@@ -43,8 +43,16 @@ public class CharacterController {
         description = "CHARACTER_NOT_FOUND",
         content = @Content(schema = @Schema(ref = "#/components/schemas/ErrorResponse"))),
     @io.swagger.v3.oas.annotations.responses.ApiResponse(
+        responseCode = "406",
+        description = "NOT_ACCEPTABLE: JSON 이외의 응답 형식 요청",
+        content = @Content(schema = @Schema(ref = "#/components/schemas/ErrorResponse"))),
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(
         responseCode = "429",
         description = "LOST_ARK_RATE_LIMITED",
+        content = @Content(schema = @Schema(ref = "#/components/schemas/ErrorResponse"))),
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(
+        responseCode = "500",
+        description = "INTERNAL_SERVER_ERROR",
         content = @Content(schema = @Schema(ref = "#/components/schemas/ErrorResponse"))),
     @io.swagger.v3.oas.annotations.responses.ApiResponse(
         responseCode = "502",

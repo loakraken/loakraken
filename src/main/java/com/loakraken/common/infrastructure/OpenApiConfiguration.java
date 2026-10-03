@@ -2,10 +2,12 @@ package com.loakraken.common.infrastructure;
 
 import io.swagger.v3.oas.models.Components;
 import io.swagger.v3.oas.models.OpenAPI;
+import io.swagger.v3.oas.models.info.Contact;
 import io.swagger.v3.oas.models.info.Info;
 import io.swagger.v3.oas.models.media.ObjectSchema;
 import io.swagger.v3.oas.models.media.Schema;
 import io.swagger.v3.oas.models.media.StringSchema;
+import io.swagger.v3.oas.models.servers.Server;
 import java.util.List;
 import java.util.Set;
 import org.springframework.context.annotation.Bean;
@@ -27,8 +29,13 @@ class OpenApiConfiguration {
         .info(
             new Info()
                 .title("LOAKraken API")
-                .version("v1")
+                .version("1.0.0")
+                .contact(
+                    new Contact()
+                        .name("LOAKraken")
+                        .url("https://github.com/loakraken/loakraken/issues"))
                 .description("로스트아크 캐릭터 조회 및 성장 분석 API. 실제 구현된 /api/v1 경로를 문서화합니다."))
+        .servers(List.of(new Server().url("/").description("현재 API 서버")))
         .components(new Components().addSchemas("ErrorResponse", errorSchema));
   }
 }

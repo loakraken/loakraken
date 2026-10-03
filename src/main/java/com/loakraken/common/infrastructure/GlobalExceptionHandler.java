@@ -7,6 +7,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatusCode;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -20,12 +21,16 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
   @ExceptionHandler(BusinessException.class)
   public ResponseEntity<ApiResponse<Void>> handleBusinessException(BusinessException exception) {
     var errorCode = exception.errorCode();
-    return ResponseEntity.status(errorCode.httpStatus()).body(ApiResponse.from(errorCode));
+    return ResponseEntity.status(errorCode.httpStatus())
+        .contentType(MediaType.APPLICATION_JSON)
+        .body(ApiResponse.from(errorCode));
   }
 
   @ExceptionHandler(ConstraintViolationException.class)
   public ResponseEntity<ApiResponse<Void>> handleConstraintViolation() {
-    return ResponseEntity.badRequest().body(ApiResponse.from(CommonErrorCode.INVALID_REQUEST));
+    return ResponseEntity.badRequest()
+        .contentType(MediaType.APPLICATION_JSON)
+        .body(ApiResponse.from(CommonErrorCode.INVALID_REQUEST));
   }
 
   @Override
@@ -48,7 +53,10 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         errorCode == null
             ? new ApiResponse<Void>("HTTP_" + status.value(), "요청을 처리할 수 없습니다.", null)
             : ApiResponse.from(errorCode);
-    return super.handleExceptionInternal(exception, response, headers, status, request);
+    var responseHeaders = new HttpHeaders();
+    responseHeaders.putAll(headers);
+    responseHeaders.setContentType(MediaType.APPLICATION_JSON);
+    return super.handleExceptionInternal(exception, response, responseHeaders, status, request);
   }
 
   @ExceptionHandler(Exception.class)
@@ -56,6 +64,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     // 예외 메시지나 원인에는 외부 응답·비밀값이 포함될 수 있어 타입만 기록한다.
     log.error("처리하지 못한 서버 오류가 발생했습니다. exceptionType={}", exception.getClass().getName());
     return ResponseEntity.internalServerError()
+        .contentType(MediaType.APPLICATION_JSON)
         .body(ApiResponse.from(CommonErrorCode.INTERNAL_SERVER_ERROR));
   }
 }

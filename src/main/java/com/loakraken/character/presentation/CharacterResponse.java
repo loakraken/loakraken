@@ -11,13 +11,13 @@ public record CharacterResponse(
     String characterName,
     String serverName,
     String className,
-    Integer characterLevel,
+    @NullableResponse Integer characterLevel,
     BigDecimal itemLevel,
-    BigDecimal combatPower,
-    Integer expeditionLevel,
-    String imageUrl,
-    String title,
-    String guildName,
+    @NullableResponse BigDecimal combatPower,
+    @NullableResponse Integer expeditionLevel,
+    @NullableResponse String imageUrl,
+    @NullableResponse String title,
+    @NullableResponse String guildName,
     List<StatResponse> stats,
     CharacterLoadoutResponse loadout,
     List<SiblingResponse> siblings,
@@ -52,12 +52,12 @@ public record CharacterResponse(
         result.fetchedAt());
   }
 
-  public record StatResponse(String type, String value) {}
+  public record StatResponse(@NullableResponse String type, @NullableResponse String value) {}
 
   public record SiblingResponse(
       String characterName,
       String serverName,
       String className,
-      Integer characterLevel,
+      @NullableResponse Integer characterLevel,
       BigDecimal itemLevel) {}
 }

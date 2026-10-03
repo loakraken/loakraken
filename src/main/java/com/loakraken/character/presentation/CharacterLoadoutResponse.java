@@ -7,11 +7,11 @@ import java.util.List;
 @Schema(description = "공식 API의 구조화된 전투정보. null 섹션은 제공된 데이터가 없음을 뜻하며 Tooltip은 포함하지 않습니다.")
 public record CharacterLoadoutResponse(
     List<EquipmentResponse> equipment,
-    EngravingsResponse engravings,
-    GemsResponse gems,
-    CardsResponse cards,
-    ArkPassiveResponse arkPassive,
-    ArkGridResponse arkGrid) {
+    @NullableResponse EngravingsResponse engravings,
+    @NullableResponse GemsResponse gems,
+    @NullableResponse CardsResponse cards,
+    @NullableResponse ArkPassiveResponse arkPassive,
+    @NullableResponse ArkGridResponse arkGrid) {
   static CharacterLoadoutResponse from(CharacterLoadout value) {
     return new CharacterLoadoutResponse(
         value.equipment().stream().map(EquipmentResponse::from).toList(),
@@ -22,7 +22,11 @@ public record CharacterLoadoutResponse(
         ArkGridResponse.from(value.arkGrid()));
   }
 
-  public record EquipmentResponse(String type, String name, String icon, String grade) {
+  public record EquipmentResponse(
+      @NullableResponse String type,
+      @NullableResponse String name,
+      @NullableResponse String icon,
+      @NullableResponse String grade) {
     static EquipmentResponse from(CharacterLoadout.Equipment value) {
       if (value == null) return null;
       return new EquipmentResponse(value.type(), value.name(), value.icon(), value.grade());
@@ -42,14 +46,20 @@ public record CharacterLoadoutResponse(
     }
   }
 
-  public record EngravingResponse(Integer slot, String name, String icon) {
+  public record EngravingResponse(
+      @NullableResponse Integer slot,
+      @NullableResponse String name,
+      @NullableResponse String icon) {
     static EngravingResponse from(CharacterLoadout.Engraving value) {
       if (value == null) return null;
       return new EngravingResponse(value.slot(), value.name(), value.icon());
     }
   }
 
-  public record EngravingEffectResponse(String icon, String name, String description) {
+  public record EngravingEffectResponse(
+      @NullableResponse String icon,
+      @NullableResponse String name,
+      @NullableResponse String description) {
     static EngravingEffectResponse from(CharacterLoadout.EngravingEffect value) {
       if (value == null) return null;
       return new EngravingEffectResponse(value.icon(), value.name(), value.description());
@@ -57,7 +67,11 @@ public record CharacterLoadoutResponse(
   }
 
   public record PassiveEngravingResponse(
-      Integer abilityStoneLevel, String grade, Integer level, String name, String description) {
+      @NullableResponse Integer abilityStoneLevel,
+      @NullableResponse String grade,
+      @NullableResponse Integer level,
+      @NullableResponse String name,
+      @NullableResponse String description) {
     static PassiveEngravingResponse from(CharacterLoadout.PassiveEngraving value) {
       if (value == null) return null;
       return new PassiveEngravingResponse(
@@ -69,7 +83,8 @@ public record CharacterLoadoutResponse(
     }
   }
 
-  public record GemsResponse(List<GemResponse> items, GemEffectsResponse effects) {
+  public record GemsResponse(
+      List<GemResponse> items, @NullableResponse GemEffectsResponse effects) {
     static GemsResponse from(CharacterLoadout.Gems value) {
       if (value == null) return null;
       return new GemsResponse(
@@ -78,7 +93,12 @@ public record CharacterLoadoutResponse(
     }
   }
 
-  public record GemResponse(Integer slot, String name, String icon, Integer level, String grade) {
+  public record GemResponse(
+      @NullableResponse Integer slot,
+      @NullableResponse String name,
+      @NullableResponse String icon,
+      @NullableResponse Integer level,
+      @NullableResponse String grade) {
     static GemResponse from(CharacterLoadout.Gem value) {
       if (value == null) return null;
       return new GemResponse(
@@ -86,7 +106,8 @@ public record CharacterLoadoutResponse(
     }
   }
 
-  public record GemEffectsResponse(String description, List<GemSkillResponse> skills) {
+  public record GemEffectsResponse(
+      @NullableResponse String description, List<GemSkillResponse> skills) {
     static GemEffectsResponse from(CharacterLoadout.GemEffects value) {
       if (value == null) return null;
       return new GemEffectsResponse(
@@ -95,7 +116,11 @@ public record CharacterLoadoutResponse(
   }
 
   public record GemSkillResponse(
-      Integer gemSlot, String name, List<String> description, String option, String icon) {
+      @NullableResponse Integer gemSlot,
+      @NullableResponse String name,
+      List<String> description,
+      @NullableResponse String option,
+      @NullableResponse String icon) {
     static GemSkillResponse from(CharacterLoadout.GemSkill value) {
       if (value == null) return null;
       return new GemSkillResponse(
@@ -113,12 +138,12 @@ public record CharacterLoadoutResponse(
   }
 
   public record CardResponse(
-      Integer slot,
-      String name,
-      String icon,
-      Integer awakeCount,
-      Integer awakeTotal,
-      String grade) {
+      @NullableResponse Integer slot,
+      @NullableResponse String name,
+      @NullableResponse String icon,
+      @NullableResponse Integer awakeCount,
+      @NullableResponse Integer awakeTotal,
+      @NullableResponse String grade) {
     static CardResponse from(CharacterLoadout.Card value) {
       if (value == null) return null;
       return new CardResponse(
@@ -132,7 +157,7 @@ public record CharacterLoadoutResponse(
   }
 
   public record CardSetResponse(
-      Integer index, List<Integer> cardSlots, List<EffectResponse> items) {
+      @NullableResponse Integer index, List<Integer> cardSlots, List<EffectResponse> items) {
     static CardSetResponse from(CharacterLoadout.CardSet value) {
       if (value == null) return null;
       return new CardSetResponse(
@@ -142,7 +167,8 @@ public record CharacterLoadoutResponse(
     }
   }
 
-  public record EffectResponse(String name, String description) {
+  public record EffectResponse(
+      @NullableResponse String name, @NullableResponse String description) {
     static EffectResponse from(CharacterLoadout.Effect value) {
       if (value == null) return null;
       return new EffectResponse(value.name(), value.description());
@@ -150,8 +176,8 @@ public record CharacterLoadoutResponse(
   }
 
   public record ArkPassiveResponse(
-      String title,
-      Boolean enabled,
+      @NullableResponse String title,
+      @NullableResponse Boolean enabled,
       List<PassivePointResponse> points,
       List<PassiveEffectResponse> effects) {
     static ArkPassiveResponse from(CharacterLoadout.ArkPassive value) {
@@ -164,14 +190,20 @@ public record CharacterLoadoutResponse(
     }
   }
 
-  public record PassivePointResponse(String name, Integer value, String description) {
+  public record PassivePointResponse(
+      @NullableResponse String name,
+      @NullableResponse Integer value,
+      @NullableResponse String description) {
     static PassivePointResponse from(CharacterLoadout.PassivePoint value) {
       if (value == null) return null;
       return new PassivePointResponse(value.name(), value.value(), value.description());
     }
   }
 
-  public record PassiveEffectResponse(String name, String description, String icon) {
+  public record PassiveEffectResponse(
+      @NullableResponse String name,
+      @NullableResponse String description,
+      @NullableResponse String icon) {
     static PassiveEffectResponse from(CharacterLoadout.PassiveEffect value) {
       if (value == null) return null;
       return new PassiveEffectResponse(value.name(), value.description(), value.icon());
@@ -188,11 +220,11 @@ public record CharacterLoadoutResponse(
   }
 
   public record GridSlotResponse(
-      Integer index,
-      String icon,
-      String name,
-      Integer point,
-      String grade,
+      @NullableResponse Integer index,
+      @NullableResponse String icon,
+      @NullableResponse String name,
+      @NullableResponse Integer point,
+      @NullableResponse String grade,
       List<GridGemResponse> gems) {
     static GridSlotResponse from(CharacterLoadout.GridSlot value) {
       if (value == null) return null;
@@ -206,14 +238,18 @@ public record CharacterLoadoutResponse(
     }
   }
 
-  public record GridEffectResponse(String name, Integer level) {
+  public record GridEffectResponse(@NullableResponse String name, @NullableResponse Integer level) {
     static GridEffectResponse from(CharacterLoadout.GridEffect value) {
       if (value == null) return null;
       return new GridEffectResponse(value.name(), value.level());
     }
   }
 
-  public record GridGemResponse(Integer index, String icon, Boolean active, String grade) {
+  public record GridGemResponse(
+      @NullableResponse Integer index,
+      @NullableResponse String icon,
+      @NullableResponse Boolean active,
+      @NullableResponse String grade) {
     static GridGemResponse from(CharacterLoadout.GridGem value) {
       if (value == null) return null;
       return new GridGemResponse(value.index(), value.icon(), value.active(), value.grade());

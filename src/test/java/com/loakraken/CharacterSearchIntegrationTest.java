@@ -65,6 +65,7 @@ class CharacterSearchIntegrationTest {
     var first = request("/api/v1/characters/search?characterName=" + encode(NAME));
     var second = request("/api/v1/characters/search?characterName=" + encode(NAME));
     assertThat(first.statusCode()).isEqualTo(200);
+    ApiContractFixture.write("character-search.json", first.body());
     assertThat(second.body()).isEqualTo(first.body());
     var result = mapper.readTree(first.body());
     assertThat(result.path("code").asText()).isEqualTo("CHARACTER_SEARCH_SUCCESS");
@@ -99,6 +100,7 @@ class CharacterSearchIntegrationTest {
             "?characterName=" + "a".repeat(65))) {
       var response = request("/api/v1/characters/search" + query);
       assertThat(response.statusCode()).isEqualTo(400);
+      ApiContractFixture.write("invalid-request.json", response.body());
       assertThat(mapper.readTree(response.body()).path("code").asText())
           .isEqualTo("INVALID_REQUEST");
     }
@@ -124,6 +126,29 @@ class CharacterSearchIntegrationTest {
         .isEqualTo(200);
     assertThat(mapper.readTree(redis.opsForValue().get(KEY)).path("details").isObject()).isTrue();
     verify(detailsPort).fetch(NAME);
+  }
+
+  @Test
+  void 지원하지_않는_응답_형식은_406_공통_오류다() throws Exception {
+    try (var client = HttpClient.newHttpClient()) {
+      var response =
+          client.send(
+              HttpRequest.newBuilder(
+                      URI.create(
+                          "http://localhost:"
+                              + port
+                              + "/api/v1/characters/search?characterName="
+                              + encode(NAME)))
+                  .header("Accept", "application/xml")
+                  .GET()
+                  .build(),
+              HttpResponse.BodyHandlers.ofString());
+      assertThat(response.statusCode()).isEqualTo(406);
+      ApiContractFixture.write("not-acceptable.json", response.body());
+      assertThat(mapper.readTree(response.body()).path("code").asText())
+          .isEqualTo("NOT_ACCEPTABLE");
+    }
+    verifyNoInteractions(detailsPort);
   }
 
   @Test

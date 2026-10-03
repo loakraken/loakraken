@@ -8,11 +8,11 @@ import java.util.List;
 @Schema(description = "현재 관측값의 집계입니다. 성능 점수나 효율 평가가 아니며 미제공 섹션은 null입니다.")
 public record CharacterAnalysisResponse(
     int equipmentCount,
-    GemSummaryResponse gems,
-    CardSummaryResponse cards,
-    EngravingSummaryResponse engravings,
-    PassiveSummaryResponse arkPassive,
-    GridSummaryResponse arkGrid) {
+    @NullableResponse GemSummaryResponse gems,
+    @NullableResponse CardSummaryResponse cards,
+    @NullableResponse EngravingSummaryResponse engravings,
+    @NullableResponse PassiveSummaryResponse arkPassive,
+    @NullableResponse GridSummaryResponse arkGrid) {
   static CharacterAnalysisResponse from(CharacterAnalysis value) {
     var gems = value.gems();
     var cards = value.cards();
@@ -61,9 +61,10 @@ public record CharacterAnalysisResponse(
   public record GemSummaryResponse(
       int count,
       int unknownLevelCount,
-      Integer minLevel,
-      Integer maxLevel,
+      @NullableResponse Integer minLevel,
+      @NullableResponse Integer maxLevel,
       @Schema(description = "확인 가능한 양수 레벨만 산술 평균, 소수 둘째 자리 반올림. 계산할 값이 없으면 null입니다.")
+          @NullableResponse
           BigDecimal averageLevel,
       List<LevelCountResponse> levelDistribution) {}
 
@@ -77,9 +78,11 @@ public record CharacterAnalysisResponse(
   public record EngravingSummaryResponse(
       int slotCount, int legacyEffectCount, int arkPassiveEffectCount) {}
 
-  public record PassiveSummaryResponse(Boolean enabled, List<PointValueResponse> points) {}
+  public record PassiveSummaryResponse(
+      @NullableResponse Boolean enabled, List<PointValueResponse> points) {}
 
-  public record PointValueResponse(String name, Integer value) {}
+  public record PointValueResponse(
+      @NullableResponse String name, @NullableResponse Integer value) {}
 
   public record GridSummaryResponse(
       int coreCount, int activeGemCount, int inactiveGemCount, int unknownGemCount) {}

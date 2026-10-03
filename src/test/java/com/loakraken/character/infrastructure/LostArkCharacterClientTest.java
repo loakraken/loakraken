@@ -3,6 +3,7 @@ package com.loakraken.character.infrastructure;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.loakraken.ApiContractFixture;
 import com.loakraken.character.application.CharacterErrorCode;
 import com.loakraken.character.application.CharacterException;
 import com.loakraken.character.application.CharacterResult;
@@ -123,6 +124,7 @@ class LostArkCharacterClientTest {
     var cacheJson = mapper.writeValueAsString(result);
     assertThat(mapper.readValue(cacheJson, CharacterResult.class)).isEqualTo(result);
     var response = mapper.writeValueAsString(CharacterResponse.from(result));
+    ApiContractFixture.write("character-full.json", response);
     assertThat(response)
         .contains("테스트 무기", "원정대캐릭터")
         .doesNotContain("Tooltip", "ToolTip", "unparsed-secret-tooltip", "FutureField");

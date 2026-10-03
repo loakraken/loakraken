@@ -72,6 +72,7 @@ dependencyManagement {
 
 tasks.named('test') {
     useJUnitPlatform()
+    outputs.dir(layout.buildDirectory.dir('generated'))
 }
 
 spotless {

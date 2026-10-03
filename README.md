@@ -38,6 +38,19 @@ Compose는 `.env`를 자동으로 읽지만 Spring Boot는 자동으로 읽지 �
 테스트에는 Docker가 필요하고, 개발 DB와 별도의 임시 PostgreSQL/Valkey 컨테이너를 사용합니다.
 GitHub Actions는 PR과 develop/master push 시 동일한 빌드를 실행합니다.
 
+## API 문서
+
+local 프로필로 실행한 뒤 아래 주소를 사용합니다.
+
+- Swagger UI: http://localhost:8080/swagger-ui.html
+- OpenAPI JSON: http://localhost:8080/v3/api-docs
+- 공통 응답 계약: [docs/api-contract.md](docs/api-contract.md)
+
+Swagger에는 실제 구현한 `/api/v1/**` 경로만 표시합니다.
+현재 기반 구성 단계에서는 API 목록이 비어 있을 수 있습니다.
+운영 프로필은 기본 비활성화하며 필요한 환경에서 `API_DOCS_ENABLED=true`로 활성화합니다.
+Lost Ark API 키는 서버 설정으로만 사용하며 Swagger에 입력하거나 노출하지 않습니다.
+
 ## 작업 흐름
 
 이슈 생성 및 LOAKraken Projects 연결 → develop 기준 이슈 번호 브랜치 → 구현·검증 → develop PR.

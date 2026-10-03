@@ -1,6 +1,7 @@
 """Validate generated OpenAPI 3.1 schemas against real test response artifacts."""
 
 import copy
+import argparse
 import json
 from pathlib import Path
 
@@ -12,8 +13,11 @@ def load(path):
 
 
 def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--live", action="store_true", help="Validate explicit live-test artifacts without making API calls")
+    args = parser.parse_args()
     generated = Path(__file__).resolve().parents[1] / "build" / "generated"
-    document = load(generated / "openapi.json")
+    document = load(generated / ("openapi-live.json" if args.live else "openapi.json"))
     if not document["openapi"].startswith("3.1."):
         raise ValueError("OpenAPI 3.1 is required")
     operation = document["paths"]["/api/v1/characters/search"]["get"]
@@ -25,6 +29,8 @@ def main():
         ("invalid-request.json", operation["responses"]["400"]["content"]["application/json"]["schema"]),
         ("not-acceptable.json", operation["responses"]["406"]["content"]["application/json"]["schema"]),
     ]
+    if args.live:
+        cases = [("character-live.json", operation["responses"]["200"]["content"]["application/json"]["schema"])]
     for filename, response_schema in cases:
         schema = {"$schema": "https://json-schema.org/draft/2020-12/schema", "components": document["components"], **response_schema}
         validator = Draft202012Validator(schema, format_checker=FormatChecker())

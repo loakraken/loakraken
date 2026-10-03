@@ -32,6 +32,16 @@ class LostArkRequestGateTest {
   }
 
   @Test
+  void 공식_100회_한도보다_낮은_90회_예산에서_후속_호출을_차단한다() {
+    var gate = gate(new MutableClock(), 90, 1);
+    for (int i = 0; i < 90; i++) {
+      gate.acquire();
+      gate.release();
+    }
+    assertThatThrownBy(() -> gate.acquire()).isInstanceOf(CharacterException.class);
+  }
+
+  @Test
   void 남은_할당량이_0이면_서버의_리셋_시각까지_차단한다() {
     var clock = new MutableClock();
     var gate = gate(clock, 90, 1);

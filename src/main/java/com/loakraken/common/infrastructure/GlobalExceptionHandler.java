@@ -35,17 +35,19 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
       HttpHeaders headers,
       HttpStatusCode status,
       WebRequest request) {
-    var errorCode = switch (status.value()) {
-      case 400 -> CommonErrorCode.INVALID_REQUEST;
-      case 404 -> CommonErrorCode.RESOURCE_NOT_FOUND;
-      case 405 -> CommonErrorCode.METHOD_NOT_ALLOWED;
-      case 406 -> CommonErrorCode.NOT_ACCEPTABLE;
-      case 415 -> CommonErrorCode.UNSUPPORTED_MEDIA_TYPE;
-      default -> null;
-    };
-    var response = errorCode == null
-        ? new ApiResponse<Void>("HTTP_" + status.value(), "요청을 처리할 수 없습니다.", null)
-        : ApiResponse.from(errorCode);
+    var errorCode =
+        switch (status.value()) {
+          case 400 -> CommonErrorCode.INVALID_REQUEST;
+          case 404 -> CommonErrorCode.RESOURCE_NOT_FOUND;
+          case 405 -> CommonErrorCode.METHOD_NOT_ALLOWED;
+          case 406 -> CommonErrorCode.NOT_ACCEPTABLE;
+          case 415 -> CommonErrorCode.UNSUPPORTED_MEDIA_TYPE;
+          default -> null;
+        };
+    var response =
+        errorCode == null
+            ? new ApiResponse<Void>("HTTP_" + status.value(), "요청을 처리할 수 없습니다.", null)
+            : ApiResponse.from(errorCode);
     return super.handleExceptionInternal(exception, response, headers, status, request);
   }
 

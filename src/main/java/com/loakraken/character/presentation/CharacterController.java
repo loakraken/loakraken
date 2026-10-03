@@ -52,7 +52,8 @@ public class CharacterController {
         content = @Content(schema = @Schema(ref = "#/components/schemas/ErrorResponse"))),
     @io.swagger.v3.oas.annotations.responses.ApiResponse(
         responseCode = "503",
-        description = "LOST_ARK_NOT_CONFIGURED 또는 CHARACTER_CACHE_UNAVAILABLE",
+        description =
+            "LOST_ARK_NOT_CONFIGURED, CHARACTER_CACHE_UNAVAILABLE 또는 CHARACTER_STORAGE_UNAVAILABLE",
         content = @Content(schema = @Schema(ref = "#/components/schemas/ErrorResponse"))),
     @io.swagger.v3.oas.annotations.responses.ApiResponse(
         responseCode = "504",

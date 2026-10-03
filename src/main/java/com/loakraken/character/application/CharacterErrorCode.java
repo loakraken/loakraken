@@ -9,7 +9,8 @@ public enum CharacterErrorCode implements ErrorCode {
   LOST_ARK_RATE_LIMITED(HttpStatus.TOO_MANY_REQUESTS, "조회 요청이 많습니다. 잠시 후 다시 시도해 주세요."),
   LOST_ARK_API_ERROR(HttpStatus.BAD_GATEWAY, "로스트아크 API 응답을 처리할 수 없습니다."),
   LOST_ARK_API_TIMEOUT(HttpStatus.GATEWAY_TIMEOUT, "로스트아크 API 응답이 지연되고 있습니다."),
-  CHARACTER_CACHE_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "캐릭터 캐시를 사용할 수 없습니다.");
+  CHARACTER_CACHE_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "캐릭터 캐시를 사용할 수 없습니다."),
+  CHARACTER_STORAGE_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "캐릭터 조회 결과를 저장할 수 없습니다.");
 
   private final HttpStatus httpStatus;
   private final String message;

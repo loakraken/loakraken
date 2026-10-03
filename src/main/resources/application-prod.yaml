@@ -16,3 +16,9 @@ spring:
     redis:
       host: ${VALKEY_HOST}
       port: ${VALKEY_PORT:6379}
+
+springdoc:
+  api-docs:
+    enabled: ${API_DOCS_ENABLED:false}
+  swagger-ui:
+    enabled: ${API_DOCS_ENABLED:false}

@@ -5,3 +5,13 @@ spring:
   threads:
     virtual:
       enabled: true
+
+springdoc:
+  paths-to-match: /api/v1/**
+  override-with-generic-response: false
+  remove-broken-reference-definitions: false
+  api-docs:
+    version: OPENAPI_3_1
+  swagger-ui:
+    path: /swagger-ui.html
+    disable-swagger-default-url: true

@@ -21,6 +21,7 @@ public record CharacterResponse(
     List<StatResponse> stats,
     CharacterLoadoutResponse loadout,
     List<SiblingResponse> siblings,
+    CharacterAnalysisResponse analysis,
     @Schema(description = "외부 API에서 실제 수집한 UTC 시각. 캐시 조회에서도 유지됩니다.") Instant fetchedAt) {
   public static CharacterResponse from(CharacterResult result) {
     var profile = result.details().profile();
@@ -47,6 +48,7 @@ public record CharacterResponse(
                         sibling.characterLevel(),
                         sibling.itemLevel()))
             .toList(),
+        CharacterAnalysisResponse.from(result.analysis()),
         result.fetchedAt());
   }
 

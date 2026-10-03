@@ -7,6 +7,7 @@ import static org.mockito.Mockito.*;
 import com.loakraken.character.application.CharacterDetailsPort;
 import com.loakraken.character.application.CharacterErrorCode;
 import com.loakraken.character.application.CharacterException;
+import com.loakraken.character.application.FetchedCharacter;
 import com.loakraken.character.domain.CharacterDetails;
 import com.loakraken.character.domain.CharacterLoadout;
 import com.loakraken.character.domain.CharacterProfile;
@@ -26,7 +27,9 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.context.annotation.Import;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import tools.jackson.databind.json.JsonMapper;
 
 @Import(TestcontainersConfiguration.class)
@@ -37,17 +40,28 @@ class CharacterSearchIntegrationTest {
   @LocalServerPort private int port;
   @Autowired private StringRedisTemplate redis;
   @Autowired private JsonMapper mapper;
+  @Autowired private JdbcClient jdbc;
   @MockitoBean private CharacterDetailsPort detailsPort;
 
   @BeforeEach
   @AfterEach
   void 캐시_정리() {
     redis.delete(KEY);
+    jdbc.sql(
+            "DELETE FROM character_snapshot WHERE character_id IN (SELECT character_id FROM characters WHERE character_name = :name)")
+        .param("name", NAME)
+        .update();
+    jdbc.sql("DELETE FROM characters WHERE character_name = :name").param("name", NAME).update();
   }
 
   @Test
   void 검색_결과를_Valkey에_저장하고_재조회에서_같은_수집시각을_반환한다() throws Exception {
-    when(detailsPort.fetch(NAME)).thenReturn(profile());
+    when(detailsPort.fetch(NAME))
+        .thenAnswer(
+            invocation -> {
+              assertThat(TransactionSynchronizationManager.isActualTransactionActive()).isFalse();
+              return profile();
+            });
     var first = request("/api/v1/characters/search?characterName=" + encode(NAME));
     var second = request("/api/v1/characters/search?characterName=" + encode(NAME));
     assertThat(first.statusCode()).isEqualTo(200);
@@ -62,6 +76,15 @@ class CharacterSearchIntegrationTest {
     assertThat(result.at("/data/siblings").isArray()).isTrue();
     assertThat(redis.getExpire(KEY)).isBetween(1L, 300L);
     verify(detailsPort, times(1)).fetch(NAME);
+    assertThat(
+            jdbc.sql(
+                    "SELECT count(*) FROM character_snapshot s JOIN characters c USING (character_id) WHERE c.character_name = :name")
+                .param("name", NAME)
+                .query(Integer.class)
+                .single())
+        .isEqualTo(1);
+    assertThat(first.body()).doesNotContain("armoryJson", "siblingsJson", "원본툴팁");
+    assertThat(redis.opsForValue().get(KEY)).doesNotContain("armoryJson", "siblingsJson", "원본툴팁");
   }
 
   @Test
@@ -122,7 +145,7 @@ class CharacterSearchIntegrationTest {
         .isTrue();
   }
 
-  private CharacterDetails profile() {
+  private FetchedCharacter profile() {
     var profile =
         new CharacterProfile(
             NAME,
@@ -144,7 +167,8 @@ class CharacterSearchIntegrationTest {
             null,
             null,
             null);
-    return new CharacterDetails(profile, loadout, List.of());
+    return new FetchedCharacter(
+        new CharacterDetails(profile, loadout, List.of()), "{\"Tooltip\":\"원본툴팁\"}", "[]");
   }
 
   private String encode(String text) {

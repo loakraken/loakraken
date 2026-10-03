@@ -56,6 +56,18 @@ Swagger에는 실제 구현한 `/api/v1/**` 경로만 표시합니다.
 운영 프로필은 기본 비활성화하며 필요한 환경에서 `API_DOCS_ENABLED=true`로 활성화합니다.
 Lost Ark API 키는 서버 설정으로만 사용하며 Swagger에 입력하거나 노출하지 않습니다.
 
+`build`의 통합 테스트는 `build/generated/openapi.json`과 응답 검증용 JSON을 생성합니다.
+GitHub Actions에서 JSON Schema 검증 후 `openapi-contract` 산출물로 보관합니다.
+로컬에서도 Python 3.13 이상으로 아래 검사를 실행할 수 있습니다.
+
+```powershell
+python -m pip install -r scripts/requirements-api.txt
+python scripts/validate_api_contract.py
+```
+
+응답 필드는 null이어도 생략하지 않습니다. 상세한 명세 보정과 검증 범위는
+[docs/openapi-contract.md](docs/openapi-contract.md)를 참고합니다.
+
 ## 작업 흐름
 
 이슈 생성 및 LOAKraken Projects 연결 → develop 기준 이슈 번호 브랜치 → 구현·검증 → develop PR.

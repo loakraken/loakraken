@@ -30,6 +30,15 @@ class OpenApiIntegrationTest {
         .isEqualTo("null");
     assertThat(document.path("paths").has("/test/success")).isFalse();
     assertThat(document.path("paths").has("/actuator/health")).isFalse();
+    ApiContractFixture.write("openapi.json", response.body());
+    assertThat(
+            document
+                .at("/components/schemas/CharacterLoadoutResponse/properties/gems/anyOf/1/type")
+                .asText())
+        .isEqualTo("null");
+    assertThat(document.at("/components/schemas/GemsResponse/type").asText()).isEqualTo("object");
+    assertThat(document.at("/components/schemas/CharacterResponse/required").toString())
+        .contains("characterName", "combatPower", "analysis");
   }
 
   @Test

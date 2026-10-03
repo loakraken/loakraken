@@ -74,6 +74,8 @@ class CharacterSearchIntegrationTest {
     assertThat(result.at("/data/loadout/equipment/0/name").asText()).isEqualTo("테스트 무기");
     assertThat(result.at("/data/loadout/gems").isNull()).isTrue();
     assertThat(result.at("/data/siblings").isArray()).isTrue();
+    assertThat(result.at("/data/analysis/equipmentCount").intValue()).isEqualTo(1);
+    assertThat(result.at("/data/analysis/gems").isNull()).isTrue();
     assertThat(redis.getExpire(KEY)).isBetween(1L, 300L);
     verify(detailsPort, times(1)).fetch(NAME);
     assertThat(
@@ -139,6 +141,10 @@ class CharacterSearchIntegrationTest {
     assertThat(document.at("/components/schemas/CharacterResponse/properties").has("loadout"))
         .isTrue();
     assertThat(document.at("/components/schemas/CharacterResponse/properties").has("siblings"))
+        .isTrue();
+    assertThat(document.at("/components/schemas/CharacterResponse/properties").has("analysis"))
+        .isTrue();
+    assertThat(document.at("/components/schemas/CharacterAnalysisResponse/properties").has("gems"))
         .isTrue();
     assertThat(
             document.at("/components/schemas/CharacterLoadoutResponse/properties").has("arkGrid"))

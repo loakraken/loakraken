@@ -28,7 +28,8 @@ public class CharacterController {
   @GetMapping("/search")
   @Operation(
       summary = "캐릭터 검색",
-      description = "현재는 프로필을 제공합니다. 5분 캐시를 기본으로 사용하며 fetchedAt은 실제 외부 수집 시각입니다.")
+      description =
+          "프로필, 장비·보석·각인·카드·아크패시브·아크그리드와 원정대를 제공합니다. 기본 캐시는 5분이며 fetchedAt은 실제 외부 수집 완료 시각입니다. null 섹션은 공식 API에서 데이터가 제공되지 않은 경우입니다.")
   @ApiResponses({
     @io.swagger.v3.oas.annotations.responses.ApiResponse(
         responseCode = "200",

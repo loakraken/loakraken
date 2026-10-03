@@ -5,6 +5,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
 
+import com.loakraken.character.domain.CharacterDetails;
+import com.loakraken.character.domain.CharacterLoadout;
 import com.loakraken.character.domain.CharacterProfile;
 import java.math.BigDecimal;
 import java.time.Clock;
@@ -21,12 +23,15 @@ class CharacterQueryServiceTest {
   private final CharacterProfile profile =
       new CharacterProfile(
           "모험가", "루페온", "바드", 70, new BigDecimal("1700"), null, 300, null, null, null, List.of());
+  private final CharacterDetails details =
+      new CharacterDetails(
+          profile, new CharacterLoadout(List.of(), null, null, null, null, null), List.of());
 
   @Test
   void 캐시_적중은_외부_호출과_수집시각_변경이_없다() {
-    var port = mock(CharacterProfilePort.class);
+    var port = mock(CharacterDetailsPort.class);
     var cache = mock(CharacterCache.class);
-    var cached = new CharacterResult(profile, clock.instant().minusSeconds(60));
+    var cached = new CharacterResult(details, clock.instant().minusSeconds(60));
     when(cache.find("모험가")).thenReturn(Optional.of(cached));
     var service = new CharacterQueryService(port, cache, clock);
     assertThat(service.search(new SearchCharacterCommand(" 모험가 "))).isEqualTo(cached);
@@ -35,7 +40,7 @@ class CharacterQueryServiceTest {
 
   @Test
   void 동일_캐릭터_동시_요청은_한번만_갱신한다() throws Exception {
-    var port = mock(CharacterProfilePort.class);
+    var port = mock(CharacterDetailsPort.class);
     var data = new ConcurrentHashMap<String, CharacterResult>();
     var cache =
         new CharacterCache() {
@@ -54,7 +59,7 @@ class CharacterQueryServiceTest {
             invocation -> {
               entered.countDown();
               if (!release.await(5, TimeUnit.SECONDS)) throw new IllegalStateException("테스트 대기 초과");
-              return profile;
+              return details;
             });
     var service = new CharacterQueryService(port, cache, clock);
     try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
@@ -67,29 +72,29 @@ class CharacterQueryServiceTest {
         release.countDown();
       }
       for (var future : futures)
-        assertThat(future.get(5, TimeUnit.SECONDS).profile()).isEqualTo(profile);
+        assertThat(future.get(5, TimeUnit.SECONDS).details()).isEqualTo(details);
     }
     verify(port, times(1)).fetch("모험가");
   }
 
   @Test
   void 갱신_실패_후_다음_요청은_다시_시도할_수_있다() {
-    var port = mock(CharacterProfilePort.class);
+    var port = mock(CharacterDetailsPort.class);
     var cache = mock(CharacterCache.class);
     when(cache.find(anyString())).thenReturn(Optional.empty());
     when(port.fetch("모험가"))
         .thenThrow(new CharacterException(CharacterErrorCode.LOST_ARK_API_ERROR))
-        .thenReturn(profile);
+        .thenReturn(details);
     var service = new CharacterQueryService(port, cache, clock);
     assertThatThrownBy(() -> service.search(new SearchCharacterCommand("모험가")))
         .isInstanceOf(CharacterException.class);
-    assertThat(service.search(new SearchCharacterCommand("모험가")).profile()).isEqualTo(profile);
+    assertThat(service.search(new SearchCharacterCommand("모험가")).details()).isEqualTo(details);
     verify(port, times(2)).fetch("모험가");
   }
 
   @Test
   void 캐시_장애는_외부_API를_우회_호출하지_않는다() {
-    var port = mock(CharacterProfilePort.class);
+    var port = mock(CharacterDetailsPort.class);
     var cache = mock(CharacterCache.class);
     when(cache.find(anyString()))
         .thenThrow(new CharacterException(CharacterErrorCode.CHARACTER_CACHE_UNAVAILABLE));

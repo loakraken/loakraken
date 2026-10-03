@@ -1,6 +1,6 @@
 package com.loakraken.character.application;
 
-import com.loakraken.character.domain.CharacterProfile;
+import com.loakraken.character.domain.CharacterDetails;
 import java.time.Instant;
 
-public record CharacterResult(CharacterProfile profile, Instant fetchedAt) {}
+public record CharacterResult(CharacterDetails details, Instant fetchedAt) {}

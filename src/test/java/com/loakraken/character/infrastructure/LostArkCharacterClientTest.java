@@ -5,12 +5,15 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.loakraken.character.application.CharacterErrorCode;
 import com.loakraken.character.application.CharacterException;
+import com.loakraken.character.application.CharacterResult;
+import com.loakraken.character.presentation.CharacterResponse;
 import com.sun.net.httpserver.HttpServer;
 import java.net.InetSocketAddress;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -19,6 +22,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import tools.jackson.databind.json.JsonMapper;
 
 class LostArkCharacterClientTest {
   private HttpServer server;
@@ -27,13 +31,16 @@ class LostArkCharacterClientTest {
   private volatile int status = 200;
   private volatile String body =
       """
-      {"CharacterName":"모험가","ServerName":"루페온","CharacterClassName":"바드",
+      {"ArmoryProfile":{"CharacterName":"모험가","ServerName":"루페온","CharacterClassName":"바드",
        "CharacterLevel":70,"ItemAvgLevel":"1,700.50","CombatPower":"12,345.67",
-       "Stats":[{"Type":"치명","Value":"100","Tooltip":[]}],"FutureField":"ignored"}
+       "Stats":[{"Type":"치명","Value":"100","Tooltip":[]}],"FutureField":"ignored"}}
       """;
   private volatile String authorization;
   private volatile String requestPath;
   private volatile long delayMillis;
+  private volatile String siblingsBody = "[]";
+  private volatile int siblingsStatus = 200;
+  private volatile String armoryQuery;
 
   @BeforeEach
   void 설정() throws Exception {
@@ -48,10 +55,13 @@ class LostArkCharacterClientTest {
           requestPath = exchange.getRequestURI().getRawPath();
           try {
             if (delayMillis > 0) Thread.sleep(delayMillis);
-            byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
+            boolean siblings = requestPath.endsWith("/siblings");
+            if (!siblings) armoryQuery = exchange.getRequestURI().getRawQuery();
+            byte[] bytes = (siblings ? siblingsBody : body).getBytes(StandardCharsets.UTF_8);
+            int responseStatus = siblings ? siblingsStatus : status;
             exchange.getResponseHeaders().set("Content-Type", "application/json");
             if (status == 429) exchange.getResponseHeaders().set("X-RateLimit-Remaining", "0");
-            exchange.sendResponseHeaders(status, bytes.length);
+            exchange.sendResponseHeaders(responseStatus, bytes.length);
             exchange.getResponseBody().write(bytes);
           } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
@@ -73,10 +83,70 @@ class LostArkCharacterClientTest {
     var result = client("test-token", Duration.ofSeconds(2)).fetch("모험가");
     assertThat(authorization).isEqualTo("Bearer test-token");
     assertThat(requestPath).contains("%EB%AA%A8%ED%97%98%EA%B0%80");
-    assertThat(result.itemLevel()).isEqualByComparingTo("1700.50");
-    assertThat(result.combatPower()).isEqualByComparingTo("12345.67");
-    assertThat(result.stats()).hasSize(1);
-    assertThat(requests).hasValue(1);
+    assertThat(armoryQuery)
+        .contains("profiles%2Bequipment%2Bengravings%2Bgems%2Bcards%2Barkpassive%2Barkgrid");
+    assertThat(result.profile().itemLevel()).isEqualByComparingTo("1700.50");
+    assertThat(result.profile().combatPower()).isEqualByComparingTo("12345.67");
+    assertThat(result.profile().stats()).hasSize(1);
+    assertThat(result.loadout().equipment()).isEmpty();
+    assertThat(result.siblings()).isEmpty();
+    assertThat(requests).hasValue(2);
+  }
+
+  @Test
+  void 종합_전투정보와_원정대를_매핑하고_Tooltip을_제외한다() throws Exception {
+    try (var resource = getClass().getResourceAsStream("/fixtures/armory-summary.json")) {
+      body = new String(resource.readAllBytes(), StandardCharsets.UTF_8);
+    }
+    siblingsBody =
+        """
+      [{"CharacterName":"원정대캐릭터","ServerName":"카단","CharacterClassName":"바드","CharacterLevel":70,"ItemAvgLevel":"1,650.00"}]
+      """;
+    var details = client("test", Duration.ofSeconds(2)).fetch("모험가");
+    var loadout = details.loadout();
+    assertThat(loadout.equipment().getFirst().name()).isEqualTo("테스트 무기");
+    assertThat(loadout.engravings().arkPassiveEffects().getFirst().abilityStoneLevel()).isNull();
+    assertThat(loadout.gems().items().getFirst().level()).isEqualTo(9);
+    assertThat(loadout.gems().effects().skills().getFirst().description())
+        .containsExactly("효과1", "효과2");
+    assertThat(loadout.cards().items().getFirst().awakeCount()).isEqualTo(5);
+    assertThat(loadout.cards().effects().getFirst().items().getFirst().name()).isEqualTo("세트명");
+    assertThat(loadout.arkPassive().enabled()).isTrue();
+    assertThat(loadout.arkPassive().points().getFirst().value()).isEqualTo(120);
+    assertThat(loadout.arkGrid().slots().getFirst().gems().getFirst().active()).isFalse();
+    assertThat(loadout.arkGrid().effects().getFirst().level()).isEqualTo(2);
+    assertThat(details.siblings().getFirst().itemLevel()).isEqualByComparingTo("1650");
+    var result = new CharacterResult(details, Instant.parse("2026-10-04T00:00:00Z"));
+    var mapper = new JsonMapper();
+    var cacheJson = mapper.writeValueAsString(result);
+    assertThat(mapper.readValue(cacheJson, CharacterResult.class)).isEqualTo(result);
+    var response = mapper.writeValueAsString(CharacterResponse.from(result));
+    assertThat(response)
+        .contains("테스트 무기", "원정대캐릭터")
+        .doesNotContain("Tooltip", "ToolTip", "unparsed-secret-tooltip", "FutureField");
+    assertThat(requests).hasValue(2);
+  }
+
+  @Test
+  void 원정대_조회_실패는_불완전한_성공_결과를_만들지_않는다() {
+    siblingsStatus = 503;
+    assertError(client("test", Duration.ofSeconds(2)), CharacterErrorCode.LOST_ARK_API_ERROR);
+    assertThat(requests).hasValue(2);
+  }
+
+  @Test
+  void 원정대_null_응답은_불완전한_외부_응답이다() {
+    siblingsBody = "null";
+    assertError(client("test", Duration.ofSeconds(2)), CharacterErrorCode.LOST_ARK_API_ERROR);
+  }
+
+  @Test
+  void 잘못된_원정대_숫자는_외부_응답_오류다() {
+    siblingsBody =
+        """
+      [{"CharacterName":"캐릭터","ServerName":"카단","CharacterClassName":"바드","ItemAvgLevel":"invalid"}]
+      """;
+    assertError(client("test", Duration.ofSeconds(2)), CharacterErrorCode.LOST_ARK_API_ERROR);
   }
 
   @Test
@@ -133,7 +203,7 @@ class LostArkCharacterClientTest {
     status = 404;
     assertError(client, CharacterErrorCode.CHARACTER_NOT_FOUND);
     status = 200;
-    assertThat(client.fetch("모험가").characterName()).isEqualTo("모험가");
+    assertThat(client.fetch("모험가").profile().characterName()).isEqualTo("모험가");
   }
 
   private LostArkCharacterClient client(String key, Duration timeout) {

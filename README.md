@@ -47,7 +47,7 @@ local 프로필로 실행한 뒤 아래 주소를 사용합니다.
 - 공통 응답 계약: [docs/api-contract.md](docs/api-contract.md)
 
 Swagger에는 실제 구현한 `/api/v1/**` 경로만 표시합니다.
-`GET /api/v1/characters/search?characterName=캐릭터명`으로 프로필을 검색할 수 있습니다.
+`GET /api/v1/characters/search?characterName=캐릭터명`으로 프로필·전투정보·원정대를 검색할 수 있습니다.
 실제 조회에는 IntelliJ 실행 구성이나 서버 환경 변수에 `LOSTARK_API_KEY`를 설정해야 합니다.
 `.env`에만 작성하면 Spring Boot에는 전달되지 않습니다. 키 없이도 문서와 테스트는 실행됩니다.
 검색 동작과 오류 코드는 [docs/character-search.md](docs/character-search.md)를 참고합니다.

@@ -4,9 +4,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
 
+import com.loakraken.character.application.CharacterDetailsPort;
 import com.loakraken.character.application.CharacterErrorCode;
 import com.loakraken.character.application.CharacterException;
-import com.loakraken.character.application.CharacterProfilePort;
+import com.loakraken.character.domain.CharacterDetails;
+import com.loakraken.character.domain.CharacterLoadout;
 import com.loakraken.character.domain.CharacterProfile;
 import java.math.BigDecimal;
 import java.net.URI;
@@ -31,11 +33,11 @@ import tools.jackson.databind.json.JsonMapper;
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 class CharacterSearchIntegrationTest {
   private static final String NAME = "통합테스트캐릭터";
-  private static final String KEY = "character:v1:" + NAME + ":profile";
+  private static final String KEY = "character:v2:" + NAME + ":summary";
   @LocalServerPort private int port;
   @Autowired private StringRedisTemplate redis;
   @Autowired private JsonMapper mapper;
-  @MockitoBean private CharacterProfilePort profilePort;
+  @MockitoBean private CharacterDetailsPort detailsPort;
 
   @BeforeEach
   @AfterEach
@@ -45,7 +47,7 @@ class CharacterSearchIntegrationTest {
 
   @Test
   void 검색_결과를_Valkey에_저장하고_재조회에서_같은_수집시각을_반환한다() throws Exception {
-    when(profilePort.fetch(NAME)).thenReturn(profile());
+    when(detailsPort.fetch(NAME)).thenReturn(profile());
     var first = request("/api/v1/characters/search?characterName=" + encode(NAME));
     var second = request("/api/v1/characters/search?characterName=" + encode(NAME));
     assertThat(first.statusCode()).isEqualTo(200);
@@ -55,8 +57,11 @@ class CharacterSearchIntegrationTest {
     assertThat(result.at("/data/characterName").asText()).isEqualTo(NAME);
     assertThat(result.at("/data/itemLevel").decimalValue()).isEqualByComparingTo("1700.5");
     assertThat(result.at("/data/fetchedAt").asText()).isNotBlank();
+    assertThat(result.at("/data/loadout/equipment/0/name").asText()).isEqualTo("테스트 무기");
+    assertThat(result.at("/data/loadout/gems").isNull()).isTrue();
+    assertThat(result.at("/data/siblings").isArray()).isTrue();
     assertThat(redis.getExpire(KEY)).isBetween(1L, 300L);
-    verify(profilePort, times(1)).fetch(NAME);
+    verify(detailsPort, times(1)).fetch(NAME);
   }
 
   @Test
@@ -72,12 +77,12 @@ class CharacterSearchIntegrationTest {
       assertThat(mapper.readTree(response.body()).path("code").asText())
           .isEqualTo("INVALID_REQUEST");
     }
-    verifyNoInteractions(profilePort);
+    verifyNoInteractions(detailsPort);
   }
 
   @Test
   void 미존재_캐릭터는_404이고_정상_캐시에_저장하지_않는다() throws Exception {
-    when(profilePort.fetch(anyString()))
+    when(detailsPort.fetch(anyString()))
         .thenThrow(new CharacterException(CharacterErrorCode.CHARACTER_NOT_FOUND));
     var response = request("/api/v1/characters/search?characterName=" + encode(NAME));
     assertThat(response.statusCode()).isEqualTo(404);
@@ -89,11 +94,11 @@ class CharacterSearchIntegrationTest {
   @Test
   void 손상된_캐시는_다시_조회한_정상_결과로_교체한다() throws Exception {
     redis.opsForValue().set(KEY, "invalid-json");
-    when(profilePort.fetch(NAME)).thenReturn(profile());
+    when(detailsPort.fetch(NAME)).thenReturn(profile());
     assertThat(request("/api/v1/characters/search?characterName=" + encode(NAME)).statusCode())
         .isEqualTo(200);
-    assertThat(mapper.readTree(redis.opsForValue().get(KEY)).path("profile").isObject()).isTrue();
-    verify(profilePort).fetch(NAME);
+    assertThat(mapper.readTree(redis.opsForValue().get(KEY)).path("details").isObject()).isTrue();
+    verify(detailsPort).fetch(NAME);
   }
 
   @Test
@@ -108,21 +113,38 @@ class CharacterSearchIntegrationTest {
     assertThat(operation.at("/responses/200/content/application~1json/schema/$ref").asText())
         .isNotBlank();
     assertThat(document.toString()).doesNotContain("apiKey", "Authorization");
+    assertThat(document.at("/components/schemas/CharacterResponse/properties").has("loadout"))
+        .isTrue();
+    assertThat(document.at("/components/schemas/CharacterResponse/properties").has("siblings"))
+        .isTrue();
+    assertThat(
+            document.at("/components/schemas/CharacterLoadoutResponse/properties").has("arkGrid"))
+        .isTrue();
   }
 
-  private CharacterProfile profile() {
-    return new CharacterProfile(
-        NAME,
-        "루페온",
-        "바드",
-        70,
-        new BigDecimal("1700.5"),
-        new BigDecimal("12345"),
-        300,
-        null,
-        null,
-        null,
-        List.of());
+  private CharacterDetails profile() {
+    var profile =
+        new CharacterProfile(
+            NAME,
+            "루페온",
+            "바드",
+            70,
+            new BigDecimal("1700.5"),
+            new BigDecimal("12345"),
+            300,
+            null,
+            null,
+            null,
+            List.of());
+    var loadout =
+        new CharacterLoadout(
+            List.of(new CharacterLoadout.Equipment("무기", "테스트 무기", "icon", "고대")),
+            null,
+            null,
+            null,
+            null,
+            null);
+    return new CharacterDetails(profile, loadout, List.of());
   }
 
   private String encode(String text) {

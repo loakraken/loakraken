@@ -1,0 +1,21 @@
+name: "⚙️ Chore Issue"
+description: "설정 변경, 라이브러리 업데이트 등 기타 작업을 위한 템플릿"
+labels: ["chore"]
+title: "[CHORE] "
+body:
+  - type: textarea
+    id: chore-summary
+    attributes:
+      label: 📄 작업 내용
+      description: 수행할 작업에 대해 설명해 주세요.
+      placeholder: e.g. Redis 설정 정보 환경 변수화
+    validations:
+      required: true
+
+  - type: textarea
+    id: todo-list
+    attributes:
+      label: ✅ 체크리스트
+      description: 구체적인 작업 단계를 작성해주세요.
+    validations:
+      required: true

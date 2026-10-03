@@ -1,0 +1,36 @@
+name: "♻️ Refactor Issue"
+description: "코드 구조 개선 및 최적화를 위한 이슈 템플릿"
+labels: ["refactor"]
+title: "[REFACTOR] "
+body:
+  - type: textarea
+    id: refactor-summary
+    attributes:
+      label: 💡 리팩터링 대상 및 이유
+      description: 어떤 부분을 왜 리팩터링하려는지 간결하게 설명해 주세요.
+      placeholder: e.g. 중복된 API 호출 로직을 공통 유틸리티로 분리합니다.
+    validations:
+      required: true
+
+  - type: textarea
+    id: current-code
+    attributes:
+      label: 🔍 현재 코드 상태 (문제점)
+      description: 현재 코드의 어떤 점이 문제인지(가독성, 성능, 유지보수 등) 적어주세요.
+
+  - type: textarea
+    id: todo-list
+    attributes:
+      label: ✅ 체크리스트 (구현할 내용)
+      description: 작업 항목을 체크박스로 작성해주세요.
+      placeholder: |
+        - [ ] 공통 모듈 생성
+        - [ ] 기존 로직 대체 및 테스트 코드 작성
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected-effect
+    attributes:
+      label: 🚀 기대 효과
+      description: 리팩터링 후 어떤 이점(성능 향상, 가독성 개선 등)이 있는지 적어주세요.

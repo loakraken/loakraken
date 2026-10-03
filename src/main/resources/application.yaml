@@ -1,0 +1,7 @@
+spring:
+  application:
+    name: loakraken
+
+  threads:
+    virtual:
+      enabled: true

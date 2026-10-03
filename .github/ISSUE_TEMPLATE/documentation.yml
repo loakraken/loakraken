@@ -1,0 +1,19 @@
+name: "📚 Docs Issue"
+description: "문서 작성 및 수정을 위한 이슈 템플릿"
+labels: ["documentation"]
+title: "[DOCS] "
+body:
+  - type: textarea
+    id: docs-summary
+    attributes:
+      label: ✍️ 작성/수정할 문서
+      description: 어떤 문서를 작업하는지 설명해 주세요.
+      placeholder: e.g. API 명세서 최신화 (인증 관련 엔드포인트)
+    validations:
+      required: true
+
+  - type: textarea
+    id: todo-list
+    attributes:
+      label: ✅ 체크리스트
+      description: 작성해야 할 세부 항목을 적어주세요.

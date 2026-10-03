@@ -3,6 +3,7 @@ package com.loakraken.character.infrastructure;
 import com.loakraken.character.application.CharacterDetailsPort;
 import com.loakraken.character.application.CharacterErrorCode;
 import com.loakraken.character.application.CharacterException;
+import com.loakraken.character.application.FetchedCharacter;
 import com.loakraken.character.domain.CharacterDetails;
 import java.util.Arrays;
 import java.util.Map;
@@ -11,6 +12,8 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.json.JsonMapper;
 
 @Component
 class LostArkCharacterClient implements CharacterDetailsPort {
@@ -19,43 +22,54 @@ class LostArkCharacterClient implements CharacterDetailsPort {
   private final RestClient client;
   private final LostArkProperties properties;
   private final LostArkRequestGate gate;
+  private final JsonMapper mapper;
 
   LostArkCharacterClient(
-      RestClient lostArkRestClient, LostArkProperties properties, LostArkRequestGate gate) {
+      RestClient lostArkRestClient,
+      LostArkProperties properties,
+      LostArkRequestGate gate,
+      JsonMapper mapper) {
     this.client = lostArkRestClient;
     this.properties = properties;
     this.gate = gate;
+    this.mapper = mapper;
   }
 
   @Override
-  public CharacterDetails fetch(String characterName) {
-    var armory =
+  public FetchedCharacter fetch(String characterName) {
+    var armoryPayload =
         request(
             "/armories/characters/{name}?filters={filters}",
             characterName,
             LostArkArmoryResponse.class,
             CharacterErrorCode.CHARACTER_NOT_FOUND);
+    var armory = armoryPayload.value();
     if (armory == null) throw new CharacterException(CharacterErrorCode.CHARACTER_NOT_FOUND);
     if (armory.profile() == null)
       throw new CharacterException(CharacterErrorCode.LOST_ARK_API_ERROR);
     var profile = LostArkProfileMapper.from(armory.profile());
-    var siblings =
+    var siblingsPayload =
         request(
             "/characters/{name}/siblings",
             characterName,
             LostArkSiblingResponse[].class,
             CharacterErrorCode.LOST_ARK_API_ERROR);
+    var siblings = siblingsPayload.value();
     if (siblings == null) throw new CharacterException(CharacterErrorCode.LOST_ARK_API_ERROR);
-    return new CharacterDetails(
-        profile,
-        armory.toLoadout(),
-        Arrays.stream(siblings)
-            .filter(Objects::nonNull)
-            .map(LostArkSiblingResponse::toDomain)
-            .toList());
+    var details =
+        new CharacterDetails(
+            profile,
+            armory.toLoadout(),
+            Arrays.stream(siblings)
+                .filter(Objects::nonNull)
+                .map(LostArkSiblingResponse::toDomain)
+                .toList());
+    return new FetchedCharacter(details, armoryPayload.json(), siblingsPayload.json());
   }
 
-  private <T> T request(
+  private record Payload<T>(T value, String json) {}
+
+  private <T> Payload<T> request(
       String path, String characterName, Class<T> responseType, CharacterErrorCode notFoundCode) {
     if (properties.apiKey().isBlank())
       throw new CharacterException(CharacterErrorCode.LOST_ARK_NOT_CONFIGURED);
@@ -73,7 +87,10 @@ class LostArkCharacterClient implements CharacterDetailsPort {
                   throw new CharacterException(CharacterErrorCode.LOST_ARK_RATE_LIMITED);
                 if (status != 200)
                   throw new CharacterException(CharacterErrorCode.LOST_ARK_API_ERROR);
-                return response.bodyTo(responseType);
+                String json = response.bodyTo(String.class);
+                if (json == null || json.isBlank())
+                  throw new CharacterException(CharacterErrorCode.LOST_ARK_API_ERROR);
+                return new Payload<>(mapper.readValue(json, responseType), json);
               });
     } catch (ResourceAccessException exception) {
       Throwable cause = exception;
@@ -85,7 +102,7 @@ class LostArkCharacterClient implements CharacterDetailsPort {
         cause = cause.getCause();
       }
       throw new CharacterException(CharacterErrorCode.LOST_ARK_API_ERROR);
-    } catch (RestClientException exception) {
+    } catch (RestClientException | JacksonException exception) {
       throw new CharacterException(CharacterErrorCode.LOST_ARK_API_ERROR);
     } finally {
       gate.release();

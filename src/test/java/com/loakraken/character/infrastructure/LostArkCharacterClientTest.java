@@ -85,11 +85,11 @@ class LostArkCharacterClientTest {
     assertThat(requestPath).contains("%EB%AA%A8%ED%97%98%EA%B0%80");
     assertThat(armoryQuery)
         .contains("profiles%2Bequipment%2Bengravings%2Bgems%2Bcards%2Barkpassive%2Barkgrid");
-    assertThat(result.profile().itemLevel()).isEqualByComparingTo("1700.50");
-    assertThat(result.profile().combatPower()).isEqualByComparingTo("12345.67");
-    assertThat(result.profile().stats()).hasSize(1);
-    assertThat(result.loadout().equipment()).isEmpty();
-    assertThat(result.siblings()).isEmpty();
+    assertThat(result.details().profile().itemLevel()).isEqualByComparingTo("1700.50");
+    assertThat(result.details().profile().combatPower()).isEqualByComparingTo("12345.67");
+    assertThat(result.details().profile().stats()).hasSize(1);
+    assertThat(result.details().loadout().equipment()).isEmpty();
+    assertThat(result.details().siblings()).isEmpty();
     assertThat(requests).hasValue(2);
   }
 
@@ -102,7 +102,9 @@ class LostArkCharacterClientTest {
         """
       [{"CharacterName":"원정대캐릭터","ServerName":"카단","CharacterClassName":"바드","CharacterLevel":70,"ItemAvgLevel":"1,650.00"}]
       """;
-    var details = client("test", Duration.ofSeconds(2)).fetch("모험가");
+    var fetched = client("test", Duration.ofSeconds(2)).fetch("모험가");
+    var details = fetched.details();
+    assertThat(fetched.armoryJson()).contains("unparsed-secret-tooltip", "FutureField");
     var loadout = details.loadout();
     assertThat(loadout.equipment().getFirst().name()).isEqualTo("테스트 무기");
     assertThat(loadout.engravings().arkPassiveEffects().getFirst().abilityStoneLevel()).isNull();
@@ -203,7 +205,7 @@ class LostArkCharacterClientTest {
     status = 404;
     assertError(client, CharacterErrorCode.CHARACTER_NOT_FOUND);
     status = 200;
-    assertThat(client.fetch("모험가").profile().characterName()).isEqualTo("모험가");
+    assertThat(client.fetch("모험가").details().profile().characterName()).isEqualTo("모험가");
   }
 
   private LostArkCharacterClient client(String key, Duration timeout) {
@@ -219,7 +221,8 @@ class LostArkCharacterClientTest {
     return new LostArkCharacterClient(
         new CharacterConfiguration().lostArkRestClient(properties),
         properties,
-        new LostArkRequestGate(Clock.systemUTC(), properties));
+        new LostArkRequestGate(Clock.systemUTC(), properties),
+        new JsonMapper());
   }
 
   private void assertError(LostArkCharacterClient client, CharacterErrorCode code) {

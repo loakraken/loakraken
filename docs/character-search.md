@@ -12,6 +12,7 @@
 
 - Valkey 키: `character:v2:{정규화한 캐릭터명}:summary`, 기본 TTL 5분 (`lostark.summary-ttl`)
 - 전투정보와 원정대 조회가 모두 성공한 결과만 캐시에 저장합니다. 두 요청은 순서대로 실행하며 각각 호출 예산을 사용합니다.
+- 실제 수집 결과는 [PostgreSQL 스냅샷](character-snapshots.md)에 저장한 뒤 캐시에 반영합니다.
 - 캐시 적중 시 최초 수집 시각을 유지하고 외부 API를 호출하지 않습니다.
 - 같은 이름의 동시 요청은 단일 애플리케이션 인스턴스 안에서 한 번으로 합칩니다.
 - 손상된 캐시는 삭제 후 조회하며 캐시 연결 장애 시 503으로 종료합니다.
@@ -43,6 +44,7 @@
 | 502 | LOST_ARK_API_ERROR | 공식 API 오류, 잘못된 응답, 연결 실패 |
 | 503 | LOST_ARK_NOT_CONFIGURED | 서버 API 키 미설정 |
 | 503 | CHARACTER_CACHE_UNAVAILABLE | 캐시 읽기·쓰기 실패 |
+| 503 | CHARACTER_STORAGE_UNAVAILABLE | 수집 결과 DB 저장 실패 |
 | 504 | LOST_ARK_API_TIMEOUT | 공식 API 응답 시간 초과 |
 
 외부 오류 본문과 인증 정보는 응답에 포함하지 않습니다.

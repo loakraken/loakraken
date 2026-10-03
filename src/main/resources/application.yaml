@@ -6,6 +6,11 @@ spring:
     virtual:
       enabled: true
 
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+
   data:
     redis:
       connect-timeout: 1s

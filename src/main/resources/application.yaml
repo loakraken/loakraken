@@ -6,6 +6,19 @@ spring:
     virtual:
       enabled: true
 
+  data:
+    redis:
+      connect-timeout: 1s
+      timeout: 1s
+
+lostark:
+  api-key: ${LOSTARK_API_KEY:}
+  connect-timeout: 3s
+  read-timeout: 5s
+  requests-per-minute: 90
+  max-concurrent-requests: 4
+  profile-ttl: 5m
+
 springdoc:
   paths-to-match: /api/v1/**
   override-with-generic-response: false

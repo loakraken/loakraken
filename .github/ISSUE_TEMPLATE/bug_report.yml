@@ -1,8 +1,15 @@
-name: "🐞 Bug Report"
-description: "버그 해결을 위한 이슈 템플릿"
-labels: ["bug", "priority:high"]
-title: "[BUG] "
+name: "🐞 Fix Issue"
+description: "develop 기준 일반 버그 수정 (운영 긴급 수정은 Hotfix 양식 사용)"
+labels: ["bug"]
+title: "[FIX] "
 body:
+  - type: markdown
+    attributes:
+      value: |
+        ## 🌿 GitFlow 안내
+        이슈 생성 후 발급된 번호로 `develop`에서 `fix/{issueNumber}-{english-kebab-case}` 브랜치를 만듭니다.
+        PR 대상은 `develop`입니다. 이미 배포된 운영 버전의 긴급 수정은 **Hotfix Issue**를 사용해 주세요.
+
   - type: textarea
     id: bug-summary
     attributes:
@@ -37,7 +44,19 @@ body:
       required: true
 
   - type: textarea
+    id: verification-plan
+    attributes:
+      label: ✅ 수정 범위 및 검증 계획
+      description: 수정할 항목과 재현 테스트, 주변 기능의 회귀 확인 방법을 작성해 주세요.
+      placeholder: |
+        - [ ] 실패하는 재현 테스트 확인
+        - [ ] 원인 수정 및 정상 결과 확인
+        - [ ] 관련 기능 회귀 확인
+    validations:
+      required: true
+
+  - type: textarea
     id: additional-info
     attributes:
       label: 📋 추가 정보 (로그, 스크린샷, 환경 등)
-      description: 스크린샷, 에러 로그, 사용 환경(OS, 브라우저/앱 버전) 등 참고할만한 자료를 첨부해주세요.
+      description: 발생 버전, 환경, 로그, 스크린샷 등을 작성해 주세요. 토큰과 비밀번호 등 민감값은 제거해 주세요.

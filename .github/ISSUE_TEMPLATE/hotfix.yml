@@ -1,0 +1,68 @@
+name: "🚑 Hotfix Issue"
+description: "master에 배포된 운영 버전의 긴급 버그 수정 전용 템플릿"
+labels: ["bug", "hotfix"]
+title: "[HOTFIX] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## 🌿 GitFlow 안내
+        이슈 생성 후 발급된 번호로 `master`에서 `hotfix/{issueNumber}-{english-kebab-case}` 브랜치를 만듭니다.
+        운영 반영 PR 대상은 `master`이며, 동일 수정은 반드시 `develop`에도 반영합니다.
+        일반 개발 중 발견된 버그는 **Fix Issue**와 `fix/* → develop` 흐름을 사용해 주세요.
+
+  - type: input
+    id: affected-version
+    attributes:
+      label: 🏷️ 영향받는 운영 버전
+      description: 실제 배포된 태그 또는 커밋을 작성해 주세요.
+      placeholder: v0.1.0 또는 배포 커밋 SHA
+    validations:
+      required: true
+
+  - type: textarea
+    id: incident-summary
+    attributes:
+      label: 🚨 장애 내용 및 긴급 수정 사유
+      description: 사용자 영향, 발생 범위, 일반 릴리스까지 기다릴 수 없는 이유를 작성해 주세요.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction-steps
+    attributes:
+      label: 📝 재현 경로 및 예상 결과
+      description: 발생 환경, 재현 단계, 실제 결과와 기대 결과를 작성해 주세요. 로그의 민감값은 제거합니다.
+    validations:
+      required: true
+
+  - type: textarea
+    id: fix-plan
+    attributes:
+      label: 🛠️ 최소 수정 범위 및 복구 방법
+      description: 긴급 해결에 필요한 변경, 배포 방법, 실패 시 복구 방법을 작성해 주세요.
+    validations:
+      required: true
+
+  - type: textarea
+    id: verification-plan
+    attributes:
+      label: 🔍 검증 계획
+      description: 재현 테스트, 주변 기능 회귀, 배포 후 정상화 확인 방법을 작성해 주세요.
+    validations:
+      required: true
+
+  - type: textarea
+    id: todo-list
+    attributes:
+      label: ✅ 긴급 수정 완료 체크리스트
+      description: 이슈 생성 후 진행에 따라 체크합니다. develop 반영까지 확인한 뒤 이슈를 종료합니다.
+      value: |
+        - [ ] 장애 원인 확인 및 최소 수정
+        - [ ] 재현·회귀 테스트 통과
+        - [ ] hotfix → master PR 병합 및 운영 반영
+        - [ ] 동일 수정의 develop 반영 PR 병합
+        - [ ] 배포 후 정상화 확인
+        - [ ] 완료된 hotfix 브랜치 정리
+    validations:
+      required: true

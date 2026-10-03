@@ -1,0 +1,61 @@
+name: "🚀 Release Issue"
+description: "검증된 develop 변경의 배포 준비와 master 반영을 위한 이슈 템플릿"
+labels: ["release"]
+title: "[RELEASE] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## 🌿 GitFlow 안내
+        이슈 생성 후 `develop`에서 `release/v{version}` 브랜치를 만듭니다. 릴리스 브랜치는 이슈 번호 대신 버전을 사용합니다.
+        배포 PR 대상은 `master`입니다. 릴리스 과정에서 생긴 수정은 `develop`에도 반영합니다.
+        신규 기능은 추가하지 않고 버전·배포 설정·문서·마지막 버그 수정·릴리스 검증만 수행합니다.
+
+  - type: input
+    id: release-version
+    attributes:
+      label: 🏷️ 릴리스 버전
+      description: 태그와 브랜치에 사용할 버전을 작성해 주세요.
+      placeholder: v0.1.0
+    validations:
+      required: true
+
+  - type: textarea
+    id: release-scope
+    attributes:
+      label: 📦 배포 범위 및 관련 이슈·PR
+      description: 이번 릴리스에 포함되는 변경과 제외할 항목, 관련 링크를 작성해 주세요.
+    validations:
+      required: true
+
+  - type: textarea
+    id: deployment-plan
+    attributes:
+      label: 🛠️ 배포 및 복구 계획
+      description: 배포 순서, 설정·마이그레이션 영향, 실패 시 복구 방법을 작성해 주세요. 해당 없는 항목은 이유를 적어주세요.
+    validations:
+      required: true
+
+  - type: textarea
+    id: release-validation
+    attributes:
+      label: 🔍 릴리스 검증 계획
+      description: 빌드·테스트·배포 전후 핵심 동작의 검증 방법과 성공 기준을 작성해 주세요.
+    validations:
+      required: true
+
+  - type: textarea
+    id: todo-list
+    attributes:
+      label: ✅ 릴리스 완료 체크리스트
+      description: 이슈 생성 후 진행에 따라 체크합니다. 모든 해당 항목을 완료한 뒤 이슈를 종료합니다.
+      value: |
+        - [ ] 배포 범위 및 버전 확정
+        - [ ] 릴리스 빌드와 테스트 통과
+        - [ ] release → master PR 병합
+        - [ ] master의 배포 커밋에 버전 태그 생성
+        - [ ] 릴리스 중 수정 사항을 develop에 반영 (없으면 해당 없음 기록)
+        - [ ] 배포 후 핵심 동작 확인
+        - [ ] 완료된 릴리스 브랜치 정리
+    validations:
+      required: true

@@ -13,14 +13,14 @@ public record LostArkProperties(
     @DefaultValue("5s") Duration readTimeout,
     @DefaultValue("90") int requestsPerMinute,
     @DefaultValue("4") int maxConcurrentRequests,
-    @DefaultValue("5m") Duration profileTtl) {
+    @DefaultValue("5m") Duration summaryTtl) {
   public LostArkProperties {
     if (connectTimeout.isNegative()
         || connectTimeout.isZero()
         || readTimeout.isNegative()
         || readTimeout.isZero()
-        || profileTtl.isNegative()
-        || profileTtl.isZero()
+        || summaryTtl.isNegative()
+        || summaryTtl.isZero()
         || requestsPerMinute < 1
         || maxConcurrentRequests < 1) {
       throw new IllegalArgumentException("외부 API 타임아웃, TTL 및 호출 제한은 양수여야 합니다.");

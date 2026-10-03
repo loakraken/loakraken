@@ -30,7 +30,7 @@ class ValkeyCharacterCache implements CharacterCache {
       if (json == null) return Optional.empty();
       try {
         var result = mapper.readValue(json, CharacterResult.class);
-        if (result != null && result.profile() != null && result.fetchedAt() != null)
+        if (result != null && result.details() != null && result.fetchedAt() != null)
           return Optional.of(result);
       } catch (JacksonException ignored) {
         // 손상되거나 이전 버전인 캐시는 제거한 뒤 정상 경로로 다시 조회한다.
@@ -47,13 +47,13 @@ class ValkeyCharacterCache implements CharacterCache {
     try {
       redis
           .opsForValue()
-          .set(key(name), mapper.writeValueAsString(result), properties.profileTtl());
+          .set(key(name), mapper.writeValueAsString(result), properties.summaryTtl());
     } catch (DataAccessException | JacksonException exception) {
       throw new CharacterException(CharacterErrorCode.CHARACTER_CACHE_UNAVAILABLE);
     }
   }
 
   private String key(String name) {
-    return "character:v1:" + name + ":profile";
+    return "character:v2:" + name + ":summary";
   }
 }

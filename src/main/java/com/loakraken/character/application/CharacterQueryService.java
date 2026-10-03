@@ -9,15 +9,15 @@ import org.springframework.stereotype.Service;
 
 @Service
 public class CharacterQueryService {
-  private final CharacterProfilePort profilePort;
+  private final CharacterDetailsPort detailsPort;
   private final CharacterCache cache;
   private final Clock clock;
   private final ConcurrentHashMap<String, CompletableFuture<CharacterResult>> flights =
       new ConcurrentHashMap<>();
 
   public CharacterQueryService(
-      CharacterProfilePort profilePort, CharacterCache cache, Clock clock) {
-    this.profilePort = profilePort;
+      CharacterDetailsPort detailsPort, CharacterCache cache, Clock clock) {
+    this.detailsPort = detailsPort;
     this.cache = cache;
     this.clock = clock;
   }
@@ -43,8 +43,8 @@ public class CharacterQueryService {
               .find(name)
               .orElseGet(
                   () -> {
-                    var profile = profilePort.fetch(name);
-                    var fetched = new CharacterResult(profile, Instant.now(clock));
+                    var details = detailsPort.fetch(name);
+                    var fetched = new CharacterResult(details, Instant.now(clock));
                     cache.save(name, fetched);
                     return fetched;
                   });

@@ -17,7 +17,7 @@ lostark:
   read-timeout: 5s
   requests-per-minute: 90
   max-concurrent-requests: 4
-  profile-ttl: 5m
+  summary-ttl: 5m
 
 springdoc:
   paths-to-match: /api/v1/**

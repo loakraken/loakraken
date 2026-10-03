@@ -39,7 +39,7 @@ final class LostArkProfileMapper {
     return value == null || value.isBlank();
   }
 
-  private static BigDecimal number(String value) {
+  static BigDecimal number(String value) {
     if (blank(value)) return null;
     try {
       var number = new BigDecimal(value.replace(",", "").strip());

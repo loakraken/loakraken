@@ -6,7 +6,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 
-@Schema(description = "캐릭터 프로필 조회 결과. 후속 작업에서 전투정보 섹션을 추가합니다.")
+@Schema(description = "캐릭터 프로필, 전투정보와 원정대 캐릭터 조회 결과")
 public record CharacterResponse(
     String characterName,
     String serverName,
@@ -19,9 +19,11 @@ public record CharacterResponse(
     String title,
     String guildName,
     List<StatResponse> stats,
+    CharacterLoadoutResponse loadout,
+    List<SiblingResponse> siblings,
     @Schema(description = "외부 API에서 실제 수집한 UTC 시각. 캐시 조회에서도 유지됩니다.") Instant fetchedAt) {
   public static CharacterResponse from(CharacterResult result) {
-    var profile = result.profile();
+    var profile = result.details().profile();
     return new CharacterResponse(
         profile.characterName(),
         profile.serverName(),
@@ -34,8 +36,26 @@ public record CharacterResponse(
         profile.title(),
         profile.guildName(),
         profile.stats().stream().map(stat -> new StatResponse(stat.type(), stat.value())).toList(),
+        CharacterLoadoutResponse.from(result.details().loadout()),
+        result.details().siblings().stream()
+            .map(
+                sibling ->
+                    new SiblingResponse(
+                        sibling.characterName(),
+                        sibling.serverName(),
+                        sibling.className(),
+                        sibling.characterLevel(),
+                        sibling.itemLevel()))
+            .toList(),
         result.fetchedAt());
   }
 
   public record StatResponse(String type, String value) {}
+
+  public record SiblingResponse(
+      String characterName,
+      String serverName,
+      String className,
+      Integer characterLevel,
+      BigDecimal itemLevel) {}
 }

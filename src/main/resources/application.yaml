@@ -20,6 +20,7 @@ lostark:
   api-key: ${LOSTARK_API_KEY:}
   connect-timeout: 3s
   read-timeout: 5s
+  # 공식 한도 100회/분에 여유를 둔 인스턴스별 예산입니다.
   requests-per-minute: 90
   max-concurrent-requests: 4
   summary-ttl: 5m

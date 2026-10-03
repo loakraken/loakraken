@@ -68,7 +68,33 @@ python scripts/validate_api_contract.py
 응답 필드는 null이어도 생략하지 않습니다. 상세한 명세 보정과 검증 범위는
 [docs/openapi-contract.md](docs/openapi-contract.md)를 참고합니다.
 
-## 작업 흐름
+## 실제 Lost Ark API 검증
+
+공식 한도는 분당 100회이며 서버는 여유를 둔 90회/분을 기본 예산으로 사용합니다.
+아래 실조회 테스트는 독립 Testcontainers DB·Valkey에서 한 캐릭터만 조회하며,
+외부 호출 예산을 2회로 제한하고 재조회에서 추가 호출·스냅샷 저장이 없는지 확인합니다.
+기본 빌드와 CI에서는 이 테스트를 건너뜁니다. 실제 429를 유발하는 부하 테스트는 하지 않습니다.
+
+현재 터미널의 `LOSTARK_API_KEY`를 설정한 상태에서 실행합니다.
+IntelliJ 실행 구성의 환경 변수나 `.env`는 터미널에 자동 전달되지 않습니다.
+`.env.example`의 키는 빈 값으로 유지합니다.
+
+```powershell
+$env:LOSTARK_LIVE_TEST = 'true'
+$env:LOSTARK_TEST_CHARACTER = '조회할캐릭터명'
+try {
+    .\gradlew.bat test --tests com.loakraken.LostArkLiveIntegrationTest
+    if ($LASTEXITCODE -ne 0) { throw '실조회 테스트 실패' }
+    python scripts/validate_api_contract.py --live
+    if ($LASTEXITCODE -ne 0) { throw '실조회 명세 검증 실패' }
+} finally {
+    Remove-Item Env:LOSTARK_LIVE_TEST, Env:LOSTARK_TEST_CHARACTER -ErrorAction SilentlyContinue
+}
+```
+
+실제 응답 산출물은 Git에서 제외된 `build/generated/character-live.json`에 저장합니다.
+
+## GitFlow
 
 이슈 생성 및 LOAKraken Projects 연결 → develop 기준 이슈 번호 브랜치 → 구현·검증 → develop PR.
 Projects 상태는 작업 시작 시 진행, PR 생성 시 검토, 병합 및 이슈 완료 시 완료로 갱신합니다.

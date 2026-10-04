@@ -6,10 +6,12 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.loakraken.ApiContractFixture;
 import com.loakraken.character.application.CharacterErrorCode;
 import com.loakraken.character.application.CharacterException;
+import com.loakraken.character.application.CharacterMetrics;
 import com.loakraken.character.application.CharacterResult;
 import com.loakraken.character.domain.ObservationState;
 import com.loakraken.character.presentation.CharacterResponse;
 import com.sun.net.httpserver.HttpServer;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.net.InetSocketAddress;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
@@ -28,6 +30,8 @@ import org.junit.jupiter.params.provider.ValueSource;
 import tools.jackson.databind.json.JsonMapper;
 
 class LostArkCharacterClientTest {
+  private final SimpleMeterRegistry registry = new SimpleMeterRegistry();
+  private final CharacterMetrics metrics = new CharacterMetrics(registry);
   private HttpServer server;
   private ExecutorService executor;
   private final AtomicInteger requests = new AtomicInteger();
@@ -77,6 +81,13 @@ class LostArkCharacterClientTest {
 
   @AfterEach
   void 정리() {
+    for (var meter : registry.getMeters()) {
+      var id = meter.getId();
+      assertThat(id.toString())
+          .doesNotContain("모험가", "원정대캐릭터", "test-token", "secret", "http", "/characters/");
+      assertThat(id.getTags())
+          .allMatch(tag -> java.util.Set.of("endpoint", "outcome", "event").contains(tag.getKey()));
+    }
     server.stop(0);
     executor.close();
   }
@@ -94,6 +105,20 @@ class LostArkCharacterClientTest {
     assertThat(result.details().loadout().equipment()).isEmpty();
     assertThat(result.details().siblings()).isEmpty();
     assertThat(requests).hasValue(2);
+    assertThat(
+            registry
+                .get("loakraken.lostark.requests")
+                .tags("endpoint", "armory", "outcome", "success")
+                .timer()
+                .count())
+        .isEqualTo(1);
+    assertThat(
+            registry
+                .get("loakraken.lostark.requests")
+                .tags("endpoint", "siblings", "outcome", "success")
+                .timer()
+                .count())
+        .isEqualTo(1);
   }
 
   @Test
@@ -138,6 +163,13 @@ class LostArkCharacterClientTest {
     siblingsStatus = 503;
     assertError(client("test", Duration.ofSeconds(2)), CharacterErrorCode.LOST_ARK_API_ERROR);
     assertThat(requests).hasValue(2);
+    assertThat(
+            registry
+                .get("loakraken.lostark.requests")
+                .tags("endpoint", "siblings", "outcome", "error")
+                .timer()
+                .count())
+        .isEqualTo(1);
   }
 
   @ParameterizedTest
@@ -239,6 +271,7 @@ class LostArkCharacterClientTest {
   void 키가_없으면_외부_요청을_보내지_않는다() {
     assertError(client("", Duration.ofSeconds(2)), CharacterErrorCode.LOST_ARK_NOT_CONFIGURED);
     assertThat(requests).hasValue(0);
+    assertThat(registry.getMeters()).isEmpty();
   }
 
   @Test
@@ -248,12 +281,32 @@ class LostArkCharacterClientTest {
     assertError(client, CharacterErrorCode.LOST_ARK_RATE_LIMITED);
     assertError(client, CharacterErrorCode.LOST_ARK_RATE_LIMITED);
     assertThat(requests).hasValue(1);
+    assertThat(
+            registry
+                .get("loakraken.lostark.requests")
+                .tag("outcome", "rate_limited")
+                .timer()
+                .count())
+        .isEqualTo(1);
+    assertThat(
+            registry.get("loakraken.lostark.gate").tag("event", "upstream_429").counter().count())
+        .isEqualTo(1);
+    assertThat(
+            registry
+                .get("loakraken.lostark.gate")
+                .tag("event", "upstream_backoff_reject")
+                .counter()
+                .count())
+        .isEqualTo(1);
   }
 
   @Test
   void 응답_지연은_타임아웃으로_처리한다() {
     delayMillis = 500;
     assertError(client("test", Duration.ofMillis(100)), CharacterErrorCode.LOST_ARK_API_TIMEOUT);
+    var timer = registry.get("loakraken.lostark.requests").tag("outcome", "timeout").timer();
+    assertThat(timer.count()).isEqualTo(1);
+    assertThat(timer.totalTime(java.util.concurrent.TimeUnit.MILLISECONDS)).isPositive();
   }
 
   @ParameterizedTest
@@ -263,6 +316,8 @@ class LostArkCharacterClientTest {
     body = "secret-upstream-error";
     assertError(client("test", Duration.ofSeconds(2)), CharacterErrorCode.LOST_ARK_API_ERROR);
     assertThat(requests).hasValue(1);
+    assertThat(registry.get("loakraken.lostark.requests").tag("outcome", "error").timer().count())
+        .isEqualTo(1);
   }
 
   @Test
@@ -270,6 +325,9 @@ class LostArkCharacterClientTest {
     var client = client("test", Duration.ofSeconds(2));
     status = 404;
     assertError(client, CharacterErrorCode.CHARACTER_NOT_FOUND);
+    assertThat(
+            registry.get("loakraken.lostark.requests").tag("outcome", "not_found").timer().count())
+        .isEqualTo(1);
     status = 200;
     assertThat(client.fetch("모험가").details().profile().characterName()).isEqualTo("모험가");
   }
@@ -287,8 +345,9 @@ class LostArkCharacterClientTest {
     return new LostArkCharacterClient(
         new CharacterConfiguration().lostArkRestClient(properties),
         properties,
-        new LostArkRequestGate(Clock.systemUTC(), properties),
-        new JsonMapper());
+        new LostArkRequestGate(Clock.systemUTC(), properties, metrics),
+        new JsonMapper(),
+        metrics);
   }
 
   private void assertError(LostArkCharacterClient client, CharacterErrorCode code) {

@@ -1,5 +1,6 @@
 package com.loakraken.character.infrastructure;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.loakraken.character.application.CharacterException;
@@ -9,11 +10,23 @@ import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpHeaders;
 
 class LostArkRequestGateTest {
+  private final io.micrometer.core.instrument.simple.SimpleMeterRegistry registry =
+      new io.micrometer.core.instrument.simple.SimpleMeterRegistry();
+  private final com.loakraken.character.application.CharacterMetrics metrics =
+      new com.loakraken.character.application.CharacterMetrics(registry);
+
   @Test
   void 동시_호출_제한을_초과하면_대기열을_늘리지_않는다() {
     var gate = gate(Clock.systemUTC(), 90, 1);
     gate.acquire();
     assertThatThrownBy(() -> gate.acquire()).isInstanceOf(CharacterException.class);
+    assertThat(
+            registry
+                .get("loakraken.lostark.gate")
+                .tag("event", "concurrency_reject")
+                .counter()
+                .count())
+        .isEqualTo(1);
     gate.release();
     gate.acquire();
     gate.release();
@@ -26,6 +39,9 @@ class LostArkRequestGateTest {
     gate.acquire();
     gate.release();
     assertThatThrownBy(() -> gate.acquire()).isInstanceOf(CharacterException.class);
+    assertThat(
+            registry.get("loakraken.lostark.gate").tag("event", "budget_reject").counter().count())
+        .isEqualTo(1);
     clock.now = clock.now.plusSeconds(60);
     gate.acquire();
     gate.release();
@@ -65,7 +81,8 @@ class LostArkRequestGateTest {
             Duration.ofSeconds(5),
             budget,
             concurrency,
-            Duration.ofMinutes(5)));
+            Duration.ofMinutes(5)),
+        metrics);
   }
 
   private static class MutableClock extends Clock {

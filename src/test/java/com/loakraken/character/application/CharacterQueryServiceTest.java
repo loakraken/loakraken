@@ -19,6 +19,9 @@ import java.util.concurrent.*;
 import org.junit.jupiter.api.Test;
 
 class CharacterQueryServiceTest {
+  private final io.micrometer.core.instrument.simple.SimpleMeterRegistry registry =
+      new io.micrometer.core.instrument.simple.SimpleMeterRegistry();
+  private final CharacterMetrics metrics = new CharacterMetrics(registry);
   private final Clock clock = Clock.fixed(Instant.parse("2026-10-04T00:00:00Z"), ZoneOffset.UTC);
   private final CharacterProfile profile =
       new CharacterProfile(
@@ -36,9 +39,16 @@ class CharacterQueryServiceTest {
     var cache = mock(CharacterCache.class);
     var cached = new CharacterResult(details, clock.instant().minusSeconds(60));
     when(cache.find("모험가")).thenReturn(Optional.of(cached));
-    var service = new CharacterQueryService(port, cache, clock, snapshots);
+    var service = new CharacterQueryService(port, cache, clock, snapshots, metrics);
     assertThat(service.search(new SearchCharacterCommand(" 모험가 "))).isEqualTo(cached);
     verifyNoInteractions(port, snapshots);
+    assertThat(
+            registry
+                .get("loakraken.character.searches")
+                .tag("outcome", "success")
+                .counter()
+                .count())
+        .isEqualTo(1);
   }
 
   @Test
@@ -64,7 +74,7 @@ class CharacterQueryServiceTest {
               if (!release.await(5, TimeUnit.SECONDS)) throw new IllegalStateException("테스트 대기 초과");
               return fetched;
             });
-    var service = new CharacterQueryService(port, cache, clock, snapshots);
+    var service = new CharacterQueryService(port, cache, clock, snapshots, metrics);
     try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
       var futures = new ArrayList<Future<CharacterResult>>();
       try {
@@ -78,6 +88,13 @@ class CharacterQueryServiceTest {
         assertThat(future.get(5, TimeUnit.SECONDS).details()).isEqualTo(details);
     }
     verify(port, times(1)).fetch("모험가");
+    assertThat(
+            registry
+                .get("loakraken.character.searches")
+                .tag("outcome", "success")
+                .counter()
+                .count())
+        .isEqualTo(16);
     verify(snapshots, times(1)).save(fetched, clock.instant());
   }
 
@@ -89,11 +106,25 @@ class CharacterQueryServiceTest {
     when(port.fetch("모험가"))
         .thenThrow(new CharacterException(CharacterErrorCode.LOST_ARK_API_ERROR))
         .thenReturn(fetched);
-    var service = new CharacterQueryService(port, cache, clock, snapshots);
+    var service = new CharacterQueryService(port, cache, clock, snapshots, metrics);
     assertThatThrownBy(() -> service.search(new SearchCharacterCommand("모험가")))
         .isInstanceOf(CharacterException.class);
     assertThat(service.search(new SearchCharacterCommand("모험가")).details()).isEqualTo(details);
     verify(port, times(2)).fetch("모험가");
+    assertThat(
+            registry
+                .get("loakraken.character.searches")
+                .tag("outcome", "success")
+                .counter()
+                .count())
+        .isEqualTo(1);
+    assertThat(
+            registry
+                .get("loakraken.character.searches")
+                .tag("outcome", "failure")
+                .counter()
+                .count())
+        .isEqualTo(1);
   }
 
   @Test
@@ -105,7 +136,7 @@ class CharacterQueryServiceTest {
     doThrow(new org.springframework.dao.DataAccessResourceFailureException("internal-secret"))
         .when(snapshots)
         .save(fetched, clock.instant());
-    var service = new CharacterQueryService(port, cache, clock, snapshots);
+    var service = new CharacterQueryService(port, cache, clock, snapshots, metrics);
     assertThatThrownBy(() -> service.search(new SearchCharacterCommand("모험가")))
         .isInstanceOfSatisfying(
             CharacterException.class,
@@ -121,9 +152,16 @@ class CharacterQueryServiceTest {
     var cache = mock(CharacterCache.class);
     when(cache.find(anyString()))
         .thenThrow(new CharacterException(CharacterErrorCode.CHARACTER_CACHE_UNAVAILABLE));
-    var service = new CharacterQueryService(port, cache, clock, snapshots);
+    var service = new CharacterQueryService(port, cache, clock, snapshots, metrics);
     assertThatThrownBy(() -> service.search(new SearchCharacterCommand("모험가")))
         .isInstanceOf(CharacterException.class);
     verifyNoInteractions(port);
+    assertThat(
+            registry
+                .get("loakraken.character.searches")
+                .tag("outcome", "failure")
+                .counter()
+                .count())
+        .isEqualTo(1);
   }
 }

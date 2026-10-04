@@ -26,13 +26,14 @@ class SharedLostArkBudgetIntegrationTest {
   private static final HttpServer server = server();
   @Autowired CharacterDetailsPort characters;
   @Autowired MarketPricesPort markets;
+  @Autowired MarketOptionsPort options;
   @Autowired ApplicationContext context;
 
   @DynamicPropertySource
   static void properties(DynamicPropertyRegistry properties) {
     properties.add("lostark.base-url", () -> "http://127.0.0.1:" + server.getAddress().getPort());
     properties.add("lostark.api-key", () -> "local-test-token");
-    properties.add("lostark.requests-per-minute", () -> "3");
+    properties.add("lostark.requests-per-minute", () -> "4");
   }
 
   @AfterAll
@@ -55,7 +56,8 @@ class SharedLostArkBudgetIntegrationTest {
             MarketSearch.Sort.RECENT_PRICE,
             MarketSearch.SortCondition.ASC);
     markets.fetch(MarketSource.ACTIVE_LISTING, search);
-    assertThat(calls).hasValue(3);
+    options.fetchOptions();
+    assertThat(calls).hasValue(4);
     assertThatThrownBy(() -> markets.fetch(MarketSource.RECENT_TRADE, search))
         .isInstanceOfSatisfying(
             BusinessException.class,
@@ -66,7 +68,7 @@ class SharedLostArkBudgetIntegrationTest {
             BusinessException.class,
             exception ->
                 assertThat(exception.errorCode().code()).isEqualTo("LOST_ARK_RATE_LIMITED"));
-    assertThat(calls).hasValue(3);
+    assertThat(calls).hasValue(4);
   }
 
   private static HttpServer server() {
@@ -78,14 +80,16 @@ class SharedLostArkBudgetIntegrationTest {
             calls.incrementAndGet();
             String path = exchange.getRequestURI().getPath();
             String json =
-                path.startsWith("/armories/")
-                    ? """
+                path.equals("/markets/options")
+                    ? "{\"Categories\":[],\"ItemGrades\":[],\"ItemTiers\":[],\"Classes\":[]}"
+                    : path.startsWith("/armories/")
+                        ? """
             {"ArmoryProfile":{"CharacterName":"모험가","ServerName":"루페온",
             "CharacterClassName":"바드","CharacterLevel":70,"ItemAvgLevel":"1700.5"}}
             """
-                    : path.endsWith("/siblings")
-                        ? "[]"
-                        : "{\"PageNo\":1,\"PageSize\":10,\"TotalCount\":0,\"Items\":[]}";
+                        : path.endsWith("/siblings")
+                            ? "[]"
+                            : "{\"PageNo\":1,\"PageSize\":10,\"TotalCount\":0,\"Items\":[]}";
             exchange.getRequestBody().readAllBytes();
             exchange.getResponseHeaders().set("Content-Type", "application/json");
             byte[] bytes = json.getBytes(StandardCharsets.UTF_8);

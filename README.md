@@ -63,6 +63,8 @@ Swagger에는 실제 구현한 `/api/v1/**` 경로만 표시합니다.
 단일 인스턴스 운영·캐시 장애 정책과 Micrometer 지표는 [docs/backend-operations.md](docs/backend-operations.md)에 정리했습니다.
 거래소 현재 판매·최근 거래 가격은 `/api/v1/markets/items`와 `/api/v1/markets/trades`로 조회합니다.
 검색 조건·가격 출처·조회 시각과 제한은 [docs/market-prices.md](docs/market-prices.md)를 참고합니다.
+거래소 선택 목록은 `/api/v1/markets/options`로 조회합니다. 기본 가격 캐시 30초·옵션 캐시 10분과
+동일 요청 병합·캐시 장애 정책은 [docs/market-cache.md](docs/market-cache.md)에 정리했습니다.
 운영 프로필은 기본 비활성화하며 필요한 환경에서 `API_DOCS_ENABLED=true`로 활성화합니다.
 Lost Ark API 키는 서버 설정으로만 사용하며 Swagger에 입력하거나 노출하지 않습니다.
 

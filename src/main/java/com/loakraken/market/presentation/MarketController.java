@@ -19,7 +19,7 @@ import org.springframework.web.bind.annotation.*;
 @ApiResponses({
   @io.swagger.v3.oas.annotations.responses.ApiResponse(
       responseCode = "200",
-      description = "가격 조회 성공"),
+      description = "거래소 조회 성공"),
   @io.swagger.v3.oas.annotations.responses.ApiResponse(
       responseCode = "400",
       description = "INVALID_REQUEST: 검색 조건 오류",
@@ -42,7 +42,7 @@ import org.springframework.web.bind.annotation.*;
       content = @Content(schema = @Schema(ref = "#/components/schemas/ErrorResponse"))),
   @io.swagger.v3.oas.annotations.responses.ApiResponse(
       responseCode = "503",
-      description = "LOST_ARK_NOT_CONFIGURED",
+      description = "LOST_ARK_NOT_CONFIGURED 또는 MARKET_CACHE_UNAVAILABLE",
       content = @Content(schema = @Schema(ref = "#/components/schemas/ErrorResponse"))),
   @io.swagger.v3.oas.annotations.responses.ApiResponse(
       responseCode = "504",
@@ -59,7 +59,8 @@ public class MarketController {
   @GetMapping("/items")
   @Operation(
       summary = "현재 판매 상품 가격 조회",
-      description = "공식 POST /markets/items를 한 번 조회합니다. 검색 조건의 기본값을 적용해 응답에 함께 반환합니다.")
+      description =
+          "공식 현재 판매 상품을 조회합니다. 기본 캐시는 30초이며 observedAt은 원래 수집 시각입니다. 적용한 검색 조건을 함께 반환합니다.")
   public ApiResponse<MarketPriceResponse> items(
       @Valid @ModelAttribute @ParameterObject MarketSearchRequest request) {
     return search(MarketSource.ACTIVE_LISTING, request);
@@ -68,7 +69,7 @@ public class MarketController {
   @GetMapping("/trades")
   @Operation(
       summary = "최근 거래 상품 가격 조회",
-      description = "공식 POST /markets/trades를 한 번 조회합니다. 개별 거래 시각과 집계 기간은 제공되지 않습니다.")
+      description = "공식 최근 거래 상품을 조회합니다. 기본 캐시는 30초이며 개별 거래 시각과 집계 기간은 제공되지 않습니다.")
   public ApiResponse<MarketPriceResponse> trades(
       @Valid @ModelAttribute @ParameterObject MarketSearchRequest request) {
     return search(MarketSource.RECENT_TRADE, request);
@@ -79,5 +80,15 @@ public class MarketController {
     return ApiResponse.of(
         MarketSuccessCode.MARKET_SEARCH_SUCCESS,
         MarketPriceResponse.from(service.search(source, request.toSearch())));
+  }
+
+  @GetMapping("/options")
+  @Operation(
+      summary = "거래소 검색 옵션 조회",
+      description =
+          "공식 카테고리·하위 카테고리·등급·티어·직업 목록입니다. 기본 캐시는 10분이며 observedAt은 원래 수집 시각입니다. 가격 검색 시 자동으로 선행 호출하지 않습니다.")
+  public ApiResponse<MarketOptionsResponse> options() {
+    return ApiResponse.of(
+        MarketSuccessCode.MARKET_OPTIONS_SUCCESS, MarketOptionsResponse.from(service.options()));
   }
 }

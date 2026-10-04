@@ -12,16 +12,19 @@ Valkey 읽기·쓰기 장애는 `503 CHARACTER_CACHE_UNAVAILABLE`로 종료한�
 
 관측 저장·이력 공개는 `CHARACTER_SNAPSHOTS_ENABLED=false`를 유지한다. 저장 범위 확인 전 diff·장기 통계·성장 그래프를 확장하지 않는다.
 
+거래소는 가격 30초·검색 옵션 10분을 기본 TTL로 사용한다. 옵션 외부 조회도 공유 예산 1회를 사용한다. 거래소 캐시 장애는 `503 MARKET_CACHE_UNAVAILABLE`이며 외부 API 우회나 오래된 응답 반환을 하지 않는다. [거래소 옵션·캐시 계약](market-cache.md)을 참고한다.
+
 ## 계측 계약
 
 Actuator가 제공하는 MeterRegistry에 기록한다. 태그는 코드의 고정 enum 또는 success/failure만 사용한다. 캐릭터명·서버명·원문 URL·API 키·예외 메시지는 태그로 받지 않는다.
 
 | Meter | 종류 | 태그 | 의미 |
 |---|---|---|---|
-| loakraken.lostark.requests | Timer | endpoint=armory/siblings/market_items/market_trades, outcome=success/not_found/rate_limited/timeout/error | 게이트 통과 후 HTTP 요청 시도부터 응답 수신·JSON 디코딩 종료까지 횟수와 지연 |
+| loakraken.lostark.requests | Timer | endpoint=armory/siblings/market_items/market_trades/market_options, outcome=success/not_found/rate_limited/timeout/error | 게이트 통과 후 HTTP 요청 시도부터 응답 수신·JSON 디코딩 종료까지 횟수와 지연 |
 | loakraken.cache.operations | Counter | outcome=hit/miss/invalid/read_error/write_success/write_error | 캐시 읽기·쓰기 결과 및 손상 발견 |
 | loakraken.lostark.gate | Counter | event=budget_reject/concurrency_reject/upstream_429/upstream_backoff_reject | 로컬 차단 사유와 외부 429 관측 |
 | loakraken.character.searches | Counter | outcome=success/failure | 검색 application 서비스 호출의 완료 결과 |
+| loakraken.market.cache.operations | Counter | kind=prices/options, outcome=hit/miss/invalid/read_error/write_success/write_error | 거래소 캐시 연산 결과. 출처·검색 조건·해시·이름은 태그에 포함하지 않음 |
 
 외부 요청 Timer의 count가 요청 횟수이므로 별도 요청 Counter와 합산하지 않는다. success는 HTTP 200 및 타입 디코딩 성공이다. 이후 필수 프로필 검증이나 도메인 매핑에서 실패하면 HTTP 지표는 success여도 검색은 failure일 수 있다. not_found는 실제 외부 404이며 원정대 404를 공개 API에서 502로 바꾸는 정책과 구별된다. error에는 다른 HTTP 오류, 비어 있는 응답, JSON 디코딩 오류, 타임아웃 외 연결 오류가 포함된다. API 키 미설정과 로컬 게이트 거절은 HTTP 시도 지표를 만들지 않는다.
 
@@ -31,9 +34,9 @@ Actuator가 제공하는 MeterRegistry에 기록한다. 태그는 코드의 고�
 
 검색 성공·실패는 캐시 적중과 동시 요청 병합 참여자를 포함해 각 서비스 호출당 한 번이다. 컨트롤러 입력 검증에서 종료된 요청은 여기에 포함되지 않으며 기본 HTTP 서버 지표로 확인한다.
 
-거래소는 캐시를 사용하지 않으며 캐릭터 검색 Counter에도 포함되지 않는다. 거래소 도메인 검증 실패는 HTTP Timer의 디코딩 성공과 별개이며 공개 HTTP 서버 응답 지표에서 502로 확인한다.
+거래소 캐시는 별도의 Counter를 사용하며 캐릭터 캐시·검색 Counter에 포함되지 않는다. 거래소 캐시도 초기 읽기와 병합 내부 재확인 때문에 miss가 둘 이상 기록될 수 있다. 손상 발견·시각 만료·문맥 불일치 invalid는 삭제 성공 시 miss, 삭제 실패 시 read_error와 함께 기록된다. 거래소 도메인 검증 실패는 HTTP Timer의 디코딩 성공과 별개이며 공개 HTTP 서버 응답 지표에서 502로 확인한다.
 
-loakraken.* Meter 조합의 상한은 요청 20 + 캐시 6 + 게이트 4 + 검색 2 = 32개다. exporter가 생성하는 실제 시계열 수는 Timer의 count/total/max 등에 따라 더 많을 수 있다. 미발생 조합은 아직 등록되지 않을 수 있다. 기본 누적값은 프로세스 재시작 시 초기화된다.
+loakraken.* Meter 조합의 상한은 요청 25 + 캐릭터 캐시 6 + 게이트 4 + 캐릭터 검색 2 + 거래소 캐시 12 = 49개다. exporter가 생성하는 실제 시계열 수는 Timer의 count/total/max 등에 따라 더 많을 수 있다. 미발생 조합은 아직 등록되지 않을 수 있다. 기본 누적값은 프로세스 재시작 시 초기화된다.
 
 ## 확인 방법과 공개 범위
 

@@ -195,6 +195,84 @@ class LostArkMarketClientTest {
   }
 
   private LostArkMarketClient client(String key, Duration timeout) {
+    return new LostArkMarketClient(httpClient(key, timeout));
+  }
+
+  @Test
+  void 검색_옵션은_GET으로_조회하고_하위목록의_null과_빈목록을_보존한다() {
+    body =
+        """
+      {"Categories":[{"Code":50000,"CodeName":"재료","Subs":[{"Code":50010,"CodeName":"강화"}]},
+        {"Code":60000,"CodeName":"소모품","Subs":[]},{"Code":70000,"CodeName":"기타","Subs":null}],
+       "ItemGrades":["일반","희귀"],"ItemTiers":[3,4],"Classes":["바드"],"FutureField":true}
+      """;
+    var options =
+        new LostArkMarketOptionsClient(httpClient("test-token", Duration.ofSeconds(2)))
+            .fetchOptions();
+    assertThat(path).isEqualTo("/markets/options");
+    assertThat(method).isEqualTo("GET");
+    assertThat(auth).isEqualTo("Bearer test-token");
+    assertThat(requestBody).isEmpty();
+    assertThat(options.categories().getFirst().subs().getFirst().code()).isEqualTo(50010);
+    assertThat(options.categories().get(1).subs()).isEmpty();
+    assertThat(options.categories().get(2).subs()).isNull();
+    assertThat(options.itemGrades()).containsExactly("일반", "희귀");
+    assertThat(options.itemTiers()).containsExactly(3, 4);
+    assertThat(options.classes()).containsExactly("바드");
+    assertThat(
+            registry
+                .get("loakraken.lostark.requests")
+                .tags("endpoint", "market_options", "outcome", "success")
+                .timer()
+                .count())
+        .isEqualTo(1);
+  }
+
+  @ParameterizedTest
+  @ValueSource(
+      strings = {
+        "null",
+        "{}",
+        "broken",
+        "{\"Categories\":null,\"ItemGrades\":[],\"ItemTiers\":[],\"Classes\":[]}",
+        "{\"Categories\":[{\"CodeName\":\"missing code\"}],\"ItemGrades\":[],\"ItemTiers\":[],\"Classes\":[]}",
+        "{\"Categories\":[],\"ItemGrades\":[null],\"ItemTiers\":[],\"Classes\":[]}",
+        "{\"Categories\":[],\"ItemGrades\":[],\"ItemTiers\":[-1],\"Classes\":[]}"
+      })
+  void 필수_검색_옵션이_없거나_잘못되면_실패한다(String response) {
+    body = response;
+    var client = new LostArkMarketOptionsClient(httpClient("test", Duration.ofSeconds(2)));
+    assertThatThrownBy(client::fetchOptions)
+        .isInstanceOfSatisfying(
+            BusinessException.class,
+            error -> assertThat(error.errorCode()).isEqualTo(LostArkErrorCode.LOST_ARK_API_ERROR));
+  }
+
+  @Test
+  void 제공된_빈_옵션은_누락으로_취급하지_않는다() {
+    body = "{\"Categories\":[],\"ItemGrades\":[],\"ItemTiers\":[],\"Classes\":[]}";
+    var options =
+        new LostArkMarketOptionsClient(httpClient("test", Duration.ofSeconds(2))).fetchOptions();
+    assertThat(options.categories()).isEmpty();
+    assertThat(options.classes()).isEmpty();
+  }
+
+  @Test
+  void 옵션_429도_가격_요청을_함께_차단한다() {
+    var http = httpClient("test", Duration.ofSeconds(2));
+    var options = new LostArkMarketOptionsClient(http);
+    status = 429;
+    assertThatThrownBy(options::fetchOptions)
+        .isInstanceOfSatisfying(
+            BusinessException.class,
+            error ->
+                assertThat(error.errorCode()).isEqualTo(LostArkErrorCode.LOST_ARK_RATE_LIMITED));
+    status = 200;
+    assertError(new LostArkMarketClient(http), LostArkErrorCode.LOST_ARK_RATE_LIMITED);
+    assertThat(calls).hasValue(1);
+  }
+
+  private LostArkMarketHttpClient httpClient(String key, Duration timeout) {
     var properties =
         new LostArkProperties(
             URI.create("http://127.0.0.1:" + server.getAddress().getPort()),
@@ -204,7 +282,7 @@ class LostArkMarketClientTest {
             90,
             1,
             Duration.ofMinutes(5));
-    return new LostArkMarketClient(
+    return new LostArkMarketHttpClient(
         new LostArkConfiguration().lostArkRestClient(properties),
         properties,
         new LostArkRequestGate(Clock.systemUTC(), properties, metrics),

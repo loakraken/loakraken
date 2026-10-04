@@ -59,6 +59,38 @@ class LostArkEquipmentTooltipTest {
   }
 
   @Test
+  void 연마_효과는_공식_수치_색으로_등급을_정하고_모르는_색은_null로_둔다() {
+    var detail =
+        LostArkEquipmentTooltip.parse(
+            "테스트 목걸이",
+            """
+            {"Element_006":{"type":"ItemPartBox","value":{"Element_000":"연마 효과",
+              "Element_001":"<img src='emoticon_sign_greenDot' width='0' height='0' vspace='-3'></img>추가 피해 <FONT COLOR='FE9600'>+2.60%</FONT><BR><img src='x'></img>무기 공격력 <FONT COLOR='#CE43FC'>+1.80%</FONT><BR>낙인력 <font color='00b5ff'>+2.15%</font><BR>공격력 <FONT COLOR='123456'>+80</FONT><BR>설명만 있는 줄"}}}
+            """);
+    assertThat(detail.polishEffects())
+        .containsExactly(
+            new CharacterLoadout.PolishEffect("추가 피해", "+2.60%", CharacterLoadout.PolishGrade.HIGH),
+            new CharacterLoadout.PolishEffect("무기 공격력", "+1.80%", CharacterLoadout.PolishGrade.MID),
+            new CharacterLoadout.PolishEffect("낙인력", "+2.15%", CharacterLoadout.PolishGrade.LOW),
+            new CharacterLoadout.PolishEffect("공격력", "+80", null));
+    assertThat(detail.effects().getFirst().lines())
+        .containsExactly(
+            "추가 피해 +2.60%", "무기 공격력 +1.80%", "낙인력 +2.15%", "공격력 +80", "설명만 있는 줄");
+  }
+
+  @Test
+  void 연마_효과가_아닌_효과_묶음은_등급을_만들지_않는다() {
+    var detail =
+        LostArkEquipmentTooltip.parse(
+            "테스트 팔찌",
+            """
+            {"Element_005":{"type":"ItemPartBox","value":{"Element_000":"팔찌 효과",
+              "Element_001":"치명타 피해 <FONT COLOR='#CE43FC'>+8.40%</FONT>"}}}
+            """);
+    assertThat(detail.polishEffects()).isEmpty();
+  }
+
+  @Test
   void 품질이_적용되지_않는_장비는_품질을_null로_둔다() {
     var detail =
         LostArkEquipmentTooltip.parse(

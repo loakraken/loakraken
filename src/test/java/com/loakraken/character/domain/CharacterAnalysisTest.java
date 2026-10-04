@@ -275,7 +275,7 @@ class CharacterAnalysisTest {
         null,
         "고대",
         new CharacterLoadout.EquipmentDetail(
-            refineLevel, quality, null, 4, point, List.of(), List.of()));
+            refineLevel, quality, null, 4, point, List.of(), List.of(), List.of()));
   }
 
   private CharacterAnalysis.GemSummary gems(List<CharacterLoadout.Gem> gems) {

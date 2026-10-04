@@ -7,6 +7,7 @@ import java.time.ZoneOffset;
 import java.util.UUID;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
 
 @Repository
 class PostgresCharacterSnapshotRepository implements CharacterSnapshotPort {
@@ -17,6 +18,7 @@ class PostgresCharacterSnapshotRepository implements CharacterSnapshotPort {
   }
 
   @Override
+  @Transactional(timeout = 3)
   public void save(FetchedCharacter fetched, Instant fetchedAt) {
     var profile = fetched.details().profile();
     // UPSERT가 캐릭터 행을 잠가 최신 스냅샷 비교와 추가를 같은 트랜잭션 안에서 직렬화한다.

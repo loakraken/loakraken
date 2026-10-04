@@ -1,5 +1,6 @@
 package com.loakraken.character.infrastructure;
 
+import com.loakraken.character.application.CharacterSnapshotPolicy;
 import java.net.http.HttpClient;
 import java.time.Clock;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -9,7 +10,7 @@ import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.web.client.RestClient;
 
 @Configuration(proxyBeanMethods = false)
-@EnableConfigurationProperties(LostArkProperties.class)
+@EnableConfigurationProperties({LostArkProperties.class, CharacterSnapshotPolicy.class})
 class CharacterConfiguration {
   @Bean
   Clock characterClock() {

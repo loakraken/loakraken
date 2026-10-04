@@ -29,7 +29,8 @@ import tools.jackson.databind.json.JsonMapper;
     properties = {
       "lostark.base-url=https://developer-lostark.game.onstove.com",
       "lostark.requests-per-minute=2",
-      "lostark.max-concurrent-requests=1"
+      "lostark.max-concurrent-requests=1",
+      "character.snapshots.enabled=false"
     })
 class LostArkLiveIntegrationTest {
   @LocalServerPort private int port;
@@ -74,8 +75,7 @@ class LostArkLiveIntegrationTest {
                   .param("name", name)
                   .query(Integer.class)
                   .single())
-          .isEqualTo(1);
-      ApiContractFixture.write("character-live.json", first.body());
+          .isZero();
       var docs =
           http.send(
               HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/v3/api-docs"))

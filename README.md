@@ -53,6 +53,9 @@ Swagger에는 실제 구현한 `/api/v1/**` 경로만 표시합니다.
 검색 동작과 오류 코드는 [docs/character-search.md](docs/character-search.md)를 참고합니다.
 원본 저장·중복 억제·트랜잭션 정책은 [docs/character-snapshots.md](docs/character-snapshots.md)에 정리했습니다.
 저장된 당시 프로필 수치는 `GET /api/v1/characters/snapshots`로 조회하며 [이력 조회 계약](docs/character-history.md)을 참고합니다.
+관측 저장·이력 조회는 `CHARACTER_SNAPSHOTS_ENABLED=false`가 기본값이며 이력 API는 503을 반환합니다.
+검색·단기 캐시는 동작합니다. 합성 데이터 개발 또는 보관·재제공 범위를 확인한 환경에서만
+실행 환경 변수로 `CHARACTER_SNAPSHOTS_ENABLED=true`를 지정합니다. [검증 근거와 한계](docs/source-verification.md)를 참고합니다.
 관측값 집계와 미확인 값 처리 기준은 [docs/character-analysis.md](docs/character-analysis.md)를 참고합니다.
 관측 근거 기반 진단과 프론트 연동 계약은 [docs/character-diagnostics.md](docs/character-diagnostics.md)에 정리했습니다.
 기준서의 비교 사이트 10곳과 검증 범위는 [docs/reference-sites.md](docs/reference-sites.md)에서 확인할 수 있습니다.
@@ -69,7 +72,8 @@ GitHub Actions는 Gradle의 Java 테스트를 실행하고 명세와 응답을 `
 
 공식 한도는 분당 100회이며 서버는 여유를 둔 90회/분을 기본 예산으로 사용합니다.
 아래 실조회 테스트는 독립 Testcontainers DB·Valkey에서 한 캐릭터만 조회하며,
-외부 호출 예산을 2회로 제한하고 재조회에서 추가 호출·스냅샷 저장이 없는지 확인합니다.
+외부 호출 예산을 2회로 제한하고 재조회에서 추가 호출이 없는지 확인합니다.
+실조회 테스트는 관측 저장을 비활성화하며 스냅샷이 생성되지 않는지 확인합니다.
 기본 빌드와 CI에서는 이 테스트를 건너뜁니다. 실제 429를 유발하는 부하 테스트는 하지 않습니다.
 
 현재 터미널의 `LOSTARK_API_KEY`를 설정한 상태에서 실행합니다.
@@ -87,4 +91,5 @@ try {
 }
 ```
 
-실제 응답 산출물은 Git에서 제외된 `build/generated/character-live.json`에 저장합니다.
+실제 캐릭터 응답은 파일로 남기지 않습니다. 공개 OpenAPI 명세만 `build/generated/openapi-live.json`에 저장합니다.
+이전에 생성된 로컬 응답 파일은 이 변경으로 삭제하지 않습니다.

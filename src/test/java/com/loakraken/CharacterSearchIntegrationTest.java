@@ -33,7 +33,9 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 import tools.jackson.databind.json.JsonMapper;
 
 @Import(TestcontainersConfiguration.class)
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@SpringBootTest(
+    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+    properties = "character.snapshots.enabled=true")
 class CharacterSearchIntegrationTest {
   private static final String NAME = "통합테스트캐릭터";
   private static final String KEY = "character:v2:" + NAME + ":summary";

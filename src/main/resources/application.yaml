@@ -25,6 +25,10 @@ lostark:
   max-concurrent-requests: 4
   summary-ttl: 5m
 
+character:
+  snapshots:
+    enabled: ${CHARACTER_SNAPSHOTS_ENABLED:false}
+
 springdoc:
   paths-to-match: /api/v1/**
   override-with-generic-response: false

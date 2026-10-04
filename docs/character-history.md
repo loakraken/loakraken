@@ -4,6 +4,9 @@
 
 ## 요청
 
+기본 설정은 `CHARACTER_SNAPSHOTS_ENABLED=false`이며 유효한 요청에 `503 CHARACTER_HISTORY_DISABLED`를 반환한다.
+기존 저장 기록이 있어도 비활성 상태에서는 읽거나 공개하지 않는다. 아래 성공 응답은 저장 기능이 활성화된 환경의 계약이다.
+
 | 파라미터 | 형식 | 의미 |
 |---|---|---|
 | characterName | 필수 문자열, 문자/숫자 1–64자 | 검색 응답에서 받은 캐릭터명 |
@@ -59,6 +62,7 @@ Accept: application/json
 | 400 | INVALID_SNAPSHOT_CURSOR | 존재하지 않거나 다른 캐릭터/서버에 속한 커서 |
 | 406 | NOT_ACCEPTABLE | JSON 이외의 응답 형식 요청 |
 | 503 | CHARACTER_HISTORY_UNAVAILABLE | DB 장애, 처리할 수 없는 원본/저장 버전. 불완전한 목록을 성공으로 반환하지 않음 |
+| 503 | CHARACTER_HISTORY_DISABLED | 관측 저장·이력 기능 비활성 상태. 기록이 없다는 의미가 아님 |
 | 500 | INTERNAL_SERVER_ERROR | 예상하지 못한 내부 오류 |
 
 이력 없음은 게임 캐릭터 미존재라는 뜻이 아니므로 404로 표현하지 않는다. 이 API는 외부 API를 호출하지 않으므로 검색 API의 429/502/504를 그대로 나열하지 않는다.

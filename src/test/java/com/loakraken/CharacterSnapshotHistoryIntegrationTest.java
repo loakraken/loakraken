@@ -33,7 +33,9 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 @Import(TestcontainersConfiguration.class)
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@SpringBootTest(
+    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+    properties = "character.snapshots.enabled=true")
 class CharacterSnapshotHistoryIntegrationTest {
   private static final String NAME = "이력테스트";
   private static final Instant TIME = Instant.parse("2026-10-04T00:00:00Z");

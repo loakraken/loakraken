@@ -13,7 +13,7 @@ class CharacterSnapshotQueryServiceTest {
   void 저장소_장애와_트랜잭션_연결_장애는_공개용_503으로_변환한다() {
     var history = mock(CharacterSnapshotHistoryPort.class);
     var query = new SnapshotHistoryQuery("모험가", "루페온", 20, null);
-    var service = new CharacterSnapshotQueryService(history);
+    var service = new CharacterSnapshotQueryService(history, new CharacterSnapshotPolicy(true));
     for (var failure :
         new RuntimeException[] {
           new DataAccessResourceFailureException("internal connection detail"),

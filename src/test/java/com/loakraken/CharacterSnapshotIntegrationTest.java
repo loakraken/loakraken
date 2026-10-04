@@ -27,7 +27,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.simple.JdbcClient;
 
 @Import(TestcontainersConfiguration.class)
-@SpringBootTest
+@SpringBootTest(properties = "character.snapshots.enabled=true")
 class CharacterSnapshotIntegrationTest {
   private static final String NAME = "스냅샷테스트";
   private static final Instant TIME = Instant.parse("2026-10-04T00:00:00Z");

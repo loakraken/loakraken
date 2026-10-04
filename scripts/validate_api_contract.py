@@ -21,6 +21,7 @@ def main():
     if not document["openapi"].startswith("3.1."):
         raise ValueError("OpenAPI 3.1 is required")
     operation = document["paths"]["/api/v1/characters/search"]["get"]
+    history = document["paths"]["/api/v1/characters/snapshots"]["get"] if not args.live else None
     for definition in document["components"]["schemas"].values():
         Draft202012Validator.check_schema(definition)
     cases = [
@@ -31,6 +32,10 @@ def main():
     ]
     if args.live:
         cases = [("character-live.json", operation["responses"]["200"]["content"]["application/json"]["schema"])]
+    else:
+        for filename, status in [("snapshot-history.json", "200"), ("snapshot-history-empty.json", "200"),
+                                 ("snapshot-history-invalid-cursor.json", "400"), ("snapshot-history-unavailable.json", "503")]:
+            cases.append((filename, history["responses"][status]["content"]["application/json"]["schema"]))
     for filename, response_schema in cases:
         schema = {"$schema": "https://json-schema.org/draft/2020-12/schema", "components": document["components"], **response_schema}
         validator = Draft202012Validator(schema, format_checker=FormatChecker())

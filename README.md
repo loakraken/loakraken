@@ -52,6 +52,7 @@ Swagger에는 실제 구현한 `/api/v1/**` 경로만 표시합니다.
 `.env`에만 작성하면 Spring Boot에는 전달되지 않습니다. 키 없이도 문서와 테스트는 실행됩니다.
 검색 동작과 오류 코드는 [docs/character-search.md](docs/character-search.md)를 참고합니다.
 원본 저장·중복 억제·트랜잭션 정책은 [docs/character-snapshots.md](docs/character-snapshots.md)에 정리했습니다.
+저장된 당시 프로필 수치는 `GET /api/v1/characters/snapshots`로 조회하며 [이력 조회 계약](docs/character-history.md)을 참고합니다.
 관측값 집계와 미확인 값 처리 기준은 [docs/character-analysis.md](docs/character-analysis.md)를 참고합니다.
 관측 근거 기반 진단과 프론트 연동 계약은 [docs/character-diagnostics.md](docs/character-diagnostics.md)에 정리했습니다.
 기준서의 비교 사이트 10곳과 검증 범위는 [docs/reference-sites.md](docs/reference-sites.md)에서 확인할 수 있습니다.

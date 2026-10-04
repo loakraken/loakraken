@@ -24,7 +24,7 @@ class CharacterQueryServiceTest {
       new CharacterProfile(
           "모험가", "루페온", "바드", 70, new BigDecimal("1700"), null, 300, null, null, null, List.of());
   private final CharacterDetails details =
-      new CharacterDetails(
+      com.loakraken.CharacterTestFixture.details(
           profile, new CharacterLoadout(List.of(), null, null, null, null, null), List.of());
   private final FetchedCharacter fetched = new FetchedCharacter(details, "{}", "[]");
   private final CharacterSnapshotCommandService snapshots =

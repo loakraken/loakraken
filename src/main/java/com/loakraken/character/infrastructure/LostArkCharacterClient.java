@@ -56,6 +56,7 @@ class LostArkCharacterClient implements CharacterDetailsPort {
             CharacterErrorCode.LOST_ARK_API_ERROR);
     var siblings = siblingsPayload.value();
     if (siblings == null) throw new CharacterException(CharacterErrorCode.LOST_ARK_API_ERROR);
+    var coverage = armory.coverage(Arrays.asList(siblings));
     var details =
         new CharacterDetails(
             profile,
@@ -63,7 +64,8 @@ class LostArkCharacterClient implements CharacterDetailsPort {
             Arrays.stream(siblings)
                 .filter(Objects::nonNull)
                 .map(LostArkSiblingResponse::toDomain)
-                .toList());
+                .toList(),
+            coverage);
     return new FetchedCharacter(details, armoryPayload.json(), siblingsPayload.json());
   }
 

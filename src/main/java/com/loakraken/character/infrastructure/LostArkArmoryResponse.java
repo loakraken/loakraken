@@ -3,7 +3,10 @@ package com.loakraken.character.infrastructure;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.loakraken.character.domain.CharacterLoadout;
+import com.loakraken.character.domain.CharacterObservationCoverage;
+import com.loakraken.character.domain.ObservationState;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.function.Function;
 
@@ -16,6 +19,48 @@ record LostArkArmoryResponse(
     @JsonProperty("ArmoryCard") Cards cards,
     @JsonProperty("ArkPassive") ArkPassive arkPassive,
     @JsonProperty("ArkGrid") ArkGrid arkGrid) {
+  CharacterObservationCoverage coverage(List<LostArkSiblingResponse> siblings) {
+    return new CharacterObservationCoverage(
+        ObservationState.collection(equipment),
+        section(
+            engravings,
+            Map.of(
+                "slots",
+                    ObservationState.collection(engravings == null ? null : engravings.slots()),
+                "effects",
+                    ObservationState.collection(engravings == null ? null : engravings.effects()),
+                "arkPassiveEffects",
+                    ObservationState.collection(
+                        engravings == null ? null : engravings.arkPassiveEffects()))),
+        section(
+            gems, Map.of("items", ObservationState.collection(gems == null ? null : gems.items()))),
+        section(
+            cards,
+            Map.of(
+                "items", ObservationState.collection(cards == null ? null : cards.items()),
+                "effects", ObservationState.collection(cards == null ? null : cards.effects()))),
+        section(
+            arkPassive,
+            Map.of(
+                "points",
+                    ObservationState.collection(arkPassive == null ? null : arkPassive.points()),
+                "effects",
+                    ObservationState.collection(arkPassive == null ? null : arkPassive.effects()))),
+        section(
+            arkGrid,
+            Map.of(
+                "slots", ObservationState.collection(arkGrid == null ? null : arkGrid.slots()),
+                "effects",
+                    ObservationState.collection(arkGrid == null ? null : arkGrid.effects()))),
+        ObservationState.collection(siblings));
+  }
+
+  private CharacterObservationCoverage.Section section(
+      Object value, Map<String, ObservationState> collections) {
+    return new CharacterObservationCoverage.Section(
+        value == null ? ObservationState.NOT_PROVIDED : ObservationState.PROVIDED, collections);
+  }
+
   CharacterLoadout toLoadout() {
     return new CharacterLoadout(
         map(equipment, Equipment::toDomain),

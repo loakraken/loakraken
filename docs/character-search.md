@@ -10,7 +10,7 @@
 
 ## 조회와 캐시
 
-- Valkey 키: `character:v2:{정규화한 캐릭터명}:summary`, 기본 TTL 5분 (`lostark.summary-ttl`)
+- Valkey 키: `character:v3:{정규화한 캐릭터명}:summary`, 기본 TTL 5분 (`lostark.summary-ttl`)
 - 전투정보와 원정대 조회가 모두 성공한 결과만 캐시에 저장합니다. 두 요청은 순서대로 실행하며 각각 호출 예산을 사용합니다.
 - 기본 설정에서는 수집 결과를 단기 캐시에만 반영합니다. `CHARACTER_SNAPSHOTS_ENABLED=true`일 때만 [PostgreSQL 스냅샷](character-snapshots.md)에 먼저 저장합니다.
 - 캐시 적중 시 최초 수집 시각을 유지하고 외부 API를 호출하지 않습니다.
@@ -23,6 +23,8 @@
 설정은 `lostark` 속성에서 변경합니다. API 키는 서버 환경 변수 `LOSTARK_API_KEY`로 전달합니다.
 
 ## 전투정보
+
+`coverage`는 정규화 전 주요 섹션과 목록의 제공 상태다. [원천 제공 상태 계약](character-observation.md)의 null·빈 배열·제공 구분을 사용한다. 빈 배열은 미착용 판정이 아니다.
 
 `loadout`은 `equipment`, `engravings`, `gems`, `cards`, `arkPassive`, `arkGrid`를 포함합니다.
 목록 데이터가 없으면 빈 배열, 개별 섹션 데이터가 제공되지 않으면 `null`입니다.

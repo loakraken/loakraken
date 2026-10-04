@@ -57,6 +57,7 @@ Swagger에는 실제 구현한 `/api/v1/**` 경로만 표시합니다.
 검색·단기 캐시는 동작합니다. 합성 데이터 개발 또는 보관·재제공 범위를 확인한 환경에서만
 실행 환경 변수로 `CHARACTER_SNAPSHOTS_ENABLED=true`를 지정합니다. [검증 근거와 한계](docs/source-verification.md)를 참고합니다.
 관측값 집계와 미확인 값 처리 기준은 [docs/character-analysis.md](docs/character-analysis.md)를 참고합니다.
+원천의 null·빈 목록 구분과 캐시 호환성은 [docs/character-observation.md](docs/character-observation.md)를 참고합니다.
 관측 근거 기반 진단과 프론트 연동 계약은 [docs/character-diagnostics.md](docs/character-diagnostics.md)에 정리했습니다.
 기준서의 비교 사이트 10곳과 검증 범위는 [docs/reference-sites.md](docs/reference-sites.md)에서 확인할 수 있습니다.
 운영 프로필은 기본 비활성화하며 필요한 환경에서 `API_DOCS_ENABLED=true`로 활성화합니다.

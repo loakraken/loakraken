@@ -8,7 +8,6 @@ import com.loakraken.character.application.CharacterDetailsPort;
 import com.loakraken.character.application.CharacterErrorCode;
 import com.loakraken.character.application.CharacterException;
 import com.loakraken.character.application.FetchedCharacter;
-import com.loakraken.character.domain.CharacterDetails;
 import com.loakraken.character.domain.CharacterLoadout;
 import com.loakraken.character.domain.CharacterProfile;
 import java.math.BigDecimal;
@@ -38,7 +37,7 @@ import tools.jackson.databind.json.JsonMapper;
     properties = "character.snapshots.enabled=true")
 class CharacterSearchIntegrationTest {
   private static final String NAME = "통합테스트캐릭터";
-  private static final String KEY = "character:v2:" + NAME + ":summary";
+  private static final String KEY = "character:v3:" + NAME + ":summary";
   @LocalServerPort private int port;
   @Autowired private StringRedisTemplate redis;
   @Autowired private JsonMapper mapper;
@@ -49,6 +48,7 @@ class CharacterSearchIntegrationTest {
   @AfterEach
   void 캐시_정리() {
     redis.delete(KEY);
+    redis.delete("character:v2:" + NAME + ":summary");
     jdbc.sql(
             "DELETE FROM character_snapshot WHERE character_id IN (SELECT character_id FROM characters WHERE character_name = :name)")
         .param("name", NAME)
@@ -112,6 +112,20 @@ class CharacterSearchIntegrationTest {
           .isEqualTo("INVALID_REQUEST");
     }
     verifyNoInteractions(detailsPort);
+  }
+
+  @Test
+  void 원천_상태가_없던_구버전_캐시를_사용하지_않는다() throws Exception {
+    redis
+        .opsForValue()
+        .set("character:v2:" + NAME + ":summary", "old-cache", java.time.Duration.ofMinutes(5));
+    when(detailsPort.fetch(NAME)).thenReturn(profile());
+    var response = request("/api/v1/characters/search?characterName=" + encode(NAME));
+    assertThat(response.statusCode()).isEqualTo(200);
+    assertThat(mapper.readTree(response.body()).at("/data/coverage/gems/state").asText())
+        .isEqualTo("NOT_PROVIDED");
+    verify(detailsPort).fetch(NAME);
+    assertThat(redis.hasKey(KEY)).isTrue();
   }
 
   @Test
@@ -206,7 +220,9 @@ class CharacterSearchIntegrationTest {
             null,
             null);
     return new FetchedCharacter(
-        new CharacterDetails(profile, loadout, List.of()), "{\"Tooltip\":\"원본툴팁\"}", "[]");
+        com.loakraken.CharacterTestFixture.details(profile, loadout, List.of()),
+        "{\"Tooltip\":\"원본툴팁\"}",
+        "[]");
   }
 
   private String encode(String text) {

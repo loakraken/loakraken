@@ -96,4 +96,3 @@ try {
 ```
 
 실제 응답 산출물은 Git에서 제외된 `build/generated/character-live.json`에 저장합니다.
-

@@ -27,6 +27,7 @@ class SharedLostArkBudgetIntegrationTest {
   @Autowired CharacterDetailsPort characters;
   @Autowired MarketPricesPort markets;
   @Autowired MarketOptionsPort options;
+  @Autowired MaterialQuoteService quotes;
   @Autowired ApplicationContext context;
 
   @DynamicPropertySource
@@ -55,9 +56,34 @@ class SharedLostArkBudgetIntegrationTest {
             1,
             MarketSearch.Sort.RECENT_PRICE,
             MarketSearch.SortCondition.ASC);
-    markets.fetch(MarketSource.ACTIVE_LISTING, search);
+    var quoteCommand =
+        new MaterialQuoteCommand(
+            com.loakraken.market.domain.MaterialPriceBasis.CURRENT_MIN_PRICE,
+            java.util.List.of(new MaterialQuoteCommand.Item(123, 1, 0, search)));
+    assertThat(quotes.quote(quoteCommand).complete()).isFalse();
+    assertThat(quotes.quote(quoteCommand).complete()).isFalse();
     options.fetchOptions();
     assertThat(calls).hasValue(4);
+    var uncached =
+        new MarketSearch(
+            50010,
+            "",
+            null,
+            "",
+            "",
+            1,
+            MarketSearch.Sort.RECENT_PRICE,
+            MarketSearch.SortCondition.ASC);
+    assertThatThrownBy(
+            () ->
+                quotes.quote(
+                    new MaterialQuoteCommand(
+                        com.loakraken.market.domain.MaterialPriceBasis.CURRENT_MIN_PRICE,
+                        java.util.List.of(new MaterialQuoteCommand.Item(124, 1, 0, uncached)))))
+        .isInstanceOfSatisfying(
+            BusinessException.class,
+            exception ->
+                assertThat(exception.errorCode().code()).isEqualTo("LOST_ARK_RATE_LIMITED"));
     assertThatThrownBy(() -> markets.fetch(MarketSource.RECENT_TRADE, search))
         .isInstanceOfSatisfying(
             BusinessException.class,

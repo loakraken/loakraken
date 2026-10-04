@@ -29,6 +29,11 @@ character:
   snapshots:
     enabled: ${CHARACTER_SNAPSHOTS_ENABLED:false}
 
+market:
+  cache:
+    prices-ttl: ${MARKET_PRICES_CACHE_TTL:30s}
+    options-ttl: ${MARKET_OPTIONS_CACHE_TTL:10m}
+
 springdoc:
   paths-to-match: /api/v1/**
   override-with-generic-response: false

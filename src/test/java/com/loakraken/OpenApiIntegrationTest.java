@@ -102,6 +102,22 @@ class OpenApiIntegrationTest {
   }
 
   @Test
+  void 거래소_검색옵션의_필수필드와_하위목록_null을_명시한다() throws Exception {
+    var document = JsonMapper.builder().build().readTree(request("/v3/api-docs").body());
+    var operation = document.path("paths").path("/api/v1/markets/options").path("get");
+    assertThat(operation.path("responses").toString()).contains("200", "429", "502", "503", "504");
+    assertThat(document.at("/components/schemas/MarketOptionsResponse/required").toString())
+        .contains("observedAt", "categories", "itemGrades", "itemTiers", "classes");
+    assertThat(
+            document
+                .at("/components/schemas/MarketCategoryResponse/properties/subs/anyOf/1/type")
+                .asText())
+        .isEqualTo("null");
+    assertThat(document.at("/components/schemas/MarketSubcategoryResponse/required").toString())
+        .contains("code", "codeName");
+  }
+
+  @Test
   void 운영_지표_엔드포인트는_기본으로_공개하지_않는다() throws Exception {
     assertThat(request("/actuator/metrics").statusCode()).isEqualTo(404);
     assertThat(request("/actuator/prometheus").statusCode()).isEqualTo(404);

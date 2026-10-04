@@ -9,7 +9,9 @@ import org.springframework.context.annotation.Configuration;
 class MarketOpenApiConfiguration {
   @Bean
   OpenApiCustomizer marketResponseContract() {
-    return document ->
-        ResponseContracts.apply(MarketPriceResponse.class, document.getComponents().getSchemas());
+    return document -> {
+      ResponseContracts.apply(MarketPriceResponse.class, document.getComponents().getSchemas());
+      ResponseContracts.apply(MarketOptionsResponse.class, document.getComponents().getSchemas());
+    };
   }
 }

@@ -36,7 +36,8 @@ public class LostArkMetrics {
     ARMORY,
     SIBLINGS,
     MARKET_ITEMS,
-    MARKET_TRADES
+    MARKET_TRADES,
+    MARKET_OPTIONS
   }
 
   public enum ApiOutcome {

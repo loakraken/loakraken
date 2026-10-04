@@ -255,7 +255,7 @@ class LostArkCharacterClientTest {
           case "items-empty" -> "GEMS_NOT_OBSERVED";
           default -> "";
         };
-    assertThat(json.at("/analysis/diagnostics/ruleVersion").asText()).isEqualTo("observed-v2");
+    assertThat(json.at("/analysis/diagnostics/ruleVersion").asText()).isEqualTo("observed-v3");
     boolean found = false;
     for (var finding : json.at("/analysis/diagnostics/findings")) {
       var path = finding.path("evidencePath").asText();

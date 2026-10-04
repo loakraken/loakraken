@@ -15,7 +15,7 @@ class CharacterDiagnosticsTest {
     var report =
         diagnose(
             CharacterAnalysis.from(new CharacterLoadout(List.of(), null, null, null, null, null)));
-    assertThat(report.ruleVersion()).isEqualTo("observed-v2");
+    assertThat(report.ruleVersion()).isEqualTo("observed-v3");
     assertThat(report.findings())
         .extracting(CharacterDiagnostics.Finding::code)
         .containsExactly(
@@ -37,7 +37,7 @@ class CharacterDiagnosticsTest {
         new CharacterAnalysis(
             1,
             new CharacterAnalysis.EquipmentSummary(
-                0, 1, 0, null, null, List.of(), 0, null, null, null, List.of()),
+                1, 0, 0, null, null, List.of(), 0, null, null, null, List.of()),
             new CharacterAnalysis.GemSummary(0, 0, null, null, null, List.of()),
             new CharacterAnalysis.CardSummary(0, 0, 0),
             new CharacterAnalysis.EngravingSummary(0, 0, 0),
@@ -56,7 +56,7 @@ class CharacterDiagnosticsTest {
         new CharacterAnalysis(
             1,
             new CharacterAnalysis.EquipmentSummary(
-                0, 1, 0, null, null, List.of(), 0, null, null, null, List.of()),
+                1, 0, 0, null, null, List.of(), 0, null, null, null, List.of()),
             new CharacterAnalysis.GemSummary(3, 2, 7, 7, new BigDecimal("7.00"), List.of()),
             new CharacterAnalysis.CardSummary(3, 1, 5),
             new CharacterAnalysis.EngravingSummary(0, 0, 5),
@@ -89,7 +89,7 @@ class CharacterDiagnosticsTest {
         new CharacterAnalysis(
             1,
             new CharacterAnalysis.EquipmentSummary(
-                0, 1, 0, null, null, List.of(), 0, null, null, null, List.of()),
+                1, 0, 0, null, null, List.of(), 0, null, null, null, List.of()),
             validGems(),
             new CharacterAnalysis.CardSummary(1, 0, 0),
             new CharacterAnalysis.EngravingSummary(0, 0, 5),
@@ -112,7 +112,7 @@ class CharacterDiagnosticsTest {
         new CharacterAnalysis(
             1,
             new CharacterAnalysis.EquipmentSummary(
-                0, 1, 0, null, null, List.of(), 0, null, null, null, List.of()),
+                1, 0, 0, null, null, List.of(), 0, null, null, null, List.of()),
             validGems(),
             new CharacterAnalysis.CardSummary(1, 0, 0),
             new CharacterAnalysis.EngravingSummary(0, 0, 0),
@@ -145,7 +145,11 @@ class CharacterDiagnosticsTest {
     assertThat(analysis.cards().knownAwakeningTotal()).isZero();
     assertThat(diagnose(analysis).findings())
         .extracting(CharacterDiagnostics.Finding::code)
-        .containsExactly(GEM_LEVEL_UNKNOWN, CARD_AWAKENING_UNKNOWN, ARK_PASSIVE_POINT_UNKNOWN);
+        .containsExactly(
+            EQUIPMENT_DETAIL_UNAVAILABLE,
+            GEM_LEVEL_UNKNOWN,
+            CARD_AWAKENING_UNKNOWN,
+            ARK_PASSIVE_POINT_UNKNOWN);
   }
 
   private CharacterAnalysis.GemSummary validGems() {
@@ -189,6 +193,57 @@ class CharacterDiagnosticsTest {
             EQUIPMENT_NOT_OBSERVED, GEMS_NOT_OBSERVED, CARDS_NOT_OBSERVED, ARK_GRID_NOT_OBSERVED);
     assertThat(report.findings()).allMatch(finding -> finding.observedCount() == null);
     assertThat(report.findings().getFirst().evidencePath()).isEqualTo("/data/coverage/equipment");
+  }
+
+  @Test
+  void 해석할_수_없는_장비_Tooltip은_데이터_부족으로_개수와_함께_알린다() {
+    var parsed =
+        new CharacterLoadout.Equipment(
+            "투구",
+            "+19 투구",
+            null,
+            "고대",
+            new CharacterLoadout.EquipmentDetail(19, 95, 1770, 4, null, List.of(), List.of()));
+    var unparsed = new CharacterLoadout.Equipment("무기", "무기", null, "고대", null);
+    var report =
+        diagnose(
+            CharacterAnalysis.from(
+                new CharacterLoadout(
+                    List.of(parsed, unparsed, unparsed), null, null, null, null, null)));
+    var finding =
+        report.findings().stream()
+            .filter(item -> item.code() == CharacterDiagnostics.Code.EQUIPMENT_DETAIL_UNAVAILABLE)
+            .findFirst()
+            .orElseThrow();
+    assertThat(finding.category()).isEqualTo(DATA_GAP);
+    assertThat(finding.observedCount()).isEqualTo(2);
+    assertThat(finding.evidencePath()).isEqualTo("/data/analysis/equipment/detailUnavailableCount");
+    assertThat(report.ruleVersion()).isEqualTo("observed-v3");
+  }
+
+  @Test
+  void 모든_장비를_해석했거나_장비가_없으면_해석_불가_진단을_추가하지_않는다() {
+    var parsed =
+        new CharacterLoadout.Equipment(
+            "투구",
+            "+19 투구",
+            null,
+            "고대",
+            new CharacterLoadout.EquipmentDetail(19, 95, 1770, 4, null, List.of(), List.of()));
+    var allParsed =
+        diagnose(
+            CharacterAnalysis.from(
+                new CharacterLoadout(List.of(parsed), null, null, null, null, null)));
+    var empty =
+        diagnose(
+            CharacterAnalysis.from(new CharacterLoadout(List.of(), null, null, null, null, null)));
+    assertThat(allParsed.findings())
+        .extracting(CharacterDiagnostics.Finding::code)
+        .doesNotContain(CharacterDiagnostics.Code.EQUIPMENT_DETAIL_UNAVAILABLE);
+    assertThat(empty.findings())
+        .extracting(CharacterDiagnostics.Finding::code)
+        .contains(EQUIPMENT_NOT_OBSERVED)
+        .doesNotContain(CharacterDiagnostics.Code.EQUIPMENT_DETAIL_UNAVAILABLE);
   }
 
   // 기존 회귀 사례는 명시적으로 제공된 목록을 가정한다. 미제공 목록은 별도 사례에서 검증한다.

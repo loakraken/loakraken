@@ -23,6 +23,14 @@ public record CharacterDiagnostics(String ruleVersion, List<Finding> findings) {
           "/data/analysis/equipmentCount",
           0,
           "장비 목록에서 확인된 항목이 없습니다. 미착용 여부는 이 결과만으로 판단할 수 없습니다.");
+    } else if (analysis.equipment().detailUnavailableCount() > 0) {
+      add(
+          findings,
+          Code.EQUIPMENT_DETAIL_UNAVAILABLE,
+          Category.DATA_GAP,
+          "/data/analysis/equipment/detailUnavailableCount",
+          analysis.equipment().detailUnavailableCount(),
+          "상세 정보를 해석할 수 없는 장비가 재련·품질 집계에서 제외되었습니다. 장비 상태는 이 결과만으로 판단할 수 없습니다.");
     }
     var gems = analysis.gems();
     if (gems == null) {
@@ -140,7 +148,7 @@ public record CharacterDiagnostics(String ruleVersion, List<Finding> findings) {
             "활성 여부를 확인할 수 없는 아크그리드 젬이 있습니다.");
       }
     }
-    return new CharacterDiagnostics("observed-v2", findings);
+    return new CharacterDiagnostics("observed-v3", findings);
   }
 
   private static void missingCollection(
@@ -182,6 +190,7 @@ public record CharacterDiagnostics(String ruleVersion, List<Finding> findings) {
   public enum Code {
     EQUIPMENT_UNAVAILABLE,
     EQUIPMENT_NOT_OBSERVED,
+    EQUIPMENT_DETAIL_UNAVAILABLE,
     GEMS_UNAVAILABLE,
     GEM_ITEMS_UNAVAILABLE,
     GEMS_NOT_OBSERVED,

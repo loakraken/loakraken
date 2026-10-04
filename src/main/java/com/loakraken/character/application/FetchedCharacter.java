@@ -7,6 +7,5 @@ public record FetchedCharacter(CharacterDetails details, String armoryJson, Stri
   public FetchedCharacter {
     Objects.requireNonNull(details);
     Objects.requireNonNull(armoryJson);
-    Objects.requireNonNull(siblingsJson);
   }
 }

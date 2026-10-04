@@ -2,9 +2,6 @@ package com.loakraken.character.application;
 
 import java.time.Clock;
 import java.time.Instant;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionException;
-import java.util.concurrent.ConcurrentHashMap;
 import org.springframework.dao.DataAccessException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.TransactionException;
@@ -16,8 +13,8 @@ public class CharacterQueryService {
   private final Clock clock;
   private final CharacterSnapshotCommandService snapshots;
   private final CharacterMetrics metrics;
-  private final ConcurrentHashMap<String, CompletableFuture<CharacterResult>> flights =
-      new ConcurrentHashMap<>();
+  private final SingleFlight<CharacterResult> searches = new SingleFlight<>();
+  private final SingleFlight<CharacterSiblingsResult> siblingQueries = new SingleFlight<>();
 
   public CharacterQueryService(
       CharacterDetailsPort detailsPort,
@@ -35,7 +32,10 @@ public class CharacterQueryService {
   public CharacterResult search(SearchCharacterCommand command) {
     boolean success = false;
     try {
-      var result = searchWithSingleFlight(command);
+      var result =
+          command.includeSiblings()
+              ? searchWithSiblings(command.characterName())
+              : searchArmory(command.characterName());
       success = true;
       return result;
     } finally {
@@ -43,46 +43,62 @@ public class CharacterQueryService {
     }
   }
 
-  private CharacterResult searchWithSingleFlight(SearchCharacterCommand command) {
+  public CharacterSiblingsResult siblings(SearchCharacterCommand command) {
     String name = command.characterName();
+    var cached = cache.findSiblings(name);
+    if (cached.isPresent()) return cached.get();
+    return siblingQueries.run(
+        name,
+        () ->
+            cache
+                .findSiblings(name)
+                .orElseGet(
+                    () -> {
+                      var siblings = detailsPort.fetchSiblings(name);
+                      var result = new CharacterSiblingsResult(name, siblings, Instant.now(clock));
+                      cache.saveSiblings(name, result);
+                      return result;
+                    }));
+  }
+
+  private CharacterResult searchWithSiblings(String name) {
     var cached = cache.find(name);
     if (cached.isPresent()) return cached.get();
-    var future = new CompletableFuture<CharacterResult>();
-    var existing = flights.putIfAbsent(name, future);
-    if (existing != null) {
-      try {
-        return existing.join();
-      } catch (CompletionException exception) {
-        if (exception.getCause() instanceof RuntimeException cause) throw cause;
-        if (exception.getCause() instanceof Error cause) throw cause;
-        throw exception;
-      }
-    }
-    try {
-      var result =
-          cache
-              .find(name)
-              .orElseGet(
-                  () -> {
-                    var fetched = detailsPort.fetch(name);
-                    var fetchedAt = Instant.now(clock);
-                    try {
-                      snapshots.save(fetched, fetchedAt);
-                    } catch (DataAccessException | TransactionException exception) {
-                      throw new CharacterException(
-                          CharacterErrorCode.CHARACTER_STORAGE_UNAVAILABLE);
-                    }
-                    var collectedResult = new CharacterResult(fetched.details(), fetchedAt);
-                    cache.save(name, collectedResult);
-                    return collectedResult;
-                  });
-      future.complete(result);
-      return result;
-    } catch (RuntimeException | Error exception) {
-      future.completeExceptionally(exception);
-      throw exception;
-    } finally {
-      flights.remove(name, future);
-    }
+    return searches.run(
+        "summary:" + name,
+        () ->
+            cache
+                .find(name)
+                .orElseGet(
+                    () -> {
+                      var fetched = detailsPort.fetch(name);
+                      var fetchedAt = Instant.now(clock);
+                      try {
+                        snapshots.save(fetched, fetchedAt);
+                      } catch (DataAccessException | TransactionException exception) {
+                        throw new CharacterException(
+                            CharacterErrorCode.CHARACTER_STORAGE_UNAVAILABLE);
+                      }
+                      var result = new CharacterResult(fetched.details(), fetchedAt);
+                      cache.save(name, result);
+                      return result;
+                    }));
+  }
+
+  private CharacterResult searchArmory(String name) {
+    var cached = cache.findArmory(name);
+    if (cached.isPresent()) return cached.get();
+    return searches.run(
+        "armory:" + name,
+        () ->
+            cache
+                .findArmory(name)
+                .orElseGet(
+                    () -> {
+                      var fetched = detailsPort.fetchArmory(name);
+                      var result = new CharacterResult(fetched.details(), Instant.now(clock));
+                      cache.saveArmory(name, result);
+                      return result;
+                    }));
   }
 }

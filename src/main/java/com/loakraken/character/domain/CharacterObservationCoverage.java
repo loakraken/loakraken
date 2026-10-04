@@ -18,7 +18,6 @@ public record CharacterObservationCoverage(
     Objects.requireNonNull(cards);
     Objects.requireNonNull(arkPassive);
     Objects.requireNonNull(arkGrid);
-    Objects.requireNonNull(siblings);
   }
 
   /** collections는 해당 섹션의 명시적으로 매핑한 최상위 목록 상태다. */

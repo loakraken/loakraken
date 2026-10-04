@@ -54,17 +54,7 @@ class CharacterQueryServiceTest {
   @Test
   void 동일_캐릭터_동시_요청은_한번만_갱신한다() throws Exception {
     var port = mock(CharacterDetailsPort.class);
-    var data = new ConcurrentHashMap<String, CharacterResult>();
-    var cache =
-        new CharacterCache() {
-          public Optional<CharacterResult> find(String name) {
-            return Optional.ofNullable(data.get(name));
-          }
-
-          public void save(String name, CharacterResult result) {
-            data.put(name, result);
-          }
-        };
+    var cache = new MemoryCache();
     var entered = new CountDownLatch(1);
     var release = new CountDownLatch(1);
     when(port.fetch("모험가"))
@@ -163,5 +153,98 @@ class CharacterQueryServiceTest {
                 .counter()
                 .count())
         .isEqualTo(1);
+  }
+
+  @Test
+  void 전투정보만_조회하면_원정대를_호출하지_않고_스냅샷을_저장하지_않는다() {
+    var port = mock(CharacterDetailsPort.class);
+    var cache = new MemoryCache();
+    var armoryOnly =
+        new FetchedCharacter(
+            com.loakraken.CharacterTestFixture.details(
+                profile, new CharacterLoadout(List.of(), null, null, null, null, null), null),
+            "{}",
+            null);
+    when(port.fetchArmory("모험가")).thenReturn(armoryOnly);
+    var service = new CharacterQueryService(port, cache, clock, snapshots, metrics);
+    var first = service.search(new SearchCharacterCommand("모험가", false));
+    var second = service.search(new SearchCharacterCommand("모험가", false));
+    assertThat(first.details().siblings()).isNull();
+    assertThat(second).isEqualTo(first);
+    verify(port, times(1)).fetchArmory("모험가");
+    verify(port, never()).fetch(anyString());
+    verify(port, never()).fetchSiblings(anyString());
+    verifyNoInteractions(snapshots);
+    assertThat(cache.summaries).isEmpty();
+    assertThat(cache.armories).containsKey("모험가");
+  }
+
+  @Test
+  void 원정대_조회는_별도_캐시를_쓰고_동시_요청을_한번으로_합친다() throws Exception {
+    var port = mock(CharacterDetailsPort.class);
+    var cache = new MemoryCache();
+    var entered = new CountDownLatch(1);
+    var release = new CountDownLatch(1);
+    var siblings =
+        List.of(
+            new com.loakraken.character.domain.CharacterSibling(
+                "모험가", "루페온", "바드", 70, new BigDecimal("1700")));
+    when(port.fetchSiblings("모험가"))
+        .thenAnswer(
+            invocation -> {
+              entered.countDown();
+              if (!release.await(5, TimeUnit.SECONDS)) throw new IllegalStateException("테스트 대기 초과");
+              return siblings;
+            });
+    var service = new CharacterQueryService(port, cache, clock, snapshots, metrics);
+    try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
+      var futures = new ArrayList<Future<CharacterSiblingsResult>>();
+      try {
+        for (int i = 0; i < 16; i++)
+          futures.add(executor.submit(() -> service.siblings(new SearchCharacterCommand(" 모험가 "))));
+        assertThat(entered.await(5, TimeUnit.SECONDS)).isTrue();
+      } finally {
+        release.countDown();
+      }
+      for (var future : futures)
+        assertThat(future.get(5, TimeUnit.SECONDS).siblings()).isEqualTo(siblings);
+    }
+    assertThat(service.siblings(new SearchCharacterCommand("모험가")).fetchedAt())
+        .isEqualTo(clock.instant());
+    verify(port, times(1)).fetchSiblings("모험가");
+    verify(port, never()).fetch(anyString());
+    verifyNoInteractions(snapshots);
+    assertThat(cache.siblings).containsKey("모험가");
+    assertThat(registry.find("loakraken.character.searches").counter()).isNull();
+  }
+
+  private static final class MemoryCache implements CharacterCache {
+    final ConcurrentHashMap<String, CharacterResult> summaries = new ConcurrentHashMap<>();
+    final ConcurrentHashMap<String, CharacterResult> armories = new ConcurrentHashMap<>();
+    final ConcurrentHashMap<String, CharacterSiblingsResult> siblings = new ConcurrentHashMap<>();
+
+    public Optional<CharacterResult> find(String name) {
+      return Optional.ofNullable(summaries.get(name));
+    }
+
+    public void save(String name, CharacterResult result) {
+      summaries.put(name, result);
+    }
+
+    public Optional<CharacterResult> findArmory(String name) {
+      return Optional.ofNullable(armories.get(name));
+    }
+
+    public void saveArmory(String name, CharacterResult result) {
+      armories.put(name, result);
+    }
+
+    public Optional<CharacterSiblingsResult> findSiblings(String name) {
+      return Optional.ofNullable(siblings.get(name));
+    }
+
+    public void saveSiblings(String name, CharacterSiblingsResult result) {
+      siblings.put(name, result);
+    }
   }
 }

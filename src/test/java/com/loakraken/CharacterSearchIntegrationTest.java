@@ -51,6 +51,8 @@ class CharacterSearchIntegrationTest {
     redis.delete("character:v2:" + NAME + ":summary");
     redis.delete("character:v3:" + NAME + ":summary");
     redis.delete("character:v4:" + NAME + ":summary");
+    redis.delete("character:v5:" + NAME + ":armory");
+    redis.delete("character:v1:" + NAME + ":siblings");
     jdbc.sql(
             "DELETE FROM character_snapshot WHERE character_id IN (SELECT character_id FROM characters WHERE character_name = :name)")
         .param("name", NAME)
@@ -205,6 +207,64 @@ class CharacterSearchIntegrationTest {
     assertThat(
             document.at("/components/schemas/CharacterLoadoutResponse/properties").has("arkGrid"))
         .isTrue();
+  }
+
+  @Test
+  void 원정대_제외_검색은_전투정보만_수집하고_원정대를_null로_반환한다() throws Exception {
+    var armoryOnly =
+        new FetchedCharacter(
+            com.loakraken.CharacterTestFixture.details(
+                profile().details().profile(), profile().details().loadout(), null),
+            "{}",
+            null);
+    when(detailsPort.fetchArmory(NAME)).thenReturn(armoryOnly);
+    var path = "/api/v1/characters/search?includeSiblings=false&characterName=" + encode(NAME);
+    var first = request(path);
+    var second = request(path);
+    assertThat(first.statusCode()).isEqualTo(200);
+    assertThat(second.body()).isEqualTo(first.body());
+    ApiContractFixture.write("character-search-armory.json", first.body());
+    var result = mapper.readTree(first.body());
+    assertThat(result.at("/data/siblings").isNull()).isTrue();
+    assertThat(result.at("/data/coverage/siblings").isNull()).isTrue();
+    assertThat(result.at("/data/loadout/equipment/0/name").asText()).isEqualTo("테스트 무기");
+    verify(detailsPort, times(1)).fetchArmory(NAME);
+    verify(detailsPort, never()).fetch(anyString());
+    assertThat(redis.hasKey("character:v5:" + NAME + ":armory")).isTrue();
+    assertThat(redis.hasKey(KEY)).isFalse();
+  }
+
+  @Test
+  void 원정대_조회는_별도_API로_캐시하고_없는_캐릭터는_404다() throws Exception {
+    when(detailsPort.fetchSiblings(NAME))
+        .thenReturn(
+            List.of(
+                new com.loakraken.character.domain.CharacterSibling(
+                    NAME, "루페온", "바드", 70, new BigDecimal("1700.5"))));
+    var path = "/api/v1/characters/siblings?characterName=" + encode(NAME);
+    var first = request(path);
+    var second = request(path);
+    assertThat(first.statusCode()).isEqualTo(200);
+    assertThat(second.body()).isEqualTo(first.body());
+    ApiContractFixture.write("character-siblings.json", first.body());
+    var result = mapper.readTree(first.body());
+    assertThat(result.path("code").asText()).isEqualTo("CHARACTER_SIBLINGS_SUCCESS");
+    assertThat(result.at("/data/characterName").asText()).isEqualTo(NAME);
+    assertThat(result.at("/data/siblings/0/itemLevel").decimalValue())
+        .isEqualByComparingTo("1700.5");
+    assertThat(result.at("/data/fetchedAt").asText()).isNotBlank();
+    verify(detailsPort, times(1)).fetchSiblings(NAME);
+    verify(detailsPort, never()).fetch(anyString());
+
+    when(detailsPort.fetchSiblings("없는캐릭터"))
+        .thenThrow(new CharacterException(CharacterErrorCode.CHARACTER_NOT_FOUND));
+    var missing = request("/api/v1/characters/siblings?characterName=" + encode("없는캐릭터"));
+    assertThat(missing.statusCode()).isEqualTo(404);
+    assertThat(request("/api/v1/characters/siblings?characterName=").statusCode()).isEqualTo(400);
+    assertThat(
+            request("/api/v1/characters/search?includeSiblings=maybe&characterName=" + encode(NAME))
+                .statusCode())
+        .isEqualTo(400);
   }
 
   private FetchedCharacter profile() {

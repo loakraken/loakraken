@@ -38,6 +38,16 @@
 원정대 목록은 공식 Siblings 응답 전체이며 서버로 임의 필터링하지 않습니다.
 `analysis`는 [기본 분석](character-analysis.md)의 관측값 집계를 제공합니다.
 
+## 원정대 분리 조회
+
+공식 전투정보실은 원정대 캐릭터를 접힌 목록으로, 로아와·클로아·일로아는 보유 캐릭터를 별도 탭/페이지로 제공한다(2026-10-05 관찰). 이에 맞춰 원정대를 검색과 따로 조회할 수 있다.
+
+- `GET /api/v1/characters/search?includeSiblings=false&characterName=모험가`: 공식 Armories만 1회 호출한다. 응답 `siblings`와 `coverage.siblings`는 null이며 "이 요청에서 조회하지 않음"을 뜻한다. 캐시 키는 `character:v5:{name}:armory`. 스냅샷은 저장하지 않는다(스냅샷 스키마가 원정대 원문을 필수로 요구한다).
+- `includeSiblings` 생략 또는 true: 기존과 같다. Armories + Siblings 2회, 둘 다 성공해야 검색 성공, 캐시 키 `character:v5:{name}:summary`.
+- `GET /api/v1/characters/siblings?characterName=모험가`: 공식 Siblings만 1회 호출한다. 응답은 `characterName`, `siblings`, `fetchedAt`, 성공 코드 `CHARACTER_SIBLINGS_SUCCESS`. 캐시 키 `character:v1:{name}:siblings`, 기본 TTL은 검색과 같은 5분. 같은 이름의 동시 요청은 인스턴스 안에서 한 번으로 합친다.
+- 공식 원정대 API는 없는 캐릭터에 200 `[]`를 반환한다(2026-10-05 1회 확인). 원정대에는 조회한 캐릭터 자신이 포함되므로 단독 원정대 조회의 빈 목록과 공식 404는 `404 CHARACTER_NOT_FOUND`다. 결합 검색에서는 전투정보 확인 뒤의 원정대 오류를 기존처럼 502로 처리한다.
+- 화면을 나누면 캐릭터 상세는 1회, 원정대 탭을 열 때 1회를 사용한다. 원정대 실패가 캐릭터 상세를 막지 않는다.
+
 ## 장비 Tooltip 해석 — equipment-tooltip-v1
 
 각 `equipment[].detail`은 공식 장비 Tooltip(JSON 문자열)에서 확인된 값만 구조화한다. Tooltip이 없거나 JSON이 아니거나 객체가 아니면 `detail=null`이며 검색은 실패하지 않는다. 원본 Tooltip 문자열은 공개 응답과 캐시에 포함하지 않는다.

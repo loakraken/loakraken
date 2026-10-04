@@ -1,6 +1,7 @@
 package com.loakraken.character.presentation;
 
 import com.loakraken.character.application.CharacterResult;
+import com.loakraken.character.domain.CharacterSibling;
 import com.loakraken.common.api.NullableResponse;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.math.BigDecimal;
@@ -21,7 +22,8 @@ public record CharacterResponse(
     @NullableResponse String guildName,
     List<StatResponse> stats,
     CharacterLoadoutResponse loadout,
-    List<SiblingResponse> siblings,
+    @Schema(description = "원정대 캐릭터. includeSiblings=false 요청에서는 조회하지 않아 null입니다.") @NullableResponse
+        List<SiblingResponse> siblings,
     CharacterObservationCoverageResponse coverage,
     CharacterAnalysisResponse analysis,
     @Schema(description = "외부 API에서 실제 수집한 UTC 시각. 캐시 조회에서도 유지됩니다.") Instant fetchedAt) {
@@ -40,16 +42,9 @@ public record CharacterResponse(
         profile.guildName(),
         profile.stats().stream().map(stat -> new StatResponse(stat.type(), stat.value())).toList(),
         CharacterLoadoutResponse.from(result.details().loadout()),
-        result.details().siblings().stream()
-            .map(
-                sibling ->
-                    new SiblingResponse(
-                        sibling.characterName(),
-                        sibling.serverName(),
-                        sibling.className(),
-                        sibling.characterLevel(),
-                        sibling.itemLevel()))
-            .toList(),
+        result.details().siblings() == null
+            ? null
+            : SiblingResponse.from(result.details().siblings()),
         CharacterObservationCoverageResponse.from(result.details().coverage()),
         CharacterAnalysisResponse.from(result.analysis(), result.details().coverage()),
         result.fetchedAt());
@@ -62,5 +57,18 @@ public record CharacterResponse(
       String serverName,
       String className,
       @NullableResponse Integer characterLevel,
-      BigDecimal itemLevel) {}
+      BigDecimal itemLevel) {
+    static List<SiblingResponse> from(List<CharacterSibling> siblings) {
+      return siblings.stream()
+          .map(
+              sibling ->
+                  new SiblingResponse(
+                      sibling.characterName(),
+                      sibling.serverName(),
+                      sibling.className(),
+                      sibling.characterLevel(),
+                      sibling.itemLevel()))
+          .toList();
+    }
+  }
 }

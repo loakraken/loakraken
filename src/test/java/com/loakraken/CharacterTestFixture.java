@@ -26,7 +26,7 @@ public final class CharacterTestFixture {
             missing("items", "effects"),
             missing("points", "effects"),
             missing("slots", "effects"),
-            ObservationState.collection(siblings)));
+            siblings == null ? null : ObservationState.collection(siblings)));
   }
 
   private static CharacterObservationCoverage.Section missing(String... keys) {

@@ -58,7 +58,24 @@ class OpenApiIntegrationTest {
                 .asText())
         .isEqualTo("null");
     assertThat(document.at("/components/schemas/CharacterResponse/required").toString())
-        .contains("characterName", "combatPower", "analysis", "coverage");
+        .contains("characterName", "combatPower", "analysis", "coverage", "siblings");
+    assertThat(
+            document
+                .at("/components/schemas/CharacterResponse/properties/siblings/anyOf/1/type")
+                .asText())
+        .isEqualTo("null");
+    assertThat(
+            document
+                .at(
+                    "/components/schemas/CharacterObservationCoverageResponse/properties/siblings/anyOf/1/type")
+                .asText())
+        .isEqualTo("null");
+    var search = document.at("/paths/~1api~1v1~1characters~1search/get/parameters");
+    assertThat(search.toString()).contains("includeSiblings");
+    var siblings = document.at("/paths/~1api~1v1~1characters~1siblings/get");
+    assertThat(siblings.path("responses").has("404")).isTrue();
+    assertThat(document.at("/components/schemas/CharacterSiblingsResponse/required").toString())
+        .contains("characterName", "siblings", "fetchedAt");
     assertThat(
             document
                 .at("/components/schemas/CharacterObservationCoverageResponse/required")

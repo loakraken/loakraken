@@ -11,12 +11,17 @@ public record CharacterSearchRequest(
         @NotBlank
         @Size(max = 64)
         @Pattern(regexp = "[\\p{L}\\p{N}]+")
-        String characterName) {
+        String characterName,
+    @Schema(
+            description =
+                "원정대 포함 여부. 생략하거나 true면 원정대까지 조회합니다. false면 전투정보만 조회하며 siblings와 coverage.siblings는 null입니다. 원정대는 /api/v1/characters/siblings로 따로 조회합니다.",
+            defaultValue = "true")
+        Boolean includeSiblings) {
   public CharacterSearchRequest {
     characterName = characterName == null ? null : characterName.strip();
   }
 
   public SearchCharacterCommand toCommand() {
-    return new SearchCharacterCommand(characterName);
+    return new SearchCharacterCommand(characterName, includeSiblings == null || includeSiblings);
   }
 }

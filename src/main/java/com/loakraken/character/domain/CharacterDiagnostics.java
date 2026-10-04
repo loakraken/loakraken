@@ -9,9 +9,13 @@ public record CharacterDiagnostics(String ruleVersion, List<Finding> findings) {
     findings = List.copyOf(findings);
   }
 
-  public static CharacterDiagnostics from(CharacterAnalysis analysis) {
+  public static CharacterDiagnostics from(
+      CharacterAnalysis analysis, CharacterObservationCoverage coverage) {
+    java.util.Objects.requireNonNull(coverage);
     var findings = new ArrayList<Finding>();
-    if (analysis.equipmentCount() == 0) {
+    if (coverage.equipment() == ObservationState.NOT_PROVIDED) {
+      missingCollection(findings, Code.EQUIPMENT_UNAVAILABLE, "equipment", "장비 목록");
+    } else if (analysis.equipmentCount() == 0) {
       add(
           findings,
           Code.EQUIPMENT_NOT_OBSERVED,
@@ -23,6 +27,8 @@ public record CharacterDiagnostics(String ruleVersion, List<Finding> findings) {
     var gems = analysis.gems();
     if (gems == null) {
       unavailable(findings, Code.GEMS_UNAVAILABLE, "gems", "보석");
+    } else if (coverage.gems().collections().get("items") == ObservationState.NOT_PROVIDED) {
+      missingCollection(findings, Code.GEM_ITEMS_UNAVAILABLE, "gems/collections/items", "보석 항목 목록");
     } else if (gems.count() == 0) {
       add(
           findings,
@@ -43,6 +49,9 @@ public record CharacterDiagnostics(String ruleVersion, List<Finding> findings) {
     var cards = analysis.cards();
     if (cards == null) {
       unavailable(findings, Code.CARDS_UNAVAILABLE, "cards", "카드");
+    } else if (coverage.cards().collections().get("items") == ObservationState.NOT_PROVIDED) {
+      missingCollection(
+          findings, Code.CARD_ITEMS_UNAVAILABLE, "cards/collections/items", "카드 항목 목록");
     } else if (cards.count() == 0) {
       add(
           findings,
@@ -100,7 +109,10 @@ public record CharacterDiagnostics(String ruleVersion, List<Finding> findings) {
     if (grid == null) {
       unavailable(findings, Code.ARK_GRID_UNAVAILABLE, "arkGrid", "아크그리드");
     } else {
-      if (grid.coreCount() == 0) {
+      if (coverage.arkGrid().collections().get("slots") == ObservationState.NOT_PROVIDED) {
+        missingCollection(
+            findings, Code.ARK_GRID_SLOTS_UNAVAILABLE, "arkGrid/collections/slots", "아크그리드 슬롯 목록");
+      } else if (grid.coreCount() == 0) {
         add(
             findings,
             Code.ARK_GRID_NOT_OBSERVED,
@@ -128,7 +140,18 @@ public record CharacterDiagnostics(String ruleVersion, List<Finding> findings) {
             "활성 여부를 확인할 수 없는 아크그리드 젬이 있습니다.");
       }
     }
-    return new CharacterDiagnostics("observed-v1", findings);
+    return new CharacterDiagnostics("observed-v2", findings);
+  }
+
+  private static void missingCollection(
+      List<Finding> findings, Code code, String path, String label) {
+    add(
+        findings,
+        code,
+        Category.DATA_GAP,
+        "/data/coverage/" + path,
+        null,
+        label + "이 제공되지 않아 항목 수와 장착 여부를 판단할 수 없습니다.");
   }
 
   private static void unavailable(List<Finding> findings, Code code, String section, String label) {
@@ -157,11 +180,14 @@ public record CharacterDiagnostics(String ruleVersion, List<Finding> findings) {
   }
 
   public enum Code {
+    EQUIPMENT_UNAVAILABLE,
     EQUIPMENT_NOT_OBSERVED,
     GEMS_UNAVAILABLE,
+    GEM_ITEMS_UNAVAILABLE,
     GEMS_NOT_OBSERVED,
     GEM_LEVEL_UNKNOWN,
     CARDS_UNAVAILABLE,
+    CARD_ITEMS_UNAVAILABLE,
     CARDS_NOT_OBSERVED,
     CARD_AWAKENING_UNKNOWN,
     ENGRAVINGS_UNAVAILABLE,
@@ -170,6 +196,7 @@ public record CharacterDiagnostics(String ruleVersion, List<Finding> findings) {
     ARK_PASSIVE_DISABLED,
     ARK_PASSIVE_POINT_UNKNOWN,
     ARK_GRID_UNAVAILABLE,
+    ARK_GRID_SLOTS_UNAVAILABLE,
     ARK_GRID_NOT_OBSERVED,
     ARK_GRID_GEM_INACTIVE,
     ARK_GRID_GEM_STATE_UNKNOWN

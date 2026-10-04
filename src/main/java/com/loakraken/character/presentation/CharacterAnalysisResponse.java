@@ -2,6 +2,7 @@ package com.loakraken.character.presentation;
 
 import com.loakraken.character.domain.CharacterAnalysis;
 import com.loakraken.character.domain.CharacterDiagnostics;
+import com.loakraken.character.domain.CharacterObservationCoverage;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.math.BigDecimal;
 import java.util.List;
@@ -15,7 +16,8 @@ public record CharacterAnalysisResponse(
     @NullableResponse PassiveSummaryResponse arkPassive,
     @NullableResponse GridSummaryResponse arkGrid,
     CharacterDiagnosticsResponse diagnostics) {
-  static CharacterAnalysisResponse from(CharacterAnalysis value) {
+  static CharacterAnalysisResponse from(
+      CharacterAnalysis value, CharacterObservationCoverage coverage) {
     var gems = value.gems();
     var cards = value.cards();
     var engravings = value.engravings();
@@ -58,7 +60,7 @@ public record CharacterAnalysisResponse(
                 grid.activeGemCount(),
                 grid.inactiveGemCount(),
                 grid.unknownGemCount()),
-        CharacterDiagnosticsResponse.from(CharacterDiagnostics.from(value)));
+        CharacterDiagnosticsResponse.from(CharacterDiagnostics.from(value, coverage)));
   }
 
   public record GemSummaryResponse(

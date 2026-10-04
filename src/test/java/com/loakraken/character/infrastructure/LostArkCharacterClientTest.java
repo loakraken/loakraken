@@ -162,6 +162,46 @@ class LostArkCharacterClientTest {
   }
 
   @Test
+  void 원천_마크업은_일반_텍스트로_매핑하고_원본_JSON에는_보존한다() throws Exception {
+    body =
+        """
+        {"ArmoryProfile":{"CharacterName":"모험가","ServerName":"루페온","CharacterClassName":"바드",
+          "CharacterLevel":70,"ItemAvgLevel":"1,700.50",
+          "Title":"<img src='emoticon_tooltip_ranking_1' width='18' height='18' vspace='-4'></img>칭호",
+          "GuildName":"길드&amp;이름"},
+         "ArmoryEngraving":{"ArkPassiveEffects":[{"Grade":"유물","Level":4,"Name":"원한",
+           "Description":"피해가 <FONT COLOR='#99ff99'>27.00%</FONT> 증가<BR>받는 피해 증가"}]},
+         "ArmoryGem":{"Gems":[{"Slot":0,"Level":6,"Grade":"전설",
+           "Name":"<P ALIGN='CENTER'><FONT COLOR='#F99200'>6레벨 광휘의 보석 (귀속)</FONT></P>"}],
+          "Effects":{"Description":"<FONT COLOR='#B7FB00'>기본 공격력 총합 : 4.95%</FONT>",
+           "Skills":[{"GemSlot":0,"Name":"스킬","Description":["<FONT COLOR='#FFD200'>피해</FONT> 증가"],
+            "Option":"공격력 &lt; 1% 증가"}]}},
+         "ArkPassive":{"IsArkPassive":true,"Effects":[{"Name":"깨달음",
+           "Description":"<FONT color='#83E9FF'>깨달음</FONT> 1티어 <FONT color='#83E9FF'>버스트 강화 Lv.1</FONT>"}]}}
+        """;
+    var fetched = client("test", Duration.ofSeconds(2)).fetch("모험가");
+    var profile = fetched.details().profile();
+    var loadout = fetched.details().loadout();
+    assertThat(profile.title()).isEqualTo("칭호");
+    assertThat(profile.guildName()).isEqualTo("길드&이름");
+    assertThat(loadout.engravings().arkPassiveEffects().getFirst().description())
+        .isEqualTo("피해가 27.00% 증가\n받는 피해 증가");
+    assertThat(loadout.gems().items().getFirst().name()).isEqualTo("6레벨 광휘의 보석 (귀속)");
+    assertThat(loadout.gems().effects().description()).isEqualTo("기본 공격력 총합 : 4.95%");
+    assertThat(loadout.gems().effects().skills().getFirst().description()).containsExactly("피해 증가");
+    assertThat(loadout.gems().effects().skills().getFirst().option()).isEqualTo("공격력 < 1% 증가");
+    assertThat(loadout.arkPassive().effects().getFirst().description())
+        .isEqualTo("깨달음 1티어 버스트 강화 Lv.1");
+    assertThat(fetched.armoryJson()).contains("<FONT COLOR='#F99200'>", "<BR>");
+    var result = new CharacterResult(fetched.details(), Instant.parse("2026-10-04T00:00:00Z"));
+    var mapper = new JsonMapper();
+    var cacheJson = mapper.writeValueAsString(result);
+    var response = mapper.writeValueAsString(CharacterResponse.from(result));
+    assertThat(cacheJson).doesNotContainIgnoringCase("<font", "<p ", "<br", "<img");
+    assertThat(response).doesNotContainIgnoringCase("<font", "<p ", "<br", "<img");
+  }
+
+  @Test
   void 원정대_조회_실패는_불완전한_성공_결과를_만들지_않는다() {
     siblingsStatus = 503;
     assertError(client("test", Duration.ofSeconds(2)), CharacterErrorCode.LOST_ARK_API_ERROR);

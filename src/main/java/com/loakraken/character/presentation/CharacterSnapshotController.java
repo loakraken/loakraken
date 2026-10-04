@@ -29,7 +29,7 @@ public class CharacterSnapshotController {
   @Operation(
       summary = "저장된 캐릭터 관측 이력",
       description =
-          "서버와 캐릭터명이 일치하는 저장 기록만 최신순으로 읽습니다. 외부 API를 호출하지 않습니다. 동일 시각은 저장 순서 역순이며 동일 원본 재조회는 새 기록을 만들지 않습니다. 기록이 없으면 빈 목록입니다.")
+          "관측 이력 기능은 기본 비활성화 상태로 503을 반환합니다. 활성화된 환경에서는 서버와 캐릭터명이 일치하는 저장 기록만 최신순으로 읽습니다. 외부 API를 호출하지 않습니다. 동일 시각은 저장 순서 역순이며 동일 원본 재조회는 새 기록을 만들지 않습니다. 활성 상태에서 기록이 없으면 빈 목록입니다.")
   @ApiResponses({
     @io.swagger.v3.oas.annotations.responses.ApiResponse(
         responseCode = "200",
@@ -48,7 +48,8 @@ public class CharacterSnapshotController {
         content = @Content(schema = @Schema(ref = "#/components/schemas/ErrorResponse"))),
     @io.swagger.v3.oas.annotations.responses.ApiResponse(
         responseCode = "503",
-        description = "CHARACTER_HISTORY_UNAVAILABLE: 저장소 장애 또는 처리할 수 없는 기록",
+        description =
+            "CHARACTER_HISTORY_DISABLED: 기능 비활성화 / CHARACTER_HISTORY_UNAVAILABLE: 저장소 장애 또는 처리할 수 없는 기록",
         content = @Content(schema = @Schema(ref = "#/components/schemas/ErrorResponse")))
   })
   public ApiResponse<CharacterSnapshotHistoryResponse> history(

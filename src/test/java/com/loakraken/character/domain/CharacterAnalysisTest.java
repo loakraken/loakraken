@@ -165,6 +165,108 @@ class CharacterAnalysisTest {
     assertThat(result.averageQuality()).isEqualByComparingTo("96.67");
   }
 
+  @Test
+  void 품질은_무기_방어구와_장신구로_나눠_집계하고_그_외_장비는_그룹에서_제외한다() {
+    var items =
+        List.of(
+            typed("무기", 100),
+            typed("투구", 95),
+            typed("상의", 95),
+            typed("목걸이", 87),
+            typed("반지", 76),
+            typed("어빌리티 스톤", 50));
+    var groups =
+        CharacterAnalysis.from(new CharacterLoadout(items, null, null, null, null, null))
+            .equipment()
+            .qualityGroups();
+    assertThat(groups)
+        .extracting(CharacterAnalysis.QualityGroup::group)
+        .containsExactly(CharacterAnalysis.WEAPON_ARMOR, CharacterAnalysis.ACCESSORY);
+    assertThat(groups.get(0).count()).isEqualTo(3);
+    assertThat(groups.get(0).min()).isEqualTo(95);
+    assertThat(groups.get(0).average()).isEqualByComparingTo("96.67");
+    assertThat(groups.get(1).count()).isEqualTo(2);
+    assertThat(groups.get(1).max()).isEqualTo(87);
+    assertThat(groups.get(1).average()).isEqualByComparingTo("81.50");
+    var empty =
+        CharacterAnalysis.from(new CharacterLoadout(List.of(), null, null, null, null, null))
+            .equipment()
+            .qualityGroups();
+    assertThat(empty).allMatch(group -> group.count() == 0 && group.average() == null);
+  }
+
+  @Test
+  void 보석_효과는_피해와_재사용_대기시간_형식만_분류하고_나머지는_미확인으로_센다() {
+    var skills =
+        List.of(
+            skill("피해 28.00% 증가"),
+            skill("재사용 대기시간 16.00% 감소"),
+            skill("재사용 대기시간 16.00% 감소"),
+            skill("피해 증가"),
+            new CharacterLoadout.GemSkill(5, "스킬", List.of(), null, null));
+    var result =
+        gemsWith(
+            new CharacterLoadout.Gems(
+                List.of(gem(6)), new CharacterLoadout.GemEffects(null, skills)));
+    assertThat(result.damageEffectCount()).isEqualTo(1);
+    assertThat(result.cooldownEffectCount()).isEqualTo(2);
+    assertThat(result.unknownEffectCount()).isEqualTo(2);
+    var noEffects = gemsWith(new CharacterLoadout.Gems(List.of(gem(6)), null));
+    assertThat(noEffects.damageEffectCount() + noEffects.cooldownEffectCount()).isZero();
+  }
+
+  @Test
+  void 아크그리드는_질서와_혼돈_코어의_포인트를_따로_합산한다() {
+    var grid =
+        new CharacterLoadout.ArkGrid(
+            List.of(
+                slot("질서의 해 코어 : 살상연희", 18),
+                slot("질서의 달 코어 : 쌍검난무", 17),
+                slot("혼돈의 별 코어 : 공격", 17),
+                slot("혼돈의 달 코어", null),
+                slot("기타 코어", 5)),
+            List.of());
+    var result =
+        CharacterAnalysis.from(new CharacterLoadout(List.of(), null, null, null, null, grid))
+            .arkGrid();
+    assertThat(result.orderPoints()).isEqualTo(35);
+    assertThat(result.chaosPoints()).isEqualTo(17);
+    var none =
+        CharacterAnalysis.from(
+                new CharacterLoadout(
+                    List.of(),
+                    null,
+                    null,
+                    null,
+                    null,
+                    new CharacterLoadout.ArkGrid(List.of(), List.of())))
+            .arkGrid();
+    assertThat(none.orderPoints()).isNull();
+    assertThat(none.chaosPoints()).isNull();
+  }
+
+  private CharacterLoadout.Equipment typed(String type, Integer quality) {
+    return new CharacterLoadout.Equipment(
+        type,
+        type,
+        null,
+        "고대",
+        new CharacterLoadout.EquipmentDetail(null, quality, null, 4, null, List.of(), List.of()));
+  }
+
+  private CharacterLoadout.GemSkill skill(String description) {
+    return new CharacterLoadout.GemSkill(0, "스킬", List.of(description), null, null);
+  }
+
+  private CharacterAnalysis.GemSummary gemsWith(CharacterLoadout.Gems gems) {
+    return CharacterAnalysis.from(new CharacterLoadout(List.of(), null, gems, null, null, null))
+        .gems();
+  }
+
+  private CharacterLoadout.GridSlot slot(String name, Integer point) {
+    return new CharacterLoadout.GridSlot(0, null, name, point, null, List.of());
+  }
+
   private CharacterLoadout.Equipment equipment(
       Integer refineLevel, Integer quality, CharacterLoadout.PointBonus point) {
     return new CharacterLoadout.Equipment(

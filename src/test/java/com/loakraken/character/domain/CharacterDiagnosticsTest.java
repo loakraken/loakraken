@@ -121,7 +121,7 @@ class CharacterDiagnosticsTest {
   void 원본의_비정상_값은_집계와_진단에서_일관되게_제외한다() {
     var loadout =
         new CharacterLoadout(
-            List.of(new CharacterLoadout.Equipment("무기", "무기", null, null)),
+            List.of(new CharacterLoadout.Equipment("무기", "무기", null, null, null)),
             new CharacterLoadout.Engravings(List.of(), List.of(), List.of()),
             new CharacterLoadout.Gems(
                 List.of(new CharacterLoadout.Gem(0, null, null, -1, null)), null),

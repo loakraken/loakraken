@@ -27,10 +27,65 @@ public record CharacterLoadoutResponse(
       @NullableResponse String type,
       @NullableResponse String name,
       @NullableResponse String icon,
-      @NullableResponse String grade) {
+      @NullableResponse String grade,
+      @Schema(description = "Tooltip에서 해석한 장비 정보. Tooltip이 없거나 해석할 수 없으면 null입니다.")
+          @NullableResponse
+          EquipmentDetailResponse detail) {
     static EquipmentResponse from(CharacterLoadout.Equipment value) {
       if (value == null) return null;
-      return new EquipmentResponse(value.type(), value.name(), value.icon(), value.grade());
+      return new EquipmentResponse(
+          value.type(),
+          value.name(),
+          value.icon(),
+          value.grade(),
+          EquipmentDetailResponse.from(value.detail()));
+    }
+  }
+
+  @Schema(
+      description =
+          "공식 Tooltip에서 확인된 값만 담습니다. 확인되지 않은 값은 null이며 추정하지 않습니다. 엘릭서·초월·상급 재련은 아직 해석하지 않습니다.")
+  public record EquipmentDetailResponse(
+      @Schema(description = "해석 규칙 버전", example = "equipment-tooltip-v1") String parserVersion,
+      @Schema(description = "장비 이름의 +N 재련 단계") @NullableResponse Integer refineLevel,
+      @Schema(description = "품질 0~100. 품질이 적용되지 않는 장비는 null") @NullableResponse Integer quality,
+      @Schema(description = "장비 아이템 레벨. 장신구 등 표시되지 않는 장비는 null") @NullableResponse
+          Integer itemLevel,
+      @NullableResponse Integer tier,
+      @Schema(description = "장비가 제공하는 아크패시브 포인트") @NullableResponse
+          PointBonusResponse arkPassivePoint,
+      @Schema(description = "효과 묶음. 제목과 줄 단위 일반 텍스트") List<EffectGroupResponse> effects,
+      @Schema(description = "어빌리티 스톤의 무작위 각인") List<StoneEngravingResponse> stoneEngravings) {
+    static EquipmentDetailResponse from(CharacterLoadout.EquipmentDetail value) {
+      if (value == null) return null;
+      return new EquipmentDetailResponse(
+          CharacterLoadout.EquipmentDetail.PARSER_VERSION,
+          value.refineLevel(),
+          value.quality(),
+          value.itemLevel(),
+          value.tier(),
+          PointBonusResponse.from(value.arkPassivePoint()),
+          value.effects().stream().map(EffectGroupResponse::from).toList(),
+          value.stoneEngravings().stream().map(StoneEngravingResponse::from).toList());
+    }
+  }
+
+  public record PointBonusResponse(String name, Integer value) {
+    static PointBonusResponse from(CharacterLoadout.PointBonus value) {
+      if (value == null) return null;
+      return new PointBonusResponse(value.name(), value.value());
+    }
+  }
+
+  public record EffectGroupResponse(String title, List<String> lines) {
+    static EffectGroupResponse from(CharacterLoadout.EffectGroup value) {
+      return new EffectGroupResponse(value.title(), value.lines());
+    }
+  }
+
+  public record StoneEngravingResponse(String name, Integer level) {
+    static StoneEngravingResponse from(CharacterLoadout.StoneEngraving value) {
+      return new StoneEngravingResponse(value.name(), value.level());
     }
   }
 

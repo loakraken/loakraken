@@ -3,11 +3,15 @@ package com.loakraken.character.infrastructure;
 import com.loakraken.character.application.CharacterDetailsPort;
 import com.loakraken.character.application.CharacterErrorCode;
 import com.loakraken.character.application.CharacterException;
+import com.loakraken.character.application.CharacterMetrics;
+import com.loakraken.character.application.CharacterMetrics.ApiOutcome;
+import com.loakraken.character.application.CharacterMetrics.Endpoint;
 import com.loakraken.character.application.FetchedCharacter;
 import com.loakraken.character.domain.CharacterDetails;
 import java.util.Arrays;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.atomic.AtomicReference;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClient;
@@ -23,22 +27,26 @@ class LostArkCharacterClient implements CharacterDetailsPort {
   private final LostArkProperties properties;
   private final LostArkRequestGate gate;
   private final JsonMapper mapper;
+  private final CharacterMetrics metrics;
 
   LostArkCharacterClient(
       RestClient lostArkRestClient,
       LostArkProperties properties,
       LostArkRequestGate gate,
-      JsonMapper mapper) {
+      JsonMapper mapper,
+      CharacterMetrics metrics) {
     this.client = lostArkRestClient;
     this.properties = properties;
     this.gate = gate;
     this.mapper = mapper;
+    this.metrics = metrics;
   }
 
   @Override
   public FetchedCharacter fetch(String characterName) {
     var armoryPayload =
         request(
+            Endpoint.ARMORY,
             "/armories/characters/{name}?filters={filters}",
             characterName,
             LostArkArmoryResponse.class,
@@ -50,6 +58,7 @@ class LostArkCharacterClient implements CharacterDetailsPort {
     var profile = LostArkProfileMapper.from(armory.profile());
     var siblingsPayload =
         request(
+            Endpoint.SIBLINGS,
             "/characters/{name}/siblings",
             characterName,
             LostArkSiblingResponse[].class,
@@ -72,10 +81,16 @@ class LostArkCharacterClient implements CharacterDetailsPort {
   private record Payload<T>(T value, String json) {}
 
   private <T> Payload<T> request(
-      String path, String characterName, Class<T> responseType, CharacterErrorCode notFoundCode) {
+      Endpoint endpoint,
+      String path,
+      String characterName,
+      Class<T> responseType,
+      CharacterErrorCode notFoundCode) {
     if (properties.apiKey().isBlank())
       throw new CharacterException(CharacterErrorCode.LOST_ARK_NOT_CONFIGURED);
     gate.acquire();
+    var sample = metrics.startApi();
+    var outcome = new AtomicReference<>(ApiOutcome.ERROR);
     try {
       return client
           .get()
@@ -84,21 +99,29 @@ class LostArkCharacterClient implements CharacterDetailsPort {
               (request, response) -> {
                 int status = response.getStatusCode().value();
                 gate.observe(response.getHeaders(), status == 429);
-                if (status == 404) throw new CharacterException(notFoundCode);
-                if (status == 429)
+                if (status == 404) {
+                  outcome.set(ApiOutcome.NOT_FOUND);
+                  throw new CharacterException(notFoundCode);
+                }
+                if (status == 429) {
+                  outcome.set(ApiOutcome.RATE_LIMITED);
                   throw new CharacterException(CharacterErrorCode.LOST_ARK_RATE_LIMITED);
+                }
                 if (status != 200)
                   throw new CharacterException(CharacterErrorCode.LOST_ARK_API_ERROR);
                 String json = response.bodyTo(String.class);
                 if (json == null || json.isBlank())
                   throw new CharacterException(CharacterErrorCode.LOST_ARK_API_ERROR);
-                return new Payload<>(mapper.readValue(json, responseType), json);
+                var payload = new Payload<>(mapper.readValue(json, responseType), json);
+                outcome.set(ApiOutcome.SUCCESS);
+                return payload;
               });
     } catch (ResourceAccessException exception) {
       Throwable cause = exception;
       while (cause != null) {
         if (cause instanceof java.net.http.HttpTimeoutException
             || cause instanceof java.net.SocketTimeoutException) {
+          outcome.set(ApiOutcome.TIMEOUT);
           throw new CharacterException(CharacterErrorCode.LOST_ARK_API_TIMEOUT);
         }
         cause = cause.getCause();
@@ -108,6 +131,7 @@ class LostArkCharacterClient implements CharacterDetailsPort {
       throw new CharacterException(CharacterErrorCode.LOST_ARK_API_ERROR);
     } finally {
       gate.release();
+      metrics.finishApi(sample, endpoint, outcome.get());
     }
   }
 }

@@ -15,6 +15,7 @@ public class CharacterQueryService {
   private final CharacterCache cache;
   private final Clock clock;
   private final CharacterSnapshotCommandService snapshots;
+  private final CharacterMetrics metrics;
   private final ConcurrentHashMap<String, CompletableFuture<CharacterResult>> flights =
       new ConcurrentHashMap<>();
 
@@ -22,14 +23,27 @@ public class CharacterQueryService {
       CharacterDetailsPort detailsPort,
       CharacterCache cache,
       Clock clock,
-      CharacterSnapshotCommandService snapshots) {
+      CharacterSnapshotCommandService snapshots,
+      CharacterMetrics metrics) {
     this.detailsPort = detailsPort;
     this.cache = cache;
     this.clock = clock;
     this.snapshots = snapshots;
+    this.metrics = metrics;
   }
 
   public CharacterResult search(SearchCharacterCommand command) {
+    boolean success = false;
+    try {
+      var result = searchWithSingleFlight(command);
+      success = true;
+      return result;
+    } finally {
+      metrics.search(success);
+    }
+  }
+
+  private CharacterResult searchWithSingleFlight(SearchCharacterCommand command) {
     String name = command.characterName();
     var cached = cache.find(name);
     if (cached.isPresent()) return cached.get();

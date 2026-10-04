@@ -76,6 +76,12 @@ class OpenApiIntegrationTest {
     assertThat(response.body()).contains("Swagger UI");
   }
 
+  @Test
+  void 운영_지표_엔드포인트는_기본으로_공개하지_않는다() throws Exception {
+    assertThat(request("/actuator/metrics").statusCode()).isEqualTo(404);
+    assertThat(request("/actuator/prometheus").statusCode()).isEqualTo(404);
+  }
+
   private HttpResponse<String> request(String path) throws Exception {
     try (var client = HttpClient.newHttpClient()) {
       return client.send(

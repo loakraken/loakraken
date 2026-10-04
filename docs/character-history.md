@@ -75,6 +75,6 @@ Accept: application/json
 
 실제 PostgreSQL 통합 테스트로 동일 시각 정렬, 중간 삽입 후 다음 페이지, 같은 원본 재조회, 서버 분리, 기본/최대 개수, 잘못된 커서, 손상 데이터와 저장 버전을 검증한다. 테스트 전체에서 외부 조회와 캐시 호출이 없음을 확인한다.
 
-CI의 openapi-contract 산출물에 OpenAPI 명세와 정상·빈 목록·잘못된 커서·저장소 오류 응답을 함께 보관하고 JSON Schema로 검증한다. 프론트엔드는 별도 채팅에서 이 계약을 사용하며 이 PR에는 프론트 코드 변경이 없다.
+CI에서 Java 통합 테스트를 실행하고 openapi-contract 산출물에 OpenAPI 명세와 정상·빈 목록·잘못된 커서·저장소 오류 응답을 함께 보관한다. 전체 JSON Schema 대조는 로컬 선택 검사다. 프론트엔드는 별도 채팅에서 이 계약을 사용하며 이 PR에는 프론트 코드 변경이 없다.
 
 저장 정책은 [스냅샷 저장](character-snapshots.md), 현재 상태의 분석은 [관측 기반 진단](character-diagnostics.md)을 참고한다.

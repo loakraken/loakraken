@@ -37,12 +37,12 @@ class CharacterDiagnosticsTest {
         new CharacterAnalysis(
             1,
             new CharacterAnalysis.EquipmentSummary(
-                1, 0, 0, null, null, List.of(), 0, null, null, null, List.of()),
-            new CharacterAnalysis.GemSummary(0, 0, null, null, null, List.of()),
+                1, 0, 0, null, null, List.of(), 0, null, null, null, List.of(), List.of()),
+            new CharacterAnalysis.GemSummary(0, 0, null, null, null, List.of(), 0, 0, 0),
             new CharacterAnalysis.CardSummary(0, 0, 0),
             new CharacterAnalysis.EngravingSummary(0, 0, 0),
             new CharacterAnalysis.PassiveSummary(true, List.of()),
-            new CharacterAnalysis.GridSummary(0, 0, 0, 0));
+            new CharacterAnalysis.GridSummary(0, 0, 0, 0, null, null));
     var report = diagnose(analysis);
     assertThat(report.findings())
         .extracting(CharacterDiagnostics.Finding::code)
@@ -56,8 +56,9 @@ class CharacterDiagnosticsTest {
         new CharacterAnalysis(
             1,
             new CharacterAnalysis.EquipmentSummary(
-                1, 0, 0, null, null, List.of(), 0, null, null, null, List.of()),
-            new CharacterAnalysis.GemSummary(3, 2, 7, 7, new BigDecimal("7.00"), List.of()),
+                1, 0, 0, null, null, List.of(), 0, null, null, null, List.of(), List.of()),
+            new CharacterAnalysis.GemSummary(
+                3, 2, 7, 7, new BigDecimal("7.00"), List.of(), 0, 0, 0),
             new CharacterAnalysis.CardSummary(3, 1, 5),
             new CharacterAnalysis.EngravingSummary(0, 0, 5),
             new CharacterAnalysis.PassiveSummary(
@@ -65,7 +66,7 @@ class CharacterDiagnosticsTest {
                 List.of(
                     new CharacterAnalysis.PointValue("진화", 0),
                     new CharacterAnalysis.PointValue("깨달음", null))),
-            new CharacterAnalysis.GridSummary(1, 0, 0, 2));
+            new CharacterAnalysis.GridSummary(1, 0, 0, 2, null, null));
     var findings = diagnose(analysis).findings();
     assertThat(findings)
         .extracting(CharacterDiagnostics.Finding::code)
@@ -89,12 +90,12 @@ class CharacterDiagnosticsTest {
         new CharacterAnalysis(
             1,
             new CharacterAnalysis.EquipmentSummary(
-                1, 0, 0, null, null, List.of(), 0, null, null, null, List.of()),
+                1, 0, 0, null, null, List.of(), 0, null, null, null, List.of(), List.of()),
             validGems(),
             new CharacterAnalysis.CardSummary(1, 0, 0),
             new CharacterAnalysis.EngravingSummary(0, 0, 5),
             new CharacterAnalysis.PassiveSummary(false, List.of()),
-            new CharacterAnalysis.GridSummary(1, 2, 1, 1));
+            new CharacterAnalysis.GridSummary(1, 2, 1, 1, null, null));
     var findings = diagnose(analysis).findings();
     assertThat(findings)
         .extracting(CharacterDiagnostics.Finding::code)
@@ -112,13 +113,13 @@ class CharacterDiagnosticsTest {
         new CharacterAnalysis(
             1,
             new CharacterAnalysis.EquipmentSummary(
-                1, 0, 0, null, null, List.of(), 0, null, null, null, List.of()),
+                1, 0, 0, null, null, List.of(), 0, null, null, null, List.of(), List.of()),
             validGems(),
             new CharacterAnalysis.CardSummary(1, 0, 0),
             new CharacterAnalysis.EngravingSummary(0, 0, 0),
             new CharacterAnalysis.PassiveSummary(
                 true, List.of(new CharacterAnalysis.PointValue("진화", 0))),
-            new CharacterAnalysis.GridSummary(1, 0, 0, 0));
+            new CharacterAnalysis.GridSummary(1, 0, 0, 0, null, null));
     var report = diagnose(analysis);
     assertThat(report.findings()).isEmpty();
     assertThatThrownBy(() -> report.findings().add(null))
@@ -154,7 +155,7 @@ class CharacterDiagnosticsTest {
 
   private CharacterAnalysis.GemSummary validGems() {
     return new CharacterAnalysis.GemSummary(
-        1, 0, 1, 1, BigDecimal.ONE, List.of(new CharacterAnalysis.LevelCount(1, 1)));
+        1, 0, 1, 1, BigDecimal.ONE, List.of(new CharacterAnalysis.LevelCount(1, 1)), 0, 0, 0);
   }
 
   @Test

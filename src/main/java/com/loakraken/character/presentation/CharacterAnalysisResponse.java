@@ -43,6 +43,16 @@ public record CharacterAnalysisResponse(
             equipment.averageQuality(),
             equipment.arkPassivePoints().stream()
                 .map(point -> new PointValueResponse(point.name(), point.value()))
+                .toList(),
+            equipment.qualityGroups().stream()
+                .map(
+                    group ->
+                        new QualityGroupResponse(
+                            group.group(),
+                            group.count(),
+                            group.min(),
+                            group.max(),
+                            group.average()))
                 .toList()),
         gems == null
             ? null
@@ -54,7 +64,10 @@ public record CharacterAnalysisResponse(
                 gems.averageLevel(),
                 gems.levelDistribution().stream()
                     .map(level -> new LevelCountResponse(level.level(), level.count()))
-                    .toList()),
+                    .toList(),
+                gems.damageEffectCount(),
+                gems.cooldownEffectCount(),
+                gems.unknownEffectCount()),
         cards == null
             ? null
             : new CardSummaryResponse(
@@ -78,7 +91,9 @@ public record CharacterAnalysisResponse(
                 grid.coreCount(),
                 grid.activeGemCount(),
                 grid.inactiveGemCount(),
-                grid.unknownGemCount()),
+                grid.unknownGemCount(),
+                grid.orderPoints(),
+                grid.chaosPoints()),
         CharacterDiagnosticsResponse.from(CharacterDiagnostics.from(value, coverage)));
   }
 
@@ -96,7 +111,19 @@ public record CharacterAnalysisResponse(
       @Schema(description = "확인된 품질의 단순 산술 평균, 소수 둘째 자리 반올림. 값이 없으면 null입니다.") @NullableResponse
           BigDecimal averageQuality,
       @Schema(description = "장비가 제공하는 아크패시브 포인트의 이름별 합계. 아크패시브 섹션의 전체 포인트와 다릅니다.")
-          List<PointValueResponse> arkPassivePoints) {}
+          List<PointValueResponse> arkPassivePoints,
+      @Schema(
+              description =
+                  "품질 그룹별 집계. WEAPON_ARMOR(무기·투구·상의·하의·장갑·어깨), ACCESSORY(목걸이·귀걸이·반지) 순서로 항상 두 항목입니다.")
+          List<QualityGroupResponse> qualityGroups) {}
+
+  public record QualityGroupResponse(
+      @Schema(description = "WEAPON_ARMOR 또는 ACCESSORY") String group,
+      int count,
+      @NullableResponse Integer min,
+      @NullableResponse Integer max,
+      @Schema(description = "단순 산술 평균, 소수 둘째 자리 반올림. 값이 없으면 null입니다.") @NullableResponse
+          BigDecimal average) {}
 
   public record GemSummaryResponse(
       int count,
@@ -106,7 +133,10 @@ public record CharacterAnalysisResponse(
       @Schema(description = "확인 가능한 양수 레벨만 산술 평균, 소수 둘째 자리 반올림. 계산할 값이 없으면 null입니다.")
           @NullableResponse
           BigDecimal averageLevel,
-      List<LevelCountResponse> levelDistribution) {}
+      List<LevelCountResponse> levelDistribution,
+      @Schema(description = "보석 스킬 효과가 \"피해 N% 증가\"인 개수") int damageEffectCount,
+      @Schema(description = "보석 스킬 효과가 \"재사용 대기시간 N% 감소\"인 개수") int cooldownEffectCount,
+      @Schema(description = "두 형식에 해당하지 않아 분류하지 않은 보석 스킬 효과 개수") int unknownEffectCount) {}
 
   public record LevelCountResponse(int level, int count) {}
 
@@ -125,5 +155,12 @@ public record CharacterAnalysisResponse(
       @NullableResponse String name, @NullableResponse Integer value) {}
 
   public record GridSummaryResponse(
-      int coreCount, int activeGemCount, int inactiveGemCount, int unknownGemCount) {}
+      int coreCount,
+      int activeGemCount,
+      int inactiveGemCount,
+      int unknownGemCount,
+      @Schema(description = "이름이 질서로 시작하는 코어의 포인트 합. 해당 코어가 없으면 null") @NullableResponse
+          Integer orderPoints,
+      @Schema(description = "이름이 혼돈으로 시작하는 코어의 포인트 합. 해당 코어가 없으면 null") @NullableResponse
+          Integer chaosPoints) {}
 }

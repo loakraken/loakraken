@@ -4,7 +4,9 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Set;
 import java.util.TreeMap;
+import java.util.regex.Pattern;
 
 public record CharacterAnalysis(
     int equipmentCount,
@@ -14,6 +16,13 @@ public record CharacterAnalysis(
     EngravingSummary engravings,
     PassiveSummary arkPassive,
     GridSummary arkGrid) {
+
+  public static final String WEAPON_ARMOR = "WEAPON_ARMOR";
+  public static final String ACCESSORY = "ACCESSORY";
+  private static final Set<String> WEAPON_ARMOR_TYPES = Set.of("무기", "투구", "상의", "하의", "장갑", "어깨");
+  private static final Set<String> ACCESSORY_TYPES = Set.of("목걸이", "귀걸이", "반지");
+  private static final Pattern GEM_DAMAGE = Pattern.compile("^피해 [0-9.]+% 증가$");
+  private static final Pattern GEM_COOLDOWN = Pattern.compile("^재사용 대기시간 [0-9.]+% 감소$");
 
   public static CharacterAnalysis from(CharacterLoadout loadout) {
     return new CharacterAnalysis(
@@ -35,9 +44,9 @@ public record CharacterAnalysis(
     int detailCount = 0;
     var refineLevels = new TreeMap<Integer, Integer>();
     int refineCount = 0;
-    Integer minQuality = null, maxQuality = null;
-    long qualitySum = 0;
-    int qualityCount = 0;
+    var quality = new QualityStats();
+    var weaponArmor = new QualityStats();
+    var accessory = new QualityStats();
     var points = new LinkedHashMap<String, Integer>();
     for (var item : equipment) {
       var detail = item.detail();
@@ -48,10 +57,9 @@ public record CharacterAnalysis(
         refineCount++;
       }
       if (detail.quality() != null) {
-        minQuality = minQuality == null ? detail.quality() : Math.min(minQuality, detail.quality());
-        maxQuality = maxQuality == null ? detail.quality() : Math.max(maxQuality, detail.quality());
-        qualitySum += detail.quality();
-        qualityCount++;
+        quality.add(detail.quality());
+        if (WEAPON_ARMOR_TYPES.contains(item.type())) weaponArmor.add(detail.quality());
+        else if (ACCESSORY_TYPES.contains(item.type())) accessory.add(detail.quality());
       }
       var point = detail.arkPassivePoint();
       if (point != null && point.name() != null && point.value() != null)
@@ -66,16 +74,38 @@ public record CharacterAnalysis(
         refineLevels.entrySet().stream()
             .map(entry -> new LevelCount(entry.getKey(), entry.getValue()))
             .toList(),
-        qualityCount,
-        minQuality,
-        maxQuality,
-        qualityCount == 0
-            ? null
-            : BigDecimal.valueOf(qualitySum)
-                .divide(BigDecimal.valueOf(qualityCount), 2, RoundingMode.HALF_UP),
+        quality.count,
+        quality.min,
+        quality.max,
+        quality.average(),
         points.entrySet().stream()
             .map(entry -> new PointValue(entry.getKey(), entry.getValue()))
-            .toList());
+            .toList(),
+        List.of(weaponArmor.toGroup(WEAPON_ARMOR), accessory.toGroup(ACCESSORY)));
+  }
+
+  private static final class QualityStats {
+    int count;
+    Integer min;
+    Integer max;
+    long sum;
+
+    void add(int value) {
+      count++;
+      sum += value;
+      min = min == null ? value : Math.min(min, value);
+      max = max == null ? value : Math.max(max, value);
+    }
+
+    BigDecimal average() {
+      return count == 0
+          ? null
+          : BigDecimal.valueOf(sum).divide(BigDecimal.valueOf(count), 2, RoundingMode.HALF_UP);
+    }
+
+    QualityGroup toGroup(String group) {
+      return new QualityGroup(group, count, min, max, average());
+    }
   }
 
   private static GemSummary gems(CharacterLoadout.Gems gems) {
@@ -89,6 +119,18 @@ public record CharacterAnalysis(
       sum += gem.level();
       known++;
     }
+    int damage = 0, cooldown = 0, unknownEffect = 0;
+    if (gems.effects() != null) {
+      for (var skill : gems.effects().skills()) {
+        boolean isDamage =
+            skill.description().stream().anyMatch(line -> GEM_DAMAGE.matcher(line).matches());
+        boolean isCooldown =
+            skill.description().stream().anyMatch(line -> GEM_COOLDOWN.matcher(line).matches());
+        if (isDamage && !isCooldown) damage++;
+        else if (isCooldown && !isDamage) cooldown++;
+        else unknownEffect++;
+      }
+    }
     return new GemSummary(
         gems.items().size(),
         gems.items().size() - known,
@@ -99,7 +141,10 @@ public record CharacterAnalysis(
             : BigDecimal.valueOf(sum).divide(BigDecimal.valueOf(known), 2, RoundingMode.HALF_UP),
         counts.entrySet().stream()
             .map(entry -> new LevelCount(entry.getKey(), entry.getValue()))
-            .toList());
+            .toList(),
+        damage,
+        cooldown,
+        unknownEffect);
   }
 
   private static CardSummary cards(CharacterLoadout.Cards cards) {
@@ -132,14 +177,19 @@ public record CharacterAnalysis(
   private static GridSummary grid(CharacterLoadout.ArkGrid grid) {
     if (grid == null) return null;
     int active = 0, inactive = 0, unknown = 0;
+    Integer order = null, chaos = null;
     for (var slot : grid.slots()) {
+      if (slot.name() != null && slot.point() != null && slot.point() >= 0) {
+        if (slot.name().startsWith("질서")) order = (order == null ? 0 : order) + slot.point();
+        else if (slot.name().startsWith("혼돈")) chaos = (chaos == null ? 0 : chaos) + slot.point();
+      }
       for (var gem : slot.gems()) {
         if (gem.active() == null) unknown++;
         else if (gem.active()) active++;
         else inactive++;
       }
     }
-    return new GridSummary(grid.slots().size(), active, inactive, unknown);
+    return new GridSummary(grid.slots().size(), active, inactive, unknown, order, chaos);
   }
 
   public record EquipmentSummary(
@@ -153,12 +203,17 @@ public record CharacterAnalysis(
       Integer minQuality,
       Integer maxQuality,
       BigDecimal averageQuality,
-      List<PointValue> arkPassivePoints) {
+      List<PointValue> arkPassivePoints,
+      List<QualityGroup> qualityGroups) {
     public EquipmentSummary {
       refineDistribution = List.copyOf(refineDistribution);
       arkPassivePoints = List.copyOf(arkPassivePoints);
+      qualityGroups = List.copyOf(qualityGroups);
     }
   }
+
+  public record QualityGroup(
+      String group, int count, Integer min, Integer max, BigDecimal average) {}
 
   public record GemSummary(
       int count,
@@ -166,7 +221,10 @@ public record CharacterAnalysis(
       Integer minLevel,
       Integer maxLevel,
       BigDecimal averageLevel,
-      List<LevelCount> levelDistribution) {
+      List<LevelCount> levelDistribution,
+      int damageEffectCount,
+      int cooldownEffectCount,
+      int unknownEffectCount) {
     public GemSummary {
       levelDistribution = List.copyOf(levelDistribution);
     }
@@ -187,5 +245,10 @@ public record CharacterAnalysis(
   public record PointValue(String name, Integer value) {}
 
   public record GridSummary(
-      int coreCount, int activeGemCount, int inactiveGemCount, int unknownGemCount) {}
+      int coreCount,
+      int activeGemCount,
+      int inactiveGemCount,
+      int unknownGemCount,
+      Integer orderPoints,
+      Integer chaosPoints) {}
 }

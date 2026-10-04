@@ -67,7 +67,20 @@ class OpenApiIntegrationTest {
     assertThat(document.at("/components/schemas/ObservationSectionResponse/required").toString())
         .contains("state", "collections");
     assertThat(document.at("/components/schemas/CharacterAnalysisResponse/required").toString())
-        .contains("diagnostics");
+        .contains("diagnostics", "equipment");
+    assertThat(document.at("/components/schemas/EquipmentSummaryResponse/required").toString())
+        .contains(
+            "detailCount",
+            "detailUnavailableCount",
+            "refineDistribution",
+            "averageQuality",
+            "arkPassivePoints");
+    assertThat(
+            document
+                .at(
+                    "/components/schemas/EquipmentSummaryResponse/properties/averageQuality/anyOf/1/type")
+                .asText())
+        .isEqualTo("null");
     assertThat(document.at("/components/schemas/DiagnosticFindingResponse/required").toString())
         .contains("code", "category", "evidencePath", "observedCount", "message");
     assertThat(

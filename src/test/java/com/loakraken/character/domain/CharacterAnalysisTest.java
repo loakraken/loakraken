@@ -95,6 +95,87 @@ class CharacterAnalysisTest {
     assertThat(result.unknownGemCount()).isEqualTo(1);
   }
 
+  @Test
+  void 장비_재련과_품질은_확인된_값만_집계하고_해석_불가_장비를_따로_센다() {
+    var equipment =
+        List.of(
+            equipment(19, 100, new CharacterLoadout.PointBonus("진화", 24)),
+            equipment(19, 95, new CharacterLoadout.PointBonus("진화", 24)),
+            equipment(20, null, null),
+            equipment(null, 87, new CharacterLoadout.PointBonus("깨달음", 13)),
+            equipment(null, null, new CharacterLoadout.PointBonus("도약", 18)),
+            new CharacterLoadout.Equipment("무기", "해석 불가", null, null, null));
+    var result =
+        CharacterAnalysis.from(new CharacterLoadout(equipment, null, null, null, null, null))
+            .equipment();
+    assertThat(result.detailCount()).isEqualTo(5);
+    assertThat(result.detailUnavailableCount()).isEqualTo(1);
+    assertThat(result.refineCount()).isEqualTo(3);
+    assertThat(result.minRefineLevel()).isEqualTo(19);
+    assertThat(result.maxRefineLevel()).isEqualTo(20);
+    assertThat(result.refineDistribution())
+        .containsExactly(
+            new CharacterAnalysis.LevelCount(19, 2), new CharacterAnalysis.LevelCount(20, 1));
+    assertThat(result.qualityCount()).isEqualTo(3);
+    assertThat(result.minQuality()).isEqualTo(87);
+    assertThat(result.maxQuality()).isEqualTo(100);
+    assertThat(result.averageQuality()).isEqualByComparingTo("94.00");
+    assertThat(result.arkPassivePoints())
+        .containsExactly(
+            new CharacterAnalysis.PointValue("진화", 48),
+            new CharacterAnalysis.PointValue("깨달음", 13),
+            new CharacterAnalysis.PointValue("도약", 18));
+  }
+
+  @Test
+  void 장비가_없거나_값이_없으면_0으로_대체하지_않고_null로_둔다() {
+    var empty =
+        CharacterAnalysis.from(new CharacterLoadout(List.of(), null, null, null, null, null))
+            .equipment();
+    assertThat(empty.detailCount()).isZero();
+    assertThat(empty.minRefineLevel()).isNull();
+    assertThat(empty.averageQuality()).isNull();
+    assertThat(empty.refineDistribution()).isEmpty();
+    var noValues =
+        CharacterAnalysis.from(
+                new CharacterLoadout(
+                    List.of(equipment(null, null, null)), null, null, null, null, null))
+            .equipment();
+    assertThat(noValues.detailCount()).isEqualTo(1);
+    assertThat(noValues.qualityCount()).isZero();
+    assertThat(noValues.minQuality()).isNull();
+    assertThat(noValues.arkPassivePoints()).isEmpty();
+  }
+
+  @Test
+  void 품질_평균은_소수_둘째_자리에서_반올림한다() {
+    var result =
+        CharacterAnalysis.from(
+                new CharacterLoadout(
+                    List.of(
+                        equipment(null, 100, null),
+                        equipment(null, 95, null),
+                        equipment(null, 95, null)),
+                    null,
+                    null,
+                    null,
+                    null,
+                    null))
+            .equipment();
+    assertThat(result.averageQuality()).isEqualByComparingTo("96.67");
+  }
+
+  private CharacterLoadout.Equipment equipment(
+      Integer refineLevel, Integer quality, CharacterLoadout.PointBonus point) {
+    return new CharacterLoadout.Equipment(
+        "장비",
+        "장비",
+        null,
+        "고대",
+        new CharacterLoadout.EquipmentDetail(
+            refineLevel, quality, null, 4, point, List.of(), List.of()));
+  }
+
   private CharacterAnalysis.GemSummary gems(List<CharacterLoadout.Gem> gems) {
     return CharacterAnalysis.from(
             new CharacterLoadout(

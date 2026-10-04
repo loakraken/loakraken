@@ -124,6 +124,33 @@ class OpenApiIntegrationTest {
   }
 
   @Test
+  void 보석_계획의_공식_규칙과_필수_수량_계약을_명시한다() throws Exception {
+    var document = JsonMapper.builder().build().readTree(request("/v3/api-docs").body());
+    var operation = document.path("paths").path("/api/v1/gems/synthesis-plans").path("post");
+    assertThat(operation.path("requestBody").path("required").asBoolean()).isTrue();
+    assertThat(operation.path("responses").toString()).contains("200", "400", "406", "415", "500");
+    assertThat(document.at("/components/schemas/GemSynthesisRequest/required").toString())
+        .contains("tier", "baseLevel", "targetLevel", "targetQuantity", "inventory");
+    assertThat(document.at("/components/schemas/GemSynthesisResponse/required").toString())
+        .contains(
+            "ruleVersion",
+            "rulesVerifiedOn",
+            "sources",
+            "status",
+            "additionalBaseQuantity",
+            "inventory",
+            "steps",
+            "outcomesPerSynthesis");
+    assertThat(document.at("/components/schemas/GemSynthesisStepResponse/required").toString())
+        .contains("inputLevel", "outputLevel", "inputQuantity", "outputQuantity");
+    assertThat(
+            document
+                .at("/components/schemas/GemSynthesisRequest/properties/validLevels")
+                .isMissingNode())
+        .isTrue();
+  }
+
+  @Test
   void 재료_견적은_필수_수량과_미계산_null_계약을_명시한다() throws Exception {
     var document = JsonMapper.builder().build().readTree(request("/v3/api-docs").body());
     var operation = document.path("paths").path("/api/v1/markets/material-quotes").path("post");

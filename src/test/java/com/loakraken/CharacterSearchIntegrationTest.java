@@ -86,7 +86,7 @@ class CharacterSearchIntegrationTest {
     assertThat(result.at("/data/loadout/equipment/0/detail").isNull()).isTrue();
     assertThat(result.at("/data/analysis/gems").isNull()).isTrue();
     assertThat(result.at("/data/analysis/diagnostics/ruleVersion").asText())
-        .isEqualTo("observed-v2");
+        .isEqualTo("observed-v3");
     for (var finding : result.at("/data/analysis/diagnostics/findings")) {
       assertThat(result.at(finding.path("evidencePath").asText()).isMissingNode()).isFalse();
     }

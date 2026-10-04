@@ -7,7 +7,7 @@ import java.util.List;
 
 @Schema(description = "관측값 기반 진단. 빈 findings는 스펙 완성이나 레이드 적합성을 보증하지 않습니다.")
 public record CharacterDiagnosticsResponse(
-    @Schema(description = "진단 규칙 버전. 수집 시각은 최상위 fetchedAt을 사용합니다.", example = "observed-v2")
+    @Schema(description = "진단 규칙 버전. 수집 시각은 최상위 fetchedAt을 사용합니다.", example = "observed-v3")
         String ruleVersion,
     @Schema(description = "장비·보석·카드·각인·패시브·그리드 순서. 성능 또는 강화 우선순위가 아닙니다.")
         List<DiagnosticFindingResponse> findings) {

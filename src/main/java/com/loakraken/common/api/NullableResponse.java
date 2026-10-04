@@ -1,4 +1,4 @@
-package com.loakraken.character.presentation;
+package com.loakraken.common.api;
 
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
@@ -7,4 +7,4 @@ import java.lang.annotation.Target;
 
 @Retention(RetentionPolicy.RUNTIME)
 @Target(ElementType.RECORD_COMPONENT)
-@interface NullableResponse {}
+public @interface NullableResponse {}

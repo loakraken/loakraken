@@ -11,6 +11,7 @@ import com.loakraken.character.application.CharacterMetrics;
 import com.loakraken.character.application.CharacterResult;
 import com.loakraken.character.domain.CharacterLoadout;
 import com.loakraken.character.domain.CharacterProfile;
+import com.loakraken.common.lostark.LostArkProperties;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.math.BigDecimal;
 import java.net.URI;

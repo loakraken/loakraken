@@ -1,4 +1,4 @@
-package com.loakraken.character.infrastructure;
+package com.loakraken.common.lostark;
 
 import java.net.URI;
 import java.time.Duration;

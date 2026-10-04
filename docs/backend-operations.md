@@ -4,7 +4,7 @@
 
 MVP는 **동일 API 키를 사용하는 백엔드 프로세스 1개, replicas=1**을 전제로 한다. 배포 인프라를 새로 만들거나 replica 수를 자동 강제하는 코드를 추가한 것은 아니다. 현재 single flight, 호출 예산, 동시성 제한은 JVM 내부 상태다.
 
-기본 외부 호출 예산은 인스턴스당 90회/분, 동시 요청 4개이며 공식 100회/분 한도에 여유를 둔다. 검색 캐시 미적중은 전투정보·원정대 요청 2회를 사용할 수 있다. 배치·로컬 테스트·다른 서비스가 같은 키를 사용하면 총량을 공유한다. 단일 replica만으로 다른 프로세스까지 제어되지는 않는다.
+기본 외부 호출 예산은 인스턴스당 90회/분, 동시 요청 4개이며 공식 100회/분 한도에 여유를 둔다. 캐릭터와 거래소는 동일 제한기 빈을 사용하며 합산 예산이다. 캐릭터 검색 캐시 미적중은 전투정보·원정대 요청 2회, 거래소 한 페이지 조회는 1회를 사용할 수 있다. 배치·로컬 테스트·다른 서비스가 같은 키를 사용하면 총량을 공유한다. 단일 replica만으로 다른 프로세스까지 제어되지는 않는다.
 
 운영 시 동일 키를 쓰는 프로세스를 함께 관리하고, 배포 중 구·신 인스턴스를 겹쳐 실행하지 않는다. 재시작은 JVM 예산 기록을 초기화하므로 필요 시 기존 요청 구간이 끝날 때까지 기다린다. 여러 인스턴스가 필요하면 배포 전에 공유 quota와 갱신 조정을 설계한다. 현재 문서는 분산 제한을 구현했다는 의미가 아니다.
 
@@ -18,7 +18,7 @@ Actuator가 제공하는 MeterRegistry에 기록한다. 태그는 코드의 고�
 
 | Meter | 종류 | 태그 | 의미 |
 |---|---|---|---|
-| loakraken.lostark.requests | Timer | endpoint=armory/siblings, outcome=success/not_found/rate_limited/timeout/error | 게이트 통과 후 HTTP 요청 시도부터 응답 수신·JSON 디코딩 종료까지 횟수와 지연 |
+| loakraken.lostark.requests | Timer | endpoint=armory/siblings/market_items/market_trades, outcome=success/not_found/rate_limited/timeout/error | 게이트 통과 후 HTTP 요청 시도부터 응답 수신·JSON 디코딩 종료까지 횟수와 지연 |
 | loakraken.cache.operations | Counter | outcome=hit/miss/invalid/read_error/write_success/write_error | 캐시 읽기·쓰기 결과 및 손상 발견 |
 | loakraken.lostark.gate | Counter | event=budget_reject/concurrency_reject/upstream_429/upstream_backoff_reject | 로컬 차단 사유와 외부 429 관측 |
 | loakraken.character.searches | Counter | outcome=success/failure | 검색 application 서비스 호출의 완료 결과 |
@@ -31,7 +31,9 @@ Actuator가 제공하는 MeterRegistry에 기록한다. 태그는 코드의 고�
 
 검색 성공·실패는 캐시 적중과 동시 요청 병합 참여자를 포함해 각 서비스 호출당 한 번이다. 컨트롤러 입력 검증에서 종료된 요청은 여기에 포함되지 않으며 기본 HTTP 서버 지표로 확인한다.
 
-이번에 추가한 loakraken.* Meter 조합의 상한은 요청 10 + 캐시 6 + 게이트 4 + 검색 2 = 22개다. exporter가 생성하는 실제 시계열 수는 Timer의 count/total/max 등에 따라 더 많을 수 있다. 미발생 조합은 아직 등록되지 않을 수 있다. 기본 누적값은 프로세스 재시작 시 초기화된다.
+거래소는 캐시를 사용하지 않으며 캐릭터 검색 Counter에도 포함되지 않는다. 거래소 도메인 검증 실패는 HTTP Timer의 디코딩 성공과 별개이며 공개 HTTP 서버 응답 지표에서 502로 확인한다.
+
+loakraken.* Meter 조합의 상한은 요청 20 + 캐시 6 + 게이트 4 + 검색 2 = 32개다. exporter가 생성하는 실제 시계열 수는 Timer의 count/total/max 등에 따라 더 많을 수 있다. 미발생 조합은 아직 등록되지 않을 수 있다. 기본 누적값은 프로세스 재시작 시 초기화된다.
 
 ## 확인 방법과 공개 범위
 

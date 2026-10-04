@@ -1,9 +1,9 @@
-package com.loakraken.character.infrastructure;
+package com.loakraken.common.lostark;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.loakraken.character.application.CharacterException;
+import com.loakraken.common.api.BusinessException;
 import java.net.URI;
 import java.time.*;
 import org.junit.jupiter.api.Test;
@@ -12,14 +12,13 @@ import org.springframework.http.HttpHeaders;
 class LostArkRequestGateTest {
   private final io.micrometer.core.instrument.simple.SimpleMeterRegistry registry =
       new io.micrometer.core.instrument.simple.SimpleMeterRegistry();
-  private final com.loakraken.character.application.CharacterMetrics metrics =
-      new com.loakraken.character.application.CharacterMetrics(registry);
+  private final LostArkMetrics metrics = new LostArkMetrics(registry);
 
   @Test
   void 동시_호출_제한을_초과하면_대기열을_늘리지_않는다() {
     var gate = gate(Clock.systemUTC(), 90, 1);
     gate.acquire();
-    assertThatThrownBy(() -> gate.acquire()).isInstanceOf(CharacterException.class);
+    assertThatThrownBy(() -> gate.acquire()).isInstanceOf(BusinessException.class);
     assertThat(
             registry
                 .get("loakraken.lostark.gate")
@@ -38,7 +37,7 @@ class LostArkRequestGateTest {
     var gate = gate(clock, 1, 1);
     gate.acquire();
     gate.release();
-    assertThatThrownBy(() -> gate.acquire()).isInstanceOf(CharacterException.class);
+    assertThatThrownBy(() -> gate.acquire()).isInstanceOf(BusinessException.class);
     assertThat(
             registry.get("loakraken.lostark.gate").tag("event", "budget_reject").counter().count())
         .isEqualTo(1);
@@ -54,7 +53,7 @@ class LostArkRequestGateTest {
       gate.acquire();
       gate.release();
     }
-    assertThatThrownBy(() -> gate.acquire()).isInstanceOf(CharacterException.class);
+    assertThatThrownBy(() -> gate.acquire()).isInstanceOf(BusinessException.class);
   }
 
   @Test
@@ -65,7 +64,7 @@ class LostArkRequestGateTest {
     headers.set("X-RateLimit-Remaining", "0");
     headers.set("X-RateLimit-Reset", Long.toString(clock.now.plusSeconds(30).getEpochSecond()));
     gate.observe(headers, false);
-    assertThatThrownBy(() -> gate.acquire()).isInstanceOf(CharacterException.class);
+    assertThatThrownBy(() -> gate.acquire()).isInstanceOf(BusinessException.class);
     clock.now = clock.now.plusSeconds(30);
     gate.acquire();
     gate.release();

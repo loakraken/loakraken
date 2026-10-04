@@ -1,6 +1,7 @@
 package com.loakraken.character.presentation;
 
 import com.loakraken.character.application.CharacterSnapshotPage;
+import com.loakraken.common.api.NullableResponse;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.math.BigDecimal;
 import java.time.Instant;

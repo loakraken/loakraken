@@ -78,7 +78,7 @@ record LostArkArmoryResponse(
       @JsonProperty("Icon") String icon,
       @JsonProperty("Grade") String grade) {
     CharacterLoadout.Equipment toDomain() {
-      return new CharacterLoadout.Equipment(type, name, icon, grade);
+      return new CharacterLoadout.Equipment(type, LostArkText.plain(name), icon, grade);
     }
   }
 
@@ -101,7 +101,7 @@ record LostArkArmoryResponse(
       @JsonProperty("Name") String name,
       @JsonProperty("Icon") String icon) {
     CharacterLoadout.Engraving toDomain() {
-      return new CharacterLoadout.Engraving(slot, name, icon);
+      return new CharacterLoadout.Engraving(slot, LostArkText.plain(name), icon);
     }
   }
 
@@ -111,7 +111,8 @@ record LostArkArmoryResponse(
       @JsonProperty("Name") String name,
       @JsonProperty("Description") String description) {
     CharacterLoadout.EngravingEffect toDomain() {
-      return new CharacterLoadout.EngravingEffect(icon, name, description);
+      return new CharacterLoadout.EngravingEffect(
+          icon, LostArkText.plain(name), LostArkText.plain(description));
     }
   }
 
@@ -124,7 +125,7 @@ record LostArkArmoryResponse(
       @JsonProperty("Description") String description) {
     CharacterLoadout.PassiveEngraving toDomain() {
       return new CharacterLoadout.PassiveEngraving(
-          abilityStoneLevel, grade, level, name, description);
+          abilityStoneLevel, grade, level, LostArkText.plain(name), LostArkText.plain(description));
     }
   }
 
@@ -144,7 +145,7 @@ record LostArkArmoryResponse(
       @JsonProperty("Level") Integer level,
       @JsonProperty("Grade") String grade) {
     CharacterLoadout.Gem toDomain() {
-      return new CharacterLoadout.Gem(slot, name, icon, level, grade);
+      return new CharacterLoadout.Gem(slot, LostArkText.plain(name), icon, level, grade);
     }
   }
 
@@ -153,7 +154,8 @@ record LostArkArmoryResponse(
       @JsonProperty("Description") String description,
       @JsonProperty("Skills") List<GemSkill> skills) {
     CharacterLoadout.GemEffects toDomain() {
-      return new CharacterLoadout.GemEffects(description, map(skills, GemSkill::toDomain));
+      return new CharacterLoadout.GemEffects(
+          LostArkText.plain(description), map(skills, GemSkill::toDomain));
     }
   }
 
@@ -166,7 +168,11 @@ record LostArkArmoryResponse(
       @JsonProperty("Icon") String icon) {
     CharacterLoadout.GemSkill toDomain() {
       return new CharacterLoadout.GemSkill(
-          gemSlot, name, map(description, Function.identity()), option, icon);
+          gemSlot,
+          LostArkText.plain(name),
+          LostArkText.plain(description),
+          LostArkText.plain(option),
+          icon);
     }
   }
 
@@ -188,7 +194,8 @@ record LostArkArmoryResponse(
       @JsonProperty("AwakeTotal") Integer awakeTotal,
       @JsonProperty("Grade") String grade) {
     CharacterLoadout.Card toDomain() {
-      return new CharacterLoadout.Card(slot, name, icon, awakeCount, awakeTotal, grade);
+      return new CharacterLoadout.Card(
+          slot, LostArkText.plain(name), icon, awakeCount, awakeTotal, grade);
     }
   }
 
@@ -207,7 +214,7 @@ record LostArkArmoryResponse(
   record Effect(
       @JsonProperty("Name") String name, @JsonProperty("Description") String description) {
     CharacterLoadout.Effect toDomain() {
-      return new CharacterLoadout.Effect(name, description);
+      return new CharacterLoadout.Effect(LostArkText.plain(name), LostArkText.plain(description));
     }
   }
 
@@ -219,7 +226,7 @@ record LostArkArmoryResponse(
       @JsonProperty("Effects") List<PassiveEffect> effects) {
     CharacterLoadout.ArkPassive toDomain() {
       return new CharacterLoadout.ArkPassive(
-          title,
+          LostArkText.plain(title),
           enabled,
           map(points, PassivePoint::toDomain),
           map(effects, PassiveEffect::toDomain));
@@ -232,7 +239,8 @@ record LostArkArmoryResponse(
       @JsonProperty("Value") Integer value,
       @JsonProperty("Description") String description) {
     CharacterLoadout.PassivePoint toDomain() {
-      return new CharacterLoadout.PassivePoint(name, value, description);
+      return new CharacterLoadout.PassivePoint(
+          LostArkText.plain(name), value, LostArkText.plain(description));
     }
   }
 
@@ -242,7 +250,8 @@ record LostArkArmoryResponse(
       @JsonProperty("Description") String description,
       @JsonProperty("Icon") String icon) {
     CharacterLoadout.PassiveEffect toDomain() {
-      return new CharacterLoadout.PassiveEffect(name, description, icon);
+      return new CharacterLoadout.PassiveEffect(
+          LostArkText.plain(name), LostArkText.plain(description), icon);
     }
   }
 
@@ -266,14 +275,14 @@ record LostArkArmoryResponse(
       @JsonProperty("Gems") List<GridGem> gems) {
     CharacterLoadout.GridSlot toDomain() {
       return new CharacterLoadout.GridSlot(
-          index, icon, name, point, grade, map(gems, GridGem::toDomain));
+          index, icon, LostArkText.plain(name), point, grade, map(gems, GridGem::toDomain));
     }
   }
 
   @JsonIgnoreProperties(ignoreUnknown = true)
   record GridEffect(@JsonProperty("Name") String name, @JsonProperty("Level") Integer level) {
     CharacterLoadout.GridEffect toDomain() {
-      return new CharacterLoadout.GridEffect(name, level);
+      return new CharacterLoadout.GridEffect(LostArkText.plain(name), level);
     }
   }
 

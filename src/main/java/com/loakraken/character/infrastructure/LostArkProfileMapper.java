@@ -25,8 +25,8 @@ final class LostArkProfileMapper {
         number(response.combatPower()),
         response.expeditionLevel(),
         response.imageUrl(),
-        response.title(),
-        response.guildName(),
+        LostArkText.plain(response.title()),
+        LostArkText.plain(response.guildName()),
         response.stats() == null
             ? List.of()
             : response.stats().stream()

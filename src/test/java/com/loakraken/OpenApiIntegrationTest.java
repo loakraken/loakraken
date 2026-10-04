@@ -123,6 +123,39 @@ class OpenApiIntegrationTest {
     assertThat(request("/actuator/prometheus").statusCode()).isEqualTo(404);
   }
 
+  @Test
+  void 재료_견적은_필수_수량과_미계산_null_계약을_명시한다() throws Exception {
+    var document = JsonMapper.builder().build().readTree(request("/v3/api-docs").body());
+    var operation = document.path("paths").path("/api/v1/markets/material-quotes").path("post");
+    assertThat(operation.path("requestBody").path("required").asBoolean()).isTrue();
+    assertThat(operation.path("responses").toString()).contains("200", "400", "415", "429", "503");
+    assertThat(document.at("/components/schemas/MaterialQuoteRequest/required").toString())
+        .contains("priceBasis", "items");
+    assertThat(document.at("/components/schemas/MaterialQuoteItemRequest/required").toString())
+        .contains("itemId", "requiredQuantity", "ownedQuantity", "search");
+    assertThat(document.at("/components/schemas/MaterialQuoteResponse/required").toString())
+        .contains("ruleVersion", "priceBasis", "complete", "knownCostGold", "totalCostGold");
+    assertThat(
+            document
+                .at(
+                    "/components/schemas/MaterialQuoteResponse/properties/totalCostGold/anyOf/1/type")
+                .asText())
+        .isEqualTo("null");
+    assertThat(
+            document
+                .at(
+                    "/components/schemas/MaterialQuoteLineResponse/properties/purchase/anyOf/1/type")
+                .asText())
+        .isEqualTo("null");
+    assertThat(document.at("/components/schemas/MaterialQuoteLineResponse/required").toString())
+        .contains("status", "observedAt", "bundleCount", "pricePerBundle", "purchase");
+    assertThat(
+            document
+                .at("/components/schemas/MaterialQuoteRequest/properties/uniqueItemIds")
+                .isMissingNode())
+        .isTrue();
+  }
+
   private HttpResponse<String> request(String path) throws Exception {
     try (var client = HttpClient.newHttpClient()) {
       return client.send(

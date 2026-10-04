@@ -2,6 +2,13 @@ spring:
   application:
     name: loakraken
 
+  jackson:
+    deserialization:
+      accept-float-as-int: false
+    datatype:
+      enum:
+        fail-on-numbers-for-enums: true
+
   threads:
     virtual:
       enabled: true

@@ -3,6 +3,7 @@ package com.loakraken.market.presentation;
 import com.loakraken.common.api.ApiResponse;
 import com.loakraken.market.application.MarketQueryService;
 import com.loakraken.market.application.MarketSource;
+import com.loakraken.market.application.MaterialQuoteService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -51,9 +52,11 @@ import org.springframework.web.bind.annotation.*;
 })
 public class MarketController {
   private final MarketQueryService service;
+  private final MaterialQuoteService quotes;
 
-  public MarketController(MarketQueryService service) {
+  public MarketController(MarketQueryService service, MaterialQuoteService quotes) {
     this.service = service;
+    this.quotes = quotes;
   }
 
   @GetMapping("/items")
@@ -90,5 +93,22 @@ public class MarketController {
   public ApiResponse<MarketOptionsResponse> options() {
     return ApiResponse.of(
         MarketSuccessCode.MARKET_OPTIONS_SUCCESS, MarketOptionsResponse.from(service.options()));
+  }
+
+  @PostMapping(value = "/material-quotes", consumes = MediaType.APPLICATION_JSON_VALUE)
+  @Operation(
+      summary = "재료 구매 견적 계산",
+      description =
+          "필요·보유 수량과 선택한 공식 묶음 가격으로 계산합니다. 최대 10개 항목의 검색 페이지를 캐시·공유 호출 예산 안에서 순차 조회합니다. "
+              + "미계산 항목이 있으면 complete=false와 totalCostGold=null입니다. 재련 기대 비용·매물 수량 보장·자동 구매는 제공하지 않습니다.")
+  @io.swagger.v3.oas.annotations.responses.ApiResponse(
+      responseCode = "415",
+      description = "UNSUPPORTED_MEDIA_TYPE",
+      content = @Content(schema = @Schema(ref = "#/components/schemas/ErrorResponse")))
+  public ApiResponse<MaterialQuoteResponse> materialQuote(
+      @Valid @RequestBody MaterialQuoteRequest request) {
+    return ApiResponse.of(
+        MarketSuccessCode.MATERIAL_QUOTE_SUCCESS,
+        MaterialQuoteResponse.from(quotes.quote(request.toCommand())));
   }
 }

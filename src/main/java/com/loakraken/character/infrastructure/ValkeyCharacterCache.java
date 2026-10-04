@@ -6,8 +6,10 @@ import com.loakraken.character.application.CharacterException;
 import com.loakraken.character.application.CharacterMetrics;
 import com.loakraken.character.application.CharacterMetrics.CacheOutcome;
 import com.loakraken.character.application.CharacterResult;
+import com.loakraken.character.application.CharacterSiblingsResult;
 import com.loakraken.common.lostark.LostArkProperties;
 import java.util.Optional;
+import java.util.function.Predicate;
 import org.springframework.dao.DataAccessException;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
@@ -34,15 +36,57 @@ class ValkeyCharacterCache implements CharacterCache {
 
   @Override
   public Optional<CharacterResult> find(String name) {
+    return read(
+        summaryKey(name),
+        CharacterResult.class,
+        result ->
+            result.details() != null
+                && result.fetchedAt() != null
+                && result.details().siblings() != null
+                && result.details().coverage().siblings() != null);
+  }
+
+  @Override
+  public void save(String name, CharacterResult result) {
+    write(summaryKey(name), result);
+  }
+
+  @Override
+  public Optional<CharacterResult> findArmory(String name) {
+    return read(
+        armoryKey(name),
+        CharacterResult.class,
+        result ->
+            result.details() != null
+                && result.fetchedAt() != null
+                && result.details().siblings() == null);
+  }
+
+  @Override
+  public void saveArmory(String name, CharacterResult result) {
+    write(armoryKey(name), result);
+  }
+
+  @Override
+  public Optional<CharacterSiblingsResult> findSiblings(String name) {
+    return read(siblingsKey(name), CharacterSiblingsResult.class, result -> true);
+  }
+
+  @Override
+  public void saveSiblings(String name, CharacterSiblingsResult result) {
+    write(siblingsKey(name), result);
+  }
+
+  private <T> Optional<T> read(String key, Class<T> type, Predicate<T> complete) {
     try {
-      String json = redis.opsForValue().get(key(name));
+      String json = redis.opsForValue().get(key);
       if (json == null) {
         metrics.cache(CacheOutcome.MISS);
         return Optional.empty();
       }
       try {
-        var result = mapper.readValue(json, CharacterResult.class);
-        if (result != null && result.details() != null && result.fetchedAt() != null) {
+        var result = mapper.readValue(json, type);
+        if (result != null && complete.test(result)) {
           metrics.cache(CacheOutcome.HIT);
           return Optional.of(result);
         }
@@ -50,7 +94,7 @@ class ValkeyCharacterCache implements CharacterCache {
         // 손상되거나 이전 버전인 캐시는 제거한 뒤 정상 경로로 다시 조회한다.
       }
       metrics.cache(CacheOutcome.INVALID);
-      redis.delete(key(name));
+      redis.delete(key);
       metrics.cache(CacheOutcome.MISS);
       return Optional.empty();
     } catch (DataAccessException exception) {
@@ -59,12 +103,9 @@ class ValkeyCharacterCache implements CharacterCache {
     }
   }
 
-  @Override
-  public void save(String name, CharacterResult result) {
+  private void write(String key, Object result) {
     try {
-      redis
-          .opsForValue()
-          .set(key(name), mapper.writeValueAsString(result), properties.summaryTtl());
+      redis.opsForValue().set(key, mapper.writeValueAsString(result), properties.summaryTtl());
       metrics.cache(CacheOutcome.WRITE_SUCCESS);
     } catch (DataAccessException | JacksonException exception) {
       metrics.cache(CacheOutcome.WRITE_ERROR);
@@ -72,7 +113,15 @@ class ValkeyCharacterCache implements CharacterCache {
     }
   }
 
-  private String key(String name) {
+  private String summaryKey(String name) {
     return "character:v5:" + name + ":summary";
+  }
+
+  private String armoryKey(String name) {
+    return "character:v5:" + name + ":armory";
+  }
+
+  private String siblingsKey(String name) {
+    return "character:v1:" + name + ":siblings";
   }
 }

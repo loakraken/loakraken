@@ -13,6 +13,8 @@ class CharacterOpenApiConfiguration {
       ResponseContracts.apply(CharacterResponse.class, document.getComponents().getSchemas());
       ResponseContracts.apply(
           CharacterSnapshotHistoryResponse.class, document.getComponents().getSchemas());
+      ResponseContracts.apply(
+          CharacterSiblingsResponse.class, document.getComponents().getSchemas());
     };
   }
 }

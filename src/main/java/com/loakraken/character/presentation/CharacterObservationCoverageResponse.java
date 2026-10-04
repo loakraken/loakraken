@@ -2,6 +2,7 @@ package com.loakraken.character.presentation;
 
 import com.loakraken.character.domain.CharacterObservationCoverage;
 import com.loakraken.character.domain.ObservationState;
+import com.loakraken.common.api.NullableResponse;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.Map;
 
@@ -13,7 +14,9 @@ public record CharacterObservationCoverageResponse(
     ObservationSectionResponse cards,
     ObservationSectionResponse arkPassive,
     ObservationSectionResponse arkGrid,
-    ObservationState siblings) {
+    @Schema(description = "원정대 목록 상태. includeSiblings=false 요청에서는 조회하지 않아 null입니다.")
+        @NullableResponse
+        ObservationState siblings) {
   static CharacterObservationCoverageResponse from(CharacterObservationCoverage value) {
     return new CharacterObservationCoverageResponse(
         value.equipment(),

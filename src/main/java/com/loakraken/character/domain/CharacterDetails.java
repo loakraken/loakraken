@@ -12,6 +12,6 @@ public record CharacterDetails(
     Objects.requireNonNull(profile);
     Objects.requireNonNull(loadout);
     Objects.requireNonNull(coverage);
-    siblings = List.copyOf(siblings);
+    siblings = siblings == null ? null : List.copyOf(siblings);
   }
 }

@@ -74,4 +74,53 @@ public class CharacterController {
         CharacterSuccessCode.CHARACTER_SEARCH_SUCCESS,
         CharacterResponse.from(queryService.search(request.toCommand())));
   }
+
+  @GetMapping("/siblings")
+  @Operation(
+      summary = "원정대 캐릭터 조회",
+      description =
+          "공식 원정대 목록만 조회합니다. 캐릭터 검색과 별도로 캐시(기본 5분)하며 같은 이름의 동시 요청을 합칩니다. 공식 API가 빈 목록을 반환하면 존재하지 않는 캐릭터로 처리합니다.")
+  @ApiResponses({
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(
+        responseCode = "200",
+        description = "원정대 조회 성공"),
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(
+        responseCode = "400",
+        description = "캐릭터명 누락 또는 형식 오류",
+        content = @Content(schema = @Schema(ref = "#/components/schemas/ErrorResponse"))),
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(
+        responseCode = "404",
+        description = "CHARACTER_NOT_FOUND: 공식 API 404 또는 빈 원정대 목록",
+        content = @Content(schema = @Schema(ref = "#/components/schemas/ErrorResponse"))),
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(
+        responseCode = "406",
+        description = "NOT_ACCEPTABLE: JSON 이외의 응답 형식 요청",
+        content = @Content(schema = @Schema(ref = "#/components/schemas/ErrorResponse"))),
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(
+        responseCode = "429",
+        description = "LOST_ARK_RATE_LIMITED",
+        content = @Content(schema = @Schema(ref = "#/components/schemas/ErrorResponse"))),
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(
+        responseCode = "500",
+        description = "INTERNAL_SERVER_ERROR",
+        content = @Content(schema = @Schema(ref = "#/components/schemas/ErrorResponse"))),
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(
+        responseCode = "502",
+        description = "LOST_ARK_API_ERROR",
+        content = @Content(schema = @Schema(ref = "#/components/schemas/ErrorResponse"))),
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(
+        responseCode = "503",
+        description = "LOST_ARK_NOT_CONFIGURED 또는 CHARACTER_CACHE_UNAVAILABLE",
+        content = @Content(schema = @Schema(ref = "#/components/schemas/ErrorResponse"))),
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(
+        responseCode = "504",
+        description = "LOST_ARK_API_TIMEOUT",
+        content = @Content(schema = @Schema(ref = "#/components/schemas/ErrorResponse")))
+  })
+  public ApiResponse<CharacterSiblingsResponse> siblings(
+      @Valid @ModelAttribute @ParameterObject CharacterSiblingsRequest request) {
+    return ApiResponse.of(
+        CharacterSuccessCode.CHARACTER_SIBLINGS_SUCCESS,
+        CharacterSiblingsResponse.from(queryService.siblings(request.toCommand())));
+  }
 }

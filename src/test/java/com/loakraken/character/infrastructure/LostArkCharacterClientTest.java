@@ -285,6 +285,49 @@ class LostArkCharacterClientTest {
   }
 
   @Test
+  void 전투정보만_조회하면_원정대를_요청하지_않고_원정대_상태를_null로_둔다() {
+    var fetched = client("test", Duration.ofSeconds(2)).fetchArmory("모험가");
+    assertThat(requests).hasValue(1);
+    assertThat(requestPath).doesNotEndWith("/siblings");
+    assertThat(fetched.details().siblings()).isNull();
+    assertThat(fetched.details().coverage().siblings()).isNull();
+    assertThat(fetched.siblingsJson()).isNull();
+    assertThat(fetched.details().profile().itemLevel()).isEqualByComparingTo("1700.50");
+  }
+
+  @Test
+  void 원정대만_조회하면_전투정보를_요청하지_않는다() {
+    siblingsBody =
+        """
+        [{"CharacterName":"모험가","ServerName":"루페온","CharacterClassName":"바드","CharacterLevel":70,"ItemAvgLevel":"1,700.50"},
+         null,
+         {"CharacterName":"원정대캐릭터","ServerName":"카단","CharacterClassName":"바드","CharacterLevel":60,"ItemAvgLevel":"1,650.00"}]
+        """;
+    var siblings = client("test", Duration.ofSeconds(2)).fetchSiblings("모험가");
+    assertThat(requests).hasValue(1);
+    assertThat(requestPath).endsWith("/siblings");
+    assertThat(siblings).extracting("characterName").containsExactly("모험가", "원정대캐릭터");
+  }
+
+  @ParameterizedTest
+  @CsvSource(
+      delimiter = '|',
+      value = {
+        "200|[]|CHARACTER_NOT_FOUND",
+        "404|[]|CHARACTER_NOT_FOUND",
+        "200|null|LOST_ARK_API_ERROR"
+      })
+  void 원정대_단독_조회의_빈_목록과_404는_미존재다(int responseStatus, String responseBody, String code) {
+    siblingsStatus = responseStatus;
+    siblingsBody = responseBody;
+    assertThatThrownBy(() -> client("test", Duration.ofSeconds(2)).fetchSiblings("없는캐릭터"))
+        .isInstanceOfSatisfying(
+            CharacterException.class,
+            exception ->
+                assertThat(exception.errorCode()).isEqualTo(CharacterErrorCode.valueOf(code)));
+  }
+
+  @Test
   void 원정대_null_응답은_불완전한_외부_응답이다() {
     siblingsBody = "null";
     assertError(client("test", Duration.ofSeconds(2)), CharacterErrorCode.LOST_ARK_API_ERROR);

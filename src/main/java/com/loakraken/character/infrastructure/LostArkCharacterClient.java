@@ -5,6 +5,7 @@ import com.loakraken.character.application.CharacterErrorCode;
 import com.loakraken.character.application.CharacterException;
 import com.loakraken.character.application.FetchedCharacter;
 import com.loakraken.character.domain.CharacterDetails;
+import com.loakraken.character.domain.CharacterSibling;
 import com.loakraken.common.api.BusinessException;
 import com.loakraken.common.lostark.LostArkMetrics;
 import com.loakraken.common.lostark.LostArkMetrics.ApiOutcome;
@@ -12,6 +13,7 @@ import com.loakraken.common.lostark.LostArkMetrics.Endpoint;
 import com.loakraken.common.lostark.LostArkProperties;
 import com.loakraken.common.lostark.LostArkRequestGate;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicReference;
@@ -47,38 +49,76 @@ class LostArkCharacterClient implements CharacterDetailsPort {
 
   @Override
   public FetchedCharacter fetch(String characterName) {
-    var armoryPayload =
+    var armoryPayload = armory(characterName);
+    var armory = armoryPayload.value();
+    var profile = LostArkProfileMapper.from(armory.profile());
+    var siblingsPayload = siblings(characterName, CharacterErrorCode.LOST_ARK_API_ERROR);
+    var siblings = siblingsPayload.value();
+    var details =
+        new CharacterDetails(
+            profile,
+            armory.toLoadout(),
+            toDomain(siblings),
+            armory.coverage(Arrays.asList(siblings)));
+    return new FetchedCharacter(details, armoryPayload.json(), siblingsPayload.json());
+  }
+
+  @Override
+  public FetchedCharacter fetchArmory(String characterName) {
+    var armoryPayload = armory(characterName);
+    var armory = armoryPayload.value();
+    var details =
+        new CharacterDetails(
+            LostArkProfileMapper.from(armory.profile()),
+            armory.toLoadout(),
+            null,
+            armory.coverage(null));
+    return new FetchedCharacter(details, armoryPayload.json(), null);
+  }
+
+  @Override
+  public List<CharacterSibling> fetchSiblings(String characterName) {
+    var siblings = siblings(characterName, CharacterErrorCode.CHARACTER_NOT_FOUND).value();
+    var result = toDomain(siblings);
+    // 공식 원정대 API는 없는 캐릭터에 200과 빈 배열을 반환한다. 원정대에는 조회한 캐릭터 자신이 포함된다.
+    if (result.isEmpty()) throw new CharacterException(CharacterErrorCode.CHARACTER_NOT_FOUND);
+    return result;
+  }
+
+  private Payload<LostArkArmoryResponse> armory(String characterName) {
+    var payload =
         request(
             Endpoint.ARMORY,
             "/armories/characters/{name}?filters={filters}",
             characterName,
             LostArkArmoryResponse.class,
             CharacterErrorCode.CHARACTER_NOT_FOUND);
-    var armory = armoryPayload.value();
-    if (armory == null) throw new CharacterException(CharacterErrorCode.CHARACTER_NOT_FOUND);
-    if (armory.profile() == null)
+    if (payload.value() == null)
+      throw new CharacterException(CharacterErrorCode.CHARACTER_NOT_FOUND);
+    if (payload.value().profile() == null)
       throw new CharacterException(CharacterErrorCode.LOST_ARK_API_ERROR);
-    var profile = LostArkProfileMapper.from(armory.profile());
-    var siblingsPayload =
+    return payload;
+  }
+
+  private Payload<LostArkSiblingResponse[]> siblings(
+      String characterName, CharacterErrorCode notFoundCode) {
+    var payload =
         request(
             Endpoint.SIBLINGS,
             "/characters/{name}/siblings",
             characterName,
             LostArkSiblingResponse[].class,
-            CharacterErrorCode.LOST_ARK_API_ERROR);
-    var siblings = siblingsPayload.value();
-    if (siblings == null) throw new CharacterException(CharacterErrorCode.LOST_ARK_API_ERROR);
-    var coverage = armory.coverage(Arrays.asList(siblings));
-    var details =
-        new CharacterDetails(
-            profile,
-            armory.toLoadout(),
-            Arrays.stream(siblings)
-                .filter(Objects::nonNull)
-                .map(LostArkSiblingResponse::toDomain)
-                .toList(),
-            coverage);
-    return new FetchedCharacter(details, armoryPayload.json(), siblingsPayload.json());
+            notFoundCode);
+    if (payload.value() == null)
+      throw new CharacterException(CharacterErrorCode.LOST_ARK_API_ERROR);
+    return payload;
+  }
+
+  private static List<CharacterSibling> toDomain(LostArkSiblingResponse[] siblings) {
+    return Arrays.stream(siblings)
+        .filter(Objects::nonNull)
+        .map(LostArkSiblingResponse::toDomain)
+        .toList();
   }
 
   private record Payload<T>(T value, String json) {}

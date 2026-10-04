@@ -52,7 +52,7 @@ record LostArkArmoryResponse(
                 "slots", ObservationState.collection(arkGrid == null ? null : arkGrid.slots()),
                 "effects",
                     ObservationState.collection(arkGrid == null ? null : arkGrid.effects()))),
-        ObservationState.collection(siblings));
+        siblings == null ? null : ObservationState.collection(siblings));
   }
 
   private CharacterObservationCoverage.Section section(

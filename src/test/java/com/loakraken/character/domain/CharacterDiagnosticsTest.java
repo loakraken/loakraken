@@ -13,9 +13,9 @@ class CharacterDiagnosticsTest {
   @Test
   void 미제공_정보를_비활성이나_미착용으로_단정하지_않는다() {
     var report =
-        CharacterDiagnostics.from(
+        diagnose(
             CharacterAnalysis.from(new CharacterLoadout(List.of(), null, null, null, null, null)));
-    assertThat(report.ruleVersion()).isEqualTo("observed-v1");
+    assertThat(report.ruleVersion()).isEqualTo("observed-v2");
     assertThat(report.findings())
         .extracting(CharacterDiagnostics.Finding::code)
         .containsExactly(
@@ -41,7 +41,7 @@ class CharacterDiagnosticsTest {
             new CharacterAnalysis.EngravingSummary(0, 0, 0),
             new CharacterAnalysis.PassiveSummary(true, List.of()),
             new CharacterAnalysis.GridSummary(0, 0, 0, 0));
-    var report = CharacterDiagnostics.from(analysis);
+    var report = diagnose(analysis);
     assertThat(report.findings())
         .extracting(CharacterDiagnostics.Finding::code)
         .containsExactly(GEMS_NOT_OBSERVED, CARDS_NOT_OBSERVED, ARK_GRID_NOT_OBSERVED);
@@ -62,7 +62,7 @@ class CharacterDiagnosticsTest {
                     new CharacterAnalysis.PointValue("진화", 0),
                     new CharacterAnalysis.PointValue("깨달음", null))),
             new CharacterAnalysis.GridSummary(1, 0, 0, 2));
-    var findings = CharacterDiagnostics.from(analysis).findings();
+    var findings = diagnose(analysis).findings();
     assertThat(findings)
         .extracting(CharacterDiagnostics.Finding::code)
         .containsExactly(
@@ -89,7 +89,7 @@ class CharacterDiagnosticsTest {
             new CharacterAnalysis.EngravingSummary(0, 0, 5),
             new CharacterAnalysis.PassiveSummary(false, List.of()),
             new CharacterAnalysis.GridSummary(1, 2, 1, 1));
-    var findings = CharacterDiagnostics.from(analysis).findings();
+    var findings = diagnose(analysis).findings();
     assertThat(findings)
         .extracting(CharacterDiagnostics.Finding::code)
         .containsExactly(ARK_PASSIVE_DISABLED, ARK_GRID_GEM_INACTIVE, ARK_GRID_GEM_STATE_UNKNOWN);
@@ -111,7 +111,7 @@ class CharacterDiagnosticsTest {
             new CharacterAnalysis.PassiveSummary(
                 true, List.of(new CharacterAnalysis.PointValue("진화", 0))),
             new CharacterAnalysis.GridSummary(1, 0, 0, 0));
-    var report = CharacterDiagnostics.from(analysis);
+    var report = diagnose(analysis);
     assertThat(report.findings()).isEmpty();
     assertThatThrownBy(() -> report.findings().add(null))
         .isInstanceOf(UnsupportedOperationException.class);
@@ -135,7 +135,7 @@ class CharacterDiagnosticsTest {
     var analysis = CharacterAnalysis.from(loadout);
     assertThat(analysis.gems().averageLevel()).isNull();
     assertThat(analysis.cards().knownAwakeningTotal()).isZero();
-    assertThat(CharacterDiagnostics.from(analysis).findings())
+    assertThat(diagnose(analysis).findings())
         .extracting(CharacterDiagnostics.Finding::code)
         .containsExactly(GEM_LEVEL_UNKNOWN, CARD_AWAKENING_UNKNOWN, ARK_PASSIVE_POINT_UNKNOWN);
   }
@@ -143,5 +143,69 @@ class CharacterDiagnosticsTest {
   private CharacterAnalysis.GemSummary validGems() {
     return new CharacterAnalysis.GemSummary(
         1, 0, 1, 1, BigDecimal.ONE, List.of(new CharacterAnalysis.LevelCount(1, 1)));
+  }
+
+  @Test
+  void 미제공_목록은_개수_0_대신_원천_상태를_근거로_진단한다() {
+    var loadout =
+        new CharacterLoadout(
+            List.of(),
+            null,
+            new CharacterLoadout.Gems(List.of(), null),
+            new CharacterLoadout.Cards(List.of(), List.of()),
+            null,
+            new CharacterLoadout.ArkGrid(List.of(), List.of()));
+    var unknownItems =
+        new CharacterObservationCoverage.Section(
+            ObservationState.PROVIDED, java.util.Map.of("items", ObservationState.NOT_PROVIDED));
+    var coverage =
+        new CharacterObservationCoverage(
+            ObservationState.NOT_PROVIDED,
+            section(false),
+            unknownItems,
+            unknownItems,
+            section(false),
+            new CharacterObservationCoverage.Section(
+                ObservationState.PROVIDED,
+                java.util.Map.of("slots", ObservationState.NOT_PROVIDED)),
+            ObservationState.PROVIDED_EMPTY);
+    var report = CharacterDiagnostics.from(CharacterAnalysis.from(loadout), coverage);
+    assertThat(report.findings())
+        .extracting(CharacterDiagnostics.Finding::code)
+        .contains(
+            EQUIPMENT_UNAVAILABLE,
+            GEM_ITEMS_UNAVAILABLE,
+            CARD_ITEMS_UNAVAILABLE,
+            ARK_GRID_SLOTS_UNAVAILABLE)
+        .doesNotContain(
+            EQUIPMENT_NOT_OBSERVED, GEMS_NOT_OBSERVED, CARDS_NOT_OBSERVED, ARK_GRID_NOT_OBSERVED);
+    assertThat(report.findings()).allMatch(finding -> finding.observedCount() == null);
+    assertThat(report.findings().getFirst().evidencePath()).isEqualTo("/data/coverage/equipment");
+  }
+
+  // 기존 회귀 사례는 명시적으로 제공된 목록을 가정한다. 미제공 목록은 별도 사례에서 검증한다.
+  private CharacterDiagnostics diagnose(CharacterAnalysis analysis) {
+    var coverage =
+        new CharacterObservationCoverage(
+            analysis.equipmentCount() == 0
+                ? ObservationState.PROVIDED_EMPTY
+                : ObservationState.PROVIDED,
+            section(analysis.engravings() != null),
+            section(analysis.gems() != null),
+            section(analysis.cards() != null),
+            section(analysis.arkPassive() != null),
+            section(analysis.arkGrid() != null),
+            ObservationState.PROVIDED_EMPTY);
+    return CharacterDiagnostics.from(analysis, coverage);
+  }
+
+  private CharacterObservationCoverage.Section section(boolean provided) {
+    return new CharacterObservationCoverage.Section(
+        provided ? ObservationState.PROVIDED : ObservationState.NOT_PROVIDED,
+        java.util.Map.of(
+            "items",
+            provided ? ObservationState.PROVIDED : ObservationState.NOT_PROVIDED,
+            "slots",
+            provided ? ObservationState.PROVIDED : ObservationState.NOT_PROVIDED));
   }
 }

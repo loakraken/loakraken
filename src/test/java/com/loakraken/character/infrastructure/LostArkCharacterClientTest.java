@@ -166,6 +166,27 @@ class LostArkCharacterClientTest {
     assertThat(json.at("/data").isMissingNode()).isTrue();
     assertThat(json.at("/coverage/gems/state").asText()).isEqualTo(section.name());
     assertThat(json.at("/coverage/gems/collections/items").asText()).isEqualTo(items.name());
+    var expectedCode =
+        switch (fixture) {
+          case "section-null" -> "GEMS_UNAVAILABLE";
+          case "items-null" -> "GEM_ITEMS_UNAVAILABLE";
+          case "items-empty" -> "GEMS_NOT_OBSERVED";
+          default -> "";
+        };
+    assertThat(json.at("/analysis/diagnostics/ruleVersion").asText()).isEqualTo("observed-v2");
+    boolean found = false;
+    for (var finding : json.at("/analysis/diagnostics/findings")) {
+      var path = finding.path("evidencePath").asText();
+      assertThat(json.at(path.substring("/data".length())).isMissingNode()).isFalse();
+      if (finding.path("code").asText().equals(expectedCode)) {
+        found = true;
+        if (fixture.equals("items-null")) {
+          assertThat(path).isEqualTo("/data/coverage/gems/collections/items");
+          assertThat(finding.path("observedCount").isNull()).isTrue();
+        }
+      }
+    }
+    assertThat(found).isEqualTo(!expectedCode.isEmpty());
     ApiContractFixture.write(
         "observation-gems-" + fixture + ".json",
         "{\"code\":\"CHARACTER_SEARCH_SUCCESS\",\"message\":\"합성 테스트\",\"data\":" + response + "}");

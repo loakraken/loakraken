@@ -50,7 +50,7 @@ public record CharacterResponse(
                         sibling.itemLevel()))
             .toList(),
         CharacterObservationCoverageResponse.from(result.details().coverage()),
-        CharacterAnalysisResponse.from(result.analysis()),
+        CharacterAnalysisResponse.from(result.analysis(), result.details().coverage()),
         result.fetchedAt());
   }
 

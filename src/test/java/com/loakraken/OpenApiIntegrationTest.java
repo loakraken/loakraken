@@ -39,6 +39,10 @@ class OpenApiIntegrationTest {
     assertThat(document.at("/components/schemas/GemsResponse/type").asText()).isEqualTo("object");
     assertThat(document.at("/components/schemas/CharacterResponse/required").toString())
         .contains("characterName", "combatPower", "analysis");
+    assertThat(document.at("/components/schemas/CharacterAnalysisResponse/required").toString())
+        .contains("diagnostics");
+    assertThat(document.at("/components/schemas/DiagnosticFindingResponse/required").toString())
+        .contains("code", "category", "evidencePath", "observedCount", "message");
   }
 
   @Test

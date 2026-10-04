@@ -41,6 +41,12 @@ def main():
         invalid.pop("characterName" if filename == "character-full.json" else "code")
         if validator.is_valid(invalid):
             raise AssertionError(f"Required field is not enforced: {filename}")
+        if filename == "character-search.json":
+            for field, replacement in [("category", "UNSUPPORTED"), ("observedCount", "unknown")]:
+                invalid = copy.deepcopy(value)
+                invalid["data"]["analysis"]["diagnostics"]["findings"][0][field] = replacement
+                if validator.is_valid(invalid):
+                    raise AssertionError(f"Diagnostic field is not enforced: {field}")
         print(f"PASS {filename}")
 
 

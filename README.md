@@ -53,6 +53,8 @@ Swagger에는 실제 구현한 `/api/v1/**` 경로만 표시합니다.
 검색 동작과 오류 코드는 [docs/character-search.md](docs/character-search.md)를 참고합니다.
 원본 저장·중복 억제·트랜잭션 정책은 [docs/character-snapshots.md](docs/character-snapshots.md)에 정리했습니다.
 관측값 집계와 미확인 값 처리 기준은 [docs/character-analysis.md](docs/character-analysis.md)를 참고합니다.
+관측 근거 기반 진단과 프론트 연동 계약은 [docs/character-diagnostics.md](docs/character-diagnostics.md)에 정리했습니다.
+기준서의 비교 사이트 10곳과 검증 범위는 [docs/reference-sites.md](docs/reference-sites.md)에서 확인할 수 있습니다.
 운영 프로필은 기본 비활성화하며 필요한 환경에서 `API_DOCS_ENABLED=true`로 활성화합니다.
 Lost Ark API 키는 서버 설정으로만 사용하며 Swagger에 입력하거나 노출하지 않습니다.
 

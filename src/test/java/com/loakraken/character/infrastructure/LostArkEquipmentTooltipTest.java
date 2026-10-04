@@ -74,8 +74,7 @@ class LostArkEquipmentTooltipTest {
             new CharacterLoadout.PolishEffect("낙인력", "+2.15%", CharacterLoadout.PolishGrade.LOW),
             new CharacterLoadout.PolishEffect("공격력", "+80", null));
     assertThat(detail.effects().getFirst().lines())
-        .containsExactly(
-            "추가 피해 +2.60%", "무기 공격력 +1.80%", "낙인력 +2.15%", "공격력 +80", "설명만 있는 줄");
+        .containsExactly("추가 피해 +2.60%", "무기 공격력 +1.80%", "낙인력 +2.15%", "공격력 +80", "설명만 있는 줄");
   }
 
   @Test

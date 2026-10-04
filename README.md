@@ -97,8 +97,3 @@ try {
 
 실제 응답 산출물은 Git에서 제외된 `build/generated/character-live.json`에 저장합니다.
 
-## GitFlow
-
-이슈 생성 및 LOAKraken Projects 연결 → develop 기준 이슈 번호 브랜치 → 구현·검증 → develop PR.
-Projects 상태는 작업 시작 시 진행, PR 생성 시 검토, 병합 및 이슈 완료 시 완료로 갱신합니다.
-커밋은 `<type>: <한글 변경 내용>`, PR은 `[TYPE] 제목` 형식입니다.

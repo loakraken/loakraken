@@ -7,7 +7,6 @@ import com.loakraken.character.application.CharacterCache;
 import com.loakraken.character.application.CharacterDetailsPort;
 import com.loakraken.character.application.CharacterSnapshotCommandService;
 import com.loakraken.character.application.FetchedCharacter;
-import com.loakraken.character.domain.CharacterDetails;
 import com.loakraken.character.domain.CharacterLoadout;
 import com.loakraken.character.domain.CharacterProfile;
 import java.math.BigDecimal;
@@ -230,7 +229,7 @@ class CharacterSnapshotHistoryIntegrationTest {
             .formatted(NAME, server, itemLevel, mapper.writeValueAsString(power));
     snapshots.save(
         new FetchedCharacter(
-            new CharacterDetails(
+            com.loakraken.CharacterTestFixture.details(
                 profile, new CharacterLoadout(List.of(), null, null, null, null, null), List.of()),
             raw,
             "[]"),

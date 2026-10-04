@@ -54,6 +54,6 @@ class ValkeyCharacterCache implements CharacterCache {
   }
 
   private String key(String name) {
-    return "character:v2:" + name + ":summary";
+    return "character:v3:" + name + ":summary";
   }
 }

@@ -7,6 +7,7 @@ import com.loakraken.ApiContractFixture;
 import com.loakraken.character.application.CharacterErrorCode;
 import com.loakraken.character.application.CharacterException;
 import com.loakraken.character.application.CharacterResult;
+import com.loakraken.character.domain.ObservationState;
 import com.loakraken.character.presentation.CharacterResponse;
 import com.sun.net.httpserver.HttpServer;
 import java.net.InetSocketAddress;
@@ -22,6 +23,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -136,6 +138,47 @@ class LostArkCharacterClientTest {
     siblingsStatus = 503;
     assertError(client("test", Duration.ofSeconds(2)), CharacterErrorCode.LOST_ARK_API_ERROR);
     assertThat(requests).hasValue(2);
+  }
+
+  @ParameterizedTest
+  @CsvSource({
+    "section-null,NOT_PROVIDED,NOT_PROVIDED",
+    "items-null,PROVIDED,NOT_PROVIDED",
+    "items-empty,PROVIDED,PROVIDED_EMPTY",
+    "items-provided,PROVIDED,PROVIDED"
+  })
+  void 원천_보석_상태는_정규화와_캐시_직렬화_후에도_구별된다(
+      String fixture, ObservationState section, ObservationState items) throws Exception {
+    try (var resource =
+        getClass().getResourceAsStream("/fixtures/observation-gems-" + fixture + ".json")) {
+      body = new String(resource.readAllBytes(), StandardCharsets.UTF_8);
+    }
+    var fetched = client("test", Duration.ofSeconds(2)).fetch("모험가");
+    var result = new CharacterResult(fetched.details(), Instant.parse("2026-10-04T00:00:00Z"));
+    var mapper = new JsonMapper();
+    var restored = mapper.readValue(mapper.writeValueAsString(result), CharacterResult.class);
+    assertThat(restored).isEqualTo(result);
+    assertThat(restored.details().coverage().gems().state()).isEqualTo(section);
+    assertThat(restored.details().coverage().gems().collections().get("items")).isEqualTo(items);
+    assertThat(restored.details().coverage().siblings()).isEqualTo(ObservationState.PROVIDED_EMPTY);
+    var response = mapper.writeValueAsString(CharacterResponse.from(restored));
+    var json = mapper.readTree(response);
+    assertThat(json.at("/data").isMissingNode()).isTrue();
+    assertThat(json.at("/coverage/gems/state").asText()).isEqualTo(section.name());
+    assertThat(json.at("/coverage/gems/collections/items").asText()).isEqualTo(items.name());
+    ApiContractFixture.write(
+        "observation-gems-" + fixture + ".json",
+        "{\"code\":\"CHARACTER_SEARCH_SUCCESS\",\"message\":\"합성 테스트\",\"data\":" + response + "}");
+  }
+
+  @Test
+  void null_항목만_있는_목록은_원천의_빈_목록으로_바꾸지_않는다() {
+    body = body.substring(0, body.lastIndexOf('}')) + ",\"ArmoryEquipment\":[null]}";
+    var details = client("test", Duration.ofSeconds(2)).fetch("모험가").details();
+    assertThat(details.loadout().equipment()).isEmpty();
+    assertThat(details.coverage().equipment()).isEqualTo(ObservationState.PROVIDED);
+    assertThat(details.coverage().engravings().collections())
+        .containsEntry("slots", ObservationState.NOT_PROVIDED);
   }
 
   @Test

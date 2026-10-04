@@ -5,7 +5,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.loakraken.character.application.CharacterSnapshotCommandService;
 import com.loakraken.character.application.FetchedCharacter;
-import com.loakraken.character.domain.CharacterDetails;
 import com.loakraken.character.domain.CharacterLoadout;
 import com.loakraken.character.domain.CharacterProfile;
 import java.math.BigDecimal;
@@ -188,7 +187,7 @@ class CharacterSnapshotIntegrationTest {
             null,
             List.of());
     var details =
-        new CharacterDetails(
+        com.loakraken.CharacterTestFixture.details(
             profile, new CharacterLoadout(List.of(), null, null, null, null, null), List.of());
     return new FetchedCharacter(details, raw, "[]");
   }

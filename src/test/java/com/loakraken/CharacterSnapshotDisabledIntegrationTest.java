@@ -8,7 +8,6 @@ import com.loakraken.character.application.CharacterSnapshotHistoryPort;
 import com.loakraken.character.application.CharacterSnapshotPolicy;
 import com.loakraken.character.application.CharacterSnapshotPort;
 import com.loakraken.character.application.FetchedCharacter;
-import com.loakraken.character.domain.CharacterDetails;
 import com.loakraken.character.domain.CharacterLoadout;
 import com.loakraken.character.domain.CharacterProfile;
 import java.math.BigDecimal;
@@ -36,7 +35,7 @@ import tools.jackson.databind.json.JsonMapper;
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 class CharacterSnapshotDisabledIntegrationTest {
   private static final String NAME = "저장비활성테스트";
-  private static final String KEY = "character:v2:" + NAME + ":summary";
+  private static final String KEY = "character:v3:" + NAME + ":summary";
   @LocalServerPort private int port;
   @Autowired private StringRedisTemplate redis;
   @Autowired private JsonMapper mapper;
@@ -67,7 +66,10 @@ class CharacterSnapshotDisabledIntegrationTest {
     var loadout = new CharacterLoadout(List.of(), null, null, null, null, null);
     when(details.fetch(NAME))
         .thenReturn(
-            new FetchedCharacter(new CharacterDetails(profile, loadout, List.of()), "{}", "[]"));
+            new FetchedCharacter(
+                com.loakraken.CharacterTestFixture.details(profile, loadout, List.of()),
+                "{}",
+                "[]"));
     String path = "/api/v1/characters/search?characterName=" + encode(NAME);
     var first = request(path);
     var second = request(path);

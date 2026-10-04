@@ -11,7 +11,7 @@
 
 ## 조회와 캐시
 
-- Valkey 키: `character:v4:{정규화한 캐릭터명}:summary`, 기본 TTL 5분 (`lostark.summary-ttl`)
+- Valkey 키: `character:v5:{정규화한 캐릭터명}:summary`, 기본 TTL 5분 (`lostark.summary-ttl`)
 - 전투정보와 원정대 조회가 모두 성공한 결과만 캐시에 저장합니다. 두 요청은 순서대로 실행하며 각각 호출 예산을 사용합니다.
 - 기본 설정에서는 수집 결과를 단기 캐시에만 반영합니다. `CHARACTER_SNAPSHOTS_ENABLED=true`일 때만 [PostgreSQL 스냅샷](character-snapshots.md)에 먼저 저장합니다.
 - 캐시 적중 시 최초 수집 시각을 유지하고 외부 API를 호출하지 않습니다.
@@ -33,10 +33,30 @@
 `arkPassive=null`은 서로 다른 상태입니다. 문자열은 외부 서비스의 이름·설명을 보존하므로 화면에서는
 텍스트로 표시해야 하며 HTML로 삽입하지 않습니다.
 
-장비 품질·재련 수치처럼 Tooltip 해석이 필요한 정보와 성능 점수는 아직 제공하지 않습니다.
+장비 재련·품질 등은 아래 Tooltip 해석 규칙으로 제공하며 성능 점수는 아직 제공하지 않습니다.
 캐시 키 버전을 분리했으므로 기존 프로필 캐시가 종합 응답으로 사용되지 않습니다.
 원정대 목록은 공식 Siblings 응답 전체이며 서버로 임의 필터링하지 않습니다.
 `analysis`는 [기본 분석](character-analysis.md)의 관측값 집계를 제공합니다.
+
+## 장비 Tooltip 해석 — equipment-tooltip-v1
+
+각 `equipment[].detail`은 공식 장비 Tooltip(JSON 문자열)에서 확인된 값만 구조화한다. Tooltip이 없거나 JSON이 아니거나 객체가 아니면 `detail=null`이며 검색은 실패하지 않는다. 원본 Tooltip 문자열은 공개 응답과 캐시에 포함하지 않는다.
+
+| 필드 | 원천 | 규칙 |
+|---|---|---|
+| parserVersion | 고정값 | `equipment-tooltip-v1` |
+| refineLevel | 장비 이름의 `+N` 접두 | 1~99, 없으면 null |
+| quality | 첫 `ItemTitle.qualityValue` | 0~100 정수. `-1`(품질 미적용)·문자열·범위 밖은 null |
+| itemLevel | 첫 `ItemTitle.leftStr2`의 `아이템 레벨 N` | 장신구처럼 표시되지 않으면 null |
+| tier | 같은 문자열의 `티어 N` | 없으면 null |
+| arkPassivePoint | 제목이 `아크 패시브 포인트 효과`인 `ItemPartBox` | `이름 +값` 한 줄일 때만 `{name, value}`, 그 외 null |
+| effects | 그 밖의 `ItemPartBox`(기본/추가/연마/팔찌 효과)와 `IndentStringGroup` | `{title, lines}`. 마크업을 제거하고 `<BR>` 기준 줄로 나눈다 |
+| stoneEngravings | `IndentStringGroup` 제목 `무작위 각인 효과` | `[이름] Lv.N` 형식만 `{name, level}`. 레벨 보너스 줄은 effects에만 남는다 |
+
+- 효과 줄은 표시용 문자열이다. 능력치 이름과 수치로 분해하거나 합산하지 않는다.
+- 알 수 없는 요소 타입은 무시한다. 엘릭서·초월·상급 재련은 실제 응답 표본을 확보하지 못해 해석하지 않으며, 해당 정보가 없다는 뜻이 아니다.
+- 해석 대상 요소는 2026-10-05 실제 응답 1건의 장비 17개 구조를 기준으로 했다. 실제 응답은 저장하지 않았고 테스트는 같은 구조의 합성 Tooltip을 사용한다.
+- 점수·추천·투자 효율은 제공하지 않는다.
 
 ## 오류
 

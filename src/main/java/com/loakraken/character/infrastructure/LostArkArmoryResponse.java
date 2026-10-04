@@ -76,9 +76,11 @@ record LostArkArmoryResponse(
       @JsonProperty("Type") String type,
       @JsonProperty("Name") String name,
       @JsonProperty("Icon") String icon,
-      @JsonProperty("Grade") String grade) {
+      @JsonProperty("Grade") String grade,
+      @JsonProperty("Tooltip") String tooltip) {
     CharacterLoadout.Equipment toDomain() {
-      return new CharacterLoadout.Equipment(type, LostArkText.plain(name), icon, grade);
+      return new CharacterLoadout.Equipment(
+          type, LostArkText.plain(name), icon, grade, LostArkEquipmentTooltip.parse(name, tooltip));
     }
   }
 

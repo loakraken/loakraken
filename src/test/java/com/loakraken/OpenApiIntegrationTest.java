@@ -37,6 +37,26 @@ class OpenApiIntegrationTest {
                 .asText())
         .isEqualTo("null");
     assertThat(document.at("/components/schemas/GemsResponse/type").asText()).isEqualTo("object");
+    assertThat(
+            document
+                .at("/components/schemas/EquipmentResponse/properties/detail/anyOf/1/type")
+                .asText())
+        .isEqualTo("null");
+    assertThat(document.at("/components/schemas/EquipmentDetailResponse/required").toString())
+        .contains(
+            "parserVersion",
+            "refineLevel",
+            "quality",
+            "itemLevel",
+            "tier",
+            "arkPassivePoint",
+            "effects",
+            "stoneEngravings");
+    assertThat(
+            document
+                .at("/components/schemas/EquipmentDetailResponse/properties/quality/anyOf/1/type")
+                .asText())
+        .isEqualTo("null");
     assertThat(document.at("/components/schemas/CharacterResponse/required").toString())
         .contains("characterName", "combatPower", "analysis", "coverage");
     assertThat(

@@ -37,7 +37,7 @@ import tools.jackson.databind.json.JsonMapper;
     properties = "character.snapshots.enabled=true")
 class CharacterSearchIntegrationTest {
   private static final String NAME = "통합테스트캐릭터";
-  private static final String KEY = "character:v4:" + NAME + ":summary";
+  private static final String KEY = "character:v5:" + NAME + ":summary";
   @LocalServerPort private int port;
   @Autowired private StringRedisTemplate redis;
   @Autowired private JsonMapper mapper;
@@ -50,6 +50,7 @@ class CharacterSearchIntegrationTest {
     redis.delete(KEY);
     redis.delete("character:v2:" + NAME + ":summary");
     redis.delete("character:v3:" + NAME + ":summary");
+    redis.delete("character:v4:" + NAME + ":summary");
     jdbc.sql(
             "DELETE FROM character_snapshot WHERE character_id IN (SELECT character_id FROM characters WHERE character_name = :name)")
         .param("name", NAME)
@@ -116,8 +117,8 @@ class CharacterSearchIntegrationTest {
   }
 
   @Test
-  void 원천_상태나_텍스트_정제가_없던_구버전_캐시를_사용하지_않는다() throws Exception {
-    for (var version : java.util.List.of("v2", "v3"))
+  void 원천_상태와_텍스트_정제와_장비_정보가_없던_구버전_캐시를_사용하지_않는다() throws Exception {
+    for (var version : java.util.List.of("v2", "v3", "v4"))
       redis
           .opsForValue()
           .set(
@@ -218,7 +219,7 @@ class CharacterSearchIntegrationTest {
             List.of());
     var loadout =
         new CharacterLoadout(
-            List.of(new CharacterLoadout.Equipment("무기", "테스트 무기", "icon", "고대")),
+            List.of(new CharacterLoadout.Equipment("무기", "테스트 무기", "icon", "고대", null)),
             null,
             null,
             null,

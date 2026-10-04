@@ -138,6 +138,12 @@ class LostArkCharacterClientTest {
     assertThat(fetched.armoryJson()).contains("unparsed-secret-tooltip", "FutureField");
     var loadout = details.loadout();
     assertThat(loadout.equipment().getFirst().name()).isEqualTo("테스트 무기");
+    assertThat(loadout.equipment().getFirst().detail()).isNull();
+    var helmet = loadout.equipment().get(1).detail();
+    assertThat(helmet.refineLevel()).isEqualTo(19);
+    assertThat(helmet.quality()).isEqualTo(95);
+    assertThat(helmet.itemLevel()).isEqualTo(1770);
+    assertThat(helmet.arkPassivePoint().value()).isEqualTo(24);
     assertThat(loadout.engravings().arkPassiveEffects().getFirst().abilityStoneLevel()).isNull();
     assertThat(loadout.gems().items().getFirst().level()).isEqualTo(9);
     assertThat(loadout.gems().effects().skills().getFirst().description())
@@ -156,8 +162,9 @@ class LostArkCharacterClientTest {
     var response = mapper.writeValueAsString(CharacterResponse.from(result));
     ApiContractFixture.write("character-full.json", response);
     assertThat(response)
-        .contains("테스트 무기", "원정대캐릭터")
-        .doesNotContain("Tooltip", "ToolTip", "unparsed-secret-tooltip", "FutureField");
+        .contains("테스트 무기", "원정대캐릭터", "\"parserVersion\":\"equipment-tooltip-v1\"")
+        .doesNotContain(
+            "Tooltip", "ToolTip", "unparsed-secret-tooltip", "FutureField", "Element_00", "<FONT");
     assertThat(requests).hasValue(2);
   }
 

@@ -13,7 +13,34 @@ public record CharacterLoadout(
     equipment = equipment == null ? List.of() : List.copyOf(equipment);
   }
 
-  public record Equipment(String type, String name, String icon, String grade) {}
+  public record Equipment(
+      String type, String name, String icon, String grade, EquipmentDetail detail) {}
+
+  public record EquipmentDetail(
+      Integer refineLevel,
+      Integer quality,
+      Integer itemLevel,
+      Integer tier,
+      PointBonus arkPassivePoint,
+      List<EffectGroup> effects,
+      List<StoneEngraving> stoneEngravings) {
+    public static final String PARSER_VERSION = "equipment-tooltip-v1";
+
+    public EquipmentDetail {
+      effects = effects == null ? List.of() : List.copyOf(effects);
+      stoneEngravings = stoneEngravings == null ? List.of() : List.copyOf(stoneEngravings);
+    }
+  }
+
+  public record PointBonus(String name, Integer value) {}
+
+  public record EffectGroup(String title, List<String> lines) {
+    public EffectGroup {
+      lines = lines == null ? List.of() : List.copyOf(lines);
+    }
+  }
+
+  public record StoneEngraving(String name, Integer level) {}
 
   public record Engravings(
       List<Engraving> slots,

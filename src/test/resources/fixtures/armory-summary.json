@@ -4,7 +4,8 @@
     "CharacterLevel": 70, "ItemAvgLevel": "1,700.50", "CombatPower": "12,345.67"
   },
   "ArmoryEquipment": [
-    {"Type": "무기", "Name": "테스트 무기", "Icon": "weapon.png", "Grade": "고대", "Tooltip": "unparsed-secret-tooltip"}
+    {"Type": "무기", "Name": "테스트 무기", "Icon": "weapon.png", "Grade": "고대", "Tooltip": "unparsed-secret-tooltip"},
+    {"Type": "투구", "Name": "+19 테스트 투구", "Icon": "helmet.png", "Grade": "고대", "Tooltip": "{\"Element_001\":{\"type\":\"ItemTitle\",\"value\":{\"leftStr2\":\"<FONT SIZE='14'>아이템 레벨 1770 (티어 4)</FONT>\",\"qualityValue\":95}},\"Element_004\":{\"type\":\"ItemPartBox\",\"value\":{\"Element_000\":\"기본 효과\",\"Element_001\":\"물리 방어력 +9734<BR>민첩 +120150\"}},\"Element_008\":{\"type\":\"ItemPartBox\",\"value\":{\"Element_000\":\"아크 패시브 포인트 효과\",\"Element_001\":\"진화 +24\"}}}"}
   ],
   "ArmoryEngraving": {
     "Engravings": [{"Slot": 0, "Name": "테스트 각인", "Icon": "engraving.png"}],

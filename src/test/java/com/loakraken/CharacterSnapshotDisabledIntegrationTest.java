@@ -35,7 +35,7 @@ import tools.jackson.databind.json.JsonMapper;
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 class CharacterSnapshotDisabledIntegrationTest {
   private static final String NAME = "저장비활성테스트";
-  private static final String KEY = "character:v5:" + NAME + ":summary";
+  private static final String KEY = "character:v6:" + NAME + ":summary";
   @LocalServerPort private int port;
   @Autowired private StringRedisTemplate redis;
   @Autowired private JsonMapper mapper;

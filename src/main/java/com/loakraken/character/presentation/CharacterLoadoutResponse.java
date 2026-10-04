@@ -46,7 +46,7 @@ public record CharacterLoadoutResponse(
       description =
           "공식 Tooltip에서 확인된 값만 담습니다. 확인되지 않은 값은 null이며 추정하지 않습니다. 엘릭서·초월·상급 재련은 아직 해석하지 않습니다.")
   public record EquipmentDetailResponse(
-      @Schema(description = "해석 규칙 버전", example = "equipment-tooltip-v1") String parserVersion,
+      @Schema(description = "해석 규칙 버전", example = "equipment-tooltip-v2") String parserVersion,
       @Schema(description = "장비 이름의 +N 재련 단계") @NullableResponse Integer refineLevel,
       @Schema(description = "품질 0~100. 품질이 적용되지 않는 장비는 null") @NullableResponse Integer quality,
       @Schema(description = "장비 아이템 레벨. 장신구 등 표시되지 않는 장비는 null") @NullableResponse
@@ -55,7 +55,9 @@ public record CharacterLoadoutResponse(
       @Schema(description = "장비가 제공하는 아크패시브 포인트") @NullableResponse
           PointBonusResponse arkPassivePoint,
       @Schema(description = "효과 묶음. 제목과 줄 단위 일반 텍스트") List<EffectGroupResponse> effects,
-      @Schema(description = "어빌리티 스톤의 무작위 각인") List<StoneEngravingResponse> stoneEngravings) {
+      @Schema(description = "어빌리티 스톤의 무작위 각인") List<StoneEngravingResponse> stoneEngravings,
+      @Schema(description = "장신구 연마 효과와 공식 Tooltip 색 기준 등급. 연마 효과가 없는 장비는 빈 목록")
+          List<PolishEffectResponse> polishEffects) {
     static EquipmentDetailResponse from(CharacterLoadout.EquipmentDetail value) {
       if (value == null) return null;
       return new EquipmentDetailResponse(
@@ -66,7 +68,8 @@ public record CharacterLoadoutResponse(
           value.tier(),
           PointBonusResponse.from(value.arkPassivePoint()),
           value.effects().stream().map(EffectGroupResponse::from).toList(),
-          value.stoneEngravings().stream().map(StoneEngravingResponse::from).toList());
+          value.stoneEngravings().stream().map(StoneEngravingResponse::from).toList(),
+          value.polishEffects().stream().map(PolishEffectResponse::from).toList());
     }
   }
 
@@ -80,6 +83,18 @@ public record CharacterLoadoutResponse(
   public record EffectGroupResponse(String title, List<String> lines) {
     static EffectGroupResponse from(CharacterLoadout.EffectGroup value) {
       return new EffectGroupResponse(value.title(), value.lines());
+    }
+  }
+
+  @Schema(
+      description =
+          "등급은 공식 Tooltip 수치 색(FE9600=HIGH, CE43FC=MID, 00B5FF=LOW)으로 정하며 공식 장신구 연마 확률표의 3단계(0.7%/3.0%/6.3%)와 대응합니다. 알 수 없는 색은 null입니다.")
+  public record PolishEffectResponse(
+      @Schema(example = "추가 피해") String name,
+      @Schema(example = "+2.60%") String value,
+      @NullableResponse CharacterLoadout.PolishGrade grade) {
+    static PolishEffectResponse from(CharacterLoadout.PolishEffect value) {
+      return new PolishEffectResponse(value.name(), value.value(), value.grade());
     }
   }
 

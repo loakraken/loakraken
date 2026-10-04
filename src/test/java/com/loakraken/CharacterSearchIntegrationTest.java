@@ -37,7 +37,7 @@ import tools.jackson.databind.json.JsonMapper;
     properties = "character.snapshots.enabled=true")
 class CharacterSearchIntegrationTest {
   private static final String NAME = "통합테스트캐릭터";
-  private static final String KEY = "character:v5:" + NAME + ":summary";
+  private static final String KEY = "character:v6:" + NAME + ":summary";
   @LocalServerPort private int port;
   @Autowired private StringRedisTemplate redis;
   @Autowired private JsonMapper mapper;
@@ -51,7 +51,8 @@ class CharacterSearchIntegrationTest {
     redis.delete("character:v2:" + NAME + ":summary");
     redis.delete("character:v3:" + NAME + ":summary");
     redis.delete("character:v4:" + NAME + ":summary");
-    redis.delete("character:v5:" + NAME + ":armory");
+    redis.delete("character:v5:" + NAME + ":summary");
+    redis.delete("character:v6:" + NAME + ":armory");
     redis.delete("character:v1:" + NAME + ":siblings");
     jdbc.sql(
             "DELETE FROM character_snapshot WHERE character_id IN (SELECT character_id FROM characters WHERE character_name = :name)")
@@ -124,7 +125,7 @@ class CharacterSearchIntegrationTest {
 
   @Test
   void 원천_상태와_텍스트_정제와_장비_정보가_없던_구버전_캐시를_사용하지_않는다() throws Exception {
-    for (var version : java.util.List.of("v2", "v3", "v4"))
+    for (var version : java.util.List.of("v2", "v3", "v4", "v5"))
       redis
           .opsForValue()
           .set(
@@ -230,7 +231,7 @@ class CharacterSearchIntegrationTest {
     assertThat(result.at("/data/loadout/equipment/0/name").asText()).isEqualTo("테스트 무기");
     verify(detailsPort, times(1)).fetchArmory(NAME);
     verify(detailsPort, never()).fetch(anyString());
-    assertThat(redis.hasKey("character:v5:" + NAME + ":armory")).isTrue();
+    assertThat(redis.hasKey("character:v6:" + NAME + ":armory")).isTrue();
     assertThat(redis.hasKey(KEY)).isFalse();
   }
 

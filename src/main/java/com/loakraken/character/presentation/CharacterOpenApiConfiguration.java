@@ -16,8 +16,11 @@ import org.springframework.context.annotation.Configuration;
 class CharacterOpenApiConfiguration {
   @Bean
   OpenApiCustomizer characterResponseContract() {
-    return document ->
-        apply(CharacterResponse.class, document.getComponents().getSchemas(), new HashSet<>());
+    return document -> {
+      var visited = new HashSet<Class<?>>();
+      apply(CharacterResponse.class, document.getComponents().getSchemas(), visited);
+      apply(CharacterSnapshotHistoryResponse.class, document.getComponents().getSchemas(), visited);
+    };
   }
 
   @SuppressWarnings({"rawtypes", "unchecked"}) // Swagger 모델 API가 raw Schema 맵을 반환한다.

@@ -43,6 +43,23 @@ class OpenApiIntegrationTest {
         .contains("diagnostics");
     assertThat(document.at("/components/schemas/DiagnosticFindingResponse/required").toString())
         .contains("code", "category", "evidencePath", "observedCount", "message");
+    assertThat(
+            document.at("/components/schemas/CharacterSnapshotHistoryResponse/required").toString())
+        .contains("items", "nextCursor");
+    assertThat(
+            document
+                .at(
+                    "/components/schemas/CharacterSnapshotHistoryResponse/properties/nextCursor/anyOf/1/type")
+                .asText())
+        .isEqualTo("null");
+    assertThat(document.at("/components/schemas/SnapshotSummaryResponse/required").toString())
+        .contains("snapshotId", "fetchedAt", "className", "itemLevel", "combatPower");
+    assertThat(
+            document
+                .at(
+                    "/components/schemas/SnapshotSummaryResponse/properties/combatPower/anyOf/1/type")
+                .asText())
+        .isEqualTo("null");
   }
 
   @Test

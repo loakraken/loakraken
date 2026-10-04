@@ -52,6 +52,7 @@ Swagger에는 실제 구현한 `/api/v1/**` 경로만 표시합니다.
 `.env`에만 작성하면 Spring Boot에는 전달되지 않습니다. 키 없이도 문서와 테스트는 실행됩니다.
 검색 동작과 오류 코드는 [docs/character-search.md](docs/character-search.md)를 참고합니다.
 원본 저장·중복 억제·트랜잭션 정책은 [docs/character-snapshots.md](docs/character-snapshots.md)에 정리했습니다.
+저장된 당시 프로필 수치는 `GET /api/v1/characters/snapshots`로 조회하며 [이력 조회 계약](docs/character-history.md)을 참고합니다.
 관측값 집계와 미확인 값 처리 기준은 [docs/character-analysis.md](docs/character-analysis.md)를 참고합니다.
 관측 근거 기반 진단과 프론트 연동 계약은 [docs/character-diagnostics.md](docs/character-diagnostics.md)에 정리했습니다.
 기준서의 비교 사이트 10곳과 검증 범위는 [docs/reference-sites.md](docs/reference-sites.md)에서 확인할 수 있습니다.
@@ -59,13 +60,7 @@ Swagger에는 실제 구현한 `/api/v1/**` 경로만 표시합니다.
 Lost Ark API 키는 서버 설정으로만 사용하며 Swagger에 입력하거나 노출하지 않습니다.
 
 `build`의 통합 테스트는 `build/generated/openapi.json`과 응답 검증용 JSON을 생성합니다.
-GitHub Actions에서 JSON Schema 검증 후 `openapi-contract` 산출물로 보관합니다.
-로컬에서도 Python 3.13 이상으로 아래 검사를 실행할 수 있습니다.
-
-```powershell
-python -m pip install -r scripts/requirements-api.txt
-python scripts/validate_api_contract.py
-```
+GitHub Actions는 Gradle의 Java 테스트를 실행하고 명세와 응답을 `openapi-contract` 산출물로 보관합니다.
 
 응답 필드는 null이어도 생략하지 않습니다. 상세한 명세 보정과 검증 범위는
 [docs/openapi-contract.md](docs/openapi-contract.md)를 참고합니다.
@@ -87,17 +82,9 @@ $env:LOSTARK_TEST_CHARACTER = '조회할캐릭터명'
 try {
     .\gradlew.bat test --tests com.loakraken.LostArkLiveIntegrationTest
     if ($LASTEXITCODE -ne 0) { throw '실조회 테스트 실패' }
-    python scripts/validate_api_contract.py --live
-    if ($LASTEXITCODE -ne 0) { throw '실조회 명세 검증 실패' }
 } finally {
     Remove-Item Env:LOSTARK_LIVE_TEST, Env:LOSTARK_TEST_CHARACTER -ErrorAction SilentlyContinue
 }
 ```
 
 실제 응답 산출물은 Git에서 제외된 `build/generated/character-live.json`에 저장합니다.
-
-## GitFlow
-
-이슈 생성 및 LOAKraken Projects 연결 → develop 기준 이슈 번호 브랜치 → 구현·검증 → develop PR.
-Projects 상태는 작업 시작 시 진행, PR 생성 시 검토, 병합 및 이슈 완료 시 완료로 갱신합니다.
-커밋은 `<type>: <한글 변경 내용>`, PR은 `[TYPE] 제목` 형식입니다.

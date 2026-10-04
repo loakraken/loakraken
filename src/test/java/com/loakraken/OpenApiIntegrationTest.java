@@ -77,6 +77,31 @@ class OpenApiIntegrationTest {
   }
 
   @Test
+  void 거래소_가격의_출처와_null_계약을_명시한다() throws Exception {
+    var document = JsonMapper.builder().build().readTree(request("/v3/api-docs").body());
+    for (var path : java.util.List.of("/api/v1/markets/items", "/api/v1/markets/trades")) {
+      var operation = document.path("paths").path(path).path("get");
+      assertThat(operation.isMissingNode()).isFalse();
+      assertThat(operation.path("responses").toString())
+          .contains("200", "400", "429", "502", "503", "504");
+    }
+    assertThat(document.at("/components/schemas/MarketPriceResponse/required").toString())
+        .contains("source", "observedAt", "windowFrom", "windowTo", "search", "items");
+    assertThat(
+            document
+                .at("/components/schemas/MarketPriceResponse/properties/windowFrom/anyOf/1/type")
+                .asText())
+        .isEqualTo("null");
+    assertThat(
+            document
+                .at("/components/schemas/MarketPriceItem/properties/currentMinPrice/anyOf/1/type")
+                .asText())
+        .isEqualTo("null");
+    assertThat(document.at("/components/schemas/MarketPriceItem/required").toString())
+        .contains("bundleCount", "recentPrice", "yDayAvgPrice", "currentMinPrice");
+  }
+
+  @Test
   void 운영_지표_엔드포인트는_기본으로_공개하지_않는다() throws Exception {
     assertThat(request("/actuator/metrics").statusCode()).isEqualTo(404);
     assertThat(request("/actuator/prometheus").statusCode()).isEqualTo(404);

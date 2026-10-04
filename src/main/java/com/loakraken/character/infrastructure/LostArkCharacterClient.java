@@ -3,11 +3,14 @@ package com.loakraken.character.infrastructure;
 import com.loakraken.character.application.CharacterDetailsPort;
 import com.loakraken.character.application.CharacterErrorCode;
 import com.loakraken.character.application.CharacterException;
-import com.loakraken.character.application.CharacterMetrics;
-import com.loakraken.character.application.CharacterMetrics.ApiOutcome;
-import com.loakraken.character.application.CharacterMetrics.Endpoint;
 import com.loakraken.character.application.FetchedCharacter;
 import com.loakraken.character.domain.CharacterDetails;
+import com.loakraken.common.api.BusinessException;
+import com.loakraken.common.lostark.LostArkMetrics;
+import com.loakraken.common.lostark.LostArkMetrics.ApiOutcome;
+import com.loakraken.common.lostark.LostArkMetrics.Endpoint;
+import com.loakraken.common.lostark.LostArkProperties;
+import com.loakraken.common.lostark.LostArkRequestGate;
 import java.util.Arrays;
 import java.util.Map;
 import java.util.Objects;
@@ -27,14 +30,14 @@ class LostArkCharacterClient implements CharacterDetailsPort {
   private final LostArkProperties properties;
   private final LostArkRequestGate gate;
   private final JsonMapper mapper;
-  private final CharacterMetrics metrics;
+  private final LostArkMetrics metrics;
 
   LostArkCharacterClient(
       RestClient lostArkRestClient,
       LostArkProperties properties,
       LostArkRequestGate gate,
       JsonMapper mapper,
-      CharacterMetrics metrics) {
+      LostArkMetrics metrics) {
     this.client = lostArkRestClient;
     this.properties = properties;
     this.gate = gate;
@@ -88,7 +91,11 @@ class LostArkCharacterClient implements CharacterDetailsPort {
       CharacterErrorCode notFoundCode) {
     if (properties.apiKey().isBlank())
       throw new CharacterException(CharacterErrorCode.LOST_ARK_NOT_CONFIGURED);
-    gate.acquire();
+    try {
+      gate.acquire();
+    } catch (BusinessException exception) {
+      throw new CharacterException(CharacterErrorCode.LOST_ARK_RATE_LIMITED);
+    }
     var sample = metrics.startApi();
     var outcome = new AtomicReference<>(ApiOutcome.ERROR);
     try {

@@ -6,10 +6,13 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.loakraken.ApiContractFixture;
 import com.loakraken.character.application.CharacterErrorCode;
 import com.loakraken.character.application.CharacterException;
-import com.loakraken.character.application.CharacterMetrics;
 import com.loakraken.character.application.CharacterResult;
 import com.loakraken.character.domain.ObservationState;
 import com.loakraken.character.presentation.CharacterResponse;
+import com.loakraken.common.lostark.LostArkConfiguration;
+import com.loakraken.common.lostark.LostArkMetrics;
+import com.loakraken.common.lostark.LostArkProperties;
+import com.loakraken.common.lostark.LostArkRequestGate;
 import com.sun.net.httpserver.HttpServer;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.net.InetSocketAddress;
@@ -31,7 +34,7 @@ import tools.jackson.databind.json.JsonMapper;
 
 class LostArkCharacterClientTest {
   private final SimpleMeterRegistry registry = new SimpleMeterRegistry();
-  private final CharacterMetrics metrics = new CharacterMetrics(registry);
+  private final LostArkMetrics metrics = new LostArkMetrics(registry);
   private HttpServer server;
   private ExecutorService executor;
   private final AtomicInteger requests = new AtomicInteger();
@@ -343,7 +346,7 @@ class LostArkCharacterClientTest {
             1,
             Duration.ofMinutes(5));
     return new LostArkCharacterClient(
-        new CharacterConfiguration().lostArkRestClient(properties),
+        new LostArkConfiguration().lostArkRestClient(properties),
         properties,
         new LostArkRequestGate(Clock.systemUTC(), properties, metrics),
         new JsonMapper(),

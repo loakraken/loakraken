@@ -3,6 +3,7 @@ package com.loakraken.character.presentation;
 import com.loakraken.character.domain.CharacterAnalysis;
 import com.loakraken.character.domain.CharacterDiagnostics;
 import com.loakraken.character.domain.CharacterObservationCoverage;
+import com.loakraken.common.api.NullableResponse;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.math.BigDecimal;
 import java.util.List;

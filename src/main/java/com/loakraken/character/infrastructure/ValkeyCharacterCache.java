@@ -6,6 +6,7 @@ import com.loakraken.character.application.CharacterException;
 import com.loakraken.character.application.CharacterMetrics;
 import com.loakraken.character.application.CharacterMetrics.CacheOutcome;
 import com.loakraken.character.application.CharacterResult;
+import com.loakraken.common.lostark.LostArkProperties;
 import java.util.Optional;
 import org.springframework.dao.DataAccessException;
 import org.springframework.data.redis.core.StringRedisTemplate;

@@ -80,6 +80,10 @@ class CharacterSearchIntegrationTest {
     assertThat(result.at("/data/loadout/gems").isNull()).isTrue();
     assertThat(result.at("/data/siblings").isArray()).isTrue();
     assertThat(result.at("/data/analysis/equipmentCount").intValue()).isEqualTo(1);
+    assertThat(result.at("/data/analysis/equipment/detailUnavailableCount").intValue())
+        .isEqualTo(1);
+    assertThat(result.at("/data/analysis/equipment/averageQuality").isNull()).isTrue();
+    assertThat(result.at("/data/loadout/equipment/0/detail").isNull()).isTrue();
     assertThat(result.at("/data/analysis/gems").isNull()).isTrue();
     assertThat(result.at("/data/analysis/diagnostics/ruleVersion").asText())
         .isEqualTo("observed-v2");

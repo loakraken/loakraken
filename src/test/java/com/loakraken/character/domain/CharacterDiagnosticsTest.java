@@ -36,6 +36,8 @@ class CharacterDiagnosticsTest {
     var analysis =
         new CharacterAnalysis(
             1,
+            new CharacterAnalysis.EquipmentSummary(
+                0, 1, 0, null, null, List.of(), 0, null, null, null, List.of()),
             new CharacterAnalysis.GemSummary(0, 0, null, null, null, List.of()),
             new CharacterAnalysis.CardSummary(0, 0, 0),
             new CharacterAnalysis.EngravingSummary(0, 0, 0),
@@ -53,6 +55,8 @@ class CharacterDiagnosticsTest {
     var analysis =
         new CharacterAnalysis(
             1,
+            new CharacterAnalysis.EquipmentSummary(
+                0, 1, 0, null, null, List.of(), 0, null, null, null, List.of()),
             new CharacterAnalysis.GemSummary(3, 2, 7, 7, new BigDecimal("7.00"), List.of()),
             new CharacterAnalysis.CardSummary(3, 1, 5),
             new CharacterAnalysis.EngravingSummary(0, 0, 5),
@@ -84,6 +88,8 @@ class CharacterDiagnosticsTest {
     var analysis =
         new CharacterAnalysis(
             1,
+            new CharacterAnalysis.EquipmentSummary(
+                0, 1, 0, null, null, List.of(), 0, null, null, null, List.of()),
             validGems(),
             new CharacterAnalysis.CardSummary(1, 0, 0),
             new CharacterAnalysis.EngravingSummary(0, 0, 5),
@@ -105,6 +111,8 @@ class CharacterDiagnosticsTest {
     var analysis =
         new CharacterAnalysis(
             1,
+            new CharacterAnalysis.EquipmentSummary(
+                0, 1, 0, null, null, List.of(), 0, null, null, null, List.of()),
             validGems(),
             new CharacterAnalysis.CardSummary(1, 0, 0),
             new CharacterAnalysis.EngravingSummary(0, 0, 0),

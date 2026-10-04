@@ -11,6 +11,7 @@ import java.util.List;
 @Schema(description = "현재 관측값의 집계입니다. 성능 점수나 효율 평가가 아니며 미제공 섹션은 null입니다.")
 public record CharacterAnalysisResponse(
     int equipmentCount,
+    EquipmentSummaryResponse equipment,
     @NullableResponse GemSummaryResponse gems,
     @NullableResponse CardSummaryResponse cards,
     @NullableResponse EngravingSummaryResponse engravings,
@@ -19,6 +20,7 @@ public record CharacterAnalysisResponse(
     CharacterDiagnosticsResponse diagnostics) {
   static CharacterAnalysisResponse from(
       CharacterAnalysis value, CharacterObservationCoverage coverage) {
+    var equipment = value.equipment();
     var gems = value.gems();
     var cards = value.cards();
     var engravings = value.engravings();
@@ -26,6 +28,22 @@ public record CharacterAnalysisResponse(
     var grid = value.arkGrid();
     return new CharacterAnalysisResponse(
         value.equipmentCount(),
+        new EquipmentSummaryResponse(
+            equipment.detailCount(),
+            equipment.detailUnavailableCount(),
+            equipment.refineCount(),
+            equipment.minRefineLevel(),
+            equipment.maxRefineLevel(),
+            equipment.refineDistribution().stream()
+                .map(level -> new LevelCountResponse(level.level(), level.count()))
+                .toList(),
+            equipment.qualityCount(),
+            equipment.minQuality(),
+            equipment.maxQuality(),
+            equipment.averageQuality(),
+            equipment.arkPassivePoints().stream()
+                .map(point -> new PointValueResponse(point.name(), point.value()))
+                .toList()),
         gems == null
             ? null
             : new GemSummaryResponse(
@@ -63,6 +81,22 @@ public record CharacterAnalysisResponse(
                 grid.unknownGemCount()),
         CharacterDiagnosticsResponse.from(CharacterDiagnostics.from(value, coverage)));
   }
+
+  @Schema(description = "장비 Tooltip 해석 결과의 관측 집계입니다. 부위별 가중치·점수·추천이 아니며 값이 없는 장비는 각 집계에서 제외합니다.")
+  public record EquipmentSummaryResponse(
+      @Schema(description = "Tooltip을 해석한 장비 수") int detailCount,
+      @Schema(description = "Tooltip이 없거나 해석할 수 없어 detail이 null인 장비 수") int detailUnavailableCount,
+      @Schema(description = "재련 단계가 확인된 장비 수") int refineCount,
+      @NullableResponse Integer minRefineLevel,
+      @NullableResponse Integer maxRefineLevel,
+      List<LevelCountResponse> refineDistribution,
+      @Schema(description = "품질이 확인된 장비 수. 품질이 적용되지 않는 장비는 제외") int qualityCount,
+      @NullableResponse Integer minQuality,
+      @NullableResponse Integer maxQuality,
+      @Schema(description = "확인된 품질의 단순 산술 평균, 소수 둘째 자리 반올림. 값이 없으면 null입니다.") @NullableResponse
+          BigDecimal averageQuality,
+      @Schema(description = "장비가 제공하는 아크패시브 포인트의 이름별 합계. 아크패시브 섹션의 전체 포인트와 다릅니다.")
+          List<PointValueResponse> arkPassivePoints) {}
 
   public record GemSummaryResponse(
       int count,

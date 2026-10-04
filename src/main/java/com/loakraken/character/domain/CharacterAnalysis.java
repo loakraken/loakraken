@@ -2,11 +2,13 @@ package com.loakraken.character.domain;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.TreeMap;
 
 public record CharacterAnalysis(
     int equipmentCount,
+    EquipmentSummary equipment,
     GemSummary gems,
     CardSummary cards,
     EngravingSummary engravings,
@@ -16,6 +18,7 @@ public record CharacterAnalysis(
   public static CharacterAnalysis from(CharacterLoadout loadout) {
     return new CharacterAnalysis(
         loadout.equipment().size(),
+        equipment(loadout.equipment()),
         gems(loadout.gems()),
         cards(loadout.cards()),
         loadout.engravings() == null
@@ -26,6 +29,53 @@ public record CharacterAnalysis(
                 loadout.engravings().arkPassiveEffects().size()),
         passive(loadout.arkPassive()),
         grid(loadout.arkGrid()));
+  }
+
+  private static EquipmentSummary equipment(List<CharacterLoadout.Equipment> equipment) {
+    int detailCount = 0;
+    var refineLevels = new TreeMap<Integer, Integer>();
+    int refineCount = 0;
+    Integer minQuality = null, maxQuality = null;
+    long qualitySum = 0;
+    int qualityCount = 0;
+    var points = new LinkedHashMap<String, Integer>();
+    for (var item : equipment) {
+      var detail = item.detail();
+      if (detail == null) continue;
+      detailCount++;
+      if (detail.refineLevel() != null) {
+        refineLevels.merge(detail.refineLevel(), 1, Integer::sum);
+        refineCount++;
+      }
+      if (detail.quality() != null) {
+        minQuality = minQuality == null ? detail.quality() : Math.min(minQuality, detail.quality());
+        maxQuality = maxQuality == null ? detail.quality() : Math.max(maxQuality, detail.quality());
+        qualitySum += detail.quality();
+        qualityCount++;
+      }
+      var point = detail.arkPassivePoint();
+      if (point != null && point.name() != null && point.value() != null)
+        points.merge(point.name(), point.value(), Integer::sum);
+    }
+    return new EquipmentSummary(
+        detailCount,
+        equipment.size() - detailCount,
+        refineCount,
+        refineLevels.isEmpty() ? null : refineLevels.firstKey(),
+        refineLevels.isEmpty() ? null : refineLevels.lastKey(),
+        refineLevels.entrySet().stream()
+            .map(entry -> new LevelCount(entry.getKey(), entry.getValue()))
+            .toList(),
+        qualityCount,
+        minQuality,
+        maxQuality,
+        qualityCount == 0
+            ? null
+            : BigDecimal.valueOf(qualitySum)
+                .divide(BigDecimal.valueOf(qualityCount), 2, RoundingMode.HALF_UP),
+        points.entrySet().stream()
+            .map(entry -> new PointValue(entry.getKey(), entry.getValue()))
+            .toList());
   }
 
   private static GemSummary gems(CharacterLoadout.Gems gems) {
@@ -90,6 +140,24 @@ public record CharacterAnalysis(
       }
     }
     return new GridSummary(grid.slots().size(), active, inactive, unknown);
+  }
+
+  public record EquipmentSummary(
+      int detailCount,
+      int detailUnavailableCount,
+      int refineCount,
+      Integer minRefineLevel,
+      Integer maxRefineLevel,
+      List<LevelCount> refineDistribution,
+      int qualityCount,
+      Integer minQuality,
+      Integer maxQuality,
+      BigDecimal averageQuality,
+      List<PointValue> arkPassivePoints) {
+    public EquipmentSummary {
+      refineDistribution = List.copyOf(refineDistribution);
+      arkPassivePoints = List.copyOf(arkPassivePoints);
+    }
   }
 
   public record GemSummary(

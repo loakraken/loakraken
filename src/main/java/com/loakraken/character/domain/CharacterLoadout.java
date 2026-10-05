@@ -205,7 +205,12 @@ public record CharacterLoadout(
 
   public record PassivePoint(String name, Integer value, String description) {}
 
-  public record PassiveEffect(String name, String description, String icon) {}
+  /** effect: 공식 노드 Tooltip의 효과 문구. 없으면 null. */
+  public record PassiveEffect(String name, String description, String icon, String effect) {
+    public PassiveEffect(String name, String description, String icon) {
+      this(name, description, icon, null);
+    }
+  }
 
   public record ArkGrid(List<GridSlot> slots, List<GridEffect> effects) {
     public ArkGrid {

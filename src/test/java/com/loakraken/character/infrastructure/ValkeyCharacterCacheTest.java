@@ -68,7 +68,7 @@ class ValkeyCharacterCacheTest {
   void 손상된_캐시는_삭제한_후_미적중으로_기록한다() {
     when(values.get(anyString())).thenReturn("broken-secret-json");
     assertThat(cache.find("모험가")).isEmpty();
-    verify(redis).delete("character:v9:모험가:summary");
+    verify(redis).delete("character:v10:모험가:summary");
     assertThat(count("invalid")).isEqualTo(1);
     assertThat(count("miss")).isEqualTo(1);
   }

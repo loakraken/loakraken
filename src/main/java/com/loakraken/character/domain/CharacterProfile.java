@@ -101,5 +101,14 @@ public record CharacterProfile(
 
   public record SkillPoints(Integer used, Integer total) {}
 
-  public record Stat(String type, String value) {}
+  /** tooltip: 공식 스탯 Tooltip의 정제된 문장(예: "치명타 적중률이 20.61% 증가합니다."). */
+  public record Stat(String type, String value, List<String> tooltip) {
+    public Stat {
+      tooltip = tooltip == null ? List.of() : List.copyOf(tooltip);
+    }
+
+    public Stat(String type, String value) {
+      this(type, value, List.of());
+    }
+  }
 }

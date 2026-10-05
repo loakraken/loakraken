@@ -67,6 +67,26 @@ class ValkeyMarketCache implements MarketCache {
     write(OPTIONS_KEY, result, properties.optionsTtl(), Kind.OPTIONS);
   }
 
+  public Optional<MarketItemHistoryResult> findItemHistory(long itemId) {
+    return read(
+        historyKey(itemId),
+        MarketItemHistoryResult.class,
+        Kind.ITEM_HISTORY,
+        result ->
+            result.history() != null
+                && result.history().itemId() == itemId
+                && fresh(result.observedAt(), properties.historyTtl()));
+  }
+
+  public void saveItemHistory(MarketItemHistoryResult result) {
+    write(
+        historyKey(result.history().itemId()), result, properties.historyTtl(), Kind.ITEM_HISTORY);
+  }
+
+  private static String historyKey(long itemId) {
+    return "market:v1:item-history:" + itemId;
+  }
+
   private boolean fresh(Instant observedAt, Duration ttl) {
     var now = clock.instant();
     return !observedAt.isAfter(now) && observedAt.isAfter(now.minus(ttl));

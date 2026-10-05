@@ -31,7 +31,8 @@ class ValkeyMarketCacheTest {
       new ValkeyMarketCache(
           redis,
           mapper,
-          new MarketCacheProperties(Duration.ofSeconds(30), Duration.ofMinutes(10)),
+          new MarketCacheProperties(
+              Duration.ofSeconds(30), Duration.ofMinutes(10), Duration.ofMinutes(10)),
           new MarketMetrics(registry),
           Clock.fixed(now, ZoneOffset.UTC));
 
@@ -122,10 +123,15 @@ class ValkeyMarketCacheTest {
 
   @Test
   void 설정한_TTL은_양수여야_한다() {
-    assertThatThrownBy(() -> new MarketCacheProperties(Duration.ZERO, Duration.ofMinutes(10)))
+    assertThatThrownBy(
+            () ->
+                new MarketCacheProperties(
+                    Duration.ZERO, Duration.ofMinutes(10), Duration.ofMinutes(10)))
         .isInstanceOf(IllegalArgumentException.class);
     assertThatThrownBy(
-            () -> new MarketCacheProperties(Duration.ofSeconds(30), Duration.ofSeconds(-1)))
+            () ->
+                new MarketCacheProperties(
+                    Duration.ofSeconds(30), Duration.ofSeconds(-1), Duration.ofMinutes(10)))
         .isInstanceOf(IllegalArgumentException.class);
   }
 

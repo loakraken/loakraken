@@ -38,7 +38,6 @@ class LostArkMarketHttpClient {
 
   <T> T request(Endpoint endpoint, MarketSearch search, Class<T> responseType) {
     if (properties.apiKey().isBlank()) throw error(LostArkErrorCode.LOST_ARK_NOT_CONFIGURED);
-    T payload;
     RestClient.RequestHeadersSpec<?> request;
     if (endpoint == Endpoint.MARKET_OPTIONS) {
       request = client.get().uri("/markets/options");
@@ -52,6 +51,23 @@ class LostArkMarketHttpClient {
     } else {
       throw new IllegalArgumentException("지원하지 않는 거래소 API");
     }
+    T payload = execute(endpoint, request, responseType);
+    if (payload == null) throw error(LostArkErrorCode.LOST_ARK_API_ERROR);
+    return payload;
+  }
+
+  /** 공식 API는 없는 상품 ID에 200과 본문 null을 반환한다. 그 경우 null을 돌려준다. */
+  <T> T requestItem(long itemId, Class<T> responseType) {
+    if (properties.apiKey().isBlank()) throw error(LostArkErrorCode.LOST_ARK_NOT_CONFIGURED);
+    return execute(
+        Endpoint.MARKET_ITEM_HISTORY,
+        client.get().uri("/markets/items/{itemId}", itemId),
+        responseType);
+  }
+
+  private <T> T execute(
+      Endpoint endpoint, RestClient.RequestHeadersSpec<?> request, Class<T> responseType) {
+    T payload;
     gate.acquire();
     var sample = metrics.startApi();
     var outcome = new AtomicReference<>(ApiOutcome.ERROR);
@@ -71,7 +87,10 @@ class LostArkMarketHttpClient {
                 if (json == null || json.isBlank())
                   throw error(LostArkErrorCode.LOST_ARK_API_ERROR);
                 var value = mapper.readValue(json, responseType);
-                outcome.set(ApiOutcome.SUCCESS);
+                outcome.set(
+                    value == null && endpoint == Endpoint.MARKET_ITEM_HISTORY
+                        ? ApiOutcome.NOT_FOUND
+                        : ApiOutcome.SUCCESS);
                 return value;
               });
     } catch (ResourceAccessException exception) {
@@ -89,7 +108,6 @@ class LostArkMarketHttpClient {
       gate.release();
       metrics.finishApi(sample, endpoint, outcome.get());
     }
-    if (payload == null) throw error(LostArkErrorCode.LOST_ARK_API_ERROR);
     return payload;
   }
 

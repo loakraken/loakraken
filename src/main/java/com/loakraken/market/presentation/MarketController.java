@@ -11,6 +11,8 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Positive;
 import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
@@ -89,6 +91,23 @@ public class MarketController {
     return ApiResponse.of(
         MarketSuccessCode.MARKET_SEARCH_SUCCESS,
         MarketPriceResponse.from(service.search(source, request.toSearch())));
+  }
+
+  @GetMapping("/items/{itemId}/history")
+  @Operation(
+      summary = "상품 14일 시세 이력",
+      description =
+          "공식 거래소 상품 상세의 최근 14일 일별 평균가·거래량입니다. 오늘(한국 날짜) 값은 진행 중인 부분 집계라 partial=true이며 요약에서 제외합니다. "
+              + "기본 캐시 10분, 같은 상품 동시 요청 병합, 캐릭터·거래소 공유 호출 예산을 사용합니다. 공식 API가 모르는 상품은 404 MARKET_ITEM_NOT_FOUND입니다.")
+  @io.swagger.v3.oas.annotations.responses.ApiResponse(
+      responseCode = "404",
+      description = "MARKET_ITEM_NOT_FOUND",
+      content = @Content(schema = @Schema(ref = "#/components/schemas/ErrorResponse")))
+  public ApiResponse<MarketItemHistoryResponse> itemHistory(
+      @PathVariable @Positive @Max(999_999_999) long itemId) {
+    return ApiResponse.of(
+        MarketSuccessCode.MARKET_ITEM_HISTORY_SUCCESS,
+        MarketItemHistoryResponse.from(service.itemHistory(itemId)));
   }
 
   @GetMapping("/options")

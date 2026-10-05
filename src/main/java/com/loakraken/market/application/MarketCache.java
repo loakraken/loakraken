@@ -10,4 +10,8 @@ public interface MarketCache {
   Optional<MarketOptionsResult> findOptions();
 
   void saveOptions(MarketOptionsResult result);
+
+  Optional<MarketItemHistoryResult> findItemHistory(long itemId);
+
+  void saveItemHistory(MarketItemHistoryResult result);
 }

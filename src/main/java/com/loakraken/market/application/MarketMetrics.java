@@ -25,7 +25,8 @@ public class MarketMetrics {
 
   public enum Kind {
     PRICES,
-    OPTIONS
+    OPTIONS,
+    ITEM_HISTORY
   }
 
   public enum Outcome {

@@ -1,5 +1,6 @@
 package com.loakraken.market.application;
 
+import com.loakraken.common.api.BusinessException;
 import java.time.Clock;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
@@ -7,6 +8,7 @@ import java.util.concurrent.CompletionException;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -15,17 +17,39 @@ public class MarketQueryService {
   private final Clock clock;
   private final MarketOptionsPort options;
   private final MarketCache cache;
+  private final MarketItemHistoryPort itemHistory;
   private final ConcurrentHashMap<PriceKey, CompletableFuture<MarketResult>> priceFlights =
       new ConcurrentHashMap<>();
   private final ConcurrentHashMap<String, CompletableFuture<MarketOptionsResult>> optionFlights =
       new ConcurrentHashMap<>();
+  private final ConcurrentHashMap<Long, CompletableFuture<MarketItemHistoryResult>> historyFlights =
+      new ConcurrentHashMap<>();
 
+  @Autowired
   public MarketQueryService(
-      MarketPricesPort prices, MarketOptionsPort options, MarketCache cache, Clock clock) {
+      MarketPricesPort prices,
+      MarketOptionsPort options,
+      MarketCache cache,
+      Clock clock,
+      MarketItemHistoryPort itemHistory) {
     this.prices = prices;
     this.options = options;
     this.cache = cache;
     this.clock = clock;
+    this.itemHistory = itemHistory;
+  }
+
+  /** 테스트·기존 호출 호환: 상품 이력을 쓰지 않는 구성. */
+  public MarketQueryService(
+      MarketPricesPort prices, MarketOptionsPort options, MarketCache cache, Clock clock) {
+    this(
+        prices,
+        options,
+        cache,
+        clock,
+        itemId -> {
+          throw new UnsupportedOperationException("상품 이력 포트가 없습니다.");
+        });
   }
 
   public MarketResult search(MarketSource source, MarketSearch search) {
@@ -50,6 +74,22 @@ public class MarketQueryService {
           return new MarketOptionsResult(clock.instant(), fetched);
         },
         cache::saveOptions);
+  }
+
+  /** 공식 상품 상세(14일 일별 시세). 없는 상품은 MARKET_ITEM_NOT_FOUND이며 캐시하지 않는다. */
+  public MarketItemHistoryResult itemHistory(long itemId) {
+    return collect(
+        itemId,
+        historyFlights,
+        () -> cache.findItemHistory(itemId),
+        () ->
+            new MarketItemHistoryResult(
+                clock.instant(),
+                itemHistory
+                    .fetchHistory(itemId)
+                    .orElseThrow(
+                        () -> new BusinessException(MarketErrorCode.MARKET_ITEM_NOT_FOUND))),
+        cache::saveItemHistory);
   }
 
   private <K, V> V collect(

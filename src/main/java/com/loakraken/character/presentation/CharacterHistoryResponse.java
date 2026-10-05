@@ -2,6 +2,7 @@ package com.loakraken.character.presentation;
 
 import com.loakraken.character.application.CharacterHistoryQuery;
 import com.loakraken.character.application.CharacterObservationPoint;
+import com.loakraken.character.application.CharacterTitleObservation;
 import com.loakraken.common.api.NullableResponse;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.math.BigDecimal;
@@ -13,9 +14,15 @@ public record CharacterHistoryResponse(
     String characterName,
     String serverName,
     @Schema(description = "값이 바뀐 관측만 한 점이 됩니다. 같은 값의 재수집은 lastConfirmedAt만 갱신합니다.")
-        List<PointResponse> points) {
+        List<PointResponse> points,
+    @Schema(
+            description =
+                "검색 때 관측한 장착 칭호. 획득일이 아니라 LOAKraken이 처음·마지막으로 관측한 시각이며, 장착한 적 없는 보유 칭호는 알 수 없습니다.")
+        List<TitleResponse> titles) {
   static CharacterHistoryResponse from(
-      CharacterHistoryQuery query, List<CharacterObservationPoint> points) {
+      CharacterHistoryQuery query,
+      List<CharacterObservationPoint> points,
+      List<CharacterTitleObservation> titles) {
     return new CharacterHistoryResponse(
         query.characterName(),
         query.serverName(),
@@ -30,8 +37,16 @@ public record CharacterHistoryResponse(
                         point.itemLevel(),
                         point.combatPower(),
                         point.expeditionLevel()))
+            .toList(),
+        titles.stream()
+            .map(
+                title ->
+                    new TitleResponse(
+                        title.title(), title.firstObservedAt(), title.lastObservedAt()))
             .toList());
   }
+
+  public record TitleResponse(String title, Instant firstObservedAt, Instant lastObservedAt) {}
 
   public record PointResponse(
       @Schema(description = "이 값이 처음 관측된 UTC 시각") Instant observedAt,

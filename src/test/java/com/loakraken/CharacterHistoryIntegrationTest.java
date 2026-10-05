@@ -37,6 +37,10 @@ class CharacterHistoryIntegrationTest {
   @AfterEach
   void 정리() {
     jdbc.sql(
+            "DELETE FROM character_title_observation WHERE character_id IN (SELECT character_id FROM characters WHERE character_name = :name)")
+        .param("name", NAME)
+        .update();
+    jdbc.sql(
             "DELETE FROM character_observation WHERE character_id IN (SELECT character_id FROM characters WHERE character_name = :name)")
         .param("name", NAME)
         .update();
@@ -74,16 +78,36 @@ class CharacterHistoryIntegrationTest {
   }
 
   @Test
+  void 장착_칭호는_칭호별_최초와_마지막_관측_시각으로_누적한다() throws Exception {
+    history.record(profile("1700.00", null, 260, "심연의 징벌자"), TIME);
+    history.record(profile("1700.00", null, 260, "이클립스"), TIME.plusSeconds(600));
+    history.record(profile("1700.00", null, 260, "심연의 징벌자"), TIME.plusSeconds(1200));
+    history.record(profile("1700.00", null, 260, "  "), TIME.plusSeconds(1800));
+    var titles = mapper.readTree(request("").body()).at("/data/titles");
+    assertThat(titles.size()).isEqualTo(2);
+    assertThat(titles.get(0).path("title").asText()).isEqualTo("심연의 징벌자");
+    assertThat(titles.get(0).path("firstObservedAt").asText()).isEqualTo("2026-10-05T00:00:00Z");
+    assertThat(titles.get(0).path("lastObservedAt").asText()).isEqualTo("2026-10-05T00:20:00Z");
+    assertThat(titles.get(1).path("title").asText()).isEqualTo("이클립스");
+  }
+
+  @Test
   void 기록이_없으면_빈_목록이고_잘못된_limit은_400이다() throws Exception {
     var empty = request("");
     assertThat(empty.statusCode()).isEqualTo(200);
     assertThat(mapper.readTree(empty.body()).at("/data/points").size()).isZero();
+    assertThat(mapper.readTree(empty.body()).at("/data/titles").size()).isZero();
     assertThat(request("&limit=501").statusCode()).isEqualTo(400);
     assertThat(send("/api/v1/characters/history?characterName=" + encode(NAME)).statusCode())
         .isEqualTo(400);
   }
 
   private CharacterProfile profile(String itemLevel, String combatPower, int expeditionLevel) {
+    return profile(itemLevel, combatPower, expeditionLevel, null);
+  }
+
+  private CharacterProfile profile(
+      String itemLevel, String combatPower, int expeditionLevel, String title) {
     return new CharacterProfile(
         NAME,
         "루페온",
@@ -93,7 +117,7 @@ class CharacterHistoryIntegrationTest {
         combatPower == null ? null : new BigDecimal(combatPower),
         expeditionLevel,
         null,
-        null,
+        title,
         null,
         List.of());
   }

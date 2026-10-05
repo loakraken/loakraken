@@ -6,7 +6,10 @@ import java.util.List;
 import java.util.Objects;
 
 public record CharacterSiblingsResult(
-    String characterName, List<CharacterSibling> siblings, Instant fetchedAt) {
+    String characterName,
+    List<CharacterSibling> siblings,
+    Instant fetchedAt,
+    Instant refreshAvailableAt) {
   public CharacterSiblingsResult {
     Objects.requireNonNull(characterName);
     Objects.requireNonNull(fetchedAt);

@@ -80,6 +80,10 @@ class CharacterSearchIntegrationTest {
     assertThat(result.at("/data/characterName").asText()).isEqualTo(NAME);
     assertThat(result.at("/data/itemLevel").decimalValue()).isEqualByComparingTo("1700.5");
     assertThat(result.at("/data/fetchedAt").asText()).isNotBlank();
+    var fetchedAt = java.time.Instant.parse(result.at("/data/fetchedAt").asText());
+    var refreshAt = java.time.Instant.parse(result.at("/data/refreshAvailableAt").asText());
+    assertThat(java.time.Duration.between(fetchedAt, refreshAt))
+        .isBetween(java.time.Duration.ofMinutes(5), java.time.Duration.ofMinutes(5).plusSeconds(1));
     assertThat(result.at("/data/loadout/equipment/0/name").asText()).isEqualTo("테스트 무기");
     assertThat(result.at("/data/loadout/gems").isNull()).isTrue();
     assertThat(result.at("/data/siblings").isArray()).isTrue();
@@ -255,6 +259,7 @@ class CharacterSearchIntegrationTest {
     assertThat(result.at("/data/siblings/0/itemLevel").decimalValue())
         .isEqualByComparingTo("1700.5");
     assertThat(result.at("/data/fetchedAt").asText()).isNotBlank();
+    assertThat(result.at("/data/refreshAvailableAt").asText()).isNotBlank();
     verify(detailsPort, times(1)).fetchSiblings(NAME);
     verify(detailsPort, never()).fetch(anyString());
 

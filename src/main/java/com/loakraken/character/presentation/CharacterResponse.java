@@ -26,7 +26,12 @@ public record CharacterResponse(
         List<SiblingResponse> siblings,
     CharacterObservationCoverageResponse coverage,
     CharacterAnalysisResponse analysis,
-    @Schema(description = "외부 API에서 실제 수집한 UTC 시각. 캐시 조회에서도 유지됩니다.") Instant fetchedAt) {
+    @Schema(description = "외부 API에서 실제 수집한 UTC 시각. 캐시 조회에서도 유지됩니다.") Instant fetchedAt,
+    @Schema(
+            description =
+                "캐시 만료 예정 UTC 시각. 이 시각 이전 요청은 캐시를 반환해 fetchedAt이 바뀌지 않습니다. 캐시 적중에서도 유지되며 실제 만료는 1초 미만 늦을 수 있습니다. 알 수 없으면 null입니다.")
+        @NullableResponse
+        Instant refreshAvailableAt) {
   public static CharacterResponse from(CharacterResult result) {
     var profile = result.details().profile();
     return new CharacterResponse(
@@ -47,7 +52,8 @@ public record CharacterResponse(
             : SiblingResponse.from(result.details().siblings()),
         CharacterObservationCoverageResponse.from(result.details().coverage()),
         CharacterAnalysisResponse.from(result.analysis(), result.details().coverage()),
-        result.fetchedAt());
+        result.fetchedAt(),
+        result.refreshAvailableAt());
   }
 
   public record StatResponse(@NullableResponse String type, @NullableResponse String value) {}

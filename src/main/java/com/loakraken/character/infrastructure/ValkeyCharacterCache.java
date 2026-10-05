@@ -8,6 +8,7 @@ import com.loakraken.character.application.CharacterMetrics.CacheOutcome;
 import com.loakraken.character.application.CharacterResult;
 import com.loakraken.character.application.CharacterSiblingsResult;
 import com.loakraken.common.lostark.LostArkProperties;
+import java.time.Duration;
 import java.util.Optional;
 import java.util.function.Predicate;
 import org.springframework.dao.DataAccessException;
@@ -32,6 +33,11 @@ class ValkeyCharacterCache implements CharacterCache {
     this.mapper = mapper;
     this.properties = properties;
     this.metrics = metrics;
+  }
+
+  @Override
+  public Duration ttl() {
+    return properties.summaryTtl();
   }
 
   @Override

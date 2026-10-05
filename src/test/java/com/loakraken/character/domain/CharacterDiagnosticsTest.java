@@ -205,7 +205,7 @@ class CharacterDiagnosticsTest {
             null,
             "고대",
             new CharacterLoadout.EquipmentDetail(
-                19, 95, 1770, 4, null, List.of(), List.of(), List.of()));
+                19, 95, 1770, 4, null, List.of(), List.of(), List.of(), List.of()));
     var unparsed = new CharacterLoadout.Equipment("무기", "무기", null, "고대", null);
     var report =
         diagnose(
@@ -232,7 +232,7 @@ class CharacterDiagnosticsTest {
             null,
             "고대",
             new CharacterLoadout.EquipmentDetail(
-                19, 95, 1770, 4, null, List.of(), List.of(), List.of()));
+                19, 95, 1770, 4, null, List.of(), List.of(), List.of(), List.of()));
     var allParsed =
         diagnose(
             CharacterAnalysis.from(

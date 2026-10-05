@@ -252,7 +252,7 @@ class CharacterAnalysisTest {
         null,
         "고대",
         new CharacterLoadout.EquipmentDetail(
-            null, quality, null, 4, null, List.of(), List.of(), List.of()));
+            null, quality, null, 4, null, List.of(), List.of(), List.of(), List.of()));
   }
 
   private CharacterLoadout.GemSkill skill(String description) {
@@ -276,7 +276,7 @@ class CharacterAnalysisTest {
         null,
         "고대",
         new CharacterLoadout.EquipmentDetail(
-            refineLevel, quality, null, 4, point, List.of(), List.of(), List.of()));
+            refineLevel, quality, null, 4, point, List.of(), List.of(), List.of(), List.of()));
   }
 
   private CharacterAnalysis.GemSummary gems(List<CharacterLoadout.Gem> gems) {

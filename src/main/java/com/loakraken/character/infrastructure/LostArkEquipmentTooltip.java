@@ -18,15 +18,17 @@ final class LostArkEquipmentTooltip {
   private static final String ARK_PASSIVE_POINT_TITLE = "아크 패시브 포인트 효과";
   private static final String STONE_ENGRAVING_TITLE = "무작위 각인 효과";
   private static final String POLISH_TITLE = "연마 효과";
+  private static final String BRACELET_TITLE = "팔찌 효과";
+  private static final Pattern ICON = Pattern.compile("(?i)<img[^>]*>(\\s*</img>)?");
   private static final Pattern LINE_BREAK = Pattern.compile("(?i)<br\\s*/?>");
   private static final Pattern FONT_COLOR =
       Pattern.compile("(?i)<font[^>]*color=['\"]?#?([0-9a-f]{6})");
   private static final Pattern NAME_VALUE = Pattern.compile("^(.+?) ([+-][0-9][0-9.,]*%?)$");
-  private static final java.util.Map<String, CharacterLoadout.PolishGrade> POLISH_GRADES =
+  private static final java.util.Map<String, CharacterLoadout.EffectGrade> EFFECT_GRADES =
       java.util.Map.of(
-          "FE9600", CharacterLoadout.PolishGrade.HIGH,
-          "CE43FC", CharacterLoadout.PolishGrade.MID,
-          "00B5FF", CharacterLoadout.PolishGrade.LOW);
+          "FE9600", CharacterLoadout.EffectGrade.HIGH,
+          "CE43FC", CharacterLoadout.EffectGrade.MID,
+          "00B5FF", CharacterLoadout.EffectGrade.LOW);
 
   private LostArkEquipmentTooltip() {}
 
@@ -45,6 +47,7 @@ final class LostArkEquipmentTooltip {
     var effects = new ArrayList<CharacterLoadout.EffectGroup>();
     var stoneEngravings = new ArrayList<CharacterLoadout.StoneEngraving>();
     var polishEffects = new ArrayList<CharacterLoadout.PolishEffect>();
+    var braceletEffects = new ArrayList<CharacterLoadout.BraceletEffect>();
     for (var element : root.values()) {
       var value = element.path("value");
       switch (text(element.path("type"))) {
@@ -64,6 +67,8 @@ final class LostArkEquipmentTooltip {
           else effects.add(new CharacterLoadout.EffectGroup(title, lines));
           if (POLISH_TITLE.equals(title))
             polishEffects.addAll(polish(text(value.path("Element_001"))));
+          if (BRACELET_TITLE.equals(title))
+            braceletEffects.addAll(bracelet(text(value.path("Element_001"))));
         }
         case "IndentStringGroup" -> {
           for (var group : value.values()) {
@@ -87,7 +92,25 @@ final class LostArkEquipmentTooltip {
         arkPassivePoint,
         effects,
         stoneEngravings,
-        polishEffects);
+        polishEffects,
+        braceletEffects);
+  }
+
+  private static List<CharacterLoadout.BraceletEffect> bracelet(String source) {
+    var result = new ArrayList<CharacterLoadout.BraceletEffect>();
+    // 효과마다 앞에 아이콘이 붙고, 한 효과가 줄바꿈으로 두 줄이 되기도 한다.
+    String[] segments = ICON.matcher(source).find() ? ICON.split(source) : LINE_BREAK.split(source);
+    for (var raw : segments) {
+      String text = LostArkText.plain(raw);
+      if (text.isEmpty()) continue;
+      result.add(new CharacterLoadout.BraceletEffect(text, grade(raw)));
+    }
+    return result;
+  }
+
+  private static CharacterLoadout.EffectGrade grade(String raw) {
+    var color = FONT_COLOR.matcher(raw);
+    return color.find() ? EFFECT_GRADES.get(color.group(1).toUpperCase()) : null;
   }
 
   private static List<CharacterLoadout.PolishEffect> polish(String source) {
@@ -97,9 +120,8 @@ final class LostArkEquipmentTooltip {
       if (line.isEmpty()) continue;
       var nameValue = NAME_VALUE.matcher(line);
       if (!nameValue.matches()) continue;
-      var color = FONT_COLOR.matcher(raw);
-      var grade = color.find() ? POLISH_GRADES.get(color.group(1).toUpperCase()) : null;
-      result.add(new CharacterLoadout.PolishEffect(nameValue.group(1), nameValue.group(2), grade));
+      result.add(
+          new CharacterLoadout.PolishEffect(nameValue.group(1), nameValue.group(2), grade(raw)));
     }
     return result;
   }

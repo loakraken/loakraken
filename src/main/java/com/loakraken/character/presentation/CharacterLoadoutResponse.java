@@ -46,7 +46,7 @@ public record CharacterLoadoutResponse(
       description =
           "공식 Tooltip에서 확인된 값만 담습니다. 확인되지 않은 값은 null이며 추정하지 않습니다. 엘릭서·초월·상급 재련은 아직 해석하지 않습니다.")
   public record EquipmentDetailResponse(
-      @Schema(description = "해석 규칙 버전", example = "equipment-tooltip-v2") String parserVersion,
+      @Schema(description = "해석 규칙 버전", example = "equipment-tooltip-v3") String parserVersion,
       @Schema(description = "장비 이름의 +N 재련 단계") @NullableResponse Integer refineLevel,
       @Schema(description = "품질 0~100. 품질이 적용되지 않는 장비는 null") @NullableResponse Integer quality,
       @Schema(description = "장비 아이템 레벨. 장신구 등 표시되지 않는 장비는 null") @NullableResponse
@@ -57,7 +57,9 @@ public record CharacterLoadoutResponse(
       @Schema(description = "효과 묶음. 제목과 줄 단위 일반 텍스트") List<EffectGroupResponse> effects,
       @Schema(description = "어빌리티 스톤의 무작위 각인") List<StoneEngravingResponse> stoneEngravings,
       @Schema(description = "장신구 연마 효과와 공식 Tooltip 색 기준 등급. 연마 효과가 없는 장비는 빈 목록")
-          List<PolishEffectResponse> polishEffects) {
+          List<PolishEffectResponse> polishEffects,
+      @Schema(description = "팔찌 효과와 공식 Tooltip 색 기준 등급. 팔찌가 아니면 빈 목록")
+          List<BraceletEffectResponse> braceletEffects) {
     static EquipmentDetailResponse from(CharacterLoadout.EquipmentDetail value) {
       if (value == null) return null;
       return new EquipmentDetailResponse(
@@ -69,7 +71,8 @@ public record CharacterLoadoutResponse(
           PointBonusResponse.from(value.arkPassivePoint()),
           value.effects().stream().map(EffectGroupResponse::from).toList(),
           value.stoneEngravings().stream().map(StoneEngravingResponse::from).toList(),
-          value.polishEffects().stream().map(PolishEffectResponse::from).toList());
+          value.polishEffects().stream().map(PolishEffectResponse::from).toList(),
+          value.braceletEffects().stream().map(BraceletEffectResponse::from).toList());
     }
   }
 
@@ -92,9 +95,20 @@ public record CharacterLoadoutResponse(
   public record PolishEffectResponse(
       @Schema(example = "추가 피해") String name,
       @Schema(example = "+2.60%") String value,
-      @NullableResponse CharacterLoadout.PolishGrade grade) {
+      @NullableResponse CharacterLoadout.EffectGrade grade) {
     static PolishEffectResponse from(CharacterLoadout.PolishEffect value) {
       return new PolishEffectResponse(value.name(), value.value(), value.grade());
+    }
+  }
+
+  @Schema(
+      description =
+          "팔찌 효과 하나(두 줄 효과 포함)와 등급. 등급은 효과의 첫 색 수치(FE9600=HIGH, CE43FC=MID, 00B5FF=LOW)로 정하며 공식 팔찌 확률표의 특수 효과 3단계와 대응합니다. 전투 특성처럼 구간형 수치이거나 알 수 없는 색은 null입니다.")
+  public record BraceletEffectResponse(
+      @Schema(example = "치명타 피해 +8.40%") String text,
+      @NullableResponse CharacterLoadout.EffectGrade grade) {
+    static BraceletEffectResponse from(CharacterLoadout.BraceletEffect value) {
+      return new BraceletEffectResponse(value.text(), value.grade());
     }
   }
 

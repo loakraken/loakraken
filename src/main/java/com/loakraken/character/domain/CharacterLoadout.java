@@ -8,10 +8,49 @@ public record CharacterLoadout(
     Gems gems,
     Cards cards,
     ArkPassive arkPassive,
-    ArkGrid arkGrid) {
+    ArkGrid arkGrid,
+    List<Skill> skills) {
   public CharacterLoadout {
     equipment = equipment == null ? List.of() : List.copyOf(equipment);
+    skills = skills == null ? List.of() : List.copyOf(skills);
   }
+
+  public CharacterLoadout(
+      List<Equipment> equipment,
+      Engravings engravings,
+      Gems gems,
+      Cards cards,
+      ArkPassive arkPassive,
+      ArkGrid arkGrid) {
+    this(equipment, engravings, gems, cards, arkPassive, arkGrid, List.of());
+  }
+
+  public record Skill(
+      String name,
+      String icon,
+      Integer level,
+      String type,
+      Integer partBreakLevel,
+      Boolean counter,
+      List<Tripod> tripods,
+      Rune rune,
+      List<SkillGemEffect> gemEffects) {
+    public Skill {
+      tripods = tripods == null ? List.of() : List.copyOf(tripods);
+      gemEffects = gemEffects == null ? List.of() : List.copyOf(gemEffects);
+    }
+  }
+
+  public record Tripod(Integer tier, Integer slot, String name, String icon) {}
+
+  public record Rune(String name, String icon, String grade) {}
+
+  public enum GemEffectKind {
+    DAMAGE,
+    COOLDOWN
+  }
+
+  public record SkillGemEffect(String text, GemEffectKind kind) {}
 
   public record Equipment(
       String type, String name, String icon, String grade, EquipmentDetail detail) {}

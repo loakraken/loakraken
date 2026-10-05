@@ -27,7 +27,7 @@ import tools.jackson.databind.json.JsonMapper;
 @Component
 class LostArkCharacterClient implements CharacterDetailsPort {
   private static final String FILTERS =
-      "profiles+equipment+engravings+gems+cards+arkpassive+arkgrid";
+      "profiles+equipment+engravings+gems+cards+arkpassive+arkgrid+combat-skills";
   private final RestClient client;
   private final LostArkProperties properties;
   private final LostArkRequestGate gate;

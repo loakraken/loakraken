@@ -16,7 +16,9 @@ record LostArkProfileResponse(
     @JsonProperty("CharacterImage") String imageUrl,
     @JsonProperty("Title") String title,
     @JsonProperty("GuildName") String guildName,
-    @JsonProperty("Stats") List<Stat> stats) {
+    @JsonProperty("Stats") List<Stat> stats,
+    @JsonProperty("UsingSkillPoint") Integer usingSkillPoint,
+    @JsonProperty("TotalSkillPoint") Integer totalSkillPoint) {
   @JsonIgnoreProperties(ignoreUnknown = true)
   record Stat(@JsonProperty("Type") String type, @JsonProperty("Value") String value) {}
 }

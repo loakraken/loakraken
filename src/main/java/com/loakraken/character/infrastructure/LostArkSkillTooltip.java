@@ -1,0 +1,72 @@
+package com.loakraken.character.infrastructure;
+
+import com.loakraken.character.domain.CharacterLoadout;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.regex.Pattern;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.json.JsonMapper;
+
+final class LostArkSkillTooltip {
+  private static final JsonMapper MAPPER = JsonMapper.builder().build();
+  private static final Pattern PART_BREAK = Pattern.compile("부위 파괴 : 레벨 (\\d{1,2})");
+  private static final Pattern COUNTER = Pattern.compile("카운터 : 가능");
+  private static final Pattern GEM_DAMAGE = Pattern.compile("피해 [0-9.]+% 증가$");
+  private static final Pattern GEM_COOLDOWN = Pattern.compile("재사용 대기시간 [0-9.]+% 감소$");
+  private static final String GEM_TITLE = "보석 효과";
+
+  private LostArkSkillTooltip() {}
+
+  record Parsed(
+      Integer partBreakLevel, Boolean counter, List<CharacterLoadout.SkillGemEffect> gemEffects) {
+    static final Parsed UNKNOWN = new Parsed(null, null, List.of());
+  }
+
+  static Parsed parse(String tooltip) {
+    if (tooltip == null || tooltip.isBlank()) return Parsed.UNKNOWN;
+    JsonNode root;
+    try {
+      root = MAPPER.readTree(tooltip);
+    } catch (JacksonException exception) {
+      return Parsed.UNKNOWN;
+    }
+    if (root == null || !root.isObject()) return Parsed.UNKNOWN;
+    Integer partBreak = null;
+    boolean counter = false;
+    var gems = new ArrayList<CharacterLoadout.SkillGemEffect>();
+    for (var element : root.values()) {
+      var value = element.path("value");
+      if ("ItemPartBox".equals(text(element.path("type")))) {
+        if (GEM_TITLE.equals(LostArkText.plain(text(value.path("Element_000")))))
+          for (var line : LostArkText.plain(text(value.path("Element_001"))).lines().toList())
+            if (!line.isBlank()) gems.add(new CharacterLoadout.SkillGemEffect(line, kind(line)));
+        continue;
+      }
+      for (var raw : strings(value)) {
+        String plain = LostArkText.plain(raw);
+        var matcher = PART_BREAK.matcher(plain);
+        if (partBreak == null && matcher.find()) partBreak = Integer.parseInt(matcher.group(1));
+        if (COUNTER.matcher(plain).find()) counter = true;
+      }
+    }
+    return new Parsed(partBreak, counter, gems);
+  }
+
+  private static CharacterLoadout.GemEffectKind kind(String line) {
+    if (GEM_DAMAGE.matcher(line).find()) return CharacterLoadout.GemEffectKind.DAMAGE;
+    if (GEM_COOLDOWN.matcher(line).find()) return CharacterLoadout.GemEffectKind.COOLDOWN;
+    return null;
+  }
+
+  private static List<String> strings(JsonNode node) {
+    if (node.isString()) return List.of(node.stringValue());
+    var result = new ArrayList<String>();
+    for (var child : node.values()) result.addAll(strings(child));
+    return result;
+  }
+
+  private static String text(JsonNode node) {
+    return node.isString() ? node.stringValue() : "";
+  }
+}

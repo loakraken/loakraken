@@ -101,7 +101,8 @@ class LostArkCharacterClientTest {
     assertThat(authorization).isEqualTo("Bearer test-token");
     assertThat(requestPath).contains("%EB%AA%A8%ED%97%98%EA%B0%80");
     assertThat(armoryQuery)
-        .contains("profiles%2Bequipment%2Bengravings%2Bgems%2Bcards%2Barkpassive%2Barkgrid");
+        .contains(
+            "profiles%2Bequipment%2Bengravings%2Bgems%2Bcards%2Barkpassive%2Barkgrid%2Bcombat-skills");
     assertThat(result.details().profile().itemLevel()).isEqualByComparingTo("1700.50");
     assertThat(result.details().profile().combatPower()).isEqualByComparingTo("12345.67");
     assertThat(result.details().profile().stats()).hasSize(1);
@@ -139,6 +140,18 @@ class LostArkCharacterClientTest {
     var loadout = details.loadout();
     assertThat(loadout.equipment().getFirst().name()).isEqualTo("테스트 무기");
     assertThat(loadout.equipment().getFirst().detail()).isNull();
+    assertThat(details.profile().skillPoints())
+        .isEqualTo(new com.loakraken.character.domain.CharacterProfile.SkillPoints(482, 483));
+    assertThat(details.coverage().skills()).isEqualTo(ObservationState.PROVIDED);
+    var skill = loadout.skills().getFirst();
+    assertThat(skill.partBreakLevel()).isEqualTo(1);
+    assertThat(skill.counter()).isTrue();
+    assertThat(skill.tripods()).extracting("name").containsExactly("약점 노출");
+    assertThat(skill.rune().grade()).isEqualTo("전설");
+    assertThat(skill.gemEffects().getFirst().kind())
+        .isEqualTo(com.loakraken.character.domain.CharacterLoadout.GemEffectKind.DAMAGE);
+    assertThat(loadout.skills().get(1).counter()).isNull();
+    assertThat(loadout.skills().get(1).rune()).isNull();
     var helmet = loadout.equipment().get(1).detail();
     assertThat(helmet.refineLevel()).isEqualTo(19);
     assertThat(helmet.quality()).isEqualTo(95);

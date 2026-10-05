@@ -10,7 +10,27 @@ public record CharacterObservationCoverage(
     Section cards,
     Section arkPassive,
     Section arkGrid,
-    ObservationState siblings) {
+    ObservationState siblings,
+    ObservationState skills) {
+  public CharacterObservationCoverage(
+      ObservationState equipment,
+      Section engravings,
+      Section gems,
+      Section cards,
+      Section arkPassive,
+      Section arkGrid,
+      ObservationState siblings) {
+    this(
+        equipment,
+        engravings,
+        gems,
+        cards,
+        arkPassive,
+        arkGrid,
+        siblings,
+        ObservationState.NOT_PROVIDED);
+  }
+
   public CharacterObservationCoverage {
     Objects.requireNonNull(equipment);
     Objects.requireNonNull(engravings);
@@ -18,6 +38,7 @@ public record CharacterObservationCoverage(
     Objects.requireNonNull(cards);
     Objects.requireNonNull(arkPassive);
     Objects.requireNonNull(arkGrid);
+    Objects.requireNonNull(skills);
   }
 
   /** collections는 해당 섹션의 명시적으로 매핑한 최상위 목록 상태다. */

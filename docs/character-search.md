@@ -11,7 +11,7 @@
 
 ## 조회와 캐시
 
-- Valkey 키: `character:v7:{정규화한 캐릭터명}:summary`, 기본 TTL 5분 (`lostark.summary-ttl`)
+- Valkey 키: `character:v8:{정규화한 캐릭터명}:summary`, 기본 TTL 5분 (`lostark.summary-ttl`)
 - 전투정보와 원정대 조회가 모두 성공한 결과만 캐시에 저장합니다. 두 요청은 순서대로 실행하며 각각 호출 예산을 사용합니다.
 - 기본 설정에서는 수집 결과를 단기 캐시에만 반영합니다. `CHARACTER_SNAPSHOTS_ENABLED=true`일 때만 [PostgreSQL 스냅샷](character-snapshots.md)에 먼저 저장합니다.
 - 캐시 적중 시 최초 수집 시각을 유지하고 외부 API를 호출하지 않습니다.
@@ -43,8 +43,8 @@
 
 공식 전투정보실은 원정대 캐릭터를 접힌 목록으로, 로아와·클로아·일로아는 보유 캐릭터를 별도 탭/페이지로 제공한다(2026-10-05 관찰). 이에 맞춰 원정대를 검색과 따로 조회할 수 있다.
 
-- `GET /api/v1/characters/search?includeSiblings=false&characterName=모험가`: 공식 Armories만 1회 호출한다. 응답 `siblings`와 `coverage.siblings`는 null이며 "이 요청에서 조회하지 않음"을 뜻한다. 캐시 키는 `character:v7:{name}:armory`. 스냅샷은 저장하지 않는다(스냅샷 스키마가 원정대 원문을 필수로 요구한다).
-- `includeSiblings` 생략 또는 true: 기존과 같다. Armories + Siblings 2회, 둘 다 성공해야 검색 성공, 캐시 키 `character:v7:{name}:summary`.
+- `GET /api/v1/characters/search?includeSiblings=false&characterName=모험가`: 공식 Armories만 1회 호출한다. 응답 `siblings`와 `coverage.siblings`는 null이며 "이 요청에서 조회하지 않음"을 뜻한다. 캐시 키는 `character:v8:{name}:armory`. 스냅샷은 저장하지 않는다(스냅샷 스키마가 원정대 원문을 필수로 요구한다).
+- `includeSiblings` 생략 또는 true: 기존과 같다. Armories + Siblings 2회, 둘 다 성공해야 검색 성공, 캐시 키 `character:v8:{name}:summary`.
 - `GET /api/v1/characters/siblings?characterName=모험가`: 공식 Siblings만 1회 호출한다. 응답은 `characterName`, `siblings`, `fetchedAt`, 성공 코드 `CHARACTER_SIBLINGS_SUCCESS`. 캐시 키 `character:v1:{name}:siblings`, 기본 TTL은 검색과 같은 5분. 같은 이름의 동시 요청은 인스턴스 안에서 한 번으로 합친다.
 - 공식 원정대 API는 없는 캐릭터에 200 `[]`를 반환한다(2026-10-05 1회 확인). 원정대에는 조회한 캐릭터 자신이 포함되므로 단독 원정대 조회의 빈 목록과 공식 404는 `404 CHARACTER_NOT_FOUND`다. 결합 검색에서는 전투정보 확인 뒤의 원정대 오류를 기존처럼 502로 처리한다.
 - 화면을 나누면 캐릭터 상세는 1회, 원정대 탭을 열 때 1회를 사용한다. 원정대 실패가 캐릭터 상세를 막지 않는다.
@@ -71,6 +71,19 @@
 - 알 수 없는 요소 타입은 무시한다. 엘릭서·초월·상급 재련은 실제 응답 표본을 확보하지 못해 해석하지 않으며, 해당 정보가 없다는 뜻이 아니다.
 - 해석 대상 요소는 2026-10-05 실제 응답 1건의 장비 17개 구조를 기준으로 했다. 실제 응답은 저장하지 않았고 테스트는 같은 구조의 합성 Tooltip을 사용한다.
 - 점수·추천·투자 효율은 제공하지 않는다.
+
+## 전투 스킬
+
+공식 Armories 통합 조회의 필터에 `combat-skills`를 포함한다. 외부 호출 수는 늘지 않는다(2026-10-05, 프론트 요청·일로아 전투 탭 참고).
+
+- `data.skillPoints`: 공식 프로필 `UsingSkillPoint`/`TotalSkillPoint`를 `{used, total}`로. 둘 다 없거나 음수면 null.
+- `data.loadout.skills[]`: 원천 스킬 전부(기본 스킬 포함). `{name, icon, level, type, partBreakLevel, counter, tripods[{tier, slot, name, icon}], rune{name, icon, grade}, gemEffects[{text, kind}]}`.
+  - `partBreakLevel`: 스킬 Tooltip의 `부위 파괴 : 레벨 N`, 없으면 null. `counter`: `카운터 : 가능`이 있으면 true, 없으면 false, Tooltip 해석 불가면 null.
+  - `tripods`: 선택된 것만. 공식 응답에 트라이포드 레벨은 없다.
+  - `gemEffects`: 스킬 Tooltip의 `보석 효과` 줄. `피해 N% 증가`=DAMAGE, `재사용 대기시간 N% 감소`=COOLDOWN, 그 외 null.
+- `data.coverage.skills`: 스킬 목록 제공 상태.
+- 일로아처럼 "부위 파괴 Lv×개수·카운터 개수"를 보이려면 사용 중인 스킬(레벨>1, 트라이포드·룬·보석 중 하나라도 있음)만 센다. 언새늘: 전체 24개 중 사용 8개, 부위 파괴 Lv1 ×1, 카운터 1, SP 482/483.
+- Tooltip 원문은 응답·캐시에 넣지 않는다. 캐시 키 `character:v8`.
 
 ## 오류
 

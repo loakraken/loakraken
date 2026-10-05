@@ -15,6 +15,8 @@ class CharacterOpenApiConfiguration {
           CharacterSnapshotHistoryResponse.class, document.getComponents().getSchemas());
       ResponseContracts.apply(
           CharacterSiblingsResponse.class, document.getComponents().getSchemas());
+      ResponseContracts.apply(
+          CharacterHistoryResponse.class, document.getComponents().getSchemas());
     };
   }
 }

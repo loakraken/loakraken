@@ -23,6 +23,12 @@ public class CharacterMetrics {
         .increment();
   }
 
+  public void history(boolean success) {
+    registry
+        .counter("loakraken.character.history.writes", "outcome", success ? "success" : "failure")
+        .increment();
+  }
+
   private String tag(Enum<?> value) {
     return value.name().toLowerCase(Locale.ROOT);
   }

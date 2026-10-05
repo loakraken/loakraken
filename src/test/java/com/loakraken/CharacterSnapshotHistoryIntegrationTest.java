@@ -201,6 +201,10 @@ class CharacterSnapshotHistoryIntegrationTest {
 
   private void cleanup() {
     jdbc.sql(
+            "DELETE FROM character_observation WHERE character_id IN (SELECT character_id FROM characters WHERE character_name = :name)")
+        .param("name", NAME)
+        .update();
+    jdbc.sql(
             "DELETE FROM character_snapshot WHERE character_id IN (SELECT character_id FROM characters WHERE character_name = :name)")
         .param("name", NAME)
         .update();

@@ -57,6 +57,10 @@ class CharacterSearchIntegrationTest {
     redis.delete("character:v8:" + NAME + ":armory");
     redis.delete("character:v1:" + NAME + ":siblings");
     jdbc.sql(
+            "DELETE FROM character_observation WHERE character_id IN (SELECT character_id FROM characters WHERE character_name = :name)")
+        .param("name", NAME)
+        .update();
+    jdbc.sql(
             "DELETE FROM character_snapshot WHERE character_id IN (SELECT character_id FROM characters WHERE character_name = :name)")
         .param("name", NAME)
         .update();
@@ -76,6 +80,13 @@ class CharacterSearchIntegrationTest {
     assertThat(first.statusCode()).isEqualTo(200);
     ApiContractFixture.write("character-search.json", first.body());
     assertThat(second.body()).isEqualTo(first.body());
+    assertThat(
+            jdbc.sql(
+                    "SELECT COUNT(*) FROM character_observation o JOIN characters c ON c.character_id = o.character_id WHERE c.character_name = :name")
+                .param("name", NAME)
+                .query(Long.class)
+                .single())
+        .isEqualTo(1);
     var result = mapper.readTree(first.body());
     assertThat(result.path("code").asText()).isEqualTo("CHARACTER_SEARCH_SUCCESS");
     assertThat(result.at("/data/characterName").asText()).isEqualTo(NAME);

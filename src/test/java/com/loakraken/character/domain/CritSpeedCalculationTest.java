@@ -70,6 +70,44 @@ class CritSpeedCalculationTest {
   }
 
   @Test
+  void 감소_효과는_띄어쓰기_없는_문구도_음수로_더한다() {
+    var sources = new ArrayList<CritSpeedCalculation.Source>();
+    CritSpeedCalculation.scan(
+        Category.ENGRAVING,
+        "질량 증가",
+        "공격속도가 10.00% 감소하지만, 적에게 주는 피해가 19.00% 증가한다. 이동속도 증가량의 48.00% 만큼 피해가 증가한다.",
+        sources,
+        true);
+    assertThat(sources).hasSize(1);
+    assertThat(sources.getFirst().axis()).isEqualTo(Axis.ATTACK_SPEED);
+    assertThat(sources.getFirst().value()).isEqualByComparingTo("-10");
+  }
+
+  @Test
+  void 신속_스탯별_표는_현재값과_최적값_행을_포함하고_신속_외_출처를_유지한다() {
+    var result =
+        CritSpeedCalculation.calculate(
+            profile("576", "77"),
+            loadout(List.of()),
+            new Assumptions(
+                false, false, 0, null, null, null, new BigDecimal("14"), new BigDecimal("14")));
+    var speed = result.speed();
+    assertThat(speed.swiftnessPerPercent()).isEqualByComparingTo("58.22");
+    var table = speed.swiftnessTable();
+    assertThat(table.getFirst().swiftness()).isZero();
+    assertThat(table.getFirst().attack()).isEqualByComparingTo("14");
+    assertThat(table).anyMatch(row -> row.current() && row.swiftness() == 77);
+    var optimal =
+        table.stream().filter(CritSpeedCalculation.SwiftnessRow::optimal).findFirst().orElseThrow();
+    assertThat(optimal.swiftness()).isEqualTo(2290);
+    assertThat(optimal.attack()).isEqualByComparingTo("53.33");
+    assertThat(optimal.attackEffective()).isEqualByComparingTo("40");
+    assertThat(optimal.supersonicEvolutionDamage()).isEqualByComparingTo("24");
+    assertThat(table.getLast().swiftness()).isEqualTo(2600);
+    assertThat(table).extracting(CritSpeedCalculation.SwiftnessRow::swiftness).isSorted();
+  }
+
+  @Test
   void 장착한_뭉툭한_가시와_음속_돌파는_공식_문구의_수치로_계산한다() {
     var result =
         CritSpeedCalculation.calculate(

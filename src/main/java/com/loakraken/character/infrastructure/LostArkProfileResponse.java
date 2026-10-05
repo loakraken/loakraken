@@ -18,7 +18,23 @@ record LostArkProfileResponse(
     @JsonProperty("GuildName") String guildName,
     @JsonProperty("Stats") List<Stat> stats,
     @JsonProperty("UsingSkillPoint") Integer usingSkillPoint,
-    @JsonProperty("TotalSkillPoint") Integer totalSkillPoint) {
+    @JsonProperty("TotalSkillPoint") Integer totalSkillPoint,
+    @JsonProperty("Tendencies") List<Tendency> tendencies,
+    @JsonProperty("Decorations") Decorations decorations,
+    @JsonProperty("HonorPoint") Integer honorPoint,
+    @JsonProperty("TownName") String townName,
+    @JsonProperty("TownLevel") Integer townLevel,
+    @JsonProperty("GuildMemberGrade") String guildMemberGrade) {
+  @JsonIgnoreProperties(ignoreUnknown = true)
+  record Tendency(
+      @JsonProperty("Type") String type,
+      @JsonProperty("Point") Integer point,
+      @JsonProperty("MaxPoint") Integer maxPoint) {}
+
+  @JsonIgnoreProperties(ignoreUnknown = true)
+  record Decorations(
+      @JsonProperty("Symbol") String symbol, @JsonProperty("Emblems") List<String> emblems) {}
+
   @JsonIgnoreProperties(ignoreUnknown = true)
   record Stat(@JsonProperty("Type") String type, @JsonProperty("Value") String value) {}
 }

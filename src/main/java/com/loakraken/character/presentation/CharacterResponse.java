@@ -23,6 +23,16 @@ public record CharacterResponse(
     List<StatResponse> stats,
     @Schema(description = "스킬 포인트 사용/전체. 공식 프로필에 없으면 null") @NullableResponse
         SkillPointsResponse skillPoints,
+    @Schema(description = "성향(지성·담력·매력·친절)") List<TendencyResponse> tendencies,
+    @Schema(description = "장식(심볼·문장). 공식 프로필에 없으면 null") @NullableResponse
+        DecorationsResponse decorations,
+    @NullableResponse Integer honorPoint,
+    @Schema(description = "영지 이름") @NullableResponse String townName,
+    @NullableResponse Integer townLevel,
+    @NullableResponse String guildMemberGrade,
+    @Schema(description = "장착 아바타. 덧입기는 isInner=true. 염색 정보는 공식 응답에서 확인되지 않아 제공하지 않습니다.")
+        List<AvatarResponse> avatars,
+    @Schema(description = "수집품 종류별 진행도와 항목") List<CollectibleResponse> collectibles,
     CharacterLoadoutResponse loadout,
     @Schema(description = "원정대 캐릭터. includeSiblings=false 요청에서는 조회하지 않아 null입니다.") @NullableResponse
         List<SiblingResponse> siblings,
@@ -36,6 +46,7 @@ public record CharacterResponse(
         Instant refreshAvailableAt) {
   public static CharacterResponse from(CharacterResult result) {
     var profile = result.details().profile();
+    var inner = profile.inner();
     return new CharacterResponse(
         profile.characterName(),
         profile.serverName(),
@@ -51,6 +62,43 @@ public record CharacterResponse(
         profile.skillPoints() == null
             ? null
             : new SkillPointsResponse(profile.skillPoints().used(), profile.skillPoints().total()),
+        inner == null
+            ? List.of()
+            : inner.tendencies().stream()
+                .map(t -> new TendencyResponse(t.type(), t.point(), t.maxPoint()))
+                .toList(),
+        inner == null || inner.decorations() == null
+            ? null
+            : new DecorationsResponse(inner.decorations().symbol(), inner.decorations().emblems()),
+        inner == null ? null : inner.honorPoint(),
+        inner == null ? null : inner.townName(),
+        inner == null ? null : inner.townLevel(),
+        inner == null ? null : inner.guildMemberGrade(),
+        result.details().loadout().avatars().stream()
+            .map(
+                a ->
+                    new AvatarResponse(
+                        a.type(),
+                        a.name(),
+                        a.icon(),
+                        a.grade(),
+                        a.isSet(),
+                        a.isInner(),
+                        a.effects()))
+            .toList(),
+        result.details().loadout().collectibles().stream()
+            .map(
+                c ->
+                    new CollectibleResponse(
+                        c.type(),
+                        c.icon(),
+                        c.point(),
+                        c.maxPoint(),
+                        c.items().stream()
+                            .map(
+                                i -> new CollectibleItemResponse(i.name(), i.point(), i.maxPoint()))
+                            .toList()))
+            .toList(),
         CharacterLoadoutResponse.from(result.details().loadout()),
         result.details().siblings() == null
             ? null
@@ -60,6 +108,34 @@ public record CharacterResponse(
         result.fetchedAt(),
         result.refreshAvailableAt());
   }
+
+  public record TendencyResponse(
+      @NullableResponse String type,
+      @NullableResponse Integer point,
+      @NullableResponse Integer maxPoint) {}
+
+  public record DecorationsResponse(@NullableResponse String symbol, List<String> emblems) {}
+
+  public record AvatarResponse(
+      @NullableResponse String type,
+      @NullableResponse String name,
+      @NullableResponse String icon,
+      @NullableResponse String grade,
+      @NullableResponse Boolean isSet,
+      @NullableResponse Boolean isInner,
+      @Schema(description = "아바타 기본 효과 줄(예: 민첩 +2.00%)") List<String> effects) {}
+
+  public record CollectibleResponse(
+      @NullableResponse String type,
+      @NullableResponse String icon,
+      @NullableResponse Integer point,
+      @NullableResponse Integer maxPoint,
+      List<CollectibleItemResponse> items) {}
+
+  public record CollectibleItemResponse(
+      @NullableResponse String name,
+      @NullableResponse Integer point,
+      @NullableResponse Integer maxPoint) {}
 
   public record SkillPointsResponse(
       @NullableResponse Integer used, @NullableResponse Integer total) {}

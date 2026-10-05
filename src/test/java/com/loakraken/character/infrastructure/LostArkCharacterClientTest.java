@@ -102,7 +102,7 @@ class LostArkCharacterClientTest {
     assertThat(requestPath).contains("%EB%AA%A8%ED%97%98%EA%B0%80");
     assertThat(armoryQuery)
         .contains(
-            "profiles%2Bequipment%2Bengravings%2Bgems%2Bcards%2Barkpassive%2Barkgrid%2Bcombat-skills");
+            "profiles%2Bequipment%2Bengravings%2Bgems%2Bcards%2Barkpassive%2Barkgrid%2Bcombat-skills%2Bavatars%2Bcollectibles");
     assertThat(result.details().profile().itemLevel()).isEqualByComparingTo("1700.50");
     assertThat(result.details().profile().combatPower()).isEqualByComparingTo("12345.67");
     assertThat(result.details().profile().stats()).hasSize(1);
@@ -143,6 +143,20 @@ class LostArkCharacterClientTest {
     assertThat(details.profile().skillPoints())
         .isEqualTo(new com.loakraken.character.domain.CharacterProfile.SkillPoints(482, 483));
     assertThat(details.coverage().skills()).isEqualTo(ObservationState.PROVIDED);
+    var inner = details.profile().inner();
+    assertThat(inner.tendencies()).hasSize(2);
+    assertThat(inner.tendencies().getFirst().point()).isEqualTo(532);
+    assertThat(inner.decorations().emblems()).containsExactly("emblem-1.png");
+    assertThat(inner.townName()).isEqualTo("테스트영지");
+    assertThat(inner.honorPoint()).isEqualTo(6);
+    assertThat(details.coverage().avatars()).isEqualTo(ObservationState.PROVIDED);
+    assertThat(details.coverage().collectibles()).isEqualTo(ObservationState.PROVIDED);
+    assertThat(loadout.avatars().getFirst().name()).isEqualTo("테스트 아바타 (귀속)");
+    assertThat(loadout.avatars().getFirst().isInner()).isTrue();
+    assertThat(loadout.avatars().getFirst().effects()).containsExactly("민첩 +2.00%");
+    assertThat(loadout.avatars().get(1).effects()).isEmpty();
+    assertThat(loadout.collectibles().getFirst().items()).hasSize(1);
+    assertThat(loadout.collectibles().getFirst().point()).isEqualTo(952);
     var skill = loadout.skills().getFirst();
     assertThat(skill.partBreakLevel()).isEqualTo(1);
     assertThat(skill.counter()).isTrue();

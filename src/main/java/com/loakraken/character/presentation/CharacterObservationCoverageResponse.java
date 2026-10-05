@@ -17,7 +17,9 @@ public record CharacterObservationCoverageResponse(
     @Schema(description = "원정대 목록 상태. includeSiblings=false 요청에서는 조회하지 않아 null입니다.")
         @NullableResponse
         ObservationState siblings,
-    @Schema(description = "전투 스킬 목록 상태") ObservationState skills) {
+    @Schema(description = "전투 스킬 목록 상태") ObservationState skills,
+    @Schema(description = "아바타 목록 상태") ObservationState avatars,
+    @Schema(description = "수집품 목록 상태") ObservationState collectibles) {
   static CharacterObservationCoverageResponse from(CharacterObservationCoverage value) {
     return new CharacterObservationCoverageResponse(
         value.equipment(),
@@ -27,7 +29,9 @@ public record CharacterObservationCoverageResponse(
         ObservationSectionResponse.from(value.arkPassive()),
         ObservationSectionResponse.from(value.arkGrid()),
         value.siblings(),
-        value.skills());
+        value.skills(),
+        value.avatars(),
+        value.collectibles());
   }
 
   public record ObservationSectionResponse(

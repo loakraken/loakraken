@@ -32,7 +32,16 @@ final class LostArkProfileMapper {
             : response.stats().stream()
                 .filter(stat -> stat != null)
                 .map(stat -> new CharacterProfile.Stat(stat.type(), stat.value()))
-                .toList());
+                .toList(),
+        skillPoints(response.usingSkillPoint(), response.totalSkillPoint()));
+  }
+
+  private static CharacterProfile.SkillPoints skillPoints(Integer used, Integer total) {
+    Integer validUsed = used == null || used < 0 ? null : used;
+    Integer validTotal = total == null || total < 0 ? null : total;
+    return validUsed == null && validTotal == null
+        ? null
+        : new CharacterProfile.SkillPoints(validUsed, validTotal);
   }
 
   private static boolean blank(String value) {

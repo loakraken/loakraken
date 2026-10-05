@@ -18,7 +18,8 @@ record LostArkArmoryResponse(
     @JsonProperty("ArmoryGem") Gems gems,
     @JsonProperty("ArmoryCard") Cards cards,
     @JsonProperty("ArkPassive") ArkPassive arkPassive,
-    @JsonProperty("ArkGrid") ArkGrid arkGrid) {
+    @JsonProperty("ArkGrid") ArkGrid arkGrid,
+    @JsonProperty("ArmorySkills") List<Skill> skills) {
   CharacterObservationCoverage coverage(List<LostArkSiblingResponse> siblings) {
     return new CharacterObservationCoverage(
         ObservationState.collection(equipment),
@@ -52,7 +53,8 @@ record LostArkArmoryResponse(
                 "slots", ObservationState.collection(arkGrid == null ? null : arkGrid.slots()),
                 "effects",
                     ObservationState.collection(arkGrid == null ? null : arkGrid.effects()))),
-        siblings == null ? null : ObservationState.collection(siblings));
+        siblings == null ? null : ObservationState.collection(siblings),
+        ObservationState.collection(skills));
   }
 
   private CharacterObservationCoverage.Section section(
@@ -68,7 +70,8 @@ record LostArkArmoryResponse(
         gems == null ? null : gems.toDomain(),
         cards == null ? null : cards.toDomain(),
         arkPassive == null ? null : arkPassive.toDomain(),
-        arkGrid == null ? null : arkGrid.toDomain());
+        arkGrid == null ? null : arkGrid.toDomain(),
+        map(skills, Skill::toDomain));
   }
 
   @JsonIgnoreProperties(ignoreUnknown = true)
@@ -296,6 +299,57 @@ record LostArkArmoryResponse(
       @JsonProperty("Grade") String grade) {
     CharacterLoadout.GridGem toDomain() {
       return new CharacterLoadout.GridGem(index, icon, active, grade);
+    }
+  }
+
+  @JsonIgnoreProperties(ignoreUnknown = true)
+  record Skill(
+      @JsonProperty("Name") String name,
+      @JsonProperty("Icon") String icon,
+      @JsonProperty("Level") Integer level,
+      @JsonProperty("Type") String type,
+      @JsonProperty("Tripods") List<Tripod> tripods,
+      @JsonProperty("Rune") Rune rune,
+      @JsonProperty("Tooltip") String tooltip) {
+    CharacterLoadout.Skill toDomain() {
+      var parsed = LostArkSkillTooltip.parse(tooltip);
+      return new CharacterLoadout.Skill(
+          LostArkText.plain(name),
+          icon,
+          level,
+          LostArkText.plain(type),
+          parsed.partBreakLevel(),
+          parsed.counter(),
+          tripods == null
+              ? List.of()
+              : tripods.stream()
+                  .filter(tripod -> tripod != null && Boolean.TRUE.equals(tripod.selected()))
+                  .map(tripod -> tripod.toDomain())
+                  .toList(),
+          rune == null ? null : rune.toDomain(),
+          parsed.gemEffects());
+    }
+  }
+
+  @JsonIgnoreProperties(ignoreUnknown = true)
+  record Tripod(
+      @JsonProperty("Tier") Integer tier,
+      @JsonProperty("Slot") Integer slot,
+      @JsonProperty("Name") String name,
+      @JsonProperty("Icon") String icon,
+      @JsonProperty("IsSelected") Boolean selected) {
+    CharacterLoadout.Tripod toDomain() {
+      return new CharacterLoadout.Tripod(tier, slot, LostArkText.plain(name), icon);
+    }
+  }
+
+  @JsonIgnoreProperties(ignoreUnknown = true)
+  record Rune(
+      @JsonProperty("Name") String name,
+      @JsonProperty("Icon") String icon,
+      @JsonProperty("Grade") String grade) {
+    CharacterLoadout.Rune toDomain() {
+      return new CharacterLoadout.Rune(LostArkText.plain(name), icon, grade);
     }
   }
 

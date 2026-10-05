@@ -70,6 +70,20 @@ class OpenApiIntegrationTest {
                     "/components/schemas/CharacterObservationCoverageResponse/properties/siblings/anyOf/1/type")
                 .asText())
         .isEqualTo("null");
+    assertThat(document.at("/components/schemas/CharacterLoadoutResponse/required").toString())
+        .contains("skills");
+    assertThat(document.at("/components/schemas/SkillResponse/required").toString())
+        .contains("name", "partBreakLevel", "counter", "tripods", "rune", "gemEffects");
+    assertThat(
+            document
+                .at("/components/schemas/CharacterResponse/properties/skillPoints/anyOf/1/type")
+                .asText())
+        .isEqualTo("null");
+    assertThat(
+            document
+                .at("/components/schemas/CharacterObservationCoverageResponse/required")
+                .toString())
+        .contains("skills");
     var search = document.at("/paths/~1api~1v1~1characters~1search/get/parameters");
     assertThat(search.toString()).contains("includeSiblings");
     var siblings = document.at("/paths/~1api~1v1~1characters~1siblings/get");

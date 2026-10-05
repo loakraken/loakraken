@@ -1,7 +1,8 @@
 {
   "ArmoryProfile": {
     "CharacterName": "모험가", "ServerName": "루페온", "CharacterClassName": "바드",
-    "CharacterLevel": 70, "ItemAvgLevel": "1,700.50", "CombatPower": "12,345.67"
+    "CharacterLevel": 70, "ItemAvgLevel": "1,700.50", "CombatPower": "12,345.67",
+    "UsingSkillPoint": 482, "TotalSkillPoint": 483
   },
   "ArmoryEquipment": [
     {"Type": "무기", "Name": "테스트 무기", "Icon": "weapon.png", "Grade": "고대", "Tooltip": "unparsed-secret-tooltip"},
@@ -29,5 +30,6 @@
     "Slots": [{"Index": 0, "Icon": "core.png", "Name": "테스트 코어", "Point": 14, "Grade": "유물", "Gems": [{"Index": 0, "Icon": "grid-gem.png", "IsActive": false, "Grade": "희귀"}]}],
     "Effects": [{"Name": "그리드 효과", "Level": 2, "Tooltip": "unparsed-secret-tooltip"}]
   },
+  "ArmorySkills": [{"Name":"테스트 스킬","Icon":"skill.png","Level":14,"Type":"일반","SkillType":0,"Tripods":[{"Tier":0,"Slot":1,"Name":"<FONT COLOR='#FFBB63'>약점 노출</FONT>","Icon":"t1.png","IsSelected":true,"Tooltip":"unparsed-secret-tooltip"},{"Tier":0,"Slot":2,"Name":"미선택","Icon":"t2.png","IsSelected":false,"Tooltip":"x"}],"Rune":{"Name":"광분","Icon":"rune.png","Grade":"전설","Tooltip":"unparsed-secret-tooltip"},"Tooltip":"{\"Element_005\":{\"type\":\"SingleTextBox\",\"value\":\"<BR>부위 파괴 : 레벨 1<BR>카운터 : 가능\"},\"Element_008\":{\"type\":\"ItemPartBox\",\"value\":{\"Element_000\":\"보석 효과\",\"Element_001\":\"[바드] 테스트 스킬 피해 28.00% 증가\"}}}"},{"Name":"기본 스킬","Icon":"basic.png","Level":1,"Type":"일반","SkillType":0,"Tripods":[],"Rune":null,"Tooltip":"unparsed-secret-tooltip"}],
   "FutureField": "ignored"
 }

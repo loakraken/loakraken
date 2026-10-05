@@ -34,6 +34,6 @@
 
 두 외부 요청 모두 성공해야 검색 성공이다. 원정대 응답 전체가 null이면 외부 오류이므로 성공 응답에서 siblings=NOT_PROVIDED는 현재 나오지 않는다. 섹션 누락만으로 PARTIAL이나 FAILED를 붙이지 않는다.
 
-원천 DTO에서 목록 정규화 전에 계산하고 CharacterDetails와 함께 캐시에 저장한다. 캐시 왕복과 재조회에서 상태와 fetchedAt을 보존한다. 키는 `character:v3:{name}:summary`로 변경했다. 원천 상태가 없는 v2 데이터는 읽지 않고 기존 TTL로 만료되며 임의로 상태를 추정하지 않는다. 캐시가 v3여도 coverage가 없는 불완전한 값은 기존 손상 캐시 처리로 다시 수집한다. 이후 표시용 텍스트 정제를 적용하며 키를 `character:v4:{name}:summary`로 변경했고 마크업이 남은 v3 데이터는 읽지 않는다. 장비 Tooltip 해석 필드를 추가하며 키를 `character:v5:{name}:summary`로 변경했다. 연마 등급(equipment-tooltip-v2)을 추가하며 `character:v6`으로 변경했다. 팔찌 등급(equipment-tooltip-v3)을 추가하며 `character:v7`로 변경했다.
+원천 DTO에서 목록 정규화 전에 계산하고 CharacterDetails와 함께 캐시에 저장한다. 캐시 왕복과 재조회에서 상태와 fetchedAt을 보존한다. 키는 `character:v3:{name}:summary`로 변경했다. 원천 상태가 없는 v2 데이터는 읽지 않고 기존 TTL로 만료되며 임의로 상태를 추정하지 않는다. 캐시가 v3여도 coverage가 없는 불완전한 값은 기존 손상 캐시 처리로 다시 수집한다. 이후 표시용 텍스트 정제를 적용하며 키를 `character:v4:{name}:summary`로 변경했고 마크업이 남은 v3 데이터는 읽지 않는다. 장비 Tooltip 해석 필드를 추가하며 키를 `character:v5:{name}:summary`로 변경했다. 연마 등급(equipment-tooltip-v2)을 추가하며 `character:v6`으로 변경했다. 팔찌 등급(equipment-tooltip-v3)을 추가하며 `character:v7`로 변경했다. 전투 스킬·스킬 포인트를 추가하며 `character:v8`로 변경했다.
 
 검증은 독립 보석 fixture 4종, 모의 HTTP 조회, 직렬화 왕복, 구버전 캐시 배제, Swagger 필수 필드 검증으로 수행한다. 실제 Lost Ark API는 추가 호출하지 않는다. 스냅샷 저장 정책과 스키마는 변경하지 않는다.

@@ -12,7 +12,9 @@ public record CharacterLoadoutResponse(
     @NullableResponse GemsResponse gems,
     @NullableResponse CardsResponse cards,
     @NullableResponse ArkPassiveResponse arkPassive,
-    @NullableResponse ArkGridResponse arkGrid) {
+    @NullableResponse ArkGridResponse arkGrid,
+    @Schema(description = "공식 전투 스킬 전체(기본 스킬 포함). 목록이 미제공이면 빈 배열이며 coverage.skills로 구분합니다.")
+        List<SkillResponse> skills) {
   static CharacterLoadoutResponse from(CharacterLoadout value) {
     return new CharacterLoadoutResponse(
         value.equipment().stream().map(EquipmentResponse::from).toList(),
@@ -20,7 +22,8 @@ public record CharacterLoadoutResponse(
         GemsResponse.from(value.gems()),
         CardsResponse.from(value.cards()),
         ArkPassiveResponse.from(value.arkPassive()),
-        ArkGridResponse.from(value.arkGrid()));
+        ArkGridResponse.from(value.arkGrid()),
+        value.skills().stream().map(SkillResponse::from).toList());
   }
 
   public record EquipmentResponse(
@@ -294,6 +297,58 @@ public record CharacterLoadoutResponse(
       return new PassiveEffectResponse(value.name(), value.description(), value.icon());
     }
   }
+
+  public record SkillResponse(
+      @NullableResponse String name,
+      @NullableResponse String icon,
+      @NullableResponse Integer level,
+      @Schema(description = "공식 스킬 유형 문자열(일반·콤보·차지·지점·홀딩 등)") @NullableResponse String type,
+      @Schema(description = "Tooltip의 \"부위 파괴 : 레벨 N\". 없으면 null") @NullableResponse
+          Integer partBreakLevel,
+      @Schema(description = "Tooltip에 \"카운터 : 가능\"이 있으면 true. Tooltip을 해석할 수 없으면 null")
+          @NullableResponse
+          Boolean counter,
+      @Schema(description = "선택된 트라이포드만. 공식 응답에 트라이포드 레벨은 없습니다.") List<TripodResponse> tripods,
+      @NullableResponse RuneResponse rune,
+      @Schema(description = "스킬 Tooltip의 보석 효과 줄") List<SkillGemEffectResponse> gemEffects) {
+    static SkillResponse from(CharacterLoadout.Skill value) {
+      return new SkillResponse(
+          value.name(),
+          value.icon(),
+          value.level(),
+          value.type(),
+          value.partBreakLevel(),
+          value.counter(),
+          value.tripods().stream()
+              .map(
+                  tripod ->
+                      new TripodResponse(
+                          tripod.tier(), tripod.slot(), tripod.name(), tripod.icon()))
+              .toList(),
+          value.rune() == null
+              ? null
+              : new RuneResponse(value.rune().name(), value.rune().icon(), value.rune().grade()),
+          value.gemEffects().stream()
+              .map(effect -> new SkillGemEffectResponse(effect.text(), effect.kind()))
+              .toList());
+    }
+  }
+
+  public record TripodResponse(
+      @Schema(description = "0부터 시작하는 공식 단계") @NullableResponse Integer tier,
+      @NullableResponse Integer slot,
+      @NullableResponse String name,
+      @NullableResponse String icon) {}
+
+  public record RuneResponse(
+      @NullableResponse String name,
+      @NullableResponse String icon,
+      @NullableResponse String grade) {}
+
+  public record SkillGemEffectResponse(
+      @Schema(example = "[블레이드] 윈드 컷 피해 28.00% 증가") String text,
+      @Schema(description = "피해 N% 증가=DAMAGE, 재사용 대기시간 N% 감소=COOLDOWN, 그 외 null") @NullableResponse
+          CharacterLoadout.GemEffectKind kind) {}
 
   public record ArkGridResponse(List<GridSlotResponse> slots, List<GridEffectResponse> effects) {
     static ArkGridResponse from(CharacterLoadout.ArkGrid value) {

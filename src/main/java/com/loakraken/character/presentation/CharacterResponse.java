@@ -21,6 +21,8 @@ public record CharacterResponse(
     @NullableResponse String title,
     @NullableResponse String guildName,
     List<StatResponse> stats,
+    @Schema(description = "스킬 포인트 사용/전체. 공식 프로필에 없으면 null") @NullableResponse
+        SkillPointsResponse skillPoints,
     CharacterLoadoutResponse loadout,
     @Schema(description = "원정대 캐릭터. includeSiblings=false 요청에서는 조회하지 않아 null입니다.") @NullableResponse
         List<SiblingResponse> siblings,
@@ -46,6 +48,9 @@ public record CharacterResponse(
         profile.title(),
         profile.guildName(),
         profile.stats().stream().map(stat -> new StatResponse(stat.type(), stat.value())).toList(),
+        profile.skillPoints() == null
+            ? null
+            : new SkillPointsResponse(profile.skillPoints().used(), profile.skillPoints().total()),
         CharacterLoadoutResponse.from(result.details().loadout()),
         result.details().siblings() == null
             ? null
@@ -55,6 +60,9 @@ public record CharacterResponse(
         result.fetchedAt(),
         result.refreshAvailableAt());
   }
+
+  public record SkillPointsResponse(
+      @NullableResponse Integer used, @NullableResponse Integer total) {}
 
   public record StatResponse(@NullableResponse String type, @NullableResponse String value) {}
 

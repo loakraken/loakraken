@@ -69,9 +69,9 @@ class LostArkEquipmentTooltipTest {
             """);
     assertThat(detail.polishEffects())
         .containsExactly(
-            new CharacterLoadout.PolishEffect("추가 피해", "+2.60%", CharacterLoadout.PolishGrade.HIGH),
-            new CharacterLoadout.PolishEffect("무기 공격력", "+1.80%", CharacterLoadout.PolishGrade.MID),
-            new CharacterLoadout.PolishEffect("낙인력", "+2.15%", CharacterLoadout.PolishGrade.LOW),
+            new CharacterLoadout.PolishEffect("추가 피해", "+2.60%", CharacterLoadout.EffectGrade.HIGH),
+            new CharacterLoadout.PolishEffect("무기 공격력", "+1.80%", CharacterLoadout.EffectGrade.MID),
+            new CharacterLoadout.PolishEffect("낙인력", "+2.15%", CharacterLoadout.EffectGrade.LOW),
             new CharacterLoadout.PolishEffect("공격력", "+80", null));
     assertThat(detail.effects().getFirst().lines())
         .containsExactly("추가 피해 +2.60%", "무기 공격력 +1.80%", "낙인력 +2.15%", "공격력 +80", "설명만 있는 줄");
@@ -87,6 +87,42 @@ class LostArkEquipmentTooltipTest {
               "Element_001":"치명타 피해 <FONT COLOR='#CE43FC'>+8.40%</FONT>"}}}
             """);
     assertThat(detail.polishEffects()).isEmpty();
+  }
+
+  @Test
+  void 팔찌_효과는_아이콘_단위로_나누고_첫_색_수치로_등급을_정한다() {
+    var detail =
+        LostArkEquipmentTooltip.parse(
+            "테스트 팔찌",
+            """
+            {"Element_005":{"type":"ItemPartBox","value":{"Element_000":"팔찌 효과",
+              "Element_001":"<img src='a' width='20'></img> 특화 <FONT COLOR='#91FE02'>+81</FONT><BR><img src='b'></img> 전투자원 자연 회복량 <FONT COLOR='#00B5FF'>+8.00%</FONT><BR><img src='c'></img>치명타 피해 <FONT COLOR='#CE43FC'>+8.40%</FONT><BR><img src='d'></img>추가 피해가 <FONT COLOR='#00B5FF'>2.5%</FONT> 증가한다.<BR>악마 및 대악마 계열 피해량이 <FONT COLOR='#99ff99'>2.5%</FONT> 증가한다.<BR><img src='e'></img>보스 피해 <FONT COLOR='#FE9600'>+3.0%</FONT>"}}}
+            """);
+    assertThat(detail.braceletEffects())
+        .containsExactly(
+            new CharacterLoadout.BraceletEffect("특화 +81", null),
+            new CharacterLoadout.BraceletEffect(
+                "전투자원 자연 회복량 +8.00%", CharacterLoadout.EffectGrade.LOW),
+            new CharacterLoadout.BraceletEffect("치명타 피해 +8.40%", CharacterLoadout.EffectGrade.MID),
+            new CharacterLoadout.BraceletEffect(
+                "추가 피해가 2.5% 증가한다.\n악마 및 대악마 계열 피해량이 2.5% 증가한다.", CharacterLoadout.EffectGrade.LOW),
+            new CharacterLoadout.BraceletEffect("보스 피해 +3.0%", CharacterLoadout.EffectGrade.HIGH));
+    assertThat(detail.polishEffects()).isEmpty();
+  }
+
+  @Test
+  void 아이콘이_없는_팔찌_효과는_줄_단위로_나눈다() {
+    var detail =
+        LostArkEquipmentTooltip.parse(
+            "테스트 팔찌",
+            """
+            {"Element_005":{"type":"ItemPartBox","value":{"Element_000":"팔찌 효과",
+              "Element_001":"치명타 피해 <FONT COLOR='#CE43FC'>+8.40%</FONT><BR>특화 +81"}}}
+            """);
+    assertThat(detail.braceletEffects())
+        .containsExactly(
+            new CharacterLoadout.BraceletEffect("치명타 피해 +8.40%", CharacterLoadout.EffectGrade.MID),
+            new CharacterLoadout.BraceletEffect("특화 +81", null));
   }
 
   @Test

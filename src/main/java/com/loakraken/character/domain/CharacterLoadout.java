@@ -24,23 +24,27 @@ public record CharacterLoadout(
       PointBonus arkPassivePoint,
       List<EffectGroup> effects,
       List<StoneEngraving> stoneEngravings,
-      List<PolishEffect> polishEffects) {
-    public static final String PARSER_VERSION = "equipment-tooltip-v2";
+      List<PolishEffect> polishEffects,
+      List<BraceletEffect> braceletEffects) {
+    public static final String PARSER_VERSION = "equipment-tooltip-v3";
 
     public EquipmentDetail {
       effects = effects == null ? List.of() : List.copyOf(effects);
       stoneEngravings = stoneEngravings == null ? List.of() : List.copyOf(stoneEngravings);
       polishEffects = polishEffects == null ? List.of() : List.copyOf(polishEffects);
+      braceletEffects = braceletEffects == null ? List.of() : List.copyOf(braceletEffects);
     }
   }
 
-  public enum PolishGrade {
+  public enum EffectGrade {
     HIGH,
     MID,
     LOW
   }
 
-  public record PolishEffect(String name, String value, PolishGrade grade) {}
+  public record PolishEffect(String name, String value, EffectGrade grade) {}
+
+  public record BraceletEffect(String text, EffectGrade grade) {}
 
   public record PointBonus(String name, Integer value) {}
 

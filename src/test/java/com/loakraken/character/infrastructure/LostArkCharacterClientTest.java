@@ -162,7 +162,7 @@ class LostArkCharacterClientTest {
     var response = mapper.writeValueAsString(CharacterResponse.from(result));
     ApiContractFixture.write("character-full.json", response);
     assertThat(response)
-        .contains("테스트 무기", "원정대캐릭터", "\"parserVersion\":\"equipment-tooltip-v2\"")
+        .contains("테스트 무기", "원정대캐릭터", "\"parserVersion\":\"equipment-tooltip-v3\"")
         .doesNotContain(
             "Tooltip", "ToolTip", "unparsed-secret-tooltip", "FutureField", "Element_00", "<FONT");
     assertThat(requests).hasValue(2);

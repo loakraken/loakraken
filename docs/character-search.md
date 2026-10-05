@@ -11,7 +11,7 @@
 
 ## 조회와 캐시
 
-- Valkey 키: `character:v6:{정규화한 캐릭터명}:summary`, 기본 TTL 5분 (`lostark.summary-ttl`)
+- Valkey 키: `character:v7:{정규화한 캐릭터명}:summary`, 기본 TTL 5분 (`lostark.summary-ttl`)
 - 전투정보와 원정대 조회가 모두 성공한 결과만 캐시에 저장합니다. 두 요청은 순서대로 실행하며 각각 호출 예산을 사용합니다.
 - 기본 설정에서는 수집 결과를 단기 캐시에만 반영합니다. `CHARACTER_SNAPSHOTS_ENABLED=true`일 때만 [PostgreSQL 스냅샷](character-snapshots.md)에 먼저 저장합니다.
 - 캐시 적중 시 최초 수집 시각을 유지하고 외부 API를 호출하지 않습니다.
@@ -42,19 +42,19 @@
 
 공식 전투정보실은 원정대 캐릭터를 접힌 목록으로, 로아와·클로아·일로아는 보유 캐릭터를 별도 탭/페이지로 제공한다(2026-10-05 관찰). 이에 맞춰 원정대를 검색과 따로 조회할 수 있다.
 
-- `GET /api/v1/characters/search?includeSiblings=false&characterName=모험가`: 공식 Armories만 1회 호출한다. 응답 `siblings`와 `coverage.siblings`는 null이며 "이 요청에서 조회하지 않음"을 뜻한다. 캐시 키는 `character:v6:{name}:armory`. 스냅샷은 저장하지 않는다(스냅샷 스키마가 원정대 원문을 필수로 요구한다).
-- `includeSiblings` 생략 또는 true: 기존과 같다. Armories + Siblings 2회, 둘 다 성공해야 검색 성공, 캐시 키 `character:v6:{name}:summary`.
+- `GET /api/v1/characters/search?includeSiblings=false&characterName=모험가`: 공식 Armories만 1회 호출한다. 응답 `siblings`와 `coverage.siblings`는 null이며 "이 요청에서 조회하지 않음"을 뜻한다. 캐시 키는 `character:v7:{name}:armory`. 스냅샷은 저장하지 않는다(스냅샷 스키마가 원정대 원문을 필수로 요구한다).
+- `includeSiblings` 생략 또는 true: 기존과 같다. Armories + Siblings 2회, 둘 다 성공해야 검색 성공, 캐시 키 `character:v7:{name}:summary`.
 - `GET /api/v1/characters/siblings?characterName=모험가`: 공식 Siblings만 1회 호출한다. 응답은 `characterName`, `siblings`, `fetchedAt`, 성공 코드 `CHARACTER_SIBLINGS_SUCCESS`. 캐시 키 `character:v1:{name}:siblings`, 기본 TTL은 검색과 같은 5분. 같은 이름의 동시 요청은 인스턴스 안에서 한 번으로 합친다.
 - 공식 원정대 API는 없는 캐릭터에 200 `[]`를 반환한다(2026-10-05 1회 확인). 원정대에는 조회한 캐릭터 자신이 포함되므로 단독 원정대 조회의 빈 목록과 공식 404는 `404 CHARACTER_NOT_FOUND`다. 결합 검색에서는 전투정보 확인 뒤의 원정대 오류를 기존처럼 502로 처리한다.
 - 화면을 나누면 캐릭터 상세는 1회, 원정대 탭을 열 때 1회를 사용한다. 원정대 실패가 캐릭터 상세를 막지 않는다.
 
-## 장비 Tooltip 해석 — equipment-tooltip-v2
+## 장비 Tooltip 해석 — equipment-tooltip-v3
 
 각 `equipment[].detail`은 공식 장비 Tooltip(JSON 문자열)에서 확인된 값만 구조화한다. Tooltip이 없거나 JSON이 아니거나 객체가 아니면 `detail=null`이며 검색은 실패하지 않는다. 원본 Tooltip 문자열은 공개 응답과 캐시에 포함하지 않는다.
 
 | 필드 | 원천 | 규칙 |
 |---|---|---|
-| parserVersion | 고정값 | `equipment-tooltip-v2` (v1에 연마 등급 추가) |
+| parserVersion | 고정값 | `equipment-tooltip-v3` (v2 연마 등급, v3 팔찌 등급) |
 | refineLevel | 장비 이름의 `+N` 접두 | 1~99, 없으면 null |
 | quality | 첫 `ItemTitle.qualityValue` | 0~100 정수. `-1`(품질 미적용)·문자열·범위 밖은 null |
 | itemLevel | 첫 `ItemTitle.leftStr2`의 `아이템 레벨 N` | 장신구처럼 표시되지 않으면 null |
@@ -63,8 +63,9 @@
 | effects | 그 밖의 `ItemPartBox`(기본/추가/연마/팔찌 효과)와 `IndentStringGroup` | `{title, lines}`. 마크업을 제거하고 `<BR>` 기준 줄로 나눈다 |
 | stoneEngravings | `IndentStringGroup` 제목 `무작위 각인 효과` | `[이름] Lv.N` 형식만 `{name, level}`. 레벨 보너스 줄은 effects에만 남는다 |
 | polishEffects | 제목이 `연마 효과`인 `ItemPartBox`의 각 줄 | `{name, value, grade}`. `이름 +값` 형식만. grade는 수치 색 `FE9600`=HIGH, `CE43FC`=MID, `00B5FF`=LOW, 그 외 null |
+| braceletEffects | 제목이 `팔찌 효과`인 `ItemPartBox` | `{text, grade}`. 효과 앞 아이콘 기준으로 나눠 두 줄 효과를 하나로 유지. grade는 효과의 첫 색 수치(연마와 같은 색 대응), 전투 특성 초록 `91FE02` 등은 null |
 
-- 연마 등급 근거: [공식 장신구 연마 확률표](https://lostark.game.onstove.com/Probability/장신구%20연마)(수정일 2024-07-10)는 효과마다 3단계를 색으로 구분하고 등장 확률 6.3%(파랑 `00B5FF`)·3.0%(보라)·0.7%를 공개한다. 2026-10-05 언새늘 원문의 색과 로아와·클로아·일로아의 상/중/하 표기가 같은 대응을 보였다. 팔찌 효과도 같은 색을 쓰지만 공식 등급표를 확인하지 못해 등급을 만들지 않는다.
+- 연마 등급 근거: [공식 장신구 연마 확률표](https://lostark.game.onstove.com/Probability/장신구%20연마)(수정일 2024-07-10)는 효과마다 3단계를 색으로 구분하고 등장 확률 6.3%(파랑 `00B5FF`)·3.0%(보라)·0.7%를 공개한다. 2026-10-05 언새늘 원문의 색과 로아와·클로아·일로아의 상/중/하 표기가 같은 대응을 보였다. 팔찌 등급 근거: [공식 팔찌 T4 확률표](https://lostark.game.onstove.com/Probability/팔찌%20T4)(수정일 2025-12-30)는 유물·고대 팔찌 특수 효과마다 3단계 수치를 공개한다(고대 예: 치명타 피해 6.8/8.4/10.0%). 언새늘 고대 팔찌의 색이 같은 단계와 대응했다. 전투 특성(특화 등)은 공식 표에서 수치 구간형이라 등급을 만들지 않는다.
 - 효과 줄은 표시용 문자열이다. 능력치 이름과 수치로 분해하거나 합산하지 않는다.
 - 알 수 없는 요소 타입은 무시한다. 엘릭서·초월·상급 재련은 실제 응답 표본을 확보하지 못해 해석하지 않으며, 해당 정보가 없다는 뜻이 아니다.
 - 해석 대상 요소는 2026-10-05 실제 응답 1건의 장비 17개 구조를 기준으로 했다. 실제 응답은 저장하지 않았고 테스트는 같은 구조의 합성 Tooltip을 사용한다.

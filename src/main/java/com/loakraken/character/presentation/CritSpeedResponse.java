@@ -56,7 +56,8 @@ public record CritSpeedResponse(
                             target.requiredCritStat(),
                             target.requiredAdditionalCritStat(),
                             target.reached()))
-                .toList()),
+                .toList(),
+            crit.critStatPerPercent()),
         new CritSpeedSpeedResponse(
             speed.swiftnessStat(),
             speed.cap(),
@@ -72,7 +73,21 @@ public record CritSpeedResponse(
                 supersonic.optimalSpeed(),
                 supersonic.requiredSwiftness(),
                 supersonic.requiredAdditionalSwiftness(),
-                supersonic.evolutionDamage())),
+                supersonic.evolutionDamage()),
+            speed.swiftnessPerPercent(),
+            speed.swiftnessTable().stream()
+                .map(
+                    row ->
+                        new CritSpeedSwiftnessRowResponse(
+                            row.swiftness(),
+                            row.attack(),
+                            row.move(),
+                            row.attackEffective(),
+                            row.moveEffective(),
+                            row.supersonicEvolutionDamage(),
+                            row.current(),
+                            row.optimal()))
+                .toList()),
         result.limitations());
   }
 
@@ -102,7 +117,8 @@ public record CritSpeedResponse(
       @Schema(description = "실제 적용 치명타 적중률. 뭉툭한 가시 장착 시 그 상한, 아니면 100%") BigDecimal effectiveRate,
       CritSpeedBluntThornResponse bluntThorn,
       @Schema(description = "CRIT_100: 치적 100%, BLUNT_THORN_OPTIMAL: 뭉툭한 가시 최대 진화형 피해 도달")
-          List<CritSpeedTargetResponse> targets) {}
+          List<CritSpeedTargetResponse> targets,
+      @Schema(description = "치명타 적중률 1%당 치명 스탯(27.944)") BigDecimal critStatPerPercent) {}
 
   public record CritSpeedBluntThornResponse(
       @Schema(description = "EQUIPPED_NODE: 장착 노드 공식 문구, REFERENCE_LEVEL_2: 미장착이라 공식 Lv.2 문구 기준")
@@ -129,7 +145,20 @@ public record CritSpeedResponse(
       @Schema(description = "공격·이동 속도 증가 상한(%)") BigDecimal cap,
       CritSpeedAxisResponse attack,
       CritSpeedAxisResponse move,
-      CritSpeedSupersonicResponse supersonic) {}
+      CritSpeedSupersonicResponse supersonic,
+      @Schema(description = "공격·이동 속도 1%당 신속 스탯(58.22)") BigDecimal swiftnessPerPercent,
+      @Schema(description = "신속 스탯별 공이속 표. 0부터 200 간격, 현재값·최적값 행 포함(최대 4000)")
+          List<CritSpeedSwiftnessRowResponse> swiftnessTable) {}
+
+  public record CritSpeedSwiftnessRowResponse(
+      int swiftness,
+      @Schema(description = "신속 외 출처(관측+가정)를 더한 공격 속도 증가 %") BigDecimal attack,
+      BigDecimal move,
+      @Schema(description = "상한 적용") BigDecimal attackEffective,
+      BigDecimal moveEffective,
+      @Schema(description = "음속 돌파 진화형 피해(장착 노드 또는 Lv.2 기준값)") BigDecimal supersonicEvolutionDamage,
+      @Schema(description = "현재 신속 행") boolean current,
+      @Schema(description = "음속 돌파 최적 신속 행") boolean optimal) {}
 
   public record CritSpeedAxisResponse(
       BigDecimal observed,

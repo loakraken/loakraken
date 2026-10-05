@@ -1,4 +1,4 @@
-# 치명타·공이속 계산 (crit-speed-v1)
+# 치명타·공이속 계산 (crit-speed-v2)
 
 `POST /api/v1/characters/crit-speed`는 캐릭터의 치명타 적중률과 공격·이동 속도를 출처별로 합산하고, 다음 두 가지를 계산한다.
 
@@ -24,7 +24,14 @@
 | `critSynergyCount` | 치명타 시너지 수(1개당 +10%, 동일 직업 제외) | 0–3 |
 | `supportCritRate` | 서포터 치적 버프 % | 0–30 |
 | `tripodCritRate`, `extraCritRate` | 트라이포드, 아크 그리드 코어 등 그 밖의 치적 % | 0–100 |
-| `extraAttackSpeed`, `extraMoveSpeed` | 직업 각인·트라이포드·서포터 버프·만찬·음식 등의 공이속 % 합계 | 0–100 |
+| `extraAttackSpeed`, `extraMoveSpeed` | 직업 각인·트라이포드·서포터 버프·만찬·음식 등의 공이속 % 합계. 감소는 음수로 넣는다 | −100–100 |
+
+### 서포터 치적 프리셋 근거
+
+- 로아랩이 "서포터 약점 노출" 프리셋으로 1.8, 2.1, 2.5%를 제공한다. 프론트는 이 값을 `supportCritRate`에 넣는다.
+- 2026-10-06 공식 원문 104명(서포터 포함)에서 이 값과 일치하는 문구를 찾지 못했다.
+  - 원문의 "약점 노출"은 딜러 스킬 트라이포드다. 효과는 "대상이 자신 및 파티원에게 받는 피해 +4%, 헤드·백 어택 시 +5%"이고, 치적 효과가 아니다.
+- 따라서 이 값은 공식 근거가 확인되지 않은 사용자 가정으로 취급한다. 화면에는 "로아랩 프리셋, 공식 원문 미확인"으로 표시한다.
 
 ## 관측 출처 (OBSERVED)
 
@@ -39,7 +46,7 @@
 | BRACELET | 팔찌 효과 | `치명타 적중률이 X% 증가한다.`, 공이속 문구 |
 | CARD | 카드 세트 효과 | 위와 같음 |
 
-`공격 및 이동 속도가 X% 증가`는 두 축에 모두 더한다. 다음은 합산하지 않는다.
+`공격 및 이동 속도가 X% 증가`는 두 축에 모두 더한다. v2부터는 띄어쓰기 없는 문구(`공격속도`·`이동속도`)도 읽는다. 뒤에 `감소`가 오면 음수로 더한다(예: 질량 증가 `공격속도가 10.00% 감소` → 공격 속도 −10). 다음은 합산하지 않는다.
 
 - `…의 치명타 적중률`처럼 특정 스킬에만 걸리는 효과
 - `이상`, `이하`, `로`, `만큼`이 뒤따르는 조건 문구
@@ -88,11 +95,22 @@ Tooltip이 없을 때(이전 캐시 등)는 스탯을 계수로 환산하고, �
 
 이 해석으로 계산한 결과는 로아랩 음돌 계산기와 같다. 버프 14%를 가정하면 적정 신속 2,290이다.
 
+### 신속 스탯별 표 (v2)
+
+`speed.swiftnessTable[]{swiftness, attack, move, attackEffective, moveEffective, supersonicEvolutionDamage, current, optimal}`
+
+- 신속 외 출처(관측+가정)를 그대로 두고 신속만 바꿨을 때의 공이속과 음속 돌파 진화형 피해다.
+- 행 구성
+  - 0부터 200 간격이다.
+  - 현재 신속과 최적 신속 행을 함께 넣고 정렬한다.
+  - 끝값은 max(현재, 최적)보다 200~400 크다. 최대 4,000.
+- 계수: `speed.swiftnessPerPercent`(58.22), `crit.critStatPerPercent`(27.944)
+
 ## 응답 요약
 
 - `sources[]{kind, category, axis, name, value, text}`
-- `crit{critStat, observedRate, assumedRate, totalRate, effectiveRate, bluntThorn{…}, targets[]}`
-- `speed{swiftnessStat, cap, attack{observed, assumed, total, effective}, move{…}, supersonic{…}}`
+- `crit{critStat, observedRate, assumedRate, totalRate, effectiveRate, bluntThorn{…}, targets[], critStatPerPercent}`
+- `speed{swiftnessStat, cap, attack{observed, assumed, total, effective}, move{…}, supersonic{…}, swiftnessPerPercent, swiftnessTable[]}`
 - `limitations[]`: 제외하거나 근사한 항목. 아크 그리드 코어·젬, 스킬 룬·트라이포드는 공식 문구가 없어 가정 입력으로만 반영한다.
 
 ## 검증
@@ -112,3 +130,7 @@ Tooltip이 없을 때(이전 캐시 등)는 스탯을 계수로 환산하고, �
   - HTTP: 캐시 공유, 원정대 미조회, 400/415
   - OpenAPI: 필수·nullable 계약
   - 합성 산출물: `crit-speed.json`
+
+- v2 실서버(2026-10-06)
+  - 만배: 질량 증가로 공격 속도 −10이 자동 반영된다. 공속 35.86 / 이속 45.86, 적정 신속 2,873.
+  - 언새늘: 신속 표에서 최적 2,290행의 공속은 53.33%, 진화형 피해는 24%다.

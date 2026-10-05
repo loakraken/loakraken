@@ -14,7 +14,7 @@ import java.util.regex.Pattern;
  * 스탯 계산에만 쓴다. 뭉툭한 가시·음속 돌파는 장착 노드의 공식 문구에서 수치를 읽고, 미장착이면 2026-10-05 공식 Lv.2 문구를 기준값으로 쓴다.
  */
 public final class CritSpeedCalculation {
-  public static final String RULE_VERSION = "crit-speed-v1";
+  public static final String RULE_VERSION = "crit-speed-v2";
 
   /** 치명 27.944 = 치명타 적중률 1%. 공식 Tooltip 576→20.61%, 1800→64.42% 일치(2026-10-05). */
   static final BigDecimal CRIT_STAT_PER_PERCENT = new BigDecimal("27.944");
@@ -39,15 +39,22 @@ public final class CritSpeedCalculation {
   private static final Pattern STAT_MOVE_SPEED = Pattern.compile("이동 속도가 " + NUMBER + "% 증가");
   private static final Pattern STACKED_CRIT =
       Pattern.compile("치명타 적중률 \\+" + NUMBER + "%(?:(?!\\.\\s).)*?최대 (\\d+)중첩");
+
+  /** 뒤따르는 증가/감소. 감소면 음수로 더한다. */
+  private static final String DIRECTION = "(?:\\s*(증가|감소))?";
+
   private static final Pattern CRIT =
       Pattern.compile(
-          "(의 )?치명타 적중률(?:이)?\\s*(?:추가로\\s*)?\\+?\\s*" + NUMBER + "%(?!\\s*(?:이상|이하|로|만큼))");
+          "(의 )?치명타 적중률(?:이)?\\s*(?:추가로\\s*)?\\+?\\s*"
+              + NUMBER
+              + "%(?!\\s*(?:이상|이하|로|만큼))"
+              + DIRECTION);
   private static final Pattern BOTH_SPEED =
-      Pattern.compile("공격 및 이동 속도(?:가)?\\s*\\+?\\s*" + NUMBER + "%(?!\\s*만큼)");
+      Pattern.compile("공격 및 이동 ?속도(?:가)?\\s*\\+?\\s*" + NUMBER + "%(?!\\s*만큼)" + DIRECTION);
   private static final Pattern ATTACK_SPEED =
-      Pattern.compile("(의 )?공격 속도(?:가)?\\s*\\+?\\s*" + NUMBER + "%(?!\\s*만큼)");
+      Pattern.compile("(의 )?공격 ?속도(?:가)?\\s*\\+?\\s*" + NUMBER + "%(?!\\s*만큼)" + DIRECTION);
   private static final Pattern MOVE_SPEED =
-      Pattern.compile("(의 )?이동 속도(?:가)?\\s*\\+?\\s*" + NUMBER + "%(?!\\s*만큼)");
+      Pattern.compile("(의 )?이동 ?속도(?:가)?\\s*\\+?\\s*" + NUMBER + "%(?!\\s*만큼)" + DIRECTION);
   private static final Pattern LEVEL = Pattern.compile("Lv\\.(\\d+)");
   private static final String BLUNT_THORN = "뭉툭한 가시";
   private static final String SUPERSONIC = "음속 돌파";
@@ -178,7 +185,8 @@ public final class CritSpeedCalculation {
       BigDecimal totalRate,
       BigDecimal effectiveRate,
       BluntThorn bluntThorn,
-      List<CritTarget> targets) {}
+      List<CritTarget> targets,
+      BigDecimal critStatPerPercent) {}
 
   public record SpeedAxis(
       BigDecimal observed, BigDecimal assumed, BigDecimal total, BigDecimal effective) {}
@@ -196,7 +204,20 @@ public final class CritSpeedCalculation {
       BigDecimal cap,
       SpeedAxis attack,
       SpeedAxis move,
-      Supersonic supersonic) {}
+      Supersonic supersonic,
+      BigDecimal swiftnessPerPercent,
+      List<SwiftnessRow> swiftnessTable) {}
+
+  /** 신속 스탯이 swiftness일 때 공격·이동 속도와 음속 돌파 진화형 피해. 신속 외 출처(관측+가정)는 그대로 둔다. */
+  public record SwiftnessRow(
+      int swiftness,
+      BigDecimal attack,
+      BigDecimal move,
+      BigDecimal attackEffective,
+      BigDecimal moveEffective,
+      BigDecimal supersonicEvolutionDamage,
+      boolean current,
+      boolean optimal) {}
 
   public record Result(
       String ruleVersion, List<Source> sources, Crit crit, Speed speed, List<String> limitations) {}
@@ -260,7 +281,8 @@ public final class CritSpeedCalculation {
             scale(totalCrit),
             scale(totalCrit.min(equippedThorn == null ? CRIT_CAP : thornRule.critCap())),
             thorn,
-            targets);
+            targets,
+            CRIT_STAT_PER_PERCENT);
 
     var attack = axis(sources, Axis.ATTACK_SPEED);
     var move = axis(sources, Axis.MOVE_SPEED);
@@ -293,10 +315,54 @@ public final class CritSpeedCalculation {
                 scale(optimalSpeed),
                 swiftness == null ? null : requiredSwiftness,
                 additionalSwiftness,
-                scale(supersonicRule.evolutionDamage(attack.total(), move.total()))));
+                scale(supersonicRule.evolutionDamage(attack.total(), move.total()))),
+            SPEED_STAT_PER_PERCENT,
+            swiftnessTable(
+                attack.total().subtract(swiftnessSpeed.attack()),
+                move.total().subtract(swiftnessSpeed.move()),
+                swiftness,
+                requiredSwiftness,
+                supersonicRule));
     limitations.add("아크 그리드 코어·젬, 스킬 룬·트라이포드의 치명타·속도 효과는 공식 원문 문구가 없어 가정 입력으로만 반영합니다.");
     limitations.add("특정 스킬·조건 한정 효과(예: '…의 치명타 적중률', 백어택 한정)는 자동 합산하지 않습니다.");
     return new Result(RULE_VERSION, List.copyOf(sources), crit, speed, List.copyOf(limitations));
+  }
+
+  static final int TABLE_STEP = 200;
+  static final int TABLE_MAX = 4000;
+
+  private static List<SwiftnessRow> swiftnessTable(
+      BigDecimal nonStatAttack,
+      BigDecimal nonStatMove,
+      Integer current,
+      int optimal,
+      SupersonicRule rule) {
+    var points = new java.util.TreeSet<Integer>();
+    int upper =
+        Math.min(
+            TABLE_MAX,
+            ((Math.max(optimal, current == null ? 0 : current) / TABLE_STEP) + 2) * TABLE_STEP);
+    for (int value = 0; value <= upper; value += TABLE_STEP) points.add(value);
+    if (current != null && current <= TABLE_MAX) points.add(current);
+    if (optimal <= TABLE_MAX) points.add(optimal);
+    var rows = new ArrayList<SwiftnessRow>();
+    for (int value : points) {
+      var percent =
+          BigDecimal.valueOf(value).divide(SPEED_STAT_PER_PERCENT, 6, RoundingMode.HALF_UP);
+      var attack = nonStatAttack.add(percent);
+      var move = nonStatMove.add(percent);
+      rows.add(
+          new SwiftnessRow(
+              value,
+              scale(attack),
+              scale(move),
+              scale(attack.min(SPEED_CAP)),
+              scale(move.min(SPEED_CAP)),
+              scale(rule.evolutionDamage(attack, move)),
+              current != null && value == current,
+              value == optimal));
+    }
+    return List.copyOf(rows);
   }
 
   private static BigDecimal statSources(
@@ -438,12 +504,17 @@ public final class CritSpeedCalculation {
       if (crit.group(1) != null || inside(stackedSpans, crit.start())) continue;
       sources.add(
           new Source(
-              Kind.OBSERVED, category, Axis.CRIT, name, new BigDecimal(crit.group(2)), text));
+              Kind.OBSERVED,
+              category,
+              Axis.CRIT,
+              name,
+              signed(crit.group(2), crit.group(3)),
+              text));
     }
     Matcher both = BOTH_SPEED.matcher(text);
     var bothSpans = new ArrayList<int[]>();
     while (both.find()) {
-      var value = new BigDecimal(both.group(1));
+      var value = signed(both.group(1), both.group(2));
       sources.add(new Source(Kind.OBSERVED, category, Axis.ATTACK_SPEED, name, value, text));
       sources.add(new Source(Kind.OBSERVED, category, Axis.MOVE_SPEED, name, value, text));
       bothSpans.add(new int[] {both.start(), both.end()});
@@ -464,8 +535,19 @@ public final class CritSpeedCalculation {
     while (matcher.find()) {
       if (matcher.group(1) != null || inside(skip, matcher.start())) continue;
       sources.add(
-          new Source(Kind.OBSERVED, category, axis, name, new BigDecimal(matcher.group(2)), text));
+          new Source(
+              Kind.OBSERVED,
+              category,
+              axis,
+              name,
+              signed(matcher.group(2), matcher.group(3)),
+              text));
     }
+  }
+
+  private static BigDecimal signed(String number, String direction) {
+    var value = new BigDecimal(number);
+    return "감소".equals(direction) ? value.negate() : value;
   }
 
   private static boolean inside(List<int[]> spans, int index) {

@@ -36,6 +36,16 @@ public class CharacterHistoryService {
     }
   }
 
+  public List<CharacterTitleObservation> titles(CharacterHistoryQuery query) {
+    if (!policy.enabled())
+      throw new CharacterException(CharacterErrorCode.CHARACTER_HISTORY_DISABLED);
+    try {
+      return history.titles(query.characterName(), query.serverName());
+    } catch (DataAccessException | TransactionException exception) {
+      throw new CharacterException(CharacterErrorCode.CHARACTER_HISTORY_UNAVAILABLE);
+    }
+  }
+
   public List<CharacterObservationPoint> latest(CharacterHistoryQuery query) {
     if (!policy.enabled())
       throw new CharacterException(CharacterErrorCode.CHARACTER_HISTORY_DISABLED);

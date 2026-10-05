@@ -2,6 +2,7 @@ package com.loakraken.character.infrastructure;
 
 import com.loakraken.character.application.CharacterHistoryPort;
 import com.loakraken.character.application.CharacterObservationPoint;
+import com.loakraken.character.application.CharacterTitleObservation;
 import com.loakraken.character.domain.CharacterProfile;
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -77,6 +78,19 @@ class PostgresCharacterHistoryRepository implements CharacterHistoryPort {
             profile.itemLevel(),
             profile.combatPower(),
             profile.expeditionLevel());
+    if (profile.title() != null && !profile.title().isBlank())
+      jdbc.sql(
+              """
+        INSERT INTO character_title_observation (character_id, title, first_observed_at, last_observed_at)
+        VALUES (:id, :title, :at, :at)
+        ON CONFLICT (character_id, title) DO UPDATE SET
+          first_observed_at = LEAST(character_title_observation.first_observed_at, EXCLUDED.first_observed_at),
+          last_observed_at = GREATEST(character_title_observation.last_observed_at, EXCLUDED.last_observed_at)
+        """)
+          .param("id", characterId.get())
+          .param("title", profile.title().strip())
+          .param("at", at)
+          .update();
     if (latest.isPresent() && latest.get().values().sameAs(current)) {
       jdbc.sql(
               """
@@ -135,6 +149,27 @@ class PostgresCharacterHistoryRepository implements CharacterHistoryPort {
     var ascending = new ArrayList<>(points);
     java.util.Collections.reverse(ascending);
     return ascending;
+  }
+
+  @Override
+  @Transactional(readOnly = true, timeout = 3)
+  public List<CharacterTitleObservation> titles(String characterName, String serverName) {
+    return jdbc.sql(
+            """
+      SELECT t.title, t.first_observed_at, t.last_observed_at
+      FROM character_title_observation t JOIN characters c ON c.character_id = t.character_id
+      WHERE c.server_name = :server AND c.character_name = :name
+      ORDER BY t.first_observed_at, t.title
+      """)
+        .param("server", serverName)
+        .param("name", characterName)
+        .query(
+            (rs, row) ->
+                new CharacterTitleObservation(
+                    rs.getString("title"),
+                    rs.getObject("first_observed_at", OffsetDateTime.class).toInstant(),
+                    rs.getObject("last_observed_at", OffsetDateTime.class).toInstant()))
+        .list();
   }
 
   private record Latest(UUID id, Values values) {}

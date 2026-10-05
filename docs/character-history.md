@@ -9,6 +9,7 @@
 - 기록 실패(DB 장애 등)는 검색 응답을 막지 않는다. `loakraken.character.history.writes{outcome=success|failure}` 지표와 경고 로그로 남긴다.
 - 설정: `CHARACTER_HISTORY_ENABLED`(기본 true). 끄면 기록하지 않고 조회는 `503 CHARACTER_HISTORY_DISABLED`.
 - 조회: `characterName`·`serverName` 필수, `limit` 1~500(기본 100). 최근 관측부터 limit개를 **시간 오름차순**으로 `points[{observedAt, lastConfirmedAt, className, characterLevel, itemLevel, combatPower, expeditionLevel}]`에 담는다. 기록이 없으면 빈 목록. 외부 API·캐시를 쓰지 않는다.
+- 칭호: 검색할 때 공식 프로필의 장착 칭호(`Title`)를 `character_title_observation`에 칭호별 최초·마지막 관측 시각으로 누적하고 응답 `titles[{title, firstObservedAt, lastObservedAt}]`(최초 관측 오름차순)로 제공한다. 공식 API와 전투정보실은 현재 장착 칭호만 보여 주므로(2026-10-05 확인) 장착한 적 없는 보유 칭호는 알 수 없고, 시각은 획득일이 아니다.
 - 서버·이름이 함께 일치하는 기록만 읽는다. 이름 변경·서버 이동은 자동 연결하지 않는다(로아와는 로그인 후 복구 기능으로 처리).
 - 원문 JSON 스냅샷(아래 `/snapshots`)은 Tooltip 포함 수백 KB이고 내구도처럼 자주 바뀌는 값 때문에 거의 매 조회 새 행이 생겨 기본 비활성을 유지한다.
 

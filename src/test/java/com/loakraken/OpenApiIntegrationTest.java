@@ -90,6 +90,8 @@ class OpenApiIntegrationTest {
         .isTrue();
     assertThat(document.at("/components/schemas/PointResponse/required").toString())
         .contains("observedAt", "lastConfirmedAt", "itemLevel", "combatPower");
+    assertThat(document.at("/components/schemas/CharacterHistoryResponse/required").toString())
+        .contains("points", "titles");
     var siblings = document.at("/paths/~1api~1v1~1characters~1siblings/get");
     assertThat(siblings.path("responses").has("404")).isTrue();
     assertThat(document.at("/components/schemas/CharacterSiblingsResponse/required").toString())

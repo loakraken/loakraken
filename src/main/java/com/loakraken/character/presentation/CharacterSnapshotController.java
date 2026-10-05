@@ -52,7 +52,8 @@ public class CharacterSnapshotController {
     var query = request.toQuery();
     return ApiResponse.of(
         CharacterSuccessCode.CHARACTER_HISTORY_SUCCESS,
-        CharacterHistoryResponse.from(query, historyService.latest(query)));
+        CharacterHistoryResponse.from(
+            query, historyService.latest(query), historyService.titles(query)));
   }
 
   @GetMapping("/snapshots")

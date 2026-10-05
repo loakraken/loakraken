@@ -35,6 +35,8 @@ lostark:
 character:
   snapshots:
     enabled: ${CHARACTER_SNAPSHOTS_ENABLED:false}
+  history:
+    enabled: ${CHARACTER_HISTORY_ENABLED:true}
 
 market:
   cache:

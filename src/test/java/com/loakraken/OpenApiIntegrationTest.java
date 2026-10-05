@@ -86,6 +86,10 @@ class OpenApiIntegrationTest {
         .contains("skills");
     var search = document.at("/paths/~1api~1v1~1characters~1search/get/parameters");
     assertThat(search.toString()).contains("includeSiblings");
+    assertThat(document.at("/paths/~1api~1v1~1characters~1history/get/responses").has("503"))
+        .isTrue();
+    assertThat(document.at("/components/schemas/PointResponse/required").toString())
+        .contains("observedAt", "lastConfirmedAt", "itemLevel", "combatPower");
     var siblings = document.at("/paths/~1api~1v1~1characters~1siblings/get");
     assertThat(siblings.path("responses").has("404")).isTrue();
     assertThat(document.at("/components/schemas/CharacterSiblingsResponse/required").toString())

@@ -32,7 +32,9 @@ import org.springframework.transaction.PlatformTransactionManager;
 import tools.jackson.databind.json.JsonMapper;
 
 @Import(TestcontainersConfiguration.class)
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@SpringBootTest(
+    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+    properties = "character.history.enabled=false")
 class CharacterSnapshotDisabledIntegrationTest {
   private static final String NAME = "저장비활성테스트";
   private static final String KEY = "character:v8:" + NAME + ":summary";
@@ -59,7 +61,7 @@ class CharacterSnapshotDisabledIntegrationTest {
   }
 
   @Test
-  void 기본_설정에서는_DB_저장과_트랜잭션_없이_검색과_캐시가_동작한다() throws Exception {
+  void 원문_스냅샷과_이력을_끄면_DB_저장과_트랜잭션_없이_검색과_캐시가_동작한다() throws Exception {
     var profile =
         new CharacterProfile(
             NAME, "루페온", "바드", 70, new BigDecimal("1700"), null, 300, null, null, null, List.of());

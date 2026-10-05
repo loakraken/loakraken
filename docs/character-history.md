@@ -1,4 +1,20 @@
-# 저장된 캐릭터 관측 이력 API
+# 캐릭터 관측 이력
+
+## 그래프용 이력 — `GET /api/v1/characters/history` (기본 활성)
+
+2026-10-05 사용자 결정으로 비교 사이트(로아와 전투력 추이, 클로아 아이템 레벨·전투력·원정대 레벨 그래프)처럼 이력을 저장·제공한다. 공식 보관 범위 회신을 기다리지 않으며 이전의 "관측 저장 기본 비활성" 정책을 대체한다.
+
+- 저장: 캐릭터 검색이 외부에서 새로 수집할 때마다(원정대 포함·제외 모두) `character_observation`에 직업·캐릭터 레벨·아이템 레벨·전투력·원정대 레벨과 수집 시각을 기록한다. 캐시 적중은 기록하지 않는다.
+- 직전 관측과 값이 모두 같으면 새 행 없이 `last_confirmed_at`만 갱신한다. 더 오래된 수집 결과는 최신 관측을 덮어쓰지 않는다.
+- 기록 실패(DB 장애 등)는 검색 응답을 막지 않는다. `loakraken.character.history.writes{outcome=success|failure}` 지표와 경고 로그로 남긴다.
+- 설정: `CHARACTER_HISTORY_ENABLED`(기본 true). 끄면 기록하지 않고 조회는 `503 CHARACTER_HISTORY_DISABLED`.
+- 조회: `characterName`·`serverName` 필수, `limit` 1~500(기본 100). 최근 관측부터 limit개를 **시간 오름차순**으로 `points[{observedAt, lastConfirmedAt, className, characterLevel, itemLevel, combatPower, expeditionLevel}]`에 담는다. 기록이 없으면 빈 목록. 외부 API·캐시를 쓰지 않는다.
+- 서버·이름이 함께 일치하는 기록만 읽는다. 이름 변경·서버 이동은 자동 연결하지 않는다(로아와는 로그인 후 복구 기능으로 처리).
+- 원문 JSON 스냅샷(아래 `/snapshots`)은 Tooltip 포함 수백 KB이고 내구도처럼 자주 바뀌는 값 때문에 거의 매 조회 새 행이 생겨 기본 비활성을 유지한다.
+
+---
+
+## 원문 스냅샷 이력 — `GET /api/v1/characters/snapshots` (기본 비활성)
 
 `GET /api/v1/characters/snapshots`는 DB에 이미 저장된 스냅샷의 프로필 요약을 반환한다. API 키와 Valkey 조회를 사용하지 않으며 Lost Ark API를 호출하거나 새 스냅샷을 만들지 않는다.
 

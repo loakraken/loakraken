@@ -1,5 +1,6 @@
 package com.loakraken.character.presentation;
 
+import com.loakraken.character.application.CharacterHistoryService;
 import com.loakraken.character.application.CharacterSnapshotQueryService;
 import com.loakraken.common.api.ApiResponse;
 import io.swagger.v3.oas.annotations.Operation;
@@ -20,9 +21,38 @@ import org.springframework.web.bind.annotation.RestController;
 @Tag(name = "캐릭터")
 public class CharacterSnapshotController {
   private final CharacterSnapshotQueryService queryService;
+  private final CharacterHistoryService historyService;
 
-  public CharacterSnapshotController(CharacterSnapshotQueryService queryService) {
+  public CharacterSnapshotController(
+      CharacterSnapshotQueryService queryService, CharacterHistoryService historyService) {
     this.queryService = queryService;
+    this.historyService = historyService;
+  }
+
+  @GetMapping("/history")
+  @Operation(
+      summary = "캐릭터 관측 이력(그래프용)",
+      description =
+          "검색할 때 저장한 아이템 레벨·전투력·원정대 레벨의 시계열입니다. 외부 API와 캐시를 사용하지 않습니다. 서버·캐릭터명이 함께 일치하는 기록만 반환하며 이름 변경·서버 이동은 자동 연결하지 않습니다. 기록이 없으면 빈 목록입니다.")
+  @ApiResponses({
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(
+        responseCode = "200",
+        description = "조회 성공"),
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(
+        responseCode = "400",
+        description = "캐릭터명·서버명 누락, 형식 오류 또는 limit 범위 오류",
+        content = @Content(schema = @Schema(ref = "#/components/schemas/ErrorResponse"))),
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(
+        responseCode = "503",
+        description = "CHARACTER_HISTORY_DISABLED: 기능 비활성화 / CHARACTER_HISTORY_UNAVAILABLE: 저장소 장애",
+        content = @Content(schema = @Schema(ref = "#/components/schemas/ErrorResponse")))
+  })
+  public ApiResponse<CharacterHistoryResponse> observationHistory(
+      @Valid @ModelAttribute @ParameterObject CharacterHistoryRequest request) {
+    var query = request.toQuery();
+    return ApiResponse.of(
+        CharacterSuccessCode.CHARACTER_HISTORY_SUCCESS,
+        CharacterHistoryResponse.from(query, historyService.latest(query)));
   }
 
   @GetMapping("/snapshots")

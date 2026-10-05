@@ -77,6 +77,8 @@ class CharacterQueryServiceTest {
       for (var future : futures)
         assertThat(future.get(5, TimeUnit.SECONDS).details()).isEqualTo(details);
     }
+    assertThat(cache.find("모험가").orElseThrow().refreshAvailableAt())
+        .isEqualTo(clock.instant().plusSeconds(300));
     verify(port, times(1)).fetch("모험가");
     assertThat(
             registry
@@ -93,6 +95,7 @@ class CharacterQueryServiceTest {
     var port = mock(CharacterDetailsPort.class);
     var cache = mock(CharacterCache.class);
     when(cache.find(anyString())).thenReturn(Optional.empty());
+    when(cache.ttl()).thenReturn(java.time.Duration.ofMinutes(5));
     when(port.fetch("모험가"))
         .thenThrow(new CharacterException(CharacterErrorCode.LOST_ARK_API_ERROR))
         .thenReturn(fetched);
@@ -170,6 +173,7 @@ class CharacterQueryServiceTest {
     var first = service.search(new SearchCharacterCommand("모험가", false));
     var second = service.search(new SearchCharacterCommand("모험가", false));
     assertThat(first.details().siblings()).isNull();
+    assertThat(first.refreshAvailableAt()).isEqualTo(clock.instant().plusSeconds(300));
     assertThat(second).isEqualTo(first);
     verify(port, times(1)).fetchArmory("모험가");
     verify(port, never()).fetch(anyString());
@@ -209,8 +213,9 @@ class CharacterQueryServiceTest {
       for (var future : futures)
         assertThat(future.get(5, TimeUnit.SECONDS).siblings()).isEqualTo(siblings);
     }
-    assertThat(service.siblings(new SearchCharacterCommand("모험가")).fetchedAt())
-        .isEqualTo(clock.instant());
+    var cachedSiblings = service.siblings(new SearchCharacterCommand("모험가"));
+    assertThat(cachedSiblings.fetchedAt()).isEqualTo(clock.instant());
+    assertThat(cachedSiblings.refreshAvailableAt()).isEqualTo(clock.instant().plusSeconds(300));
     verify(port, times(1)).fetchSiblings("모험가");
     verify(port, never()).fetch(anyString());
     verifyNoInteractions(snapshots);
@@ -222,6 +227,10 @@ class CharacterQueryServiceTest {
     final ConcurrentHashMap<String, CharacterResult> summaries = new ConcurrentHashMap<>();
     final ConcurrentHashMap<String, CharacterResult> armories = new ConcurrentHashMap<>();
     final ConcurrentHashMap<String, CharacterSiblingsResult> siblings = new ConcurrentHashMap<>();
+
+    public java.time.Duration ttl() {
+      return java.time.Duration.ofMinutes(5);
+    }
 
     public Optional<CharacterResult> find(String name) {
       return Optional.ofNullable(summaries.get(name));

@@ -55,7 +55,9 @@ public class CharacterQueryService {
                 .orElseGet(
                     () -> {
                       var siblings = detailsPort.fetchSiblings(name);
-                      var result = new CharacterSiblingsResult(name, siblings, Instant.now(clock));
+                      var now = Instant.now(clock);
+                      var result =
+                          new CharacterSiblingsResult(name, siblings, now, now.plus(cache.ttl()));
                       cache.saveSiblings(name, result);
                       return result;
                     }));
@@ -79,7 +81,9 @@ public class CharacterQueryService {
                         throw new CharacterException(
                             CharacterErrorCode.CHARACTER_STORAGE_UNAVAILABLE);
                       }
-                      var result = new CharacterResult(fetched.details(), fetchedAt);
+                      var result =
+                          new CharacterResult(
+                              fetched.details(), fetchedAt, Instant.now(clock).plus(cache.ttl()));
                       cache.save(name, result);
                       return result;
                     }));
@@ -96,7 +100,9 @@ public class CharacterQueryService {
                 .orElseGet(
                     () -> {
                       var fetched = detailsPort.fetchArmory(name);
-                      var result = new CharacterResult(fetched.details(), Instant.now(clock));
+                      var now = Instant.now(clock);
+                      var result =
+                          new CharacterResult(fetched.details(), now, now.plus(cache.ttl()));
                       cache.saveArmory(name, result);
                       return result;
                     }));

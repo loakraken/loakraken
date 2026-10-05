@@ -75,7 +75,16 @@ class OpenApiIntegrationTest {
     var siblings = document.at("/paths/~1api~1v1~1characters~1siblings/get");
     assertThat(siblings.path("responses").has("404")).isTrue();
     assertThat(document.at("/components/schemas/CharacterSiblingsResponse/required").toString())
-        .contains("characterName", "siblings", "fetchedAt");
+        .contains("characterName", "siblings", "fetchedAt", "refreshAvailableAt");
+    for (var schema : java.util.List.of("CharacterResponse", "CharacterSiblingsResponse"))
+      assertThat(
+              document
+                  .at(
+                      "/components/schemas/"
+                          + schema
+                          + "/properties/refreshAvailableAt/anyOf/1/type")
+                  .asText())
+          .isEqualTo("null");
     assertThat(
             document
                 .at("/components/schemas/CharacterObservationCoverageResponse/required")

@@ -83,7 +83,9 @@ class OpenApiIntegrationTest {
             document
                 .at("/components/schemas/CharacterObservationCoverageResponse/required")
                 .toString())
-        .contains("skills");
+        .contains("skills", "avatars", "collectibles");
+    assertThat(document.at("/components/schemas/CharacterResponse/required").toString())
+        .contains("tendencies", "decorations", "honorPoint", "townName", "avatars", "collectibles");
     var search = document.at("/paths/~1api~1v1~1characters~1search/get/parameters");
     assertThat(search.toString()).contains("includeSiblings");
     assertThat(document.at("/paths/~1api~1v1~1characters~1history/get/responses").has("503"))

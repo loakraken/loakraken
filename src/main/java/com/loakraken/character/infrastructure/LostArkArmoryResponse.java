@@ -19,7 +19,9 @@ record LostArkArmoryResponse(
     @JsonProperty("ArmoryCard") Cards cards,
     @JsonProperty("ArkPassive") ArkPassive arkPassive,
     @JsonProperty("ArkGrid") ArkGrid arkGrid,
-    @JsonProperty("ArmorySkills") List<Skill> skills) {
+    @JsonProperty("ArmorySkills") List<Skill> skills,
+    @JsonProperty("ArmoryAvatars") List<Avatar> avatars,
+    @JsonProperty("Collectibles") List<Collectible> collectibles) {
   CharacterObservationCoverage coverage(List<LostArkSiblingResponse> siblings) {
     return new CharacterObservationCoverage(
         ObservationState.collection(equipment),
@@ -54,7 +56,9 @@ record LostArkArmoryResponse(
                 "effects",
                     ObservationState.collection(arkGrid == null ? null : arkGrid.effects()))),
         siblings == null ? null : ObservationState.collection(siblings),
-        ObservationState.collection(skills));
+        ObservationState.collection(skills),
+        ObservationState.collection(avatars),
+        ObservationState.collection(collectibles));
   }
 
   private CharacterObservationCoverage.Section section(
@@ -71,7 +75,9 @@ record LostArkArmoryResponse(
         cards == null ? null : cards.toDomain(),
         arkPassive == null ? null : arkPassive.toDomain(),
         arkGrid == null ? null : arkGrid.toDomain(),
-        map(skills, Skill::toDomain));
+        map(skills, Skill::toDomain),
+        map(avatars, Avatar::toDomain),
+        map(collectibles, Collectible::toDomain));
   }
 
   @JsonIgnoreProperties(ignoreUnknown = true)
@@ -328,6 +334,53 @@ record LostArkArmoryResponse(
                   .toList(),
           rune == null ? null : rune.toDomain(),
           parsed.gemEffects());
+    }
+  }
+
+  @JsonIgnoreProperties(ignoreUnknown = true)
+  record Avatar(
+      @JsonProperty("Type") String type,
+      @JsonProperty("Name") String name,
+      @JsonProperty("Icon") String icon,
+      @JsonProperty("Grade") String grade,
+      @JsonProperty("IsSet") Boolean isSet,
+      @JsonProperty("IsInner") Boolean isInner,
+      @JsonProperty("Tooltip") String tooltip) {
+    CharacterLoadout.Avatar toDomain() {
+      var detail = LostArkEquipmentTooltip.parse(name, tooltip);
+      return new CharacterLoadout.Avatar(
+          LostArkText.plain(type),
+          LostArkText.plain(name),
+          icon,
+          grade,
+          isSet,
+          isInner,
+          detail == null
+              ? List.of()
+              : detail.effects().stream().flatMap(group -> group.lines().stream()).toList());
+    }
+  }
+
+  @JsonIgnoreProperties(ignoreUnknown = true)
+  record Collectible(
+      @JsonProperty("Type") String type,
+      @JsonProperty("Icon") String icon,
+      @JsonProperty("Point") Integer point,
+      @JsonProperty("MaxPoint") Integer maxPoint,
+      @JsonProperty("CollectiblePoints") List<CollectiblePoint> items) {
+    CharacterLoadout.Collectible toDomain() {
+      return new CharacterLoadout.Collectible(
+          LostArkText.plain(type), icon, point, maxPoint, map(items, CollectiblePoint::toDomain));
+    }
+  }
+
+  @JsonIgnoreProperties(ignoreUnknown = true)
+  record CollectiblePoint(
+      @JsonProperty("PointName") String name,
+      @JsonProperty("Point") Integer point,
+      @JsonProperty("MaxPoint") Integer maxPoint) {
+    CharacterLoadout.CollectibleItem toDomain() {
+      return new CharacterLoadout.CollectibleItem(LostArkText.plain(name), point, maxPoint);
     }
   }
 

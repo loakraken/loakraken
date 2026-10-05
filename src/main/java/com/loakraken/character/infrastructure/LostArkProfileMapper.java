@@ -33,7 +33,32 @@ final class LostArkProfileMapper {
                 .filter(stat -> stat != null)
                 .map(stat -> new CharacterProfile.Stat(stat.type(), stat.value()))
                 .toList(),
-        skillPoints(response.usingSkillPoint(), response.totalSkillPoint()));
+        skillPoints(response.usingSkillPoint(), response.totalSkillPoint()),
+        new CharacterProfile.Inner(
+            response.tendencies() == null
+                ? List.of()
+                : response.tendencies().stream()
+                    .filter(tendency -> tendency != null)
+                    .map(
+                        tendency ->
+                            new CharacterProfile.Tendency(
+                                LostArkText.plain(tendency.type()),
+                                tendency.point(),
+                                tendency.maxPoint()))
+                    .toList(),
+            response.decorations() == null
+                ? null
+                : new CharacterProfile.Decorations(
+                    response.decorations().symbol(),
+                    response.decorations().emblems() == null
+                        ? List.of()
+                        : response.decorations().emblems().stream()
+                            .filter(emblem -> emblem != null)
+                            .toList()),
+            response.honorPoint(),
+            LostArkText.plain(response.townName()),
+            response.townLevel(),
+            LostArkText.plain(response.guildMemberGrade())));
   }
 
   private static CharacterProfile.SkillPoints skillPoints(Integer used, Integer total) {

@@ -9,11 +9,48 @@ public record CharacterLoadout(
     Cards cards,
     ArkPassive arkPassive,
     ArkGrid arkGrid,
-    List<Skill> skills) {
+    List<Skill> skills,
+    List<Avatar> avatars,
+    List<Collectible> collectibles) {
   public CharacterLoadout {
     equipment = equipment == null ? List.of() : List.copyOf(equipment);
     skills = skills == null ? List.of() : List.copyOf(skills);
+    avatars = avatars == null ? List.of() : List.copyOf(avatars);
+    collectibles = collectibles == null ? List.of() : List.copyOf(collectibles);
   }
+
+  public CharacterLoadout(
+      List<Equipment> equipment,
+      Engravings engravings,
+      Gems gems,
+      Cards cards,
+      ArkPassive arkPassive,
+      ArkGrid arkGrid,
+      List<Skill> skills) {
+    this(equipment, engravings, gems, cards, arkPassive, arkGrid, skills, List.of(), List.of());
+  }
+
+  public record Avatar(
+      String type,
+      String name,
+      String icon,
+      String grade,
+      Boolean isSet,
+      Boolean isInner,
+      List<String> effects) {
+    public Avatar {
+      effects = effects == null ? List.of() : List.copyOf(effects);
+    }
+  }
+
+  public record Collectible(
+      String type, String icon, Integer point, Integer maxPoint, List<CollectibleItem> items) {
+    public Collectible {
+      items = items == null ? List.of() : List.copyOf(items);
+    }
+  }
+
+  public record CollectibleItem(String name, Integer point, Integer maxPoint) {}
 
   public CharacterLoadout(
       List<Equipment> equipment,

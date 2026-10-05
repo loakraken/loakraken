@@ -60,6 +60,12 @@ class MarketQueryServiceTest {
           public void saveOptions(MarketOptionsResult value) {
             storedOptions.set(value);
           }
+
+          public Optional<MarketItemHistoryResult> findItemHistory(long itemId) {
+            return Optional.empty();
+          }
+
+          public void saveItemHistory(MarketItemHistoryResult result) {}
         };
     var entered = new CountDownLatch(1);
     var release = new CountDownLatch(1);

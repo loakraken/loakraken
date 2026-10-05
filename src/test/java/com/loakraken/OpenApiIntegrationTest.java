@@ -270,6 +270,26 @@ class OpenApiIntegrationTest {
   }
 
   @Test
+  void 상품_시세_이력은_부분_집계와_null_요약_계약을_명시한다() throws Exception {
+    var document = JsonMapper.builder().build().readTree(request("/v3/api-docs").body());
+    var operation =
+        document.path("paths").path("/api/v1/markets/items/{itemId}/history").path("get");
+    assertThat(operation.path("responses").toString()).contains("200", "400", "404", "429", "503");
+    assertThat(operation.path("parameters").get(0).path("schema").path("maximum").asLong())
+        .isEqualTo(999_999_999L);
+    assertThat(document.at("/components/schemas/MarketItemHistoryResponse/required").toString())
+        .contains("itemId", "observedAt", "baseDate", "variants");
+    assertThat(document.at("/components/schemas/MarketDailyStatResponse/required").toString())
+        .contains("date", "averagePrice", "tradeCount", "partial");
+    assertThat(
+            document
+                .at(
+                    "/components/schemas/MarketItemSummaryResponse/properties/dayChangeRate/anyOf/1/type")
+                .asText())
+        .isEqualTo("null");
+  }
+
+  @Test
   void 재료_단가는_요청_필수값과_미계산_null_계약을_명시한다() throws Exception {
     var document = JsonMapper.builder().build().readTree(request("/v3/api-docs").body());
     var operation = document.path("paths").path("/api/v1/markets/material-prices").path("post");

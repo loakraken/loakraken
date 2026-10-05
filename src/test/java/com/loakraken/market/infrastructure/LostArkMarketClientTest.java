@@ -117,6 +117,54 @@ class LostArkMarketClientTest {
   }
 
   @Test
+  void 상품_상세는_GET으로_조회하고_변형별_일별_시세를_보존한다() {
+    body =
+        """
+        [{"Name":"검증 재료","TradeRemainCount":null,"BundleCount":100,"Stats":[
+          {"Date":"2026-10-06","AvgPrice":175.5,"TradeCount":8817},
+          {"Date":"2026-10-05","AvgPrice":172.6,"TradeCount":247145},
+          {"Date":null,"AvgPrice":1,"TradeCount":1}],"ToolTip":"{}"},
+         {"Name":"검증 재료","TradeRemainCount":2,"BundleCount":1,"Stats":null}]
+        """;
+    var history =
+        new LostArkMarketItemClient(httpClient("test-token", Duration.ofSeconds(2)))
+            .fetchHistory(66102006)
+            .orElseThrow();
+    assertThat(path).isEqualTo("/markets/items/66102006");
+    assertThat(method).isEqualTo("GET");
+    assertThat(history.itemId()).isEqualTo(66102006);
+    assertThat(history.variants()).hasSize(2);
+    var first = history.variants().getFirst();
+    assertThat(first.bundleCount()).isEqualTo(100);
+    assertThat(first.tradeRemainCount()).isNull();
+    assertThat(first.days()).hasSize(2);
+    assertThat(first.days().getFirst().averagePrice()).isEqualByComparingTo("175.5");
+    assertThat(history.variants().get(1).days()).isEmpty();
+    assertThat(
+            registry
+                .get("loakraken.lostark.requests")
+                .tags("endpoint", "market_item_history", "outcome", "success")
+                .timer()
+                .count())
+        .isEqualTo(1);
+  }
+
+  @Test
+  void 공식_API가_null을_돌려주면_상품_없음으로_처리한다() {
+    body = "null";
+    assertThat(
+            new LostArkMarketItemClient(httpClient("test", Duration.ofSeconds(2))).fetchHistory(1))
+        .isEmpty();
+    assertThat(
+            registry
+                .get("loakraken.lostark.requests")
+                .tags("endpoint", "market_item_history", "outcome", "not_found")
+                .timer()
+                .count())
+        .isEqualTo(1);
+  }
+
+  @Test
   void 최근_거래는_현재_최저가를_추론하지_않고_누락_가격을_보존한다() {
     body = body.replace("\"RecentPrice\":0", "\"RecentPrice\":null");
     var result =

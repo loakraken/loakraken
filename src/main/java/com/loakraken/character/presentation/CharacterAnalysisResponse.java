@@ -3,6 +3,7 @@ package com.loakraken.character.presentation;
 import com.loakraken.character.domain.CharacterAnalysis;
 import com.loakraken.character.domain.CharacterDiagnostics;
 import com.loakraken.character.domain.CharacterObservationCoverage;
+import com.loakraken.character.domain.CharacterPosition;
 import com.loakraken.common.api.NullableResponse;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.math.BigDecimal;
@@ -17,7 +18,12 @@ public record CharacterAnalysisResponse(
     @NullableResponse EngravingSummaryResponse engravings,
     @NullableResponse PassiveSummaryResponse arkPassive,
     @NullableResponse GridSummaryResponse arkGrid,
-    CharacterDiagnosticsResponse diagnostics) {
+    CharacterDiagnosticsResponse diagnostics,
+    @Schema(description = "아크패시브 깨달음 노드 기준 포지션. 판정 근거가 없으면 null") @NullableResponse
+        CharacterPosition.Role position,
+    @Schema(description = "판정에 쓴 깨달음 노드 이름 또는 서포터가 없는 직업명. 판정 불가면 null") @NullableResponse
+        String positionEvidence,
+    @Schema(description = "포지션 판정 규칙 버전", example = "position-v1") String positionRuleVersion) {
   static CharacterAnalysisResponse from(
       CharacterAnalysis value, CharacterObservationCoverage coverage) {
     var equipment = value.equipment();
@@ -94,7 +100,10 @@ public record CharacterAnalysisResponse(
                 grid.unknownGemCount(),
                 grid.orderPoints(),
                 grid.chaosPoints()),
-        CharacterDiagnosticsResponse.from(CharacterDiagnostics.from(value, coverage)));
+        CharacterDiagnosticsResponse.from(CharacterDiagnostics.from(value, coverage)),
+        value.position().role(),
+        value.position().evidence(),
+        CharacterPosition.RULE_VERSION);
   }
 
   @Schema(description = "장비 Tooltip 해석 결과의 관측 집계입니다. 부위별 가중치·점수·추천이 아니며 값이 없는 장비는 각 집계에서 제외합니다.")

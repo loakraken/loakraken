@@ -12,6 +12,6 @@ public record CharacterResult(
   }
 
   public CharacterAnalysis analysis() {
-    return CharacterAnalysis.from(details.loadout());
+    return CharacterAnalysis.from(details.loadout(), details.profile().className());
   }
 }

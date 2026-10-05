@@ -15,7 +15,26 @@ public record CharacterAnalysis(
     CardSummary cards,
     EngravingSummary engravings,
     PassiveSummary arkPassive,
-    GridSummary arkGrid) {
+    GridSummary arkGrid,
+    CharacterPosition position) {
+  public CharacterAnalysis(
+      int equipmentCount,
+      EquipmentSummary equipment,
+      GemSummary gems,
+      CardSummary cards,
+      EngravingSummary engravings,
+      PassiveSummary arkPassive,
+      GridSummary arkGrid) {
+    this(
+        equipmentCount,
+        equipment,
+        gems,
+        cards,
+        engravings,
+        arkPassive,
+        arkGrid,
+        CharacterPosition.judge(null, null));
+  }
 
   public static final String WEAPON_ARMOR = "WEAPON_ARMOR";
   public static final String ACCESSORY = "ACCESSORY";
@@ -25,6 +44,10 @@ public record CharacterAnalysis(
   private static final Pattern GEM_COOLDOWN = Pattern.compile("^재사용 대기시간 [0-9.]+% 감소$");
 
   public static CharacterAnalysis from(CharacterLoadout loadout) {
+    return from(loadout, null);
+  }
+
+  public static CharacterAnalysis from(CharacterLoadout loadout, String className) {
     return new CharacterAnalysis(
         loadout.equipment().size(),
         equipment(loadout.equipment()),
@@ -37,7 +60,8 @@ public record CharacterAnalysis(
                 loadout.engravings().effects().size(),
                 loadout.engravings().arkPassiveEffects().size()),
         passive(loadout.arkPassive()),
-        grid(loadout.arkGrid()));
+        grid(loadout.arkGrid()),
+        CharacterPosition.judge(className, loadout.arkPassive()));
   }
 
   private static EquipmentSummary equipment(List<CharacterLoadout.Equipment> equipment) {

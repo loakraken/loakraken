@@ -111,7 +111,14 @@ class OpenApiIntegrationTest {
     assertThat(document.at("/components/schemas/ObservationSectionResponse/required").toString())
         .contains("state", "collections");
     assertThat(document.at("/components/schemas/CharacterAnalysisResponse/required").toString())
-        .contains("diagnostics", "equipment");
+        .contains(
+            "diagnostics", "equipment", "position", "positionEvidence", "positionRuleVersion");
+    assertThat(
+            document
+                .at(
+                    "/components/schemas/CharacterAnalysisResponse/properties/position/anyOf/1/type")
+                .asText())
+        .isEqualTo("null");
     assertThat(document.at("/components/schemas/EquipmentSummaryResponse/required").toString())
         .contains(
             "detailCount",

@@ -1,0 +1,103 @@
+package com.loakraken.refining.presentation;
+
+import com.loakraken.refining.domain.RefiningPlan;
+import com.loakraken.refining.domain.RefiningRules;
+import io.swagger.v3.oas.annotations.media.Schema;
+import java.math.BigDecimal;
+import java.util.List;
+
+@Schema(
+    description =
+        "재련 기대 비용. 기대값은 확률 분포의 평균이며, 최악은 장인의 기운으로 확정될 때까지 모두 실패한 경우입니다. 시세 환산·실링은 포함하지 않습니다.")
+public record RefiningPlanResponse(
+    String ruleVersion,
+    SourceResponse source,
+    RefiningRules.Grade grade,
+    RefiningRules.EquipmentType equipmentType,
+    int fromStage,
+    int toStage,
+    boolean useBreath,
+    boolean useBook,
+    boolean growthSupport,
+    List<StageResponse> stages,
+    @Schema(description = "단계별 기대 소모량(소수 둘째 자리 반올림)의 합") List<QuantityResponse> expectedMaterials,
+    @Schema(description = "모든 단계가 최대 시도 수까지 간 경우의 소모량") List<QuantityResponse> worstCaseMaterials,
+    BigDecimal expectedGold,
+    long worstCaseGold,
+    @Schema(description = "계산 가정과 제외 항목") List<String> assumptions) {
+  static RefiningPlanResponse from(
+      RefiningRules rules,
+      RefiningRules.Grade grade,
+      RefiningRules.EquipmentType equipmentType,
+      RefiningPlanRequest request,
+      RefiningPlan plan) {
+    var options = request.toOptions();
+    return new RefiningPlanResponse(
+        rules.ruleVersion(),
+        new SourceResponse(
+            rules.source().name(),
+            rules.source().commit(),
+            rules.source().license(),
+            rules.source().crossCheckedWith(),
+            rules.source().verifiedOn()),
+        grade,
+        equipmentType,
+        options.fromStage(),
+        options.toStage(),
+        options.useBreath(),
+        options.useBook(),
+        options.growthSupport(),
+        plan.stages().stream().map(StageResponse::from).toList(),
+        quantities(plan.expectedMaterials()),
+        quantities(plan.worstCaseMaterials()),
+        plan.expectedGold(),
+        plan.worstCaseGold(),
+        List.of(
+            "실패할 때마다 기본 확률의 10%가 오르며 최대 10회까지 누적합니다.",
+            "장인의 기운은 시도 최종 성공률(숨결·책 포함) × 0.465만큼 쌓이고 100%면 다음 시도가 확정 성공입니다.",
+            "현재 장인의 기운·실패 횟수는 첫 단계에만 적용하고 이후 단계는 0에서 시작합니다.",
+            "실링, 강화 재봉술·야금술, 운명의 전율 책, 이벤트·익스프레스 추가 확률, 특수 재련은 계산하지 않습니다.",
+            "골드 환산 시세는 포함하지 않습니다. 재료 견적 API로 기대·최악 수량을 환산할 수 있습니다."));
+  }
+
+  private static List<QuantityResponse> quantities(List<RefiningPlan.Quantity> values) {
+    return values.stream()
+        .map(value -> new QuantityResponse(value.name(), value.amount()))
+        .toList();
+  }
+
+  public record SourceResponse(
+      @Schema(description = "단계별 수치 출처") String name,
+      String commit,
+      String license,
+      @Schema(description = "교차 검증한 다른 출처") String crossCheckedWith,
+      String verifiedOn) {}
+
+  public record StageResponse(
+      @Schema(description = "이 단계 재련 후 단계") int targetStage,
+      @Schema(description = "첫 시도 성공률(만분율, 1 = 0.01%). 숨결·책 포함") int firstAttemptSuccessRateBp,
+      @Schema(description = "기대 시도 수") BigDecimal expectedAttempts,
+      @Schema(description = "50% 확률로 이 시도 안에 성공") int medianAttempts,
+      @Schema(description = "90% 확률로 이 시도 안에 성공") int p90Attempts,
+      @Schema(description = "장인의 기운으로 확정되는 최대 시도 수") int maxAttempts,
+      List<QuantityResponse> expectedMaterials,
+      List<QuantityResponse> worstCaseMaterials,
+      BigDecimal expectedGold,
+      long worstCaseGold) {
+    static StageResponse from(RefiningPlan.StagePlan stage) {
+      return new StageResponse(
+          stage.targetStage(),
+          stage.firstAttemptSuccessRateBp(),
+          stage.expectedAttempts(),
+          stage.medianAttempts(),
+          stage.p90Attempts(),
+          stage.maxAttempts(),
+          quantities(stage.expectedMaterials()),
+          quantities(stage.worstCaseMaterials()),
+          stage.expectedGold(),
+          stage.worstCaseGold());
+    }
+  }
+
+  public record QuantityResponse(String name, BigDecimal amount) {}
+}

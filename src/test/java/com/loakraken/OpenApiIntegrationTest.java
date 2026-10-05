@@ -263,6 +263,15 @@ class OpenApiIntegrationTest {
         .isEqualTo("null");
     assertThat(document.at("/components/schemas/CritSpeedSupersonicResponse/required").toString())
         .contains("optimalSpeed", "requiredSwiftness", "requiredAdditionalSwiftness");
+    assertThat(document.at("/components/schemas/CritSpeedSpeedResponse/required").toString())
+        .contains("swiftnessPerPercent", "swiftnessTable");
+    assertThat(document.at("/components/schemas/CritSpeedSwiftnessRowResponse/required").toString())
+        .contains("swiftness", "attack", "move", "supersonicEvolutionDamage", "current", "optimal");
+    assertThat(
+            document
+                .at("/components/schemas/CritSpeedAssumptions/properties/extraAttackSpeed/minimum")
+                .asInt())
+        .isEqualTo(-100);
     assertThat(document.at("/components/schemas/StatResponse/required").toString())
         .contains("tooltip");
     assertThat(document.at("/components/schemas/PassiveEffectResponse/required").toString())

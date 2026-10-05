@@ -42,13 +42,13 @@ public record CritSpeedRequest(
           @DecimalMax("100")
           @Digits(integer = 3, fraction = 2)
           BigDecimal extraCritRate,
-      @Schema(description = "공격 속도 가정 %(직업 각인·트라이포드·서포터 버프·만찬·음식 합)")
-          @DecimalMin("0")
+      @Schema(description = "공격 속도 가정 %(직업 각인·트라이포드·서포터 버프·만찬·음식 합). 감소는 음수")
+          @DecimalMin("-100")
           @DecimalMax("100")
           @Digits(integer = 3, fraction = 2)
           BigDecimal extraAttackSpeed,
-      @Schema(description = "이동 속도 가정 %(직업 각인·트라이포드·서포터 버프·만찬·음식 합)")
-          @DecimalMin("0")
+      @Schema(description = "이동 속도 가정 %(직업 각인·트라이포드·서포터 버프·만찬·음식 합). 감소는 음수")
+          @DecimalMin("-100")
           @DecimalMax("100")
           @Digits(integer = 3, fraction = 2)
           BigDecimal extraMoveSpeed) {}

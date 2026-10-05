@@ -67,13 +67,20 @@ class CritSpeedIntegrationTest {
     assertThat(response.statusCode()).isEqualTo(200);
     var json = mapper.readTree(response.body());
     assertThat(json.path("code").asText()).isEqualTo("CHARACTER_CRIT_SPEED_SUCCESS");
-    assertThat(json.at("/data/ruleVersion").asText()).isEqualTo("crit-speed-v1");
+    assertThat(json.at("/data/ruleVersion").asText()).isEqualTo("crit-speed-v2");
     assertThat(json.at("/data/characterName").asText()).isEqualTo(NAME);
     assertThat(json.at("/data/crit/observedRate").decimalValue()).isEqualByComparingTo("25.71");
     assertThat(json.at("/data/crit/assumedRate").decimalValue()).isEqualByComparingTo("10");
     assertThat(json.at("/data/crit/targets/0/key").asText()).isEqualTo("CRIT_100");
     assertThat(json.at("/data/crit/bluntThorn/source").asText()).isEqualTo("REFERENCE_LEVEL_2");
     assertThat(json.at("/data/speed/supersonic/requiredSwiftness").asInt()).isEqualTo(2290);
+    assertThat(json.at("/data/speed/swiftnessPerPercent").decimalValue())
+        .isEqualByComparingTo("58.22");
+    assertThat(json.at("/data/crit/critStatPerPercent").decimalValue())
+        .isEqualByComparingTo("27.944");
+    assertThat(json.at("/data/speed/swiftnessTable/0/swiftness").asInt()).isZero();
+    assertThat(json.at("/data/speed/swiftnessTable/0/attack").decimalValue())
+        .isEqualByComparingTo("14");
     assertThat(json.at("/data/sources/0/kind").asText()).isEqualTo("OBSERVED");
     assertThat(json.at("/data/sources/0/text").asText()).contains("20.61%");
     assertThat(json.at("/data/limitations").size()).isPositive();
@@ -92,6 +99,7 @@ class CritSpeedIntegrationTest {
         "{\"characterName\":\"모험가\",\"assumptions\":{\"critSynergyCount\":4}}",
         "{\"characterName\":\"모험가\",\"assumptions\":{\"extraCritRate\":-1}}",
         "{\"characterName\":\"모험가\",\"assumptions\":{\"extraAttackSpeed\":100.001}}",
+        "{\"characterName\":\"모험가\",\"assumptions\":{\"extraMoveSpeed\":-100.5}}",
         "{broken"
       })
   void 잘못된_요청은_조회_전에_400으로_거절한다(String body) throws Exception {

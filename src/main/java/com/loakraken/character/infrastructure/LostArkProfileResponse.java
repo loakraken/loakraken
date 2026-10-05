@@ -36,5 +36,8 @@ record LostArkProfileResponse(
       @JsonProperty("Symbol") String symbol, @JsonProperty("Emblems") List<String> emblems) {}
 
   @JsonIgnoreProperties(ignoreUnknown = true)
-  record Stat(@JsonProperty("Type") String type, @JsonProperty("Value") String value) {}
+  record Stat(
+      @JsonProperty("Type") String type,
+      @JsonProperty("Value") String value,
+      @JsonProperty("Tooltip") List<String> tooltip) {}
 }

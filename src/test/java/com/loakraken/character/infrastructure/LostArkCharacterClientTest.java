@@ -202,7 +202,8 @@ class LostArkCharacterClientTest {
         {"ArmoryProfile":{"CharacterName":"모험가","ServerName":"루페온","CharacterClassName":"바드",
           "CharacterLevel":70,"ItemAvgLevel":"1,700.50",
           "Title":"<img src='emoticon_tooltip_ranking_1' width='18' height='18' vspace='-4'></img>칭호",
-          "GuildName":"길드&amp;이름"},
+          "GuildName":"길드&amp;이름",
+          "Stats":[{"Type":"치명","Value":"576","Tooltip":["<font color='#FFFFFF'>치명타 적중률이 <font color='#99ff99'>20.61%</font> 증가합니다.</font>",""]}]},
          "ArmoryEngraving":{"ArkPassiveEffects":[{"Grade":"유물","Level":4,"Name":"원한",
            "Description":"피해가 <FONT COLOR='#99ff99'>27.00%</FONT> 증가<BR>받는 피해 증가"}]},
          "ArmoryGem":{"Gems":[{"Slot":0,"Level":6,"Grade":"전설",
@@ -211,7 +212,8 @@ class LostArkCharacterClientTest {
            "Skills":[{"GemSlot":0,"Name":"스킬","Description":["<FONT COLOR='#FFD200'>피해</FONT> 증가"],
             "Option":"공격력 &lt; 1% 증가"}]}},
          "ArkPassive":{"IsArkPassive":true,"Effects":[{"Name":"깨달음",
-           "Description":"<FONT color='#83E9FF'>깨달음</FONT> 1티어 <FONT color='#83E9FF'>버스트 강화 Lv.1</FONT>"}]}}
+           "Description":"<FONT color='#83E9FF'>깨달음</FONT> 1티어 <FONT color='#83E9FF'>버스트 강화 Lv.1</FONT>",
+           "ToolTip":"{\\\"Element_000\\\":{\\\"type\\\":\\\"NameTagBox\\\",\\\"value\\\":\\\"버스트 강화\\\"},\\\"Element_002\\\":{\\\"type\\\":\\\"MultiTextBox\\\",\\\"value\\\":\\\"치명타 적중률이 <FONT COLOR='#99ff99'>8.0%</FONT> 증가합니다.<BR>  다음 줄||\\\"}}"}]}}
         """;
     var fetched = client("test", Duration.ofSeconds(2)).fetch("모험가");
     var profile = fetched.details().profile();
@@ -226,6 +228,9 @@ class LostArkCharacterClientTest {
     assertThat(loadout.gems().effects().skills().getFirst().option()).isEqualTo("공격력 < 1% 증가");
     assertThat(loadout.arkPassive().effects().getFirst().description())
         .isEqualTo("깨달음 1티어 버스트 강화 Lv.1");
+    assertThat(loadout.arkPassive().effects().getFirst().effect())
+        .isEqualTo("치명타 적중률이 8.0% 증가합니다. 다음 줄");
+    assertThat(profile.stats().getFirst().tooltip()).containsExactly("치명타 적중률이 20.61% 증가합니다.");
     assertThat(fetched.armoryJson()).contains("<FONT COLOR='#F99200'>", "<BR>");
     var result = new CharacterResult(fetched.details(), Instant.parse("2026-10-04T00:00:00Z"));
     var mapper = new JsonMapper();

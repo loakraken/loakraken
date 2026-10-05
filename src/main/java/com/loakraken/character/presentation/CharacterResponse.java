@@ -58,7 +58,9 @@ public record CharacterResponse(
         profile.imageUrl(),
         profile.title(),
         profile.guildName(),
-        profile.stats().stream().map(stat -> new StatResponse(stat.type(), stat.value())).toList(),
+        profile.stats().stream()
+            .map(stat -> new StatResponse(stat.type(), stat.value(), stat.tooltip()))
+            .toList(),
         profile.skillPoints() == null
             ? null
             : new SkillPointsResponse(profile.skillPoints().used(), profile.skillPoints().total()),
@@ -140,7 +142,11 @@ public record CharacterResponse(
   public record SkillPointsResponse(
       @NullableResponse Integer used, @NullableResponse Integer total) {}
 
-  public record StatResponse(@NullableResponse String type, @NullableResponse String value) {}
+  public record StatResponse(
+      @NullableResponse String type,
+      @NullableResponse String value,
+      @Schema(description = "공식 스탯 Tooltip 문장(정제). 예: 치명타 적중률이 20.61% 증가합니다.")
+          List<String> tooltip) {}
 
   public record SiblingResponse(
       String characterName,

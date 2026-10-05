@@ -259,10 +259,14 @@ record LostArkArmoryResponse(
   record PassiveEffect(
       @JsonProperty("Name") String name,
       @JsonProperty("Description") String description,
-      @JsonProperty("Icon") String icon) {
+      @JsonProperty("Icon") String icon,
+      @JsonProperty("ToolTip") String tooltip) {
     CharacterLoadout.PassiveEffect toDomain() {
       return new CharacterLoadout.PassiveEffect(
-          LostArkText.plain(name), LostArkText.plain(description), icon);
+          LostArkText.plain(name),
+          LostArkText.plain(description),
+          icon,
+          LostArkSkillTooltip.passiveEffect(tooltip));
     }
   }
 

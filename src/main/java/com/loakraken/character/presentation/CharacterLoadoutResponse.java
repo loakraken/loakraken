@@ -291,10 +291,13 @@ public record CharacterLoadoutResponse(
   public record PassiveEffectResponse(
       @NullableResponse String name,
       @NullableResponse String description,
-      @NullableResponse String icon) {
+      @NullableResponse String icon,
+      @Schema(description = "공식 노드 Tooltip의 효과 문구(수치 포함). 제공되지 않으면 null") @NullableResponse
+          String effect) {
     static PassiveEffectResponse from(CharacterLoadout.PassiveEffect value) {
       if (value == null) return null;
-      return new PassiveEffectResponse(value.name(), value.description(), value.icon());
+      return new PassiveEffectResponse(
+          value.name(), value.description(), value.icon(), value.effect());
     }
   }
 

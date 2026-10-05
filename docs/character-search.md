@@ -11,7 +11,7 @@
 
 ## 조회와 캐시
 
-- Valkey 키: `character:v9:{정규화한 캐릭터명}:summary`, 기본 TTL 5분 (`lostark.summary-ttl`)
+- Valkey 키: `character:v10:{정규화한 캐릭터명}:summary`, 기본 TTL 5분 (`lostark.summary-ttl`)
 - 전투정보와 원정대 조회가 모두 성공한 결과만 캐시에 저장합니다. 두 요청은 순서대로 실행하며 각각 호출 예산을 사용합니다.
 - 기본 설정에서는 수집 결과를 단기 캐시에만 반영합니다. `CHARACTER_SNAPSHOTS_ENABLED=true`일 때만 [PostgreSQL 스냅샷](character-snapshots.md)에 먼저 저장합니다.
 - 캐시 적중 시 최초 수집 시각을 유지하고 외부 API를 호출하지 않습니다.
@@ -43,8 +43,8 @@
 
 공식 전투정보실은 원정대 캐릭터를 접힌 목록으로, 로아와·클로아·일로아는 보유 캐릭터를 별도 탭/페이지로 제공한다(2026-10-05 관찰). 이에 맞춰 원정대를 검색과 따로 조회할 수 있다.
 
-- `GET /api/v1/characters/search?includeSiblings=false&characterName=모험가`: 공식 Armories만 1회 호출한다. 응답 `siblings`와 `coverage.siblings`는 null이며 "이 요청에서 조회하지 않음"을 뜻한다. 캐시 키는 `character:v9:{name}:armory`. 스냅샷은 저장하지 않는다(스냅샷 스키마가 원정대 원문을 필수로 요구한다).
-- `includeSiblings` 생략 또는 true: 기존과 같다. Armories + Siblings 2회, 둘 다 성공해야 검색 성공, 캐시 키 `character:v9:{name}:summary`.
+- `GET /api/v1/characters/search?includeSiblings=false&characterName=모험가`: 공식 Armories만 1회 호출한다. 응답 `siblings`와 `coverage.siblings`는 null이며 "이 요청에서 조회하지 않음"을 뜻한다. 캐시 키는 `character:v10:{name}:armory`. 스냅샷은 저장하지 않는다(스냅샷 스키마가 원정대 원문을 필수로 요구한다).
+- `includeSiblings` 생략 또는 true: 기존과 같다. Armories + Siblings 2회, 둘 다 성공해야 검색 성공, 캐시 키 `character:v10:{name}:summary`.
 - `GET /api/v1/characters/siblings?characterName=모험가`: 공식 Siblings만 1회 호출한다. 응답은 `characterName`, `siblings`, `fetchedAt`, 성공 코드 `CHARACTER_SIBLINGS_SUCCESS`. 캐시 키 `character:v1:{name}:siblings`, 기본 TTL은 검색과 같은 5분. 같은 이름의 동시 요청은 인스턴스 안에서 한 번으로 합친다.
 - 공식 원정대 API는 없는 캐릭터에 200 `[]`를 반환한다(2026-10-05 1회 확인). 원정대에는 조회한 캐릭터 자신이 포함되므로 단독 원정대 조회의 빈 목록과 공식 404는 `404 CHARACTER_NOT_FOUND`다. 결합 검색에서는 전투정보 확인 뒤의 원정대 오류를 기존처럼 502로 처리한다.
 - 화면을 나누면 캐릭터 상세는 1회, 원정대 탭을 열 때 1회를 사용한다. 원정대 실패가 캐릭터 상세를 막지 않는다.
@@ -95,7 +95,7 @@ Armories 통합 조회 필터에 `avatars`·`collectibles`를 포함한다(외�
 - `avatars[{type, name, icon, grade, isSet, isInner, effects[]}]`: 덧입기는 `isInner=true`, `effects`는 Tooltip의 기본 효과 줄. 염색 정보는 공식 응답에서 확인되지 않아 제공하지 않는다.
 - `collectibles[{type, icon, point, maxPoint, items[{name, point, maxPoint}]}]`: 수집품 11종. 획득처는 공식 API에 없다.
 - `coverage.avatars`·`coverage.collectibles`. 증명의 전장(colosseums)은 아직 제공하지 않는다.
-- 캐시 키 `character:v9`.
+- 캐시 키 `character:v10`.
 
 ## 오류
 
@@ -116,3 +116,9 @@ Armories 통합 조회 필터에 `avatars`·`collectibles`를 포함한다(외�
 
 공식 계약: [Armories Swagger](https://developer-lostark.game.onstove.com/swagger-doc/endpoints/armories),
 [사용 가이드](https://developer-lostark.game.onstove.com/usage-guide).
+
+## 스탯 Tooltip과 아크 패시브 효과 문구 (2026-10-06)
+
+- `stats[].tooltip`: 공식 스탯 Tooltip 문장을 마크업을 제거해 그대로 제공한다. 예: `치명` → `치명타 적중률이 20.61% 증가합니다.` 빈 줄은 뺀다.
+- `loadout.arkPassive.effects[].effect`: 공식 노드 ToolTip의 `MultiTextBox` 효과 문구(수치 포함)를 한 줄로 이은 값이다. 해석할 수 없으면 null이다. 예: `치명타 적중률이 8.0% 증가하고, 진화형 피해가 10.0% 증가합니다.`
+- 두 값은 [치명타·공이속 계산](crit-speed.md)의 관측 근거로 쓰인다. 캐시 키는 `character:v10`.

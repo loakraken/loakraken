@@ -53,6 +53,27 @@ final class LostArkSkillTooltip {
     return new Parsed(partBreak, counter, gems);
   }
 
+  /** 아크 패시브 노드 Tooltip의 MultiTextBox 효과 문구를 이어 붙인다. 없거나 해석할 수 없으면 null. */
+  static String passiveEffect(String tooltip) {
+    if (tooltip == null || tooltip.isBlank()) return null;
+    JsonNode root;
+    try {
+      root = MAPPER.readTree(tooltip);
+    } catch (JacksonException exception) {
+      return null;
+    }
+    if (root == null || !root.isObject()) return null;
+    var parts = new ArrayList<String>();
+    for (var element : root.values()) {
+      if (!"MultiTextBox".equals(text(element.path("type")))) continue;
+      String plain = LostArkText.plain(text(element.path("value")));
+      if (plain == null) continue;
+      for (var part : plain.split("\\|\\|"))
+        if (!part.isBlank()) parts.add(part.strip().replaceAll("\\s+", " "));
+    }
+    return parts.isEmpty() ? null : String.join(" ", parts);
+  }
+
   private static CharacterLoadout.GemEffectKind kind(String line) {
     if (GEM_DAMAGE.matcher(line).find()) return CharacterLoadout.GemEffectKind.DAMAGE;
     if (GEM_COOLDOWN.matcher(line).find()) return CharacterLoadout.GemEffectKind.COOLDOWN;

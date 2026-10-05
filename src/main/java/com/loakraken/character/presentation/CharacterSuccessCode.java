@@ -6,7 +6,8 @@ import org.springframework.http.HttpStatus;
 enum CharacterSuccessCode implements SuccessCode {
   CHARACTER_SEARCH_SUCCESS,
   CHARACTER_HISTORY_SUCCESS,
-  CHARACTER_SIBLINGS_SUCCESS;
+  CHARACTER_SIBLINGS_SUCCESS,
+  CHARACTER_CRIT_SPEED_SUCCESS;
 
   public HttpStatus httpStatus() {
     return HttpStatus.OK;
@@ -20,6 +21,7 @@ enum CharacterSuccessCode implements SuccessCode {
     return switch (this) {
       case CHARACTER_HISTORY_SUCCESS -> "캐릭터 관측 이력 조회에 성공했습니다.";
       case CHARACTER_SIBLINGS_SUCCESS -> "원정대 캐릭터 조회에 성공했습니다.";
+      case CHARACTER_CRIT_SPEED_SUCCESS -> "치명타·공이속 계산에 성공했습니다.";
       default -> "캐릭터 조회에 성공했습니다.";
     };
   }

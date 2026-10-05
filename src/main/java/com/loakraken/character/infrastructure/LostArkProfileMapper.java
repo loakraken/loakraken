@@ -31,7 +31,17 @@ final class LostArkProfileMapper {
             ? List.of()
             : response.stats().stream()
                 .filter(stat -> stat != null)
-                .map(stat -> new CharacterProfile.Stat(stat.type(), stat.value()))
+                .map(
+                    stat ->
+                        new CharacterProfile.Stat(
+                            stat.type(),
+                            stat.value(),
+                            stat.tooltip() == null
+                                ? List.of()
+                                : stat.tooltip().stream()
+                                    .map(LostArkText::plain)
+                                    .filter(line -> line != null && !line.isBlank())
+                                    .toList()))
                 .toList(),
         skillPoints(response.usingSkillPoint(), response.totalSkillPoint()),
         new CharacterProfile.Inner(

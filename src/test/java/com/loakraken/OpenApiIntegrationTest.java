@@ -239,6 +239,37 @@ class OpenApiIntegrationTest {
   }
 
   @Test
+  void 치명타_공이속_계산은_관측과_가정_분리와_null_계약을_명시한다() throws Exception {
+    var document = JsonMapper.builder().build().readTree(request("/v3/api-docs").body());
+    var operation = document.path("paths").path("/api/v1/characters/crit-speed").path("post");
+    assertThat(operation.path("requestBody").path("required").asBoolean()).isTrue();
+    assertThat(operation.path("responses").toString()).contains("200", "400", "404", "415", "429");
+    assertThat(document.at("/components/schemas/CritSpeedRequest/required").toString())
+        .contains("characterName");
+    assertThat(
+            document
+                .at("/components/schemas/CritSpeedAssumptions/properties/critSynergyCount/maximum")
+                .asInt())
+        .isEqualTo(3);
+    assertThat(document.at("/components/schemas/CritSpeedResponse/required").toString())
+        .contains("ruleVersion", "sources", "crit", "speed", "limitations");
+    assertThat(document.at("/components/schemas/CritSpeedSourceResponse/required").toString())
+        .contains("kind", "category", "axis", "value", "text");
+    assertThat(
+            document
+                .at(
+                    "/components/schemas/CritSpeedTargetResponse/properties/requiredCritStat/anyOf/1/type")
+                .asText())
+        .isEqualTo("null");
+    assertThat(document.at("/components/schemas/CritSpeedSupersonicResponse/required").toString())
+        .contains("optimalSpeed", "requiredSwiftness", "requiredAdditionalSwiftness");
+    assertThat(document.at("/components/schemas/StatResponse/required").toString())
+        .contains("tooltip");
+    assertThat(document.at("/components/schemas/PassiveEffectResponse/required").toString())
+        .contains("effect");
+  }
+
+  @Test
   void 재료_단가는_요청_필수값과_미계산_null_계약을_명시한다() throws Exception {
     var document = JsonMapper.builder().build().readTree(request("/v3/api-docs").body());
     var operation = document.path("paths").path("/api/v1/markets/material-prices").path("post");

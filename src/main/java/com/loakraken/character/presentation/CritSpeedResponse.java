@@ -1,0 +1,157 @@
+package com.loakraken.character.presentation;
+
+import com.loakraken.character.application.CritSpeedService;
+import com.loakraken.character.domain.CritSpeedCalculation;
+import com.loakraken.common.api.NullableResponse;
+import io.swagger.v3.oas.annotations.media.Schema;
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.util.List;
+
+@Schema(description = "치명타·공이속 계산. 관측(OBSERVED)과 가정(ASSUMED) 출처를 분리합니다. 값은 % 단위입니다.")
+public record CritSpeedResponse(
+    @Schema(description = "계산 규칙 버전") String ruleVersion,
+    String characterName,
+    @NullableResponse String className,
+    @Schema(description = "캐릭터 원천 수집 시각(캐시 적중 시 원래 시각)") Instant fetchedAt,
+    @Schema(description = "합산한 출처. text는 공식 원문 또는 가정 설명") List<CritSpeedSourceResponse> sources,
+    CritSpeedCritResponse crit,
+    CritSpeedSpeedResponse speed,
+    @Schema(description = "계산에서 제외했거나 근사한 항목") List<String> limitations) {
+
+  static CritSpeedResponse from(CritSpeedService.CritSpeedResult value) {
+    var result = value.result();
+    var crit = result.crit();
+    var thorn = crit.bluntThorn();
+    var speed = result.speed();
+    var supersonic = speed.supersonic();
+    return new CritSpeedResponse(
+        result.ruleVersion(),
+        value.characterName(),
+        value.className(),
+        value.fetchedAt(),
+        result.sources().stream().map(CritSpeedSourceResponse::from).toList(),
+        new CritSpeedCritResponse(
+            crit.critStat(),
+            crit.observedRate(),
+            crit.assumedRate(),
+            crit.totalRate(),
+            crit.effectiveRate(),
+            new CritSpeedBluntThornResponse(
+                thorn.source(),
+                thorn.rule().level(),
+                thorn.rule().baseEvolutionDamage(),
+                thorn.rule().critCap(),
+                thorn.rule().conversionPercent(),
+                thorn.rule().maxEvolutionDamage(),
+                thorn.optimalCritRate(),
+                thorn.evolutionDamage(),
+                thorn.effectiveCritRate()),
+            crit.targets().stream()
+                .map(
+                    target ->
+                        new CritSpeedTargetResponse(
+                            target.key(),
+                            target.targetRate(),
+                            target.requiredCritStat(),
+                            target.requiredAdditionalCritStat(),
+                            target.reached()))
+                .toList()),
+        new CritSpeedSpeedResponse(
+            speed.swiftnessStat(),
+            speed.cap(),
+            CritSpeedAxisResponse.from(speed.attack()),
+            CritSpeedAxisResponse.from(speed.move()),
+            new CritSpeedSupersonicResponse(
+                supersonic.source(),
+                supersonic.rule().level(),
+                supersonic.rule().conversionPercent(),
+                supersonic.rule().overCapBonus(),
+                supersonic.rule().overCapConversionPercent(),
+                supersonic.rule().maxEvolutionDamage(),
+                supersonic.optimalSpeed(),
+                supersonic.requiredSwiftness(),
+                supersonic.requiredAdditionalSwiftness(),
+                supersonic.evolutionDamage())),
+        result.limitations());
+  }
+
+  public record CritSpeedSourceResponse(
+      CritSpeedCalculation.Kind kind,
+      CritSpeedCalculation.Category category,
+      CritSpeedCalculation.Axis axis,
+      @NullableResponse String name,
+      BigDecimal value,
+      @NullableResponse String text) {
+    static CritSpeedSourceResponse from(CritSpeedCalculation.Source source) {
+      return new CritSpeedSourceResponse(
+          source.kind(),
+          source.category(),
+          source.axis(),
+          source.name(),
+          source.value(),
+          source.text());
+    }
+  }
+
+  public record CritSpeedCritResponse(
+      @Schema(description = "프로필 치명 스탯. 알 수 없으면 null") @NullableResponse Integer critStat,
+      BigDecimal observedRate,
+      BigDecimal assumedRate,
+      @Schema(description = "관측+가정 치명타 적중률(상한 적용 전)") BigDecimal totalRate,
+      @Schema(description = "실제 적용 치명타 적중률. 뭉툭한 가시 장착 시 그 상한, 아니면 100%") BigDecimal effectiveRate,
+      CritSpeedBluntThornResponse bluntThorn,
+      @Schema(description = "CRIT_100: 치적 100%, BLUNT_THORN_OPTIMAL: 뭉툭한 가시 최대 진화형 피해 도달")
+          List<CritSpeedTargetResponse> targets) {}
+
+  public record CritSpeedBluntThornResponse(
+      @Schema(description = "EQUIPPED_NODE: 장착 노드 공식 문구, REFERENCE_LEVEL_2: 미장착이라 공식 Lv.2 문구 기준")
+          CritSpeedCalculation.NodeSource source,
+      @NullableResponse Integer level,
+      BigDecimal baseEvolutionDamage,
+      BigDecimal critCap,
+      @Schema(description = "상한 초과 치적의 진화형 피해 전환 비율 %") BigDecimal conversionPercent,
+      BigDecimal maxEvolutionDamage,
+      BigDecimal optimalCritRate,
+      @Schema(description = "현재 totalRate에서의 노드 진화형 피해") BigDecimal evolutionDamage,
+      @Schema(description = "노드 장착 시 적용 치적") BigDecimal effectiveCritRate) {}
+
+  public record CritSpeedTargetResponse(
+      String key,
+      BigDecimal targetRate,
+      @Schema(description = "목표에 필요한 치명 스탯 총량. 치명 스탯을 모르면 null") @NullableResponse
+          Integer requiredCritStat,
+      @Schema(description = "추가로 필요한 치명(올림)") int requiredAdditionalCritStat,
+      boolean reached) {}
+
+  public record CritSpeedSpeedResponse(
+      @NullableResponse Integer swiftnessStat,
+      @Schema(description = "공격·이동 속도 증가 상한(%)") BigDecimal cap,
+      CritSpeedAxisResponse attack,
+      CritSpeedAxisResponse move,
+      CritSpeedSupersonicResponse supersonic) {}
+
+  public record CritSpeedAxisResponse(
+      BigDecimal observed,
+      BigDecimal assumed,
+      BigDecimal total,
+      @Schema(description = "상한 적용") BigDecimal effective) {
+    static CritSpeedAxisResponse from(CritSpeedCalculation.SpeedAxis axis) {
+      return new CritSpeedAxisResponse(
+          axis.observed(), axis.assumed(), axis.total(), axis.effective());
+    }
+  }
+
+  public record CritSpeedSupersonicResponse(
+      CritSpeedCalculation.NodeSource source,
+      @NullableResponse Integer level,
+      @Schema(description = "상한 이내 공격·이동 속도 증가량의 진화형 피해 전환 %") BigDecimal conversionPercent,
+      @Schema(description = "둘 다 상한 초과 시 추가 진화형 피해") BigDecimal overCapBonus,
+      @Schema(description = "상한 초과분의 진화형 피해 전환 %") BigDecimal overCapConversionPercent,
+      BigDecimal maxEvolutionDamage,
+      @Schema(description = "공격·이동 속도를 같게 올릴 때 최대 진화형 피해에 닿는 속도 증가량") BigDecimal optimalSpeed,
+      @Schema(description = "optimalSpeed에 필요한 신속 총량. 신속 스탯을 모르면 null") @NullableResponse
+          Integer requiredSwiftness,
+      int requiredAdditionalSwiftness,
+      @Schema(description = "현재 속도에서의 노드 진화형 피해") BigDecimal evolutionDamage) {}
+}

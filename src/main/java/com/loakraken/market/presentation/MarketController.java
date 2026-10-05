@@ -4,6 +4,7 @@ import com.loakraken.common.api.ApiResponse;
 import com.loakraken.market.application.MarketQueryService;
 import com.loakraken.market.application.MarketSource;
 import com.loakraken.market.application.MaterialQuoteService;
+import com.loakraken.market.application.MaterialUnitPriceService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -53,10 +54,15 @@ import org.springframework.web.bind.annotation.*;
 public class MarketController {
   private final MarketQueryService service;
   private final MaterialQuoteService quotes;
+  private final MaterialUnitPriceService unitPrices;
 
-  public MarketController(MarketQueryService service, MaterialQuoteService quotes) {
+  public MarketController(
+      MarketQueryService service,
+      MaterialQuoteService quotes,
+      MaterialUnitPriceService unitPrices) {
     this.service = service;
     this.quotes = quotes;
+    this.unitPrices = unitPrices;
   }
 
   @GetMapping("/items")
@@ -110,5 +116,25 @@ public class MarketController {
     return ApiResponse.of(
         MarketSuccessCode.MATERIAL_QUOTE_SUCCESS,
         MaterialQuoteResponse.from(quotes.quote(request.toCommand())));
+  }
+
+  @PostMapping(value = "/material-prices", consumes = MediaType.APPLICATION_JSON_VALUE)
+  @Operation(
+      summary = "재료 이름별 1개당 시세",
+      description =
+          "재료 이름(최대 20개)마다 강화 재료 분류의 현재 판매 목록 첫 페이지에서 이름이 정확히 같은 상품을 찾아 선택한 기준 가격 ÷ 묶음 수로 1개당 골드를 계산합니다. "
+              + "운명의 파편은 운명의 파편 주머니(소 1,000·중 2,000·대 3,000개, 공식 Tooltip)를 파편 1개당 가격으로 바꿔 가장 싼 주머니를 고릅니다. "
+              + "이름별 검색 페이지를 기존 30초 캐시·공유 호출 예산 안에서 조회합니다. 재련 계획의 재료 이름을 그대로 넣을 수 있습니다.")
+  @io.swagger.v3.oas.annotations.responses.ApiResponse(
+      responseCode = "415",
+      description = "UNSUPPORTED_MEDIA_TYPE",
+      content = @Content(schema = @Schema(ref = "#/components/schemas/ErrorResponse")))
+  public ApiResponse<MaterialPriceResponse> materialPrices(
+      @Valid @RequestBody MaterialPriceRequest request) {
+    return ApiResponse.of(
+        MarketSuccessCode.MATERIAL_PRICE_SUCCESS,
+        MaterialPriceResponse.from(
+            request.priceBasis(),
+            unitPrices.prices(request.priceBasis(), request.normalizedNames())));
   }
 }

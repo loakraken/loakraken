@@ -239,6 +239,26 @@ class OpenApiIntegrationTest {
   }
 
   @Test
+  void 재료_단가는_요청_필수값과_미계산_null_계약을_명시한다() throws Exception {
+    var document = JsonMapper.builder().build().readTree(request("/v3/api-docs").body());
+    var operation = document.path("paths").path("/api/v1/markets/material-prices").path("post");
+    assertThat(operation.path("requestBody").path("required").asBoolean()).isTrue();
+    assertThat(operation.path("responses").toString()).contains("200", "400", "415", "429", "503");
+    assertThat(document.at("/components/schemas/MaterialPriceRequest/required").toString())
+        .contains("priceBasis", "names");
+    assertThat(document.at("/components/schemas/MaterialPriceResponse/required").toString())
+        .contains("priceBasis", "items");
+    assertThat(document.at("/components/schemas/MaterialPriceItemResponse/required").toString())
+        .contains("name", "status", "unitPriceGold", "contentsPerItem", "observedAt");
+    assertThat(
+            document
+                .at(
+                    "/components/schemas/MaterialPriceItemResponse/properties/unitPriceGold/anyOf/1/type")
+                .asText())
+        .isEqualTo("null");
+  }
+
+  @Test
   void 재료_견적은_필수_수량과_미계산_null_계약을_명시한다() throws Exception {
     var document = JsonMapper.builder().build().readTree(request("/v3/api-docs").body());
     var operation = document.path("paths").path("/api/v1/markets/material-quotes").path("post");

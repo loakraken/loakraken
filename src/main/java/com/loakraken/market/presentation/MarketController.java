@@ -1,6 +1,7 @@
 package com.loakraken.market.presentation;
 
 import com.loakraken.common.api.ApiResponse;
+import com.loakraken.market.application.MarketBoardService;
 import com.loakraken.market.application.MarketQueryService;
 import com.loakraken.market.application.MarketSource;
 import com.loakraken.market.application.MaterialQuoteService;
@@ -57,14 +58,17 @@ public class MarketController {
   private final MarketQueryService service;
   private final MaterialQuoteService quotes;
   private final MaterialUnitPriceService unitPrices;
+  private final MarketBoardService board;
 
   public MarketController(
       MarketQueryService service,
       MaterialQuoteService quotes,
-      MaterialUnitPriceService unitPrices) {
+      MaterialUnitPriceService unitPrices,
+      MarketBoardService board) {
     this.service = service;
     this.quotes = quotes;
     this.unitPrices = unitPrices;
+    this.board = board;
   }
 
   @GetMapping("/items")
@@ -91,6 +95,27 @@ public class MarketController {
     return ApiResponse.of(
         MarketSuccessCode.MARKET_SEARCH_SUCCESS,
         MarketPriceResponse.from(service.search(source, request.toSearch())));
+  }
+
+  @GetMapping("/tabs")
+  @Operation(summary = "시세 보드 탭", description = "보드 탭과 공식 카테고리 코드, 기본 티어, 정렬 값입니다. 외부 호출이 없습니다.")
+  public ApiResponse<MarketTabsResponse> tabs() {
+    return ApiResponse.of(MarketSuccessCode.MARKET_TABS_SUCCESS, MarketTabsResponse.create());
+  }
+
+  @GetMapping("/board")
+  @Operation(
+      summary = "시세 보드",
+      description =
+          "탭별 현재 판매 품목과 전일 대비 등락률입니다. default·high·low는 공식 정렬 한 페이지(검색 캐시 30초)를 씁니다. "
+              + "rise·fall은 공식 정렬에 없어 탭 전체(최대 10페이지)를 순차 스캔하고 3분 캐시합니다. 동시 요청은 합칩니다. "
+              + "changeWeek·spark7은 상품 이력 캐시가 있을 때만 채웁니다(추가 외부 호출 없음).")
+  public ApiResponse<MarketBoardResponse> board(
+      @Valid @ModelAttribute @ParameterObject MarketBoardRequest request) {
+    return ApiResponse.of(
+        MarketSuccessCode.MARKET_BOARD_SUCCESS,
+        MarketBoardResponse.from(
+            board.board(request.tab(), request.tier(), request.toSort(), request.pageOrDefault())));
   }
 
   @GetMapping("/items/{itemId}/history")

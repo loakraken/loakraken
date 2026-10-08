@@ -66,6 +66,13 @@ class MarketQueryServiceTest {
           }
 
           public void saveItemHistory(MarketItemHistoryResult result) {}
+
+          public Optional<MarketBoardScan> findBoardScan(
+              com.loakraken.market.domain.MarketTab tab, Integer tier) {
+            return Optional.empty();
+          }
+
+          public void saveBoardScan(MarketBoardScan scan) {}
         };
     var entered = new CountDownLatch(1);
     var release = new CountDownLatch(1);

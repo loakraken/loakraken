@@ -32,7 +32,10 @@ class ValkeyMarketCacheTest {
           redis,
           mapper,
           new MarketCacheProperties(
-              Duration.ofSeconds(30), Duration.ofMinutes(10), Duration.ofMinutes(10)),
+              Duration.ofSeconds(30),
+              Duration.ofMinutes(10),
+              Duration.ofMinutes(10),
+              Duration.ofMinutes(3)),
           new MarketMetrics(registry),
           Clock.fixed(now, ZoneOffset.UTC));
 
@@ -126,12 +129,18 @@ class ValkeyMarketCacheTest {
     assertThatThrownBy(
             () ->
                 new MarketCacheProperties(
-                    Duration.ZERO, Duration.ofMinutes(10), Duration.ofMinutes(10)))
+                    Duration.ZERO,
+                    Duration.ofMinutes(10),
+                    Duration.ofMinutes(10),
+                    Duration.ofMinutes(3)))
         .isInstanceOf(IllegalArgumentException.class);
     assertThatThrownBy(
             () ->
                 new MarketCacheProperties(
-                    Duration.ofSeconds(30), Duration.ofSeconds(-1), Duration.ofMinutes(10)))
+                    Duration.ofSeconds(30),
+                    Duration.ofSeconds(-1),
+                    Duration.ofMinutes(10),
+                    Duration.ofMinutes(3)))
         .isInstanceOf(IllegalArgumentException.class);
   }
 

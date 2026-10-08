@@ -279,6 +279,27 @@ class OpenApiIntegrationTest {
   }
 
   @Test
+  void 시세_보드는_탭_정렬_검증과_null_등락률_계약을_명시한다() throws Exception {
+    var document = JsonMapper.builder().build().readTree(request("/v3/api-docs").body());
+    var board = document.path("paths").path("/api/v1/markets/board").path("get");
+    assertThat(board.path("parameters").toString())
+        .contains("tab", "sort", "default|high|low|rise|fall");
+    assertThat(document.path("paths").path("/api/v1/markets/tabs").path("get").isMissingNode())
+        .isFalse();
+    assertThat(document.at("/components/schemas/MarketBoardResponse/required").toString())
+        .contains("ruleVersion", "changeBasis", "scannedItems", "complete", "items");
+    assertThat(document.at("/components/schemas/MarketBoardItemResponse/required").toString())
+        .contains("itemId", "changeDay", "changeWeek", "spark7", "historyAvailable");
+    assertThat(
+            document
+                .at("/components/schemas/MarketBoardItemResponse/properties/changeDay/anyOf/1/type")
+                .asText())
+        .isEqualTo("null");
+    assertThat(document.at("/components/schemas/MarketTabResponse/required").toString())
+        .contains("tab", "label", "categoryCode", "defaultTier");
+  }
+
+  @Test
   void 상품_시세_이력은_부분_집계와_null_요약_계약을_명시한다() throws Exception {
     var document = JsonMapper.builder().build().readTree(request("/v3/api-docs").body());
     var operation =

@@ -4,12 +4,18 @@ import com.loakraken.common.api.BusinessException;
 import com.loakraken.market.application.*;
 import com.loakraken.market.application.MarketMetrics.Kind;
 import com.loakraken.market.application.MarketMetrics.Outcome;
+import com.loakraken.market.domain.MarketTab;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Collection;
 import java.util.HexFormat;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.function.Predicate;
 import org.springframework.dao.DataAccessException;
@@ -81,6 +87,62 @@ class ValkeyMarketCache implements MarketCache {
   public void saveItemHistory(MarketItemHistoryResult result) {
     write(
         historyKey(result.history().itemId()), result, properties.historyTtl(), Kind.ITEM_HISTORY);
+  }
+
+  @Override
+  public Map<Long, MarketItemHistoryResult> findItemHistories(Collection<Long> itemIds) {
+    var ids = itemIds.stream().distinct().toList();
+    if (ids.isEmpty()) return Map.of();
+    List<String> values;
+    try {
+      values =
+          redis.opsForValue().multiGet(ids.stream().map(ValkeyMarketCache::historyKey).toList());
+    } catch (DataAccessException exception) {
+      metrics.cache(Kind.ITEM_HISTORY, Outcome.READ_ERROR);
+      throw unavailable();
+    }
+    var result = new LinkedHashMap<Long, MarketItemHistoryResult>();
+    for (int i = 0; i < ids.size(); i++) {
+      var json = values == null ? null : values.get(i);
+      if (json == null) {
+        metrics.cache(Kind.ITEM_HISTORY, Outcome.MISS);
+        continue;
+      }
+      try {
+        var value = mapper.readValue(json, MarketItemHistoryResult.class);
+        if (value != null
+            && value.history() != null
+            && value.history().itemId() == ids.get(i)
+            && fresh(value.observedAt(), properties.historyTtl())) {
+          metrics.cache(Kind.ITEM_HISTORY, Outcome.HIT);
+          result.put(ids.get(i), value);
+          continue;
+        }
+      } catch (JacksonException | IllegalArgumentException ignored) {
+        // 보드 보강은 읽기 전용이다. 손상 항목은 단건 조회 경로가 정리한다.
+      }
+      metrics.cache(Kind.ITEM_HISTORY, Outcome.INVALID);
+    }
+    return result;
+  }
+
+  public Optional<MarketBoardScan> findBoardScan(MarketTab tab, Integer tier) {
+    return read(
+        boardKey(tab, tier),
+        MarketBoardScan.class,
+        Kind.BOARD_SCAN,
+        scan ->
+            scan.tab() == tab
+                && Objects.equals(scan.tier(), tier)
+                && fresh(scan.observedAt(), properties.boardScanTtl()));
+  }
+
+  public void saveBoardScan(MarketBoardScan scan) {
+    write(boardKey(scan.tab(), scan.tier()), scan, properties.boardScanTtl(), Kind.BOARD_SCAN);
+  }
+
+  private static String boardKey(MarketTab tab, Integer tier) {
+    return "market:v1:board-scan:" + tab.name() + ":" + (tier == null ? "all" : tier);
   }
 
   private static String historyKey(long itemId) {

@@ -11,7 +11,7 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
  */
 @ConfigurationProperties("stats.collector")
 public record CharacterCollectionPolicy(
-    @DefaultValue("true") boolean enabled,
+    @DefaultValue("false") boolean enabled,
     @DefaultValue("3s") Duration interval,
     @DefaultValue("40") int reserve,
     @DefaultValue("1640") BigDecimal minItemLevel,

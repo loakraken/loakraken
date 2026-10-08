@@ -7,7 +7,7 @@ import org.springframework.stereotype.Component;
 
 /** 통계 표본 수집 주기 실행. 단일 인스턴스 전제다. */
 @Component
-@ConditionalOnProperty(prefix = "stats.collector", name = "enabled", matchIfMissing = true)
+@ConditionalOnProperty(prefix = "stats.collector", name = "enabled", havingValue = "true")
 class CharacterCollectorScheduler {
   private final CharacterCollectorService collector;
 

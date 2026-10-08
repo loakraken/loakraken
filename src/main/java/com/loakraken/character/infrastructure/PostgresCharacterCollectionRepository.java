@@ -6,7 +6,9 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -41,8 +43,8 @@ class PostgresCharacterCollectionRepository implements CharacterCollectionPort {
     return jdbc.sql(
             """
         SELECT character_name, server_name FROM characters
-        WHERE roster_scanned_at IS NULL OR roster_scanned_at < :stale
-        ORDER BY roster_scanned_at NULLS FIRST, item_level DESC, character_name
+        WHERE roster_scanned_at IS NULL OR roster_scanned_at < :stale OR roster_key IS NULL
+        ORDER BY roster_scanned_at NULLS FIRST, (roster_key IS NULL) DESC, item_level DESC, character_name
         LIMIT 1
         """)
         .param("stale", utc(staleBefore))
@@ -54,6 +56,7 @@ class PostgresCharacterCollectionRepository implements CharacterCollectionPort {
   @Transactional(timeout = 5)
   public int saveRoster(List<CharacterSibling> siblings, Instant now) {
     int discovered = 0;
+    var rosterKey = rosterKey(siblings);
     for (var sibling : siblings) {
       if (sibling == null
           || sibling.characterName() == null
@@ -65,11 +68,11 @@ class PostgresCharacterCollectionRepository implements CharacterCollectionPort {
           jdbc.sql(
                   """
           INSERT INTO characters (character_id, character_name, server_name, class_name, item_level,
-                                  last_synced_at, discovered_at, roster_scanned_at)
-          VALUES (:id, :name, :server, :className, :itemLevel, :now, :now, :now)
+                                  last_synced_at, discovered_at, roster_scanned_at, roster_key)
+          VALUES (:id, :name, :server, :className, :itemLevel, :now, :now, :now, :rosterKey)
           ON CONFLICT (server_name, character_name) DO UPDATE SET
             class_name = EXCLUDED.class_name, item_level = EXCLUDED.item_level,
-            roster_scanned_at = EXCLUDED.roster_scanned_at
+            roster_scanned_at = EXCLUDED.roster_scanned_at, roster_key = EXCLUDED.roster_key
           RETURNING (xmax = 0)
           """)
               .param("id", UUID.randomUUID())
@@ -78,11 +81,45 @@ class PostgresCharacterCollectionRepository implements CharacterCollectionPort {
               .param("className", sibling.className())
               .param("itemLevel", sibling.itemLevel())
               .param("now", utc(now))
+              .param("rosterKey", rosterKey)
               .query(Boolean.class)
               .single();
       if (Boolean.TRUE.equals(inserted)) discovered++;
     }
     return discovered;
+  }
+
+  /** 원정대 캐릭터 중 이미 키가 있으면 그 키를 쓰고, 없으면 새로 만든다. */
+  private UUID rosterKey(List<CharacterSibling> siblings) {
+    var pairs = new HashSet<String>();
+    for (var sibling : siblings)
+      if (sibling != null && sibling.characterName() != null && sibling.serverName() != null)
+        pairs.add(sibling.serverName() + "|" + sibling.characterName());
+    if (pairs.isEmpty()) return UUID.randomUUID();
+    var names =
+        siblings.stream()
+            .filter(s -> s != null && s.characterName() != null)
+            .map(CharacterSibling::characterName)
+            .distinct()
+            .toList();
+    return jdbc
+        .sql(
+            """
+        SELECT server_name, character_name, roster_key FROM characters
+        WHERE roster_key IS NOT NULL AND character_name IN (:names)
+        ORDER BY roster_key
+        """)
+        .param("names", names)
+        .query(
+            (row, index) ->
+                pairs.contains(row.getString(1) + "|" + row.getString(2))
+                    ? row.getObject(3, UUID.class)
+                    : null)
+        .list()
+        .stream()
+        .filter(Objects::nonNull)
+        .findFirst()
+        .orElseGet(UUID::randomUUID);
   }
 
   @Override
@@ -111,8 +148,12 @@ class PostgresCharacterCollectionRepository implements CharacterCollectionPort {
 
   @Override
   public void markRosterScanned(Target target, Instant now) {
+    // 원정대를 찾지 못했거나 목록에 자신이 없던 캐릭터도 자기 키를 받아, 키가 없다는 이유로 다시 고르지 않는다.
     jdbc.sql(
-            "UPDATE characters SET roster_scanned_at = :now WHERE server_name = :server AND character_name = :name")
+            """
+        UPDATE characters SET roster_scanned_at = :now, roster_key = COALESCE(roster_key, gen_random_uuid())
+        WHERE server_name = :server AND character_name = :name
+        """)
         .param("now", utc(now))
         .param("server", target.serverName())
         .param("name", target.characterName())

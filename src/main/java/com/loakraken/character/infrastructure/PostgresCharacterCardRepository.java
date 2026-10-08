@@ -2,7 +2,6 @@ package com.loakraken.character.infrastructure;
 
 import com.loakraken.character.application.CharacterCardPort;
 import com.loakraken.character.domain.CardCollection;
-import com.loakraken.character.domain.CharacterLoadout;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -31,28 +30,28 @@ class PostgresCharacterCardRepository implements CharacterCardPort {
 
   @Override
   @Transactional(timeout = 5)
-  public void record(
-      String serverName,
-      String characterName,
-      List<CharacterLoadout.Card> cards,
-      CardCollection.Learned learned,
-      String position,
-      Instant observedAt) {
-    var at = utc(observedAt);
+  public void record(Observation observation) {
+    var at = utc(observation.observedAt());
+    var learned = observation.learned();
     var characterId =
         jdbc.sql(
                 "SELECT character_id FROM characters WHERE server_name = :server AND character_name = :name")
-            .param("server", serverName)
-            .param("name", characterName)
+            .param("server", observation.serverName())
+            .param("name", observation.characterName())
             .query(UUID.class)
             .optional();
     if (characterId.isPresent()) {
-      if (position != null)
-        jdbc.sql("UPDATE characters SET position = :position WHERE character_id = :id")
-            .param("position", position)
-            .param("id", characterId.get())
-            .update();
-      for (var card : cards) {
+      jdbc.sql(
+              """
+          UPDATE characters SET position = COALESCE(:position, position),
+            gem_mean_level = COALESCE(:gem, gem_mean_level)
+          WHERE character_id = :id
+          """)
+          .param("position", observation.position())
+          .param("gem", observation.gemMeanLevel())
+          .param("id", characterId.get())
+          .update();
+      for (var card : observation.cards()) {
         if (card == null || card.name() == null || card.name().isBlank()) continue;
         jdbc.sql(
                 """

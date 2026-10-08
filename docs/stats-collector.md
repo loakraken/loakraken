@@ -8,8 +8,8 @@
 
 | 작업 | 대상 선정 | 공식 호출 | 저장 |
 |---|---|---|---|
-| 원정대 발견 | 원정대를 훑은 적이 없거나 7일이 지난 캐릭터 중 아이템 레벨이 높은 순 | siblings 1회 | 계정의 모든 캐릭터를 `characters`에 추가·갱신(서버·직업·아이템 레벨). 전원을 훑은 것으로 표시 |
-| 프로필 갱신 | 1640 이상이고 프로필이 없거나 7일이 지난 캐릭터 중 오래된 순 | armory 1회 | 관측 이력 기록(전투력 등), 포지션(position-v1) 저장 |
+| 원정대 발견 | 원정대를 훑은 적이 없거나 7일이 지났거나 원정대 키(roster_key)가 없는 캐릭터 중 아이템 레벨이 높은 순 | siblings 1회 | 계정의 모든 캐릭터를 `characters`에 추가·갱신(서버·직업·아이템 레벨). 같은 원정대 키를 주고 전원을 훑은 것으로 표시 |
+| 프로필 갱신 | 1640 이상이고 프로필이 없거나 7일이 지난 캐릭터 중 오래된 순 | armory 1회 | 관측 이력(전투력 등), 포지션(position-v1), 카드 기록(F-6), 4티어 보석 평균 레벨 |
 
 - 사용자 검색으로 받은 프로필도 갱신으로 친다(`profile_refreshed_at`). 그래서 같은 캐릭터를 중복으로 부르지 않는다.
 - 공식 API가 찾지 못한 캐릭터와 해석에 실패한 캐릭터는 다음 주기까지 다시 고르지 않는다.
@@ -24,14 +24,25 @@
 
 | 설정 | 기본값 | 환경 변수 |
 |---|---|---|
-| `stats.collector.enabled` | true | `STATS_COLLECTOR_ENABLED` |
+| `stats.collector.enabled` | false | `STATS_COLLECTOR_ENABLED` |
 | `stats.collector.interval` | 3s | `STATS_COLLECTOR_INTERVAL` |
 | `stats.collector.reserve` | 40 | `STATS_COLLECTOR_RESERVE` |
 | `stats.collector.min-item-level` | 1640 | — |
 | `stats.collector.profile-refresh-after`, `roster-rescan-after` | 7d | — |
 | `stats.collector.initial-delay` | 30s | — |
 
-**로컬 개발 주의:** 기본으로 켜져 있어서, 로컬 서버를 띄워 두면 개인 키로 분당 최대 20회를 계속 쓴다. 필요 없으면 `STATS_COLLECTOR_ENABLED=false`로 끈다.
+**기본은 꺼져 있다.** 수집을 돌릴 인스턴스 **한 곳**에서만 `STATS_COLLECTOR_ENABLED=true`로 켠다.
+- `LostArkRequestGate`는 인스턴스별이라 다른 인스턴스의 사용량을 모른다.
+- 같은 키로 여러 인스턴스(팀별 worktree의 8080·8081·8090번대)가 각각 분당 20회를 돌리면 공식 한도를 넘겨, 사용자 검색이 429를 받을 수 있다(PM 검토 #94 P1).
+
+## 수집 상태 확인
+
+- 지표: 관리 포트(로컬 9091) `/actuator/metrics/loakraken.stats.collector`
+  - 태그 `task`·`outcome`으로 회차를 나눠 본다.
+  - `yielded`가 많으면 사용자 요청 때문에 양보하는 중이다.
+  - `task=none`만 늘면 할 일이 없는 상태다. 알고 있는 원정대를 모두 7일 안에 훑었다는 뜻이다.
+- DB: `SELECT COUNT(*) FILTER (WHERE combat_power IS NOT NULL), COUNT(DISTINCT roster_key) FROM characters`
+- 표본은 사용자 검색으로 들어온 원정대에서만 넓어진다. 공식 API에는 랭킹이나 캐릭터 목록이 없다.
 
 ## 저장 (Flyway V5)
 

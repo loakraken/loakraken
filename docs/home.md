@@ -42,7 +42,7 @@
 | 일정 | 30분 | `home.cache.calendar-ttl` | `HOME_CALENDAR_CACHE_TTL` | 1회 |
 | 소식(공지+이벤트) | 10분 | `home.cache.news-ttl` | `HOME_NEWS_CACHE_TTL` | 2회 |
 
-- Valkey 키: `home:v1:calendar`, `home:v1:news`
+- Valkey 키: `home:v2:calendar`(보상 ItemLevel 그룹을 담으면서 v2), `home:v1:news`
 - 동시 요청은 합친다.
 - 캐시 장애는 `503 HOME_CACHE_UNAVAILABLE`이다.
 - 외부 오류는 기존 429/502/503/504를 그대로 쓴다.

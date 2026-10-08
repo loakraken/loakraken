@@ -39,7 +39,7 @@ class HomeIntegrationTest {
   @BeforeEach
   @AfterEach
   void clearCache() {
-    redis.delete(List.of("home:v1:calendar", "home:v1:news"));
+    redis.delete(List.of("home:v2:calendar", "home:v1:news"));
   }
 
   @Test
@@ -73,6 +73,11 @@ class HomeIntegrationTest {
     assertThat(json.path("code").asText()).isEqualTo("HOME_SCHEDULE_SUCCESS");
     assertThat(json.at("/data/ruleVersion").asText()).isEqualTo("home-schedule-v1");
     assertThat(json.at("/data/coveredFrom").asText()).isEqualTo(today.toString());
+    // 오늘은 공통 실링과 오늘 23시 해적 주화만 나오고, 다른 날 회차의 골드는 빠진다(F-9).
+    assertThat(json.at("/data/adventureIslands/0/rewardGroups/0/rewards").toString())
+        .contains("\"name\":\"실링\"", "\"timed\":false", "\"name\":\"해적 주화\"", "\"timed\":true")
+        .doesNotContain("골드");
+    assertThat(json.at("/data/fieldBosses/0/rewardGroups").isArray()).isTrue();
     assertThat(json.at("/data/adventureIslands/0/rewardKinds").toString())
         .isEqualTo("[\"PIRATE_COIN\"]");
     assertThat(json.at("/data/adventureIslands/0/startTimes/0").asText())

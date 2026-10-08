@@ -36,6 +36,41 @@ class GameCalendarTest {
   }
 
   @Test
+  void 그_날_보상은_ItemLevel_그룹을_지키고_다른_날_회차_보상은_뺀다() {
+    var gate =
+        new GameCalendar.Entry(
+            "카오스게이트",
+            "일렁이는 악마군단",
+            null,
+            1580,
+            List.of(at(THU, 11), at(MON, 11)),
+            List.of(
+                new GameCalendar.Reward("공통 재료", null, "영웅", List.of(), 1580),
+                new GameCalendar.Reward("목요일 보상", null, "전설", List.of(at(THU, 11)), 1580),
+                new GameCalendar.Reward("월요일 보상", null, "전설", List.of(at(MON, 11)), 1580),
+                new GameCalendar.Reward("상위 공통", null, "유물", List.of(), 1640),
+                new GameCalendar.Reward("상위 월요일만", null, "유물", List.of(at(MON, 11)), 1700)));
+    var thursday = gate.rewardGroupsOn(THU);
+    assertThat(thursday)
+        .extracting(GameCalendar.RewardGroup::minItemLevel)
+        .containsExactly(1580, 1640);
+    assertThat(thursday.get(0).rewards())
+        .containsExactly(
+            new GameCalendar.DayReward("공통 재료", null, "영웅", false),
+            new GameCalendar.DayReward("목요일 보상", null, "전설", true));
+    assertThat(thursday.get(1).rewards())
+        .containsExactly(new GameCalendar.DayReward("상위 공통", null, "유물", false));
+    // 월요일에는 1700 그룹이 생기고 목요일 보상은 빠진다.
+    var monday = gate.rewardGroupsOn(MON);
+    assertThat(monday)
+        .extracting(GameCalendar.RewardGroup::minItemLevel)
+        .containsExactly(1580, 1640, 1700);
+    assertThat(monday.get(0).rewards())
+        .extracting(GameCalendar.DayReward::name)
+        .containsExactly("공통 재료", "월요일 보상");
+  }
+
+  @Test
   void 주간_표와_범위는_날짜순이고_범주별로_이름순이다() {
     var calendar =
         new GameCalendar(

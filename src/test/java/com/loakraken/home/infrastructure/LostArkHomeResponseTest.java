@@ -31,6 +31,8 @@ class LostArkHomeResponseTest {
         .containsExactly(
             LocalDateTime.parse("2026-10-12T11:00:00"), LocalDateTime.parse("2026-10-12T13:00:00"));
     assertThat(island.rewards()).hasSize(2);
+    assertThat(island.rewards())
+        .allMatch(reward -> Integer.valueOf(0).equals(reward.minItemLevel()));
     assertThat(island.rewardKindsOn(LocalDate.parse("2026-10-12")))
         .containsExactly(GameCalendar.RewardKind.GOLD);
     assertThat(calendar.entries().get(1).startTimes()).isEmpty();

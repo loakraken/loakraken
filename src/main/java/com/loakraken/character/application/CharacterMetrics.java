@@ -35,6 +35,12 @@ public class CharacterMetrics {
         .increment();
   }
 
+  public void popular(boolean success) {
+    registry
+        .counter("loakraken.character.popular.writes", "outcome", success ? "success" : "failure")
+        .increment();
+  }
+
   public void views(boolean success) {
     registry
         .counter("loakraken.character.views.writes", "outcome", success ? "success" : "failure")

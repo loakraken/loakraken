@@ -1,0 +1,105 @@
+name: Deploy
+
+# 수동 배포 초안. 서버·비밀값이 준비되기 전에는 "Check deploy settings" 단계에서 멈춘다.
+# 운영(production) 환경에는 GitHub Environments의 승인자 보호를 건다(docs/ops/deploy.md).
+# 서버는 사업자와 무관한 Linux + docker compose이며, /opt/loakraken/<환경>에 stack.env가 있어야 한다.
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 배포 환경
+        type: choice
+        options: [staging, production]
+        required: true
+      api_tag:
+        description: "백엔드 이미지 태그(예: sha-1a2b3c4, 운영은 sha-만)"
+        type: string
+        required: true
+      web_tag:
+        description: "프론트 이미지 태그(예: sha-5d6e7f8, 운영은 sha-만)"
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-${{ inputs.environment }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: ${{ inputs.environment }}
+    env:
+      DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+      DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+      DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+      DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+      TARGET_ENV: ${{ inputs.environment }}
+      DEPLOY_PATH: /opt/loakraken/${{ inputs.environment }}
+      API_TAG: ${{ inputs.api_tag }}
+      WEB_TAG: ${{ inputs.web_tag }}
+      OWNER: ${{ github.repository_owner }}
+    steps:
+      - name: Check deploy settings
+        run: |
+          missing=""
+          for name in DEPLOY_HOST DEPLOY_USER DEPLOY_SSH_KEY DEPLOY_KNOWN_HOSTS; do
+            [ -n "${!name}" ] || missing="$missing $name"
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::배포 비밀값이 없습니다:$missing (docs/ops/deploy.md 참고)"
+            exit 1
+          fi
+          # 운영은 재현·롤백이 정확한 커밋 태그(sha-)만 받는다. 스테이징만 develop·master 가변 태그를 허용한다.
+          if [ "$TARGET_ENV" = "production" ]; then
+            pattern='^sha-[0-9a-f]{7,40}$'
+          else
+            pattern='^(sha-[0-9a-f]{7,40}|develop|master)$'
+          fi
+          [[ "$API_TAG" =~ $pattern ]] || { echo "::error::api_tag 형식이 올바르지 않습니다"; exit 1; }
+          [[ "$WEB_TAG" =~ $pattern ]] || { echo "::error::web_tag 형식이 올바르지 않습니다"; exit 1; }
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          sparse-checkout: deploy
+
+      - name: Prepare SSH
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
+
+      - name: Upload stack files
+        run: |
+          scp -i ~/.ssh/deploy_key deploy/compose.prod.yaml deploy/Caddyfile \
+            "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/"
+
+      - name: Back up database, pull images, start
+        run: |
+          ssh -i ~/.ssh/deploy_key "$DEPLOY_USER@$DEPLOY_HOST" bash -s -- \
+            "$DEPLOY_PATH" "ghcr.io/$OWNER/loakraken-api:$API_TAG" "ghcr.io/$OWNER/loakraken-web:$WEB_TAG" <<'REMOTE'
+          set -euo pipefail
+          cd "$1"
+          compose() { docker compose -f compose.prod.yaml --env-file stack.env --env-file images.env "$@"; }
+
+          # 직전 이미지 태그를 남겨 롤백에 쓴다.
+          [ -f images.env ] && cp images.env images.prev.env
+          printf 'API_IMAGE=%s\nWEB_IMAGE=%s\n' "$2" "$3" > images.env.next
+
+          # 배포 전 DB 백업(실행 중일 때만).
+          mkdir -p backups
+          if [ -f images.env ] && [ -n "$(compose ps -q postgres 2>/dev/null)" ]; then
+            compose exec -T postgres sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" --format=custom' \
+              > "backups/pre-deploy-$(date -u +%Y%m%dT%H%M%SZ).dump"
+            ls -1t backups/pre-deploy-*.dump | tail -n +15 | xargs -r rm --
+          fi
+
+          mv images.env.next images.env
+          compose pull
+          compose up -d --wait --remove-orphans
+          compose ps
+          REMOTE

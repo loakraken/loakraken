@@ -1,0 +1,200 @@
+# LOAKraken 운영 스택 초안: 사업자와 무관한 Linux 서버 1대 + docker compose.
+# 절차·비밀 파일 준비는 docs/ops/deploy.md를 따른다.
+#
+#   docker compose -f compose.prod.yaml --env-file stack.env up -d --wait
+#
+# 공개 포트는 edge(80/443)뿐이다. web·api·postgres·valkey는 호스트에 포트를 열지 않는다.
+# 망: public(edge↔web), internal(web↔api, 공식 API 호출을 위한 외부 통신 허용), data(api↔postgres·valkey, 외부 통신 차단).
+# 비밀값은 compose secrets로 파일 마운트(/run/secrets/...)하며 환경변수·이미지·저장소에 두지 않는다.
+
+name: ${STACK_NAME:-loakraken}
+
+# 컨테이너 로그는 서비스마다 10MB × 5개까지만 남긴다(디스크 보호, 오래된 로그 자동 삭제).
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
+services:
+  edge:
+    image: caddy:2.11.7-alpine
+    restart: unless-stopped
+    logging: *default-logging
+    ports:
+      - "${EDGE_HTTP_PORT:-80}:80"
+      - "${EDGE_HTTPS_PORT:-443}:443"
+      - "${EDGE_HTTPS_PORT:-443}:443/udp"
+    environment:
+      SITE_ADDRESS: "${SITE_ADDRESS:?SITE_ADDRESS가 필요합니다(예 loakraken.gg)}"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - edge-data:/data
+      - edge-config:/config
+    depends_on:
+      web:
+        condition: service_healthy
+    networks:
+      - public
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+
+  web:
+    image: "${WEB_IMAGE:?WEB_IMAGE가 필요합니다}"
+    restart: unless-stopped
+    logging: *default-logging
+    environment:
+      LOAKRAKEN_API_ORIGIN: http://api:8080
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:3000/about').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+      interval: 15s
+      timeout: 5s
+      start_period: 30s
+      retries: 5
+    mem_limit: ${WEB_MEM_LIMIT:-768m}
+    networks:
+      public:
+      internal:
+        # 백엔드는 이 주소에서 온 X-Forwarded-For만 믿는다(api의 SERVER_TOMCAT_REMOTEIP_INTERNALPROXIES).
+        ipv4_address: ${WEB_INTERNAL_IP:-172.31.250.10}
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+  api:
+    image: "${API_IMAGE:?API_IMAGE가 필요합니다}"
+    restart: unless-stopped
+    logging: *default-logging
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      # /run/secrets의 파일 이름을 설정 키로 읽는다(DB_PASSWORD, LOSTARK_API_KEY, spring.data.redis.password).
+      SPRING_CONFIG_IMPORT: optional:configtree:/run/secrets/
+      DB_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-loakraken}
+      DB_USERNAME: ${POSTGRES_USER:-loakraken}
+      VALKEY_HOST: valkey
+      VALKEY_PORT: "6379"
+      # 공식 API 호출 한도를 쓰는 백그라운드 작업은 스택마다 명시한다(운영 1곳만 true).
+      STATS_COLLECTOR_ENABLED: ${STATS_COLLECTOR_ENABLED:-false}
+      MARKET_WARMUP_ENABLED: ${MARKET_WARMUP_ENABLED:-false}
+      API_DOCS_ENABLED: "false"
+      # 클라이언트 IP 헤더를 믿는 프록시를 web 한 곳으로 한정한다(Tomcat RemoteIpValve 정규식). 사설 대역 전체를 믿지 않는다.
+      SERVER_TOMCAT_REMOTEIP_INTERNALPROXIES: ${TRUSTED_PROXY_REGEX:-172\.31\.250\.10}
+    secrets:
+      - source: db_password
+        target: DB_PASSWORD
+      - source: valkey_password
+        target: spring.data.redis.password
+      - source: lostark_api_key
+        target: LOSTARK_API_KEY
+    depends_on:
+      postgres:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
+    healthcheck:
+      # 운영 이미지에는 curl·wget이 없어 bash /dev/tcp로 health를 확인한다.
+      test:
+        - CMD
+        - bash
+        - -c
+        - "exec 3<>/dev/tcp/127.0.0.1/8080 && printf 'GET /actuator/health HTTP/1.0\\r\\nHost: localhost\\r\\n\\r\\n' >&3 && grep -q '\"status\":\"UP\"' <&3"
+      interval: 15s
+      timeout: 5s
+      start_period: 90s
+      retries: 5
+    mem_limit: ${API_MEM_LIMIT:-1280m}
+    networks:
+      - internal
+      - data
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+  postgres:
+    image: postgres:18.6
+    restart: unless-stopped
+    logging: *default-logging
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-loakraken}
+      POSTGRES_USER: ${POSTGRES_USER:-loakraken}
+      POSTGRES_PASSWORD_FILE: /run/secrets/db_password
+    secrets:
+      - db_password
+    volumes:
+      - postgres-data:/var/lib/postgresql
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    mem_limit: ${POSTGRES_MEM_LIMIT:-768m}
+    networks:
+      - data
+    security_opt:
+      - no-new-privileges:true
+
+  valkey:
+    image: valkey/valkey:9.1.2
+    restart: unless-stopped
+    logging: *default-logging
+    command:
+      - sh
+      - -c
+      - exec valkey-server --appendonly yes --requirepass "$$(cat /run/secrets/valkey_password)"
+    secrets:
+      - valkey_password
+    volumes:
+      - valkey-data:/data
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - valkey-cli --no-auth-warning -a "$$(cat /run/secrets/valkey_password)" ping | grep -q PONG
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    mem_limit: ${VALKEY_MEM_LIMIT:-256m}
+    networks:
+      - data
+    security_opt:
+      - no-new-privileges:true
+
+secrets:
+  db_password:
+    file: ${SECRETS_DIR:?SECRETS_DIR가 필요합니다(스택별 경로, 예 /opt/loakraken/production/secrets)}/db_password
+  valkey_password:
+    file: ${SECRETS_DIR:?SECRETS_DIR가 필요합니다}/valkey_password
+  lostark_api_key:
+    file: ${SECRETS_DIR:?SECRETS_DIR가 필요합니다}/lostark_api_key
+
+networks:
+  # edge ↔ web만 연결한다.
+  public:
+  # web↔api. api가 공식 API를 불러야 해서 외부 통신을 막지 않는다. 서브넷을 고정해 web 주소를 신뢰 프록시로 쓴다.
+  internal:
+    ipam:
+      config:
+        - subnet: ${INTERNAL_SUBNET:-172.31.250.0/24}
+  # api↔postgres·valkey. 외부 통신이 없는 망(DB·캐시는 인터넷에 나가지 않는다).
+  data:
+    internal: true
+
+volumes:
+  edge-data:
+  edge-config:
+  postgres-data:
+  valkey-data:

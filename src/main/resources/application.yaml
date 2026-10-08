@@ -52,7 +52,7 @@ market:
 
 stats:
   collector:
-    enabled: ${STATS_COLLECTOR_ENABLED:true}
+    enabled: ${STATS_COLLECTOR_ENABLED:false}
     interval: ${STATS_COLLECTOR_INTERVAL:3s}
     reserve: ${STATS_COLLECTOR_RESERVE:40}
 

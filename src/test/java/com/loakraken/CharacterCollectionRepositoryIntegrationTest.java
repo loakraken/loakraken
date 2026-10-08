@@ -68,6 +68,38 @@ class CharacterCollectionRepositoryIntegrationTest {
   }
 
   @Test
+  void 원정대를_다시_훑으면_기존_원정대_키를_이어_쓴다() {
+    collection.saveRoster(List.of(sibling("본캐", "1700"), sibling("부캐", "1640")), NOW);
+    // 새 캐릭터가 생긴 원정대를 다시 훑어도 같은 키를 쓴다.
+    collection.saveRoster(
+        List.of(sibling("본캐", "1701"), sibling("부캐", "1640"), sibling("신규캐", "1600")),
+        NOW.plusSeconds(60));
+    var keys =
+        jdbc.sql("SELECT DISTINCT roster_key FROM characters WHERE server_name = :s")
+            .param("s", SERVER)
+            .query(java.util.UUID.class)
+            .list();
+    assertThat(keys).hasSize(1).doesNotContainNull();
+
+    // 키가 없는 캐릭터는 원정대 스캔 대상이고, 스캔 표시 후에는 키를 받아 다시 고르지 않는다.
+    jdbc.sql(
+            "UPDATE characters SET roster_key = NULL WHERE server_name = :s AND character_name = '신규캐'")
+        .param("s", SERVER)
+        .update();
+    var due = collection.nextRosterDue(NOW.minusSeconds(3600));
+    if (due.isPresent() && due.get().serverName().equals(SERVER))
+      assertThat(due.get().characterName()).isEqualTo("신규캐");
+    collection.markRosterScanned(new Target("신규캐", SERVER), NOW.plusSeconds(120));
+    assertThat(
+            jdbc.sql(
+                    "SELECT COUNT(*) FROM characters WHERE server_name = :s AND roster_key IS NULL")
+                .param("s", SERVER)
+                .query(Long.class)
+                .single())
+        .isZero();
+  }
+
+  @Test
   void 프로필_갱신_대상은_최소_레벨_이상_미갱신_우선이고_검색_이력은_갱신으로_친다() {
     collection.saveRoster(
         List.of(sibling("본캐", "1700"), sibling("부캐", "1680"), sibling("저레벨", "1500")), NOW);
@@ -91,6 +123,20 @@ class CharacterCollectionRepositoryIntegrationTest {
                 .query(String.class)
                 .single())
         .isEqualTo("SUPPORT");
+    // 못 찾은 캐릭터는 시도 시각만 남고 성공 관측 시각은 그대로라, 통계 모집단에서 기간이 지나면 빠진다(PM #100 P1).
+    collection.markProfileMissing(new Target("본캐", SERVER), NOW.plusSeconds(30));
+    assertThat(
+            jdbc.sql(
+                    "SELECT profile_refreshed_at = :refreshed AND profile_checked_at = :checked FROM characters WHERE server_name = :s AND character_name = '본캐'")
+                .param("refreshed", NOW.atOffset(java.time.ZoneOffset.UTC))
+                .param("checked", NOW.plusSeconds(30).atOffset(java.time.ZoneOffset.UTC))
+                .param("s", SERVER)
+                .query(Boolean.class)
+                .single())
+        .isTrue();
+    // 시도 시각이 최근이면 다시 고르지 않는다.
+    var next = collection.nextProfileDue(new BigDecimal("1640"), NOW.plusSeconds(10));
+    assertThat(next.map(Target::characterName)).isNotEqualTo(java.util.Optional.of("본캐"));
     collection.markProfileMissing(new Target("저레벨", SERVER), NOW);
     collection.markRosterScanned(new Target("본캐", SERVER), NOW.plusSeconds(5));
   }

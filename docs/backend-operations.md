@@ -29,6 +29,9 @@ Actuator가 제공하는 MeterRegistry에 기록한다. 태그는 코드의 고�
 | loakraken.character.views.writes | Counter | outcome=success/failure | 캐릭터 조회수 비동기 기록 결과(대기열 초과로 버린 조회 포함, [조회수](character-views.md)). 캐릭터명은 태그에 포함하지 않음 |
 | loakraken.stats.collector | Counter | task=profile/roster/none, outcome=success/not_found/failed/yielded/storage_failed | 통계 표본 수집기 회차 결과([수집기](stats-collector.md)). 캐릭터명은 태그에 포함하지 않음 |
 | loakraken.stats.collector.discovered | Counter | 없음 | 원정대로 새로 발견한 캐릭터 수 |
+| loakraken.character.cards.writes | Counter | outcome=success/failure | 카드 기록·포지션·보석 평균 비동기 쓰기 결과([카드 기록](card-collection.md)). 대기열이 차서 버린 관측도 failure |
+
+통계 표본 수집기는 기본으로 꺼져 있다. 운영에서는 수집을 맡을 인스턴스 하나에만 `STATS_COLLECTOR_ENABLED=true`를 준다([수집기](stats-collector.md)).
 
 외부 요청 Timer의 count가 요청 횟수이므로 별도 요청 Counter와 합산하지 않는다. success는 HTTP 200 및 타입 디코딩 성공이다. 이후 필수 프로필 검증이나 도메인 매핑에서 실패하면 HTTP 지표는 success여도 검색은 failure일 수 있다. not_found는 실제 외부 404이며 원정대 404를 공개 API에서 502로 바꾸는 정책과 구별된다. error에는 다른 HTTP 오류, 비어 있는 응답, JSON 디코딩 오류, 타임아웃 외 연결 오류가 포함된다. API 키 미설정과 로컬 게이트 거절은 HTTP 시도 지표를 만들지 않는다.
 

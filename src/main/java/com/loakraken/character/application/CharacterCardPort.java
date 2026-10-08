@@ -2,19 +2,17 @@ package com.loakraken.character.application;
 
 import com.loakraken.character.domain.CardCollection;
 import com.loakraken.character.domain.CharacterLoadout;
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
 
 public interface CharacterCardPort {
-  /** 캐릭터가 없으면(관측 이력에 아직 없으면) 아무것도 하지 않는다. 각성은 높아질 때만 바꾼다. position이 null이면 기존 포지션을 유지한다. */
-  void record(
-      String serverName,
-      String characterName,
-      List<CharacterLoadout.Card> cards,
-      CardCollection.Learned learned,
-      String position,
-      Instant observedAt);
+  /**
+   * 캐릭터가 없으면(관측 이력에 아직 없으면) 아무것도 하지 않는다. 카드 각성은 높아질 때만 바꾼다. position이 null이면 기존 값을 유지한다. 보석 평균은
+   * gemsObserved일 때만 바꾸고, 이때는 null(4티어 보석 없음)로도 덮는다.
+   */
+  void record(Observation observation);
 
   /** 같은 서버의 원정대 캐릭터들이 기록한 카드. recordedBy는 그 최고 기록을 남긴 캐릭터다. */
   RosterCards rosterCards(String serverName, Collection<String> characterNames);
@@ -25,6 +23,16 @@ public interface CharacterCardPort {
 
   /** DEALER·SUPPORT 또는 null. */
   String position(String serverName, String characterName);
+
+  record Observation(
+      String serverName,
+      String characterName,
+      List<CharacterLoadout.Card> cards,
+      CardCollection.Learned learned,
+      String position,
+      BigDecimal gemMeanLevel,
+      boolean gemsObserved,
+      Instant observedAt) {}
 
   record RosterCards(List<CardCollection.OwnedCard> cards, int observedCharacters) {}
 }

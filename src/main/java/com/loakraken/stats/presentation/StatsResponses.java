@@ -1,0 +1,342 @@
+package com.loakraken.stats.presentation;
+
+import com.loakraken.common.api.NullableResponse;
+import com.loakraken.stats.application.StatsPort;
+import com.loakraken.stats.application.StatsQueryService;
+import com.loakraken.stats.application.StatsQueryService.Meta;
+import com.loakraken.stats.domain.StatsConditions;
+import io.swagger.v3.oas.annotations.media.Schema;
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.util.List;
+
+/** 통계·랭킹 응답. 표본이 30명 미만(sampleStatus=COLLECTING)이면 분위수·평균·백분위·티어는 null입니다. */
+public final class StatsResponses {
+  private StatsResponses() {}
+
+  @Schema(
+      description =
+          "공통 메타. 모집단은 LOAKraken이 관측한 캐릭터 중 최근 activeDays일 안에 프로필(전투력)을 확인한 캐릭터이며 게임 전체 인구가 아닙니다.")
+  public record StatsMetaResponse(
+      @Schema(description = "조건에 맞는 캐릭터 수") long population,
+      StatsConditionsResponse conditions,
+      Instant aggregatedAt,
+      @Schema(description = "현재는 latest만 제공합니다", example = "latest") String snapshot,
+      @Schema(example = "stats-v1") String ruleVersion,
+      @Schema(example = "30") int minSample,
+      @Schema(
+              description = "COLLECTING(표본 30명 미만) 또는 READY",
+              allowableValues = {"COLLECTING", "READY"})
+          String sampleStatus,
+      StatsCoverageResponse coverage) {
+    static StatsMetaResponse from(Meta meta) {
+      return new StatsMetaResponse(
+          meta.population(),
+          StatsConditionsResponse.from(meta.conditions()),
+          meta.aggregatedAt(),
+          meta.snapshot(),
+          meta.ruleVersion(),
+          meta.minSample(),
+          meta.sampleStatus().name(),
+          StatsCoverageResponse.from(meta.coverage()));
+    }
+  }
+
+  @Schema(description = "정규화한 조건(기본값 포함)")
+  public record StatsConditionsResponse(
+      @NullableResponse String server,
+      @NullableResponse @Schema(allowableValues = {"DEALER", "SUPPORT"}) String role,
+      @NullableResponse String className,
+      @Schema(description = "최근 확인 기간(일): 7, 30, 90") int activeDays,
+      BigDecimal itemLevelMin,
+      @NullableResponse BigDecimal itemLevelMax,
+      @NullableResponse BigDecimal combatPowerMin,
+      @NullableResponse BigDecimal combatPowerMax,
+      @Schema(description = "원정대(같은 서버) 대표 캐릭터(아이템 레벨 최고)만") boolean representativeOnly) {
+    static StatsConditionsResponse from(StatsConditions conditions) {
+      return new StatsConditionsResponse(
+          conditions.server(),
+          conditions.role() == null ? null : conditions.role().name(),
+          conditions.className(),
+          conditions.activeDays(),
+          conditions.itemLevelMin(),
+          conditions.itemLevelMax(),
+          conditions.combatPowerMin(),
+          conditions.combatPowerMax(),
+          conditions.representativeOnly());
+    }
+  }
+
+  @Schema(description = "수집 범위. 표본이 어디까지 모였는지 보여 줍니다.")
+  public record StatsCoverageResponse(
+      @Schema(description = "프로필(전투력)을 확인한 캐릭터 수") long observedCharacters,
+      @Schema(description = "원정대로 발견한 캐릭터 포함 전체") long knownCharacters,
+      @Schema(description = "원정대를 훑은 계정 수") long discoveredAccounts) {
+    static StatsCoverageResponse from(StatsPort.Coverage coverage) {
+      return new StatsCoverageResponse(
+          coverage.observedCharacters(), coverage.knownCharacters(), coverage.discoveredAccounts());
+    }
+  }
+
+  public record StatsSummaryResponse(
+      StatsMetaResponse meta,
+      @NullableResponse BigDecimal itemLevelMean,
+      @NullableResponse BigDecimal itemLevelMedian,
+      @NullableResponse BigDecimal combatPowerMedian,
+      @NullableResponse @Schema(description = "전투력 상위 10% 기준선(90번째 백분위수)")
+          BigDecimal combatPowerP90,
+      long dealers,
+      long supports,
+      @Schema(description = "역할을 판정하지 못한 캐릭터 수") long unknownRole,
+      @NullableResponse @Schema(description = "역할 판정 캐릭터 중 서포터 비율(%)") BigDecimal supportShare,
+      @NullableResponse
+          @Schema(description = "4티어 보석(겁화·작열·광휘) 캐릭터별 평균 레벨의 평균. 보석 기록이 30명 미만이면 null")
+          BigDecimal gemMeanLevel,
+      @Schema(description = "보석 평균을 계산한 캐릭터 수") long gemSample) {
+    static StatsSummaryResponse from(StatsQueryService.SummaryResult result) {
+      return new StatsSummaryResponse(
+          StatsMetaResponse.from(result.meta()),
+          result.itemLevelMean(),
+          result.itemLevelMedian(),
+          result.combatPowerMedian(),
+          result.combatPowerP90(),
+          result.dealers(),
+          result.supports(),
+          result.unknownRole(),
+          result.supportShare(),
+          result.gemMeanLevel(),
+          result.gemSample());
+    }
+  }
+
+  public record StatsPercentilesResponse(
+      BigDecimal p10, BigDecimal p25, BigDecimal p50, BigDecimal p75, BigDecimal p90) {}
+
+  public record StatsClassRowResponse(
+      String className,
+      long count,
+      @NullableResponse @Schema(description = "모집단 대비 비율(%)") BigDecimal share,
+      long dealers,
+      long supports,
+      long unknownRole,
+      @NullableResponse
+          @Schema(description = "딜러·서포터 겸용 직업(바드·홀리나이트·도화가·발키리)만. 역할 판정 캐릭터 중 서포터 비율(%)")
+          BigDecimal supportShare,
+      @NullableResponse BigDecimal itemLevelMean,
+      @NullableResponse BigDecimal gemMeanLevel,
+      @NullableResponse @Schema(description = "전투력 분위수") StatsPercentilesResponse combatPower,
+      @Schema(allowableValues = {"COLLECTING", "READY"}) String sampleStatus) {}
+
+  public record StatsClassesResponse(StatsMetaResponse meta, List<StatsClassRowResponse> rows) {
+    static StatsClassesResponse from(StatsQueryService.ClassesResult result) {
+      return new StatsClassesResponse(
+          StatsMetaResponse.from(result.meta()),
+          result.rows().stream()
+              .map(
+                  row ->
+                      new StatsClassRowResponse(
+                          row.className(),
+                          row.count(),
+                          row.share(),
+                          row.dealers(),
+                          row.supports(),
+                          row.unknownRole(),
+                          row.supportShare(),
+                          row.itemLevelMean(),
+                          row.gemMeanLevel(),
+                          row.combatPower() == null
+                              ? null
+                              : new StatsPercentilesResponse(
+                                  row.combatPower().p10(),
+                                  row.combatPower().p25(),
+                                  row.combatPower().p50(),
+                                  row.combatPower().p75(),
+                                  row.combatPower().p90()),
+                          row.sampleStatus().name()))
+              .toList());
+    }
+  }
+
+  public record StatsServerRowResponse(
+      String serverName,
+      long count,
+      @NullableResponse BigDecimal share,
+      @NullableResponse BigDecimal itemLevelMedian,
+      @NullableResponse BigDecimal combatPowerMedian,
+      @Schema(description = "필터와 무관하게 이 서버에서 알고 있는 전체 캐릭터 수(원정대로 발견한 캐릭터 포함)") long knownCharacters,
+      @Schema(description = "이 서버에서 수집한 원정대 수(roster_key 기준)") long rosters,
+      @Schema(allowableValues = {"COLLECTING", "READY"}) String sampleStatus) {}
+
+  public record StatsServersResponse(StatsMetaResponse meta, List<StatsServerRowResponse> rows) {
+    static StatsServersResponse from(StatsQueryService.ServersResult result) {
+      return new StatsServersResponse(
+          StatsMetaResponse.from(result.meta()),
+          result.rows().stream()
+              .map(
+                  row ->
+                      new StatsServerRowResponse(
+                          row.serverName(),
+                          row.count(),
+                          row.share(),
+                          row.itemLevelMedian(),
+                          row.combatPowerMedian(),
+                          row.knownCharacters(),
+                          row.rosters(),
+                          row.sampleStatus().name()))
+              .toList());
+    }
+  }
+
+  @Schema(description = "구간 [from, to)")
+  public record StatsBinResponse(BigDecimal from, BigDecimal to, long count) {}
+
+  public record StatsPercentileOfResponse(
+      BigDecimal value,
+      @Schema(description = "이 값보다 큰 캐릭터 수 + 1") long rank,
+      long total,
+      @NullableResponse @Schema(description = "상위 몇 %인지(소수 둘째 자리 올림)") BigDecimal topPercent,
+      @NullableResponse
+          @Schema(allowableValues = {"TOP1", "TOP5", "TOP10", "TOP25", "TOP50", "REST"})
+          String tier) {}
+
+  public record StatsDistributionResponse(
+      StatsMetaResponse meta,
+      @Schema(allowableValues = {"COMBAT_POWER", "ITEM_LEVEL"}) String metric,
+      BigDecimal width,
+      @Schema(description = "관측값이 있는 구간만(오름차순). 빈 구간은 생략합니다") List<StatsBinResponse> bins,
+      @NullableResponse @Schema(description = "percentileOf를 줬을 때만")
+          StatsPercentileOfResponse percentileOf) {
+    static StatsDistributionResponse from(StatsQueryService.DistributionResult result) {
+      var of = result.percentileOf();
+      return new StatsDistributionResponse(
+          StatsMetaResponse.from(result.meta()),
+          result.metric().name(),
+          result.width(),
+          result.bins().stream()
+              .map(bin -> new StatsBinResponse(bin.from(), bin.to(), bin.count()))
+              .toList(),
+          of == null
+              ? null
+              : new StatsPercentileOfResponse(
+                  of.value(),
+                  of.rank(),
+                  of.total(),
+                  of.topPercent(),
+                  of.tier() == null ? null : of.tier().name()));
+    }
+  }
+
+  public record StatsSnapshotResponse(String snapshot, Instant aggregatedAt, long population) {}
+
+  public record StatsSnapshotsResponse(List<StatsSnapshotResponse> snapshots) {
+    static StatsSnapshotsResponse from(StatsQueryService.SnapshotsResult result) {
+      return new StatsSnapshotsResponse(
+          result.snapshots().stream()
+              .map(
+                  snapshot ->
+                      new StatsSnapshotResponse(
+                          snapshot.snapshot(), snapshot.aggregatedAt(), snapshot.population()))
+              .toList());
+    }
+  }
+
+  public record StatsRankedCharacterResponse(
+      @Schema(description = "동률은 같은 순위(1, 1, 3)") long rank,
+      String characterName,
+      String serverName,
+      String className,
+      @NullableResponse @Schema(allowableValues = {"DEALER", "SUPPORT"}) String position,
+      BigDecimal itemLevel,
+      BigDecimal combatPower,
+      @NullableResponse BigDecimal topPercent,
+      @NullableResponse
+          @Schema(allowableValues = {"TOP1", "TOP5", "TOP10", "TOP25", "TOP50", "REST"})
+          String tier) {}
+
+  public record StatsRankingResponse(
+      StatsMetaResponse meta,
+      @Schema(allowableValues = {"COMBAT_POWER", "ITEM_LEVEL"}) String metric,
+      int page,
+      int size,
+      @Schema(description = "전체 순위 대상 수는 meta.population")
+          List<StatsRankedCharacterResponse> rows) {
+    static StatsRankingResponse from(StatsQueryService.RankingResult result) {
+      return new StatsRankingResponse(
+          StatsMetaResponse.from(result.meta()),
+          result.metric().name(),
+          result.page(),
+          result.size(),
+          result.rows().stream()
+              .map(
+                  row ->
+                      new StatsRankedCharacterResponse(
+                          row.rank(),
+                          row.characterName(),
+                          row.serverName(),
+                          row.className(),
+                          row.position(),
+                          row.itemLevel(),
+                          row.combatPower(),
+                          row.topPercent(),
+                          row.tier() == null ? null : row.tier().name()))
+              .toList());
+    }
+  }
+
+  public record StatsRankEntryResponse(
+      @Schema(allowableValues = {"COMBAT_POWER", "ITEM_LEVEL"}) String metric,
+      @Schema(allowableValues = {"ALL", "SERVER", "CLASS"}) String scope,
+      @NullableResponse @Schema(description = "서버명 또는 직업명. ALL이면 null") String scopeValue,
+      long rank,
+      long total,
+      @NullableResponse BigDecimal topPercent,
+      @NullableResponse
+          @Schema(allowableValues = {"TOP1", "TOP5", "TOP10", "TOP25", "TOP50", "REST"})
+          String tier,
+      @Schema(allowableValues = {"COLLECTING", "READY"}) String sampleStatus) {}
+
+  public record StatsCharacterRankResponse(
+      String characterName,
+      String serverName,
+      String className,
+      @NullableResponse @Schema(allowableValues = {"DEALER", "SUPPORT"}) String position,
+      BigDecimal itemLevel,
+      BigDecimal combatPower,
+      @NullableResponse Instant refreshedAt,
+      @Schema(description = "조건(최근 확인 기간·레벨 범위 등)의 모집단에 들어가는가. false면 entries는 빈 배열")
+          boolean included,
+      StatsConditionsResponse conditions,
+      Instant aggregatedAt,
+      String ruleVersion,
+      int minSample,
+      List<StatsRankEntryResponse> entries) {
+    static StatsCharacterRankResponse from(StatsQueryService.CharacterRankResult result) {
+      return new StatsCharacterRankResponse(
+          result.characterName(),
+          result.serverName(),
+          result.className(),
+          result.position(),
+          result.itemLevel(),
+          result.combatPower(),
+          result.refreshedAt(),
+          result.included(),
+          StatsConditionsResponse.from(result.conditions()),
+          result.aggregatedAt(),
+          result.ruleVersion(),
+          result.minSample(),
+          result.entries().stream()
+              .map(
+                  entry ->
+                      new StatsRankEntryResponse(
+                          entry.metric().name(),
+                          entry.scope().name(),
+                          entry.scopeValue(),
+                          entry.rank(),
+                          entry.total(),
+                          entry.topPercent(),
+                          entry.tier() == null ? null : entry.tier().name(),
+                          entry.sampleStatus().name()))
+              .toList());
+    }
+  }
+}

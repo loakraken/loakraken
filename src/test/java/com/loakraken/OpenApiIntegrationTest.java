@@ -441,6 +441,48 @@ class OpenApiIntegrationTest {
         .isTrue();
   }
 
+  @Test
+  void 통계_랭킹은_필수필드_null_허용값_계약을_명시한다() throws Exception {
+    var document = JsonMapper.builder().build().readTree(request("/v3/api-docs").body());
+    for (var path :
+        new String[] {
+          "/api/v1/stats/summary",
+          "/api/v1/stats/classes",
+          "/api/v1/stats/servers",
+          "/api/v1/stats/distribution",
+          "/api/v1/stats/snapshots",
+          "/api/v1/rankings",
+          "/api/v1/characters/rank"
+        })
+      assertThat(document.at("/paths/" + path.replace("/", "~1") + "/get").isMissingNode())
+          .as(path)
+          .isFalse();
+    assertThat(document.at("/components/schemas/StatsMetaResponse/required").toString())
+        .contains("population", "conditions", "sampleStatus", "coverage", "minSample");
+    assertThat(
+            document
+                .at("/components/schemas/StatsMetaResponse/properties/sampleStatus/enum")
+                .toString())
+        .contains("COLLECTING", "READY");
+    assertThat(document.at("/components/schemas/StatsSummaryResponse/required").toString())
+        .contains("itemLevelMedian", "combatPowerP90", "supportShare", "gemMeanLevel");
+    assertThat(
+            document
+                .at(
+                    "/components/schemas/StatsSummaryResponse/properties/combatPowerP90/anyOf/1/type")
+                .asText())
+        .isEqualTo("null");
+    assertThat(
+            document
+                .at("/components/schemas/StatsRankedCharacterResponse/properties/tier/anyOf/0/enum")
+                .toString())
+        .contains("TOP1", "REST");
+    assertThat(document.at("/components/schemas/StatsRankEntryResponse/required").toString())
+        .contains("metric", "scope", "scopeValue", "rank", "total", "topPercent", "tier");
+    assertThat(document.at("/components/schemas/StatsClassRowResponse/required").toString())
+        .contains("combatPower", "supportShare", "sampleStatus");
+  }
+
   private HttpResponse<String> request(String path) throws Exception {
     try (var client = HttpClient.newHttpClient()) {
       return client.send(

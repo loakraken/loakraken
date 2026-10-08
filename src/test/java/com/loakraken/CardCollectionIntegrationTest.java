@@ -125,6 +125,9 @@ class CardCollectionIntegrationTest {
                   .statusCode())
           .as(name)
           .isEqualTo(200);
+    // 카드 기록은 비동기로 쓴다.
+    awaitCards(TEACHER, 6);
+    awaitCards(SUPPORT, 3);
     jdbc.sql(
             "UPDATE characters SET position = 'DEALER' WHERE server_name = :s AND character_name = :n")
         .param("s", SERVER)
@@ -172,6 +175,14 @@ class CardCollectionIntegrationTest {
     when(detailsPort.fetchArmory(ALT))
         .thenReturn(character(ALT, SERVER, "소서리스", cards(List.of("발탄"), new int[] {1}), List.of()));
     get("/api/v1/characters/search?includeSiblings=false&characterName=" + encode(ALT));
+    // 작업자는 하나라 뒤이은 기록이 반영되면 앞선 부캐 기록도 끝난 것이다.
+    redis.delete("character:v11:" + TEACHER + ":armory");
+    when(detailsPort.fetchArmory(TEACHER))
+        .thenReturn(
+            character(
+                TEACHER, OTHER_SERVER, "버서커", cards(List.of("니나브"), new int[] {5}), List.of()));
+    get("/api/v1/characters/search?includeSiblings=false&characterName=" + encode(TEACHER));
+    awaitCards(TEACHER, 7);
     assertThat(
             jdbc.sql(
                     "SELECT awake_count FROM character_card cc JOIN characters c USING (character_id) WHERE c.character_name = :n AND cc.card_name = '발탄'")
@@ -204,6 +215,20 @@ class CardCollectionIntegrationTest {
     assertThat(get("/api/v1/characters/card-collection?characterName=a-b").statusCode())
         .isEqualTo(400);
     assertThat(get("/api/v1/characters/card-collection").statusCode()).isEqualTo(400);
+  }
+
+  private void awaitCards(String name, int expected) throws InterruptedException {
+    for (int i = 0; i < 100; i++) {
+      long count =
+          jdbc.sql(
+                  "SELECT COUNT(*) FROM character_card cc JOIN characters c USING (character_id) WHERE c.character_name = :n")
+              .param("n", name)
+              .query(Long.class)
+              .single();
+      if (count >= expected) return;
+      Thread.sleep(50);
+    }
+    throw new AssertionError(name + " 카드 기록이 " + expected + "장에 도달하지 않았습니다.");
   }
 
   private static List<CharacterLoadout.Card> cards(List<String> names, int[] awake) {

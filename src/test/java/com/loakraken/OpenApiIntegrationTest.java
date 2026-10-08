@@ -279,6 +279,30 @@ class OpenApiIntegrationTest {
   }
 
   @Test
+  void 아크_그리드_상세는_코어_옵션과_의지력_null_계약을_명시한다() throws Exception {
+    var document = JsonMapper.builder().build().readTree(request("/v3/api-docs").body());
+    assertThat(document.at("/components/schemas/ArkGridResponse/required").toString())
+        .contains("willpower");
+    assertThat(document.at("/components/schemas/GridSlotResponse/required").toString())
+        .contains(
+            "coreType",
+            "supplyWillpower",
+            "usedWillpower",
+            "options",
+            "activeOptionCount",
+            "optionCount");
+    assertThat(document.at("/components/schemas/GridEffectResponse/required").toString())
+        .contains("value", "percent");
+    assertThat(document.at("/components/schemas/GridGemResponse/required").toString())
+        .contains("gemPoint", "corePoint", "requiredWillpower", "options");
+    assertThat(
+            document
+                .at("/components/schemas/GridSlotResponse/properties/supplyWillpower/anyOf/1/type")
+                .asText())
+        .isEqualTo("null");
+  }
+
+  @Test
   void 홈_일정과_소식은_nullable_시각과_분류_계약을_명시한다() throws Exception {
     var document = JsonMapper.builder().build().readTree(request("/v3/api-docs").body());
     assertThat(document.path("paths").path("/api/v1/home/schedule").path("get").isMissingNode())

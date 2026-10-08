@@ -120,11 +120,11 @@ class ValkeyCharacterCache implements CharacterCache {
   }
 
   private String summaryKey(String name) {
-    return "character:v10:" + name + ":summary";
+    return "character:v11:" + name + ":summary";
   }
 
   private String armoryKey(String name) {
-    return "character:v10:" + name + ":armory";
+    return "character:v11:" + name + ":armory";
   }
 
   private String siblingsKey(String name) {

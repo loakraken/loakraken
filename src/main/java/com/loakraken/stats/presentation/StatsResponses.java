@@ -163,6 +163,8 @@ public final class StatsResponses {
       @NullableResponse BigDecimal share,
       @NullableResponse BigDecimal itemLevelMedian,
       @NullableResponse BigDecimal combatPowerMedian,
+      @Schema(description = "필터와 무관하게 이 서버에서 알고 있는 전체 캐릭터 수(원정대로 발견한 캐릭터 포함)") long knownCharacters,
+      @Schema(description = "이 서버에서 수집한 원정대 수(roster_key 기준)") long rosters,
       @Schema(allowableValues = {"COLLECTING", "READY"}) String sampleStatus) {}
 
   public record StatsServersResponse(StatsMetaResponse meta, List<StatsServerRowResponse> rows) {
@@ -178,6 +180,8 @@ public final class StatsResponses {
                           row.share(),
                           row.itemLevelMedian(),
                           row.combatPowerMedian(),
+                          row.knownCharacters(),
+                          row.rosters(),
                           row.sampleStatus().name()))
               .toList());
     }

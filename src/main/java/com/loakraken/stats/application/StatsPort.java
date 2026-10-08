@@ -53,8 +53,14 @@ public interface StatsPort {
       BigDecimal gemMeanLevel,
       List<BigDecimal> combatPowerPercentiles) {}
 
+  /** knownCharacters·rosters는 필터와 무관하게 그 서버에서 알고 있는 전체 캐릭터 수와 원정대 수다. */
   record ServerRow(
-      String serverName, long count, BigDecimal itemLevelMedian, BigDecimal combatPowerMedian) {}
+      String serverName,
+      long count,
+      BigDecimal itemLevelMedian,
+      BigDecimal combatPowerMedian,
+      long knownCharacters,
+      long rosters) {}
 
   record Range(long count, BigDecimal min, BigDecimal max) {}
 

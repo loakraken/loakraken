@@ -134,6 +134,11 @@ class StatsIntegrationTest {
     var servers = data("/api/v1/stats/servers?server=" + encode(SERVER));
     assertThat(servers.at("/rows/0/serverName").asText()).isEqualTo(SERVER);
     assertThat(servers.at("/rows/0/count").asLong()).isEqualTo(40);
+    // 필터와 무관한 전체 캐릭터(오래된 캐릭터·발견만 된 캐릭터 포함)와 원정대 수
+    assertThat(servers.at("/rows/0/knownCharacters").asLong()).isEqualTo(42);
+    assertThat(servers.at("/rows/0/rosters").asLong()).isEqualTo(1);
+    ApiContractFixture.write(
+        "stats-servers.json", get("/api/v1/stats/servers?server=" + encode(SERVER)).body());
 
     var distribution =
         data(

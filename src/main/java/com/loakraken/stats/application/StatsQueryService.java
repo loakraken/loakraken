@@ -122,6 +122,8 @@ public class StatsQueryService {
                             population == 0 ? null : share(row.count(), population),
                             ready ? row.itemLevelMedian() : null,
                             ready ? row.combatPowerMedian() : null,
+                            row.knownCharacters(),
+                            row.rosters(),
                             status);
                       })
                   .toList());
@@ -413,6 +415,8 @@ public class StatsQueryService {
       BigDecimal share,
       BigDecimal itemLevelMedian,
       BigDecimal combatPowerMedian,
+      long knownCharacters,
+      long rosters,
       SampleStatus sampleStatus) {}
 
   public record ServersResult(Meta meta, List<ServerStat> rows) {}

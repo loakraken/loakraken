@@ -91,23 +91,36 @@ class PostgresStatsRepository implements StatsPort {
 
   @Override
   public List<ServerRow> servers(StatsConditions conditions, Instant since) {
-    return population(conditions, since)
-        .statement(
-            """
-        SELECT server_name, COUNT(*) AS n,
-          percentile_cont(0.5) WITHIN GROUP (ORDER BY item_level) AS il_median,
-          percentile_cont(0.5) WITHIN GROUP (ORDER BY combat_power) AS cp_median
-        FROM pop GROUP BY server_name ORDER BY n DESC, server_name
-        """,
-            jdbc)
-        .query(
-            (row, index) ->
-                new ServerRow(
-                    row.getString("server_name"),
-                    row.getLong("n"),
-                    round(row.getBigDecimal("il_median")),
-                    round(row.getBigDecimal("cp_median"))))
-        .list();
+    // 모집단이 0명인 서버도 알고 있는 캐릭터·원정대 수는 보여 준다.
+    var rows =
+        population(conditions, since)
+            .statement(
+                """
+            , known AS (
+              SELECT server_name, COUNT(*) AS known, COUNT(DISTINCT roster_key) AS rosters
+              FROM characters GROUP BY server_name),
+            stat AS (
+              SELECT server_name, COUNT(*) AS n,
+                percentile_cont(0.5) WITHIN GROUP (ORDER BY item_level) AS il_median,
+                percentile_cont(0.5) WITHIN GROUP (ORDER BY combat_power) AS cp_median
+              FROM pop GROUP BY server_name)
+            SELECT k.server_name, COALESCE(s.n, 0) AS n, s.il_median, s.cp_median, k.known, k.rosters
+            FROM known k LEFT JOIN stat s ON s.server_name = k.server_name
+            ORDER BY n DESC, k.known DESC, k.server_name
+            """,
+                jdbc)
+            .query(
+                (row, index) ->
+                    new ServerRow(
+                        row.getString("server_name"),
+                        row.getLong("n"),
+                        round(row.getBigDecimal("il_median")),
+                        round(row.getBigDecimal("cp_median")),
+                        row.getLong("known"),
+                        row.getLong("rosters")))
+            .list();
+    if (conditions.server() == null) return rows;
+    return rows.stream().filter(row -> row.serverName().equals(conditions.server())).toList();
   }
 
   @Override

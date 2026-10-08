@@ -219,14 +219,66 @@ public record CharacterLoadout(
     }
   }
 
+  /** core: 코어 Tooltip 해석(arkgrid-tooltip-v1). 해석할 수 없으면 null. */
   public record GridSlot(
-      Integer index, String icon, String name, Integer point, String grade, List<GridGem> gems) {
+      Integer index,
+      String icon,
+      String name,
+      Integer point,
+      String grade,
+      List<GridGem> gems,
+      CoreDetail core) {
     public GridSlot {
       gems = gems == null ? List.of() : List.copyOf(gems);
     }
+
+    public GridSlot(
+        Integer index, String icon, String name, Integer point, String grade, List<GridGem> gems) {
+      this(index, icon, name, point, grade, gems, null);
+    }
   }
 
-  public record GridEffect(String name, Integer level) {}
+  /** options는 포인트 구간 오름차순. conditions는 '코어 옵션 발동 조건' 줄. */
+  public record CoreDetail(
+      String coreType, Integer supplyWillpower, List<CoreOption> options, List<String> conditions) {
+    public CoreDetail {
+      options = options == null ? List.of() : List.copyOf(options);
+      conditions = conditions == null ? List.of() : List.copyOf(conditions);
+    }
+  }
 
-  public record GridGem(Integer index, String icon, Boolean active, String grade) {}
+  public record CoreOption(int threshold, String text) {}
+
+  /** value: 공식 Tooltip 문구(예: "공격력 +1.02%"), percent: 그 수치. 없으면 null. */
+  public record GridEffect(String name, Integer level, String value, java.math.BigDecimal percent) {
+    public GridEffect(String name, Integer level) {
+      this(name, level, null, null);
+    }
+  }
+
+  /** detail: 젬 Tooltip 해석. 해석할 수 없으면 null. */
+  public record GridGem(
+      Integer index, String icon, Boolean active, String grade, GemDetail detail) {
+    public GridGem(Integer index, String icon, Boolean active, String grade) {
+      this(index, icon, active, grade, null);
+    }
+  }
+
+  /** gemPoint: 젬 기본 정보의 젬 포인트, corePoint: 코어에 더하는 질서·혼돈 포인트. */
+  public record GemDetail(
+      String name,
+      String gemType,
+      Integer gemPoint,
+      Integer requiredWillpower,
+      Integer baseWillpower,
+      Integer willpowerEfficiency,
+      Integer corePoint,
+      List<GemOption> options) {
+    public GemDetail {
+      options = options == null ? List.of() : List.copyOf(options);
+    }
+  }
+
+  public record GemOption(
+      String name, Integer level, String effect, java.math.BigDecimal percent) {}
 }

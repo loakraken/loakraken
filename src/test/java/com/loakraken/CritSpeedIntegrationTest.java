@@ -40,8 +40,8 @@ class CritSpeedIntegrationTest {
   @BeforeEach
   @AfterEach
   void 정리() {
-    redis.delete("character:v10:" + NAME + ":summary");
-    redis.delete("character:v10:" + NAME + ":armory");
+    redis.delete("character:v11:" + NAME + ":summary");
+    redis.delete("character:v11:" + NAME + ":armory");
     redis.delete("character:v1:" + NAME + ":siblings");
     for (var table :
         List.of("character_title_observation", "character_observation", "character_snapshot"))

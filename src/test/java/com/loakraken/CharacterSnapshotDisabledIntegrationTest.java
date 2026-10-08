@@ -37,7 +37,7 @@ import tools.jackson.databind.json.JsonMapper;
     properties = "character.history.enabled=false")
 class CharacterSnapshotDisabledIntegrationTest {
   private static final String NAME = "저장비활성테스트";
-  private static final String KEY = "character:v10:" + NAME + ":summary";
+  private static final String KEY = "character:v11:" + NAME + ":summary";
   @LocalServerPort private int port;
   @Autowired private StringRedisTemplate redis;
   @Autowired private JsonMapper mapper;

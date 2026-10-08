@@ -353,14 +353,30 @@ public record CharacterLoadoutResponse(
       @Schema(description = "피해 N% 증가=DAMAGE, 재사용 대기시간 N% 감소=COOLDOWN, 그 외 null") @NullableResponse
           CharacterLoadout.GemEffectKind kind) {}
 
-  public record ArkGridResponse(List<GridSlotResponse> slots, List<GridEffectResponse> effects) {
+  public record ArkGridResponse(
+      List<GridSlotResponse> slots,
+      List<GridEffectResponse> effects,
+      @Schema(description = "코어 공급 의지력 합과 활성 젬 필요 의지력 합. 코어 상세가 없으면 null") @NullableResponse
+          WillpowerResponse willpower) {
     static ArkGridResponse from(CharacterLoadout.ArkGrid value) {
       if (value == null) return null;
+      var slots = value.slots().stream().map(GridSlotResponse::from).toList();
+      Integer supply = null;
+      Integer used = null;
+      for (var slot : slots) {
+        if (slot == null || slot.supplyWillpower() == null) continue;
+        supply = (supply == null ? 0 : supply) + slot.supplyWillpower();
+        used =
+            (used == null ? 0 : used) + (slot.usedWillpower() == null ? 0 : slot.usedWillpower());
+      }
       return new ArkGridResponse(
-          value.slots().stream().map(GridSlotResponse::from).toList(),
-          value.effects().stream().map(GridEffectResponse::from).toList());
+          slots,
+          value.effects().stream().map(GridEffectResponse::from).toList(),
+          supply == null ? null : new WillpowerResponse(used, supply));
     }
   }
+
+  public record WillpowerResponse(int used, int supply) {}
 
   public record GridSlotResponse(
       @NullableResponse Integer index,
@@ -368,23 +384,65 @@ public record CharacterLoadoutResponse(
       @NullableResponse String name,
       @NullableResponse Integer point,
       @NullableResponse String grade,
-      List<GridGemResponse> gems) {
+      List<GridGemResponse> gems,
+      @Schema(description = "코어 타입(예: 질서 - 해). 코어 Tooltip을 해석할 수 없으면 null") @NullableResponse
+          String coreType,
+      @Schema(description = "코어 공급 의지력") @NullableResponse Integer supplyWillpower,
+      @Schema(description = "활성 젬의 필요 의지력 합") @NullableResponse Integer usedWillpower,
+      @Schema(description = "포인트 구간 옵션(오름차순). active는 현재 포인트로 달성했는지")
+          List<CoreOptionResponse> options,
+      @Schema(description = "달성한 구간 수(예: 4/6의 4)") int activeOptionCount,
+      @Schema(description = "전체 구간 수") int optionCount,
+      @Schema(description = "코어 옵션 발동 조건") List<String> conditions) {
     static GridSlotResponse from(CharacterLoadout.GridSlot value) {
       if (value == null) return null;
+      var core = value.core();
+      int point = value.point() == null ? 0 : value.point();
+      var options =
+          core == null
+              ? List.<CoreOptionResponse>of()
+              : core.options().stream()
+                  .map(
+                      option ->
+                          new CoreOptionResponse(
+                              option.threshold(), option.text(), option.threshold() <= point))
+                  .toList();
+      Integer used = null;
+      if (core != null && core.supplyWillpower() != null) {
+        used = 0;
+        for (var gem : value.gems())
+          if (gem != null
+              && Boolean.TRUE.equals(gem.active())
+              && gem.detail() != null
+              && gem.detail().requiredWillpower() != null) used += gem.detail().requiredWillpower();
+      }
       return new GridSlotResponse(
           value.index(),
           value.icon(),
           value.name(),
           value.point(),
           value.grade(),
-          value.gems().stream().map(GridGemResponse::from).toList());
+          value.gems().stream().map(GridGemResponse::from).toList(),
+          core == null ? null : core.coreType(),
+          core == null ? null : core.supplyWillpower(),
+          used,
+          options,
+          (int) options.stream().filter(CoreOptionResponse::active).count(),
+          options.size(),
+          core == null ? List.of() : core.conditions());
     }
   }
 
-  public record GridEffectResponse(@NullableResponse String name, @NullableResponse Integer level) {
+  public record CoreOptionResponse(int threshold, String text, boolean active) {}
+
+  public record GridEffectResponse(
+      @NullableResponse String name,
+      @NullableResponse Integer level,
+      @Schema(description = "공식 Tooltip 문구(예: 공격력 +1.02%)") @NullableResponse String value,
+      @Schema(description = "value의 % 수치") @NullableResponse java.math.BigDecimal percent) {
     static GridEffectResponse from(CharacterLoadout.GridEffect value) {
       if (value == null) return null;
-      return new GridEffectResponse(value.name(), value.level());
+      return new GridEffectResponse(value.name(), value.level(), value.value(), value.percent());
     }
   }
 
@@ -392,10 +450,44 @@ public record CharacterLoadoutResponse(
       @NullableResponse Integer index,
       @NullableResponse String icon,
       @NullableResponse Boolean active,
-      @NullableResponse String grade) {
+      @NullableResponse String grade,
+      @Schema(description = "젬 이름(예: 질서의 젬 : 안정)") @NullableResponse String name,
+      @NullableResponse String gemType,
+      @Schema(description = "젬 기본 정보의 젬 포인트") @NullableResponse Integer gemPoint,
+      @Schema(description = "코어에 더하는 질서·혼돈 포인트") @NullableResponse Integer corePoint,
+      @NullableResponse Integer requiredWillpower,
+      @NullableResponse Integer baseWillpower,
+      @NullableResponse Integer willpowerEfficiency,
+      List<GemOptionResponse> options) {
     static GridGemResponse from(CharacterLoadout.GridGem value) {
       if (value == null) return null;
-      return new GridGemResponse(value.index(), value.icon(), value.active(), value.grade());
+      var detail = value.detail();
+      return new GridGemResponse(
+          value.index(),
+          value.icon(),
+          value.active(),
+          value.grade(),
+          detail == null ? null : detail.name(),
+          detail == null ? null : detail.gemType(),
+          detail == null ? null : detail.gemPoint(),
+          detail == null ? null : detail.corePoint(),
+          detail == null ? null : detail.requiredWillpower(),
+          detail == null ? null : detail.baseWillpower(),
+          detail == null ? null : detail.willpowerEfficiency(),
+          detail == null
+              ? List.of()
+              : detail.options().stream()
+                  .map(
+                      option ->
+                          new GemOptionResponse(
+                              option.name(), option.level(), option.effect(), option.percent()))
+                  .toList());
     }
   }
+
+  public record GemOptionResponse(
+      String name,
+      @NullableResponse Integer level,
+      @Schema(description = "효과 문구(예: 공격력 +0.03%)") @NullableResponse String effect,
+      @NullableResponse java.math.BigDecimal percent) {}
 }

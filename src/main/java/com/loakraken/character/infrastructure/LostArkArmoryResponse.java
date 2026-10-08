@@ -287,17 +287,27 @@ record LostArkArmoryResponse(
       @JsonProperty("Name") String name,
       @JsonProperty("Point") Integer point,
       @JsonProperty("Grade") String grade,
+      @JsonProperty("Tooltip") String tooltip,
       @JsonProperty("Gems") List<GridGem> gems) {
     CharacterLoadout.GridSlot toDomain() {
       return new CharacterLoadout.GridSlot(
-          index, icon, LostArkText.plain(name), point, grade, map(gems, GridGem::toDomain));
+          index,
+          icon,
+          LostArkText.plain(name),
+          point,
+          grade,
+          map(gems, GridGem::toDomain),
+          LostArkArkGridTooltip.core(tooltip));
     }
   }
 
   @JsonIgnoreProperties(ignoreUnknown = true)
-  record GridEffect(@JsonProperty("Name") String name, @JsonProperty("Level") Integer level) {
+  record GridEffect(
+      @JsonProperty("Name") String name,
+      @JsonProperty("Level") Integer level,
+      @JsonProperty("Tooltip") String tooltip) {
     CharacterLoadout.GridEffect toDomain() {
-      return new CharacterLoadout.GridEffect(LostArkText.plain(name), level);
+      return LostArkArkGridTooltip.effect(LostArkText.plain(name), level, tooltip);
     }
   }
 
@@ -306,9 +316,11 @@ record LostArkArmoryResponse(
       @JsonProperty("Index") Integer index,
       @JsonProperty("Icon") String icon,
       @JsonProperty("IsActive") Boolean active,
-      @JsonProperty("Grade") String grade) {
+      @JsonProperty("Grade") String grade,
+      @JsonProperty("Tooltip") String tooltip) {
     CharacterLoadout.GridGem toDomain() {
-      return new CharacterLoadout.GridGem(index, icon, active, grade);
+      return new CharacterLoadout.GridGem(
+          index, icon, active, grade, LostArkArkGridTooltip.gem(tooltip));
     }
   }
 

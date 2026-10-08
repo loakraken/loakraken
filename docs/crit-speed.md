@@ -14,7 +14,7 @@
  "supportCritRate":2.5,"tripodCritRate":0,"extraCritRate":0,"extraAttackSpeed":14,"extraMoveSpeed":14}}
 ```
 
-- 캐릭터명은 검색 API와 같은 규칙을 쓴다. 원정대 없이 전투정보만 조회하며 `character:v10:{name}:armory` 캐시를 공유한다.
+- 캐릭터명은 검색 API와 같은 규칙을 쓴다. 원정대 없이 전투정보만 조회하며 `character:v11:{name}:armory` 캐시를 공유한다.
 - `assumptions`는 생략할 수 있고, 각 값을 생략하면 0이나 false로 처리한다.
 
 | 가정 | 의미 | 범위 |

@@ -15,7 +15,9 @@ public enum CharacterErrorCode implements ErrorCode {
   CHARACTER_HISTORY_DISABLED(HttpStatus.SERVICE_UNAVAILABLE, "캐릭터 관측 이력 기능이 비활성화되어 있습니다."),
   CHARACTER_HISTORY_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "캐릭터 관측 이력을 조회할 수 없습니다."),
   CHARACTER_VIEWS_DISABLED(HttpStatus.SERVICE_UNAVAILABLE, "캐릭터 조회수 기능이 비활성화되어 있습니다."),
-  CHARACTER_VIEWS_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "캐릭터 조회수를 조회할 수 없습니다.");
+  CHARACTER_VIEWS_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "캐릭터 조회수를 조회할 수 없습니다."),
+  CARD_COLLECTION_DISABLED(HttpStatus.SERVICE_UNAVAILABLE, "원정대 카드 기록 기능이 비활성화되어 있습니다."),
+  CARD_COLLECTION_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "원정대 카드 기록을 조회할 수 없습니다.");
 
   private final HttpStatus httpStatus;
   private final String message;

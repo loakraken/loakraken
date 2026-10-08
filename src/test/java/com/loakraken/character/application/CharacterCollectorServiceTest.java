@@ -29,6 +29,7 @@ class CharacterCollectorServiceTest {
   private final CharacterDetailsPort details = mock(CharacterDetailsPort.class);
   private final CharacterCollectionPort collection = mock(CharacterCollectionPort.class);
   private final CharacterHistoryService history = mock(CharacterHistoryService.class);
+  private final CharacterCardService cards = mock(CharacterCardService.class);
   private final LostArkRequestGate gate = mock(LostArkRequestGate.class);
   private final SimpleMeterRegistry registry = new SimpleMeterRegistry();
   private final Target target = new Target("모험가", "루페온");
@@ -83,6 +84,7 @@ class CharacterCollectorServiceTest {
     var service = service("key", true);
     assertThat(service.tick()).isEqualTo(Task.PROFILE);
     verify(history).record(profile, clock.instant());
+    verify(cards).record(any(), eq(clock.instant()));
     verify(collection).markProfileRefreshed(eq(target), any(), eq(clock.instant()));
     assertThat(service.tick()).isEqualTo(Task.ROSTER);
     verify(collection).markRosterScanned(target, clock.instant());
@@ -134,6 +136,6 @@ class CharacterCollectorServiceTest {
             Duration.ofDays(7),
             Duration.ofDays(7));
     return new CharacterCollectorService(
-        details, collection, history, policy, gate, lostArk, registry, clock);
+        details, collection, history, cards, policy, gate, lostArk, registry, clock);
   }
 }

@@ -24,6 +24,7 @@ public class CharacterCollectorService {
   private final CharacterDetailsPort details;
   private final CharacterCollectionPort collection;
   private final CharacterHistoryService history;
+  private final CharacterCardService cards;
   private final CharacterCollectionPolicy policy;
   private final LostArkRequestGate gate;
   private final LostArkProperties lostArk;
@@ -35,6 +36,7 @@ public class CharacterCollectorService {
       CharacterDetailsPort details,
       CharacterCollectionPort collection,
       CharacterHistoryService history,
+      CharacterCardService cards,
       CharacterCollectionPolicy policy,
       LostArkRequestGate gate,
       LostArkProperties lostArk,
@@ -43,6 +45,7 @@ public class CharacterCollectorService {
     this.details = details;
     this.collection = collection;
     this.history = history;
+    this.cards = cards;
     this.policy = policy;
     this.gate = gate;
     this.lostArk = lostArk;
@@ -86,6 +89,7 @@ public class CharacterCollectorService {
         var fetched = details.fetchArmory(target.get().characterName());
         var profile = fetched.details().profile();
         history.record(profile, now);
+        cards.record(fetched.details(), now);
         var position =
             CharacterPosition.judge(profile.className(), fetched.details().loadout().arkPassive());
         collection.markProfileRefreshed(

@@ -14,6 +14,7 @@ public class CharacterQueryService {
   private final CharacterSnapshotCommandService snapshots;
   private final CharacterMetrics metrics;
   private final CharacterHistoryService history;
+  private final CharacterCardService cards;
   private final SingleFlight<CharacterResult> searches = new SingleFlight<>();
   private final SingleFlight<CharacterSiblingsResult> siblingQueries = new SingleFlight<>();
 
@@ -23,13 +24,15 @@ public class CharacterQueryService {
       Clock clock,
       CharacterSnapshotCommandService snapshots,
       CharacterMetrics metrics,
-      CharacterHistoryService history) {
+      CharacterHistoryService history,
+      CharacterCardService cards) {
     this.detailsPort = detailsPort;
     this.cache = cache;
     this.clock = clock;
     this.snapshots = snapshots;
     this.metrics = metrics;
     this.history = history;
+    this.cards = cards;
   }
 
   public CharacterResult search(SearchCharacterCommand command) {
@@ -89,6 +92,7 @@ public class CharacterQueryService {
                               fetched.details(), fetchedAt, Instant.now(clock).plus(cache.ttl()));
                       cache.save(name, result);
                       history.record(fetched.details().profile(), fetchedAt);
+                      cards.record(fetched.details(), fetchedAt);
                       return result;
                     }));
   }
@@ -109,6 +113,7 @@ public class CharacterQueryService {
                           new CharacterResult(fetched.details(), now, now.plus(cache.ttl()));
                       cache.saveArmory(name, result);
                       history.record(fetched.details().profile(), now);
+                      cards.record(fetched.details(), now);
                       return result;
                     }));
   }

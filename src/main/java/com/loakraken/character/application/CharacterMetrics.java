@@ -29,6 +29,12 @@ public class CharacterMetrics {
         .increment();
   }
 
+  public void cards(boolean success) {
+    registry
+        .counter("loakraken.character.cards.writes", "outcome", success ? "success" : "failure")
+        .increment();
+  }
+
   public void views(boolean success) {
     registry
         .counter("loakraken.character.views.writes", "outcome", success ? "success" : "failure")

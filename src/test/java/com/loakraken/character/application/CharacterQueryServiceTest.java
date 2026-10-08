@@ -33,6 +33,7 @@ class CharacterQueryServiceTest {
   private final CharacterSnapshotCommandService snapshots =
       mock(CharacterSnapshotCommandService.class);
   private final CharacterHistoryService history = mock(CharacterHistoryService.class);
+  private final CharacterCardService cards = mock(CharacterCardService.class);
 
   @Test
   void 캐시_적중은_외부_호출과_수집시각_변경이_없다() {
@@ -40,7 +41,7 @@ class CharacterQueryServiceTest {
     var cache = mock(CharacterCache.class);
     var cached = new CharacterResult(details, clock.instant().minusSeconds(60));
     when(cache.find("모험가")).thenReturn(Optional.of(cached));
-    var service = new CharacterQueryService(port, cache, clock, snapshots, metrics, history);
+    var service = new CharacterQueryService(port, cache, clock, snapshots, metrics, history, cards);
     assertThat(service.search(new SearchCharacterCommand(" 모험가 "))).isEqualTo(cached);
     verifyNoInteractions(port, snapshots, history);
     assertThat(
@@ -65,7 +66,7 @@ class CharacterQueryServiceTest {
               if (!release.await(5, TimeUnit.SECONDS)) throw new IllegalStateException("테스트 대기 초과");
               return fetched;
             });
-    var service = new CharacterQueryService(port, cache, clock, snapshots, metrics, history);
+    var service = new CharacterQueryService(port, cache, clock, snapshots, metrics, history, cards);
     try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
       var futures = new ArrayList<Future<CharacterResult>>();
       try {
@@ -101,7 +102,7 @@ class CharacterQueryServiceTest {
     when(port.fetch("모험가"))
         .thenThrow(new CharacterException(CharacterErrorCode.LOST_ARK_API_ERROR))
         .thenReturn(fetched);
-    var service = new CharacterQueryService(port, cache, clock, snapshots, metrics, history);
+    var service = new CharacterQueryService(port, cache, clock, snapshots, metrics, history, cards);
     assertThatThrownBy(() -> service.search(new SearchCharacterCommand("모험가")))
         .isInstanceOf(CharacterException.class);
     assertThat(service.search(new SearchCharacterCommand("모험가")).details()).isEqualTo(details);
@@ -131,7 +132,7 @@ class CharacterQueryServiceTest {
     doThrow(new org.springframework.dao.DataAccessResourceFailureException("internal-secret"))
         .when(snapshots)
         .save(fetched, clock.instant());
-    var service = new CharacterQueryService(port, cache, clock, snapshots, metrics, history);
+    var service = new CharacterQueryService(port, cache, clock, snapshots, metrics, history, cards);
     assertThatThrownBy(() -> service.search(new SearchCharacterCommand("모험가")))
         .isInstanceOfSatisfying(
             CharacterException.class,
@@ -147,7 +148,7 @@ class CharacterQueryServiceTest {
     var cache = mock(CharacterCache.class);
     when(cache.find(anyString()))
         .thenThrow(new CharacterException(CharacterErrorCode.CHARACTER_CACHE_UNAVAILABLE));
-    var service = new CharacterQueryService(port, cache, clock, snapshots, metrics, history);
+    var service = new CharacterQueryService(port, cache, clock, snapshots, metrics, history, cards);
     assertThatThrownBy(() -> service.search(new SearchCharacterCommand("모험가")))
         .isInstanceOf(CharacterException.class);
     verifyNoInteractions(port);
@@ -171,7 +172,7 @@ class CharacterQueryServiceTest {
             "{}",
             null);
     when(port.fetchArmory("모험가")).thenReturn(armoryOnly);
-    var service = new CharacterQueryService(port, cache, clock, snapshots, metrics, history);
+    var service = new CharacterQueryService(port, cache, clock, snapshots, metrics, history, cards);
     var first = service.search(new SearchCharacterCommand("모험가", false));
     var second = service.search(new SearchCharacterCommand("모험가", false));
     assertThat(first.details().siblings()).isNull();
@@ -203,7 +204,7 @@ class CharacterQueryServiceTest {
               if (!release.await(5, TimeUnit.SECONDS)) throw new IllegalStateException("테스트 대기 초과");
               return siblings;
             });
-    var service = new CharacterQueryService(port, cache, clock, snapshots, metrics, history);
+    var service = new CharacterQueryService(port, cache, clock, snapshots, metrics, history, cards);
     try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
       var futures = new ArrayList<Future<CharacterSiblingsResult>>();
       try {

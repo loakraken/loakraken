@@ -16,6 +16,8 @@ class MarketOpenApiConfiguration {
       ResponseContracts.apply(MaterialPriceResponse.class, document.getComponents().getSchemas());
       ResponseContracts.apply(
           MarketItemHistoryResponse.class, document.getComponents().getSchemas());
+      ResponseContracts.apply(MarketBoardResponse.class, document.getComponents().getSchemas());
+      ResponseContracts.apply(MarketTabsResponse.class, document.getComponents().getSchemas());
     };
   }
 }

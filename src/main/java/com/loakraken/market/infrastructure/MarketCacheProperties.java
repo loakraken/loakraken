@@ -8,7 +8,8 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
 public record MarketCacheProperties(
     @DefaultValue("30s") Duration pricesTtl,
     @DefaultValue("10m") Duration optionsTtl,
-    @DefaultValue("10m") Duration historyTtl) {
+    @DefaultValue("10m") Duration historyTtl,
+    @DefaultValue("3m") Duration boardScanTtl) {
   public MarketCacheProperties {
     if (pricesTtl == null
         || optionsTtl == null
@@ -18,6 +19,9 @@ public record MarketCacheProperties(
         || optionsTtl.isNegative()
         || historyTtl == null
         || historyTtl.isZero()
-        || historyTtl.isNegative()) throw new IllegalArgumentException("거래소 캐시 TTL은 양수여야 합니다.");
+        || historyTtl.isNegative()
+        || boardScanTtl == null
+        || boardScanTtl.isZero()
+        || boardScanTtl.isNegative()) throw new IllegalArgumentException("거래소 캐시 TTL은 양수여야 합니다.");
   }
 }

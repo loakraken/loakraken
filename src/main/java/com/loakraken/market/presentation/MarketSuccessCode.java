@@ -8,7 +8,9 @@ enum MarketSuccessCode implements SuccessCode {
   MARKET_OPTIONS_SUCCESS,
   MATERIAL_QUOTE_SUCCESS,
   MATERIAL_PRICE_SUCCESS,
-  MARKET_ITEM_HISTORY_SUCCESS;
+  MARKET_ITEM_HISTORY_SUCCESS,
+  MARKET_BOARD_SUCCESS,
+  MARKET_TABS_SUCCESS;
 
   public HttpStatus httpStatus() {
     return HttpStatus.OK;
@@ -25,6 +27,8 @@ enum MarketSuccessCode implements SuccessCode {
       case MATERIAL_QUOTE_SUCCESS -> "재료 구매 견적 계산에 성공했습니다.";
       case MATERIAL_PRICE_SUCCESS -> "재료 단가 조회에 성공했습니다.";
       case MARKET_ITEM_HISTORY_SUCCESS -> "상품 시세 이력 조회에 성공했습니다.";
+      case MARKET_BOARD_SUCCESS -> "시세 보드 조회에 성공했습니다.";
+      case MARKET_TABS_SUCCESS -> "시세 보드 탭 조회에 성공했습니다.";
     };
   }
 }

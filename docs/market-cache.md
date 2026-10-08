@@ -28,10 +28,12 @@
 |---|---|---|---|
 | 현재 판매·최근 거래 한 페이지 | 30초 | market.cache.prices-ttl | MARKET_PRICES_CACHE_TTL |
 | 검색 옵션 전체 | 10분 | market.cache.options-ttl | MARKET_OPTIONS_CACHE_TTL |
+| 상품 14일 이력([문서](market-item-history.md)) | 10분 | market.cache.history-ttl | MARKET_HISTORY_CACHE_TTL |
+| 시세 보드 탭 전체 스캔([문서](market-board.md)) | 3분 | market.cache.board-scan-ttl | MARKET_BOARD_SCAN_CACHE_TTL |
 
-두 TTL은 양수여야 한다. 기본값을 쓰면 환경 변수 추가가 필요 없다. TTL은 API 호출량과 신선도를 위한 서비스 설정이며 공식적으로 허용된 보관 기간을 확인했다는 뜻이 아니다. 보관·재제공 범위에 관한 기존 [검증 기록](source-verification.md)은 그대로 적용한다.
+모든 TTL은 양수여야 한다. 기본값을 쓰면 환경 변수 추가가 필요 없다. TTL은 API 호출량과 신선도를 위한 서비스 설정이며 공식적으로 허용된 보관 기간을 확인했다는 뜻이 아니다. 보관·재제공 범위에 관한 기존 [검증 기록](source-verification.md)은 그대로 적용한다.
 
-Valkey 키는 가격 `market:v1:prices:{SHA-256}`, 옵션 `market:v1:options`다. 가격 해시는 출처와 적용한 **모든** 검색 조건(categoryCode, characterClass, itemTier, itemGrade, itemName, pageNo, sort, sortCondition)의 JSON으로 생성한다. 현재 판매와 최근 거래, 페이지와 정렬이 서로 다른 응답을 재사용하지 않게 한다. 앞뒤 공백 제거·NFC와 기본값 적용은 기존 공개 요청 경계에서 수행한다. 해시는 키 길이를 고정하는 장치이며 캐시 내용 암호화를 뜻하지 않는다.
+Valkey 키는 가격 `market:v1:prices:{SHA-256}`, 옵션 `market:v1:options`, 상품 이력 `market:v1:item-history:{itemId}`, 보드 스캔 `market:v1:board-scan:{TAB}:{tier|all}`다. 가격 해시는 출처와 적용한 **모든** 검색 조건(categoryCode, characterClass, itemTier, itemGrade, itemName, pageNo, sort, sortCondition)의 JSON으로 생성한다. 현재 판매와 최근 거래, 페이지와 정렬이 서로 다른 응답을 재사용하지 않게 한다. 앞뒤 공백 제거·NFC와 기본값 적용은 기존 공개 요청 경계에서 수행한다. 해시는 키 길이를 고정하는 장치이며 캐시 내용 암호화를 뜻하지 않는다.
 
 캐시 적중 시 `observedAt`은 최초 수집 완료 시각을 유지한다. 적중만으로 TTL을 연장하지 않는다. Valkey 만료 외에도 수집 시각이 현재보다 미래이거나 설정 TTL 이상 오래되면 재사용하지 않는다. 공개 응답은 캐시를 거쳤다고 실시간 가격으로 표시하지 않는다.
 

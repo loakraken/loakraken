@@ -50,6 +50,12 @@ market:
     enabled: ${MARKET_WARMUP_ENABLED:true}
     interval: ${MARKET_WARMUP_INTERVAL:9m}
 
+stats:
+  collector:
+    enabled: ${STATS_COLLECTOR_ENABLED:true}
+    interval: ${STATS_COLLECTOR_INTERVAL:3s}
+    reserve: ${STATS_COLLECTOR_RESERVE:40}
+
 home:
   cache:
     calendar-ttl: ${HOME_CALENDAR_CACHE_TTL:30m}

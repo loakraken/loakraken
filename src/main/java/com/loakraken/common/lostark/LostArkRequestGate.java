@@ -35,6 +35,17 @@ public class LostArkRequestGate {
     requests.addLast(now);
   }
 
+  /**
+   * 백그라운드 작업(통계 수집 등)이 지금 호출해도 되는지. 최근 60초 사용량이 budget − reserve 미만이고 공식 한도 대기 중이 아닐 때만 true다. 사용자
+   * 요청 몫(reserve)을 남겨 두기 위한 사전 확인이며, 실제 호출은 acquire()를 거친다.
+   */
+  public synchronized boolean backgroundAvailable(int reserve) {
+    var now = clock.instant();
+    while (!requests.isEmpty() && !requests.peekFirst().isAfter(now.minusSeconds(60)))
+      requests.removeFirst();
+    return !now.isBefore(blockedUntil) && requests.size() < budget - Math.max(0, reserve);
+  }
+
   public void release() {
     permits.release();
   }

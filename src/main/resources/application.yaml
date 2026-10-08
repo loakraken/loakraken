@@ -42,6 +42,8 @@ market:
   cache:
     prices-ttl: ${MARKET_PRICES_CACHE_TTL:30s}
     options-ttl: ${MARKET_OPTIONS_CACHE_TTL:10m}
+    history-ttl: ${MARKET_HISTORY_CACHE_TTL:10m}
+    board-scan-ttl: ${MARKET_BOARD_SCAN_CACHE_TTL:3m}
 
 springdoc:
   paths-to-match: /api/v1/**

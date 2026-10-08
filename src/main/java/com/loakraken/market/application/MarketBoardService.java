@@ -14,6 +14,7 @@ import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.locks.ReentrantLock;
 import org.springframework.stereotype.Service;
 
 /**
@@ -31,6 +32,8 @@ public class MarketBoardService {
   private final MarketCache cache;
   private final ConcurrentHashMap<ScanKey, CompletableFuture<MarketBoardScan>> scans =
       new ConcurrentHashMap<>();
+  // 서로 다른 탭·티어 스캔이 겹쳐 공유 호출 예산을 몰아 쓰지 않도록 전체 스캔은 한 번에 하나만 실행한다.
+  private final ReentrantLock scanLock = new ReentrantLock(true);
 
   public MarketBoardService(MarketQueryService markets, MarketCache cache) {
     this.markets = markets;
@@ -83,7 +86,7 @@ public class MarketBoardService {
               .findBoardScan(tab, tier)
               .orElseGet(
                   () -> {
-                    var fresh = fetchAll(tab, tier);
+                    var fresh = fetchAllSerialized(tab, tier);
                     cache.saveBoardScan(fresh);
                     return fresh;
                   });
@@ -94,6 +97,16 @@ public class MarketBoardService {
       throw exception;
     } finally {
       scans.remove(key, future);
+    }
+  }
+
+  private MarketBoardScan fetchAllSerialized(MarketTab tab, Integer tier) {
+    scanLock.lock();
+    try {
+      // 대기하는 동안 다른 요청이 같은 스캔을 저장했을 수 있다.
+      return cache.findBoardScan(tab, tier).orElseGet(() -> fetchAll(tab, tier));
+    } finally {
+      scanLock.unlock();
     }
   }
 

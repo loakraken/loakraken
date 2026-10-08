@@ -75,6 +75,7 @@ tasks.named('test') {
     outputs.dir(layout.buildDirectory.dir('generated'))
     // 시세 이력 예열이 테스트 중 공식 API를 부르거나 호출 예산 검증을 흔들지 않게 끈다.
     systemProperty 'market.warmup.enabled', 'false'
+    systemProperty 'stats.collector.enabled', 'false'
 }
 
 spotless {

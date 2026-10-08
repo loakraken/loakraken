@@ -70,6 +70,26 @@ class LostArkRequestGateTest {
     gate.release();
   }
 
+  @Test
+  void 백그라운드는_사용자_몫을_남기고_한도_대기_중에는_양보한다() {
+    var clock = new MutableClock();
+    var gate = gate(clock, 10, 4);
+    assertThat(gate.backgroundAvailable(4)).isTrue();
+    for (int i = 0; i < 6; i++) {
+      gate.acquire();
+      gate.release();
+    }
+    assertThat(gate.backgroundAvailable(4)).isFalse();
+    assertThat(gate.backgroundAvailable(3)).isTrue();
+    clock.now = clock.now.plusSeconds(61);
+    assertThat(gate.backgroundAvailable(4)).isTrue();
+    var headers = new HttpHeaders();
+    headers.set("X-RateLimit-Remaining", "0");
+    headers.set("X-RateLimit-Reset", Long.toString(clock.now.plusSeconds(30).getEpochSecond()));
+    gate.observe(headers, false);
+    assertThat(gate.backgroundAvailable(0)).isFalse();
+  }
+
   private LostArkRequestGate gate(Clock clock, int budget, int concurrency) {
     return new LostArkRequestGate(
         clock,

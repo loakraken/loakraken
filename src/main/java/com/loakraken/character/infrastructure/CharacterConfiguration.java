@@ -1,5 +1,6 @@
 package com.loakraken.character.infrastructure;
 
+import com.loakraken.character.application.CharacterCollectionPolicy;
 import com.loakraken.character.application.CharacterHistoryPolicy;
 import com.loakraken.character.application.CharacterSnapshotPolicy;
 import com.loakraken.character.application.CharacterViewPolicy;
@@ -10,6 +11,7 @@ import org.springframework.context.annotation.Configuration;
 @EnableConfigurationProperties({
   CharacterSnapshotPolicy.class,
   CharacterHistoryPolicy.class,
-  CharacterViewPolicy.class
+  CharacterViewPolicy.class,
+  CharacterCollectionPolicy.class
 })
 class CharacterConfiguration {}

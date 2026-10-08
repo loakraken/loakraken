@@ -92,6 +92,15 @@ public class MarketQueryService {
         cache::saveItemHistory);
   }
 
+  /** 캐시를 건너뛰고 공식 상세를 다시 받아 저장한다. 예열 전용이며 모르는 상품은 빈 값이다(캐시하지 않음). */
+  public Optional<MarketItemHistoryResult> refreshItemHistory(long itemId) {
+    var history = itemHistory.fetchHistory(itemId);
+    if (history.isEmpty()) return Optional.empty();
+    var result = new MarketItemHistoryResult(clock.instant(), history.get());
+    cache.saveItemHistory(result);
+    return Optional.of(result);
+  }
+
   private <K, V> V collect(
       K key,
       ConcurrentHashMap<K, CompletableFuture<V>> flights,

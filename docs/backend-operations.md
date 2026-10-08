@@ -12,7 +12,7 @@ Valkey 읽기·쓰기 장애는 `503 CHARACTER_CACHE_UNAVAILABLE`로 종료한�
 
 관측 저장·이력 공개는 `CHARACTER_SNAPSHOTS_ENABLED=false`를 유지한다. 저장 범위 확인 전 diff·장기 통계·성장 그래프를 확장하지 않는다.
 
-거래소는 가격 30초·검색 옵션 10분을 기본 TTL로 사용한다. 옵션 외부 조회도 공유 예산 1회를 사용한다. 거래소 캐시 장애는 `503 MARKET_CACHE_UNAVAILABLE`이며 외부 API 우회나 오래된 응답 반환을 하지 않는다. [거래소 옵션·캐시 계약](market-cache.md)을 참고한다.
+거래소는 가격 30초·검색 옵션 10분을 기본 TTL로 사용한다. 핵심 19개 품목 이력은 9분마다 예열한다(단일 인스턴스 스케줄러, `MARKET_WARMUP_ENABLED=false`로 끔). 옵션 외부 조회도 공유 예산 1회를 사용한다. 거래소 캐시 장애는 `503 MARKET_CACHE_UNAVAILABLE`이며 외부 API 우회나 오래된 응답 반환을 하지 않는다. [거래소 옵션·캐시 계약](market-cache.md)을 참고한다.
 
 ## 계측 계약
 
@@ -25,6 +25,7 @@ Actuator가 제공하는 MeterRegistry에 기록한다. 태그는 코드의 고�
 | loakraken.lostark.gate | Counter | event=budget_reject/concurrency_reject/upstream_429/upstream_backoff_reject | 로컬 차단 사유와 외부 429 관측 |
 | loakraken.character.searches | Counter | outcome=success/failure | 검색 application 서비스 호출의 완료 결과 |
 | loakraken.market.cache.operations | Counter | kind=prices/options/item_history/board_scan, outcome=hit/miss/invalid/read_error/write_success/write_error | 거래소 캐시 연산 결과. 출처·검색 조건·해시·이름은 태그에 포함하지 않음 |
+| loakraken.market.warmup | Counter | outcome=refreshed/not_found/failed | 핵심 품목 이력 예열 결과(9분 주기, [시세 보드](market-board.md)). 상품 ID는 태그에 포함하지 않음 |
 
 외부 요청 Timer의 count가 요청 횟수이므로 별도 요청 Counter와 합산하지 않는다. success는 HTTP 200 및 타입 디코딩 성공이다. 이후 필수 프로필 검증이나 도메인 매핑에서 실패하면 HTTP 지표는 success여도 검색은 failure일 수 있다. not_found는 실제 외부 404이며 원정대 404를 공개 API에서 502로 바꾸는 정책과 구별된다. error에는 다른 HTTP 오류, 비어 있는 응답, JSON 디코딩 오류, 타임아웃 외 연결 오류가 포함된다. API 키 미설정과 로컬 게이트 거절은 HTTP 시도 지표를 만들지 않는다.
 

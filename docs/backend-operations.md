@@ -20,7 +20,7 @@ Actuator가 제공하는 MeterRegistry에 기록한다. 태그는 코드의 고�
 
 | Meter | 종류 | 태그 | 의미 |
 |---|---|---|---|
-| loakraken.lostark.requests | Timer | endpoint=armory/siblings/market_items/market_trades/market_options, outcome=success/not_found/rate_limited/timeout/error | 게이트 통과 후 HTTP 요청 시도부터 응답 수신·JSON 디코딩 종료까지 횟수와 지연 |
+| loakraken.lostark.requests | Timer | endpoint=armory/siblings/market_items/market_trades/market_options/market_item_history/game_calendar/news_notices/news_events, outcome=success/not_found/rate_limited/timeout/error | 게이트 통과 후 HTTP 요청 시도부터 응답 수신·JSON 디코딩 종료까지 횟수와 지연 |
 | loakraken.cache.operations | Counter | outcome=hit/miss/invalid/read_error/write_success/write_error | 캐시 읽기·쓰기 결과 및 손상 발견 |
 | loakraken.lostark.gate | Counter | event=budget_reject/concurrency_reject/upstream_429/upstream_backoff_reject | 로컬 차단 사유와 외부 429 관측 |
 | loakraken.character.searches | Counter | outcome=success/failure | 검색 application 서비스 호출의 완료 결과 |

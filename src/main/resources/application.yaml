@@ -48,6 +48,11 @@ market:
     enabled: ${MARKET_WARMUP_ENABLED:true}
     interval: ${MARKET_WARMUP_INTERVAL:9m}
 
+home:
+  cache:
+    calendar-ttl: ${HOME_CALENDAR_CACHE_TTL:30m}
+    news-ttl: ${HOME_NEWS_CACHE_TTL:10m}
+
 springdoc:
   paths-to-match: /api/v1/**
   override-with-generic-response: false

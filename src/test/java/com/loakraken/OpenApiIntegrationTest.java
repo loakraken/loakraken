@@ -279,6 +279,41 @@ class OpenApiIntegrationTest {
   }
 
   @Test
+  void 홈_일정과_소식은_nullable_시각과_분류_계약을_명시한다() throws Exception {
+    var document = JsonMapper.builder().build().readTree(request("/v3/api-docs").body());
+    assertThat(document.path("paths").path("/api/v1/home/schedule").path("get").isMissingNode())
+        .isFalse();
+    assertThat(
+            document
+                .path("paths")
+                .path("/api/v1/home/news")
+                .path("get")
+                .path("parameters")
+                .toString())
+        .contains("limit", "category");
+    assertThat(document.at("/components/schemas/HomeScheduleResponse/required").toString())
+        .contains(
+            "adventureIslands",
+            "fieldBosses",
+            "chaosGates",
+            "others",
+            "goldIslandDays",
+            "weekly",
+            "coveredFrom");
+    assertThat(document.at("/components/schemas/HomeIslandResponse/required").toString())
+        .contains("rewardKinds", "nextAt", "startTimes");
+    assertThat(
+            document
+                .at("/components/schemas/HomeIslandResponse/properties/nextAt/anyOf/1/type")
+                .asText())
+        .isEqualTo("null");
+    assertThat(document.at("/components/schemas/HomeNoticeResponse/required").toString())
+        .contains("maintenanceDate", "maintenanceDateText", "category");
+    assertThat(document.at("/components/schemas/HomeEventResponse/required").toString())
+        .contains("startAt", "endAt", "rewardAt", "thumbnail");
+  }
+
+  @Test
   void 시세_보드는_탭_정렬_검증과_null_등락률_계약을_명시한다() throws Exception {
     var document = JsonMapper.builder().build().readTree(request("/v3/api-docs").body());
     var board = document.path("paths").path("/api/v1/markets/board").path("get");

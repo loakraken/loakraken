@@ -18,6 +18,7 @@ class CharacterOpenApiConfiguration {
       ResponseContracts.apply(
           CharacterHistoryResponse.class, document.getComponents().getSchemas());
       ResponseContracts.apply(CritSpeedResponse.class, document.getComponents().getSchemas());
+      ResponseContracts.apply(CharacterViewsResponse.class, document.getComponents().getSchemas());
     };
   }
 }

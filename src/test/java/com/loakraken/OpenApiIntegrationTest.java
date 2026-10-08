@@ -279,6 +279,16 @@ class OpenApiIntegrationTest {
   }
 
   @Test
+  void 조회수는_일수_검증과_합계_계약을_명시한다() throws Exception {
+    var document = JsonMapper.builder().build().readTree(request("/v3/api-docs").body());
+    var operation = document.path("paths").path("/api/v1/characters/views").path("get");
+    assertThat(operation.path("parameters").toString()).contains("characterName", "days");
+    assertThat(operation.path("responses").toString()).contains("200", "400", "503");
+    assertThat(document.at("/components/schemas/CharacterViewsResponse/required").toString())
+        .contains("days", "rangeTotal", "total", "from", "to");
+  }
+
+  @Test
   void 아크_그리드_상세는_코어_옵션과_의지력_null_계약을_명시한다() throws Exception {
     var document = JsonMapper.builder().build().readTree(request("/v3/api-docs").body());
     assertThat(document.at("/components/schemas/ArkGridResponse/required").toString())

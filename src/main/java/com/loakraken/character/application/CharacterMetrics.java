@@ -29,6 +29,12 @@ public class CharacterMetrics {
         .increment();
   }
 
+  public void views(boolean success) {
+    registry
+        .counter("loakraken.character.views.writes", "outcome", success ? "success" : "failure")
+        .increment();
+  }
+
   private String tag(Enum<?> value) {
     return value.name().toLowerCase(Locale.ROOT);
   }

@@ -37,6 +37,8 @@ character:
     enabled: ${CHARACTER_SNAPSHOTS_ENABLED:false}
   history:
     enabled: ${CHARACTER_HISTORY_ENABLED:true}
+  views:
+    enabled: ${CHARACTER_VIEWS_ENABLED:true}
 
 market:
   cache:

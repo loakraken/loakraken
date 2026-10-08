@@ -1,6 +1,7 @@
 package com.loakraken.character.presentation;
 
 import com.loakraken.character.application.CharacterQueryService;
+import com.loakraken.character.application.CharacterViewService;
 import com.loakraken.character.application.CritSpeedService;
 import com.loakraken.common.api.ApiResponse;
 import io.swagger.v3.oas.annotations.Operation;
@@ -24,10 +25,13 @@ import org.springframework.web.bind.annotation.RestController;
 public class CharacterController {
   private final CharacterQueryService queryService;
   private final CritSpeedService critSpeed;
+  private final CharacterViewService views;
 
-  public CharacterController(CharacterQueryService queryService, CritSpeedService critSpeed) {
+  public CharacterController(
+      CharacterQueryService queryService, CritSpeedService critSpeed, CharacterViewService views) {
     this.queryService = queryService;
     this.critSpeed = critSpeed;
+    this.views = views;
   }
 
   @GetMapping("/search")
@@ -75,9 +79,37 @@ public class CharacterController {
   })
   public ApiResponse<CharacterResponse> search(
       @Valid @ModelAttribute @ParameterObject CharacterSearchRequest request) {
+    var result = queryService.search(request.toCommand());
+    // 조회수는 검색 화면 응답이 성공했을 때만 센다(F-8). 기록 실패는 응답을 막지 않는다.
+    views.record(result.details().profile().characterName());
     return ApiResponse.of(
-        CharacterSuccessCode.CHARACTER_SEARCH_SUCCESS,
-        CharacterResponse.from(queryService.search(request.toCommand())));
+        CharacterSuccessCode.CHARACTER_SEARCH_SUCCESS, CharacterResponse.from(result));
+  }
+
+  @GetMapping("/views")
+  @Operation(
+      summary = "캐릭터 조회수",
+      description =
+          "LOAKraken 캐릭터 검색 성공 횟수를 KST 일별로 집계한 값입니다. 최근 days일(기본 112일=16주)을 0으로 채워 주고 기간·전체 합계를 함께 줍니다. "
+              + "외부 호출이 없습니다. 조회한 사람을 식별하지 않으므로 반복 조회도 셉니다.")
+  @ApiResponses({
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(
+        responseCode = "200",
+        description = "조회 성공"),
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(
+        responseCode = "400",
+        description = "캐릭터명·일수 오류",
+        content = @Content(schema = @Schema(ref = "#/components/schemas/ErrorResponse"))),
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(
+        responseCode = "503",
+        description = "CHARACTER_VIEWS_DISABLED 또는 CHARACTER_VIEWS_UNAVAILABLE",
+        content = @Content(schema = @Schema(ref = "#/components/schemas/ErrorResponse")))
+  })
+  public ApiResponse<CharacterViewsResponse> views(
+      @Valid @ModelAttribute @ParameterObject CharacterViewsRequest request) {
+    return ApiResponse.of(
+        CharacterSuccessCode.CHARACTER_VIEWS_SUCCESS,
+        CharacterViewsResponse.from(views.views(request.characterName(), request.daysOrDefault())));
   }
 
   @GetMapping("/siblings")

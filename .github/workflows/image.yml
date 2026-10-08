@@ -1,0 +1,69 @@
+name: Backend Image
+
+# PR에서는 이미지 빌드 설정이 바뀔 때만 빌드되는지 확인한다(Actions 사용 시간 절약).
+# develop·master push와 수동 실행은 저장소 변수 PUBLISH_IMAGES가 'true'일 때만 실행해 GHCR에 올린다(기본 꺼짐).
+on:
+  pull_request:
+    branches: [develop, master]
+    paths:
+      - Dockerfile
+      - .dockerignore
+      - build.gradle
+      - settings.gradle
+      - gradle/**
+      - .github/workflows/image.yml
+  push:
+    branches: [develop, master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backend-image-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  IMAGE: ghcr.io/${{ github.repository_owner }}/loakraken-api
+
+jobs:
+  image:
+    if: github.event_name == 'pull_request' || vars.PUBLISH_IMAGES == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: docker/setup-buildx-action@v4.4.1
+      - name: Decide whether to publish
+        id: publish
+        run: |
+          if [ "${{ github.event_name }}" != "pull_request" ] && [ "${{ vars.PUBLISH_IMAGES }}" = "true" ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: docker/metadata-action@v6.2.0
+        id: meta
+        with:
+          images: ${{ env.IMAGE }}
+          tags: |
+            type=sha,prefix=sha-,format=short
+            type=ref,event=branch
+      - if: steps.publish.outputs.enabled == 'true'
+        uses: docker/login-action@v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v7.4.0
+        with:
+          context: .
+          push: ${{ steps.publish.outputs.enabled == 'true' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=backend-image
+          cache-to: type=gha,mode=max,scope=backend-image
+          provenance: false

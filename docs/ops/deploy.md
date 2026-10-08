@@ -14,6 +14,17 @@
 - 클라이언트 IP: Caddy가 바깥의 `X-Forwarded-For`를 버리고 실제 접속 주소로 다시 쓴다. Next가 이 값을 백엔드로 넘기고, 백엔드는 Docker 내부망(사설 대역)에서 온 헤더만 믿는다(Tomcat RemoteIpValve 기본값).
   - 로컬(Docker Desktop)에서 위조 헤더 `6.6.6.6`이 버려지고 접속 주소로 바뀌는 것을 확인했다. 다만 Docker Desktop은 접속 주소가 게이트웨이(172.x)로 보인다.
   - Linux 서버는 외부 접속의 원래 IP가 유지된다(iptables DNAT). **서버를 처음 띄우면 백엔드 로그·유입 제한 키에 실제 클라이언트 IP가 찍히는지 확인한다.** 게이트웨이 주소만 보이면 edge를 `network_mode: host`로 바꾸는 것을 검토한다.
+- 유입 제한이 위조되지 않기 위한 배포 조건(PM-프론트·PM-백엔드 합의)
+  1. Next를 인터넷에 직접 노출하지 않는다. edge만 web에 닿는다(public망).
+  2. 백엔드가 믿는 프록시는 **web의 내부 고정 주소 하나**다. internal망을 `INTERNAL_SUBNET`(기본 172.31.250.0/24)로 고정하고 web에 `WEB_INTERNAL_IP`(기본 .10)를 준다. api는 `SERVER_TOMCAT_REMOTEIP_INTERNALPROXIES`(기본 `172\.31\.250\.10`)로 그 주소만 믿는다. 셋을 바꿀 때는 함께 바꾼다. 사설 대역 전체를 믿지 않는다.
+  3. 백엔드 8080은 호스트에 열지 않는다. edge는 internal망에 없어 api에 닿지 않는다(로컬에서 `wget http://api:8080` 이름 해석 실패로 확인).
+  - RemoteIpValve 자체는 백엔드 F-10 PR에서 켠다(`server.forward-headers-strategy: native`). 그 전까지 위 설정은 효과가 없다.
+
+## 로그 보존
+
+- 컨테이너 로그는 서비스마다 10MB × 5개까지만 남긴다(`json-file` 회전).
+- edge 접속 로그는 켜지 않았다(Caddyfile에 `log` 없음). 클라이언트 IP 원본을 로그로 남기지 않는다.
+- IP는 유입 제한 판정에만 쓰고 원본은 저장하지 않는다(백엔드 기준: 일별 솔트 해시).
 
 | 파일 | 역할 |
 |---|---|

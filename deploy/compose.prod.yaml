@@ -8,10 +8,18 @@
 
 name: ${STACK_NAME:-loakraken}
 
+# 컨테이너 로그는 서비스마다 10MB × 5개까지만 남긴다(디스크 보호, 오래된 로그 자동 삭제).
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
 services:
   edge:
     image: caddy:2.11.7-alpine
     restart: unless-stopped
+    logging: *default-logging
     ports:
       - "${EDGE_HTTP_PORT:-80}:80"
       - "${EDGE_HTTPS_PORT:-443}:443"
@@ -37,6 +45,7 @@ services:
   web:
     image: "${WEB_IMAGE:?WEB_IMAGE가 필요합니다}"
     restart: unless-stopped
+    logging: *default-logging
     environment:
       LOAKRAKEN_API_ORIGIN: http://api:8080
     depends_on:
@@ -54,8 +63,10 @@ services:
       retries: 5
     mem_limit: ${WEB_MEM_LIMIT:-768m}
     networks:
-      - public
-      - internal
+      public:
+      internal:
+        # 백엔드는 이 주소에서 온 X-Forwarded-For만 믿는다(api의 SERVER_TOMCAT_REMOTEIP_INTERNALPROXIES).
+        ipv4_address: ${WEB_INTERNAL_IP:-172.31.250.10}
     security_opt:
       - no-new-privileges:true
     cap_drop:
@@ -64,6 +75,7 @@ services:
   api:
     image: "${API_IMAGE:?API_IMAGE가 필요합니다}"
     restart: unless-stopped
+    logging: *default-logging
     environment:
       SPRING_PROFILES_ACTIVE: prod
       # /run/secrets의 파일 이름을 설정 키로 읽는다(DB_PASSWORD, LOSTARK_API_KEY, spring.data.redis.password).
@@ -76,6 +88,8 @@ services:
       STATS_COLLECTOR_ENABLED: ${STATS_COLLECTOR_ENABLED:-false}
       MARKET_WARMUP_ENABLED: ${MARKET_WARMUP_ENABLED:-false}
       API_DOCS_ENABLED: "false"
+      # 클라이언트 IP 헤더를 믿는 프록시를 web 한 곳으로 한정한다(Tomcat RemoteIpValve 정규식). 사설 대역 전체를 믿지 않는다.
+      SERVER_TOMCAT_REMOTEIP_INTERNALPROXIES: ${TRUSTED_PROXY_REGEX:-172\.31\.250\.10}
     secrets:
       - source: db_password
         target: DB_PASSWORD
@@ -110,6 +124,7 @@ services:
   postgres:
     image: postgres:18.6
     restart: unless-stopped
+    logging: *default-logging
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-loakraken}
       POSTGRES_USER: ${POSTGRES_USER:-loakraken}
@@ -134,6 +149,7 @@ services:
   valkey:
     image: valkey/valkey:9.1.2
     restart: unless-stopped
+    logging: *default-logging
     command:
       - sh
       - -c
@@ -168,6 +184,9 @@ networks:
   public:
   # web·api·postgres·valkey 내부망. 외부로 나가는 공식 API 호출 때문에 internal: true로 두지 않는다.
   internal:
+    ipam:
+      config:
+        - subnet: ${INTERNAL_SUBNET:-172.31.250.0/24}
 
 volumes:
   edge-data:

@@ -44,6 +44,9 @@ market:
     options-ttl: ${MARKET_OPTIONS_CACHE_TTL:10m}
     history-ttl: ${MARKET_HISTORY_CACHE_TTL:10m}
     board-scan-ttl: ${MARKET_BOARD_SCAN_CACHE_TTL:3m}
+  warmup:
+    enabled: ${MARKET_WARMUP_ENABLED:true}
+    interval: ${MARKET_WARMUP_INTERVAL:9m}
 
 springdoc:
   paths-to-match: /api/v1/**

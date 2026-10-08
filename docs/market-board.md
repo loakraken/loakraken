@@ -66,3 +66,20 @@
   - 단위: 등락률 반올림·null, 정렬 순서, 정렬별 공식 요청, 스캔 페이지 수·상한, 캐시 재사용, 7일 보강
   - HTTP: 스캔 재사용(외부 2회), 400 검증
   - OpenAPI: 계약 확인. 합성 산출물은 `market-board.json`, `market-tabs.json`이다.
+
+## 핵심 품목 이력 예열
+
+프론트 합의(B-5 Q3)에 따라, 첫 화면부터 보드의 `changeWeek`·`spark7`이 보이도록 핵심 19개 품목의 14일 이력을 주기적으로 **강제 갱신**한다. 캐시를 읽지 않고 공식 상세를 다시 받아 저장한다.
+
+| 설정 | 기본값 | 환경 변수 |
+|---|---|---|
+| `market.warmup.enabled` | true | `MARKET_WARMUP_ENABLED` |
+| `market.warmup.interval` | 9분(이력 TTL 10분보다 짧아야 끊기지 않음) | `MARKET_WARMUP_INTERVAL` |
+| `market.warmup.initial-delay` | 20초 | — |
+| `market.warmup.item-ids` | T4 재련 재료 11, 숨결 2, 업화 책 6(공식 ID) | — |
+
+- 예산: 19회 / 9분, 분당 약 2회다. 단일 인스턴스 전제다.
+- API 키가 없으면 아무것도 하지 않는다. 테스트 태스크(`build.gradle`)는 예열을 끈다.
+- 품목별 실패는 격리하고 예외 유형만 기록한다. 호출 한도 초과(429)를 만나면 이번 주기를 멈춘다.
+- 지표 `loakraken.market.warmup{outcome=refreshed|not_found|failed}`
+- 2026-10-08 실서버: 시작 20초 후 이력 키 19개가 적재됐고, 재련 재료 보드 첫 페이지 10행 모두 `historyAvailable=true`였다.

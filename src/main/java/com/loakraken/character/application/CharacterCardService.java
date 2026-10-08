@@ -75,6 +75,7 @@ public class CharacterCardService {
         CardCollection.learn(loadoutCards),
         position.role() == null ? null : position.role().name(),
         tier4GemMeanLevel(details.loadout().gems()),
+        details.loadout().gems() != null,
         observedAt);
   }
 

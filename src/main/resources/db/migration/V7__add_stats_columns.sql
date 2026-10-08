@@ -4,6 +4,14 @@
 ALTER TABLE characters ADD COLUMN roster_key UUID;
 ALTER TABLE characters ADD COLUMN gem_mean_level NUMERIC(4, 2);
 
+-- profile_checked_at: 수집기가 프로필을 마지막으로 시도한 시각(성공·못 찾음·해석 실패). 재선정 주기에만 쓴다.
+-- profile_refreshed_at은 성공한 관측 시각만 남긴다. 통계 모집단의 "최근 확인"은 이 값이다(PM 검토 #100 P1).
+ALTER TABLE characters ADD COLUMN profile_checked_at TIMESTAMPTZ;
+UPDATE characters SET profile_checked_at = profile_refreshed_at;
+DROP INDEX idx_characters_profile_due;
+CREATE INDEX idx_characters_profile_due ON characters (profile_checked_at NULLS FIRST, item_level DESC);
+CREATE INDEX idx_characters_roster_missing ON characters (item_level DESC) WHERE roster_key IS NULL;
+
 CREATE INDEX idx_characters_roster ON characters (roster_key, server_name, item_level DESC)
     WHERE roster_key IS NOT NULL;
 

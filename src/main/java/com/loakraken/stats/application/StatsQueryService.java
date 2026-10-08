@@ -322,7 +322,8 @@ public class StatsQueryService {
         StatsRules.RULE_VERSION,
         StatsRules.MIN_SAMPLE,
         SampleStatus.of(population),
-        stats.coverage());
+        // coverage는 characters 전체를 세므로 조건과 무관하게 따로 10분 캐시한다(PM #100 P2-1).
+        cached("coverage", StatsPort.Coverage.class, stats::coverage));
   }
 
   private <T> T cached(String key, Class<T> type, Supplier<T> loader) {

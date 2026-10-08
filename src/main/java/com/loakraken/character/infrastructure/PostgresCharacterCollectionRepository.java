@@ -28,8 +28,8 @@ class PostgresCharacterCollectionRepository implements CharacterCollectionPort {
     return jdbc.sql(
             """
         SELECT character_name, server_name FROM characters
-        WHERE item_level >= :min AND (profile_refreshed_at IS NULL OR profile_refreshed_at < :stale)
-        ORDER BY profile_refreshed_at NULLS FIRST, item_level DESC, character_name
+        WHERE item_level >= :min AND (profile_checked_at IS NULL OR profile_checked_at < :stale)
+        ORDER BY profile_checked_at NULLS FIRST, item_level DESC, character_name
         LIMIT 1
         """)
         .param("min", minItemLevel)
@@ -43,13 +43,23 @@ class PostgresCharacterCollectionRepository implements CharacterCollectionPort {
     return jdbc.sql(
             """
         SELECT character_name, server_name FROM characters
-        WHERE roster_scanned_at IS NULL OR roster_scanned_at < :stale OR roster_key IS NULL
-        ORDER BY roster_scanned_at NULLS FIRST, (roster_key IS NULL) DESC, item_level DESC, character_name
+        WHERE roster_scanned_at IS NULL OR roster_scanned_at < :stale
+        ORDER BY roster_scanned_at NULLS FIRST, item_level DESC, character_name
         LIMIT 1
         """)
         .param("stale", utc(staleBefore))
         .query((row, index) -> new Target(row.getString(1), row.getString(2)))
-        .optional();
+        .optional()
+        // 원정대 키가 없는 캐릭터(V7 이전에 훑은 원정대)는 한 번 더 훑는다. 부분 인덱스로 따로 찾는다.
+        .or(
+            () ->
+                jdbc.sql(
+                        """
+                    SELECT character_name, server_name FROM characters WHERE roster_key IS NULL
+                    ORDER BY item_level DESC, character_name LIMIT 1
+                    """)
+                    .query((row, index) -> new Target(row.getString(1), row.getString(2)))
+                    .optional());
   }
 
   @Override
@@ -126,7 +136,7 @@ class PostgresCharacterCollectionRepository implements CharacterCollectionPort {
   public void markProfileRefreshed(Target target, String position, Instant now) {
     jdbc.sql(
             """
-        UPDATE characters SET profile_refreshed_at = :now, position = :position
+        UPDATE characters SET profile_refreshed_at = :now, profile_checked_at = :now, position = :position
         WHERE server_name = :server AND character_name = :name
         """)
         .param("now", utc(now))
@@ -139,7 +149,8 @@ class PostgresCharacterCollectionRepository implements CharacterCollectionPort {
   @Override
   public void markProfileMissing(Target target, Instant now) {
     jdbc.sql(
-            "UPDATE characters SET profile_refreshed_at = :now WHERE server_name = :server AND character_name = :name")
+            // 못 찾음·해석 실패는 시도 시각만 남긴다. 성공 관측 시각(profile_refreshed_at)이 그대로라 통계에서 기간이 지나면 빠진다.
+            "UPDATE characters SET profile_checked_at = :now WHERE server_name = :server AND character_name = :name")
         .param("now", utc(now))
         .param("server", target.serverName())
         .param("name", target.characterName())

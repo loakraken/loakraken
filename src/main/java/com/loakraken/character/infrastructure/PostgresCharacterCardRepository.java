@@ -44,11 +44,12 @@ class PostgresCharacterCardRepository implements CharacterCardPort {
       jdbc.sql(
               """
           UPDATE characters SET position = COALESCE(:position, position),
-            gem_mean_level = COALESCE(:gem, gem_mean_level)
+            gem_mean_level = CASE WHEN :gemsObserved THEN CAST(:gem AS NUMERIC) ELSE gem_mean_level END
           WHERE character_id = :id
           """)
           .param("position", observation.position())
           .param("gem", observation.gemMeanLevel())
+          .param("gemsObserved", observation.gemsObserved())
           .param("id", characterId.get())
           .update();
       for (var card : observation.cards()) {

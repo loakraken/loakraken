@@ -123,6 +123,20 @@ class CharacterCollectionRepositoryIntegrationTest {
                 .query(String.class)
                 .single())
         .isEqualTo("SUPPORT");
+    // 못 찾은 캐릭터는 시도 시각만 남고 성공 관측 시각은 그대로라, 통계 모집단에서 기간이 지나면 빠진다(PM #100 P1).
+    collection.markProfileMissing(new Target("본캐", SERVER), NOW.plusSeconds(30));
+    assertThat(
+            jdbc.sql(
+                    "SELECT profile_refreshed_at = :refreshed AND profile_checked_at = :checked FROM characters WHERE server_name = :s AND character_name = '본캐'")
+                .param("refreshed", NOW.atOffset(java.time.ZoneOffset.UTC))
+                .param("checked", NOW.plusSeconds(30).atOffset(java.time.ZoneOffset.UTC))
+                .param("s", SERVER)
+                .query(Boolean.class)
+                .single())
+        .isTrue();
+    // 시도 시각이 최근이면 다시 고르지 않는다.
+    var next = collection.nextProfileDue(new BigDecimal("1640"), NOW.plusSeconds(10));
+    assertThat(next.map(Target::characterName)).isNotEqualTo(java.util.Optional.of("본캐"));
     collection.markProfileMissing(new Target("저레벨", SERVER), NOW);
     collection.markRosterScanned(new Target("본캐", SERVER), NOW.plusSeconds(5));
   }

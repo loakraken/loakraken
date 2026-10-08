@@ -9,8 +9,8 @@ import java.util.List;
 
 public interface CharacterCardPort {
   /**
-   * 캐릭터가 없으면(관측 이력에 아직 없으면) 아무것도 하지 않는다. 카드 각성은 높아질 때만 바꾼다. position·gemMeanLevel이 null이면 기존 값을
-   * 유지한다.
+   * 캐릭터가 없으면(관측 이력에 아직 없으면) 아무것도 하지 않는다. 카드 각성은 높아질 때만 바꾼다. position이 null이면 기존 값을 유지한다. 보석 평균은
+   * gemsObserved일 때만 바꾸고, 이때는 null(4티어 보석 없음)로도 덮는다.
    */
   void record(Observation observation);
 
@@ -31,6 +31,7 @@ public interface CharacterCardPort {
       CardCollection.Learned learned,
       String position,
       BigDecimal gemMeanLevel,
+      boolean gemsObserved,
       Instant observedAt) {}
 
   record RosterCards(List<CardCollection.OwnedCard> cards, int observedCharacters) {}

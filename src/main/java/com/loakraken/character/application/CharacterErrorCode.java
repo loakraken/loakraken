@@ -13,7 +13,9 @@ public enum CharacterErrorCode implements ErrorCode {
   CHARACTER_STORAGE_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "캐릭터 조회 결과를 저장할 수 없습니다."),
   INVALID_SNAPSHOT_CURSOR(HttpStatus.BAD_REQUEST, "해당 캐릭터의 유효한 이력 커서가 아닙니다."),
   CHARACTER_HISTORY_DISABLED(HttpStatus.SERVICE_UNAVAILABLE, "캐릭터 관측 이력 기능이 비활성화되어 있습니다."),
-  CHARACTER_HISTORY_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "캐릭터 관측 이력을 조회할 수 없습니다.");
+  CHARACTER_HISTORY_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "캐릭터 관측 이력을 조회할 수 없습니다."),
+  CHARACTER_VIEWS_DISABLED(HttpStatus.SERVICE_UNAVAILABLE, "캐릭터 조회수 기능이 비활성화되어 있습니다."),
+  CHARACTER_VIEWS_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "캐릭터 조회수를 조회할 수 없습니다.");
 
   private final HttpStatus httpStatus;
   private final String message;

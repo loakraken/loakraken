@@ -1,5 +1,6 @@
 package com.loakraken.character.presentation;
 
+import com.loakraken.character.application.CharacterCardService;
 import com.loakraken.character.application.CharacterQueryService;
 import com.loakraken.character.application.CharacterViewService;
 import com.loakraken.character.application.CritSpeedService;
@@ -26,12 +27,17 @@ public class CharacterController {
   private final CharacterQueryService queryService;
   private final CritSpeedService critSpeed;
   private final CharacterViewService views;
+  private final CharacterCardService cards;
 
   public CharacterController(
-      CharacterQueryService queryService, CritSpeedService critSpeed, CharacterViewService views) {
+      CharacterQueryService queryService,
+      CritSpeedService critSpeed,
+      CharacterViewService views,
+      CharacterCardService cards) {
     this.queryService = queryService;
     this.critSpeed = critSpeed;
     this.views = views;
+    this.cards = cards;
   }
 
   @GetMapping("/search")
@@ -159,6 +165,50 @@ public class CharacterController {
     return ApiResponse.of(
         CharacterSuccessCode.CHARACTER_SIBLINGS_SUCCESS,
         CharacterSiblingsResponse.from(queryService.siblings(request.toCommand())));
+  }
+
+  @GetMapping("/card-collection")
+  @Operation(
+      summary = "원정대 카드 기록",
+      description =
+          "원정대 캐릭터가 LOAKraken에서 검색되거나 통계 수집기에 수집될 때 장착한 카드를 기록해, 카드별 최고 각성과 속성 6칸(성·암·뇌·토·수·화) 세트 기록, 보유 카드로 구성할 수 있는 세트를 줍니다. "
+              + "공식 API에 카드 도감이 없어 실제 보유의 하한입니다. 원정대 목록은 /siblings 캐시를 공유합니다(공식 호출 최대 1회). 기록이 없어도 200입니다.")
+  @ApiResponses({
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(
+        responseCode = "200",
+        description = "조회 성공"),
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(
+        responseCode = "400",
+        description = "INVALID_REQUEST: 캐릭터명 누락 또는 형식 오류",
+        content = @Content(schema = @Schema(ref = "#/components/schemas/ErrorResponse"))),
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(
+        responseCode = "404",
+        description = "CHARACTER_NOT_FOUND",
+        content = @Content(schema = @Schema(ref = "#/components/schemas/ErrorResponse"))),
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(
+        responseCode = "429",
+        description = "LOST_ARK_RATE_LIMITED",
+        content = @Content(schema = @Schema(ref = "#/components/schemas/ErrorResponse"))),
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(
+        responseCode = "502",
+        description = "LOST_ARK_API_ERROR",
+        content = @Content(schema = @Schema(ref = "#/components/schemas/ErrorResponse"))),
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(
+        responseCode = "503",
+        description =
+            "CARD_COLLECTION_DISABLED, CARD_COLLECTION_UNAVAILABLE, LOST_ARK_NOT_CONFIGURED 또는 CHARACTER_CACHE_UNAVAILABLE",
+        content = @Content(schema = @Schema(ref = "#/components/schemas/ErrorResponse"))),
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(
+        responseCode = "504",
+        description = "LOST_ARK_API_TIMEOUT",
+        content = @Content(schema = @Schema(ref = "#/components/schemas/ErrorResponse")))
+  })
+  public ApiResponse<CardCollectionResponse> cardCollection(
+      @Valid @ModelAttribute @ParameterObject CharacterSiblingsRequest request) {
+    var roster = queryService.siblings(request.toCommand());
+    return ApiResponse.of(
+        CharacterSuccessCode.CHARACTER_CARD_COLLECTION_SUCCESS,
+        CardCollectionResponse.from(cards.collection(request.characterName(), roster.siblings())));
   }
 
   @PostMapping(value = "/crit-speed", consumes = MediaType.APPLICATION_JSON_VALUE)

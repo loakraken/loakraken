@@ -38,7 +38,10 @@ public class LostArkMetrics {
     MARKET_ITEMS,
     MARKET_TRADES,
     MARKET_OPTIONS,
-    MARKET_ITEM_HISTORY
+    MARKET_ITEM_HISTORY,
+    GAME_CALENDAR,
+    NEWS_NOTICES,
+    NEWS_EVENTS
   }
 
   public enum ApiOutcome {

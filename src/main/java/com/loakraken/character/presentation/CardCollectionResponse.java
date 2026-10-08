@@ -14,14 +14,18 @@ import java.util.List;
 public record CardCollectionResponse(
     String characterName,
     String serverName,
-    @NullableResponse @Schema(description = "DEALER, SUPPORT 또는 null(아직 판정 전)") String position,
+    @NullableResponse
+        @Schema(
+            description = "아직 판정 전이면 null",
+            allowableValues = {"DEALER", "SUPPORT"})
+        String position,
     @Schema(description = "같은 서버 원정대 캐릭터 수") int rosterCharacters,
     @Schema(description = "그중 카드 기록이 있는 캐릭터 수") int observedCharacters,
     String ruleVersion,
-    ElementRecordsResponse elementRecords,
-    @Schema(description = "카드별 최고 각성(이름순)") List<CardResponse> cards,
+    CardCollectionElementRecordsResponse elementRecords,
+    @Schema(description = "카드별 최고 각성(이름순)") List<CardCollectionCardResponse> cards,
     @Schema(description = "보유 카드로 구성할 수 있는 2세트 이상 세트(각성 합 내림차순). 장착한 적이 없어도 계산합니다.")
-        List<SetResponse> sets) {
+        List<CardCollectionSetResponse> sets) {
   static CardCollectionResponse from(CharacterCardService.Collection collection) {
     var result = collection.result();
     return new CardCollectionResponse(
@@ -31,40 +35,46 @@ public record CardCollectionResponse(
         collection.rosterCharacters(),
         collection.observedCharacters(),
         CardCollection.RULE_VERSION,
-        new ElementRecordsResponse(slots(result.dealer()), slots(result.supporter())),
-        result.cards().stream().map(CardResponse::from).toList(),
-        result.sets().stream().map(SetResponse::from).toList());
+        new CardCollectionElementRecordsResponse(slots(result.dealer()), slots(result.supporter())),
+        result.cards().stream().map(CardCollectionCardResponse::from).toList(),
+        result.sets().stream().map(CardCollectionSetResponse::from).toList());
   }
 
-  private static List<ElementSlotResponse> slots(List<CardCollection.ElementRecord> records) {
+  private static List<CardCollectionElementSlotResponse> slots(
+      List<CardCollection.ElementRecord> records) {
     return records.stream()
         .map(
             record ->
-                new ElementSlotResponse(
+                new CardCollectionElementSlotResponse(
                     record.element().name(),
                     record.setName(),
-                    record.record() == null ? null : SetRecordResponse.from(record.record())))
+                    record.record() == null
+                        ? null
+                        : CardCollectionSetRecordResponse.from(record.record())))
         .toList();
   }
 
   @Schema(description = "속성 6칸. 순서는 성·암·뇌·토·수·화(LIGHT, DARK, LIGHTNING, EARTH, WATER, FIRE)")
-  public record ElementRecordsResponse(
-      List<ElementSlotResponse> dealer, List<ElementSlotResponse> supporter) {}
+  public record CardCollectionElementRecordsResponse(
+      List<CardCollectionElementSlotResponse> dealer,
+      List<CardCollectionElementSlotResponse> supporter) {}
 
-  public record ElementSlotResponse(
-      @Schema(description = "LIGHT|DARK|LIGHTNING|EARTH|WATER|FIRE") String element,
+  public record CardCollectionElementSlotResponse(
+      @Schema(allowableValues = {"LIGHT", "DARK", "LIGHTNING", "EARTH", "WATER", "FIRE"})
+          String element,
       @Schema(description = "공식 세트명", example = "세상을 구하는 빛") String setName,
-      @NullableResponse @Schema(description = "2세트 이상 구성할 수 있을 때만") SetRecordResponse record) {}
+      @NullableResponse @Schema(description = "2세트 이상 구성할 수 있을 때만")
+          CardCollectionSetRecordResponse record) {}
 
-  public record SetRecordResponse(
+  public record CardCollectionSetRecordResponse(
       int cardCount,
       @Schema(description = "사용한 카드의 실제 각성 합") int awakening,
       @NullableResponse @Schema(description = "달성한 각성합계 단계(예: 30). 학습한 효과 기준")
           Integer activeAwakening,
       Instant observedAt,
       @Schema(description = "가장 최근 기록을 남긴 원정대 캐릭터") String recordedBy) {
-    static SetRecordResponse from(CardCollection.FormedSet set) {
-      return new SetRecordResponse(
+    static CardCollectionSetRecordResponse from(CardCollection.FormedSet set) {
+      return new CardCollectionSetRecordResponse(
           set.cardCount(),
           set.awakening(),
           set.activeAwakening(),
@@ -73,7 +83,7 @@ public record CardCollectionResponse(
     }
   }
 
-  public record CardResponse(
+  public record CardCollectionCardResponse(
       String name,
       @NullableResponse String grade,
       @NullableResponse String icon,
@@ -81,8 +91,8 @@ public record CardCollectionResponse(
       @NullableResponse Integer awakeTotal,
       Instant observedAt,
       String recordedBy) {
-    static CardResponse from(CardCollection.OwnedCard card) {
-      return new CardResponse(
+    static CardCollectionCardResponse from(CardCollection.OwnedCard card) {
+      return new CardCollectionCardResponse(
           card.name(),
           card.grade(),
           card.icon(),
@@ -93,17 +103,18 @@ public record CardCollectionResponse(
     }
   }
 
-  public record SetResponse(
+  public record CardCollectionSetResponse(
       String setName,
       int cardCount,
       int awakening,
       @NullableResponse Integer activeAwakening,
       @Schema(description = "사용한 카드(각성 높은 순, 최대 6장)") List<String> cards,
-      @Schema(description = "학습한 세트 효과. 공식 응답에서 아직 보지 못한 단계는 빠집니다") List<EffectResponse> effects,
+      @Schema(description = "학습한 세트 효과. 공식 응답에서 아직 보지 못한 단계는 빠집니다")
+          List<CardCollectionSetEffectResponse> effects,
       Instant observedAt,
       String recordedBy) {
-    static SetResponse from(CardCollection.FormedSet set) {
-      return new SetResponse(
+    static CardCollectionSetResponse from(CardCollection.FormedSet set) {
+      return new CardCollectionSetResponse(
           set.setName(),
           set.cardCount(),
           set.awakening(),
@@ -112,7 +123,7 @@ public record CardCollectionResponse(
           set.effects().stream()
               .map(
                   effect ->
-                      new EffectResponse(
+                      new CardCollectionSetEffectResponse(
                           effect.pieces(),
                           effect.awakening(),
                           effect.description(),
@@ -123,7 +134,7 @@ public record CardCollectionResponse(
     }
   }
 
-  public record EffectResponse(
+  public record CardCollectionSetEffectResponse(
       int pieces,
       @Schema(description = "각성합계 조건, 없으면 0") int awakening,
       String description,

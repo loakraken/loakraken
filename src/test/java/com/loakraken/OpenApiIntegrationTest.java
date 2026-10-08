@@ -483,6 +483,31 @@ class OpenApiIntegrationTest {
         .contains("combatPower", "supportShare", "sampleStatus");
   }
 
+  @Test
+  void 원정대_카드_기록은_고유_스키마와_필수필드_허용값을_명시한다() throws Exception {
+    var document = JsonMapper.builder().build().readTree(request("/v3/api-docs").body());
+    var schemas = document.at("/components/schemas");
+    assertThat(schemas.at("/CardCollectionResponse/required").toString())
+        .contains("position", "rosterCharacters", "observedCharacters", "elementRecords", "cards");
+    assertThat(schemas.at("/CardCollectionResponse/properties/position/anyOf/0/enum").toString())
+        .contains("DEALER", "SUPPORT");
+    assertThat(schemas.at("/CardCollectionResponse/properties/position/anyOf/1/type").asText())
+        .isEqualTo("null");
+    assertThat(schemas.at("/CardCollectionElementSlotResponse/properties/element/enum").toString())
+        .contains("LIGHT", "FIRE");
+    assertThat(schemas.at("/CardCollectionElementSlotResponse/required").toString())
+        .contains("element", "setName", "record");
+    assertThat(schemas.at("/CardCollectionCardResponse/required").toString())
+        .contains("observedAt", "recordedBy", "awakeCount");
+    assertThat(schemas.at("/CardCollectionSetEffectResponse/required").toString())
+        .contains("pieces", "awakening", "description", "active");
+    assertThat(schemas.at("/CardCollectionSetRecordResponse/required").toString())
+        .contains("activeAwakening", "recordedBy");
+    // 기존 armory 스키마는 그대로다.
+    assertThat(schemas.at("/CardResponse/properties/slot").isMissingNode()).isFalse();
+    assertThat(schemas.at("/CardResponse/properties/recordedBy").isMissingNode()).isTrue();
+  }
+
   private HttpResponse<String> request(String path) throws Exception {
     try (var client = HttpClient.newHttpClient()) {
       return client.send(

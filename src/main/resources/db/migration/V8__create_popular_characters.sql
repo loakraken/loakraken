@@ -10,8 +10,9 @@ CREATE TABLE character_popular_hourly (
 
 CREATE INDEX idx_character_popular_hour ON character_popular_hourly (hour_bucket);
 
--- 순위에서 뺄 캐릭터. 운영자가 수동으로 등록한다(docs/popular-characters.md). server_name이 NULL이면 모든 서버.
-CREATE TABLE popular_exclusion (
+-- 공개 순위(인기 검색 목록·랭킹 목록)에서 뺄 캐릭터. 운영자가 수동으로 등록한다(docs/popular-characters.md). server_name이 NULL이면 모든 서버.
+-- 본인 순위 조회(/characters/rank)에는 적용하지 않는다(PM 총괄 결정 2026-10-08).
+CREATE TABLE public_exclusion (
     exclusion_id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     character_name VARCHAR(64) NOT NULL,
     server_name VARCHAR(64),
@@ -19,4 +20,4 @@ CREATE TABLE popular_exclusion (
     reason_code VARCHAR(32) NOT NULL
 );
 
-CREATE UNIQUE INDEX uq_popular_exclusion ON popular_exclusion (character_name, COALESCE(server_name, ''));
+CREATE UNIQUE INDEX uq_public_exclusion ON public_exclusion (character_name, COALESCE(server_name, ''));

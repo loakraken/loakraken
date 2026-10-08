@@ -57,7 +57,7 @@ class PopularCharactersIntegrationTest {
     }
     if (!keys.isEmpty()) redis.delete(keys);
     jdbc.sql("DELETE FROM character_popular_hourly").update();
-    jdbc.sql("DELETE FROM popular_exclusion").update();
+    jdbc.sql("DELETE FROM public_exclusion").update();
     jdbc.sql("DELETE FROM character_view_daily WHERE character_name = :n")
         .param("n", SEARCHED)
         .update();
@@ -123,7 +123,7 @@ class PopularCharactersIntegrationTest {
     insert("인기E", hour, 50); // 제외 목록
     insert("인기D", hour.minus(30, ChronoUnit.HOURS), 20);
     jdbc.sql(
-            "INSERT INTO popular_exclusion (character_name, server_name, reason_code) VALUES ('인기E', NULL, 'ABUSE')")
+            "INSERT INTO public_exclusion (character_name, server_name, reason_code) VALUES ('인기E', NULL, 'ABUSE')")
         .update();
     jdbc.sql(
             """

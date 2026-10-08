@@ -75,7 +75,7 @@ class CharacterPopularStore implements CharacterPopularPort {
           FROM character_popular_hourly h
           WHERE h.hour_bucket >= :since
             AND NOT EXISTS (
-              SELECT 1 FROM popular_exclusion e
+              SELECT 1 FROM public_exclusion e
               WHERE e.character_name = h.character_name
                 AND (e.server_name IS NULL OR e.server_name = h.server_name))
           GROUP BY h.character_name, h.server_name
@@ -105,7 +105,7 @@ class CharacterPopularStore implements CharacterPopularPort {
         SELECT COALESCE(SUM(h.unique_views), 0) FROM character_popular_hourly h
         WHERE h.hour_bucket >= :since
           AND NOT EXISTS (
-            SELECT 1 FROM popular_exclusion e
+            SELECT 1 FROM public_exclusion e
             WHERE e.character_name = h.character_name
               AND (e.server_name IS NULL OR e.server_name = h.server_name))
         """)

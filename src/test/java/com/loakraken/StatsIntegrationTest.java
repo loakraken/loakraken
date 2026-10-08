@@ -226,6 +226,31 @@ class StatsIntegrationTest {
   }
 
   @Test
+  void 공개_제외_목록은_랭킹_목록에서만_빠지고_본인_순위는_그대로다() throws Exception {
+    표본();
+    jdbc.sql(
+            "INSERT INTO public_exclusion (character_name, server_name, reason_code) VALUES ('통계캐34', :s, 'REQUEST')")
+        .param("s", SERVER)
+        .update();
+    try {
+      var ranking = data("/api/v1/rankings?metric=COMBAT_POWER&size=3&server=" + encode(SERVER));
+      assertThat(ranking.at("/meta/population").asLong()).isEqualTo(39);
+      assertThat(ranking.at("/rows/0/characterName").asText()).isEqualTo("통계캐33");
+      assertThat(ranking.at("/rows/0/rank").asLong()).isEqualTo(1);
+      // 통계 집계와 본인 순위에는 그대로 들어간다.
+      assertThat(
+              data("/api/v1/stats/summary?server=" + encode(SERVER))
+                  .at("/meta/population")
+                  .asLong())
+          .isEqualTo(40);
+      var self = data("/api/v1/characters/rank?characterName=" + encode("통계캐34"));
+      assertThat(self.path("included").asBoolean()).isTrue();
+    } finally {
+      jdbc.sql("DELETE FROM public_exclusion WHERE character_name = '통계캐34'").update();
+    }
+  }
+
+  @Test
   void 같은_조건은_10분_캐시를_쓴다() throws Exception {
     표본();
     var first = data("/api/v1/stats/summary?server=" + encode(SERVER));

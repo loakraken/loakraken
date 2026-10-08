@@ -4,6 +4,7 @@
 #   docker compose -f compose.prod.yaml --env-file stack.env up -d --wait
 #
 # 공개 포트는 edge(80/443)뿐이다. web·api·postgres·valkey는 호스트에 포트를 열지 않는다.
+# 망: public(edge↔web), internal(web↔api, 공식 API 호출을 위한 외부 통신 허용), data(api↔postgres·valkey, 외부 통신 차단).
 # 비밀값은 compose secrets로 파일 마운트(/run/secrets/...)하며 환경변수·이미지·저장소에 두지 않는다.
 
 name: ${STACK_NAME:-loakraken}
@@ -25,7 +26,7 @@ services:
       - "${EDGE_HTTPS_PORT:-443}:443"
       - "${EDGE_HTTPS_PORT:-443}:443/udp"
     environment:
-      SITE_ADDRESS: "${SITE_ADDRESS:?SITE_ADDRESS가 필요합니다(예 loakraken.com)}"
+      SITE_ADDRESS: "${SITE_ADDRESS:?SITE_ADDRESS가 필요합니다(예 loakraken.gg)}"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - edge-data:/data
@@ -116,6 +117,7 @@ services:
     mem_limit: ${API_MEM_LIMIT:-1280m}
     networks:
       - internal
+      - data
     security_opt:
       - no-new-privileges:true
     cap_drop:
@@ -142,7 +144,7 @@ services:
       retries: 10
     mem_limit: ${POSTGRES_MEM_LIMIT:-768m}
     networks:
-      - internal
+      - data
     security_opt:
       - no-new-privileges:true
 
@@ -167,26 +169,29 @@ services:
       retries: 10
     mem_limit: ${VALKEY_MEM_LIMIT:-256m}
     networks:
-      - internal
+      - data
     security_opt:
       - no-new-privileges:true
 
 secrets:
   db_password:
-    file: ${SECRETS_DIR:-/opt/loakraken/secrets}/db_password
+    file: ${SECRETS_DIR:?SECRETS_DIR가 필요합니다(스택별 경로, 예 /opt/loakraken/production/secrets)}/db_password
   valkey_password:
-    file: ${SECRETS_DIR:-/opt/loakraken/secrets}/valkey_password
+    file: ${SECRETS_DIR:?SECRETS_DIR가 필요합니다}/valkey_password
   lostark_api_key:
-    file: ${SECRETS_DIR:-/opt/loakraken/secrets}/lostark_api_key
+    file: ${SECRETS_DIR:?SECRETS_DIR가 필요합니다}/lostark_api_key
 
 networks:
   # edge ↔ web만 연결한다.
   public:
-  # web·api·postgres·valkey 내부망. 외부로 나가는 공식 API 호출 때문에 internal: true로 두지 않는다.
+  # web↔api. api가 공식 API를 불러야 해서 외부 통신을 막지 않는다. 서브넷을 고정해 web 주소를 신뢰 프록시로 쓴다.
   internal:
     ipam:
       config:
         - subnet: ${INTERNAL_SUBNET:-172.31.250.0/24}
+  # api↔postgres·valkey. 외부 통신이 없는 망(DB·캐시는 인터넷에 나가지 않는다).
+  data:
+    internal: true
 
 volumes:
   edge-data:

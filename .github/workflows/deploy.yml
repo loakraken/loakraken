@@ -12,11 +12,11 @@ on:
         options: [staging, production]
         required: true
       api_tag:
-        description: "백엔드 이미지 태그(예: sha-1a2b3c4)"
+        description: "백엔드 이미지 태그(예: sha-1a2b3c4, 운영은 sha-만)"
         type: string
         required: true
       web_tag:
-        description: "프론트 이미지 태그(예: sha-5d6e7f8)"
+        description: "프론트 이미지 태그(예: sha-5d6e7f8, 운영은 sha-만)"
         type: string
         required: true
 
@@ -37,6 +37,7 @@ jobs:
       DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
       DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
       DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+      TARGET_ENV: ${{ inputs.environment }}
       DEPLOY_PATH: /opt/loakraken/${{ inputs.environment }}
       API_TAG: ${{ inputs.api_tag }}
       WEB_TAG: ${{ inputs.web_tag }}
@@ -52,7 +53,12 @@ jobs:
             echo "::error::배포 비밀값이 없습니다:$missing (docs/ops/deploy.md 참고)"
             exit 1
           fi
-          pattern='^(sha-[0-9a-f]{7,40}|develop|master)$'
+          # 운영은 재현·롤백이 정확한 커밋 태그(sha-)만 받는다. 스테이징만 develop·master 가변 태그를 허용한다.
+          if [ "$TARGET_ENV" = "production" ]; then
+            pattern='^sha-[0-9a-f]{7,40}$'
+          else
+            pattern='^(sha-[0-9a-f]{7,40}|develop|master)$'
+          fi
           [[ "$API_TAG" =~ $pattern ]] || { echo "::error::api_tag 형식이 올바르지 않습니다"; exit 1; }
           [[ "$WEB_TAG" =~ $pattern ]] || { echo "::error::web_tag 형식이 올바르지 않습니다"; exit 1; }
 

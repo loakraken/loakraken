@@ -22,7 +22,7 @@ class ClientLimiterTest {
 
   @Test
   void 버킷마다_분당_한도를_넘으면_창이_끝날_때까지_거절한다() {
-    var limiter = limiter(new ClientLimitProperties(true, 2, 2, 3, 5, true));
+    var limiter = limiter(new ClientLimitProperties(true, 2, 2, 3, 3, true));
     String client = limiter.clientKey("203.0.113.7");
     for (int i = 0; i < 3; i++)
       assertThat(limiter.check(ClientLimiter.Bucket.GENERAL, client).allowed()).isTrue();
@@ -49,7 +49,7 @@ class ClientLimiterTest {
 
   @Test
   void 클라이언트_키는_주소를_담지_않고_같은_주소면_같다() {
-    var limiter = limiter(new ClientLimitProperties(true, 2, 2, 3, 5, true));
+    var limiter = limiter(new ClientLimitProperties(true, 2, 2, 3, 3, true));
     String key = limiter.clientKey("203.0.113.7");
     assertThat(key).hasSize(32).doesNotContain("203").isEqualTo(limiter.clientKey("203.0.113.7"));
     assertThat(key).isNotEqualTo(limiter.clientKey("203.0.113.8"));
@@ -139,7 +139,7 @@ class ClientLimiterTest {
 
   @Test
   void 필터는_공개_주소를_세고_내부_주소는_세지_않는다() throws Exception {
-    var limiter = limiter(new ClientLimitProperties(true, 2, 1, 3, 5, true));
+    var limiter = limiter(new ClientLimitProperties(true, 2, 1, 3, 3, true));
     var filter = new ClientLimitFilter(limiter);
     for (int i = 0; i < 5; i++)
       assertThat(run(filter, "/api/v1/markets/tabs", "127.0.0.1", null).getStatus()).isEqualTo(200);
@@ -177,6 +177,32 @@ class ClientLimiterTest {
     // 사람 요청은 BOT과 따로 센다.
     assertThat(run(filter, "/api/v1/characters/search", "66.249.66.3", null).getStatus())
         .isEqualTo(200);
+  }
+
+  @Test
+  void 봇_표시_요청도_통계_경로는_봇_공유_STATS_한도를_받는다() throws Exception {
+    var limiter = limiter(new ClientLimitProperties(true, 20, 60, 240, 120, true));
+    var filter = new ClientLimitFilter(limiter);
+    for (int i = 0; i < 60; i++)
+      assertThat(run(filter, "/api/v1/rankings", "66.249.66." + (i % 200), "1").getStatus())
+          .isEqualTo(200);
+    var rejected = run(filter, "/api/v1/stats/summary", "66.249.70.1", "1");
+    assertThat(rejected.getStatus()).isEqualTo(429);
+    assertThat(rejected.getContentAsString()).contains("CLIENT_RATE_LIMITED");
+    // 통계가 아닌 경로는 BOT 한도(120) 안이면 계속 된다.
+    assertThat(run(filter, "/api/v1/characters/search", "66.249.70.1", "1").getStatus())
+        .isEqualTo(200);
+  }
+
+  @Test
+  void 봇_한도는_일반_클라이언트_한도보다_클_수_없다() {
+    var defaults = new ClientLimitProperties(true, 20, 60, 240, 120, true);
+    assertThat(defaults.botPerMinute()).isLessThanOrEqualTo(defaults.generalPerMinute());
+    org.assertj.core.api.Assertions.assertThatThrownBy(
+            () -> new ClientLimitProperties(true, 20, 60, 240, 241, true))
+        .isInstanceOf(IllegalArgumentException.class);
+    // 끈 상태는 검사하지 않는다.
+    new ClientLimitProperties(false, 0, 0, 0, 1, true);
   }
 
   @Test

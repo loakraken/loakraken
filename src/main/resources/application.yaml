@@ -46,7 +46,7 @@ lostark:
     official-per-minute: ${CLIENT_LIMIT_OFFICIAL:20}
     stats-per-minute: ${CLIENT_LIMIT_STATS:60}
     general-per-minute: ${CLIENT_LIMIT_GENERAL:240}
-    bot-per-minute: ${CLIENT_LIMIT_BOT:300}
+    bot-per-minute: ${CLIENT_LIMIT_BOT:120}
     exempt-internal: ${CLIENT_LIMIT_EXEMPT_INTERNAL:true}
 
 character:

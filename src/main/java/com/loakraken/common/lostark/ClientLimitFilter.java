@@ -16,8 +16,8 @@ import org.springframework.web.filter.OncePerRequestFilter;
  * /api/v1/** 요청을 클라이언트별로 센다(#108). 원격 주소는 Tomcat RemoteIpValve가 신뢰 프록시의 X-Forwarded-For로 정한 값이다.
  *
  * <ul>
- *   <li>검색봇 표시({@value #BOT_HEADER}: 1)는 웹이 User-Agent로 판단해 붙인다. 봇 요청은 모든 봇이 같은 BOT 버킷 하나를 쓴다. 웹은
- *       밖에서 들어온 같은 헤더를 지워야 한다.
+ *   <li>검색봇 표시({@value #BOT_HEADER}: 1)는 웹이 User-Agent로 판단해 붙인다. 봇 요청은 모든 봇이 같은 BOT 버킷 하나(한도 ≤
+ *       GENERAL)를 쓰고, 통계 경로는 봇 공유 STATS도 센다. 웹은 밖에서 들어온 같은 헤더를 지워야 한다.
  *   <li>그 밖에는 클라이언트별 GENERAL을 세고, 통계·랭킹 경로는 STATS도 센다.
  *   <li>요청을 처리하는 동안 클라이언트 키를 스레드에 두어, 공유 게이트가 공식 호출을 OFFICIAL로 매기게 한다.
  * </ul>
@@ -43,7 +43,11 @@ class ClientLimitFilter extends OncePerRequestFilter {
       HttpServletRequest request, HttpServletResponse response, FilterChain chain)
       throws ServletException, IOException {
     if ("1".equals(request.getHeader(BOT_HEADER))) {
+      // 봇 표시는 User-Agent로 붙어 흉내 낼 수 있다. 그래서 봇 칸은 일반 칸보다 느슨하면 안 된다: 봇 전체 공유 한도(≤ GENERAL)에
+      // 통계 경로는 봇 공유 STATS도 센다(PM-백엔드 #151 P1).
       var decision = limiter.check(ClientLimiter.Bucket.BOT, BOT_CLIENT);
+      if (decision.allowed() && stats(path(request)))
+        decision = limiter.check(ClientLimiter.Bucket.STATS, BOT_CLIENT);
       if (!decision.allowed()) {
         reject(response, decision);
         return;

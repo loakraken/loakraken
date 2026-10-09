@@ -40,7 +40,7 @@
 | official | 20 | 요청이 **실제로 일으킨** 공식 호출. `LostArkRequestGate.acquire()`에서 공유 예산보다 먼저 센다. 캐시 적중·단일 비행 합류·수집기·예열과 `withReserve` 안의 호출(경매 칸 채우기처럼 사용자 몫을 남기는 쪽으로 이미 제한된 호출)은 세지 않는다 |
 | stats | 60 | `/stats/**`·`/rankings`·`/characters/rank` 요청(DB 집계) |
 | general | 240 | `/api/v1/**` 전체 요청 |
-| bot | 300 | `X-Loakraken-Bot: 1` 요청 전체(모든 봇 주소 합산). 봇의 공식 호출도 official 하나를 같이 쓴다 |
+| bot | 120 | `X-Loakraken-Bot: 1` 요청 전체(모든 봇 주소 합산). general보다 클 수 없다(봇 표시는 User-Agent라 흉내 낼 수 있음). 통계 경로는 봇 공유 stats(60)도 세고, 봇의 공식 호출도 official 하나를 같이 쓴다 |
 
 - 거절: `429 CLIENT_RATE_LIMITED`. 요청 버킷 거절에는 `Retry-After`(창 끝까지 초)를 준다. 공식 호출 한도 거절은 요청 도중이라 헤더 없이 같은 코드다(#138의 Retry-After 공통 처리 병합 후 붙인다).
   - 공유 예산 초과(`LOST_ARK_RATE_LIMITED`)와 코드가 다르다. 프론트는 둘 다 "잠시 후 다시"로 보여 주면 된다.

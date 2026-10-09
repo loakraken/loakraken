@@ -30,7 +30,8 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
     properties = {
       "lostark.client-limit.general-per-minute=4",
-      "lostark.client-limit.stats-per-minute=2"
+      "lostark.client-limit.stats-per-minute=2",
+      "lostark.client-limit.bot-per-minute=4"
     })
 class ClientLimitIntegrationTest {
   @LocalServerPort private int port;

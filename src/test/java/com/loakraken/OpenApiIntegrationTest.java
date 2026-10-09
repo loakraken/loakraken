@@ -14,7 +14,10 @@ import org.springframework.context.annotation.Import;
 import tools.jackson.databind.json.JsonMapper;
 
 @Import(TestcontainersConfiguration.class)
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+// 영수증은 운영 기본 꺼짐이지만 계약 산출물(openapi-contract)에는 경로·스키마가 있어야 웹이 화면을 만든다(프론트 10-10 02:31).
+@SpringBootTest(
+    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+    properties = "receipt.enabled=true")
 class OpenApiIntegrationTest {
   @LocalServerPort private int port;
 

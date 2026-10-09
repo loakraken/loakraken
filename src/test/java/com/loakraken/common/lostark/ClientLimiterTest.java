@@ -102,6 +102,19 @@ class ClientLimiterTest {
     // 거절된 호출은 공유 예산(90)에 기록되지 않았다: 5 + 2 = 7회만 썼다.
     assertThat(gateStore.available(7, 0)).isFalse();
     assertThat(gateStore.available(8, 0)).isTrue();
+    // 사용자 몫을 남기는 호출(withReserve)은 클라이언트 한도에 매기지 않는다.
+    limiter.enter("client-a");
+    try {
+      gate.withReserve(
+          10,
+          () -> {
+            gate.acquire();
+            gate.release();
+            return null;
+          });
+    } finally {
+      limiter.exit();
+    }
     // 다른 클라이언트는 영향이 없다.
     limiter.enter("client-b");
     try {

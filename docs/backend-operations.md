@@ -37,7 +37,7 @@
 
 | 버킷 | 기본(분당) | 세는 것 |
 |---|---|---|
-| official | 20 | 요청이 **실제로 일으킨** 공식 호출. `LostArkRequestGate.acquire()`에서 공유 예산보다 먼저 센다. 캐시 적중·단일 비행 합류·수집기·예열은 세지 않는다 |
+| official | 20 | 요청이 **실제로 일으킨** 공식 호출. `LostArkRequestGate.acquire()`에서 공유 예산보다 먼저 센다. 캐시 적중·단일 비행 합류·수집기·예열과 `withReserve` 안의 호출(경매 칸 채우기처럼 사용자 몫을 남기는 쪽으로 이미 제한된 호출)은 세지 않는다 |
 | stats | 60 | `/stats/**`·`/rankings`·`/characters/rank` 요청(DB 집계) |
 | general | 240 | `/api/v1/**` 전체 요청 |
 | bot | 300 | `X-Loakraken-Bot: 1` 요청 전체(모든 봇 주소 합산). 봇의 공식 호출도 official 하나를 같이 쓴다 |

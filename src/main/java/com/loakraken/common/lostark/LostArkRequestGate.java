@@ -54,10 +54,10 @@ public class LostArkRequestGate {
 
   /**
    * 공식 호출 하나를 허가한다. 사용자 요청이면 먼저 그 클라이언트의 분당 공식 호출 한도(#108)를 센다. 넘으면 CLIENT_RATE_LIMITED이고 공유 예산은 쓰지
-   * 않는다.
+   * 않는다. {@link #withReserve} 안의 호출(경매 칸 채우기 등)은 사용자 몫을 남기는 쪽으로 이미 제한되므로 클라이언트 한도에 매기지 않는다.
    */
   public void acquire() {
-    clients.chargeOfficial();
+    if (currentReserve() == 0) clients.chargeOfficial();
     if (!permits.tryAcquire()) reject(GateEvent.CONCURRENCY_REJECT);
     GateStore.Admission admission;
     try {

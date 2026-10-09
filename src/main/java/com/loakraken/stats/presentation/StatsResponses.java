@@ -303,7 +303,14 @@ public final class StatsResponses {
       BigDecimal itemLevel,
       BigDecimal combatPower,
       @NullableResponse Instant refreshedAt,
-      @Schema(description = "조건(최근 확인 기간·레벨 범위 등)의 모집단에 들어가는가. false면 entries는 빈 배열")
+      @Schema(
+              description =
+                  "순위 공개 여부. 이 값이 최우선이다. HIDDEN(운영 공개 제외 목록)이면 entries는 빈 배열이고 순위·백분위·티어는 어디에도 없다. 이때 다른 메타(included 등)로 순위 상태를 판단하지 않는다. VISIBLE이면 included와 entries의 sampleStatus로 판단한다",
+              allowableValues = {"VISIBLE", "HIDDEN"})
+          String rankVisibility,
+      @Schema(
+              description =
+                  "조건(최근 확인 기간·레벨 범위 등)의 모집단에 들어가는가. false면 entries는 빈 배열. HIDDEN이면 항상 false")
           boolean included,
       StatsConditionsResponse conditions,
       Instant aggregatedAt,
@@ -319,6 +326,7 @@ public final class StatsResponses {
           result.itemLevel(),
           result.combatPower(),
           result.refreshedAt(),
+          result.rankVisibility().name(),
           result.included(),
           StatsConditionsResponse.from(result.conditions()),
           result.aggregatedAt(),

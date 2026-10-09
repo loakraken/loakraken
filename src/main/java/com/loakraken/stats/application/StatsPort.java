@@ -19,7 +19,7 @@ public interface StatsPort {
 
   List<Bin> histogram(StatsConditions conditions, Instant since, Metric metric, BigDecimal width);
 
-  /** value보다 큰 캐릭터 수와 모집단 수. */
+  /** value보다 큰 캐릭터 수와 모집단 수. 공개 제외 목록은 모집단에서 뺀다. */
   Standing standing(StatsConditions conditions, Instant since, Metric metric, BigDecimal value);
 
   RankingPage ranking(
@@ -30,7 +30,10 @@ public interface StatsPort {
   /** 이름이 같은 캐릭터가 여러 서버에 있으면 가장 최근에 갱신한 캐릭터. */
   Optional<Target> target(String characterName);
 
-  /** target이 조건의 모집단에 들어가는가. */
+  /** 공개 제외 목록(public_exclusion)에 있는가. */
+  boolean excluded(Target target);
+
+  /** target이 조건의 모집단(공개 제외 목록 제외)에 들어가는가. */
   boolean contains(StatsConditions conditions, Instant since, Target target);
 
   record Summary(

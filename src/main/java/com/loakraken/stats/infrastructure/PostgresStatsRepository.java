@@ -157,7 +157,7 @@ class PostgresStatsRepository implements StatsPort {
   public Standing standing(
       StatsConditions conditions, Instant since, Metric metric, BigDecimal value) {
     String column = metric.column();
-    return population(conditions, since)
+    return population(conditions, since, true)
         .statement(
             "SELECT COUNT(*) FILTER (WHERE "
                 + column
@@ -250,8 +250,21 @@ class PostgresStatsRepository implements StatsPort {
   }
 
   @Override
+  public boolean excluded(Target target) {
+    return jdbc.sql(
+            """
+        SELECT EXISTS (SELECT 1 FROM public_exclusion e
+          WHERE e.character_name = :name AND (e.server_name IS NULL OR e.server_name = :server))
+        """)
+        .param("name", target.characterName())
+        .param("server", target.serverName())
+        .query(Boolean.class)
+        .single();
+  }
+
+  @Override
   public boolean contains(StatsConditions conditions, Instant since, Target target) {
-    return population(conditions, since)
+    return population(conditions, since, true)
         .statement(
             "SELECT EXISTS (SELECT 1 FROM pop WHERE server_name = :tServer AND character_name = :tName)",
             jdbc)
@@ -267,8 +280,8 @@ class PostgresStatsRepository implements StatsPort {
   }
 
   /**
-   * excludePublic이면 공개 제외 목록(public_exclusion)의 캐릭터를 뺀다. 랭킹 목록에만 쓰고, 통계 집계와 본인 순위 조회에는 쓰지 않는다(PM 총괄
-   * 결정 2026-10-08).
+   * excludePublic이면 공개 제외 목록(public_exclusion)의 캐릭터를 모집단에서 뺀다. 개인 순위·백분위(랭킹, 캐릭터 순위, percentileOf)에
+   * 쓰고, 개인을 드러내지 않는 집계(요약·직업·서버·히스토그램)에는 쓰지 않는다(PM 총괄 결정 2026-10-09).
    */
   private static Population population(StatsConditions c, Instant since, boolean excludePublic) {
     var where =

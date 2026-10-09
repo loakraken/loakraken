@@ -479,6 +479,13 @@ class OpenApiIntegrationTest {
         .contains("TOP1", "REST");
     assertThat(document.at("/components/schemas/StatsRankEntryResponse/required").toString())
         .contains("metric", "scope", "scopeValue", "rank", "total", "topPercent", "tier");
+    assertThat(document.at("/components/schemas/StatsCharacterRankResponse/required").toString())
+        .contains("rankVisibility", "included", "entries");
+    assertThat(
+            document
+                .at("/components/schemas/StatsCharacterRankResponse/properties/rankVisibility/enum")
+                .toString())
+        .contains("VISIBLE", "HIDDEN");
     assertThat(document.at("/components/schemas/StatsClassRowResponse/required").toString())
         .contains("combatPower", "supportShare", "sampleStatus");
   }

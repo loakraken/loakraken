@@ -150,7 +150,9 @@ class PopularCharactersIntegrationTest {
     ApiContractFixture.write("characters-popular.json", get("/api/v1/characters/popular").body());
 
     var week = data("/api/v1/characters/popular?period=7d&limit=5");
-    assertThat(names(week)).containsExactly("인기D", "인기F", "인기A", "인기B", "인기G");
+    // 7d는 고유 15회 이상만 오른다.
+    assertThat(names(week)).containsExactly("인기D", "인기F");
+    assertThat(week.path("minUniqueViews").asInt()).isEqualTo(15);
 
     // 10분 캐시: 데이터를 지워도 같은 결과
     jdbc.sql("DELETE FROM character_popular_hourly").update();

@@ -2,6 +2,7 @@ package com.loakraken.character.application;
 
 import com.loakraken.character.application.CharacterPopularPort.PopularItem;
 import com.loakraken.character.application.CharacterPopularPort.PopularResult;
+import com.loakraken.common.api.ClientAddresses;
 import jakarta.annotation.PreDestroy;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
@@ -47,7 +48,8 @@ public class CharacterPopularService {
   private final CharacterMetrics metrics;
   private final Clock clock;
   private final SecureRandom random = new SecureRandom();
-  private DailySalt salt;
+  // 이중 확인 잠금 밖에서 읽으므로 volatile이다.
+  private volatile DailySalt salt;
   private final ThreadPoolExecutor writer =
       new ThreadPoolExecutor(
           1,
@@ -140,14 +142,14 @@ public class CharacterPopularService {
       var items = new ArrayList<PopularItem>();
       if (ready) {
         int rank = 1;
-        for (var row : popular.top(since, policy.minUniqueViews(), limit))
+        for (var row : popular.top(since, minUniqueViews(period), limit))
           items.add(
               new PopularItem(
                   rank++, row.characterName(), row.serverName(), row.className(), row.itemLevel()));
       }
       result =
           new PopularResult(
-              period.key(), now, ready ? "READY" : "COLLECTING", policy.minUniqueViews(), items);
+              period.key(), now, ready ? "READY" : "COLLECTING", minUniqueViews(period), items);
     } catch (DataAccessException | TransactionException exception) {
       throw new CharacterException(CharacterErrorCode.CHARACTER_POPULAR_UNAVAILABLE);
     }
@@ -164,7 +166,15 @@ public class CharacterPopularService {
     return popular.purgeBefore(clock.instant().minus(policy.retention()));
   }
 
+  int minUniqueViews(Period period) {
+    return period == Period.LAST_7_DAYS
+        ? policy.minUniqueViews().week()
+        : policy.minUniqueViews().day();
+  }
+
+  /** 주소는 사람 단위로 정규화한다(IPv6 /64, IPv4-mapped → IPv4). */
   String clientKey(LocalDate day, String clientAddress, String serverName, String characterName) {
+    String client = ClientAddresses.normalize(clientAddress);
     var current = salt;
     if (current == null || !current.day().equals(day)) {
       synchronized (this) {
@@ -182,8 +192,7 @@ public class CharacterPopularService {
       mac.init(new SecretKeySpec(current.bytes(), "HmacSHA256"));
       var digest =
           mac.doFinal(
-              (clientAddress + "\n" + serverName + "\n" + characterName)
-                  .getBytes(StandardCharsets.UTF_8));
+              (client + "\n" + serverName + "\n" + characterName).getBytes(StandardCharsets.UTF_8));
       return HexFormat.of().formatHex(digest, 0, 16);
     } catch (GeneralSecurityException exception) {
       throw new IllegalStateException(exception);

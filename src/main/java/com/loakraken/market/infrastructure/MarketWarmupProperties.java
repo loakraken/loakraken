@@ -12,7 +12,7 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
  */
 @ConfigurationProperties("market.warmup")
 public record MarketWarmupProperties(
-    @DefaultValue("true") boolean enabled,
+    @DefaultValue("false") boolean enabled,
     @DefaultValue("9m") Duration interval,
     @DefaultValue("20s") Duration initialDelay,
     @DefaultValue({

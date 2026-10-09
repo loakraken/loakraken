@@ -7,6 +7,7 @@ import com.loakraken.character.application.FetchedCharacter;
 import com.loakraken.character.domain.CharacterDetails;
 import com.loakraken.character.domain.CharacterSibling;
 import com.loakraken.common.api.BusinessException;
+import com.loakraken.common.lostark.LostArkErrorCode;
 import com.loakraken.common.lostark.LostArkMetrics;
 import com.loakraken.common.lostark.LostArkMetrics.ApiOutcome;
 import com.loakraken.common.lostark.LostArkMetrics.Endpoint;
@@ -134,6 +135,8 @@ class LostArkCharacterClient implements CharacterDetailsPort {
     try {
       gate.acquire();
     } catch (BusinessException exception) {
+      // 게이트 저장소 장애는 호출 한도가 아니라 503이다(#107).
+      if (exception.errorCode() == LostArkErrorCode.LOST_ARK_GATE_UNAVAILABLE) throw exception;
       throw new CharacterException(CharacterErrorCode.LOST_ARK_RATE_LIMITED);
     }
     var sample = metrics.startApi();

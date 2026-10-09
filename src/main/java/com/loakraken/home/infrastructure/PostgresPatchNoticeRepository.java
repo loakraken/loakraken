@@ -15,30 +15,41 @@ import org.springframework.transaction.annotation.Transactional;
 class PostgresPatchNoticeRepository implements PatchNoticePort {
   private final JdbcClient jdbc;
 
-  PostgresPatchNoticeRepository(JdbcClient jdbc) {
+  private final org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate named;
+
+  PostgresPatchNoticeRepository(
+      JdbcClient jdbc, org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate named) {
     this.jdbc = jdbc;
+    this.named = named;
   }
 
   @Override
   @Transactional(timeout = 5)
   public void save(List<PatchNotice> notices, Instant observedAt) {
+    if (notices.isEmpty()) return;
     var at = observedAt.atOffset(ZoneOffset.UTC);
-    for (var notice : notices)
-      jdbc.sql(
-              """
-          INSERT INTO patch_notice (notice_id, title, category, published_at, url, first_observed_at, last_observed_at)
-          VALUES (:id, :title, :category, :published, :url, :at, :at)
-          ON CONFLICT (notice_id) DO UPDATE SET
-            title = EXCLUDED.title, category = EXCLUDED.category, url = EXCLUDED.url,
-            last_observed_at = GREATEST(patch_notice.last_observed_at, EXCLUDED.last_observed_at)
-          """)
-          .param("id", notice.noticeId())
-          .param("title", notice.title())
-          .param("category", notice.category().name())
-          .param("published", notice.publishedAt())
-          .param("url", notice.url())
-          .param("at", at)
-          .update();
+    var batch =
+        notices.stream()
+            .map(
+                notice ->
+                    new org.springframework.jdbc.core.namedparam.MapSqlParameterSource()
+                        .addValue("id", notice.noticeId())
+                        .addValue("title", notice.title())
+                        .addValue("category", notice.category().name())
+                        .addValue("published", notice.publishedAt())
+                        .addValue("url", notice.url())
+                        .addValue("at", at))
+            .toArray(org.springframework.jdbc.core.namedparam.SqlParameterSource[]::new);
+    // 한 번의 배치로 쓴다(PM-백엔드 #126 P2).
+    named.batchUpdate(
+        """
+        INSERT INTO patch_notice (notice_id, title, category, published_at, url, first_observed_at, last_observed_at)
+        VALUES (:id, :title, :category, :published, :url, :at, :at)
+        ON CONFLICT (notice_id) DO UPDATE SET
+          title = EXCLUDED.title, category = EXCLUDED.category, url = EXCLUDED.url,
+          last_observed_at = GREATEST(patch_notice.last_observed_at, EXCLUDED.last_observed_at)
+        """,
+        batch);
   }
 
   @Override

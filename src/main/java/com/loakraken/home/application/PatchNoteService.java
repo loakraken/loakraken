@@ -18,15 +18,32 @@ import org.springframework.transaction.TransactionException;
 public class PatchNoteService implements NewsObserver {
   public static final int MAX_SIZE = 50;
   private static final Logger log = LoggerFactory.getLogger(PatchNoteService.class);
+  static final int QUEUE_CAPACITY = 100;
   private final PatchNoticePort notices;
+  private final java.util.concurrent.ThreadPoolExecutor writer =
+      new java.util.concurrent.ThreadPoolExecutor(
+          1,
+          1,
+          0,
+          java.util.concurrent.TimeUnit.MILLISECONDS,
+          new java.util.concurrent.ArrayBlockingQueue<>(QUEUE_CAPACITY),
+          Thread.ofVirtual().name("patch-notices-", 0).factory(),
+          new java.util.concurrent.ThreadPoolExecutor.DiscardPolicy());
 
   public PatchNoteService(PatchNoticePort notices) {
     this.notices = notices;
   }
 
+  @jakarta.annotation.PreDestroy
+  void shutdown() throws InterruptedException {
+    writer.shutdown();
+    writer.awaitTermination(5, java.util.concurrent.TimeUnit.SECONDS);
+  }
+
+  /** 응답 경로 밖에서 단일 작업자가 쓴다(#92 기준). 대기열이 차면 이번 관측은 버리고 다음 소식 갱신(10분) 때 다시 쌓는다. */
   @Override
   public void observed(HomeCache.NewsSnapshot snapshot) {
-    observe(snapshot.news(), snapshot.fetchedAt());
+    writer.execute(() -> observe(snapshot.news(), snapshot.fetchedAt()));
   }
 
   /** 공식 공지 중 패치 공지만 저장한다. 저장 실패는 소식 응답을 막지 않는다. */

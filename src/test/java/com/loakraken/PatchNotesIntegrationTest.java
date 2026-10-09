@@ -58,7 +58,8 @@ class PatchNotesIntegrationTest {
                 List.of(notice("10월 7일(수) 업데이트 내역 안내 (내용 추가)", now.minusDays(2), 13565)),
                 List.of()));
 
-    var json = mapper.readTree(get("/api/v1/home/patch-notes").body());
+    // 저장은 비동기라 반영될 때까지 기다린다.
+    var json = await("/api/v1/home/patch-notes", 3);
     assertThat(json.path("code").asText()).isEqualTo("HOME_PATCH_NOTES_SUCCESS");
     var data = json.path("data");
     assertThat(data.path("ruleVersion").asText()).isEqualTo("patch-notice-v1");
@@ -78,7 +79,8 @@ class PatchNotesIntegrationTest {
 
     // 캐시가 비면 새로 받고, 같은 공지 번호는 제목만 바뀐다. 목록에서 사라진 공지도 남는다.
     redis.delete("home:v1:news");
-    var after = mapper.readTree(get("/api/v1/home/patch-notes").body()).path("data");
+    get("/api/v1/home/patch-notes");
+    var after = awaitTitle("(내용 추가)").path("data");
     assertThat(after.path("total").asLong()).isEqualTo(3);
     assertThat(after.at("/items/2/title").asText()).isEqualTo("10월 7일(수) 업데이트 내역 안내 (내용 추가)");
   }
@@ -88,6 +90,26 @@ class PatchNotesIntegrationTest {
     for (var query : List.of("category=OTHER", "page=0", "size=51"))
       assertThat(get("/api/v1/home/patch-notes?" + query).statusCode()).as(query).isEqualTo(400);
     verifyNoInteractions(source);
+  }
+
+  private tools.jackson.databind.JsonNode await(String path, long total) throws Exception {
+    tools.jackson.databind.JsonNode json = null;
+    for (int i = 0; i < 100; i++) {
+      json = mapper.readTree(get(path).body());
+      if (json.at("/data/total").asLong() >= total) return json;
+      Thread.sleep(50);
+    }
+    return json;
+  }
+
+  private tools.jackson.databind.JsonNode awaitTitle(String fragment) throws Exception {
+    tools.jackson.databind.JsonNode json = null;
+    for (int i = 0; i < 100; i++) {
+      json = mapper.readTree(get("/api/v1/home/patch-notes").body());
+      if (json.toString().contains(fragment)) return json;
+      Thread.sleep(50);
+    }
+    return json;
   }
 
   private static NewsFeed.Notice notice(String title, LocalDateTime at, int id) {

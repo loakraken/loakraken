@@ -316,8 +316,8 @@ public record CharacterLoadoutResponse(
       @Schema(description = "스킬 Tooltip의 보석 효과 줄") List<SkillGemEffectResponse> gemEffects,
       @Schema(
               description =
-                  "Tooltip의 \"공격 타입\". BACK(백 어택)·HEAD(헤드 어택)·NONE(없음). Tooltip을 해석할 수 없거나 갱신 전 캐시(최대 5분)면 null. 스킬별 치명타 적중률은 crit.observedRate + BACK이면 10%p다",
-              allowableValues = {"BACK", "HEAD", "NONE"})
+                  "Tooltip의 \"공격 타입\". BACK_ATTACK(백 어택)·HEAD_ATTACK(헤드 어택)·NONE(없음). Tooltip을 해석할 수 없거나 갱신 전 캐시(최대 5분)면 null. 스킬별 치명타 적중률은 crit.observedRate + BACK_ATTACK이면 10%p다",
+              allowableValues = {"BACK_ATTACK", "HEAD_ATTACK", "NONE"})
           @NullableResponse
           String attackType) {
     static SkillResponse from(CharacterLoadout.Skill value) {

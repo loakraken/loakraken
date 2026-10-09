@@ -94,8 +94,8 @@ public record CharacterLoadout(
 
   /** 스킬 Tooltip의 "공격 타입". 백 어택은 치명타 적중률 +10%p(클로아 스킬별 치명 확률과 같은 규칙). */
   public enum AttackType {
-    BACK,
-    HEAD,
+    BACK_ATTACK,
+    HEAD_ATTACK,
     NONE
   }
 

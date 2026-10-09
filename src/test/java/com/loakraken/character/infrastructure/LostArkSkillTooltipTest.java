@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.loakraken.character.domain.CharacterLoadout;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 class LostArkSkillTooltipTest {
@@ -22,7 +23,7 @@ class LostArkSkillTooltipTest {
             """);
     assertThat(parsed.partBreakLevel()).isEqualTo(1);
     assertThat(parsed.counter()).isFalse();
-    assertThat(parsed.attackType()).isEqualTo(CharacterLoadout.AttackType.BACK);
+    assertThat(parsed.attackType()).isEqualTo(CharacterLoadout.AttackType.BACK_ATTACK);
     assertThat(parsed.gemEffects())
         .containsExactly(
             new CharacterLoadout.SkillGemEffect(
@@ -42,7 +43,7 @@ class LostArkSkillTooltipTest {
             """);
     assertThat(parsed.counter()).isTrue();
     assertThat(parsed.partBreakLevel()).isNull();
-    assertThat(parsed.attackType()).isEqualTo(CharacterLoadout.AttackType.HEAD);
+    assertThat(parsed.attackType()).isEqualTo(CharacterLoadout.AttackType.HEAD_ATTACK);
     assertThat(parsed.gemEffects()).isEmpty();
   }
 
@@ -64,6 +65,23 @@ class LostArkSkillTooltipTest {
             LostArkSkillTooltip.parse(
                     "{\"Element_005\":{\"type\":\"SingleTextBox\",\"value\":\"공격 타입 : 백 어택\"}}")
                 .attackType())
-        .isEqualTo(CharacterLoadout.AttackType.BACK);
+        .isEqualTo(CharacterLoadout.AttackType.BACK_ATTACK);
+  }
+
+  /** 공식 스킬 Tooltip의 SingleTextBox 형식(언새늘 블레이드 2026-10-09 응답의 줄 구성. 원문 전체가 아닌 해당 줄만). */
+  @ParameterizedTest
+  @CsvSource(
+      delimiter = '|',
+      value = {
+        "<FONT COLOR='#C0C0C0'>부위 파괴 : 레벨 1</FONT><BR>무력화 : 하<BR>공격 타입 : 백 어택|BACK_ATTACK",
+        "<BR>슈퍼아머 : 경직 면역<BR>무력화 : 중<BR>공격 타입 : 헤드 어택|HEAD_ATTACK",
+        "<BR>슈퍼아머 : 피격 이상 면역<BR>무력화 : 상|NONE"
+      })
+  void 실제_형식의_공격_타입_줄을_구조화한다(String line, CharacterLoadout.AttackType expected) {
+    var tooltip =
+        "{\"Element_005\":{\"type\":\"SingleTextBox\",\"value\":\""
+            + line.replace("\"", "\\\"")
+            + "\"}}";
+    assertThat(LostArkSkillTooltip.parse(tooltip).attackType()).isEqualTo(expected);
   }
 }

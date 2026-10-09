@@ -79,9 +79,9 @@
 - `data.skillPoints`: 공식 프로필 `UsingSkillPoint`/`TotalSkillPoint`를 `{used, total}`로. 둘 다 없거나 음수면 null.
 - `data.loadout.skills[]`: 원천 스킬 전부(기본 스킬 포함). `{name, icon, level, type, partBreakLevel, counter, tripods[{tier, slot, name, icon}], rune{name, icon, grade}, gemEffects[{text, kind}], attackType}`.
   - `partBreakLevel`: 스킬 Tooltip의 `부위 파괴 : 레벨 N`, 없으면 null. `counter`: `카운터 : 가능`이 있으면 true, 없으면 false, Tooltip 해석 불가면 null.
-  - `attackType`: Tooltip의 `공격 타입 : 백 어택|헤드 어택` → BACK·HEAD, 없으면 NONE, 해석 불가면 null.
+  - `attackType`: Tooltip의 `공격 타입 : 백 어택|헤드 어택` → BACK_ATTACK·HEAD_ATTACK, 없으면 NONE, 해석 불가면 null.
     - 갱신 전 캐시(최대 5분)도 null이다.
-    - 스킬별 치명타 적중률(클로아)은 `crit.observedRate` + BACK이면 10%p다(계산 검증 2026-10-09: 언새늘 8/8 일치).
+    - 스킬별 치명타 적중률(클로아)은 `crit.observedRate` + BACK_ATTACK이면 10%p다(계산 검증 2026-10-09: 언새늘 8/8 일치).
   - `tripods`: 선택된 것만. 공식 응답에 트라이포드 레벨은 없다.
   - `gemEffects`: 스킬 Tooltip의 `보석 효과` 줄. `피해 N% 증가`=DAMAGE, `재사용 대기시간 N% 감소`=COOLDOWN, 그 외 null.
 - `data.coverage.skills`: 스킬 목록 제공 상태.

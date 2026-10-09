@@ -515,6 +515,21 @@ class OpenApiIntegrationTest {
     assertThat(schemas.at("/CardResponse/properties/recordedBy").isMissingNode()).isTrue();
   }
 
+  @Test
+  void 치명타_피해와_스킬_공격_타입_계약을_명시한다() throws Exception {
+    var schemas =
+        JsonMapper.builder()
+            .build()
+            .readTree(request("/v3/api-docs").body())
+            .at("/components/schemas");
+    assertThat(schemas.at("/CritSpeedCritResponse/required").toString()).contains("damage");
+    assertThat(schemas.at("/CritSpeedCritDamageResponse/required").toString())
+        .contains("base", "observed", "total");
+    assertThat(schemas.at("/SkillResponse/required").toString()).contains("attackType");
+    assertThat(schemas.at("/SkillResponse/properties/attackType/anyOf/0/enum").toString())
+        .contains("BACK_ATTACK", "HEAD_ATTACK", "NONE");
+  }
+
   private HttpResponse<String> request(String path) throws Exception {
     try (var client = HttpClient.newHttpClient()) {
       return client.send(

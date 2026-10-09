@@ -58,8 +58,8 @@ final class LostArkSkillTooltip {
         if (attack.find())
           attackType =
               "백 어택".equals(attack.group(1))
-                  ? CharacterLoadout.AttackType.BACK
-                  : CharacterLoadout.AttackType.HEAD;
+                  ? CharacterLoadout.AttackType.BACK_ATTACK
+                  : CharacterLoadout.AttackType.HEAD_ATTACK;
       }
     }
     return new Parsed(partBreak, counter, gems, attackType);

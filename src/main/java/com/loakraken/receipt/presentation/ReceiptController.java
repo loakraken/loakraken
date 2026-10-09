@@ -25,6 +25,10 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @Validated
+@org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(
+    prefix = "receipt",
+    name = "enabled",
+    havingValue = "true")
 @Tag(name = "원정대 영수증", description = "검증된 항목 기준 원정대 환산(receipt-v1)")
 class ReceiptController {
   private final ReceiptService receipts;
@@ -39,7 +43,7 @@ class ReceiptController {
       description =
           "같은 서버 원정대의 장비 재련 기대 비용(+10→현재, 단계별 숨결·책 최소, 업화 18 이하 성장 지원, 현재 최저가)과 거래 가능 보석 시세를 더합니다. "
               + "젬·팔찌·악세는 금액에 넣지 않고 개수만 줍니다. 전투정보는 캐시를 먼저 쓰고, 한 요청에 최대 8명만 공식 API로 새로 받습니다(나머지 PENDING, 다시 요청하면 이어서). "
-              + "다른 사이트와 성공률·포함 범위 가정이 달라 값이 다를 수 있습니다.")
+              + "계산 일치 원칙 검증(재련 성공률 근거·완갑 포함) 전까지 기본으로 꺼져 있습니다(receipt.enabled).")
   @ApiResponses({
     @io.swagger.v3.oas.annotations.responses.ApiResponse(
         responseCode = "200",
@@ -91,6 +95,10 @@ class ReceiptController {
   }
 
   @Configuration(proxyBeanMethods = false)
+  @org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(
+      prefix = "receipt",
+      name = "enabled",
+      havingValue = "true")
   static class ReceiptOpenApiConfiguration {
     @Bean
     OpenApiCustomizer receiptResponseContract() {

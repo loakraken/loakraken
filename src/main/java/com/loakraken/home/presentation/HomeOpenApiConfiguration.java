@@ -12,6 +12,7 @@ class HomeOpenApiConfiguration {
     return document -> {
       ResponseContracts.apply(HomeScheduleResponse.class, document.getComponents().getSchemas());
       ResponseContracts.apply(HomeNewsResponse.class, document.getComponents().getSchemas());
+      ResponseContracts.apply(HomePatchNotesResponse.class, document.getComponents().getSchemas());
     };
   }
 }

@@ -15,13 +15,16 @@ public class HomeQueryService {
   private final HomeSourcePort source;
   private final HomeCache cache;
   private final Clock clock;
+  private final java.util.List<NewsObserver> observers;
   private final ConcurrentHashMap<String, CompletableFuture<Object>> flights =
       new ConcurrentHashMap<>();
 
-  public HomeQueryService(HomeSourcePort source, HomeCache cache, Clock clock) {
+  public HomeQueryService(
+      HomeSourcePort source, HomeCache cache, Clock clock, java.util.List<NewsObserver> observers) {
     this.source = source;
     this.cache = cache;
     this.clock = clock;
+    this.observers = java.util.List.copyOf(observers);
   }
 
   public HomeCache.CalendarSnapshot calendar() {
@@ -36,7 +39,11 @@ public class HomeQueryService {
     return collect(
         "news",
         cache::findNews,
-        () -> new HomeCache.NewsSnapshot(clock.instant(), source.fetchNews()),
+        () -> {
+          var snapshot = new HomeCache.NewsSnapshot(clock.instant(), source.fetchNews());
+          observers.forEach(observer -> observer.observed(snapshot));
+          return snapshot;
+        },
         cache::saveNews);
   }
 

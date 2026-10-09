@@ -72,7 +72,8 @@ public record CharacterLoadout(
       List<Tripod> tripods,
       Rune rune,
       List<SkillGemEffect> gemEffects,
-      AttackType attackType) {
+      AttackType attackType,
+      String category) {
     public Skill {
       tripods = tripods == null ? List.of() : List.copyOf(tripods);
       gemEffects = gemEffects == null ? List.of() : List.copyOf(gemEffects);
@@ -88,7 +89,32 @@ public record CharacterLoadout(
         List<Tripod> tripods,
         Rune rune,
         List<SkillGemEffect> gemEffects) {
-      this(name, icon, level, type, partBreakLevel, counter, tripods, rune, gemEffects, null);
+      this(name, icon, level, type, partBreakLevel, counter, tripods, rune, gemEffects, null, null);
+    }
+
+    public Skill(
+        String name,
+        String icon,
+        Integer level,
+        String type,
+        Integer partBreakLevel,
+        Boolean counter,
+        List<Tripod> tripods,
+        Rune rune,
+        List<SkillGemEffect> gemEffects,
+        AttackType attackType) {
+      this(
+          name,
+          icon,
+          level,
+          type,
+          partBreakLevel,
+          counter,
+          tripods,
+          rune,
+          gemEffects,
+          attackType,
+          null);
     }
   }
 

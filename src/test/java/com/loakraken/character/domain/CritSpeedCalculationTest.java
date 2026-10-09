@@ -303,6 +303,40 @@ class CritSpeedCalculationTest {
     assertThat(result.limitations()).anyMatch(text -> text.contains("치명타 피해는 기본 200%"));
   }
 
+  /** 직업 상태 가정(#189): 리퍼 갈증 피냄새 Lv.3 공식 문구. 목표 사이트처럼 혼돈 상태를 가정해 +23을 더한다. */
+  @Test
+  void 피냄새_혼돈_상태_가정은_기본으로_더하고_끄면_뺀다() {
+    String bloodScent = "혼돈 게이지가 가득차면 혼돈 효과가 강화되어 치명타 적중률이 23.0% 로 변경된다.";
+    var nodes = List.of(node("깨달음 1티어 피냄새 Lv.3", bloodScent), node("진화 3티어 일격 Lv.2", STRIKE));
+    var on = CritSpeedCalculation.calculate(profile("576", "77"), loadout(nodes), Assumptions.NONE);
+    assertThat(on.sources())
+        .filteredOn(source -> source.kind() == Kind.ASSUMED)
+        .singleElement()
+        .satisfies(
+            source -> {
+              assertThat(source.name()).isEqualTo("혼돈 상태 가정(피냄새 Lv.3)");
+              assertThat(source.value()).isEqualByComparingTo("23");
+              assertThat(source.text()).isEqualTo(bloodScent);
+            });
+    assertThat(on.crit().assumedRate()).isEqualByComparingTo("23");
+    var off =
+        CritSpeedCalculation.calculate(
+            profile("576", "77"),
+            loadout(nodes),
+            new Assumptions(false, false, 0, null, null, null, null, null, false));
+    assertThat(off.sources()).noneMatch(source -> source.kind() == Kind.ASSUMED);
+    assertThat(on.crit().totalRate().subtract(off.crit().totalRate())).isEqualByComparingTo("23");
+    // 관측 합에는 넣지 않는다(가정이므로).
+    assertThat(on.crit().observedRate()).isEqualByComparingTo(off.crit().observedRate());
+  }
+
+  @Test
+  void 상태_가정_표에_없는_노드는_가정하지_않는다() {
+    assertThat(CritSpeedCalculation.classState("깨달음 1티어 다른 노드 Lv.3", "치명타 적중률이 23.0% 로 변경된다."))
+        .isNull();
+    assertThat(CritSpeedCalculation.classState("피냄새 Lv.3", "혼돈 게이지 획득량이 50.0% 증가한다.")).isNull();
+  }
+
   private static CharacterProfile profile(String crit, String swiftness) {
     return new CharacterProfile(
         "언새늘",

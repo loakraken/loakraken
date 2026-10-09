@@ -4,6 +4,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -14,7 +15,7 @@ import java.util.regex.Pattern;
  * 스탯 계산에만 쓴다. 뭉툭한 가시·음속 돌파는 장착 노드의 공식 문구에서 수치를 읽고, 미장착이면 2026-10-05 공식 Lv.2 문구를 기준값으로 쓴다.
  */
 public final class CritSpeedCalculation {
-  public static final String RULE_VERSION = "crit-speed-v3";
+  public static final String RULE_VERSION = "crit-speed-v4";
 
   /**
    * 치명타 피해 앞(같은 문장)에 오면 조건부로 보고 합산하지 않는 말. 로펙·일로아는 "폭주 중"·"마력 해방 중"(각성 상태)은 넣고 "사신화 상태에서"· "페르소나
@@ -91,6 +92,8 @@ public final class CritSpeedCalculation {
     ACCESSORY,
     BRACELET,
     CARD,
+    /** 공용 아크 그리드 코어(부수는 일격·재빠른 공격, #189). */
+    ARK_GRID,
     ASSUMPTION
   }
 
@@ -108,7 +111,15 @@ public final class CritSpeedCalculation {
 
   /** text는 근거 문구(공식 원문 또는 가정 설명)다. */
   public record Source(
-      Kind kind, Category category, Axis axis, String name, BigDecimal value, String text) {}
+      Kind kind, Category category, Axis axis, String name, BigDecimal value, String text) {
+    /** 직업 상태 가정(정답표의 피냄새 같은 상태 노드와 직업 버프)인가. 요청 classState로 끄고 켠다. */
+    boolean classState() {
+      return kind == Kind.ASSUMED
+          && name != null
+          && (name.contains(" 가정(")
+              || CritEffectTable.CLASS_BUFFS.stream().anyMatch(buff -> buff.label().equals(name)));
+    }
+  }
 
   /** 모든 값은 % 단위 가정이다. null은 0으로 본다. */
   public record Assumptions(
@@ -119,10 +130,80 @@ public final class CritSpeedCalculation {
       BigDecimal tripodCritRate,
       BigDecimal extraCritRate,
       BigDecimal extraAttackSpeed,
-      BigDecimal extraMoveSpeed) {
+      BigDecimal extraMoveSpeed,
+      boolean classState,
+      Map<String, Boolean> toggles) {
+    /** 가정 입력이 없을 때. 직업 상태 가정은 목표 사이트와 같이 켠다(#189). */
     public static final Assumptions NONE =
-        new Assumptions(false, false, 0, null, null, null, null, null);
+        new Assumptions(false, false, 0, null, null, null, null, null, true);
+
+    public Assumptions {
+      toggles = toggles == null ? Map.of() : Map.copyOf(toggles);
+    }
+
+    public Assumptions(
+        boolean backAttack,
+        boolean critPet,
+        int critSynergyCount,
+        BigDecimal supportCritRate,
+        BigDecimal tripodCritRate,
+        BigDecimal extraCritRate,
+        BigDecimal extraAttackSpeed,
+        BigDecimal extraMoveSpeed,
+        boolean classState) {
+      this(
+          backAttack,
+          critPet,
+          critSynergyCount,
+          supportCritRate,
+          tripodCritRate,
+          extraCritRate,
+          extraAttackSpeed,
+          extraMoveSpeed,
+          classState,
+          Map.of());
+    }
+
+    /** 토글 key의 켬 여부. 요청에 없으면 핵심 상태는 classState, 상황 조건은 끔. */
+    boolean on(String key, boolean coreState) {
+      var value = toggles.get(key);
+      return value != null ? value : coreState && classState;
+    }
+
+    public Assumptions(
+        boolean backAttack,
+        boolean critPet,
+        int critSynergyCount,
+        BigDecimal supportCritRate,
+        BigDecimal tripodCritRate,
+        BigDecimal extraCritRate,
+        BigDecimal extraAttackSpeed,
+        BigDecimal extraMoveSpeed) {
+      this(
+          backAttack,
+          critPet,
+          critSynergyCount,
+          supportCritRate,
+          tripodCritRate,
+          extraCritRate,
+          extraAttackSpeed,
+          extraMoveSpeed,
+          true);
+    }
   }
+
+  /**
+   * 직업 상태 가정 표(#189). 공식 노드 문구가 "어떤 상태에서 치명타 적중률이 X%로 바뀐다"인 경우, 목표 사이트(일로아·클로아)는 그 상태를 가정해 X를 더한다.
+   * 표에 있는 노드만 가정으로 더하고(출처 kind=ASSUMED, 이름에 상태와 노드), 요청 classState=false면 뺀다. 같은 구조의 다른 직업은 계산 검증
+   * 전수 표로 이 목록에 더한다.
+   */
+  record StateAssumption(String node, String state, Pattern pattern) {}
+
+  static final List<StateAssumption> CLASS_STATE_ASSUMPTIONS =
+      List.of(
+          // 리퍼 갈증: "혼돈 게이지가 가득차면 혼돈 효과가 강화되어 치명타 적중률이 23.0% 로 변경된다."(공식, 10-09 확인)
+          new StateAssumption(
+              "피냄새", "혼돈 상태", Pattern.compile("치명타 적중률이\\s*" + NUMBER + "%\\s*로 변경")));
 
   public record BluntThornRule(
       Integer level,
@@ -257,9 +338,43 @@ public final class CritSpeedCalculation {
       BigDecimal total,
       BigDecimal effective,
       List<SkillTripod> tripods,
-      List<SkillTripod> conditional) {}
+      List<SkillTripod> conditional,
+      BigDecimal node,
+      List<SkillTripod> nodes,
+      BigDecimal damage,
+      List<SkillTripod> damageNodes) {}
+
+  /** 스킬 한정 노드 하나(정답표 6-1). target·skill은 CritEffectTable.SkillBonus와 같다. value는 배수까지 곱한 값. */
+  record NodeBonus(
+      String name,
+      Axis axis,
+      CritEffectTable.Target target,
+      String skill,
+      BigDecimal value,
+      String text) {
+    boolean appliesTo(CharacterLoadout.Skill skill) {
+      return switch (target) {
+        case BACK_ATTACK -> skill.attackType() == CharacterLoadout.AttackType.BACK_ATTACK;
+        case SKILL -> this.skill.equals(skill.name());
+        case CATEGORY -> this.skill.equals(skill.category());
+      };
+    }
+  }
 
   public record SkillTripod(String name, BigDecimal value, String text) {}
+
+  /**
+   * 켜고 끄는 효과 하나(PM 총괄 23:24). key는 요청 assumptions.toggles의 키다. coreState(직업 핵심 상태·자기 버프)는 기본 켬, 그
+   * 밖(스킬 직후 N초 등)은 기본 끔. text는 공식 원문 또는 근거.
+   */
+  public record ToggleState(
+      String key,
+      String label,
+      Axis axis,
+      boolean coreState,
+      boolean on,
+      BigDecimal value,
+      String text) {}
 
   public record Result(
       String ruleVersion,
@@ -267,7 +382,8 @@ public final class CritSpeedCalculation {
       Crit crit,
       Speed speed,
       List<String> limitations,
-      List<SkillCrit> skills) {}
+      List<SkillCrit> skills,
+      List<ToggleState> toggles) {}
 
   public static Result calculate(
       CharacterProfile profile, CharacterLoadout loadout, Assumptions assumptions) {
@@ -278,6 +394,11 @@ public final class CritSpeedCalculation {
     Integer swiftness = statValue(profile, "신속");
     BigDecimal critFromStat = statSources(profile, critStat, swiftness, sources, limitations);
     var conditional = new ArrayList<String>();
+    var conditionalRate = new ArrayList<String>();
+    var unclassified = new ArrayList<String>();
+    var agility = new BigDecimal[2];
+    var skillBonuses = new ArrayList<NodeBonus>();
+    var toggles = new ArrayList<ToggleState>();
     engravingSources(loadout, sources, conditional);
     BluntThornRule equippedThorn = null;
     SupersonicRule equippedSupersonic = null;
@@ -293,12 +414,36 @@ public final class CritSpeedCalculation {
           equippedSupersonic = supersonic(effect, limitations);
           continue;
         }
-        scan(Category.ARK_PASSIVE, name, effect.effect(), sources, true, conditional);
+        arkPassiveNode(
+            name,
+            effect.effect(),
+            input,
+            sources,
+            conditional,
+            conditionalRate,
+            unclassified,
+            agility,
+            skillBonuses,
+            toggles);
       }
     }
     equipmentSources(loadout, sources);
     cardSources(loadout, sources);
+    gridCoreSources(loadout, input, sources, toggles, unclassified, conditionalRate);
+    braceletToggles(loadout, input, sources, toggles, conditionalRate, conditional);
+    classBuffSources(profile, loadout, input, sources, toggles);
     assumptionSources(input, sources);
+    agilitySources(agility, sources);
+    // 직업 상태 가정(정답표 표의 피냄새·직업 버프)은 스킬별 치적 기본에도 넣는다.
+    var classStateCrit =
+        sources.stream()
+            .filter(
+                source ->
+                    source.kind() == Kind.ASSUMED
+                        && source.axis() == Axis.CRIT
+                        && source.classState())
+            .map(Source::value)
+            .reduce(BigDecimal.ZERO, BigDecimal::add);
 
     var observedCrit = sum(sources, Kind.OBSERVED, Axis.CRIT);
     var assumedCrit = sum(sources, Kind.ASSUMED, Axis.CRIT);
@@ -380,16 +525,32 @@ public final class CritSpeedCalculation {
     limitations.add(
         "치명타 피해는 기본 200%에 장비·팔찌·각인·아크 패시브·카드의 일반 문구만 더합니다. 스킬 한정('방향성 공격 스킬의 치명타 피해' 등), 받는 치명타 피해, 특정 상태 한정('…상태에서')은 제외하고, 각성 중 상시 효과('폭주 중', '마력 해방 중')는 더합니다.");
     var skills =
+        // 스킬별 기본은 관측 + 직업 상태 가정(목표 사이트와 같은 기준, #189).
         skillCrits(
             loadout,
-            observedCrit,
+            observedCrit.add(classStateCrit),
             equippedThorn == null ? CRIT_CAP : thornRule.critCap(),
-            limitations);
+            BASE_CRIT_DAMAGE.add(sum(sources, Kind.OBSERVED, Axis.CRIT_DAMAGE)),
+            limitations,
+            skillBonuses);
+    if (!conditionalRate.isEmpty())
+      limitations.add(
+          "기본 치명타 적중률에 넣지 않은 효과(공식 문구의 조건·대상 스킬, 스킬 한정은 스킬별 치명타 적중률에 반영): "
+              + String.join(", ", conditionalRate));
+    if (!unclassified.isEmpty())
+      limitations.add("직업별 치명 효과 표에 아직 없어 합산하지 않은 효과(분류 중): " + String.join(", ", unclassified));
     if (!conditional.isEmpty())
       limitations.add(
-          "특정 상태('…상태에서', '…상태일 때')에서만 붙는 치명타 피해는 합산하지 않았습니다: " + String.join(", ", conditional));
+          "기본 치명타 피해에 넣지 않은 효과(공식 문구의 조건·대상 스킬, 스킬 한정은 스킬별 치명타 피해에 반영): "
+              + String.join(", ", conditional));
     return new Result(
-        RULE_VERSION, List.copyOf(sources), crit, speed, List.copyOf(limitations), skills);
+        RULE_VERSION,
+        List.copyOf(sources),
+        crit,
+        speed,
+        List.copyOf(limitations),
+        skills,
+        List.copyOf(toggles));
   }
 
   static final int TABLE_STEP = 200;
@@ -562,6 +723,16 @@ public final class CritSpeedCalculation {
   /** 레벨을 올린(2 이상) 스킬만 이름순으로 계산한다. */
   static List<SkillCrit> skillCrits(
       CharacterLoadout loadout, BigDecimal observedCrit, BigDecimal cap, List<String> limitations) {
+    return skillCrits(loadout, observedCrit, cap, BASE_CRIT_DAMAGE, limitations, List.of());
+  }
+
+  static List<SkillCrit> skillCrits(
+      CharacterLoadout loadout,
+      BigDecimal observedCrit,
+      BigDecimal cap,
+      BigDecimal critDamage,
+      List<String> limitations,
+      List<NodeBonus> bonuses) {
     if (loadout.skills() == null) return List.of();
     var result = new ArrayList<SkillCrit>();
     boolean missingTooltip = false;
@@ -597,7 +768,21 @@ public final class CritSpeedCalculation {
               : skill.attackType() == CharacterLoadout.AttackType.BACK_ATTACK
                   ? BACK_ATTACK_CRIT
                   : BigDecimal.ZERO;
-      var total = tripodSum == null || back == null ? null : observedCrit.add(back).add(tripodSum);
+      var nodes = new ArrayList<SkillTripod>();
+      var damageNodes = new ArrayList<SkillTripod>();
+      for (var bonus : bonuses) {
+        if (!bonus.appliesTo(skill)) continue;
+        var entry = new SkillTripod(bonus.name(), scale(bonus.value()), bonus.text());
+        if (bonus.axis() == Axis.CRIT) nodes.add(entry);
+        else damageNodes.add(entry);
+      }
+      var damageSum =
+          damageNodes.stream().map(SkillTripod::value).reduce(BigDecimal.ZERO, BigDecimal::add);
+      var nodeSum = nodes.stream().map(SkillTripod::value).reduce(BigDecimal.ZERO, BigDecimal::add);
+      var total =
+          tripodSum == null || back == null
+              ? null
+              : observedCrit.add(back).add(tripodSum).add(nodeSum);
       result.add(
           new SkillCrit(
               skill.name(),
@@ -608,7 +793,11 @@ public final class CritSpeedCalculation {
               total == null ? null : scale(total),
               total == null ? null : scale(total.min(cap)),
               List.copyOf(counted),
-              List.copyOf(conditional)));
+              List.copyOf(conditional),
+              scale(nodeSum),
+              List.copyOf(nodes),
+              scale(critDamage.add(damageSum)),
+              List.copyOf(damageNodes)));
     }
     result.sort(java.util.Comparator.comparing(SkillCrit::name));
     if (missingTooltip) limitations.add("갱신 전 캐시(최대 5분)라 트라이포드 효과를 읽지 못한 스킬은 스킬별 치명타 적중률을 비워 둡니다.");
@@ -624,6 +813,481 @@ public final class CritSpeedCalculation {
         && Character.isDigit(text.charAt(sentence + 1)))
       sentence = text.lastIndexOf('.', sentence - 1);
     return TRIPOD_CONDITION.matcher(text.substring(sentence + 1, matchStart)).find();
+  }
+
+  /** 아크 패시브 노드 하나를 직업별 치명 효과 정답표로 판정한다(#189). 속도 효과는 기존 문구 해석을 그대로 쓰고, 치적·치피는 표의 판정으로만 더한다. */
+  private static void arkPassiveNode(
+      String name,
+      String text,
+      Assumptions input,
+      List<Source> sources,
+      List<String> conditionalDamage,
+      List<String> conditionalRate,
+      List<String> unclassified,
+      BigDecimal[] agility,
+      List<NodeBonus> skillBonuses,
+      List<ToggleState> toggles) {
+    var scanned = new ArrayList<Source>();
+    scan(Category.ARK_PASSIVE, name, text, scanned, true, new ArrayList<>());
+    for (var source : scanned)
+      if (source.axis() == Axis.ATTACK_SPEED || source.axis() == Axis.MOVE_SPEED)
+        sources.add(source);
+    var rule = CritEffectTable.node(name);
+    if (rule == null) {
+      if (CritEffectTable.ANY_CRIT.matcher(text).find()) unclassified.add(name);
+      return;
+    }
+    String base = rule.node();
+    if (rule.rate() == CritEffectTable.Decision.SKILL)
+      skillBonus(name, base, text, Axis.CRIT, input, skillBonuses, conditionalRate);
+    if (rule.damage() == CritEffectTable.Decision.SKILL)
+      skillBonus(name, base, text, Axis.CRIT_DAMAGE, input, skillBonuses, conditionalDamage);
+    for (var toggle : CritEffectTable.toggles(base)) {
+      var value = toggleValue(toggle, base, text);
+      if (value == null) continue;
+      boolean on = input.on(toggle.key(), toggle.coreState());
+      if (on
+          && toggle.exclusiveWith() != null
+          && toggles.stream().anyMatch(t -> t.on() && t.key().equals(toggle.exclusiveWith()))) {
+        on = false;
+        (toggle.axis() == Axis.CRIT ? conditionalRate : conditionalDamage)
+            .add(name + " " + plain(value) + "%(" + toggle.exclusiveWith() + "와 동시에 적용되지 않아 끔)");
+      }
+      toggles.add(
+          new ToggleState(
+              toggle.key(),
+              toggle.label(),
+              toggle.axis(),
+              toggle.coreState(),
+              on,
+              scale(value),
+              text));
+      if (on)
+        sources.add(
+            new Source(
+                Kind.ASSUMED,
+                Category.ASSUMPTION,
+                toggle.axis(),
+                toggle.label() + "(" + name + ")",
+                value,
+                text));
+      else
+        (toggle.axis() == Axis.CRIT ? conditionalRate : conditionalDamage)
+            .add(name + " " + plain(value) + "%(" + toggle.label() + ", 켜기 가능)");
+    }
+    if (rule.rate() == CritEffectTable.Decision.INCLUDE
+        || rule.rate() == CritEffectTable.Decision.EXCLUDE) {
+      var value = rateValue(base, text);
+      if (rule.rate() == CritEffectTable.Decision.INCLUDE) {
+        if (base.equals("기민함")) agility[0] = value;
+        else if (base.equals("피냄새")) {
+          var state = classState(name, text);
+          if (state != null) {
+            boolean on = input.on(base, true);
+            toggles.add(
+                new ToggleState(base, "혼돈 상태 가정", Axis.CRIT, true, on, scale(state.value()), text));
+            if (on) sources.add(state);
+          }
+        } else if (value != null)
+          sources.add(
+              new Source(Kind.OBSERVED, Category.ARK_PASSIVE, Axis.CRIT, name, value, text));
+      } else if (value != null) conditionalRate.add(name + " " + plain(value) + "%");
+    }
+    if (rule.damage() == CritEffectTable.Decision.INCLUDE
+        || rule.damage() == CritEffectTable.Decision.EXCLUDE) {
+      var value = damageValue(base, text);
+      if (rule.damage() == CritEffectTable.Decision.INCLUDE) {
+        if (base.equals("기민함")) agility[1] = value;
+        else if (value != null)
+          sources.add(
+              new Source(Kind.OBSERVED, Category.ARK_PASSIVE, Axis.CRIT_DAMAGE, name, value, text));
+      } else if (value != null) conditionalDamage.add(name + " " + plain(value) + "%");
+    }
+  }
+
+  /** 스킬 한정 노드: 값(공식 문구 첫 값 × 배수)을 대상 스킬에만 넘기고, 기본에서 뺀 항목으로 남긴다. */
+  private static void skillBonus(
+      String name,
+      String base,
+      String text,
+      Axis axis,
+      Assumptions input,
+      List<NodeBonus> skillBonuses,
+      List<String> excluded) {
+    var bonus = CritEffectTable.skillBonus(base, axis);
+    if (bonus == null) return;
+    var value = axis == Axis.CRIT ? rateValue(base, text) : damageValue(base, text);
+    if (value == null) return;
+    value = value.multiply(BigDecimal.valueOf(bonus.multiplier()));
+    if (!bonus.classState() || input.classState())
+      skillBonuses.add(new NodeBonus(name, axis, bonus.target(), bonus.skill(), value, text));
+    excluded.add(
+        name
+            + " "
+            + plain(value)
+            + "%("
+            + (bonus.target() == CritEffectTable.Target.BACK_ATTACK ? "백 어택 스킬" : bonus.skill())
+            + "에만"
+            + (bonus.basis() == null ? "" : ", " + bonus.basis())
+            + ")");
+  }
+
+  private static String plain(BigDecimal value) {
+    return value.stripTrailingZeros().toPlainString();
+  }
+
+  private static final Pattern RATE_VALUE =
+      Pattern.compile("치명타 적중률(?:이)?\\s*(?:추가로\\s*)?\\+?\\s*" + NUMBER + "%" + DIRECTION);
+  private static final Pattern DAMAGE_VALUE =
+      Pattern.compile("치명타 피해(?:량)?(?:이|가)?\\s*(?:추가로\\s*)?\\+?\\s*" + NUMBER + "%" + DIRECTION);
+  private static final Pattern AGILITY_DAMAGE =
+      Pattern.compile("공격 속도 증가량 %의\\s*" + NUMBER + "%\\s*만큼 치명타 피해");
+  private static final Pattern AGILITY_RATE =
+      Pattern.compile("이동 속도 증가량 %의\\s*" + NUMBER + "%\\s*만큼 치명타 적중률");
+
+  /** 표의 노드에서 치명타 적중률 값. 달인은 중첩 곱, 피냄새는 "로 변경" 값, 기민함은 이동 속도 1%당 비율. 그 밖에는 첫 일치 값. */
+  static BigDecimal rateValue(String base, String text) {
+    Matcher matcher;
+    switch (base) {
+      case "달인" -> {
+        matcher = STACKED_CRIT.matcher(text);
+        if (matcher.find())
+          return new BigDecimal(matcher.group(1)).multiply(new BigDecimal(matcher.group(2)));
+        return null;
+      }
+      case "피냄새" -> {
+        var state = CLASS_STATE_ASSUMPTIONS.getFirst().pattern().matcher(text);
+        return state.find() ? new BigDecimal(state.group(1)) : null;
+      }
+      case "기민함" -> {
+        matcher = AGILITY_RATE.matcher(text);
+        return matcher.find()
+            ? new BigDecimal(matcher.group(1)).divide(BigDecimal.valueOf(100))
+            : null;
+      }
+      default -> {
+        matcher = RATE_VALUE.matcher(text);
+        return matcher.find() ? signed(matcher.group(1), matcher.group(2)) : null;
+      }
+    }
+  }
+
+  static BigDecimal damageValue(String base, String text) {
+    if (base.equals("기민함")) {
+      var matcher = AGILITY_DAMAGE.matcher(text);
+      return matcher.find()
+          ? new BigDecimal(matcher.group(1)).divide(BigDecimal.valueOf(100))
+          : null;
+    }
+    var matcher = DAMAGE_VALUE.matcher(text);
+    return matcher.find() ? signed(matcher.group(1), matcher.group(2)) : null;
+  }
+
+  private static BigDecimal toggleValue(CritEffectTable.Toggle toggle, String base, String text) {
+    BigDecimal value;
+    if (toggle.pattern() == null) value = rateValue(base, text);
+    else {
+      var matcher = toggle.pattern().matcher(text);
+      value = matcher.find() ? new BigDecimal(matcher.group(1)) : null;
+    }
+    if (value == null || !toggle.incremental()) return value;
+    var baseValue = rateValue(base, text);
+    return baseValue == null ? null : value.subtract(baseValue);
+  }
+
+  /** 기민함: 기본 공격·이동 속도 증가량(상한 40 적용)에 비율을 곱한다. 일로아 "질풍노도 기민함"과 같은 기준(정답표 츄델 12/48). */
+  private static void agilitySources(BigDecimal[] agility, List<Source> sources) {
+    if (agility[0] == null && agility[1] == null) return;
+    // "기본 … 속도 증가량"은 증가분만 합한다. 질량 증가(공격 속도 -10%) 같은 감소는 빼지 않는다(일로아·로펙 일치, 정답표 6-2).
+    var move = increase(sources, Axis.MOVE_SPEED).min(SPEED_CAP);
+    var attack = increase(sources, Axis.ATTACK_SPEED).min(SPEED_CAP);
+    if (agility[0] != null)
+      sources.add(
+          new Source(
+              Kind.OBSERVED,
+              Category.ARK_PASSIVE,
+              Axis.CRIT,
+              "기민함(이동 속도 " + move.stripTrailingZeros().toPlainString() + "%)",
+              move.multiply(agility[0]),
+              "기본 이동 속도 증가량 %의 "
+                  + agility[0].movePointRight(2).stripTrailingZeros().toPlainString()
+                  + "% 만큼 치명타 적중률"));
+    if (agility[1] != null)
+      sources.add(
+          new Source(
+              Kind.OBSERVED,
+              Category.ARK_PASSIVE,
+              Axis.CRIT_DAMAGE,
+              "기민함(공격 속도 " + attack.stripTrailingZeros().toPlainString() + "%)",
+              attack.multiply(agility[1]),
+              "기본 공격 속도 증가량 %의 "
+                  + agility[1].movePointRight(2).stripTrailingZeros().toPlainString()
+                  + "% 만큼 치명타 피해"));
+  }
+
+  private static BigDecimal increase(List<Source> sources, Axis axis) {
+    return sources.stream()
+        .filter(source -> source.axis() == axis && source.value().signum() > 0)
+        .map(Source::value)
+        .reduce(BigDecimal.ZERO, BigDecimal::add);
+  }
+
+  /** 공용 아크 그리드 코어: 현재 포인트로 달성한 구간 문구의 치명타 적중률·피해를 더한다. */
+  private static void gridCoreSources(
+      CharacterLoadout loadout,
+      Assumptions input,
+      List<Source> sources,
+      List<ToggleState> toggles,
+      List<String> unclassified,
+      List<String> conditionalRate) {
+    if (loadout.arkGrid() == null) return;
+    for (var slot : loadout.arkGrid().slots()) {
+      if (slot == null || slot.name() == null || slot.core() == null || slot.point() == null)
+        continue;
+      for (var core : CritEffectTable.COMMON_CORES.entrySet()) {
+        if (!slot.name().endsWith(core.getKey())) continue;
+        var pattern = core.getValue() == Axis.CRIT ? RATE_VALUE : DAMAGE_VALUE;
+        var total = BigDecimal.ZERO;
+        var texts = new ArrayList<String>();
+        for (var option : slot.core().options()) {
+          if (option == null || option.text() == null || option.threshold() > slot.point())
+            continue;
+          var matcher = pattern.matcher(option.text());
+          while (matcher.find()) {
+            total = total.add(signed(matcher.group(1), matcher.group(2)));
+            texts.add(option.text());
+          }
+        }
+        if (total.signum() != 0)
+          sources.add(
+              new Source(
+                  Kind.OBSERVED,
+                  Category.ARK_GRID,
+                  core.getValue(),
+                  slot.name() + " " + slot.point() + "P",
+                  total,
+                  String.join(" ", texts)));
+      }
+      if (CritEffectTable.COMMON_CORES.keySet().stream().noneMatch(slot.name()::endsWith))
+        classCoreSources(slot, input, sources, toggles, unclassified, conditionalRate);
+    }
+  }
+
+  /** 직업 코어를 이름 표(CritEffectTable.CLASS_CORES)로 판정한다. 급소 노출(WEAK_POINT)은 직업 버프 표에서 처리한다. */
+  private static void classCoreSources(
+      CharacterLoadout.GridSlot slot,
+      Assumptions input,
+      List<Source> sources,
+      List<ToggleState> toggles,
+      List<String> unclassified,
+      List<String> conditionalRate) {
+    var rule = CritEffectTable.classCore(slot.name());
+    if (rule == null) {
+      boolean crit =
+          slot.core().options().stream()
+              .anyMatch(
+                  option ->
+                      option != null
+                          && option.text() != null
+                          && option.threshold() <= slot.point()
+                          && CritEffectTable.ANY_CRIT.matcher(option.text()).find());
+      if (crit) unclassified.add(slot.name());
+      return;
+    }
+    if (rule.decision() == CritEffectTable.CoreDecision.SITUATIONAL) {
+      for (var option : slot.core().options()) {
+        if (option == null || option.text() == null || option.threshold() > slot.point()) continue;
+        var matcher = RATE_VALUE.matcher(option.text());
+        if (!matcher.find()) continue;
+        var value = signed(matcher.group(1), matcher.group(2));
+        boolean on = input.on(rule.core(), false);
+        toggles.add(
+            new ToggleState(
+                rule.core(), rule.label(), Axis.CRIT, false, on, scale(value), option.text()));
+        if (on)
+          sources.add(
+              new Source(
+                  Kind.ASSUMED,
+                  Category.ASSUMPTION,
+                  Axis.CRIT,
+                  rule.label() + "(" + slot.name() + ")",
+                  value,
+                  option.text()));
+        else
+          conditionalRate.add(slot.name() + " " + plain(value) + "%(" + rule.label() + ", 켜기 가능)");
+      }
+      return;
+    }
+    if (rule.decision() != CritEffectTable.CoreDecision.INCLUDE) return;
+    for (var axis : List.of(Axis.CRIT, Axis.CRIT_DAMAGE)) {
+      var pattern = axis == Axis.CRIT ? CORE_RATE_ONLY : CORE_DAMAGE_ONLY;
+      var total = BigDecimal.ZERO;
+      var texts = new ArrayList<String>();
+      for (var option : slot.core().options()) {
+        if (option == null || option.text() == null || option.threshold() > slot.point()) continue;
+        var matcher = pattern.matcher(option.text().strip());
+        if (!matcher.matches()) continue;
+        total = total.add(new BigDecimal(matcher.group(1)));
+        texts.add(option.text());
+      }
+      if (total.signum() != 0)
+        sources.add(
+            new Source(
+                Kind.OBSERVED,
+                Category.ARK_GRID,
+                axis,
+                slot.name() + " " + slot.point() + "P",
+                total,
+                String.join(" ", texts)));
+    }
+  }
+
+  private static final Pattern CORE_RATE_ONLY =
+      Pattern.compile("치명타 적중률이\\s*" + NUMBER + "%\\s*증가한다\\.");
+  private static final Pattern CORE_DAMAGE_ONLY =
+      Pattern.compile("치명타 피해(?:량이|가)\\s*" + NUMBER + "%\\s*증가한다\\.");
+
+  /** 직업 코어의 급소 노출: "급소 노출 효과가 적용되어, 대상이 자신 및 파티원에게 받는 치명타 저항률이 … X% 감소" */
+  private static final Pattern CORE_WEAK_POINT =
+      Pattern.compile("급소 노출 효과가 적용되어[^.]*?치명타 저항률이(?:\\s*[0-9.]+초 동안)?\\s*" + NUMBER + "%\\s*감소");
+
+  /** 달성한 직업 코어(표의 WEAK_POINT) 옵션 중 급소 노출(치적 시너지) 문구. 없으면 null. */
+  private static CharacterLoadout.CoreOption coreWeakPoint(CharacterLoadout loadout) {
+    if (loadout.arkGrid() == null) return null;
+    for (var slot : loadout.arkGrid().slots()) {
+      if (slot == null || slot.core() == null || slot.point() == null) continue;
+      var rule = CritEffectTable.classCore(slot.name());
+      if (rule == null || rule.decision() != CritEffectTable.CoreDecision.WEAK_POINT) continue;
+      for (var option : slot.core().options())
+        if (option != null
+            && option.text() != null
+            && option.threshold() <= slot.point()
+            && CORE_WEAK_POINT.matcher(option.text()).find()) return option;
+    }
+    return null;
+  }
+
+  /** 팔찌의 적중 시 8초 효과(대상 치명타 저항·치명타 피해 저항 감소). 기본 끔 토글. */
+  private static void braceletToggles(
+      CharacterLoadout loadout,
+      Assumptions input,
+      List<Source> sources,
+      List<ToggleState> toggles,
+      List<String> conditionalRate,
+      List<String> conditionalDamage) {
+    for (var equipment : loadout.equipment()) {
+      if (equipment == null || equipment.detail() == null) continue;
+      for (var bracelet : equipment.detail().braceletEffects()) {
+        if (bracelet == null || bracelet.text() == null) continue;
+        for (var rule : CritEffectTable.BRACELET_TOGGLES) {
+          var matcher = rule.pattern().matcher(bracelet.text());
+          if (!matcher.find()) continue;
+          var value = new BigDecimal(matcher.group(1));
+          boolean on = input.on(rule.key(), false);
+          toggles.add(
+              new ToggleState(
+                  rule.key(), rule.label(), rule.axis(), false, on, scale(value), bracelet.text()));
+          if (on)
+            sources.add(
+                new Source(
+                    Kind.ASSUMED,
+                    Category.ASSUMPTION,
+                    rule.axis(),
+                    rule.label() + "(팔찌)",
+                    value,
+                    bracelet.text()));
+          else
+            (rule.axis() == Axis.CRIT ? conditionalRate : conditionalDamage)
+                .add("팔찌 " + plain(value) + "%(" + rule.label() + ", 켜기 가능)");
+        }
+      }
+    }
+  }
+
+  /** 노드 문구에 없는 직업 버프(정답표 1절 "일치 포함"). 트라이포드 문구가 있으면 그 값을, 없으면 표 값을 쓴다. */
+  private static void classBuffSources(
+      CharacterProfile profile,
+      CharacterLoadout loadout,
+      Assumptions input,
+      List<Source> sources,
+      List<ToggleState> toggles) {
+    for (var buff : CritEffectTable.CLASS_BUFFS) {
+      if (buff.className() != null && !buff.className().equals(profile.className())) continue;
+      BigDecimal value = null;
+      String text = buff.basis();
+      if (buff.skill() == null && buff.tripod() == null) value = buff.value();
+      if (buff.skill() != null && hasSkill(loadout, buff.skill())) value = buff.value();
+      if (buff.tripod() != null && buff.tripod().equals("급소 노출")) {
+        // 직업 코어(예: 데빌헌터 "샷건 오버로드" 14P)가 급소 노출을 거는 경우도 같은 시너지다(중복 적용 없음).
+        var core = coreWeakPoint(loadout);
+        if (core != null) {
+          var matcher = CORE_WEAK_POINT.matcher(core.text());
+          if (matcher.find()) {
+            value = new BigDecimal(matcher.group(1));
+            text = core.text();
+          }
+        }
+      }
+      if (buff.tripod() != null) {
+        var tripod = selectedTripod(loadout, buff.tripod());
+        if (tripod != null) {
+          value = buff.value();
+          if (tripod.effect() != null) {
+            var matcher = RATE_VALUE.matcher(tripod.effect());
+            if (matcher.find()) {
+              value = signed(matcher.group(1), matcher.group(2));
+              text = tripod.effect();
+            }
+          }
+        }
+      }
+      if (value == null) continue;
+      boolean on = input.on(buff.label(), true);
+      toggles.add(
+          new ToggleState(buff.label(), buff.label(), Axis.CRIT, true, on, scale(value), text));
+      if (on)
+        sources.add(
+            new Source(Kind.ASSUMED, Category.ASSUMPTION, Axis.CRIT, buff.label(), value, text));
+    }
+  }
+
+  private static boolean hasSkill(CharacterLoadout loadout, String name) {
+    if (loadout.skills() == null) return false;
+    return loadout.skills().stream()
+        .anyMatch(
+            skill ->
+                skill != null
+                    && name.equals(skill.name())
+                    && skill.level() != null
+                    && skill.level() > 1);
+  }
+
+  private static CharacterLoadout.Tripod selectedTripod(CharacterLoadout loadout, String name) {
+    if (loadout.skills() == null) return null;
+    for (var skill : loadout.skills()) {
+      if (skill == null || skill.level() == null || skill.level() < 2) continue;
+      for (var tripod : skill.tripods())
+        if (tripod != null && name.equals(tripod.name())) return tripod;
+    }
+    return null;
+  }
+
+  /** 표에 있는 직업 상태 노드면 가정 출처를 만든다. 아니면 null. */
+  static Source classState(String name, String text) {
+    if (name == null || text == null) return null;
+    for (var rule : CLASS_STATE_ASSUMPTIONS) {
+      if (!name.startsWith(rule.node())) continue;
+      var matcher = rule.pattern().matcher(text);
+      if (matcher.find())
+        return new Source(
+            Kind.ASSUMED,
+            Category.ASSUMPTION,
+            Axis.CRIT,
+            rule.state() + " 가정(" + name + ")",
+            new BigDecimal(matcher.group(1)),
+            text);
+    }
+    return null;
   }
 
   /** 일치 위치가 속한 문장(마침표로 나눔)에서 앞쪽에 조건 상태 말이 있는지. */

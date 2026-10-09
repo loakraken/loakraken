@@ -350,7 +350,8 @@ record LostArkArmoryResponse(
                   .toList(),
           rune == null ? null : rune.toDomain(),
           parsed.gemEffects(),
-          parsed.attackType());
+          parsed.attackType(),
+          parsed.category());
     }
   }
 

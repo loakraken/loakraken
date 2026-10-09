@@ -8,8 +8,8 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 /**
- * 직업별 치명 효과 정답표(crit-speed-v4, #189). 계산 검증 [[직업별 치명 효과 정답표]](2026-10-09, 일로아 55명·로펙 53명 대조)를 공식 노드
- * 문구(같은 날 표본 50명 armory)와 맞춰 고정한 표다.
+ * 직업별 치명 효과 정답표(crit-speed-v4~, #189·#198). 계산 검증 [[직업별 치명 효과 정답표]](2026-10-09, 일로아 55명·로펙 53명 대조)를
+ * 공식 노드 문구(같은 날 표본 50명 armory)와 맞춰 고정한 표다.
  *
  * <ul>
  *   <li>아크 패시브 노드는 이름으로 판정한다. 문구 키워드로 추측하지 않는다.
@@ -382,4 +382,98 @@ public final class CritEffectTable {
               CritSpeedCalculation.Axis.CRIT_DAMAGE,
               "팔찌 치명타 피해 저항 감소 8초 가정",
               Pattern.compile("공격 적중 시 8초 동안 대상의 치명타 피해 저항을\\s*([0-9]+(?:\\.[0-9]+)?)% 감소")));
+
+  /**
+   * 아크 패시브 노드의 공격·이동 속도 판정(#198). INCLUDE는 기본에 넣고, CORE_STATE는 기본 켬 토글, SITUATIONAL은 기본 끔 토글,
+   * EXCLUDE는 다른 대상(소환수·특정 스킬)의 속도라 넣지 않는다. 표에 없는 노드의 속도 문구는 합산하지 않고 "분류 중"으로 남긴다.
+   */
+  public enum SpeedDecision {
+    INCLUDE,
+    EXCLUDE,
+    CORE_STATE,
+    SITUATIONAL
+  }
+
+  public record SpeedRule(String node, SpeedDecision decision, String label, String basis) {}
+
+  private static final List<SpeedRule> SPEED_RULES =
+      List.of(
+          // 두 사이트 일치(츄델 기민함 48 = 신속 29.25 + 질풍노도 12)
+          new SpeedRule("질풍노도", SpeedDecision.INCLUDE, null, "두 사이트 포함"),
+          // "진화형 피해가 12.0% 증가하고, 공격 속도가 4.0% 증가합니다."
+          new SpeedRule("파괴 전차", SpeedDecision.INCLUDE, null, "조건 없는 문구"),
+          // "이동 속도가 10.0% 증가하고, …"
+          new SpeedRule("고대의 바람", SpeedDecision.INCLUDE, null, "조건 없는 문구"),
+          // "전투 중 자신 및 주변 파티원에게 '전투 축복 III' … (20초 지속, 매 초마다 갱신) … 공격 및 이동 속도 9.0% 증가"
+          new SpeedRule("축복의 여신", SpeedDecision.INCLUDE, null, "전투 중 매 초 갱신"),
+          // 직업 핵심 상태(각성형 변신·직업 게이지)
+          new SpeedRule("광기", SpeedDecision.CORE_STATE, "광기 상태 가정", "광기 상태에서는 공격속도 및 이동속도가 15.0%"),
+          new SpeedRule("환수 각성", SpeedDecision.CORE_STATE, "환수 각성 상태 가정", "환수 각성 상태에서는 … 20.0% 증가"),
+          new SpeedRule(
+              "고독한 기사", SpeedDecision.SITUATIONAL, "진격 태세 가정", "두 사이트 제외(진격 태세 동안 이동속도가 10.0% 감소)"),
+          new SpeedRule(
+              "두 번째 동료", SpeedDecision.CORE_STATE, "실버호크 소환 가정", "실버호크 소환 중 … 이동속도가 8.0% 증가"),
+          new SpeedRule(
+              "아르데타인의 기술", SpeedDecision.CORE_STATE, "드론 부착 가정", "드론이 부착된 상태에서 자신의 이동속도가 10.0% 증가"),
+          // 상황 조건(스킬·전환 직후 N초, 모드·스탠스)
+          new SpeedRule("달의 소리", SpeedDecision.SITUATIONAL, "달의 소리 효과 가정", "두 사이트 제외(페르소나 전환 시)"),
+          new SpeedRule("피스메이커 - 핸드건", SpeedDecision.SITUATIONAL, "핸드건 스탠스 변경 후 9초 가정", "9초동안"),
+          new SpeedRule("평화주의자", SpeedDecision.SITUATIONAL, "스탠스 변경 후 12초 가정", "12.0초동안"),
+          new SpeedRule("전술 이동", SpeedDecision.SITUATIONAL, "이동기 사용 후 8초 가정", "8.0초 동안"),
+          new SpeedRule("고속 진입", SpeedDecision.SITUATIONAL, "간섭 사용 후 20초 가정", "20.0초 동안"),
+          new SpeedRule("징벌의 서막", SpeedDecision.SITUATIONAL, "징벌 스킬 사용 후 5초 가정", "5.0초간"),
+          new SpeedRule("잔불", SpeedDecision.SITUATIONAL, "화신 해제 후 16초 가정", "16.0초간"),
+          new SpeedRule("폭풍의 사냥꾼", SpeedDecision.SITUATIONAL, "사냥꾼의 발걸음 5초 가정", "5.0초 동안"),
+          new SpeedRule("마나 순환", SpeedDecision.SITUATIONAL, "마나 순환 효과 가정", "마력 방출 종료 시 최대 30초"),
+          new SpeedRule("중력 가속", SpeedDecision.SITUATIONAL, "중력 모드 가정", "중력 가중영역 및 중력 해방 모드일 때"),
+          new SpeedRule("절정 I", SpeedDecision.SITUATIONAL, "스탠스 전환 가정", "난무·집중 스탠스 전환 시"),
+          new SpeedRule(
+              "깨어난 잠재력", SpeedDecision.SITUATIONAL, "여우 둔갑 가정", "여우 둔갑 : 공격 속도가 20.0% 증가"),
+          new SpeedRule("핸드 거너", SpeedDecision.SITUATIONAL, "맹공 6초 가정", "'끊임없는 맹공' 사용 시 6초"),
+          new SpeedRule("황후의 속삭임", SpeedDecision.SITUATIONAL, "루인 적중 후 6초 가정", "6.0초간"),
+          new SpeedRule("정령 폭주", SpeedDecision.SITUATIONAL, "아키르 폭주 가정", "8.0~12.0초간"),
+          // 자신이 아닌 대상의 속도
+          new SpeedRule("넘치는 교감", SpeedDecision.EXCLUDE, null, "소환수(마리린·파우루·엘씨드·슈르디) 문장"),
+          new SpeedRule("야성", SpeedDecision.EXCLUDE, null, "둔갑 스킬의 공격속도"),
+          new SpeedRule("난무 강화", SpeedDecision.EXCLUDE, null, "오의 스킬의 공격속도"),
+          new SpeedRule("막을 수 없는 분노", SpeedDecision.EXCLUDE, null, "블러드러스트의 공격 속도"),
+          new SpeedRule("초비행", SpeedDecision.EXCLUDE, null, "활공의 이동 속도"));
+
+  static final Map<String, SpeedRule> SPEED =
+      SPEED_RULES.stream()
+          .collect(Collectors.toUnmodifiableMap(SpeedRule::node, Function.identity()));
+
+  /**
+   * 선택 트라이포드의 공이속(#198 재대조 10-10 02:10). 표에 없는 트라이포드의 공이속 문구는 더하지 않고 "분류 중"으로 남긴다. 갈림 항목(일로아만 포함)은
+   * PM 총괄 23:24 기준(공식 문구가 상황 조건 → 기본 끔 토글)으로 두고 PM 판단을 기다린다.
+   */
+  public record TripodSpeed(String tripod, SpeedDecision decision, String label, String basis) {}
+
+  public static final List<TripodSpeed> TRIPOD_SPEEDS =
+      List.of(
+          // 건슬링어 기동 타격 "구르기 이후 8.0초 동안 공격 속도와 이동 속도가 19.2% 증가한다." — 두 사이트 포함(한국남자)
+          new TripodSpeed("날렵함", SpeedDecision.INCLUDE, "날렵함 8초 유지 가정", "두 사이트 포함"),
+          // 배틀마스터 붕천퇴 "적에게 콤보 공격 적중 시 4.0초간 공격속도가 19.2% 증가하고 이동속도가 19.2% 증가한다." — 일로아만(리쿠)
+          new TripodSpeed("바람의 축복", SpeedDecision.SITUATIONAL, "바람의 축복 4초 가정", "일로아만 포함, PM 판단 대기"),
+          // 버서커 마운틴 크래쉬 "스킬 사용 시 공격 속도가 4.0초 간 30.0% 증가한다." — 일로아만(TheG0D)
+          new TripodSpeed("속공 준비", SpeedDecision.SITUATIONAL, "속공 준비 4초 가정", "일로아만 포함, PM 판단 대기"));
+
+  static TripodSpeed tripodSpeed(String name) {
+    for (var rule : TRIPOD_SPEEDS) if (rule.tripod().equals(name)) return rule;
+    return null;
+  }
+
+  /** 노드 문구에 없는 직업 자기 버프의 공이속. label은 같은 상태의 치명 버프와 같아 한 토글로 켜고 끈다. */
+  public record ClassSpeedBuff(
+      String label, String className, BigDecimal attack, BigDecimal move) {}
+
+  public static final List<ClassSpeedBuff> CLASS_SPEED_BUFFS =
+      List.of(
+          // 슬레이어 폭주: 두 사이트 공이속 +20(만배 21.86/31.86 → 41.86/51.86, 계산 검증 10-10 02:10)
+          new ClassSpeedBuff("폭주 상태 가정", "슬레이어", new BigDecimal("20"), new BigDecimal("20")));
+
+  static SpeedRule speed(String nodeName) {
+    if (nodeName == null) return null;
+    return SPEED.get(nodeName.replaceFirst("\\s+Lv\\.\\d+$", "").strip());
+  }
 }

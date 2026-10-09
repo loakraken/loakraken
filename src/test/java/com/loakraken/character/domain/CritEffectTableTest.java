@@ -38,8 +38,12 @@ class CritEffectTableTest {
     assertThat(values(result, Axis.CRIT, Category.ASSUMPTION))
         .containsExactly("악마화 상태 가정(혼돈 강화 Lv.3)=30");
     assertThat(result.toggles())
-        .extracting(t -> t.key() + "/" + t.coreState() + "/" + t.on())
-        .containsExactly("혼돈 강화/true/true");
+        .extracting(t -> t.key() + "/" + t.axis() + "/" + t.coreState() + "/" + t.on())
+        .containsExactlyInAnyOrder(
+            "혼돈 강화/CRIT/true/true",
+            // 광기 "공격속도 및 이동속도가 15.0%"는 핵심 상태 공이속 토글(#198)
+            "광기/ATTACK_SPEED/true/true",
+            "광기/MOVE_SPEED/true/true");
     assertThat(result.limitations())
         .anyMatch(line -> line.contains("관통 필살 Lv.3 100%(적룡필살에만)"))
         .noneMatch(line -> line.contains("로펙"));
@@ -90,6 +94,96 @@ class CritEffectTableTest {
         .contains("천둥=6/false");
     assertThat(result.limitations())
         .anyMatch(line -> line.contains("분류 중") && line.contains("질서의 달 코어 : 표에 없는 코어"));
+  }
+
+  /** #198 재대조(계산 검증 10-10 02:10) 만배·츄델·한국남자·스카우터 공식 문구. */
+  @Test
+  void 공이속_직업_버프_공용_코어_트라이포드와_자신의_이동속도를_읽는다() {
+    var slayer = calculate("슬레이어", List.of(), List.of(), null, Assumptions.NONE);
+    // 신속 1.32 + 폭주 20(치명 폭주와 같은 토글)
+    assertThat(slayer.speed().attack().total()).isEqualByComparingTo("21.32");
+    assertThat(slayer.toggles())
+        .extracting(t -> t.key() + "/" + t.axis())
+        .contains("폭주 상태 가정/CRIT", "폭주 상태 가정/ATTACK_SPEED", "폭주 상태 가정/MOVE_SPEED");
+
+    var grid =
+        new CharacterLoadout.ArkGrid(
+            List.of(
+                core(
+                    "혼돈의 해 코어 : 재빠른 공격",
+                    20,
+                    List.of(
+                        new CharacterLoadout.CoreOption(10, "공격 속도가 1.00% 증가한다."),
+                        new CharacterLoadout.CoreOption(
+                            17, "공격 속도가 3.00% 증가하고, 치명타 피해가 5.60% 증가한다.")))),
+            List.of());
+    var core = calculate("블레이드", List.of(), List.of(), grid, Assumptions.NONE);
+    assertThat(values(core, Axis.ATTACK_SPEED, Category.ARK_GRID))
+        .containsExactly("혼돈의 해 코어 : 재빠른 공격 20P=4");
+
+    var nimble =
+        new CharacterLoadout.Skill(
+            "기동 타격",
+            null,
+            12,
+            null,
+            null,
+            null,
+            List.of(
+                new CharacterLoadout.Tripod(
+                    1, 2, "날렵함", null, "구르기 이후 8.0초 동안 공격 속도와 이동 속도가 19.2% 증가한다."),
+                new CharacterLoadout.Tripod(2, 1, "표에 없는 트라이포드", null, "공격 속도가 5.0% 증가한다.")),
+            null,
+            List.of(),
+            CharacterLoadout.AttackType.NONE);
+    var drone =
+        node(
+            "깨달음 1티어 아르데타인의 기술 Lv.3",
+            "배터리 최대량이 20.0% 증가하고 진화된 드론 전투 기술을 적용하여 드론의 이동속도가 증가한다. 또한 드론이 부착된 상태에서 자신의 이동속도가 10.0% 증가한다.");
+    var gunner = calculate("스카우터", List.of(drone), List.of(nimble), null, Assumptions.NONE);
+    // 신속 1.32 + 날렵함 19.2(두 사이트 포함 → 기본 켬)
+    assertThat(gunner.speed().attack().total()).isEqualByComparingTo("20.52");
+    // + 드론 부착 10(자신의 이동속도, 기본 켬)
+    assertThat(gunner.speed().move().total()).isEqualByComparingTo("30.52");
+    assertThat(gunner.toggles())
+        .extracting(t -> t.key() + "/" + t.axis() + "/" + t.on())
+        .contains("날렵함/ATTACK_SPEED/true", "아르데타인의 기술/MOVE_SPEED/true");
+    assertThat(gunner.limitations()).anyMatch(line -> line.contains("기동 타격 - 표에 없는 트라이포드(분류 중)"));
+  }
+
+  /** #203 재대조(10-10): 속공 준비 "공격 속도가 4.0초 간 30.0%"는 토글로 읽고, 고독한 기사 이속 −10은 두 사이트 제외라 기본 끔. */
+  @Test
+  void 지속_시간이_낀_공이속_문구를_읽고_고독한_기사는_기본_끔이다() {
+    var quick =
+        new CharacterLoadout.Skill(
+            "마운틴 크래쉬",
+            null,
+            12,
+            null,
+            null,
+            null,
+            List.of(
+                new CharacterLoadout.Tripod(
+                    1, 2, "속공 준비", null, "스킬 사용 시 공격 속도가 4.0초 간 30.0% 증가한다.")),
+            null,
+            List.of(),
+            CharacterLoadout.AttackType.NONE);
+    var knight = node("깨달음 1티어 고독한 기사 Lv.3", "Z 스킬이 진격 태세 스킬로 변경된다. 진격 태세 동안 이동속도가 10.0% 감소한다.");
+    var result = calculate("워로드", List.of(knight), List.of(quick), null, Assumptions.NONE);
+    assertThat(result.toggles())
+        .extracting(
+            t ->
+                t.key()
+                    + "/"
+                    + t.axis()
+                    + "="
+                    + t.value().stripTrailingZeros().toPlainString()
+                    + "/"
+                    + t.on())
+        .contains("속공 준비/ATTACK_SPEED=30/false", "고독한 기사/MOVE_SPEED=-10/false");
+    // 신속 1.32만
+    assertThat(result.speed().attack().total()).isEqualByComparingTo("1.32");
+    assertThat(result.speed().move().total()).isEqualByComparingTo("1.32");
   }
 
   /** PM-백엔드 10-10 01:46 P1: 켠 상황 조건 토글도 스킬별 치명타 적중률 기본에 들어간다. */

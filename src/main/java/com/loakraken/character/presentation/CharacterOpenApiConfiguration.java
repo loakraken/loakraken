@@ -24,6 +24,7 @@ class CharacterOpenApiConfiguration {
           CharacterPopularResponse.class, document.getComponents().getSchemas());
       ResponseContracts.apply(
           CardCollectionRefreshResponse.class, document.getComponents().getSchemas());
+      ResponseContracts.apply(RosterTitlesResponse.class, document.getComponents().getSchemas());
     };
   }
 }

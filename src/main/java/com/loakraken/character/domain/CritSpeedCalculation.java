@@ -28,6 +28,9 @@ public final class CritSpeedCalculation {
   static final BigDecimal CRIT_CAP = new BigDecimal("100");
   static final BigDecimal SPEED_CAP = new BigDecimal("40");
 
+  /** 기본 치명타 피해 200%. 일로아·로펙 표시값(언새늘 208.40% = 200 + 팔찌 8.40)과 같은 규칙이다(2026-10-09 계산 검증). */
+  static final BigDecimal BASE_CRIT_DAMAGE = new BigDecimal("200");
+
   static final BluntThornRule BLUNT_THORN_REFERENCE =
       new BluntThornRule(2, dec("15"), dec("80"), dec("150"), dec("75"));
   static final SupersonicRule SUPERSONIC_REFERENCE =
@@ -49,6 +52,15 @@ public final class CritSpeedCalculation {
               + NUMBER
               + "%(?!\\s*(?:이상|이하|로|만큼))"
               + DIRECTION);
+
+  /** 치명타 피해. "…의 치명타 피해"(스킬 한정)와 "받는 치명타 피해"(방어)는 group(1)로 걸러 제외한다. */
+  private static final Pattern CRIT_DAMAGE =
+      Pattern.compile(
+          "(의 |받는 )?치명타 피해(?:가|량이|량)?\\s*(?:추가로\\s*)?\\+?\\s*"
+              + NUMBER
+              + "%(?!\\s*(?:이상|이하|로|만큼))"
+              + DIRECTION);
+
   private static final Pattern BOTH_SPEED =
       Pattern.compile("공격 및 이동 ?속도(?:가)?\\s*\\+?\\s*" + NUMBER + "%(?!\\s*만큼)" + DIRECTION);
   private static final Pattern ATTACK_SPEED =
@@ -78,6 +90,7 @@ public final class CritSpeedCalculation {
 
   public enum Axis {
     CRIT,
+    CRIT_DAMAGE,
     ATTACK_SPEED,
     MOVE_SPEED
   }
@@ -186,7 +199,11 @@ public final class CritSpeedCalculation {
       BigDecimal effectiveRate,
       BluntThorn bluntThorn,
       List<CritTarget> targets,
-      BigDecimal critStatPerPercent) {}
+      BigDecimal critStatPerPercent,
+      CritDamage damage) {}
+
+  /** 치명타 피해(%). base 200 + 관측 출처 합(observed). 스킬·조건 한정 문구는 더하지 않는다. */
+  public record CritDamage(BigDecimal base, BigDecimal observed, BigDecimal total) {}
 
   public record SpeedAxis(
       BigDecimal observed, BigDecimal assumed, BigDecimal total, BigDecimal effective) {}
@@ -282,7 +299,11 @@ public final class CritSpeedCalculation {
             scale(totalCrit.min(equippedThorn == null ? CRIT_CAP : thornRule.critCap())),
             thorn,
             targets,
-            CRIT_STAT_PER_PERCENT);
+            CRIT_STAT_PER_PERCENT,
+            new CritDamage(
+                scale(BASE_CRIT_DAMAGE),
+                scale(sum(sources, Kind.OBSERVED, Axis.CRIT_DAMAGE)),
+                scale(BASE_CRIT_DAMAGE.add(sum(sources, Kind.OBSERVED, Axis.CRIT_DAMAGE)))));
 
     var attack = axis(sources, Axis.ATTACK_SPEED);
     var move = axis(sources, Axis.MOVE_SPEED);
@@ -325,6 +346,8 @@ public final class CritSpeedCalculation {
                 supersonicRule));
     limitations.add("아크 그리드 코어·젬, 스킬 룬·트라이포드의 치명타·속도 효과는 공식 원문 문구가 없어 가정 입력으로만 반영합니다.");
     limitations.add("특정 스킬·조건 한정 효과(예: '…의 치명타 적중률', 백어택 한정)는 자동 합산하지 않습니다.");
+    limitations.add(
+        "치명타 피해는 기본 200%에 장비·팔찌·각인·아크 패시브·카드의 일반 문구만 더합니다. 스킬 한정('방향성 공격 스킬의 치명타 피해' 등)과 받는 치명타 피해는 제외합니다.");
     return new Result(RULE_VERSION, List.copyOf(sources), crit, speed, List.copyOf(limitations));
   }
 
@@ -509,6 +532,18 @@ public final class CritSpeedCalculation {
               Axis.CRIT,
               name,
               signed(crit.group(2), crit.group(3)),
+              text));
+    }
+    Matcher damage = CRIT_DAMAGE.matcher(text);
+    while (damage.find()) {
+      if (damage.group(1) != null) continue;
+      sources.add(
+          new Source(
+              Kind.OBSERVED,
+              category,
+              Axis.CRIT_DAMAGE,
+              name,
+              signed(damage.group(2), damage.group(3)),
               text));
     }
     Matcher both = BOTH_SPEED.matcher(text);

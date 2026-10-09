@@ -10,6 +10,7 @@ import com.loakraken.character.application.CharacterCollectorService.Task;
 import com.loakraken.character.domain.CharacterLoadout;
 import com.loakraken.character.domain.CharacterProfile;
 import com.loakraken.character.domain.CharacterSibling;
+import com.loakraken.common.lostark.LeaderLease;
 import com.loakraken.common.lostark.LostArkProperties;
 import com.loakraken.common.lostark.LostArkRequestGate;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -31,12 +32,16 @@ class CharacterCollectorServiceTest {
   private final CharacterHistoryService history = mock(CharacterHistoryService.class);
   private final CharacterCardService cards = mock(CharacterCardService.class);
   private final LostArkRequestGate gate = mock(LostArkRequestGate.class);
+  private final LeaderLease lease = mock(LeaderLease.class);
   private final SimpleMeterRegistry registry = new SimpleMeterRegistry();
   private final Target target = new Target("모험가", "루페온");
 
   @BeforeEach
   void 기본() {
     when(gate.backgroundAvailable(anyInt())).thenReturn(true);
+    when(lease.hold(any(), any())).thenReturn(true);
+    when(gate.withReserve(anyInt(), any()))
+        .thenAnswer(invocation -> invocation.<java.util.function.Supplier<?>>getArgument(1).get());
   }
 
   @Test
@@ -110,6 +115,20 @@ class CharacterCollectorServiceTest {
   }
 
   @Test
+  void 리더_임대를_얻지_못하면_돌지_않는다() {
+    when(lease.hold(any(), any())).thenReturn(false);
+    assertThat(service("key", true).tick()).isEqualTo(Task.NONE);
+    verifyNoInteractions(details, collection);
+    assertThat(
+            registry
+                .get("loakraken.stats.collector")
+                .tag("outcome", "not_leader")
+                .counter()
+                .count())
+        .isEqualTo(1);
+  }
+
+  @Test
   void 할_일이_없으면_호출하지_않는다() {
     when(collection.nextProfileDue(any(), any())).thenReturn(Optional.empty());
     when(collection.nextRosterDue(any())).thenReturn(Optional.empty());
@@ -136,6 +155,6 @@ class CharacterCollectorServiceTest {
             Duration.ofDays(7),
             Duration.ofDays(7));
     return new CharacterCollectorService(
-        details, collection, history, cards, policy, gate, lostArk, registry, clock);
+        details, collection, history, cards, policy, gate, lease, lostArk, registry, clock);
   }
 }

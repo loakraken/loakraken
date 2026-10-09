@@ -11,7 +11,8 @@ enum CharacterSuccessCode implements SuccessCode {
   CHARACTER_VIEWS_SUCCESS,
   CHARACTER_CARD_COLLECTION_SUCCESS,
   CHARACTER_POPULAR_SUCCESS,
-  CHARACTER_CARD_COLLECTION_REFRESH_SUCCESS;
+  CHARACTER_CARD_COLLECTION_REFRESH_SUCCESS,
+  CHARACTER_TITLES_SUCCESS;
 
   public HttpStatus httpStatus() {
     return HttpStatus.OK;
@@ -30,6 +31,7 @@ enum CharacterSuccessCode implements SuccessCode {
       case CHARACTER_CARD_COLLECTION_SUCCESS -> "원정대 카드 기록 조회에 성공했습니다.";
       case CHARACTER_POPULAR_SUCCESS -> "인기 검색 캐릭터 조회에 성공했습니다.";
       case CHARACTER_CARD_COLLECTION_REFRESH_SUCCESS -> "원정대 카드 기록을 채웠습니다.";
+      case CHARACTER_TITLES_SUCCESS -> "원정대 칭호 조회에 성공했습니다.";
       default -> "캐릭터 조회에 성공했습니다.";
     };
   }

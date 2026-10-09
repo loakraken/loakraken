@@ -28,7 +28,11 @@ services:
     environment:
       SITE_ADDRESS: "${SITE_ADDRESS:?SITE_ADDRESS가 필요합니다(예 loakraken.gg)}"
     volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # 운영(Cloudflare 프록시)은 CADDYFILE=Caddyfile.cloudflare. 기본 Caddyfile은 로컬 점검·프록시 없는 구성용.
+      - ./${CADDYFILE:-Caddyfile}:/etc/caddy/Caddyfile:ro
+      - ./cloudflare/trusted-proxies.caddy:/etc/caddy/cloudflare-ips.caddy:ro
+      # Cloudflare Origin CA 인증서(origin.pem·origin.key). Cloudflare 모드에서만 쓴다.
+      - ${SECRETS_DIR:?SECRETS_DIR가 필요합니다}/tls:/etc/caddy/tls:ro
       - edge-data:/data
       - edge-config:/config
     depends_on:

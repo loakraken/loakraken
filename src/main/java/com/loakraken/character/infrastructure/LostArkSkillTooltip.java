@@ -12,15 +12,24 @@ final class LostArkSkillTooltip {
   private static final JsonMapper MAPPER = JsonMapper.builder().build();
   private static final Pattern PART_BREAK = Pattern.compile("부위 파괴 : 레벨 (\\d{1,2})");
   private static final Pattern COUNTER = Pattern.compile("카운터 : 가능");
+  private static final Pattern ATTACK_TYPE = Pattern.compile("공격 타입\s*:\s*(백\s*어택|헤드\s*어택)");
+  private static final Pattern ATTACK_TYPE_LABEL = Pattern.compile("공격 타입\s*:");
   private static final Pattern GEM_DAMAGE = Pattern.compile("피해 [0-9.]+% 증가$");
   private static final Pattern GEM_COOLDOWN = Pattern.compile("재사용 대기시간 [0-9.]+% 감소$");
   private static final String GEM_TITLE = "보석 효과";
 
   private LostArkSkillTooltip() {}
 
+  /**
+   * attackType은 Tooltip을 해석했는데 공격 타입 줄이 없으면 NONE이다. Tooltip을 해석할 수 없거나 "공격 타입" 줄은 있는데 값을 읽지 못하면
+   * null이다(추정 금지).
+   */
   record Parsed(
-      Integer partBreakLevel, Boolean counter, List<CharacterLoadout.SkillGemEffect> gemEffects) {
-    static final Parsed UNKNOWN = new Parsed(null, null, List.of());
+      Integer partBreakLevel,
+      Boolean counter,
+      List<CharacterLoadout.SkillGemEffect> gemEffects,
+      CharacterLoadout.AttackType attackType) {
+    static final Parsed UNKNOWN = new Parsed(null, null, List.of(), null);
   }
 
   static Parsed parse(String tooltip) {
@@ -34,6 +43,8 @@ final class LostArkSkillTooltip {
     if (root == null || !root.isObject()) return Parsed.UNKNOWN;
     Integer partBreak = null;
     boolean counter = false;
+    CharacterLoadout.AttackType attackType = null;
+    boolean attackLabel = false;
     var gems = new ArrayList<CharacterLoadout.SkillGemEffect>();
     for (var element : root.values()) {
       var value = element.path("value");
@@ -48,9 +59,17 @@ final class LostArkSkillTooltip {
         var matcher = PART_BREAK.matcher(plain);
         if (partBreak == null && matcher.find()) partBreak = Integer.parseInt(matcher.group(1));
         if (COUNTER.matcher(plain).find()) counter = true;
+        if (ATTACK_TYPE_LABEL.matcher(plain).find()) attackLabel = true;
+        var attack = ATTACK_TYPE.matcher(plain);
+        if (attackType == null && attack.find())
+          attackType =
+              attack.group(1).startsWith("백")
+                  ? CharacterLoadout.AttackType.BACK_ATTACK
+                  : CharacterLoadout.AttackType.HEAD_ATTACK;
       }
     }
-    return new Parsed(partBreak, counter, gems);
+    if (attackType == null && !attackLabel) attackType = CharacterLoadout.AttackType.NONE;
+    return new Parsed(partBreak, counter, gems, attackType);
   }
 
   /** 아크 패시브 노드 Tooltip의 MultiTextBox 효과 문구를 이어 붙인다. 없거나 해석할 수 없으면 null. */

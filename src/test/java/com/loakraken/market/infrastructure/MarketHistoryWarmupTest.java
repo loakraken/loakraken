@@ -2,11 +2,15 @@ package com.loakraken.market.infrastructure;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.*;
 
 import com.loakraken.common.api.BusinessException;
+import com.loakraken.common.lostark.LeaderLease;
 import com.loakraken.common.lostark.LostArkErrorCode;
 import com.loakraken.common.lostark.LostArkProperties;
+import com.loakraken.common.lostark.LostArkRequestGate;
 import com.loakraken.market.application.MarketItemHistoryResult;
 import com.loakraken.market.application.MarketQueryService;
 import com.loakraken.market.domain.MarketItemHistory;
@@ -20,6 +24,15 @@ import org.junit.jupiter.api.Test;
 
 class MarketHistoryWarmupTest {
   private final MarketQueryService markets = mock(MarketQueryService.class);
+  private final LostArkRequestGate gate = mock(LostArkRequestGate.class);
+  private final LeaderLease lease = mock(LeaderLease.class);
+
+  {
+    when(lease.hold(any(), any())).thenReturn(true);
+    when(gate.withReserve(anyInt(), any()))
+        .thenAnswer(invocation -> invocation.<java.util.function.Supplier<?>>getArgument(1).get());
+  }
+
   private final SimpleMeterRegistry registry = new SimpleMeterRegistry();
 
   @Test
@@ -87,7 +100,9 @@ class MarketHistoryWarmupTest {
         markets,
         new MarketWarmupProperties(true, Duration.ofMinutes(9), Duration.ZERO, ids),
         lostArk,
-        registry);
+        registry,
+        gate,
+        lease);
   }
 
   private double count(String outcome) {

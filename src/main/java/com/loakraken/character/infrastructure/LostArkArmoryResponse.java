@@ -349,7 +349,8 @@ record LostArkArmoryResponse(
                   .map(tripod -> tripod.toDomain())
                   .toList(),
           rune == null ? null : rune.toDomain(),
-          parsed.gemEffects());
+          parsed.gemEffects(),
+          parsed.attackType());
     }
   }
 

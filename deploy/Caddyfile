@@ -3,7 +3,6 @@
 #
 # 바깥에서 들어온 X-Forwarded-For는 믿지 않는다(trusted_proxies 미설정).
 # Caddy가 실제 접속 주소로 X-Forwarded-For를 설정하고, Next가 이 값을 백엔드로 그대로 넘긴다.
-
 {
 	admin off
 }

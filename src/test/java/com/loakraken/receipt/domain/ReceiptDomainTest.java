@@ -102,6 +102,15 @@ class ReceiptDomainTest {
     var on = EquipmentReceipt.calculate(RULES, items, freeBook, true).parts().getFirst();
     assertThat(on.stages()).anyMatch(EquipmentReceipt.StageCost::book);
     assertThat(on.gold()).isLessThan(off.gold());
+    // 책을 빼도(업화) 숨결 사용·미사용 중 싼 쪽은 그대로 고른다.
+    var freeBreath = prices(new BigDecimal("100"));
+    names.stream()
+        .filter(name -> name.contains("숨결"))
+        .forEach(name -> freeBreath.put(name, BigDecimal.ZERO));
+    var breath = EquipmentReceipt.calculate(RULES, items, freeBreath).parts().getFirst();
+    assertThat(breath.stages())
+        .allMatch(EquipmentReceipt.StageCost::breath)
+        .noneMatch(EquipmentReceipt.StageCost::book);
   }
 
   @Test

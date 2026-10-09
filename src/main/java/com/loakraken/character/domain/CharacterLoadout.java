@@ -99,7 +99,12 @@ public record CharacterLoadout(
     NONE
   }
 
-  public record Tripod(Integer tier, Integer slot, String name, String icon) {}
+  /** effect: 공식 트라이포드 Tooltip 효과 문구(태그 제거). 갱신 전 캐시나 해석할 수 없으면 null(#168). */
+  public record Tripod(Integer tier, Integer slot, String name, String icon, String effect) {
+    public Tripod(Integer tier, Integer slot, String name, String icon) {
+      this(tier, slot, name, icon, null);
+    }
+  }
 
   public record Rune(String name, String icon, String grade) {}
 

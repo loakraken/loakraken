@@ -125,6 +125,22 @@ Tooltip이 없을 때(이전 캐시 등)는 스탯을 계수로 환산하고, �
   - 끝값은 max(현재, 최적)보다 200~400 크다. 최대 4,000.
 - 계수: `speed.swiftnessPerPercent`(58.22), `crit.critStatPerPercent`(27.944)
 
+## 스킬별 치명타 적중률 (skills, #168)
+
+계산 검증팀 규칙(2026-10-09, 클로아 대조 17/17: 언새늘 8·리퍼 표본 9)이다.
+
+- `total = base + backAttack + tripod`
+  - base: `crit.observedRate`(관측 출처 합, 가정 입력은 더하지 않는다)
+  - backAttack: 스킬 공격 타입이 BACK_ATTACK이면 10, HEAD_ATTACK·NONE이면 0
+  - tripod: 선택 트라이포드 공식 Tooltip의 "치명타 적중률이 X% 증가" 합. 예: 리퍼 라스트 그래피티 "유언" +20, 사일런트 스매셔 "지면 강타" +20
+- `effective`: total에 상한(100, 뭉툭한 가시 장착 시 그 상한 80) 적용
+- 조건부 트라이포드는 합산하지 않고 `conditional[]`에 원문과 함께 둔다.
+  - 같은 문장 앞쪽에 "…시"(오버차지 시, 퍼펙트 존 성공 시), "…상태에서", "…일 때"가 있는 경우
+  - "폭발의 치명타 적중률"처럼 "…의 치명타 적중률"(스킬 일부 한정)
+- 레벨 2 이상 스킬만 이름순으로 준다.
+- 공격 타입을 모르면 backAttack·total·effective가 null이다. 갱신 전 캐시(최대 5분)라 트라이포드 문구가 없으면 tripod·total·effective가 null이고 limitations에 한 줄 남긴다(추정 금지).
+- 공식 추가 호출은 없다. armory `ArmorySkills[].Tripods[].Tooltip`을 같은 응답에서 읽는다.
+
 ## 응답 요약
 
 - `sources[]{kind, category, axis, name, value, text}`

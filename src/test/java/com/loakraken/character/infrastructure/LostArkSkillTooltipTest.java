@@ -22,6 +22,7 @@ class LostArkSkillTooltipTest {
             """);
     assertThat(parsed.partBreakLevel()).isEqualTo(1);
     assertThat(parsed.counter()).isFalse();
+    assertThat(parsed.attackType()).isEqualTo(CharacterLoadout.AttackType.BACK);
     assertThat(parsed.gemEffects())
         .containsExactly(
             new CharacterLoadout.SkillGemEffect(
@@ -41,6 +42,7 @@ class LostArkSkillTooltipTest {
             """);
     assertThat(parsed.counter()).isTrue();
     assertThat(parsed.partBreakLevel()).isNull();
+    assertThat(parsed.attackType()).isEqualTo(CharacterLoadout.AttackType.HEAD);
     assertThat(parsed.gemEffects()).isEmpty();
   }
 
@@ -52,5 +54,16 @@ class LostArkSkillTooltipTest {
     assertThat(parsed.counter()).isNull();
     assertThat(parsed.gemEffects()).isEmpty();
     assertThat(LostArkSkillTooltip.parse(null).counter()).isNull();
+    assertThat(LostArkSkillTooltip.parse(null).attackType()).isNull();
+    assertThat(
+            LostArkSkillTooltip.parse(
+                    "{\"Element_005\":{\"type\":\"SingleTextBox\",\"value\":\"무력화 : 하\"}}")
+                .attackType())
+        .isEqualTo(CharacterLoadout.AttackType.NONE);
+    assertThat(
+            LostArkSkillTooltip.parse(
+                    "{\"Element_005\":{\"type\":\"SingleTextBox\",\"value\":\"공격 타입 : 백 어택\"}}")
+                .attackType())
+        .isEqualTo(CharacterLoadout.AttackType.BACK);
   }
 }

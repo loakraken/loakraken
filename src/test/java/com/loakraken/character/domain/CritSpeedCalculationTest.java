@@ -223,6 +223,51 @@ class CritSpeedCalculationTest {
     assertThat(result.limitations()).anyMatch(text -> text.contains("치명 Tooltip이 없어"));
   }
 
+  @Test
+  void 치명타_피해는_기본_200에_일반_문구만_더하고_스킬_한정과_받는_피해는_뺀다() {
+    // 계산 검증(2026-10-09): 언새늘 208.40% = 기본 200 + 팔찌 8.40, 일격의 방향성 공격 스킬 한정 +32%는 제외(일로아·로펙과 같음)
+    var bracelet =
+        new CharacterLoadout.Equipment(
+            "팔찌",
+            "팔찌",
+            null,
+            "고대",
+            new CharacterLoadout.EquipmentDetail(
+                null,
+                null,
+                null,
+                4,
+                null,
+                List.of(),
+                List.of(),
+                List.of(),
+                List.of(
+                    new CharacterLoadout.BraceletEffect("치명타 피해 +8.40%", null),
+                    new CharacterLoadout.BraceletEffect("적에게 받는 치명타 피해가 10.00% 감소한다.", null))));
+    var loadout =
+        new CharacterLoadout(
+            List.of(bracelet),
+            null,
+            null,
+            null,
+            new CharacterLoadout.ArkPassive(
+                "아크 패시브",
+                true,
+                List.of(),
+                List.of(
+                    node("깨달음 2티어 일격 Lv.2", "치명타 적중률이 20.00% 증가하며, 방향성 공격 스킬의 치명타 피해 +32.00%"))),
+            null);
+    var result = CritSpeedCalculation.calculate(profile("576", "77"), loadout, Assumptions.NONE);
+
+    assertThat(result.crit().damage().base()).isEqualByComparingTo("200");
+    assertThat(result.crit().damage().observed()).isEqualByComparingTo("8.40");
+    assertThat(result.crit().damage().total()).isEqualByComparingTo("208.40");
+    assertThat(result.sources())
+        .filteredOn(source -> source.axis() == CritSpeedCalculation.Axis.CRIT_DAMAGE)
+        .hasSize(1);
+    assertThat(result.limitations()).anyMatch(text -> text.contains("치명타 피해는 기본 200%"));
+  }
+
   private static CharacterProfile profile(String crit, String swiftness) {
     return new CharacterProfile(
         "언새늘",

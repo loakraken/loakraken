@@ -313,7 +313,13 @@ public record CharacterLoadoutResponse(
           Boolean counter,
       @Schema(description = "선택된 트라이포드만. 공식 응답에 트라이포드 레벨은 없습니다.") List<TripodResponse> tripods,
       @NullableResponse RuneResponse rune,
-      @Schema(description = "스킬 Tooltip의 보석 효과 줄") List<SkillGemEffectResponse> gemEffects) {
+      @Schema(description = "스킬 Tooltip의 보석 효과 줄") List<SkillGemEffectResponse> gemEffects,
+      @Schema(
+              description =
+                  "Tooltip의 \"공격 타입\". BACK(백 어택)·HEAD(헤드 어택)·NONE(없음). Tooltip을 해석할 수 없거나 갱신 전 캐시(최대 5분)면 null. 스킬별 치명타 적중률은 crit.observedRate + BACK이면 10%p다",
+              allowableValues = {"BACK", "HEAD", "NONE"})
+          @NullableResponse
+          String attackType) {
     static SkillResponse from(CharacterLoadout.Skill value) {
       return new SkillResponse(
           value.name(),
@@ -333,7 +339,8 @@ public record CharacterLoadoutResponse(
               : new RuneResponse(value.rune().name(), value.rune().icon(), value.rune().grade()),
           value.gemEffects().stream()
               .map(effect -> new SkillGemEffectResponse(effect.text(), effect.kind()))
-              .toList());
+              .toList(),
+          value.attackType() == null ? null : value.attackType().name());
     }
   }
 

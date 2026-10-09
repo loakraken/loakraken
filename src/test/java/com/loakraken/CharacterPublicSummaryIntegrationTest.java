@@ -131,6 +131,21 @@ class CharacterPublicSummaryIntegrationTest {
     assertThat(data.path("serverName").isNull()).isTrue();
     assertThat(data.path("itemLevel").isNull()).isTrue();
     assertThat(data.path("observedAt").isNull()).isTrue();
+    assertThat(data.path("dataSource").isNull()).isTrue();
+  }
+
+  @Test
+  void 기록이_없는_공개_제외_이름도_404가_아니라_같은_숨김_응답이다() throws Exception {
+    jdbc.sql(
+            "INSERT INTO public_exclusion (character_name, server_name, reason_code) VALUES ('공개요약제외기록없음', '다른서버', 'USER_REQUEST')")
+        .update();
+    var response = get("공개요약제외기록없음");
+    assertThat(response.statusCode()).isEqualTo(200);
+    var data = mapper.readTree(response.body()).path("data");
+    assertThat(data.path("indexable").asBoolean()).isFalse();
+    assertThat(data.path("dataSource").isNull()).isTrue();
+    assertThat(data.path("serverName").isNull()).isTrue();
+    verifyNoInteractions(detailsPort);
   }
 
   private UUID character(String name, OffsetDateTime at) {

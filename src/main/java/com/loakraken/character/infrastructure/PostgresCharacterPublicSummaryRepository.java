@@ -45,6 +45,15 @@ class PostgresCharacterPublicSummaryRepository implements CharacterPublicSummary
   }
 
   @Override
+  public boolean excludedAnyServer(String characterName) {
+    return Boolean.TRUE.equals(
+        jdbc.sql("SELECT EXISTS (SELECT 1 FROM public_exclusion WHERE character_name = :name)")
+            .param("name", characterName)
+            .query(Boolean.class)
+            .single());
+  }
+
+  @Override
   public boolean excluded(String characterName, String serverName) {
     return Boolean.TRUE.equals(
         jdbc.sql(

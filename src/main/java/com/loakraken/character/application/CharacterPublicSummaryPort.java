@@ -21,4 +21,7 @@ public interface CharacterPublicSummaryPort {
 
   /** 공개 제외 목록에 있는가(서버 생략 제외는 모든 서버). */
   boolean excluded(String characterName, String serverName);
+
+  /** 서버와 관계없이 이 이름이 공개 제외 목록에 있는가(기록이 없을 때 쓴다). */
+  boolean excludedAnyServer(String characterName);
 }

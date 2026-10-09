@@ -3,6 +3,7 @@ package com.loakraken.receipt.domain;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.loakraken.character.domain.CharacterLoadout;
+import com.loakraken.refining.domain.GrowthCosts;
 import com.loakraken.refining.domain.RefiningRules;
 import java.math.BigDecimal;
 import java.util.HashMap;
@@ -111,6 +112,29 @@ class ReceiptDomainTest {
     assertThat(breath.stages())
         .allMatch(EquipmentReceipt.StageCost::breath)
         .noneMatch(EquipmentReceipt.StageCost::book);
+  }
+
+  /** #200: 성장 파편을 더하고, 사이트가 갈린 전율 21단계는 빼고 부위에 미확정 사유를 남긴다. */
+  @Test
+  void 성장_비용을_더하고_전율_21단계는_미확정으로_남긴다() throws Exception {
+    GrowthCosts growth;
+    try (var input =
+        ReceiptDomainTest.class.getResourceAsStream("/refining/t4-growth-costs.json")) {
+      growth =
+          tools.jackson.databind.json.JsonMapper.builder()
+              .build()
+              .readValue(input, GrowthCosts.class);
+    }
+    var items = List.of(item("무기", "+22 운명의 전율 검", 22, 4));
+    var prices = prices(BigDecimal.ONE);
+    var without = EquipmentReceipt.calculate(RULES, items, prices, false, null);
+    var with = EquipmentReceipt.calculate(RULES, items, prices, false, growth);
+    // 전율 무기 성장 파편 12~20·22단계(21 제외): 57+63+70+76+83+90+98+105+112+128 = 882,000, 파편 1개 1G
+    assertThat(with.gold().subtract(without.gold())).isEqualByComparingTo("882000");
+    assertThat(with.excluded())
+        .filteredOn(e -> e.reason() == EquipmentReceipt.Reason.GROWTH_COST_UNCONFIRMED)
+        .extracting(EquipmentReceipt.Excluded::message)
+        .containsExactly("목표 21단계 성장 비용은 로아와(120,000 파편)와 일로아(0)가 갈려 게임 확인 전까지 빼고 계산했습니다.");
   }
 
   @Test

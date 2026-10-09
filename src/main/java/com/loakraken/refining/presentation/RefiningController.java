@@ -56,6 +56,11 @@ class RefiningController {
     return ApiResponse.of(
         RefiningSuccessCode.REFINING_PLAN_SUCCESS,
         RefiningPlanResponse.from(
-            service.rules(), request.grade(), request.equipmentType(), request, plan));
+            service.rules(),
+            service.growthCosts(),
+            request.grade(),
+            request.equipmentType(),
+            request,
+            plan));
   }
 }

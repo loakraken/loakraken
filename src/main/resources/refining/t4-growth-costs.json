@@ -1,0 +1,389 @@
+{
+ "ruleVersion": "t4-growth-v1",
+ "source": {
+  "name": "로아와 통합 재련 계산기 단계별 실측(성장 비용 켬·끔 차) + 일로아 재련 계산기 구간 합(장비 성장 비용 켬·끔 차)",
+  "crossCheckedWith": "운명의 파편: 두 사이트 구간 합 일치(전율 21단계 제외). 실링: 로아와 값만(일로아는 성장 비용에 실링을 넣지 않음)",
+  "verifiedOn": "2026-10-10"
+ },
+ "research": {
+  "grade": "UPHWA",
+  "fromTargetStage": 11,
+  "toTargetStage": 14,
+  "rateBp": 8000,
+  "text": "티어 4 Lv.1590 장비 11~14단계 재련 필요 경험치 20% 감소"
+ },
+ "tracks": [
+  {
+   "grade": "UPHWA",
+   "equipmentType": "ARMOR",
+   "stages": [
+    {
+     "targetStage": 11,
+     "shard": 12000,
+     "silver": 300000,
+     "confirmed": true
+    },
+    {
+     "targetStage": 12,
+     "shard": 13000,
+     "silver": 325000,
+     "confirmed": true
+    },
+    {
+     "targetStage": 13,
+     "shard": 19000,
+     "silver": 475000,
+     "confirmed": true
+    },
+    {
+     "targetStage": 14,
+     "shard": 22000,
+     "silver": 550000,
+     "confirmed": true
+    },
+    {
+     "targetStage": 15,
+     "shard": 25000,
+     "silver": 625000,
+     "confirmed": true
+    },
+    {
+     "targetStage": 16,
+     "shard": 29000,
+     "silver": 725000,
+     "confirmed": true
+    },
+    {
+     "targetStage": 17,
+     "shard": 39000,
+     "silver": 975000,
+     "confirmed": true
+    },
+    {
+     "targetStage": 18,
+     "shard": 45000,
+     "silver": 1125000,
+     "confirmed": true
+    },
+    {
+     "targetStage": 19,
+     "shard": 51000,
+     "silver": 1173000,
+     "confirmed": true
+    },
+    {
+     "targetStage": 20,
+     "shard": 63000,
+     "silver": 1449000,
+     "confirmed": true
+    },
+    {
+     "targetStage": 21,
+     "shard": 72000,
+     "silver": 1440000,
+     "confirmed": true
+    },
+    {
+     "targetStage": 22,
+     "shard": 81000,
+     "silver": 1620000,
+     "confirmed": true
+    },
+    {
+     "targetStage": 23,
+     "shard": 91000,
+     "silver": 1820000,
+     "confirmed": true
+    },
+    {
+     "targetStage": 24,
+     "shard": 102000,
+     "silver": 2040000,
+     "confirmed": true
+    },
+    {
+     "targetStage": 25,
+     "shard": 114000,
+     "silver": 2280000,
+     "confirmed": true
+    }
+   ]
+  },
+  {
+   "grade": "UPHWA",
+   "equipmentType": "WEAPON",
+   "stages": [
+    {
+     "targetStage": 11,
+     "shard": 21000,
+     "silver": 525000,
+     "confirmed": true
+    },
+    {
+     "targetStage": 12,
+     "shard": 23000,
+     "silver": 575000,
+     "confirmed": true
+    },
+    {
+     "targetStage": 13,
+     "shard": 33000,
+     "silver": 825000,
+     "confirmed": true
+    },
+    {
+     "targetStage": 14,
+     "shard": 38000,
+     "silver": 950000,
+     "confirmed": true
+    },
+    {
+     "targetStage": 15,
+     "shard": 43000,
+     "silver": 1075000,
+     "confirmed": true
+    },
+    {
+     "targetStage": 16,
+     "shard": 49000,
+     "silver": 1225000,
+     "confirmed": true
+    },
+    {
+     "targetStage": 17,
+     "shard": 66000,
+     "silver": 1650000,
+     "confirmed": true
+    },
+    {
+     "targetStage": 18,
+     "shard": 75000,
+     "silver": 1875000,
+     "confirmed": true
+    },
+    {
+     "targetStage": 19,
+     "shard": 85000,
+     "silver": 1955000,
+     "confirmed": true
+    },
+    {
+     "targetStage": 20,
+     "shard": 106000,
+     "silver": 2438000,
+     "confirmed": true
+    },
+    {
+     "targetStage": 21,
+     "shard": 120000,
+     "silver": 2400000,
+     "confirmed": true
+    },
+    {
+     "targetStage": 22,
+     "shard": 135000,
+     "silver": 2700000,
+     "confirmed": true
+    },
+    {
+     "targetStage": 23,
+     "shard": 152000,
+     "silver": 3040000,
+     "confirmed": true
+    },
+    {
+     "targetStage": 24,
+     "shard": 170000,
+     "silver": 3400000,
+     "confirmed": true
+    },
+    {
+     "targetStage": 25,
+     "shard": 190000,
+     "silver": 3800000,
+     "confirmed": true
+    }
+   ]
+  },
+  {
+   "grade": "JEONYUL",
+   "equipmentType": "ARMOR",
+   "stages": [
+    {
+     "targetStage": 12,
+     "shard": 34000,
+     "silver": 340000,
+     "confirmed": true
+    },
+    {
+     "targetStage": 13,
+     "shard": 38000,
+     "silver": 380000,
+     "confirmed": true
+    },
+    {
+     "targetStage": 14,
+     "shard": 41000,
+     "silver": 410000,
+     "confirmed": true
+    },
+    {
+     "targetStage": 15,
+     "shard": 46000,
+     "silver": 460000,
+     "confirmed": true
+    },
+    {
+     "targetStage": 16,
+     "shard": 49000,
+     "silver": 490000,
+     "confirmed": true
+    },
+    {
+     "targetStage": 17,
+     "shard": 54000,
+     "silver": 540000,
+     "confirmed": true
+    },
+    {
+     "targetStage": 18,
+     "shard": 58000,
+     "silver": 580000,
+     "confirmed": true
+    },
+    {
+     "targetStage": 19,
+     "shard": 63000,
+     "silver": 630000,
+     "confirmed": true
+    },
+    {
+     "targetStage": 20,
+     "shard": 67000,
+     "silver": 670000,
+     "confirmed": true
+    },
+    {
+     "targetStage": 21,
+     "shard": 72000,
+     "silver": 720000,
+     "confirmed": false
+    },
+    {
+     "targetStage": 22,
+     "shard": 77000,
+     "silver": 770000,
+     "confirmed": true
+    },
+    {
+     "targetStage": 23,
+     "shard": 81000,
+     "silver": 810000,
+     "confirmed": true
+    },
+    {
+     "targetStage": 24,
+     "shard": 86000,
+     "silver": 860000,
+     "confirmed": true
+    },
+    {
+     "targetStage": 25,
+     "shard": 91000,
+     "silver": 910000,
+     "confirmed": true
+    }
+   ]
+  },
+  {
+   "grade": "JEONYUL",
+   "equipmentType": "WEAPON",
+   "stages": [
+    {
+     "targetStage": 12,
+     "shard": 57000,
+     "silver": 570000,
+     "confirmed": true
+    },
+    {
+     "targetStage": 13,
+     "shard": 63000,
+     "silver": 630000,
+     "confirmed": true
+    },
+    {
+     "targetStage": 14,
+     "shard": 70000,
+     "silver": 700000,
+     "confirmed": true
+    },
+    {
+     "targetStage": 15,
+     "shard": 76000,
+     "silver": 760000,
+     "confirmed": true
+    },
+    {
+     "targetStage": 16,
+     "shard": 83000,
+     "silver": 830000,
+     "confirmed": true
+    },
+    {
+     "targetStage": 17,
+     "shard": 90000,
+     "silver": 900000,
+     "confirmed": true
+    },
+    {
+     "targetStage": 18,
+     "shard": 98000,
+     "silver": 980000,
+     "confirmed": true
+    },
+    {
+     "targetStage": 19,
+     "shard": 105000,
+     "silver": 1050000,
+     "confirmed": true
+    },
+    {
+     "targetStage": 20,
+     "shard": 112000,
+     "silver": 1120000,
+     "confirmed": true
+    },
+    {
+     "targetStage": 21,
+     "shard": 120000,
+     "silver": 1200000,
+     "confirmed": false
+    },
+    {
+     "targetStage": 22,
+     "shard": 128000,
+     "silver": 1280000,
+     "confirmed": true
+    },
+    {
+     "targetStage": 23,
+     "shard": 136000,
+     "silver": 1360000,
+     "confirmed": true
+    },
+    {
+     "targetStage": 24,
+     "shard": 144000,
+     "silver": 1440000,
+     "confirmed": true
+    },
+    {
+     "targetStage": 25,
+     "shard": 152000,
+     "silver": 1520000,
+     "confirmed": true
+    }
+   ]
+  }
+ ]
+}

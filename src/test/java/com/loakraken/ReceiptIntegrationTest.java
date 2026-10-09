@@ -105,7 +105,7 @@ class ReceiptIntegrationTest {
     var first = get("/api/v1/characters/receipt?characterName=" + encode(MAIN));
     assertThat(first.statusCode()).as(first.body()).isEqualTo(200);
     var data = mapper.readTree(first.body()).path("data");
-    assertThat(data.path("ruleVersion").asText()).isEqualTo("receipt-v1");
+    assertThat(data.path("ruleVersion").asText()).isEqualTo("receipt-v2");
     assertThat(data.path("refiningRuleVersion").asText()).isEqualTo("t4-refining-v1");
     assertThat(data.at("/coverage/rosterCharacters").asInt()).isEqualTo(10);
     assertThat(data.at("/coverage/ready").asInt()).isEqualTo(8);

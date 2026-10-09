@@ -91,7 +91,7 @@ fi
 log "새 릴리스: api=${api_digest##*@} web=${web_digest##*@}"
 
 # 1. 배포 번들 풀기. 실행 중인 스크립트가 깨지지 않게 새 디렉터리를 만든 뒤 이름만 바꾼다.
-bundle_files=(compose.prod.yaml Caddyfile Caddyfile.cloudflare cloudflare backup pull)
+bundle_files=(compose.prod.yaml Caddyfile Caddyfile.cloudflare cloudflare backup pull monitor)
 rm -rf .bundle.new .bundle.prev
 mkdir .bundle.new .bundle.prev
 cid="$(docker create "$bundle_digest" true)"

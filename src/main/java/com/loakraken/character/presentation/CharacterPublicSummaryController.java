@@ -71,7 +71,10 @@ public class CharacterPublicSummaryController {
       @Schema(description = "이 값을 확인한 시각. STORED_OBSERVATION이면 화면에 '마지막 확인 시각'으로 보인다")
           @NullableResponse
           Instant observedAt,
-      @Schema(description = "LIVE_CACHE: 최근 5분 안 공식 조회 캐시, STORED_OBSERVATION: 저장된 마지막 관측")
+      @Schema(
+              description =
+                  "LIVE_CACHE: 최근 5분 안 공식 조회 캐시, STORED_OBSERVATION: 저장된 마지막 관측. 공개 제외면 null(관측 여부를 드러내지 않음)")
+          @NullableResponse
           CharacterPublicSummaryService.DataSource dataSource,
       @Schema(description = "false면 웹은 noindex·sitemap 제외(공개 제외 캐릭터)") boolean indexable) {
     static CharacterPublicSummaryResponse from(CharacterPublicSummaryService.Summary summary) {

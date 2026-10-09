@@ -88,6 +88,8 @@ class RosterTitlesIntegrationTest {
     assertThat(first.path("observedOrder").asInt()).isEqualTo(1);
     assertThat(first.path("recordedBy").asText()).isEqualTo(ALT);
     assertThat(first.path("firstObservedAt").asText()).startsWith("2026-10-01");
+    // KST 날짜(#175)
+    assertThat(first.path("firstObservedDate").asText()).isEqualTo("2026-10-01");
     assertThat(first.path("lastObservedAt").asText()).startsWith("2026-10-05");
     assertThat(first.path("source").asText()).isEqualTo("OBSERVED");
     assertThat(data.at("/titles/1/title").asText()).isEqualTo("이클립스");

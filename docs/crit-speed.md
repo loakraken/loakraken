@@ -157,7 +157,7 @@ Tooltip이 없을 때(이전 캐시 등)는 스탯을 계수로 환산하고, �
 | 혼돈 강화 | 데모닉 | 악마화 상태 가정 | 켬 | 30 | "악마화 중 치명타 적중률이 30.0% 증가한다." |
 | 연가비기 | 창술사 | 연가공법 16초 유지 가정 | 끔 | 20 | "연가비기 사용 시 … 16.0초 동안 치명타 적중률이 20.0% 증가" |
 | 단련 | 기상술사 | 우산 스킬 사용 후 8초 가정 | 끔 | 2 | "우산 스킬 사용 후 치명타 적중률이 8.0초간 2.0% 증가" |
-| 단련 치명타 피해 | 기상술사 | 기상 스킬 사용 후 8초 가정 | 끔 | 8(치피) | "기상 스킬 사용 후 치명타 피해량이 8.0초간 8.0% 증가 … 동시에 적용되지 않는다" |
+| 단련 치명타 피해 | 기상술사 | 기상 스킬 사용 후 8초 가정 | 끔 | 8(치피) | "기상 스킬 사용 후 치명타 피해량이 8.0초간 8.0% 증가 … 동시에 적용되지 않는다". `단련`과 함께 켜면 `단련`(치적)만 적용하고 이 토글은 on=false |
 | 피스메이커 - 샷건 | 건슬링어 | 샷건 스탠스 변경 후 9초 가정 | 끔 | 10 | "샷건 스탠스로 변경 시 치명타 적중률이 10.0% … 9초동안" |
 | 전술 훈련 | 워로드 | 방어 태세 가정 | 끔 | 0.8 | "방어 태세 중에는 1.6% 증가"(기본 0.8과의 차이) |
 
@@ -173,7 +173,7 @@ Tooltip이 없을 때(이전 캐시 등)는 스탯을 계수로 환산하고, �
 | 빛의 성장 버프 상시 유지 가정 | 서머너, 트라이포드 "빛의 성장" | 11.8 |
 
 - 켠 토글은 `sources[]`에 `kind=ASSUMED`, `category=ASSUMPTION`, 이름 "표시 이름(노드)", text = 공식 문구로 들어간다. 그래서 `crit.observedRate`는 그대로이고 `assumedRate`·`totalRate`에 들어간다.
-- 응답 `toggles[]{key, label, coreState, on, value, text}`는 이 캐릭터에 해당하는 토글만 준다. 꺼진 토글은 limitations에도 "(… 켜기 가능)"으로 남긴다.
+- 응답 `toggles[]{key, label, axis, coreState, on, value, text}`는 이 캐릭터에 해당하는 토글만 준다. 꺼진 토글은 limitations에도 "(… 켜기 가능)"으로 남긴다.
 
 ### 스킬 한정(SKILL)
 
@@ -223,7 +223,7 @@ Tooltip이 없을 때(이전 캐시 등)는 스탯을 계수로 환산하고, �
 - `crit{critStat, observedRate, assumedRate, totalRate, effectiveRate, bluntThorn{…}, targets[], critStatPerPercent}`
 - `speed{swiftnessStat, cap, attack{observed, assumed, total, effective}, move{…}, supersonic{…}, swiftnessPerPercent, swiftnessTable[]}`
 - `skills[]{…, node, nodes[], damage, damageNodes[]}`
-- `toggles[]{key, label, coreState, on, value, text}`
+- `toggles[]{key, label, axis, coreState, on, value, text}`
 - `limitations[]`: 제외하거나 근사한 항목. 아크 그리드 코어·젬, 스킬 룬·트라이포드는 공식 문구가 없어 가정 입력으로만 반영한다.
 
 ## 검증

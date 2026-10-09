@@ -368,7 +368,13 @@ public final class CritSpeedCalculation {
    * 밖(스킬 직후 N초 등)은 기본 끔. text는 공식 원문 또는 근거.
    */
   public record ToggleState(
-      String key, String label, boolean coreState, boolean on, BigDecimal value, String text) {}
+      String key,
+      String label,
+      Axis axis,
+      boolean coreState,
+      boolean on,
+      BigDecimal value,
+      String text) {}
 
   public record Result(
       String ruleVersion,
@@ -835,9 +841,22 @@ public final class CritSpeedCalculation {
       var value = toggleValue(toggle, base, text);
       if (value == null) continue;
       boolean on = input.on(toggle.key(), toggle.coreState());
+      if (on
+          && toggle.exclusiveWith() != null
+          && toggles.stream().anyMatch(t -> t.on() && t.key().equals(toggle.exclusiveWith()))) {
+        on = false;
+        (toggle.axis() == Axis.CRIT ? conditionalRate : conditionalDamage)
+            .add(name + " " + plain(value) + "%(" + toggle.exclusiveWith() + "와 동시에 적용되지 않아 끔)");
+      }
       toggles.add(
           new ToggleState(
-              toggle.key(), toggle.label(), toggle.coreState(), on, scale(value), text));
+              toggle.key(),
+              toggle.label(),
+              toggle.axis(),
+              toggle.coreState(),
+              on,
+              scale(value),
+              text));
       if (on)
         sources.add(
             new Source(
@@ -860,7 +879,8 @@ public final class CritSpeedCalculation {
           var state = classState(name, text);
           if (state != null) {
             boolean on = input.on(base, true);
-            toggles.add(new ToggleState(base, "혼돈 상태 가정", true, on, scale(state.value()), text));
+            toggles.add(
+                new ToggleState(base, "혼돈 상태 가정", Axis.CRIT, true, on, scale(state.value()), text));
             if (on) sources.add(state);
           }
         } else if (value != null)
@@ -1068,7 +1088,8 @@ public final class CritSpeedCalculation {
       }
       if (value == null) continue;
       boolean on = input.on(buff.label(), true);
-      toggles.add(new ToggleState(buff.label(), buff.label(), true, on, scale(value), text));
+      toggles.add(
+          new ToggleState(buff.label(), buff.label(), Axis.CRIT, true, on, scale(value), text));
       if (on)
         sources.add(
             new Source(Kind.ASSUMED, Category.ASSUMPTION, Axis.CRIT, buff.label(), value, text));

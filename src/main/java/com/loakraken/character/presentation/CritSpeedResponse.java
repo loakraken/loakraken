@@ -106,14 +106,17 @@ public record CritSpeedResponse(
   public record CritSpeedToggleResponse(
       @Schema(description = "요청 assumptions.toggles 키(노드 이름 또는 버프 이름)") String key,
       @Schema(description = "화면 표시 이름(예: 악마화 상태 가정)") String label,
+      @Schema(description = "켜면 더하는 축: CRIT(치명타 적중률) 또는 CRIT_DAMAGE(치명타 피해)")
+          CritSpeedCalculation.Axis axis,
       @Schema(description = "직업 핵심 상태·자기 버프면 true(기본 켬), 상황 조건이면 false(기본 끔)") boolean coreState,
-      @Schema(description = "이번 계산에서 켰는지") boolean on,
-      @Schema(description = "켜면 더하는 치명타 적중률(%)") BigDecimal value,
+      @Schema(description = "이번 계산에서 켰는지. 동시에 적용되지 않는 효과와 함께 켜면 한쪽만 true") boolean on,
+      @Schema(description = "켜면 axis에 더하는 값(%)") BigDecimal value,
       @Schema(description = "공식 원문 또는 근거") String text) {
     static CritSpeedToggleResponse from(CritSpeedCalculation.ToggleState toggle) {
       return new CritSpeedToggleResponse(
           toggle.key(),
           toggle.label(),
+          toggle.axis(),
           toggle.coreState(),
           toggle.on(),
           toggle.value(),

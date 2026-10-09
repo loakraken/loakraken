@@ -216,7 +216,7 @@ public final class CritEffectTable {
   /**
    * 켜고 끄는 치명타 적중률 효과(PM 총괄 23:24, 정답표 6-4). coreState면 직업 핵심 상태(각성형 변신·직업 게이지)라 기본 켬, 아니면 상황 조건이라
    * 기본 끔이다. pattern이 null이면 첫 "치명타 적중률이 X%" 값을 쓴다. incremental이면 그 노드의 기본 값을 뺀 차이만 더한다(전술 훈련 방어 태세
-   * 1.6 - 기본 0.8).
+   * 1.6 - 기본 0.8). exclusiveWith는 동시에 적용되지 않는 다른 토글 key다. 둘 다 켜면 exclusiveWith 쪽만 적용한다.
    */
   public record Toggle(
       String node,
@@ -225,9 +225,11 @@ public final class CritEffectTable {
       String label,
       boolean coreState,
       Pattern pattern,
-      boolean incremental) {
+      boolean incremental,
+      String exclusiveWith) {
     Toggle(String node, String label, boolean coreState, Pattern pattern, boolean incremental) {
-      this(node, node, CritSpeedCalculation.Axis.CRIT, label, coreState, pattern, incremental);
+      this(
+          node, node, CritSpeedCalculation.Axis.CRIT, label, coreState, pattern, incremental, null);
     }
   }
 
@@ -252,7 +254,9 @@ public final class CritEffectTable {
               "기상 스킬 사용 후 8초 가정",
               false,
               Pattern.compile("치명타 피해량이\\s*[0-9.]+초간\\s*([0-9]+(?:\\.[0-9]+)?)%"),
-              false),
+              false,
+              // "단, 두 효과는 동시에 적용되지 않는다." → 치명타 적중률 쪽("단련")을 켜면 이 토글은 꺼진다
+              "단련"),
           // "샷건 스탠스로 변경 시 치명타 적중률이 10.0% … 9초동안"
           new Toggle("피스메이커 - 샷건", "샷건 스탠스 변경 후 9초 가정", false, null, false),
           // "일반 스킬의 치명타 적중률이 0.8% 증가하며, 방어 태세 중에는 1.6% 증가한다."

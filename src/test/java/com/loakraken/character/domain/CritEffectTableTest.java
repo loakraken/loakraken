@@ -96,6 +96,35 @@ class CritEffectTableTest {
         .containsExactlyInAnyOrder("연가공법 16초 유지 가정(연가비기 Lv.3)=20", "방어 태세 가정(전술 훈련 Lv.1)=0.8");
     assertThat(values(on, Axis.CRIT_DAMAGE, Category.ASSUMPTION))
         .containsExactly("기상 스킬 사용 후 8초 가정(단련 Lv.2)=8");
+    assertThat(on.toggles())
+        .filteredOn(t -> t.key().equals("단련 치명타 피해"))
+        .extracting(CritSpeedCalculation.ToggleState::axis)
+        .containsExactly(Axis.CRIT_DAMAGE);
+    // 단련 두 효과는 "동시에 적용되지 않는다" → 둘 다 켜면 치명타 적중률 쪽만 적용한다.
+    var both =
+        calculate(
+            "기상술사",
+            nodes,
+            List.of(),
+            null,
+            new Assumptions(
+                false,
+                false,
+                0,
+                null,
+                null,
+                null,
+                null,
+                null,
+                true,
+                java.util.Map.of("단련", true, "단련 치명타 피해", true)));
+    assertThat(values(both, Axis.CRIT, Category.ASSUMPTION))
+        .containsExactly("우산 스킬 사용 후 8초 가정(단련 Lv.2)=2");
+    assertThat(values(both, Axis.CRIT_DAMAGE, Category.ASSUMPTION)).isEmpty();
+    assertThat(both.toggles())
+        .extracting(t -> t.key() + "/" + t.on())
+        .contains("단련/true", "단련 치명타 피해/false");
+    assertThat(both.limitations()).anyMatch(line -> line.contains("동시에 적용되지 않아 끔"));
   }
 
   @Test

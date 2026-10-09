@@ -61,8 +61,11 @@
 | `deploy/Caddyfile` | HTTPS·보안 헤더·web 프록시 |
 | `deploy/stack.production.env.example` | 운영 스택 설정 예시(비밀 아님) |
 | `deploy/stack.staging.env.example` | 스테이징 스택 설정 예시(비밀 아님) |
-| `.github/workflows/image.yml` | 이미지 빌드(PR은 빌드 확인만, push는 `PUBLISH_IMAGES=true`일 때 GHCR 업로드) |
-| `.github/workflows/deploy.yml` | 수동 배포(환경 선택 + 이미지 태그, 운영은 `sha-` 태그만) |
+| `deploy/Dockerfile.bundle` | 배포 번들 이미지 `loakraken-deploy`(compose·Caddyfile·cloudflare·backup·pull 파일을 담음) |
+| `deploy/pull/pull-deploy.sh` | 서버가 채널 태그를 따라가 배포하고, 실패하면 되돌린다 |
+| `deploy/pull/loakraken-pull-deploy@.service`·`.timer` | 위 스크립트를 2분마다 실행(systemd, `@production`·`@staging`) |
+| `.github/workflows/image.yml` | 이미지 빌드(PR은 빌드 확인만, push는 `PUBLISH_IMAGES=true`일 때 GHCR에 api·배포 번들 업로드) |
+| `.github/workflows/deploy.yml` | 배포 승인(환경 선택 + 이미지 태그 → GHCR 채널 태그 이동, 운영은 `sha-` 태그만). 서버에 접속하지 않는다 |
 
 프론트 이미지는 `loakraken-web` 저장소의 `Dockerfile`·`image.yml`이 만든다.
 
@@ -88,6 +91,7 @@
 | `db_password` | postgres, api | DB 암호(새로 생성) |
 | `valkey_password` | valkey, api | Valkey 암호(새로 생성) |
 | `lostark_api_key` | api | 운영은 운영 키, 스테이징은 개발 키 |
+| `slack_webhook_alerts` | (컨테이너 아님) pull 배포 스크립트 | Slack #alerts Incoming Webhook URL. 없으면 알림만 건너뛴다 |
 
 - compose secrets로 각 컨테이너의 `/run/secrets/`에 파일로만 마운트한다. 환경변수에 들어가지 않아 `docker inspect`에 보이지 않는다.
 - 백엔드는 `SPRING_CONFIG_IMPORT=optional:configtree:/run/secrets/`로 파일 이름(`DB_PASSWORD`, `LOSTARK_API_KEY`, `spring.data.redis.password`)을 설정 키로 읽는다.
@@ -108,32 +112,73 @@ sudo chmod 444 /opt/loakraken/$ENV/secrets/*
 ## 서버 최초 준비
 
 1. Ubuntu LTS 등 Linux 서버, Docker Engine + compose 플러그인 설치
-2. 방화벽: 22(관리자 IP만), 80, 443만 허용
-3. 배포 전용 사용자(`deploy`)를 만들고 `docker` 그룹에 넣는다. GitHub Actions용 SSH 키를 등록한다.
-4. `/opt/loakraken/production/stack.env`를 `deploy/stack.production.env.example`에서, `/opt/loakraken/staging/stack.env`를 `deploy/stack.staging.env.example`에서 만든다.
-5. 위 "비밀값" 파일을 환경별로 만든다.
-6. GHCR 읽기: 사용자가 `read:packages` 권한만 있는 토큰으로 서버에서 `docker login ghcr.io`를 한 번 한다.
-7. GitHub 저장소 설정(사용자)
-   - Environments `production`(승인자 지정), `staging`
-   - 환경 비밀값: `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_SSH_KEY`, `DEPLOY_KNOWN_HOSTS`
+2. 방화벽(Lightsail): 443은 Cloudflare 대역만, 80은 닫음, 22는 관리자 IP만 + "Allow Lightsail browser SSH/RDP" 선택. 자세한 내용은 [cloudflare.md](cloudflare.md) "Lightsail 방화벽".
+3. SSH 설정: 키 인증만 쓴다. `/etc/ssh/sshd_config.d/90-loakraken.conf`에 `PasswordAuthentication no`, `PermitRootLogin no`를 넣고 `sudo sshd -t && sudo systemctl reload ssh`. 브라우저 SSH는 Lightsail이 관리하는 키로 기본 사용자(ubuntu)에 접속하므로 이 설정과 함께 쓸 수 있다. 서버에 배포용 SSH 키는 두지 않는다(GitHub가 서버에 접속하지 않음).
+4. `/opt/loakraken/production/stack.env`를 `deploy/stack.production.env.example`에서, `/opt/loakraken/staging/stack.env`를 `deploy/stack.staging.env.example`에서 만든다. `DEPLOY_CHANNEL`·`DEPLOY_REGISTRY`가 들어 있는지 확인한다.
+5. 위 "비밀값" 파일을 환경별로 만든다. Slack 알림을 받으려면 `secrets/slack_webhook_alerts`(웹훅 URL 한 줄, 444)도 만든다.
+6. GHCR 읽기: 사용자가 `read:packages` 권한만 있는 토큰으로 서버에서 `sudo docker login ghcr.io`를 한 번 한다. pull 배포는 root로 돌므로 root 계정에 로그인해야 한다.
+7. GitHub 설정(사용자)
+   - loakraken 저장소 Environments: `production`(필수 승인자 = 사용자), `staging`
    - 저장소 변수 `PUBLISH_IMAGES=true`(두 저장소). 이전에는 이미지가 GHCR에 올라가지 않는다.
+   - `loakraken-web` 패키지 설정 → Manage Actions access에 `loakraken` 저장소를 **Write**로 추가한다. Deploy 워크플로가 web 이미지의 채널 태그를 옮기려면 필요하다.
+   - SSH 관련 비밀값(`DEPLOY_HOST` 등)은 만들지 않는다.
 8. DNS: Porkbun에서 네임서버를 Cloudflare로 바꾸고, Cloudflare에서 `loakraken.gg` A(그리고 IPv6가 있으면 AAAA) 레코드를 Lightsail 고정 IP로 **프록시 켬(주황 구름)**으로 둔다. SSL 모드는 Full(strict), 원 서버 인증서는 Cloudflare Origin CA(`secrets/tls/`). `stack.env`의 `CADDYFILE=Caddyfile.cloudflare`. 자세한 내용은 [cloudflare.md](cloudflare.md).
+9. 첫 배포 승인(아래 "배포" 1~2) 뒤 pull 배포를 설치한다(아래 "pull 배포 설치").
 
-## 배포
+## 배포 (서버가 가져오는 방식)
 
-1. develop/master에 병합되면 `image.yml`이 `sha-<커밋7자>` 태그로 두 이미지를 올린다.
-2. Actions → Deploy → 환경·`api_tag`·`web_tag`를 넣고 실행한다. production은 승인 후 진행되며 `sha-` 태그만 받는다.
-3. 워크플로가 하는 일: compose·Caddyfile 업로드 → 직전 태그를 `images.prev.env`로 보관 → DB 백업(`backups/pre-deploy-*.dump`, 최근 14개 유지) → `pull` → `up -d --wait`(헬스 체크 통과까지 대기)
+GitHub는 서버에 접속하지 않는다. 승인된 릴리스만 GHCR 채널 태그(`:production`·`:staging`)로 옮기고, 서버가 그 태그를 따라간다(PM 총괄 결정 2026-10-09).
+
+```
+병합 → image.yml: sha- 태그로 api·web·배포 번들 업로드
+     → Actions › Deploy 실행(환경·태그 입력) → production은 사용자 승인 → 채널 태그 이동
+     → 서버 타이머(2분) → 태그가 바뀌었으면 배포 → Slack #alerts에 결과
+```
+
+1. develop/master에 병합되면 `image.yml`이 `sha-<커밋7자>` 태그로 api·배포 번들(`loakraken-deploy`)을, web 저장소의 `image.yml`이 web 이미지를 올린다.
+2. Actions → Deploy → 환경·`api_tag`·`web_tag`를 넣고 실행한다. production은 GitHub Environments 승인 후에만 진행되며 `sha-` 태그만 받는다. 배포 번들은 `api_tag`와 같은 커밋을 쓴다. 실행 요약에 옮긴 digest가 남는다.
+3. 서버의 `loakraken-pull-deploy@<환경>.timer`가 2분 안에 바뀐 태그를 본다. `pull-deploy.sh`가 하는 일:
+   1. 채널 태그 3개를 받아 digest를 확인한다. `.deployed`와 같으면 끝, `.failed`(실패했던 릴리스)와 같으면 다시 시도하지 않는다.
+   2. 배포 번들을 풀어 compose·Caddyfile·cloudflare·backup·pull 파일을 바꾼다(직전 파일은 `.bundle.prev`에 보관).
+   3. DB 백업(`backups/pre-deploy-*.dump`, 최근 14개 유지)
+   4. 직전 이미지를 `images.prev.env`로 보관하고 `images.env`에 **digest로 고정**한 이미지를 쓴다.
+   5. `up -d --wait`(헬스 체크 통과까지 최대 5분). 성공하면 `.deployed`·`deploy-history.log`에 남기고 Slack에 알린다.
+   6. 실패하면 직전 이미지·번들로 되돌리고 `.failed`에 남긴 뒤 Slack에 알린다.
 4. 배포 후 15분 관찰: 오류율, `loakraken.lostark.gate{event=upstream_429}`, 응답 지연
 
-배포 전 백업은 같은 서버 디스크에만 있다. 서버를 잃으면 함께 잃으므로 외부 정기 백업은 별도로 준비한다(출시 점검표 B6).
+배포 전 백업은 같은 서버 디스크에만 있다. 서버를 잃으면 함께 잃으므로 외부 정기 백업은 [backup.md](backup.md)를 따른다(출시 점검표 B6).
+
+### pull 배포 설치 (환경마다 1회)
+
+첫 배포 승인으로 채널 태그가 생긴 뒤 서버에서 사용자가 실행한다. 이후 `pull/` 파일은 배포 번들로 자동 갱신된다(systemd 유닛 파일 자체가 바뀐 경우에만 아래 `cp`·`daemon-reload`를 다시 한다).
+
+```bash
+ENV=production
+cd /opt/loakraken/$ENV
+cid=$(sudo docker create ghcr.io/loakraken/loakraken-deploy:$ENV true)
+sudo docker cp "$cid:/bundle/pull" . && sudo docker rm "$cid"
+sudo cp pull/loakraken-pull-deploy@.service pull/loakraken-pull-deploy@.timer /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl start loakraken-pull-deploy@$ENV.service     # 첫 배포를 바로 실행(결과는 아래 journalctl)
+sudo systemctl enable --now loakraken-pull-deploy@$ENV.timer
+journalctl -u loakraken-pull-deploy@$ENV.service -n 50
+```
 
 ## 롤백
 
+평소 롤백도 **승인 절차를 거친다**. Actions → Deploy를 이전 `sha-` 태그로 다시 실행한다(`deploy-history.log`·실행 요약에서 직전 태그를 찾는다). 서버가 2분 안에 그 릴리스로 돌아간다.
+
+- 배포가 헬스 체크에서 실패하면 서버가 스스로 직전 릴리스로 되돌린다(위 3-6). 사람이 할 일은 원인 확인과 고친 릴리스 승인이다.
+- 실패한 릴리스를 그대로 다시 시도해야 하면(예: 비밀 파일을 고친 뒤) 서버에서 `.failed`를 지운다.
+- 긴급 수동 롤백(GitHub 장애 등, 관리자 SSH 또는 Lightsail 브라우저 SSH):
+
 ```bash
 cd /opt/loakraken/production
-cp images.prev.env images.env
-docker compose -f compose.prod.yaml --env-file stack.env --env-file images.env up -d --wait
+sudo systemctl stop loakraken-pull-deploy@production.timer
+sudo cp images.prev.env images.env
+sudo docker compose -f compose.prod.yaml --env-file stack.env --env-file images.env up -d --wait
+# 원인을 고친 릴리스를 Deploy로 승인한 뒤 타이머를 다시 켠다
+sudo systemctl start loakraken-pull-deploy@production.timer
 ```
 
 DB 마이그레이션(Flyway)은 되돌리지 않는다. 스키마를 바꾸는 배포는 이전 버전이 새 스키마에서도 동작하는지 PR에서 확인한다.

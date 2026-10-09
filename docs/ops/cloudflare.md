@@ -56,12 +56,18 @@ deploy/cloudflare/update-ips.sh --write    # 대역 파일 갱신 → PR로 반�
 | HTTPS TCP 443 (IPv4) | Cloudflare IPv4 15개 | 원 서버를 Cloudflare만 부를 수 있게 |
 | HTTPS TCP 443 (IPv6) | Cloudflare IPv6 7개 | IPv6 방화벽은 따로다 |
 | HTTP 80 | **열지 않는다**(기본 규칙 삭제) | Cloudflare가 HTTP→HTTPS를 처리하고 원 서버로는 443만 쓴다 |
-| SSH 22 | 아래 "SSH" | |
+| SSH TCP 22 (IPv4) | 관리자 IP만 + **Allow Lightsail browser SSH/RDP** 선택 | 아래 "SSH" |
+| SSH TCP 22 (IPv6) | 규칙 삭제(기본 규칙이 모든 주소를 허용하면 지운다) | 관리자 접속은 IPv4로 한다 |
 
 - Lightsail 콘솔은 규칙 하나에 출발지 30개까지 넣을 수 있고(API는 60개), 방화벽마다 규칙은 IPv4·IPv6 각 60개까지다. 출발지 목록은 `update-ips.sh`가 쉼표로 출력한다.
-- **SSH**: 배포 워크플로는 GitHub 러너에서 SSH로 접속한다. 러너 IP가 넓고 자주 바뀌어 출발지를 좁히기 어렵다. 그래서 다음 중 하나를 고른다(서버 준비 때 PM 총괄과 결정).
-  1. 22를 열되 키 인증만 허용(비밀번호 로그인·root 로그인 끔), fail2ban
-  2. 22는 관리자 IP만 열고, 배포는 서버가 스스로 가져오는 방식으로 바꾼다(후속 작업)
+- 같은 포트에 규칙이 여럿이면 **가장 넓은 규칙이 적용된다**. 기본 SSH 규칙(모든 IP)을 남겨 두면 관리자 IP 제한이 무의미하므로, 기본 규칙을 고치거나 지운다.
+
+### SSH (PM 총괄 결정 2026-10-09)
+
+- 22는 **관리자 IP만** 허용한다. 배포는 서버가 GHCR에서 승인된 릴리스를 가져오므로 GitHub 러너가 서버에 접속하지 않는다([deploy.md](deploy.md) "배포").
+- 규칙에서 "Restrict to IP address"를 고른 뒤 **"Allow Lightsail browser SSH/RDP"**를 선택한다. 관리자 IP가 바뀌어도 Lightsail 콘솔의 브라우저 SSH로 들어가 규칙을 고칠 수 있다(잠김 방지).
+- 서버 sshd: 키 인증만, 비밀번호 로그인·root 로그인 끔(`PasswordAuthentication no`, `PermitRootLogin no`). 설정 순서는 deploy.md "서버 최초 준비" 3.
+- 관리자 IP가 바뀌면: Lightsail 콘솔 → 인스턴스 → Networking → SSH 규칙의 출발지를 새 IP로 고친다(또는 브라우저 SSH로 작업).
 
 ## Cloudflare 캐시 주의
 
@@ -81,5 +87,5 @@ deploy/cloudflare/update-ips.sh --write    # 대역 파일 갱신 → PR로 반�
 - [Cloudflare HTTP 헤더](https://developers.cloudflare.com/fundamentals/reference/http-headers/)
 - [SSL Full(strict)](https://developers.cloudflare.com/ssl/origin-configuration/ssl-modes/full-strict/)
 - [R2 요금](https://developers.cloudflare.com/r2/pricing/), [R2 데이터 위치](https://developers.cloudflare.com/r2/reference/data-location/)
-- [Lightsail 방화벽](https://docs.aws.amazon.com/lightsail/latest/userguide/understanding-firewall-and-port-mappings-in-amazon-lightsail.html)
+- [Lightsail 방화벽](https://docs.aws.amazon.com/lightsail/latest/userguide/understanding-firewall-and-port-mappings-in-amazon-lightsail.html), [방화벽 규칙 추가(Allow Lightsail browser SSH/RDP)](https://docs.aws.amazon.com/lightsail/latest/userguide/amazon-lightsail-editing-firewall-rules.html)
 - [Caddy 전역 옵션(trusted_proxies·client_ip_headers)](https://caddyserver.com/docs/caddyfile/options)

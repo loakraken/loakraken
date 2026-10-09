@@ -5,6 +5,7 @@
 | 모델 | 문서 | 표본·기대값 | 상태 |
 |---|---|---|---|
 | 전투력 | [combat-power.md](combat-power.md) | `verification/combat-power/` | 미검증(딜러 로그 잔차 SD 4.27%, 기준 2%) |
+| 치명타·공이속 | [crit-speed.md](crit-speed.md) | `verification/crit-speed/` | 치적 교차 확인 일치(언새늘 1명, 일로아·로펙 77.21%). 치명타 피해는 미제공 |
 
 ## 규칙
 

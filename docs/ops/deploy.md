@@ -44,6 +44,7 @@
 
 - 관리(actuator) 포트 9090은 앱 포트 8080과 나눴다. 8080에는 actuator가 없다(404). 9090도 health만 노출한다(지표는 백엔드가 prometheus 레지스트리를 넣은 뒤 연다).
 - web의 `SITE_URL`은 필수다. 운영 `https://loakraken.gg`이면 robots가 허용하고 sitemap·canonical이 이 주소를 쓴다. 스테이징(`http://127.0.0.1:8081`)은 `Disallow: /`다. 같은 이미지를 쓰고 값은 실행할 때만 넣는다.
+- web 기능 플래그 `CRIT_SPEED_TOOL`(web #233): 운영 `stack.env`는 `off`를 명시해 치명 계산 도구를 첫 운영 배포에서 뺀다(PM 총괄 결정 10-09). 비우면 web 기본값(`SITE_URL`이 운영 주소일 때만 숨김)을 따르므로, `SITE_URL`이 빠지거나 달라도 숨겨지도록 명시한다. 스테이징은 비워 두어 보인다. 공개할 때 `on`으로 바꾸고 `up -d`.
 - 백엔드 로그는 ECS JSON(`LOGGING_STRUCTURED_FORMAT_CONSOLE=ecs`)이다. 로컬 확인에서 클라이언트 IP는 찍히지 않았다.
 
 ## 로그 보존

@@ -1,6 +1,11 @@
 server:
   # 신뢰 프록시(사설망·루프백)가 보낸 X-Forwarded-For만 원격 주소로 쓴다(Tomcat RemoteIpValve). 외부에서 직접 보낸 헤더는 무시한다.
   forward-headers-strategy: native
+  # JSON 응답을 gzip으로 보낸다. 홈 일정은 400KB → 8KB 수준이다(#118 P2, docs/home.md).
+  compression:
+    enabled: true
+    mime-types: application/json
+    min-response-size: 2KB
 
 spring:
   application:

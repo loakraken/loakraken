@@ -33,7 +33,12 @@ class MarketAuctionServiceTest {
   private final Clock clock = Clock.fixed(NOW, ZoneOffset.UTC);
   private LostArkRequestGate gate = gate(90);
   private final FakeAuctions port = new FakeAuctions();
-  private MarketAuctionService service = new MarketAuctionService(port, port, gate, clock);
+  private MarketAuctionService service = service();
+
+  /** 일별 기록은 테스트에서 같은 스레드로 바로 쓴다. */
+  private MarketAuctionService service() {
+    return new MarketAuctionService(port, port, gate, clock, Runnable::run);
+  }
 
   /** 실제 메모리 게이트. 가짜 검색이 실제 클라이언트처럼 호출마다 acquire한다. */
   private LostArkRequestGate gate(int budget) {
@@ -71,7 +76,7 @@ class MarketAuctionServiceTest {
   void 사용자_몫이_없으면_칸을_채우지_않고_PENDING으로_준다() {
     // 예산 43 − 사용자 몫 40 = 3칸만 채울 수 있다.
     gate = gate(43);
-    service = new MarketAuctionService(port, port, gate, clock);
+    service = service();
     var cells = service.gems();
     assertThat(port.searches).isEqualTo(3);
     assertThat(cells.stream().filter(cell -> cell.status() == MarketAuctionService.Status.PENDING))
@@ -85,7 +90,7 @@ class MarketAuctionServiceTest {
   @Test
   void 사용자_몫이_처음부터_없으면_공식_호출이_0이다() {
     gate = gate(40);
-    service = new MarketAuctionService(port, port, gate, clock);
+    service = service();
     var cells = service.gems();
     assertThat(port.searches).isZero();
     assertThat(cells).allMatch(cell -> cell.status() == MarketAuctionService.Status.PENDING);

@@ -148,6 +148,29 @@ class CardCollectionRefreshIntegrationTest {
     assertThat(data.path("remaining").asInt()).isEqualTo(2);
   }
 
+  @Test
+  void 첫_호출부터_한도에_막혀_한_명도_못_채우면_쿨다운을_풀어_바로_다시_할_수_있다() throws Exception {
+    var roster = new ArrayList<CharacterSibling>();
+    for (int i = 0; i < 3; i++)
+      roster.add(new CharacterSibling(names.get(i), SERVER, "바드", 70, new BigDecimal(1700 - i)));
+    when(detailsPort.fetchSiblings(MAIN)).thenReturn(roster);
+    // 클라이언트 한도(#151)도 공유 한도처럼 중단 사유다.
+    when(detailsPort.fetchArmory(anyString()))
+        .thenThrow(
+            new com.loakraken.common.api.BusinessException(
+                com.loakraken.common.lostark.LostArkErrorCode.CLIENT_RATE_LIMITED));
+
+    var first = post("/api/v1/characters/card-collection/refresh?characterName=" + encode(MAIN));
+    assertThat(first.statusCode()).as(first.body()).isEqualTo(200);
+    var data = mapper.readTree(first.body()).path("data");
+    assertThat(data.path("refreshed").asInt()).isZero();
+    assertThat(data.path("failed").asInt()).isEqualTo(1);
+    assertThat(data.path("remaining").asInt()).isEqualTo(2);
+    // 쿨다운이 풀려 곧바로 다시 시도할 수 있다(429 아님).
+    var again = post("/api/v1/characters/card-collection/refresh?characterName=" + encode(MAIN));
+    assertThat(again.statusCode()).as(again.body()).isEqualTo(200);
+  }
+
   private FetchedCharacter character(String name) {
     var profile =
         new CharacterProfile(

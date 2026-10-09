@@ -6,6 +6,7 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
@@ -326,6 +327,21 @@ class OpenApiIntegrationTest {
   @Test
   void 홈_일정과_소식은_nullable_시각과_분류_계약을_명시한다() throws Exception {
     var document = JsonMapper.builder().build().readTree(request("/v3/api-docs").body());
+    // 일정 보상 상세(F-9, PM-백엔드 #118 P2): rewardGroups 필수, minItemLevel nullable, timed 필수
+    for (var schema : List.of("HomeIslandResponse", "HomeTimedResponse", "HomeOtherResponse"))
+      assertThat(document.at("/components/schemas/" + schema + "/required").toString())
+          .as(schema)
+          .contains("rewardGroups");
+    assertThat(document.at("/components/schemas/HomeRewardGroupResponse/required").toString())
+        .contains("minItemLevel", "rewards");
+    assertThat(
+            document
+                .at(
+                    "/components/schemas/HomeRewardGroupResponse/properties/minItemLevel/anyOf/1/type")
+                .asText())
+        .isEqualTo("null");
+    assertThat(document.at("/components/schemas/HomeRewardResponse/required").toString())
+        .contains("name", "timed");
     assertThat(document.path("paths").path("/api/v1/home/schedule").path("get").isMissingNode())
         .isFalse();
     assertThat(

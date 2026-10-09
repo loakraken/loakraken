@@ -13,7 +13,9 @@
   - 기본은 API 키 SHA-256 앞 12자다. 키 원문은 Valkey에 넣지 않는다.
   - 운영·스테이징은 `LOSTARK_GATE_KEY_ID`(`lostark.gate.key-id`)로 명시한다.
 - 동시 요청 4개는 인스턴스 안에서만 센다.
-- 백그라운드(통계 수집기·시세 예열)는 `gate.withReserve(40, …)` 안에서 호출한다.
+- 백그라운드(통계 수집기·시세 예열·경매 칸 채우기)는 `gate.withReserve(40, …)` 안에서 호출한다. reserve는 ThreadLocal이라 **같은 스레드 전용**이다(비동기로 넘기면 그 스레드에서 다시 감싼다).
+- 사용자 요청이 백그라운드가 시작한 단일 비행에 합류해 백그라운드의 한도 거절을 받는 경우(#130 P2 ②)는 지금 없다: 시세 예열은 `refreshItemHistory`·`refreshSearch`로 단일 비행을 거치지 않고, 수집기는 공식 포트를 직접 부른다. 앞으로 백그라운드가 단일 비행을 쓰게 되면 사용자 요청을 합류시키지 않는다.
+- 시계 차이(#130 P2 ③): 대기 시각(blocked-until)은 인스턴스 시계, 60초 창은 Valkey 서버 TIME이다. 인스턴스 시계가 어긋난 만큼 공식 429 뒤 대기 시간이 길거나 짧아질 수 있다(NTP 동기 전제, 기록만).
   - 그 안의 acquire()가 사용자 몫(budget − reserve = 50)을 남기는지 판정과 기록을 한 번에 한다.
   - 다른 인스턴스가 끼어들 틈이 없다.
 - Valkey 장애
@@ -109,7 +111,7 @@ loakraken.* Meter 조합의 상한은 요청 25 + 캐릭터 캐시 6 + 게이트
 - 운영(`prod` 프로필)은 actuator를 **관리 포트**(`MANAGEMENT_SERVER_PORT`, 기본 9090)에서만 연다. 노출은 `health`·`prometheus`뿐이다. 9090은 internal·data망 안에서만 닿고 edge는 이 망에 없다(배포·운영 #131). 앱 포트(8080)에는 actuator가 없다.
 - 수집: Prometheus가 `http://api:9090/actuator/prometheus`를 긁는다. 이름은 점이 밑줄로 바뀐다(예: `loakraken_background_last_success_seconds{job="collector"}`).
 - 기본(로컬·테스트) 노출은 health뿐이고, 앱 포트의 `/actuator/metrics`·`/actuator/prometheus`는 404임을 통합 테스트로 확인한다. 관리 포트를 따로 연 구성은 `MonitoringIntegrationTest`가 확인한다.
-- 지표 태그에는 요청 ID·IP·캐릭터명이 들어가지 않는다(통합 테스트로 확인).
+- 지표 태그에는 요청 ID·IP·캐릭터명이 들어가지 않는다(통합 테스트로 확인). 관리 포트 9090은 internal망이라 web 컨테이너도 닿으므로, **지표에는 민감 정보를 넣지 않는다**는 원칙을 지킨다(새 지표를 만들 때 태그는 고정 enum만, #166 P2).
 
 ### 요청 상관 ID와 로그 필드
 

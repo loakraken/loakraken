@@ -44,6 +44,18 @@ class MonitoringIntegrationTest {
   }
 
   @Test
+  void 큰_JSON_응답은_gzip으로_보낸다() throws Exception {
+    var request =
+        HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/v3/api-docs"))
+            .header("Accept-Encoding", "gzip")
+            .GET()
+            .build();
+    var response = http.send(request, HttpResponse.BodyHandlers.ofByteArray());
+    assertThat(response.statusCode()).isEqualTo(200);
+    assertThat(response.headers().firstValue("Content-Encoding")).hasValue("gzip");
+  }
+
+  @Test
   void 요청_ID가_없거나_형식이_틀리면_새로_만든다() throws Exception {
     var none = get(port, "/api/v1/markets/tabs", null);
     var invalid = get(port, "/api/v1/markets/tabs", "bad id");

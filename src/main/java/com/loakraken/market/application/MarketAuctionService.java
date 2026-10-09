@@ -47,8 +47,40 @@ public class MarketAuctionService {
   private final Clock clock;
   private final ReentrantLock fillLock = new ReentrantLock();
 
+  // 일별 최저가 기록(최대 24회)은 요청 밖 단일 작업자가 쓴다(PM-백엔드 #139 P2). 대기열이 차면 버리고 다음 관측에서 다시 쓴다.
+  private final java.util.concurrent.Executor dailyWriter;
+
+  @org.springframework.beans.factory.annotation.Autowired
   public MarketAuctionService(
       AuctionPort auctions, AuctionSearchPort search, LostArkRequestGate gate, Clock clock) {
+    this(
+        auctions,
+        search,
+        gate,
+        clock,
+        new java.util.concurrent.ThreadPoolExecutor(
+            1,
+            1,
+            0,
+            java.util.concurrent.TimeUnit.MILLISECONDS,
+            new java.util.concurrent.ArrayBlockingQueue<>(200),
+            Thread.ofVirtual().name("auction-daily-", 0).factory(),
+            new java.util.concurrent.ThreadPoolExecutor.DiscardPolicy()));
+  }
+
+  @jakarta.annotation.PreDestroy
+  void shutdown() {
+    if (dailyWriter instanceof java.util.concurrent.ExecutorService executor) executor.shutdown();
+  }
+
+  /** 테스트: 일별 기록 작업자를 바꾼다(예: Runnable::run). */
+  MarketAuctionService(
+      AuctionPort auctions,
+      AuctionSearchPort search,
+      LostArkRequestGate gate,
+      Clock clock,
+      java.util.concurrent.Executor dailyWriter) {
+    this.dailyWriter = dailyWriter;
     this.auctions = auctions;
     this.search = search;
     this.gate = gate;
@@ -180,6 +212,10 @@ public class MarketAuctionService {
   private void remember(String key, AuctionCell cell) {
     auctions.saveCell(key, cell);
     if (cell.minBuyPrice() == null) return;
+    dailyWriter.execute(() -> recordDaily(key, cell));
+  }
+
+  private void recordDaily(String key, AuctionCell cell) {
     try {
       auctions.recordDaily(key, LocalDate.ofInstant(cell.observedAt(), KST), cell);
     } catch (DataAccessException exception) {

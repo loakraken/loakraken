@@ -88,7 +88,12 @@ public class LostArkRequestGate {
     }
   }
 
-  /** 작업 안의 공식 호출이 사용자 몫(reserve)을 남기도록 한다. 판정에 실패하면 acquire()가 LOST_ARK_RATE_LIMITED를 던진다. */
+  /**
+   * 작업 안의 공식 호출이 사용자 몫(reserve)을 남기도록 한다. 판정에 실패하면 acquire()가 LOST_ARK_RATE_LIMITED를 던진다.
+   *
+   * <p><b>같은 스레드 전용</b>이다. reserve는 ThreadLocal이라, work 안에서 다른 스레드(비동기·병렬)로 공식 호출을 넘기면 그 호출은
+   * reserve 0(사용자 경로)으로 판정된다. 공식 호출을 비동기로 바꿀 때는 그 스레드에서 다시 withReserve로 감싼다(#130 P2).
+   */
   public <T> T withReserve(int reserve, Supplier<T> work) {
     Integer previous = RESERVE.get();
     RESERVE.set(Math.max(0, reserve));

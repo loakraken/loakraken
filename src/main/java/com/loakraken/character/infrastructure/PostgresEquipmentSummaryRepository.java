@@ -48,8 +48,10 @@ class PostgresEquipmentSummaryRepository implements EquipmentSummaryPort {
     String features = CANONICAL.writeValueAsString(summary.features());
     String hash = hash(features, summary);
     var at = observedAt.atOffset(ZoneOffset.UTC);
-    // 같은 캐릭터를 동시에 쓰는 다른 인스턴스와 겹치지 않도록 캐릭터 행을 잠근다.
-    jdbc.sql("SELECT 1 FROM characters WHERE character_id = :id FOR UPDATE")
+    // 같은 캐릭터를 동시에 쓰는 다른 인스턴스와 겹치지 않도록 요약 쪽 잠금(트랜잭션 advisory lock)을 건다. characters 행을 잠그지 않아
+    // 같은 캐릭터 검색의 관측 upsert를 기다리게 하지 않는다(PM-백엔드 #165 P2).
+    jdbc.sql(
+            "SELECT 1 FROM (SELECT pg_advisory_xact_lock(hashtextextended(CAST(:id AS text), 146))) lock")
         .param("id", characterId.get())
         .query(Integer.class)
         .single();

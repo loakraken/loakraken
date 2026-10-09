@@ -33,4 +33,13 @@ class ValkeyCardRefreshCooldown implements CardRefreshCooldownPort {
       throw new CharacterException(CharacterErrorCode.CHARACTER_CACHE_UNAVAILABLE);
     }
   }
+
+  @Override
+  public void release(String rosterKey) {
+    try {
+      redis.delete(PREFIX + rosterKey);
+    } catch (DataAccessException ignored) {
+      // 풀지 못하면 쿨다운(10분)이 끝날 때 풀린다.
+    }
+  }
 }

@@ -383,6 +383,7 @@ public final class CritEffectTable {
               "팔찌 치명타 피해 저항 감소 8초 가정",
               Pattern.compile("공격 적중 시 8초 동안 대상의 치명타 피해 저항을\\s*([0-9]+(?:\\.[0-9]+)?)% 감소")));
 
+  /**
    * 아크 패시브 노드의 공격·이동 속도 판정(#198). INCLUDE는 기본에 넣고, CORE_STATE는 기본 켬 토글, SITUATIONAL은 기본 끔 토글,
    * EXCLUDE는 다른 대상(소환수·특정 스킬)의 속도라 넣지 않는다. 표에 없는 노드의 속도 문구는 합산하지 않고 "분류 중"으로 남긴다.
    */
@@ -440,6 +441,35 @@ public final class CritEffectTable {
   static final Map<String, SpeedRule> SPEED =
       SPEED_RULES.stream()
           .collect(Collectors.toUnmodifiableMap(SpeedRule::node, Function.identity()));
+
+  /**
+   * 선택 트라이포드의 공이속(#198 재대조 10-10 02:10). 표에 없는 트라이포드의 공이속 문구는 더하지 않고 "분류 중"으로 남긴다. 갈림 항목(일로아만 포함)은
+   * PM 총괄 23:24 기준(공식 문구가 상황 조건 → 기본 끔 토글)으로 두고 PM 판단을 기다린다.
+   */
+  public record TripodSpeed(String tripod, SpeedDecision decision, String label, String basis) {}
+
+  public static final List<TripodSpeed> TRIPOD_SPEEDS =
+      List.of(
+          // 건슬링어 기동 타격 "구르기 이후 8.0초 동안 공격 속도와 이동 속도가 19.2% 증가한다." — 두 사이트 포함(한국남자)
+          new TripodSpeed("날렵함", SpeedDecision.INCLUDE, "날렵함 8초 유지 가정", "두 사이트 포함"),
+          // 배틀마스터 붕천퇴 "적에게 콤보 공격 적중 시 4.0초간 공격속도가 19.2% 증가하고 이동속도가 19.2% 증가한다." — 일로아만(리쿠)
+          new TripodSpeed("바람의 축복", SpeedDecision.SITUATIONAL, "바람의 축복 4초 가정", "일로아만 포함, PM 판단 대기"),
+          // 버서커 마운틴 크래쉬 "스킬 사용 시 공격 속도가 4.0초 간 30.0% 증가한다." — 일로아만(TheG0D)
+          new TripodSpeed("속공 준비", SpeedDecision.SITUATIONAL, "속공 준비 4초 가정", "일로아만 포함, PM 판단 대기"));
+
+  static TripodSpeed tripodSpeed(String name) {
+    for (var rule : TRIPOD_SPEEDS) if (rule.tripod().equals(name)) return rule;
+    return null;
+  }
+
+  /** 노드 문구에 없는 직업 자기 버프의 공이속. label은 같은 상태의 치명 버프와 같아 한 토글로 켜고 끈다. */
+  public record ClassSpeedBuff(
+      String label, String className, BigDecimal attack, BigDecimal move) {}
+
+  public static final List<ClassSpeedBuff> CLASS_SPEED_BUFFS =
+      List.of(
+          // 슬레이어 폭주: 두 사이트 공이속 +20(만배 21.86/31.86 → 41.86/51.86, 계산 검증 10-10 02:10)
+          new ClassSpeedBuff("폭주 상태 가정", "슬레이어", new BigDecimal("20"), new BigDecimal("20")));
 
   static SpeedRule speed(String nodeName) {
     if (nodeName == null) return null;

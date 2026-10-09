@@ -104,7 +104,10 @@ public record CritSpeedResponse(
   }
 
   public record CritSpeedToggleResponse(
-      @Schema(description = "요청 assumptions.toggles 키(노드 이름 또는 버프 이름)") String key,
+      @Schema(
+              description =
+                  "요청 assumptions.toggles 키(노드·버프·트라이포드 이름). 한 key가 축마다 여러 행(예: 광기 ATTACK_SPEED·MOVE_SPEED, 폭주 CRIT·공이속)을 가질 수 있고, 요청 key 하나로 함께 켜고 끈다")
+          String key,
       @Schema(description = "화면 표시 이름(예: 악마화 상태 가정)") String label,
       @Schema(description = "켜면 더하는 축: CRIT(치명타 적중률) 또는 CRIT_DAMAGE(치명타 피해)")
           CritSpeedCalculation.Axis axis,

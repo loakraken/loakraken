@@ -436,6 +436,8 @@ public final class CritSpeedCalculation {
     gridCoreSources(loadout, input, sources, toggles, unclassified, conditionalRate);
     braceletToggles(loadout, input, sources, toggles, conditionalRate, conditional);
     classBuffSources(profile, loadout, input, sources, toggles);
+    classSpeedSources(profile, input, sources, toggles);
+    tripodSpeedSources(loadout, input, sources, toggles, speedNotes);
     assumptionSources(input, sources);
     agilitySources(agility, sources);
     // 직업 상태 가정(정답표 표의 피냄새·직업 버프)은 스킬별 치적 기본에도 넣는다.
@@ -1138,6 +1140,7 @@ public final class CritSpeedCalculation {
                   total,
                   String.join(" ", texts)));
       }
+      if (slot.name().endsWith("재빠른 공격")) commonCoreSpeed(slot, sources);
       if (CritEffectTable.COMMON_CORES.keySet().stream().noneMatch(slot.name()::endsWith))
         classCoreSources(slot, input, sources, toggles, unclassified, conditionalRate);
     }
@@ -1237,6 +1240,30 @@ public final class CritSpeedCalculation {
     return null;
   }
 
+  /** 혼돈의 해 "재빠른 공격" 달성 구간의 공격 속도(10P 1.00 + 17P 3.00 = 4, 두 사이트 포함, 10-10). */
+  private static void commonCoreSpeed(CharacterLoadout.GridSlot slot, List<Source> sources) {
+    var total = BigDecimal.ZERO;
+    var texts = new ArrayList<String>();
+    for (var option : slot.core().options()) {
+      if (option == null || option.text() == null || option.threshold() > slot.point()) continue;
+      var matcher = ATTACK_SPEED.matcher(option.text());
+      while (matcher.find()) {
+        if (matcher.group(1) != null) continue;
+        total = total.add(signed(matcher.group(2), matcher.group(3)));
+        texts.add(option.text());
+      }
+    }
+    if (total.signum() != 0)
+      sources.add(
+          new Source(
+              Kind.OBSERVED,
+              Category.ARK_GRID,
+              Axis.ATTACK_SPEED,
+              slot.name() + " " + slot.point() + "P",
+              total,
+              String.join(" ", texts)));
+  }
+
   /** 팔찌의 적중 시 8초 효과(대상 치명타 저항·치명타 피해 저항 감소). 기본 끔 토글. */
   private static void braceletToggles(
       CharacterLoadout loadout,
@@ -1269,6 +1296,85 @@ public final class CritSpeedCalculation {
           else
             (rule.axis() == Axis.CRIT ? conditionalRate : conditionalDamage)
                 .add("팔찌 " + plain(value) + "%(" + rule.label() + ", 켜기 가능)");
+        }
+      }
+    }
+  }
+
+  /** 직업 자기 버프의 공이속(슬레이어 폭주 20). 같은 label의 치명 버프와 한 토글로 켜고 끈다. */
+  private static void classSpeedSources(
+      CharacterProfile profile,
+      Assumptions input,
+      List<Source> sources,
+      List<ToggleState> toggles) {
+    for (var buff : CritEffectTable.CLASS_SPEED_BUFFS) {
+      if (!buff.className().equals(profile.className())) continue;
+      boolean on = input.on(buff.label(), true);
+      for (var axis : List.of(Axis.ATTACK_SPEED, Axis.MOVE_SPEED)) {
+        var value = axis == Axis.ATTACK_SPEED ? buff.attack() : buff.move();
+        String text = "두 사이트 기본 포함(계산 검증 10-10)";
+        toggles.add(
+            new ToggleState(buff.label(), buff.label(), axis, true, on, scale(value), text));
+        if (on)
+          sources.add(
+              new Source(Kind.ASSUMED, Category.ASSUMPTION, axis, buff.label(), value, text));
+      }
+    }
+  }
+
+  /** 레벨 2 이상 스킬의 선택 트라이포드 공이속을 트라이포드 표로 판정한다. */
+  private static void tripodSpeedSources(
+      CharacterLoadout loadout,
+      Assumptions input,
+      List<Source> sources,
+      List<ToggleState> toggles,
+      List<String> notes) {
+    if (loadout.skills() == null) return;
+    for (var skill : loadout.skills()) {
+      if (skill == null || skill.level() == null || skill.level() < 2) continue;
+      for (var tripod : skill.tripods()) {
+        if (tripod == null || tripod.effect() == null) continue;
+        var scanned = new ArrayList<Source>();
+        scan(Category.ASSUMPTION, tripod.name(), tripod.effect(), scanned, false);
+        var speeds =
+            scanned.stream()
+                .filter(s -> s.axis() == Axis.ATTACK_SPEED || s.axis() == Axis.MOVE_SPEED)
+                .toList();
+        if (speeds.isEmpty()) continue;
+        var rule = CritEffectTable.tripodSpeed(tripod.name());
+        String name = skill.name() + " - " + tripod.name();
+        if (rule == null) {
+          notes.add(name + "(분류 중)");
+          continue;
+        }
+        switch (rule.decision()) {
+          case EXCLUDE -> notes.add(name + "(" + rule.basis() + ")");
+          case INCLUDE, CORE_STATE, SITUATIONAL -> {
+            // 트라이포드는 공식 출처 분류가 없어 기본 포함도 기본 켬 토글(가정 출처)로 낸다.
+            boolean core = rule.decision() != CritEffectTable.SpeedDecision.SITUATIONAL;
+            boolean on = input.on(rule.tripod(), core);
+            for (var s : speeds) {
+              toggles.add(
+                  new ToggleState(
+                      rule.tripod(),
+                      rule.label(),
+                      s.axis(),
+                      core,
+                      on,
+                      scale(s.value()),
+                      tripod.effect()));
+              if (on)
+                sources.add(
+                    new Source(
+                        Kind.ASSUMED,
+                        Category.ASSUMPTION,
+                        s.axis(),
+                        rule.label() + "(" + name + ")",
+                        s.value(),
+                        tripod.effect()));
+            }
+            if (!on) notes.add(name + "(" + rule.label() + ", 켜기 가능)");
+          }
         }
       }
     }
@@ -1456,7 +1562,10 @@ public final class CritSpeedCalculation {
       List<Source> sources) {
     Matcher matcher = pattern.matcher(text);
     while (matcher.find()) {
-      if (matcher.group(1) != null || inside(skip, matcher.start())) continue;
+      // "…의 공격 속도"는 다른 대상 한정이지만 "자신의 이동속도"는 자기 속도다(아르데타인의 기술).
+      boolean other =
+          matcher.group(1) != null && !text.substring(0, matcher.start()).endsWith("자신");
+      if (other || inside(skip, matcher.start())) continue;
       sources.add(
           new Source(
               Kind.OBSERVED,

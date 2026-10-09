@@ -1,0 +1,128 @@
+{
+  "model": "crit-speed",
+  "ruleVersion": "crit-speed-v3",
+  "field": "crit.damage.total",
+  "unit": "%",
+  "observed": {
+    "targetSites": "2026-10-09 16시대 KST 로펙 효율표 '치명타 피해량 상세'·일로아 스펙 계산 (inzai는 21시대 일로아)",
+    "kraken": "2026-10-09 21시대 KST, 8090 로컬 검증 서버(develop + #161·#169·#174), 공식 armory 실조회. 원문은 저장하지 않음"
+  },
+  "rule": "기본 200% + 장비·팔찌·각인·아크 패시브·카드의 일반 '치명타 피해' 문구. 스킬 한정('…의 치명타 피해'), 받는 치명타 피해, 같은 문장 앞에 '상태에서'·'상태일 때'가 있는 효과는 제외(conditional). 각성 상시 효과('폭주 중', '마력 해방 중')는 포함",
+  "cases": [
+    {
+      "character": "언새늘",
+      "className": "블레이드",
+      "expected": 208.4,
+      "source": "TARGET_SITE",
+      "sites": {
+        "lopec": 208.4,
+        "iloa": 208.4
+      },
+      "derivation": "기본 200 + 팔찌 8.4. 일격 Lv.2 '방향성 공격 스킬의 치명타 피해 +32%'는 스킬 한정이라 제외",
+      "kraken": 208.4,
+      "conditional": [],
+      "status": "MATCH"
+    },
+    {
+      "character": "만배",
+      "className": "슬레이어(포식자)",
+      "expected": 277.4,
+      "source": "TARGET_SITE",
+      "sites": {
+        "lopec": 277.4,
+        "iloa": 277.4
+      },
+      "derivation": "기본 200 + 악세서리 8 + 격분 Lv.3 '폭주 중 적에게 주는 치명타 피해 51%' + 팔찌 18.4",
+      "kraken": 277.4,
+      "conditional": [],
+      "status": "MATCH"
+    },
+    {
+      "character": "blasum",
+      "className": "소서리스(점화)",
+      "expected": 259.8,
+      "source": "TARGET_SITE",
+      "sites": {
+        "lopec": 259.8,
+        "iloa": 259.8
+      },
+      "derivation": "기본 200 + 악세서리 4.8 + 발화 Lv.3 '마력 해방 중 … 치명타 피해 55%'",
+      "kraken": 259.8,
+      "conditional": [],
+      "status": "MATCH"
+    },
+    {
+      "character": "라스장인유한상",
+      "className": "소울이터",
+      "expected": 257.2,
+      "source": "TARGET_SITE",
+      "sites": {
+        "lopec": 257.2,
+        "iloa": 257.2
+      },
+      "derivation": "기본 200 + 각인 44 + 악세서리 4.8 + 팔찌 8.4. 어둠의 장송곡 Lv.3 '사신화 상태에서 사용 시 … 45%'는 제외(로펙: 데스 피날레에만)",
+      "kraken": 257.2,
+      "conditional": [
+        "어둠의 장송곡 Lv.3 45%"
+      ],
+      "status": "MATCH"
+    },
+    {
+      "character": "리승건",
+      "className": "리퍼",
+      "expected": 256.8,
+      "expectedRange": [
+        256.8,
+        259.8
+      ],
+      "source": "TARGET_SITE",
+      "sites": {
+        "lopec": 259.8,
+        "iloa": 256.8
+      },
+      "derivation": "기본 200 + 각인 52 + 악세서리 4.8. 곡예사 Lv.1 '페르소나 상태일 때 급습 스킬 적중 시 … 3%'는 로펙만 포함. 사이트가 갈리면 일로아 기준(백엔드 #161, 계산 검증 동의)",
+      "kraken": 256.8,
+      "conditional": [
+        "곡예사 Lv.1 3%",
+        "그림자 맹수 Lv.3 15%"
+      ],
+      "status": "MATCH"
+    },
+    {
+      "character": "inzai",
+      "className": "리퍼(갈증)",
+      "expected": 208,
+      "source": "TARGET_SITE",
+      "sites": {
+        "iloa": 208
+      },
+      "derivation": "기본 200 + 반지 4 × 2. 일격 Lv.2 방향성 치명타 피해는 제외",
+      "kraken": 208,
+      "conditional": [],
+      "status": "MATCH"
+    }
+  ],
+  "openMismatch": [
+    {
+      "character": "inzai",
+      "field": "crit.observedRate",
+      "status": "RULE_GAP",
+      "note": "처음 본 차이(크라켄 66.76 대 사이트 40.82)는 사이트가 옛 세팅(전투력 6,673.94)을 보고 있던 탓이라 기대값으로 쓰지 않는다. 캐릭터가 같은 날 세팅을 여러 번 바꿨다.",
+      "ruleGap": [
+        {
+          "node": "피냄새 Lv.3(리퍼 갈증, 깨달음)",
+          "text": "혼돈 게이지가 가득차면 혼돈 효과가 강화되어 치명타 적중률이 23.0%로 변경된다.",
+          "iloa": "+23 (혼돈 상태 가정)",
+          "kraken": "미합산"
+        },
+        {
+          "node": "암살자의 발자취 Lv.1(리퍼, 도약)",
+          "iloa": "+10 (적중 시 추가로 · 백 어택 스킬만, 스킬별 치적에만)",
+          "kraken": "미합산"
+        }
+      ],
+      "observedAt": "2026-10-09 22시대 KST, 일로아·클로아 갱신 후"
+    }
+  ],
+  "knownRuleGaps": "문구 규칙이 아직 다루지 않는 형식(합산됨): 스킬 주어 문장('더 썬이 … 증가하고, 치명타 피해가'), 상태 말이 아닌 조건('…이하일 때', '…이상이면', '…성공 시'). 해당 직업 표본이 없어 사이트 처리 미확인"
+}

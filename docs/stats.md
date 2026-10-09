@@ -37,6 +37,8 @@
   - 분위수·평균·중앙값·topPercent·tier는 null이다. 인원 수와 순위는 그대로 준다.
   - 직업·서버 행은 행마다 판정한다.
 - 캐시: 조건별로 10분(`stats:v1:{sha256}`). coverage는 조건과 무관하게 따로 10분 캐시한다. 캐시 장애는 조회를 막지 않는다.
+- 값 정규화(#108): 범위(itemLevel·combatPower Min/Max)·`width`·`percentileOf`는 소수 둘째 자리로 반올림하고 끝의 0을 지운다. `meta.conditions`도 정규화한 값이다. 자릿수만 바꾼 요청이 캐시 키를 늘리지 못한다.
+- 유입 제한: 통계·랭킹은 클라이언트별 분당 60회(`stats` 버킷, [운영 문서](backend-operations.md)).
 - 쿼리: 읽기 전용 트랜잭션, 5초 타임아웃. 인덱스는 V7 `idx_characters_stats`(부분 인덱스)와 `idx_characters_roster`다.
 
 ## 엔드포인트

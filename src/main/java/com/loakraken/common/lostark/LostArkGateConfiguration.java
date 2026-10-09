@@ -21,7 +21,7 @@ import org.springframework.data.redis.core.StringRedisTemplate;
  * 하나 더 만들면 Boot 자동 구성이 꺼지므로, 연결은 빈이 아닌 {@link GateRedis} 안에서 만든다.
  */
 @Configuration(proxyBeanMethods = false)
-@EnableConfigurationProperties(LostArkGateProperties.class)
+@EnableConfigurationProperties({LostArkGateProperties.class, ClientLimitProperties.class})
 class LostArkGateConfiguration {
   @Bean
   GateRedis lostArkGateRedis(
@@ -51,6 +51,31 @@ class LostArkGateConfiguration {
       GateRedis redis, LostArkGateProperties gate, LostArkProperties lostArk, Clock clock) {
     if (redis.template() == null) return new MemoryGateStore(clock);
     return new ValkeyGateStore(redis.template(), keyId(gate, lostArk));
+  }
+
+  @Bean
+  ClientLimiter clientLimiter(
+      GateRedis redis,
+      ClientLimitProperties limits,
+      LostArkProperties lostArk,
+      Clock clock,
+      io.micrometer.core.instrument.MeterRegistry registry) {
+    ClientLimitStore store =
+        redis.template() == null
+            ? new ClientLimitStore.Memory()
+            : new ClientLimitStore.Valkey(redis.template());
+    return new ClientLimiter(limits, store, clock, registry, lostArk.apiKey());
+  }
+
+  @Bean
+  org.springframework.boot.web.servlet.FilterRegistrationBean<ClientLimitFilter> clientLimitFilter(
+      ClientLimiter limiter) {
+    var registration =
+        new org.springframework.boot.web.servlet.FilterRegistrationBean<>(
+            new ClientLimitFilter(limiter));
+    registration.addUrlPatterns("/api/v1/*");
+    registration.setOrder(org.springframework.core.Ordered.HIGHEST_PRECEDENCE + 10);
+    return registration;
   }
 
   @Bean

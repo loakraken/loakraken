@@ -26,6 +26,36 @@
   - 못 얻으면 수집기 지표에 `outcome=not_leader`가 남는다.
 - 백그라운드 합산 상한: 수집기 20/분 + 예열(이력 9분에 19회 + 기본 보드 30초마다 1회, 합산 15/분 상한, #154) ≤ budget − reserve(50)
 
+## 클라이언트별 유입 제한 (#108)
+
+공유 게이트가 공식 키 전체(90회/분)를 지킨다면, 유입 제한은 **한 사람이 그 예산을 혼자 쓰지 못하게** 한다.
+
+- 클라이언트: Tomcat RemoteIpValve가 신뢰 프록시(웹)의 `X-Forwarded-For`로 정한 원격 주소를 `ClientAddresses`로 정규화한다(IPv6는 /64).
+  - Valkey 키에는 주소의 HMAC-SHA256 앞 16바이트만 넣는다. HMAC 키는 공식 API 키에서 파생해 같은 키를 쓰는 인스턴스끼리 같다.
+  - 원격 주소가 루프백·사설망이면(헤더가 빠진 내부 요청) 세지 않고 `loakraken.client.limit.unattributed`만 올린다(`exempt-internal`).
+- 버킷(1분 고정 창, `lostark:client-limit:{bucket}:{client}:{분}`, INCR·PEXPIRE Lua 한 번)
+
+| 버킷 | 기본(분당) | 세는 것 |
+|---|---|---|
+| official | 20 | 요청이 **실제로 일으킨** 공식 호출. `LostArkRequestGate.acquire()`에서 공유 예산보다 먼저 센다. 캐시 적중·단일 비행 합류·수집기·예열과 `withReserve` 안의 호출(경매 칸 채우기처럼 사용자 몫을 남기는 쪽으로 이미 제한된 호출)은 세지 않는다 |
+| stats | 60 | `/stats/**`·`/rankings`·`/characters/rank` 요청(DB 집계) |
+| general | 240 | `/api/v1/**` 전체 요청 |
+| bot | 120 | `X-Loakraken-Bot: 1` 요청 전체(모든 봇 주소 합산). general보다 클 수 없다(봇 표시는 User-Agent라 흉내 낼 수 있음). 통계 경로는 봇 공유 stats(60)도 세고, 봇의 공식 호출도 official 하나를 같이 쓴다 |
+
+- 거절: `429 CLIENT_RATE_LIMITED`. 요청 버킷 거절에는 `Retry-After`(창 끝까지 초)를 준다. 공식 호출 한도 거절은 요청 도중이라 헤더 없이 같은 코드다(#138의 Retry-After 공통 처리 병합 후 붙인다).
+  - 공유 예산 초과(`LOST_ARK_RATE_LIMITED`)와 코드가 다르다. 프론트는 둘 다 "잠시 후 다시"로 보여 주면 된다.
+- 봇 표시: 웹이 User-Agent로 검색봇을 판단해 `X-Loakraken-Bot: 1`을 붙인다. 백엔드는 User-Agent를 보지 않는다. **웹은 밖에서 들어온 같은 헤더를 지워야 한다.**
+- Valkey 장애면 제한하지 않는다(`event=unavailable`). 공식 호출은 공유 게이트가 503으로 막는다. 게이트 전용 연결(100ms)을 같이 쓴다.
+- 설정: `lostark.client-limit.*` / `CLIENT_LIMIT_ENABLED·_OFFICIAL·_STATS·_GENERAL·_BOT·_EXEMPT_INTERNAL`
+- 지표: `loakraken.client.limit{bucket, event=reject|unavailable}`, `loakraken.client.limit.unattributed`
+- 기본값 근거: 캐릭터 페이지 하나는 공식 호출 1~2회(전투정보·원정대, 원정대는 칭호·카드와 캐시 공유)라 official 20은 새 캐릭터 10명 이상/분이다. 일반 240은 페이지당 5~8개 요청으로 30페이지 이상/분이다.
+
+### 없는 캐릭터 캐시
+
+- 공식 API가 "없다"고 답한 이름(전투정보 null·원정대 빈 목록·공식 404)만 `character:v1:{이름}:missing`에 5분 기억한다. 그 사이 같은 이름은 공식 호출 없이 `404 CHARACTER_NOT_FOUND`다.
+- 한도(429)·타임아웃·서버 오류는 기억하지 않는다.
+- 새로 만든 캐릭터는 최대 5분 늦게 보일 수 있다. 캐시 읽기 장애면 정상 경로로 조회한다.
+
 ## 실행 전제
 
 MVP는 **동일 API 키를 사용하는 백엔드 프로세스 1개, replicas=1**을 전제로 한다. 배포 인프라를 새로 만들거나 replica 수를 자동 강제하는 코드를 추가한 것은 아니다. 현재 single flight, 호출 예산, 동시성 제한은 JVM 내부 상태다.

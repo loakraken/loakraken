@@ -26,7 +26,7 @@ public record StatsConditions(
     if (!StatsRules.ACTIVE_DAYS.contains(activeDays))
       throw new IllegalArgumentException("activeDays는 7, 30, 90 중 하나입니다.");
     if (itemLevelMin == null) itemLevelMin = StatsRules.DEFAULT_ITEM_LEVEL_MIN;
-    itemLevelMin = itemLevelMin.stripTrailingZeros();
+    itemLevelMin = strip(itemLevelMin);
     itemLevelMax = strip(itemLevelMax);
     combatPowerMin = strip(combatPowerMin);
     combatPowerMax = strip(combatPowerMax);
@@ -92,8 +92,16 @@ public record StatsConditions(
     return value == null || value.isBlank() ? null : value.strip();
   }
 
-  private static BigDecimal strip(BigDecimal value) {
-    return value == null ? null : value.stripTrailingZeros();
+  /**
+   * 소수 둘째 자리로 반올림한 뒤 끝의 0을 지운다(#108). 아이템 레벨·전투력은 공식 값이 소수 둘째 자리까지라 결과가 같고, 자릿수만 바꾼 요청이 캐시 키를 무한히
+   * 늘리지 못한다.
+   */
+  public static BigDecimal strip(BigDecimal value) {
+    return value == null
+        ? null
+        : value
+            .setScale(StatsRules.VALUE_SCALE, java.math.RoundingMode.HALF_UP)
+            .stripTrailingZeros();
   }
 
   private static String plain(BigDecimal value) {

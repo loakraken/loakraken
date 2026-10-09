@@ -30,6 +30,17 @@ class OpenApiIntegrationTest {
         .isEqualTo("null");
     assertThat(document.path("paths").has("/test/success")).isFalse();
     assertThat(document.path("paths").has("/actuator/health")).isFalse();
+    // 유입 제한(#108): 모든 작업에 429 CLIENT_RATE_LIMITED가 있고, 기존 429 설명은 유지한다.
+    for (var path : document.path("paths").properties())
+      for (var operation : path.getValue().properties())
+        assertThat(operation.getValue().at("/responses/429/description").asText())
+            .as(path.getKey() + " " + operation.getKey())
+            .contains("CLIENT_RATE_LIMITED");
+    assertThat(
+            document
+                .at("/paths/~1api~1v1~1characters~1search/get/responses/429/description")
+                .asText())
+        .startsWith("LOST_ARK_RATE_LIMITED");
     ApiContractFixture.write("openapi.json", response.body());
     assertThat(
             document

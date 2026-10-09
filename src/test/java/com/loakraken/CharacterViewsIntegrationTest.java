@@ -47,6 +47,7 @@ class CharacterViewsIntegrationTest {
   void 정리() {
     for (var key : List.of("summary", "armory")) redis.delete("character:v11:" + NAME + ":" + key);
     redis.delete("character:v1:" + NAME + ":siblings");
+    redis.delete("character:v1:" + NAME + ":missing");
     jdbc.sql("DELETE FROM character_view_daily WHERE character_name = :name")
         .param("name", NAME)
         .update();

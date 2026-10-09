@@ -67,7 +67,7 @@ class CritSpeedIntegrationTest {
     assertThat(response.statusCode()).isEqualTo(200);
     var json = mapper.readTree(response.body());
     assertThat(json.path("code").asText()).isEqualTo("CHARACTER_CRIT_SPEED_SUCCESS");
-    assertThat(json.at("/data/ruleVersion").asText()).isEqualTo("crit-speed-v2");
+    assertThat(json.at("/data/ruleVersion").asText()).isEqualTo("crit-speed-v3");
     assertThat(json.at("/data/characterName").asText()).isEqualTo(NAME);
     assertThat(json.at("/data/crit/observedRate").decimalValue()).isEqualByComparingTo("25.71");
     assertThat(json.at("/data/crit/assumedRate").decimalValue()).isEqualByComparingTo("10");

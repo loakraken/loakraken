@@ -105,7 +105,8 @@ Armories 통합 조회 필터에 `avatars`·`collectibles`를 포함한다(외�
 | HTTP | 코드 | 조건 |
 |---|---|---|
 | 400 | INVALID_REQUEST | 이름 누락 또는 형식 오류 |
-| 404 | CHARACTER_NOT_FOUND | 공식 API 404 또는 빈 프로필 |
+| 404 | CHARACTER_NOT_FOUND | 공식 API 404 또는 빈 프로필. 같은 이름은 5분 동안 공식 호출 없이 404(#108) |
+| 429 | CLIENT_RATE_LIMITED | 이 클라이언트의 분당 요청·공식 호출 한도 초과(#108) |
 | 429 | LOST_ARK_RATE_LIMITED | 호출량·동시 호출 제한 또는 공식 API 429 |
 | 502 | LOST_ARK_API_ERROR | 공식 API 오류, 잘못된 응답, 연결 실패 |
 | 503 | LOST_ARK_NOT_CONFIGURED | 서버 API 키 미설정 |

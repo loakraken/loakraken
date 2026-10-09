@@ -37,6 +37,8 @@
   - 분위수·평균·중앙값·topPercent·tier는 null이다. 인원 수와 순위는 그대로 준다.
   - 직업·서버 행은 행마다 판정한다.
 - 캐시: 조건별로 10분(`stats:v1:{sha256}`). coverage는 조건과 무관하게 따로 10분 캐시한다. 캐시 장애는 조회를 막지 않는다.
+- 값 정규화(#108): 범위(itemLevel·combatPower Min/Max)·`width`·`percentileOf`는 소수 둘째 자리로 반올림하고 끝의 0을 지운다. `meta.conditions`도 정규화한 값이다. 자릿수만 바꾼 요청이 캐시 키를 늘리지 못한다.
+- 유입 제한: 통계·랭킹은 클라이언트별 분당 60회(`stats` 버킷, [운영 문서](backend-operations.md)).
 - 쿼리: 읽기 전용 트랜잭션, 5초 타임아웃. 인덱스는 V7 `idx_characters_stats`(부분 인덱스)와 `idx_characters_roster`다.
 
 ## 엔드포인트
@@ -49,7 +51,7 @@
 | `GET /api/v1/stats/distribution?metric=&width=&percentileOf=` | 히스토그램. 기본 폭은 아이템 레벨 10, 전투력 100이고 최대 300구간이다. 값이 있는 구간만 준다. percentileOf는 순위·상위 %·티어 |
 | `GET /api/v1/stats/snapshots` | 현재는 latest만. 일별 06:00 KST 스냅샷은 3단계 |
 | `GET /api/v1/rankings?metric=&page=&size=` | 전투력(기본)·아이템 레벨 순위. 동률은 같은 순위(RANK). 페이지 크기 기본 50·최대 100, 최대 10,000위. 공개 제외 목록([public_exclusion](popular-characters.md))을 모집단에서 빼고 순위를 매긴다. `/characters/rank`·`percentileOf`도 같은 모집단이고, 제외된 본인은 `rankVisibility=HIDDEN`이다 |
-| `GET /api/v1/characters/rank?characterName=` | 전투력·아이템 레벨 × 전체·서버·직업 순위. 같은 필터를 받는다. 모집단 밖이면 `included=false`, entries 빈 배열 |
+| `GET /api/v1/characters/rank?characterName=` | 전투력·아이템 레벨 × 전체·서버·직업·서버 내 직업(SERVER_CLASS, scopeValue "서버/직업", #170) 순위. 같은 필터를 받는다. 모집단 밖이면 `included=false`, entries 빈 배열 |
 
 - 상위 %: `rank / total × 100`이고 소수 둘째 자리에서 올림한다. 1위/30명은 3.34다.
 - 티어 키: TOP1(≤1%), TOP5, TOP10, TOP25, TOP50, REST. 표시 이름은 프론트가 매핑한다(PM 결정).

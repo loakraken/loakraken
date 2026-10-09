@@ -132,7 +132,7 @@ public class StatsQueryService {
 
   public DistributionResult distribution(
       StatsConditions conditions, Metric metric, BigDecimal width, BigDecimal percentileOf) {
-    var binWidth = width == null ? defaultWidth(metric) : width.stripTrailingZeros();
+    var binWidth = width == null ? defaultWidth(metric) : StatsConditions.strip(width);
     var distribution =
         cached(
             "distribution:" + metric + ":" + binWidth.toPlainString() + ":" + key(conditions),
@@ -165,7 +165,11 @@ public class StatsQueryService {
         metric,
         binWidth,
         distribution.bins(),
-        standing(conditions, metric, percentileOf, distribution.meta().aggregatedAt()));
+        standing(
+            conditions,
+            metric,
+            StatsConditions.strip(percentileOf),
+            distribution.meta().aggregatedAt()));
   }
 
   public SnapshotsResult snapshots() {
@@ -215,15 +219,16 @@ public class StatsQueryService {
   }
 
   /**
-   * 캐릭터의 전체·서버·직업 순위. 캐릭터는 이 모집단 조건(필터)에 들어 있어야 순위가 나온다. 순위 모집단은 공개 제외 목록을 뺀 것이라 랭킹 목록의 순위와 같다. 제외
-   * 목록에 있는 본인은 rankVisibility=HIDDEN이고 순위·백분위·티어를 주지 않는다(PM 총괄 결정 2026-10-09).
+   * 캐릭터의 전체·서버·직업·서버 내 직업 순위. 캐릭터는 이 모집단 조건(필터)에 들어 있어야 순위가 나온다. 순위 모집단은 공개 제외 목록을 뺀 것이라 랭킹 목록의 순위와
+   * 같다. 제외 목록에 있는 본인은 rankVisibility=HIDDEN이고 순위·백분위·티어를 주지 않는다(PM 총괄 결정 2026-10-09).
    */
   public CharacterRankResult characterRank(String characterName, StatsConditions conditions) {
     var target =
         guard(() -> stats.target(characterName))
             .orElseThrow(() -> new BusinessException(StatsErrorCode.STATS_CHARACTER_NOT_OBSERVED));
     return cached(
-        "rank:" + target.serverName() + ":" + target.characterName() + ":" + key(conditions),
+        // v2: 서버 내 직업(SERVER_CLASS) 칸 추가(#170). 이전 캐시가 새 칸 없이 남지 않게 키를 바꾼다.
+        "rank:v2:" + target.serverName() + ":" + target.characterName() + ":" + key(conditions),
         CharacterRankResult.class,
         () -> {
           var now = clock.instant();
@@ -250,6 +255,14 @@ public class StatsQueryService {
                       Scope.CLASS,
                       target.className(),
                       conditions.withClassName(target.className()),
+                      since,
+                      value));
+              entries.add(
+                  entry(
+                      metric,
+                      Scope.SERVER_CLASS,
+                      target.serverName() + "/" + target.className(),
+                      conditions.withServer(target.serverName()).withClassName(target.className()),
                       since,
                       value));
             }
@@ -375,7 +388,9 @@ public class StatsQueryService {
   public enum Scope {
     ALL,
     SERVER,
-    CLASS
+    CLASS,
+    /** 같은 서버·같은 직업(#170). scopeValue는 "서버/직업". */
+    SERVER_CLASS
   }
 
   public record Meta(

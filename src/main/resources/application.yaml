@@ -1,6 +1,11 @@
 server:
   # 신뢰 프록시(사설망·루프백)가 보낸 X-Forwarded-For만 원격 주소로 쓴다(Tomcat RemoteIpValve). 외부에서 직접 보낸 헤더는 무시한다.
   forward-headers-strategy: native
+  # JSON 응답을 gzip으로 보낸다. 홈 일정은 400KB → 8KB 수준이다(#118 P2, docs/home.md).
+  compression:
+    enabled: true
+    mime-types: application/json
+    min-response-size: 2KB
 
 spring:
   application:
@@ -40,6 +45,14 @@ lostark:
     # 비우면 API 키 SHA-256 앞 12자. 운영·스테이징은 명시합니다.
     key-id: ${LOSTARK_GATE_KEY_ID:}
     command-timeout: ${LOSTARK_GATE_COMMAND_TIMEOUT:100ms}
+  # 클라이언트별 분당 한도(#108). official은 요청이 실제로 일으킨 공식 호출 수입니다. docs/backend-operations.md 참고.
+  client-limit:
+    enabled: ${CLIENT_LIMIT_ENABLED:true}
+    official-per-minute: ${CLIENT_LIMIT_OFFICIAL:20}
+    stats-per-minute: ${CLIENT_LIMIT_STATS:60}
+    general-per-minute: ${CLIENT_LIMIT_GENERAL:240}
+    bot-per-minute: ${CLIENT_LIMIT_BOT:120}
+    exempt-internal: ${CLIENT_LIMIT_EXEMPT_INTERNAL:true}
 
 character:
   snapshots:
@@ -58,6 +71,10 @@ market:
   warmup:
     enabled: ${MARKET_WARMUP_ENABLED:false}
     interval: ${MARKET_WARMUP_INTERVAL:9m}
+    # 홈 요약·시세 기본 탭(board?tab=REFINING) 강제 갱신 주기. 가격 캐시 TTL과 같게 둡니다(#154).
+    board-interval: ${MARKET_WARMUP_BOARD_INTERVAL:30s}
+    # 예열 전체(이력·보드)의 분당 공식 호출 상한입니다.
+    max-calls-per-minute: ${MARKET_WARMUP_MAX_CALLS_PER_MINUTE:15}
 
 stats:
   collector:
@@ -69,6 +86,13 @@ home:
   cache:
     calendar-ttl: ${HOME_CALENDAR_CACHE_TTL:30m}
     news-ttl: ${HOME_NEWS_CACHE_TTL:10m}
+
+management:
+  metrics:
+    distribution:
+      # p95·p99를 Prometheus에서 계산하도록 HTTP 요청 지연 히스토그램을 낸다(#143).
+      percentiles-histogram:
+        http.server.requests: true
 
 springdoc:
   paths-to-match: /api/v1/**

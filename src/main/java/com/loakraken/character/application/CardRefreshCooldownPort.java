@@ -7,4 +7,7 @@ import java.util.Optional;
 public interface CardRefreshCooldownPort {
   /** 쿨다운을 잡으면 empty, 이미 잡혀 있으면 남은 시간. */
   Optional<Duration> acquire(String rosterKey, Duration cooldown);
+
+  /** 잡은 쿨다운을 푼다(한 명도 못 채우고 한도·장애로 멈췄을 때). 실패해도 예외를 던지지 않는다. */
+  default void release(String rosterKey) {}
 }

@@ -16,7 +16,8 @@ PM 총괄 배정 E와 클로아 "획득한 특수 칭호"(3곳)를 흡수한다.
 - 칭호마다 가장 먼저 확인한 기록 하나를 쓴다. `firstObservedAt` 오름차순이고, `observedOrder`는 1부터 매긴다.
 - 응답
   - characterName, serverName, rosterCharacters, observedCharacters, ruleVersion
-  - titles[]: {title, firstObservedAt, lastObservedAt, observedOrder, recordedBy, source}
+  - titles[]: {title, firstObservedAt, firstObservedDate(KST 날짜, #175), lastObservedAt, observedOrder, recordedBy, source}
+  - 같은 `firstObservedDate`의 칭호는 한 번의 관측(첫 원정대 기록)에 함께 들어온 것이라 `observedOrder`의 앞뒤에 의미가 없다. 화면은 같은 날짜를 묶어 "같은 날 확인"으로 보인다.
 - **노출 기준(PM 총괄)**
   - "LOAKraken에서 처음 확인한 순서다. 장착한 칭호만 기록되며 실제 획득일과 다를 수 있다."
   - `acquiredAt`·획득 순서 표현은 쓰지 않는다. 프론트 표기는 "처음 확인"이다.

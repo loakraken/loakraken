@@ -19,6 +19,9 @@ import tools.jackson.databind.json.JsonMapper;
 
 @Component
 class ValkeyCharacterCache implements CharacterCache {
+  /** 없는 캐릭터 기억 시간(#108). 새로 만든 캐릭터는 최대 이만큼 늦게 보인다. */
+  static final Duration MISSING_TTL = Duration.ofMinutes(5);
+
   private final StringRedisTemplate redis;
   private final JsonMapper mapper;
   private final LostArkProperties properties;
@@ -83,6 +86,27 @@ class ValkeyCharacterCache implements CharacterCache {
     write(siblingsKey(name), result);
   }
 
+  @Override
+  public boolean isMissing(String name) {
+    try {
+      boolean missing = Boolean.TRUE.equals(redis.hasKey(missingKey(name)));
+      if (missing) metrics.cache(CacheOutcome.NOT_FOUND_HIT);
+      return missing;
+    } catch (DataAccessException exception) {
+      metrics.cache(CacheOutcome.READ_ERROR);
+      return false;
+    }
+  }
+
+  @Override
+  public void markMissing(String name) {
+    try {
+      redis.opsForValue().set(missingKey(name), "1", MISSING_TTL);
+    } catch (DataAccessException exception) {
+      metrics.cache(CacheOutcome.WRITE_ERROR);
+    }
+  }
+
   private <T> Optional<T> read(String key, Class<T> type, Predicate<T> complete) {
     try {
       String json = redis.opsForValue().get(key);
@@ -125,6 +149,10 @@ class ValkeyCharacterCache implements CharacterCache {
 
   private String armoryKey(String name) {
     return "character:v11:" + name + ":armory";
+  }
+
+  private String missingKey(String name) {
+    return "character:v1:" + name + ":missing";
   }
 
   private String siblingsKey(String name) {

@@ -67,19 +67,30 @@
   - HTTP: 스캔 재사용(외부 2회), 400 검증
   - OpenAPI: 계약 확인. 합성 산출물은 `market-board.json`, `market-tabs.json`이다.
 
+## 기본 보드 1분 갱신 (#154)
+
+홈 요약과 시세 기본 탭은 같은 `GET /markets/board?tab=REFINING`(tier 생략 → 4, 기본 정렬, 1페이지)을 쓴다(프론트 회신 10-09). 예열이 켜진 인스턴스는 이 키의 공식 검색을 **30초마다 강제 갱신**한다.
+
+- 가격 캐시 TTL(30초)과 주기가 같아, 사용자는 공식 호출을 기다리지 않고 `observedAt`은 늘 1분 안이다.
+- 다른 탭·정렬·페이지는 그대로 사용자 요청 때 받는다.
+- `gate.withReserve(40, …)`로 사용자 몫을 남긴다. 공유 한도·게이트 장애를 만나면 이번 주기를 멈춘다.
+
 ## 핵심 품목 이력 예열
 
 프론트 합의(B-5 Q3)에 따라, 첫 화면부터 보드의 `changeWeek`·`spark7`이 보이도록 핵심 19개 품목의 14일 이력을 주기적으로 **강제 갱신**한다. 캐시를 읽지 않고 공식 상세를 다시 받아 저장한다.
 
 | 설정 | 기본값 | 환경 변수 |
 |---|---|---|
-| `market.warmup.enabled` | true | `MARKET_WARMUP_ENABLED` |
+| `market.warmup.enabled` | false(지정 인스턴스에서만 켬, #107) | `MARKET_WARMUP_ENABLED` |
 | `market.warmup.interval` | 9분(이력 TTL 10분보다 짧아야 끊기지 않음) | `MARKET_WARMUP_INTERVAL` |
 | `market.warmup.initial-delay` | 20초 | — |
 | `market.warmup.item-ids` | T4 재련 재료 11, 숨결 2, 업화 책 6(공식 ID) | — |
+| `market.warmup.board-interval` | 30초(가격 캐시 TTL과 같음) | `MARKET_WARMUP_BOARD_INTERVAL` |
+| `market.warmup.board-tabs` | REFINING | — |
+| `market.warmup.max-calls-per-minute` | 15(이력·보드 합산) | `MARKET_WARMUP_MAX_CALLS_PER_MINUTE` |
 
-- 예산: 19회 / 9분, 분당 약 2회다. 단일 인스턴스 전제다.
+- 예산: 이력 19회 / 9분(분당 약 2회) + 기본 보드 2회/분. 예열 전체는 분당 15회를 넘지 않고, 넘으면 그 분의 나머지를 건너뛴다(`outcome=capped`). 이력·보드 예열은 같은 리더 임대(`market-warmup`)를 써서 한 인스턴스에서만 돈다. 그래서 인스턴스 안 분당 카운터가 합산 상한을 지킨다(#158 P2).
 - API 키가 없으면 아무것도 하지 않는다. 테스트 태스크(`build.gradle`)는 예열을 끈다.
 - 품목별 실패는 격리하고 예외 유형만 기록한다. 호출 한도 초과(429)를 만나면 이번 주기를 멈춘다.
-- 지표 `loakraken.market.warmup{outcome=refreshed|not_found|failed}`
+- 지표 `loakraken.market.warmup{target=history|board, outcome=refreshed|not_found|failed|capped}`
 - 2026-10-08 실서버: 시작 20초 후 이력 키 19개가 적재됐고, 재련 재료 보드 첫 페이지 10행 모두 `historyAvailable=true`였다.

@@ -12,16 +12,21 @@ import org.springframework.stereotype.Service;
 /** 공식 일정·소식을 캐시와 동시 요청 병합으로 제공한다. */
 @Service
 public class HomeQueryService {
+  private static final org.slf4j.Logger log =
+      org.slf4j.LoggerFactory.getLogger(HomeQueryService.class);
   private final HomeSourcePort source;
   private final HomeCache cache;
   private final Clock clock;
+  private final java.util.List<NewsObserver> observers;
   private final ConcurrentHashMap<String, CompletableFuture<Object>> flights =
       new ConcurrentHashMap<>();
 
-  public HomeQueryService(HomeSourcePort source, HomeCache cache, Clock clock) {
+  public HomeQueryService(
+      HomeSourcePort source, HomeCache cache, Clock clock, java.util.List<NewsObserver> observers) {
     this.source = source;
     this.cache = cache;
     this.clock = clock;
+    this.observers = java.util.List.copyOf(observers);
   }
 
   public HomeCache.CalendarSnapshot calendar() {
@@ -36,7 +41,18 @@ public class HomeQueryService {
     return collect(
         "news",
         cache::findNews,
-        () -> new HomeCache.NewsSnapshot(clock.instant(), source.fetchNews()),
+        () -> {
+          var snapshot = new HomeCache.NewsSnapshot(clock.instant(), source.fetchNews());
+          // 관찰자 실패는 소식 응답을 깨지 않는다(PM-백엔드 #126 P2).
+          for (var observer : observers) {
+            try {
+              observer.observed(snapshot);
+            } catch (RuntimeException exception) {
+              log.warn("소식 관찰자가 실패했습니다. 예외 유형={}", exception.getClass().getSimpleName());
+            }
+          }
+          return snapshot;
+        },
         cache::saveNews);
   }
 

@@ -20,6 +20,8 @@ public enum CharacterErrorCode implements ErrorCode {
   CARD_COLLECTION_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "원정대 카드 기록을 조회할 수 없습니다."),
   CHARACTER_POPULAR_DISABLED(HttpStatus.SERVICE_UNAVAILABLE, "인기 검색 기능이 비활성화되어 있습니다."),
   CHARACTER_POPULAR_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "인기 검색을 조회할 수 없습니다."),
+  /** 공개 요약(#145): 캐시에도 저장된 관측에도 없다. 공식 API는 부르지 않는다. */
+  CHARACTER_NOT_CACHED(HttpStatus.NOT_FOUND, "아직 확인한 기록이 없는 캐릭터입니다."),
   CARD_COLLECTION_REFRESH_COOLDOWN(
       HttpStatus.TOO_MANY_REQUESTS, "원정대 기록은 10분에 한 번 채울 수 있습니다. 잠시 후 다시 시도해 주세요.");
 

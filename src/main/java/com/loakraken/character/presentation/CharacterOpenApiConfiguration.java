@@ -25,6 +25,9 @@ class CharacterOpenApiConfiguration {
       ResponseContracts.apply(
           CardCollectionRefreshResponse.class, document.getComponents().getSchemas());
       ResponseContracts.apply(RosterTitlesResponse.class, document.getComponents().getSchemas());
+      ResponseContracts.apply(
+          CharacterPublicSummaryController.CharacterPublicSummaryResponse.class,
+          document.getComponents().getSchemas());
     };
   }
 }

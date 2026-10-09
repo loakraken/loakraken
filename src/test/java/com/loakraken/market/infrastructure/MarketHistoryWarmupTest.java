@@ -105,7 +105,8 @@ class MarketHistoryWarmupTest {
     warmup.warmBoards();
     verify(boards).refreshDefaultPage(MarketTab.REFINING);
     verify(gate).withReserve(eq(MarketHistoryWarmup.RESERVE), any());
-    verify(lease).hold(eq(MarketHistoryWarmup.BOARD_LEASE), eq(Duration.ofSeconds(60)));
+    // 이력 예열과 같은 임대(#158 P2)
+    verify(lease).hold(eq(MarketHistoryWarmup.LEASE), eq(Duration.ofMinutes(10)));
     assertThat(
             registry
                 .get("loakraken.background.last_success")
@@ -132,7 +133,7 @@ class MarketHistoryWarmupTest {
 
   @Test
   void 임대를_못_얻거나_키가_없으면_보드를_갱신하지_않는다() {
-    when(lease.hold(eq(MarketHistoryWarmup.BOARD_LEASE), any())).thenReturn(false);
+    when(lease.hold(eq(MarketHistoryWarmup.LEASE), any())).thenReturn(false);
     warmup("key", List.of(), 15).warmBoards();
     warmup("", List.of(), 15).warmBoards();
     verifyNoInteractions(boards);

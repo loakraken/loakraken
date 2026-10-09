@@ -1,6 +1,7 @@
 package com.loakraken.character.application;
 
 import com.loakraken.character.domain.CharacterSibling;
+import com.loakraken.common.api.BusinessException;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -69,7 +70,8 @@ public class CharacterCardRefreshService {
       if (server.equals(sibling.serverName()) && sibling.characterName() != null)
         roster.put(sibling.characterName(), sibling);
 
-    var wait = cooldown.acquire(rosterKey(server, roster.keySet()), COOLDOWN);
+    String key = rosterKey(server, roster.keySet());
+    var wait = cooldown.acquire(key, COOLDOWN);
     if (wait.isPresent())
       throw new CharacterException(CharacterErrorCode.CARD_COLLECTION_REFRESH_COOLDOWN, wait.get());
     var now = clock.instant();
@@ -100,21 +102,35 @@ public class CharacterCardRefreshService {
     int done = 0;
     int failed = 0;
     int attempted = 0;
+    boolean stopped = false;
     for (var target : targets) {
       if (attempted == MAX_TARGETS) break;
       attempted++;
       try {
         queries.search(new SearchCharacterCommand(target.characterName(), false));
         done++;
-      } catch (CharacterException exception) {
+      } catch (BusinessException exception) {
         failed++;
-        // 호출 한도·장애면 나머지는 다음 기회로 넘긴다.
-        if (exception.errorCode() instanceof CharacterErrorCode code && STOP_ON.contains(code))
+        // 호출 한도·장애(공유 한도·클라이언트 한도·게이트 장애 포함)면 나머지는 다음 기회로 넘긴다.
+        if (stops(exception)) {
+          stopped = true;
           break;
+        }
       }
+    }
+    // 한 명도 못 채우고 한도·장애로 멈췄으면 10분을 기다리게 하지 않는다(PM-백엔드 #138 P2).
+    if (stopped && done == 0) {
+      cooldown.release(key);
+      nextAvailableAt = now;
     }
     return new Result(
         roster.size(), done, skipped, failed, targets.size() - attempted, nextAvailableAt);
+  }
+
+  private static boolean stops(BusinessException exception) {
+    var code = exception.errorCode();
+    if (code instanceof CharacterErrorCode characterCode) return STOP_ON.contains(characterCode);
+    return code instanceof com.loakraken.common.lostark.LostArkErrorCode;
   }
 
   /** 같은 서버·같은 원정대 이름 집합이면 같은 키. 이름은 정렬해 넣는다. */

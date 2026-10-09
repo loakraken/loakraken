@@ -28,7 +28,6 @@ import org.springframework.stereotype.Component;
 class MarketHistoryWarmup {
   private static final Logger log = LoggerFactory.getLogger(MarketHistoryWarmup.class);
   static final String LEASE = "market-warmup";
-  static final String BOARD_LEASE = "market-board-warmup";
   static final int RESERVE = 40;
   private final MarketQueryService markets;
   private final MarketBoardService boards;
@@ -135,7 +134,8 @@ class MarketHistoryWarmup {
 
   private void warmBoardTabs() {
     if (lostArk.apiKey().isBlank()) return;
-    if (!lease.hold(BOARD_LEASE, properties.boardInterval().plusSeconds(30))) return;
+    // 이력 예열과 같은 임대를 쓴다. 두 주기가 한 인스턴스에서 돌아야 분당 상한(인스턴스 안 카운터)이 합산을 지킨다(#158 P2).
+    if (!lease.hold(LEASE, properties.interval().plusMinutes(1))) return;
     for (var tab : properties.boardTabs()) {
       if (!allowCall()) {
         recordBoard(Outcome.CAPPED);

@@ -89,7 +89,7 @@
 | `market.warmup.board-tabs` | REFINING | — |
 | `market.warmup.max-calls-per-minute` | 15(이력·보드 합산) | `MARKET_WARMUP_MAX_CALLS_PER_MINUTE` |
 
-- 예산: 이력 19회 / 9분(분당 약 2회) + 기본 보드 2회/분. 예열 전체는 분당 15회를 넘지 않고, 넘으면 그 분의 나머지를 건너뛴다(`outcome=capped`). 리더 임대(`market-warmup`·`market-board-warmup`)로 한 인스턴스만 돈다.
+- 예산: 이력 19회 / 9분(분당 약 2회) + 기본 보드 2회/분. 예열 전체는 분당 15회를 넘지 않고, 넘으면 그 분의 나머지를 건너뛴다(`outcome=capped`). 이력·보드 예열은 같은 리더 임대(`market-warmup`)를 써서 한 인스턴스에서만 돈다. 그래서 인스턴스 안 분당 카운터가 합산 상한을 지킨다(#158 P2).
 - API 키가 없으면 아무것도 하지 않는다. 테스트 태스크(`build.gradle`)는 예열을 끈다.
 - 품목별 실패는 격리하고 예외 유형만 기록한다. 호출 한도 초과(429)를 만나면 이번 주기를 멈춘다.
 - 지표 `loakraken.market.warmup{target=history|board, outcome=refreshed|not_found|failed|capped}`

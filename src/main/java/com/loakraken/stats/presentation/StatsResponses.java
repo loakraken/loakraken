@@ -286,7 +286,9 @@ public final class StatsResponses {
   public record StatsRankEntryResponse(
       @Schema(allowableValues = {"COMBAT_POWER", "ITEM_LEVEL"}) String metric,
       @Schema(allowableValues = {"ALL", "SERVER", "CLASS"}) String scope,
-      @NullableResponse @Schema(description = "서버명 또는 직업명. ALL이면 null") String scopeValue,
+      @NullableResponse
+          @Schema(description = "SERVER면 서버명, CLASS면 직업명, SERVER_CLASS면 \"서버/직업\". ALL이면 null")
+          String scopeValue,
       long rank,
       long total,
       @NullableResponse BigDecimal topPercent,

@@ -1,8 +1,12 @@
 name: Deploy
 
-# 수동 배포 초안. 서버·비밀값이 준비되기 전에는 "Check deploy settings" 단계에서 멈춘다.
-# 운영(production) 환경에는 GitHub Environments의 승인자 보호를 건다(docs/ops/deploy.md).
-# 서버는 사업자와 무관한 Linux + docker compose이며, /opt/loakraken/<환경>에 stack.env가 있어야 한다.
+# 서버가 가져오는 배포(pull)의 "승인" 단계다(PM 총괄 결정 2026-10-09). 서버에 SSH로 접속하지 않는다.
+# 이 작업은 GitHub Environments(production은 승인자=사용자)를 통과해야 실행되고,
+# GHCR 이미지 채널 태그(:production 또는 :staging)를 지정한 커밋 이미지로 옮긴다.
+# 서버의 pull-deploy 타이머가 채널 태그를 따라가 배포한다(docs/ops/deploy.md "pull 배포").
+#
+# 롤백: 이전 sha- 태그로 이 워크플로를 다시 실행한다.
+# 준비: loakraken-web 패키지 설정에서 이 저장소(loakraken)에 Write 권한을 준다(Manage Actions access).
 on:
   workflow_dispatch:
     inputs:
@@ -12,7 +16,7 @@ on:
         options: [staging, production]
         required: true
       api_tag:
-        description: "백엔드 이미지 태그(예: sha-1a2b3c4, 운영은 sha-만)"
+        description: "백엔드 이미지 태그(예: sha-1a2b3c4, 운영은 sha-만). 배포 번들도 같은 태그를 쓴다"
         type: string
         required: true
       web_tag:
@@ -28,33 +32,23 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  deploy:
+  promote:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 10
     environment: ${{ inputs.environment }}
+    permissions:
+      contents: read
+      packages: write
     env:
-      DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
-      DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
-      DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
-      DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
-      TARGET_ENV: ${{ inputs.environment }}
-      DEPLOY_PATH: /opt/loakraken/${{ inputs.environment }}
+      CHANNEL: ${{ inputs.environment }}
       API_TAG: ${{ inputs.api_tag }}
       WEB_TAG: ${{ inputs.web_tag }}
-      OWNER: ${{ github.repository_owner }}
+      REGISTRY: ghcr.io/${{ github.repository_owner }}
     steps:
-      - name: Check deploy settings
+      - name: Check tags
         run: |
-          missing=""
-          for name in DEPLOY_HOST DEPLOY_USER DEPLOY_SSH_KEY DEPLOY_KNOWN_HOSTS; do
-            [ -n "${!name}" ] || missing="$missing $name"
-          done
-          if [ -n "$missing" ]; then
-            echo "::error::배포 비밀값이 없습니다:$missing (docs/ops/deploy.md 참고)"
-            exit 1
-          fi
           # 운영은 재현·롤백이 정확한 커밋 태그(sha-)만 받는다. 스테이징만 develop·master 가변 태그를 허용한다.
-          if [ "$TARGET_ENV" = "production" ]; then
+          if [ "$CHANNEL" = "production" ]; then
             pattern='^sha-[0-9a-f]{7,40}$'
           else
             pattern='^(sha-[0-9a-f]{7,40}|develop|master)$'
@@ -62,46 +56,32 @@ jobs:
           [[ "$API_TAG" =~ $pattern ]] || { echo "::error::api_tag 형식이 올바르지 않습니다"; exit 1; }
           [[ "$WEB_TAG" =~ $pattern ]] || { echo "::error::web_tag 형식이 올바르지 않습니다"; exit 1; }
 
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
-          sparse-checkout: deploy
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Prepare SSH
+      - name: Move channel tags to the approved images
         run: |
-          install -m 700 -d ~/.ssh
-          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
-          chmod 600 ~/.ssh/deploy_key
-          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
-
-      - name: Upload stack files
-        run: |
-          scp -i ~/.ssh/deploy_key deploy/compose.prod.yaml deploy/Caddyfile deploy/Caddyfile.cloudflare \
-            "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/"
-          # 외부 백업 스크립트(docs/ops/backup.md)와 Cloudflare 대역 파일(docs/ops/cloudflare.md). 실행 권한을 유지해 올린다.
-          scp -i ~/.ssh/deploy_key -p -r deploy/backup deploy/cloudflare "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/"
-
-      - name: Back up database, pull images, start
-        run: |
-          ssh -i ~/.ssh/deploy_key "$DEPLOY_USER@$DEPLOY_HOST" bash -s -- \
-            "$DEPLOY_PATH" "ghcr.io/$OWNER/loakraken-api:$API_TAG" "ghcr.io/$OWNER/loakraken-web:$WEB_TAG" <<'REMOTE'
           set -euo pipefail
-          cd "$1"
-          compose() { docker compose -f compose.prod.yaml --env-file stack.env --env-file images.env "$@"; }
-
-          # 직전 이미지 태그를 남겨 롤백에 쓴다.
-          [ -f images.env ] && cp images.env images.prev.env
-          printf 'API_IMAGE=%s\nWEB_IMAGE=%s\n' "$2" "$3" > images.env.next
-
-          # 배포 전 DB 백업(실행 중일 때만).
-          mkdir -p backups
-          if [ -f images.env ] && [ -n "$(compose ps -q postgres 2>/dev/null)" ]; then
-            compose exec -T postgres sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" --format=custom' \
-              > "backups/pre-deploy-$(date -u +%Y%m%dT%H%M%SZ).dump"
-            ls -1t backups/pre-deploy-*.dump | tail -n +15 | xargs -r rm --
-          fi
-
-          mv images.env.next images.env
-          compose pull
-          compose up -d --wait --remove-orphans
-          compose ps
-          REMOTE
+          promote() {
+            local image="$1" tag="$2"
+            # 레지스트리 안에서 태그만 옮긴다(이미지를 내려받지 않음). 없는 태그면 실패한다.
+            docker buildx imagetools inspect "$REGISTRY/$image:$tag" >/dev/null
+            docker buildx imagetools create --tag "$REGISTRY/$image:$CHANNEL" "$REGISTRY/$image:$tag"
+            digest="$(docker buildx imagetools inspect "$REGISTRY/$image:$CHANNEL" --format '{{json .Manifest.Digest}}' | tr -d '"')"
+            echo "| $image | $tag | \`$digest\` |" >> "$GITHUB_STEP_SUMMARY"
+          }
+          {
+            echo "### $CHANNEL 채널 이동"
+            echo
+            echo "| 이미지 | 태그 | digest |"
+            echo "|---|---|---|"
+          } >> "$GITHUB_STEP_SUMMARY"
+          promote loakraken-api "$API_TAG"
+          promote loakraken-deploy "$API_TAG"
+          promote loakraken-web "$WEB_TAG"
+          echo >> "$GITHUB_STEP_SUMMARY"
+          echo "서버의 pull-deploy 타이머(2분 간격)가 이 릴리스를 가져갑니다. 결과는 Slack #alerts로 옵니다." >> "$GITHUB_STEP_SUMMARY"

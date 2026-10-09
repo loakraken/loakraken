@@ -82,6 +82,10 @@ stats:
     interval: ${STATS_COLLECTOR_INTERVAL:3s}
     reserve: ${STATS_COLLECTOR_RESERVE:40}
 
+# 원정대 영수증(#174)은 계산 일치 원칙(사용자 지시 10-09) 검증 전까지 공개하지 않는다. 검증 서버에서만 켠다.
+receipt:
+  enabled: ${RECEIPT_ENABLED:false}
+
 home:
   cache:
     calendar-ttl: ${HOME_CALENDAR_CACHE_TTL:30m}

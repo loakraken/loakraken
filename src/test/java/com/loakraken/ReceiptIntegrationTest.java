@@ -36,7 +36,9 @@ import tools.jackson.databind.json.JsonMapper;
 
 /** 원정대 영수증(#173). 공식 API·시세는 모두 대역이다. */
 @Import(TestcontainersConfiguration.class)
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@SpringBootTest(
+    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+    properties = "receipt.enabled=true")
 class ReceiptIntegrationTest {
   private static final String SERVER = "영수증테스트서버";
   private static final String MAIN = "영수증본캐";

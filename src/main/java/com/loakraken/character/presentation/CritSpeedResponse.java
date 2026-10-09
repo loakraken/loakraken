@@ -57,7 +57,9 @@ public record CritSpeedResponse(
                             target.requiredAdditionalCritStat(),
                             target.reached()))
                 .toList(),
-            crit.critStatPerPercent()),
+            crit.critStatPerPercent(),
+            new CritSpeedCritDamageResponse(
+                crit.damage().base(), crit.damage().observed(), crit.damage().total())),
         new CritSpeedSpeedResponse(
             speed.swiftnessStat(),
             speed.cap(),
@@ -118,7 +120,14 @@ public record CritSpeedResponse(
       CritSpeedBluntThornResponse bluntThorn,
       @Schema(description = "CRIT_100: 치적 100%, BLUNT_THORN_OPTIMAL: 뭉툭한 가시 최대 진화형 피해 도달")
           List<CritSpeedTargetResponse> targets,
-      @Schema(description = "치명타 적중률 1%당 치명 스탯(27.944)") BigDecimal critStatPerPercent) {}
+      @Schema(description = "치명타 적중률 1%당 치명 스탯(27.944)") BigDecimal critStatPerPercent,
+      @Schema(description = "치명타 피해(%). 기본 200 + 관측 출처(axis=CRIT_DAMAGE) 합. 스킬 한정 문구 제외")
+          CritSpeedCritDamageResponse damage) {}
+
+  public record CritSpeedCritDamageResponse(
+      @Schema(description = "기본 치명타 피해(200)") BigDecimal base,
+      @Schema(description = "관측 출처 합") BigDecimal observed,
+      @Schema(description = "base + observed") BigDecimal total) {}
 
   public record CritSpeedBluntThornResponse(
       @Schema(description = "EQUIPPED_NODE: 장착 노드 공식 문구, REFERENCE_LEVEL_2: 미장착이라 공식 Lv.2 문구 기준")

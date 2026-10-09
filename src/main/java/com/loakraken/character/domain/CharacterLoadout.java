@@ -71,11 +71,32 @@ public record CharacterLoadout(
       Boolean counter,
       List<Tripod> tripods,
       Rune rune,
-      List<SkillGemEffect> gemEffects) {
+      List<SkillGemEffect> gemEffects,
+      AttackType attackType) {
     public Skill {
       tripods = tripods == null ? List.of() : List.copyOf(tripods);
       gemEffects = gemEffects == null ? List.of() : List.copyOf(gemEffects);
     }
+
+    public Skill(
+        String name,
+        String icon,
+        Integer level,
+        String type,
+        Integer partBreakLevel,
+        Boolean counter,
+        List<Tripod> tripods,
+        Rune rune,
+        List<SkillGemEffect> gemEffects) {
+      this(name, icon, level, type, partBreakLevel, counter, tripods, rune, gemEffects, null);
+    }
+  }
+
+  /** 스킬 Tooltip의 "공격 타입". 백 어택은 치명타 적중률 +10%p(클로아 스킬별 치명 확률과 같은 규칙). */
+  public enum AttackType {
+    BACK_ATTACK,
+    HEAD_ATTACK,
+    NONE
   }
 
   public record Tripod(Integer tier, Integer slot, String name, String icon) {}

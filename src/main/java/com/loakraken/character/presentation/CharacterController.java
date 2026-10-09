@@ -1,5 +1,6 @@
 package com.loakraken.character.presentation;
 
+import com.loakraken.character.application.CharacterCardRefreshService;
 import com.loakraken.character.application.CharacterCardService;
 import com.loakraken.character.application.CharacterPopularService;
 import com.loakraken.character.application.CharacterQueryService;
@@ -31,18 +32,21 @@ public class CharacterController {
   private final CharacterViewService views;
   private final CharacterCardService cards;
   private final CharacterPopularService popular;
+  private final CharacterCardRefreshService cardRefresh;
 
   public CharacterController(
       CharacterQueryService queryService,
       CritSpeedService critSpeed,
       CharacterViewService views,
       CharacterCardService cards,
-      CharacterPopularService popular) {
+      CharacterPopularService popular,
+      CharacterCardRefreshService cardRefresh) {
     this.queryService = queryService;
     this.critSpeed = critSpeed;
     this.views = views;
     this.cards = cards;
     this.popular = popular;
+    this.cardRefresh = cardRefresh;
   }
 
   @GetMapping("/search")
@@ -247,6 +251,49 @@ public class CharacterController {
     return ApiResponse.of(
         CharacterSuccessCode.CHARACTER_CARD_COLLECTION_SUCCESS,
         CardCollectionResponse.from(cards.collection(request.characterName(), roster.siblings())));
+  }
+
+  @PostMapping("/card-collection/refresh")
+  @Operation(
+      summary = "원정대 카드 기록 채우기",
+      description =
+          "같은 서버 원정대 중 최근 7일 안에 프로필을 관측하지 못한 캐릭터를 아이템 레벨이 높은 순으로 최대 12명 조회해 카드 기록을 채웁니다. 캐릭터 검색과 같은 경로라 공식 호출은 1회 최대 12회이고, 원정대 목록은 캐시를 씁니다. "
+              + "같은 원정대는 10분에 1회만 받으며, 쿨다운 중에는 429와 Retry-After(초)를 줍니다. 카드 기록은 비동기로 저장되므로 응답 직후 card-collection을 다시 조회하면 됩니다.")
+  @ApiResponses({
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(
+        responseCode = "200",
+        description = "처리 완료(일부 실패 포함)"),
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(
+        responseCode = "400",
+        description = "INVALID_REQUEST: 캐릭터명 누락 또는 형식 오류",
+        content = @Content(schema = @Schema(ref = "#/components/schemas/ErrorResponse"))),
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(
+        responseCode = "404",
+        description = "CHARACTER_NOT_FOUND",
+        content = @Content(schema = @Schema(ref = "#/components/schemas/ErrorResponse"))),
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(
+        responseCode = "429",
+        description = "CARD_COLLECTION_REFRESH_COOLDOWN(Retry-After 헤더) 또는 LOST_ARK_RATE_LIMITED",
+        content = @Content(schema = @Schema(ref = "#/components/schemas/ErrorResponse"))),
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(
+        responseCode = "502",
+        description = "LOST_ARK_API_ERROR",
+        content = @Content(schema = @Schema(ref = "#/components/schemas/ErrorResponse"))),
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(
+        responseCode = "503",
+        description =
+            "CARD_COLLECTION_DISABLED, CARD_COLLECTION_UNAVAILABLE, LOST_ARK_NOT_CONFIGURED 또는 CHARACTER_CACHE_UNAVAILABLE",
+        content = @Content(schema = @Schema(ref = "#/components/schemas/ErrorResponse"))),
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(
+        responseCode = "504",
+        description = "LOST_ARK_API_TIMEOUT",
+        content = @Content(schema = @Schema(ref = "#/components/schemas/ErrorResponse")))
+  })
+  public ApiResponse<CardCollectionRefreshResponse> refreshCardCollection(
+      @Valid @ModelAttribute @ParameterObject CharacterSiblingsRequest request) {
+    return ApiResponse.of(
+        CharacterSuccessCode.CHARACTER_CARD_COLLECTION_REFRESH_SUCCESS,
+        CardCollectionRefreshResponse.from(cardRefresh.refresh(request.characterName())));
   }
 
   @PostMapping(value = "/crit-speed", consumes = MediaType.APPLICATION_JSON_VALUE)

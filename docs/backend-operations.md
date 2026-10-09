@@ -1,5 +1,31 @@
 # 백엔드 MVP 운영과 지표
 
+
+## 공유 호출 게이트와 리더 임대 (#107)
+
+같은 공식 키를 쓰는 모든 인스턴스가 분당 90회를 **합산**으로 지킨다.
+
+- 저장소: `lostark.gate.store=valkey`(기본) 또는 `memory`(단일 인스턴스)
+  - Valkey 키: `lostark:gate:{keyId}:window`(정렬 집합), `lostark:gate:{keyId}:blocked-until`
+  - 판정과 기록은 Lua 한 번이다. 서버 TIME 기준으로 대기 확인 → 60초 밖 정리 → ZCARD 판정 → ZADD·PEXPIRE 순서다.
+  - 공식 429와 잔여 0 헤더의 대기 시각은 더 늦을 때만 바꾼다. 그래서 한 인스턴스가 받은 429를 모두가 기다린다.
+- `keyId`
+  - 기본은 API 키 SHA-256 앞 12자다. 키 원문은 Valkey에 넣지 않는다.
+  - 운영·스테이징은 `LOSTARK_GATE_KEY_ID`(`lostark.gate.key-id`)로 명시한다.
+- 동시 요청 4개는 인스턴스 안에서만 센다.
+- 백그라운드(통계 수집기·시세 예열)는 `gate.withReserve(40, …)` 안에서 호출한다.
+  - 그 안의 acquire()가 사용자 몫(budget − reserve = 50)을 남기는지 판정과 기록을 한 번에 한다.
+  - 다른 인스턴스가 끼어들 틈이 없다.
+- Valkey 장애
+  - 게이트 전용 연결의 명령 타임아웃은 100ms다(`lostark.gate.command-timeout`).
+  - 사용자 요청은 `503 LOST_ARK_GATE_UNAVAILABLE`로 거절한다. 캐시 503 정책과 같다.
+  - 백그라운드는 실행하지 않는다.
+  - 지표 이벤트는 `gate_unavailable`이다.
+- 리더 임대: `lostark:leader:stats-collector`(30초), `lostark:leader:market-warmup`(주기 + 1분)
+  - 얻기는 `SET NX PX`다. 연장·해제는 "값이 내 인스턴스 ID일 때만" Lua로 한다.
+  - 못 얻으면 수집기 지표에 `outcome=not_leader`가 남는다.
+- 백그라운드 합산 상한: 수집기 20/분 + 예열(9분에 19회, 1분 갱신 도입 시 15/분 상한) ≤ budget − reserve(50)
+
 ## 실행 전제
 
 MVP는 **동일 API 키를 사용하는 백엔드 프로세스 1개, replicas=1**을 전제로 한다. 배포 인프라를 새로 만들거나 replica 수를 자동 강제하는 코드를 추가한 것은 아니다. 현재 single flight, 호출 예산, 동시성 제한은 JVM 내부 상태다.
@@ -12,7 +38,7 @@ Valkey 읽기·쓰기 장애는 `503 CHARACTER_CACHE_UNAVAILABLE`로 종료한�
 
 관측 저장·이력 공개는 `CHARACTER_SNAPSHOTS_ENABLED=false`를 유지한다. 저장 범위 확인 전 diff·장기 통계·성장 그래프를 확장하지 않는다.
 
-거래소는 가격 30초·검색 옵션 10분을 기본 TTL로 사용한다. 핵심 19개 품목 이력은 9분마다 예열한다(단일 인스턴스 스케줄러, `MARKET_WARMUP_ENABLED=false`로 끔). 옵션 외부 조회도 공유 예산 1회를 사용한다. 거래소 캐시 장애는 `503 MARKET_CACHE_UNAVAILABLE`이며 외부 API 우회나 오래된 응답 반환을 하지 않는다. [거래소 옵션·캐시 계약](market-cache.md)을 참고한다.
+거래소는 가격 30초·검색 옵션 10분을 기본 TTL로 사용한다. 핵심 19개 품목 이력은 9분마다 예열한다. 예열은 기본으로 꺼져 있고, 지정한 인스턴스에서만 `MARKET_WARMUP_ENABLED=true`로 켠다. 켜진 인스턴스끼리도 리더 임대로 한 곳만 돈다. 옵션 외부 조회도 공유 예산 1회를 사용한다. 거래소 캐시 장애는 `503 MARKET_CACHE_UNAVAILABLE`이며 외부 API 우회나 오래된 응답 반환을 하지 않는다. [거래소 옵션·캐시 계약](market-cache.md)을 참고한다.
 
 ## 계측 계약
 
@@ -20,7 +46,7 @@ Actuator가 제공하는 MeterRegistry에 기록한다. 태그는 코드의 고�
 
 | Meter | 종류 | 태그 | 의미 |
 |---|---|---|---|
-| loakraken.lostark.requests | Timer | endpoint=armory/siblings/market_items/market_trades/market_options/market_item_history/game_calendar/news_notices/news_events, outcome=success/not_found/rate_limited/timeout/error | 게이트 통과 후 HTTP 요청 시도부터 응답 수신·JSON 디코딩 종료까지 횟수와 지연 |
+| loakraken.lostark.requests | Timer | endpoint=armory/siblings/market_items/market_trades/market_options/market_item_history/game_calendar/news_notices/news_events/auction_items, outcome=success/not_found/rate_limited/timeout/error | 게이트 통과 후 HTTP 요청 시도부터 응답 수신·JSON 디코딩 종료까지 횟수와 지연 |
 | loakraken.cache.operations | Counter | outcome=hit/miss/invalid/read_error/write_success/write_error | 캐시 읽기·쓰기 결과 및 손상 발견 |
 | loakraken.lostark.gate | Counter | event=budget_reject/concurrency_reject/upstream_429/upstream_backoff_reject | 로컬 차단 사유와 외부 429 관측 |
 | loakraken.character.searches | Counter | outcome=success/failure | 검색 application 서비스 호출의 완료 결과 |
@@ -36,7 +62,7 @@ Actuator가 제공하는 MeterRegistry에 기록한다. 태그는 코드의 고�
 
 외부 요청 Timer의 count가 요청 횟수이므로 별도 요청 Counter와 합산하지 않는다. success는 HTTP 200 및 타입 디코딩 성공이다. 이후 필수 프로필 검증이나 도메인 매핑에서 실패하면 HTTP 지표는 success여도 검색은 failure일 수 있다. not_found는 실제 외부 404이며 원정대 404를 공개 API에서 502로 바꾸는 정책과 구별된다. error에는 다른 HTTP 오류, 비어 있는 응답, JSON 디코딩 오류, 타임아웃 외 연결 오류가 포함된다. API 키 미설정과 로컬 게이트 거절은 HTTP 시도 지표를 만들지 않는다.
 
-429 요청은 HTTP rate_limited와 게이트 upstream_429에 각각 하나씩 기록되며 서로 다른 관점이다. 이후 차단은 upstream_backoff_reject만 증가한다. 남은 할당량 0 헤더로 인한 차단도 같은 backoff 사유다. 차단 사유는 backoff → budget → concurrency 순서로 하나만 기록한다.
+429 요청은 HTTP rate_limited와 게이트 upstream_429에 각각 하나씩 기록되며 서로 다른 관점이다. 이후 차단은 upstream_backoff_reject만 증가한다. 남은 할당량 0 헤더로 인한 차단도 같은 backoff 사유다. 차단 사유는 concurrency → backoff → budget 순서로 하나만 기록한다. 게이트 저장소(Valkey) 장애는 gate_unavailable로 기록한다.
 
 캐시 지표는 사용자 검색 수가 아니라 저장소 연산 기준이다. 검색은 초기 읽기와 single flight 내부 재확인으로 miss가 두 번 발생할 수 있다. 손상 발견 invalid는 제거 성공 시 miss에도 기록되고, 제거 실패 시 read_error에도 기록된다. 적중률은 `hit / (hit + miss)`로 읽되 read_error를 별도로 확인한다. 서로 다른 결과를 전부 더해 검색 수로 사용하지 않는다.
 

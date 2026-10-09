@@ -2,6 +2,7 @@ package com.loakraken.character.application;
 
 import com.loakraken.character.domain.CharacterPosition;
 import com.loakraken.common.api.BusinessException;
+import com.loakraken.common.lostark.LeaderLease;
 import com.loakraken.common.lostark.LostArkErrorCode;
 import com.loakraken.common.lostark.LostArkProperties;
 import com.loakraken.common.lostark.LostArkRequestGate;
@@ -27,6 +28,7 @@ public class CharacterCollectorService {
   private final CharacterCardService cards;
   private final CharacterCollectionPolicy policy;
   private final LostArkRequestGate gate;
+  private final LeaderLease lease;
   private final LostArkProperties lostArk;
   private final MeterRegistry registry;
   private final Clock clock;
@@ -39,6 +41,7 @@ public class CharacterCollectorService {
       CharacterCardService cards,
       CharacterCollectionPolicy policy,
       LostArkRequestGate gate,
+      LeaderLease lease,
       LostArkProperties lostArk,
       MeterRegistry registry,
       Clock clock) {
@@ -48,10 +51,14 @@ public class CharacterCollectorService {
     this.cards = cards;
     this.policy = policy;
     this.gate = gate;
+    this.lease = lease;
     this.lostArk = lostArk;
     this.registry = registry;
     this.clock = clock;
   }
+
+  static final String LEASE = "stats-collector";
+  static final java.time.Duration LEASE_TTL = java.time.Duration.ofSeconds(30);
 
   public enum Task {
     PROFILE,
@@ -61,6 +68,11 @@ public class CharacterCollectorService {
 
   public synchronized Task tick() {
     if (!policy.enabled() || lostArk.apiKey().isBlank()) return Task.NONE;
+    // 켜진 인스턴스끼리도 한 곳만 돈다(#107). 임대 저장소 장애면 돌지 않는다.
+    if (!lease.hold(LEASE, LEASE_TTL)) {
+      record(Task.NONE, "not_leader");
+      return Task.NONE;
+    }
     if (!gate.backgroundAvailable(policy.reserve())) {
       record(Task.NONE, "yielded");
       return Task.NONE;
@@ -86,7 +98,9 @@ public class CharacterCollectorService {
           collection.nextProfileDue(policy.minItemLevel(), now.minus(policy.profileRefreshAfter()));
       if (target.isEmpty()) return false;
       try {
-        var fetched = details.fetchArmory(target.get().characterName());
+        var fetched =
+            gate.withReserve(
+                policy.reserve(), () -> details.fetchArmory(target.get().characterName()));
         var profile = fetched.details().profile();
         history.record(profile, now);
         cards.record(fetched.details(), now);
@@ -105,7 +119,9 @@ public class CharacterCollectorService {
     var target = collection.nextRosterDue(now.minus(policy.rosterRescanAfter()));
     if (target.isEmpty()) return false;
     try {
-      var siblings = details.fetchSiblings(target.get().characterName());
+      var siblings =
+          gate.withReserve(
+              policy.reserve(), () -> details.fetchSiblings(target.get().characterName()));
       int discovered = collection.saveRoster(siblings, now);
       collection.markRosterScanned(target.get(), now);
       record(task, "success");
@@ -123,6 +139,7 @@ public class CharacterCollectorService {
     boolean transientFailure =
         code == CharacterErrorCode.LOST_ARK_RATE_LIMITED
             || code == LostArkErrorCode.LOST_ARK_RATE_LIMITED
+            || code == LostArkErrorCode.LOST_ARK_GATE_UNAVAILABLE
             || code == CharacterErrorCode.LOST_ARK_API_TIMEOUT
             || code == CharacterErrorCode.LOST_ARK_NOT_CONFIGURED
             || code == CharacterErrorCode.CHARACTER_CACHE_UNAVAILABLE;

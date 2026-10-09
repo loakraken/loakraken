@@ -21,9 +21,16 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
   @ExceptionHandler(BusinessException.class)
   public ResponseEntity<ApiResponse<Void>> handleBusinessException(BusinessException exception) {
     var errorCode = exception.errorCode();
-    return ResponseEntity.status(errorCode.httpStatus())
-        .contentType(MediaType.APPLICATION_JSON)
-        .body(ApiResponse.from(errorCode));
+    var response =
+        ResponseEntity.status(errorCode.httpStatus()).contentType(MediaType.APPLICATION_JSON);
+    exception
+        .retryAfter()
+        .ifPresent(
+            retry ->
+                response.header(
+                    HttpHeaders.RETRY_AFTER,
+                    String.valueOf(Math.max(1, (retry.toMillis() + 999) / 1000))));
+    return response.body(ApiResponse.from(errorCode));
   }
 
   @ExceptionHandler(ConstraintViolationException.class)

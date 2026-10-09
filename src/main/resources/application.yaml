@@ -31,10 +31,15 @@ lostark:
   api-key: ${LOSTARK_API_KEY:}
   connect-timeout: 3s
   read-timeout: 5s
-  # 공식 한도 100회/분에 여유를 둔 인스턴스별 예산입니다.
+  # 공식 한도 100회/분에 여유를 둔 예산입니다. 게이트가 Valkey면 같은 키를 쓰는 모든 인스턴스 합산입니다(#107).
   requests-per-minute: 90
   max-concurrent-requests: 4
   summary-ttl: 5m
+  gate:
+    store: ${LOSTARK_GATE_STORE:valkey}
+    # 비우면 API 키 SHA-256 앞 12자. 운영·스테이징은 명시합니다.
+    key-id: ${LOSTARK_GATE_KEY_ID:}
+    command-timeout: ${LOSTARK_GATE_COMMAND_TIMEOUT:100ms}
 
 character:
   snapshots:
@@ -51,7 +56,7 @@ market:
     history-ttl: ${MARKET_HISTORY_CACHE_TTL:10m}
     board-scan-ttl: ${MARKET_BOARD_SCAN_CACHE_TTL:3m}
   warmup:
-    enabled: ${MARKET_WARMUP_ENABLED:true}
+    enabled: ${MARKET_WARMUP_ENABLED:false}
     interval: ${MARKET_WARMUP_INTERVAL:9m}
 
 stats:

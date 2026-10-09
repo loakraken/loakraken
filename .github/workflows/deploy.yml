@@ -1,9 +1,10 @@
 name: Deploy
 
-# 서버가 가져오는 배포(pull)의 "승인" 단계다(PM 총괄 결정 2026-10-09). 서버에 SSH로 접속하지 않는다.
-# 이 작업은 GitHub Environments(production은 승인자=사용자)를 통과해야 실행되고,
+# 서버가 가져오는 배포(pull)의 "릴리스 지정" 단계다. 서버에 SSH로 접속하지 않는다.
 # GHCR 이미지 채널 태그(:production 또는 :staging)를 지정한 커밋 이미지로 옮긴다.
-# 서버의 pull-deploy 타이머가 채널 태그를 따라가 배포한다(docs/ops/deploy.md "pull 배포").
+# 운영 승인은 서버에서 한다(PM 총괄 결정 2026-10-10): 무료 플랜 비공개 저장소라 GitHub Environments 승인자를 쓸 수 없어,
+# 운영 서버는 사용자가 브라우저 SSH에서 pull/approve.sh로 승인한 릴리스만 배포한다(docs/ops/deploy.md "운영 승인").
+# 규칙: Claude 세션은 production으로 이 워크플로를 실행하지 않는다. 운영 릴리스 지정과 승인은 사용자가 한다.
 #
 # 롤백: 이전 sha- 태그로 이 워크플로를 다시 실행한다.
 # 준비: loakraken-web 패키지 설정에서 이 저장소(loakraken)에 Write 권한을 준다(Manage Actions access).
@@ -15,6 +16,10 @@ on:
         type: choice
         options: [staging, production]
         required: true
+      confirm:
+        description: "운영이면 production을 그대로 입력(실수 방지. 실제 승인은 서버 approve.sh)"
+        type: string
+        required: false
       api_tag:
         description: "백엔드 이미지 태그(예: sha-1a2b3c4, 운영은 sha-만). 배포 번들도 같은 태그를 쓴다"
         type: string
@@ -35,7 +40,6 @@ jobs:
   promote:
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    environment: ${{ inputs.environment }}
     permissions:
       contents: read
       packages: write
@@ -43,10 +47,14 @@ jobs:
       CHANNEL: ${{ inputs.environment }}
       API_TAG: ${{ inputs.api_tag }}
       WEB_TAG: ${{ inputs.web_tag }}
+      CONFIRM: ${{ inputs.confirm }}
       REGISTRY: ghcr.io/${{ github.repository_owner }}
     steps:
       - name: Check tags
         run: |
+          if [ "$CHANNEL" = "production" ] && [ "$CONFIRM" != "production" ]; then
+            echo "::error::운영은 confirm에 production을 입력해야 합니다(실제 승인은 서버 approve.sh)"; exit 1
+          fi
           # 운영은 재현·롤백이 정확한 커밋 태그(sha-)만 받는다. 스테이징만 develop·master 가변 태그를 허용한다.
           if [ "$CHANNEL" = "production" ]; then
             pattern='^sha-[0-9a-f]{7,40}$'
@@ -63,7 +71,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Move channel tags to the approved images
+      - name: Move channel tags to the chosen images
         run: |
           set -euo pipefail
           promote() {
@@ -84,4 +92,8 @@ jobs:
           promote loakraken-deploy "$API_TAG"
           promote loakraken-web "$WEB_TAG"
           echo >> "$GITHUB_STEP_SUMMARY"
-          echo "서버의 pull-deploy 타이머(2분 간격)가 이 릴리스를 가져갑니다. 결과는 Slack #alerts로 옵니다." >> "$GITHUB_STEP_SUMMARY"
+          if [ "$CHANNEL" = "production" ]; then
+            echo "운영 서버는 승인 대기로 Slack #alerts에 알립니다. 사용자가 브라우저 SSH에서 sudo /opt/loakraken/production/pull/approve.sh로 승인하면 배포됩니다." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "서버의 pull-deploy 타이머(2분 간격)가 이 릴리스를 가져갑니다. 결과는 Slack #alerts로 옵니다." >> "$GITHUB_STEP_SUMMARY"
+          fi

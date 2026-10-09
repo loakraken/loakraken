@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # 서버가 가져오는 배포(pull). systemd 타이머(loakraken-pull-deploy@<환경>.timer)가 몇 분마다 실행한다.
 #
-# 승인된 배포 작업(GitHub Environments + deploy.yml)만 GHCR 채널 태그(:production/:staging)를 옮긴다.
-# 이 스크립트는 그 태그를 따라간다:
-#   채널 태그 확인 → 바뀌었으면 배포 번들 풀기 → DB 백업 → 이미지를 digest로 고정 → up -d --wait
+# Deploy 워크플로(deploy.yml)가 GHCR 채널 태그(:production/:staging)를 옮기고, 이 스크립트가 그 태그를 따라간다:
+#   채널 태그 확인 → (운영) 서버에서 사용자가 approve.sh로 승인한 릴리스인지 확인 → 배포 번들 풀기 → DB 백업
+#   → 이미지를 digest로 고정 → up -d --wait
 #   → 실패하면 직전 이미지·번들로 되돌리고 그 릴리스는 다시 시도하지 않는다 → Slack 알림
 #
 # 스택 디렉터리(/opt/loakraken/<환경>)에서 root로 실행한다(docker 그룹 권한과 같음, 비밀 디렉터리의 웹훅 파일을 읽기 위해).
@@ -88,6 +88,24 @@ if [[ "$want" == "$(cat .failed 2>/dev/null || true)" ]]; then
   exit 0
 fi
 
+# 서버 승인(PM 총괄 결정 2026-10-10): 무료 플랜 비공개 저장소라 GitHub Environments 승인을 쓸 수 없다.
+# 운영은 사용자가 서버에서 pull/approve.sh로 승인한 릴리스(.approved)만 배포한다. 비우면 운영=required, 그 밖=auto.
+APPROVAL="$(env_value DEPLOY_APPROVAL)"
+if [[ -z "$APPROVAL" ]]; then
+  [[ "$CHANNEL" == production ]] && APPROVAL=required || APPROVAL=auto
+fi
+if [[ "$APPROVAL" != auto && "$want" != "$(cat .approved 2>/dev/null || true)" ]]; then
+  # 승인 대기 알림은 릴리스마다 한 번만 보낸다.
+  if [[ "$want" != "$(cat .pending 2>/dev/null || true)" ]]; then
+    printf '%s\n' "$want" > .pending
+    a=${api_digest##*@sha256:}; w=${web_digest##*@sha256:}
+    notify "새 릴리스 승인 대기: api=${a:0:12} web=${w:0:12}. 서버 브라우저 SSH에서 sudo ${STACK_DIR}/pull/approve.sh"
+  else
+    log "승인 대기 중"
+  fi
+  exit 0
+fi
+
 log "새 릴리스: api=${api_digest##*@} web=${web_digest##*@}"
 
 # 1. 배포 번들 풀기. 실행 중인 스크립트가 깨지지 않게 새 디렉터리를 만든 뒤 이름만 바꾼다.
@@ -132,7 +150,7 @@ printf 'API_IMAGE=%s\nWEB_IMAGE=%s\n' "$api_digest" "$web_digest" > images.env
 
 if compose up -d --wait --wait-timeout 300 --remove-orphans; then
   printf '%s\n' "$want" > .deployed
-  rm -f .failed
+  rm -f .failed .pending
   printf '%s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$want" >> deploy-history.log
   notify "배포 완료: api=${api_digest##*@sha256:} web=${web_digest##*@sha256:}"
   exit 0

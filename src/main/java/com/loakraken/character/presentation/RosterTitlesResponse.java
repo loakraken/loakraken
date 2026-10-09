@@ -28,6 +28,7 @@ public record RosterTitlesResponse(
                     new RosterTitleResponse(
                         title.title(),
                         title.firstObservedAt(),
+                        java.time.LocalDate.ofInstant(title.firstObservedAt(), KST),
                         title.lastObservedAt(),
                         title.observedOrder(),
                         title.recordedBy(),
@@ -35,9 +36,15 @@ public record RosterTitlesResponse(
             .toList());
   }
 
+  static final java.time.ZoneId KST = java.time.ZoneId.of("Asia/Seoul");
+
   public record RosterTitleResponse(
       String title,
       @Schema(description = "LOAKraken이 이 칭호를 장착 상태로 처음 확인한 시각(획득일 아님)") Instant firstObservedAt,
+      @Schema(
+              description =
+                  "firstObservedAt의 KST 날짜. 같은 날 처음 확인한 칭호는 한 번에 기록된 것이라 observedOrder의 앞뒤에 의미가 없다(#144)")
+          java.time.LocalDate firstObservedDate,
       @Schema(description = "마지막으로 장착 상태를 확인한 시각") Instant lastObservedAt,
       @Schema(description = "처음 확인한 순서(1부터). 획득 순서가 아님") int observedOrder,
       @Schema(description = "처음 확인한 원정대 캐릭터") String recordedBy,

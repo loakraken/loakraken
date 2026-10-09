@@ -87,6 +87,8 @@ Actuator가 제공하는 MeterRegistry에 기록한다. 태그는 코드의 고�
 | loakraken.stats.collector.discovered | Counter | 없음 | 원정대로 새로 발견한 캐릭터 수 |
 | loakraken.character.popular.writes | Counter | outcome=success/failure | 인기 검색 고유 조회 비동기 기록 결과([인기 검색](popular-characters.md)). IP·캐릭터명은 태그에 포함하지 않음 |
 | loakraken.character.cards.writes | Counter | outcome=success/failure | 카드 기록·포지션·보석 평균 비동기 쓰기 결과([카드 기록](card-collection.md)). 대기열이 차서 버린 관측도 failure |
+| loakraken.background.last_success | Gauge(초) | job=collector/warmup_history/warmup_board | 백그라운드 작업이 마지막으로 성공한 시각(epoch 초, #143). 0이면 이 인스턴스에서 아직 성공하지 않음. 작업이 켜진 인스턴스에만 생긴다 |
+| http.server.requests | Timer(히스토그램) | method, uri(경로 템플릿), status, outcome | Spring 기본 HTTP 지표. `percentiles-histogram`을 켜 p95·p99를 Prometheus `histogram_quantile`로 계산한다(#143) |
 
 통계 표본 수집기는 기본으로 꺼져 있다. 운영에서는 수집을 맡을 인스턴스 하나에만 `STATS_COLLECTOR_ENABLED=true`를 준다([수집기](stats-collector.md)).
 
@@ -104,14 +106,30 @@ loakraken.* Meter 조합의 상한은 요청 25 + 캐릭터 캐시 6 + 게이트
 
 ## 확인 방법과 공개 범위
 
-테스트는 SimpleMeterRegistry에서 각 결과와 횟수·지연을 확인한다. Prometheus registry와 외부 모니터링 서버는 아직 연결하지 않았다. 기본 HTTP 노출은 health이며 `/actuator/metrics`와 `/actuator/prometheus`는 404임을 통합 테스트로 확인한다.
+- 운영(`prod` 프로필)은 actuator를 **관리 포트**(`MANAGEMENT_SERVER_PORT`, 기본 9090)에서만 연다. 노출은 `health`·`prometheus`뿐이다. 9090은 internal·data망 안에서만 닿고 edge는 이 망에 없다(배포·운영 #131). 앱 포트(8080)에는 actuator가 없다.
+- 수집: Prometheus가 `http://api:9090/actuator/prometheus`를 긁는다. 이름은 점이 밑줄로 바뀐다(예: `loakraken_background_last_success_seconds{job="collector"}`).
+- 기본(로컬·테스트) 노출은 health뿐이고, 앱 포트의 `/actuator/metrics`·`/actuator/prometheus`는 404임을 통합 테스트로 확인한다. 관리 포트를 따로 연 구성은 `MonitoringIntegrationTest`가 확인한다.
+- 지표 태그에는 요청 ID·IP·캐릭터명이 들어가지 않는다(통합 테스트로 확인).
 
-로컬에서 지표를 확인해야 한다면 별도 관리 포트를 loopback에 묶어 실행할 수 있다. 이 설정은 운영의 공개 주소에 그대로 적용하지 않는다.
+### 요청 상관 ID와 로그 필드
+
+- 웹(web #159)이 `X-Request-Id`를 넘긴다. `[A-Za-z0-9._:-]{8,128}`이면 그대로 쓰고, 아니면 백엔드가 UUID를 만든다. 응답 헤더 `X-Request-Id`로 돌려준다(유입 제한 429 포함).
+- 로그 MDC: `requestId`, `entryPoint`(`request`·`collector`·`warmup`). 운영은 ECS 구조화 로그(`LOGGING_STRUCTURED_FORMAT_CONSOLE=ecs`)라 MDC가 JSON 필드로 나간다.
+- 클라이언트 IP 원문은 MDC·로그에 넣지 않는다. 유입 제한·인기 검색은 HMAC 키만 쓴다.
+
+### 경보 제안(#143, 배포·운영 감시 설계 7절)
+
+| 경보 | 식 |
+|---|---|
+| 수집기 멈춤 | `time() - loakraken_background_last_success_seconds{job="collector"} > 600`(켜진 인스턴스) |
+| 보드 예열 멈춤 | `time() - loakraken_background_last_success_seconds{job="warmup_board"} > 180` |
+| 응답 지연 | `histogram_quantile(0.95, sum by (le, uri) (rate(http_server_requests_seconds_bucket[5m]))) > 2` |
+| 게이트 장애 | `increase(loakraken_lostark_gate_total{event="gate_unavailable"}[5m]) > 0` |
+
+로컬에서 지표를 볼 때는 관리 포트를 loopback에 묶는다. 이 설정은 운영 공개 주소에 그대로 쓰지 않는다.
 
 ```powershell
-.\gradlew.bat bootRun --args='--spring.profiles.active=local --management.server.port=9091 --management.server.address=127.0.0.1 --management.endpoints.web.exposure.include=health,metrics'
+.\gradlew.bat bootRun --args='--spring.profiles.active=local --management.server.port=9091 --management.server.address=127.0.0.1 --management.endpoints.web.exposure.include=health,metrics,prometheus'
 ```
-
-로컬 요청을 처리한 뒤 `http://127.0.0.1:9091/actuator/metrics/loakraken.character.searches` 등으로 확인한다. 이 문서의 명령을 자동 실행하거나 실제 캐릭터 API를 추가 호출하지는 않았다. 운영 수집 경로는 인증·네트워크 접근 범위를 정한 뒤 별도로 구성한다.
 
 Meter의 count/시간 의미는 [Micrometer Timer](https://docs.micrometer.io/micrometer/reference/concepts/timers.html), 노출 설정은 [Spring Boot Actuator](https://docs.spring.io/spring-boot/reference/actuator/endpoints.html)를 기준으로 확인했다.

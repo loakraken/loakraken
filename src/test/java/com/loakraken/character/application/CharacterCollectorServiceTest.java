@@ -94,6 +94,14 @@ class CharacterCollectorServiceTest {
     assertThat(service.tick()).isEqualTo(Task.ROSTER);
     verify(collection).markRosterScanned(target, clock.instant());
     assertThat(registry.get("loakraken.stats.collector.discovered").counter().count()).isEqualTo(1);
+    // 마지막 성공 시각 게이지(#143)
+    assertThat(
+            registry
+                .get("loakraken.background.last_success")
+                .tag("job", "collector")
+                .gauge()
+                .value())
+        .isEqualTo(clock.instant().getEpochSecond());
   }
 
   @Test

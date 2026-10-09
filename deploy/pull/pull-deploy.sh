@@ -52,9 +52,24 @@ api_ref="$REGISTRY/loakraken-api:$CHANNEL"
 web_ref="$REGISTRY/loakraken-web:$CHANNEL"
 bundle_ref="$REGISTRY/loakraken-deploy:$CHANNEL"
 
+# 레지스트리 장애 때 2분마다 같은 알림이 반복되지 않게, 같은 오류는 처음 한 번만 알리고 복구되면 알린다.
+pull_error() {
+  local msg="이미지를 가져오지 못했습니다: $1"
+  if [[ "$msg" != "$(cat .pull-error 2>/dev/null || true)" ]]; then
+    printf '%s' "$msg" > .pull-error
+    notify "$msg (복구될 때까지 다시 알리지 않음)"
+  else
+    log "$msg"
+  fi
+  exit 1
+}
 for ref in "$api_ref" "$web_ref" "$bundle_ref"; do
-  docker pull -q "$ref" >/dev/null || { notify "이미지를 가져오지 못했습니다: ${ref##*/}"; exit 1; }
+  docker pull -q "$ref" >/dev/null || pull_error "${ref##*/}"
 done
+if [[ -f .pull-error ]]; then
+  rm -f .pull-error
+  notify "이미지 가져오기 복구됨"
+fi
 # 같은 이미지가 여러 이름을 가질 수 있어 이 저장소(ref의 태그 앞부분) 이름의 digest만 고른다.
 digest_of() {
   local repo="${1%:*}" d

@@ -169,7 +169,16 @@ journalctl -u loakraken-pull-deploy@$ENV.service -n 50
 평소 롤백도 **승인 절차를 거친다**. Actions → Deploy를 이전 `sha-` 태그로 다시 실행한다(`deploy-history.log`·실행 요약에서 직전 태그를 찾는다). 서버가 2분 안에 그 릴리스로 돌아간다.
 
 - 배포가 헬스 체크에서 실패하면 서버가 스스로 직전 릴리스로 되돌린다(위 3-6). 사람이 할 일은 원인 확인과 고친 릴리스 승인이다.
-- 실패한 릴리스를 그대로 다시 시도해야 하면(예: 비밀 파일을 고친 뒤) 서버에서 `.failed`를 지운다.
+- **실패한 릴리스 다시 시도**: 실패가 일시적이었거나(배포 순간 DB·Valkey 장애로 readiness 503) 비밀 파일을 고친 경우다. 같은 태그로 다시 승인해도 digest가 같아 계속 건너뛰므로, 서버에서 `.failed`를 지우고 바로 실행한다.
+
+```bash
+cd /opt/loakraken/production
+sudo rm .failed
+sudo systemctl start loakraken-pull-deploy@production.service
+journalctl -u loakraken-pull-deploy@production.service -n 50
+```
+
+- 레지스트리(GHCR) 장애로 이미지를 못 받으면 같은 오류는 처음 한 번만 Slack에 알리고, 복구되면 "복구됨"을 알린다(2분마다 반복하지 않음).
 - 긴급 수동 롤백(GitHub 장애 등, 관리자 SSH 또는 Lightsail 브라우저 SSH):
 
 ```bash
@@ -181,7 +190,43 @@ sudo docker compose -f compose.prod.yaml --env-file stack.env --env-file images.
 sudo systemctl start loakraken-pull-deploy@production.timer
 ```
 
-DB 마이그레이션(Flyway)은 되돌리지 않는다. 스키마를 바꾸는 배포는 이전 버전이 새 스키마에서도 동작하는지 PR에서 확인한다.
+### 스키마와 되돌리기 (expand-contract)
+
+되돌리기는 이미지·번들만 되돌리고 **DB 스키마(Flyway)는 되돌리지 않는다**. 새 릴리스가 마이그레이션을 적용한 뒤 헬스 체크에서 실패하면, 이전 앱이 새 스키마 위에서 뜬다.
+
+- 스키마를 바꾸는 PR은 **expand-contract**로 나눈다. 이번 릴리스는 추가만 한다(열·테이블·인덱스 추가, 새 열은 NULL 허용 또는 기본값). 이전 코드가 더 이상 쓰지 않게 된 **다음 릴리스**에서 이름 변경·삭제·NOT NULL 강화를 한다.
+- 추가만 한 경우 이전 앱은 새 스키마에서도 뜬다(Flyway는 기본으로 모르는 이후 버전을 무시하고, Hibernate validate는 남는 열을 문제 삼지 않는다).
+- 이름 변경·삭제가 섞인 배포가 실패하면 되돌리기도 실패한다(Slack "되돌리기도 실패"). 그때는 아래 "배포 전 덤프로 복구"를 한다.
+
+### 배포 전 덤프로 복구
+
+되돌리기도 실패했거나 마이그레이션이 데이터를 망가뜨렸을 때 쓴다. 덤프 이후의 쓰기(그 사이 수집된 관측값 등)는 잃는다. 관리자 SSH 또는 Lightsail 브라우저 SSH로 실행한다.
+
+```bash
+cd /opt/loakraken/production
+sudo systemctl stop loakraken-pull-deploy@production.timer
+C="sudo docker compose -f compose.prod.yaml --env-file stack.env --env-file images.env"
+ls -t backups/pre-deploy-*.dump | head -3          # 실패한 배포 직전 덤프를 고른다(파일 이름 = UTC 시각)
+DUMP=backups/pre-deploy-<시각>.dump
+$C stop api                                          # 쓰기를 멈춘다(사이트는 점검 중 상태)
+# 덤프 이후 생긴 표까지 지우려고 public 스키마를 다시 만든 뒤 한 트랜잭션으로 복원한다
+$C exec -T postgres sh -c 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -qc "DROP SCHEMA public CASCADE; CREATE SCHEMA public AUTHORIZATION $POSTGRES_USER;" && pg_restore -U "$POSTGRES_USER" -d "$POSTGRES_DB" --exit-on-error --single-transaction' < "$DUMP"
+sudo cp images.prev.env images.env                   # 덤프와 맞는 이전 이미지(자동 되돌리기가 이미 했으면 같음)
+$C up -d --wait
+```
+
+- 복구한 뒤 서비스를 다시 열기 전에 [backup.md](backup.md) "복구 시 삭제 요청 다시 적용"을 한다.
+- 원인을 고친 릴리스를 Deploy로 승인한 뒤 타이머를 다시 켠다(`sudo systemctl start loakraken-pull-deploy@production.timer`).
+- 로컬 확인(postgres 18.6): 덤프 → 열 이름 변경·표 추가·행 추가 → 위 명령으로 복원하면 원래 열·행만 남고 추가된 표는 사라졌다.
+
+## 번들과 서버 권한
+
+`pull-deploy.sh`는 root로 돌고, 배포 번들 안의 스크립트(`pull/`·`backup/`)와 compose 파일을 그대로 실행한다. 그래서 **서버 root 권한을 지키는 선은 코드 리뷰와 운영 승인**이다.
+
+- 번들은 `image.yml`이 develop·master에 병합된 커밋으로만 만든다(PR에서는 빌드 확인만, 업로드하지 않음).
+- 운영 채널은 승인된 Deploy 작업이 `sha-` 태그 번들만 옮긴다. 서버는 그 digest로 고정해 실행한다.
+- 그러므로 `deploy/**`를 바꾸는 PR은 PM-백엔드 검토를 거친다(셸 스크립트·compose 변경은 서버 root 권한 변경과 같다고 보고 본다).
+- GHCR 쓰기 권한(packages: write)은 Actions 작업에만 있다. 사람의 개인 토큰에 쓰기 권한을 주지 않는다. 서버의 GHCR 토큰은 읽기 전용이다.
 
 ## 공식 API 호출 한도와 배포
 

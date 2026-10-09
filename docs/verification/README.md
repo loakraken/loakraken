@@ -7,6 +7,7 @@
 | 전투력 | [combat-power.md](combat-power.md) | `verification/combat-power/` | 미검증(표본 밖 RMS 딜러 4.67%·1740+ 3.89%, 기준 2%) |
 | 치명타·공이속 | [crit-speed.md](crit-speed.md) | `verification/crit-speed/` | 치적 교차 확인 일치(언새늘 1명, 일로아·로펙 77.21%). 치명타 피해는 미제공 |
 | 아크 그리드 젬 가공 | [arkgrid-gem.md](arkgrid-gem.md) | `verification/arkgrid-gem/` | 성공 확률 재현(로아또 7/7, 반올림 범위). 기대 비용은 근사(−9.8~+0.3%), 미검증 |
+| 경매 입찰가 | [auction.md](auction.md) | `verification/auction/` | 일로아·로아랩 교차 일치(선점 반올림 1G 차). 수수료 5%·10% 재입찰은 공식 문구 미확인(추정) |
 
 ## 규칙
 

@@ -108,6 +108,20 @@ class MarketHistoryWarmupTest {
     verify(lease).hold(eq(MarketHistoryWarmup.BOARD_LEASE), eq(Duration.ofSeconds(60)));
     assertThat(
             registry
+                .get("loakraken.background.last_success")
+                .tag("job", "warmup_board")
+                .gauge()
+                .value())
+        .isEqualTo(clock.now.getEpochSecond());
+    assertThat(
+            registry
+                .get("loakraken.background.last_success")
+                .tag("job", "warmup_history")
+                .gauge()
+                .value())
+        .isZero();
+    assertThat(
+            registry
                 .get("loakraken.market.warmup")
                 .tag("target", "board")
                 .tag("outcome", "refreshed")

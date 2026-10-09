@@ -29,6 +29,16 @@ public class CharacterMetrics {
         .increment();
   }
 
+  /** 장비 요약 기록 결과: created·confirmed·skipped·failed(#146). */
+  public void equipmentSummary(String outcome) {
+    registry
+        .counter(
+            "loakraken.character.equipment_summary.writes",
+            "outcome",
+            outcome.toLowerCase(java.util.Locale.ROOT))
+        .increment();
+  }
+
   public void cards(boolean success) {
     registry
         .counter("loakraken.character.cards.writes", "outcome", success ? "success" : "failure")
@@ -57,6 +67,7 @@ public class CharacterMetrics {
     INVALID,
     READ_ERROR,
     WRITE_SUCCESS,
-    WRITE_ERROR
+    WRITE_ERROR,
+    NOT_FOUND_HIT
   }
 }

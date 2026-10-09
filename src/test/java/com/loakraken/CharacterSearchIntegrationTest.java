@@ -57,6 +57,7 @@ class CharacterSearchIntegrationTest {
     redis.delete("character:v8:" + NAME + ":summary");
     redis.delete("character:v11:" + NAME + ":armory");
     redis.delete("character:v1:" + NAME + ":siblings");
+    redis.delete("character:v1:" + NAME + ":missing");
     jdbc.sql(
             "DELETE FROM character_title_observation WHERE character_id IN (SELECT character_id FROM characters WHERE character_name = :name)")
         .param("name", NAME)

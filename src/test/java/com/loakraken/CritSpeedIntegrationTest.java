@@ -43,6 +43,7 @@ class CritSpeedIntegrationTest {
     redis.delete("character:v11:" + NAME + ":summary");
     redis.delete("character:v11:" + NAME + ":armory");
     redis.delete("character:v1:" + NAME + ":siblings");
+    redis.delete("character:v1:" + NAME + ":missing");
     for (var table :
         List.of("character_title_observation", "character_observation", "character_snapshot"))
       jdbc.sql(

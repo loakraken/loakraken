@@ -25,23 +25,39 @@ public class LostArkRequestGate {
   private final Semaphore permits;
   private final LostArkMetrics metrics;
   private final GateStore store;
+  private final ClientLimiter clients;
 
-  /** 단일 인스턴스 메모리 게이트(단위 테스트). */
+  /** 단일 인스턴스 메모리 게이트(단위 테스트). 클라이언트 제한은 끈다. */
   public LostArkRequestGate(Clock clock, LostArkProperties properties, LostArkMetrics metrics) {
     this(clock, properties, metrics, new MemoryGateStore(clock));
   }
 
-  @Autowired
   public LostArkRequestGate(
       Clock clock, LostArkProperties properties, LostArkMetrics metrics, GateStore store) {
+    this(clock, properties, metrics, store, ClientLimiter.DISABLED);
+  }
+
+  @Autowired
+  public LostArkRequestGate(
+      Clock clock,
+      LostArkProperties properties,
+      LostArkMetrics metrics,
+      GateStore store,
+      ClientLimiter clients) {
     this.clock = clock;
     budget = properties.requestsPerMinute();
     permits = new Semaphore(properties.maxConcurrentRequests());
     this.metrics = metrics;
     this.store = store;
+    this.clients = clients;
   }
 
+  /**
+   * 공식 호출 하나를 허가한다. 사용자 요청이면 먼저 그 클라이언트의 분당 공식 호출 한도(#108)를 센다. 넘으면 CLIENT_RATE_LIMITED이고 공유 예산은 쓰지
+   * 않는다. {@link #withReserve} 안의 호출(경매 칸 채우기 등)은 사용자 몫을 남기는 쪽으로 이미 제한되므로 클라이언트 한도에 매기지 않는다.
+   */
   public void acquire() {
+    if (currentReserve() == 0) clients.chargeOfficial();
     if (!permits.tryAcquire()) reject(GateEvent.CONCURRENCY_REJECT);
     GateStore.Admission admission;
     try {

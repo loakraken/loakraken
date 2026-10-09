@@ -53,6 +53,7 @@ public class CharacterQueryService {
     String name = command.characterName();
     var cached = cache.findSiblings(name);
     if (cached.isPresent()) return cached.get();
+    rejectMissing(name);
     return siblingQueries.run(
         name,
         () ->
@@ -60,7 +61,7 @@ public class CharacterQueryService {
                 .findSiblings(name)
                 .orElseGet(
                     () -> {
-                      var siblings = detailsPort.fetchSiblings(name);
+                      var siblings = remembering(name, () -> detailsPort.fetchSiblings(name));
                       var now = Instant.now(clock);
                       var result =
                           new CharacterSiblingsResult(name, siblings, now, now.plus(cache.ttl()));
@@ -72,6 +73,7 @@ public class CharacterQueryService {
   private CharacterResult searchWithSiblings(String name) {
     var cached = cache.find(name);
     if (cached.isPresent()) return cached.get();
+    rejectMissing(name);
     return searches.run(
         "summary:" + name,
         () ->
@@ -79,7 +81,7 @@ public class CharacterQueryService {
                 .find(name)
                 .orElseGet(
                     () -> {
-                      var fetched = detailsPort.fetch(name);
+                      var fetched = remembering(name, () -> detailsPort.fetch(name));
                       var fetchedAt = Instant.now(clock);
                       try {
                         snapshots.save(fetched, fetchedAt);
@@ -100,6 +102,7 @@ public class CharacterQueryService {
   private CharacterResult searchArmory(String name) {
     var cached = cache.findArmory(name);
     if (cached.isPresent()) return cached.get();
+    rejectMissing(name);
     return searches.run(
         "armory:" + name,
         () ->
@@ -107,7 +110,7 @@ public class CharacterQueryService {
                 .findArmory(name)
                 .orElseGet(
                     () -> {
-                      var fetched = detailsPort.fetchArmory(name);
+                      var fetched = remembering(name, () -> detailsPort.fetchArmory(name));
                       var now = Instant.now(clock);
                       var result =
                           new CharacterResult(fetched.details(), now, now.plus(cache.ttl()));
@@ -116,5 +119,20 @@ public class CharacterQueryService {
                       cards.record(fetched.details(), now);
                       return result;
                     }));
+  }
+
+  /** 최근 공식 API가 없다고 답한 이름은 공식 호출 없이 바로 404다(#108). */
+  private void rejectMissing(String name) {
+    if (cache.isMissing(name)) throw new CharacterException(CharacterErrorCode.CHARACTER_NOT_FOUND);
+  }
+
+  /** 공식 "없는 캐릭터" 응답만 기억한다. 한도·타임아웃·서버 오류는 다른 코드라 기억하지 않는다. */
+  private <T> T remembering(String name, java.util.function.Supplier<T> fetch) {
+    try {
+      return fetch.get();
+    } catch (CharacterException exception) {
+      if (exception.errorCode() == CharacterErrorCode.CHARACTER_NOT_FOUND) cache.markMissing(name);
+      throw exception;
+    }
   }
 }

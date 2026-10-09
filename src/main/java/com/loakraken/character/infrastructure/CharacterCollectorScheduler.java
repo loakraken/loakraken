@@ -19,6 +19,12 @@ class CharacterCollectorScheduler {
       fixedDelayString = "${stats.collector.interval:3s}",
       initialDelayString = "${stats.collector.initial-delay:30s}")
   void tick() {
-    collector.tick();
+    // 구조화 로그에서 사용자 요청과 구분한다(#143).
+    org.slf4j.MDC.put("entryPoint", "collector");
+    try {
+      collector.tick();
+    } finally {
+      org.slf4j.MDC.remove("entryPoint");
+    }
   }
 }

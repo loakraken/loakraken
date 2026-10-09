@@ -2,12 +2,15 @@ package com.loakraken.character.infrastructure;
 
 import com.loakraken.character.application.CharacterCardPort;
 import com.loakraken.character.domain.CardCollection;
+import java.sql.ResultSet;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -182,6 +185,24 @@ class PostgresCharacterCardRepository implements CharacterCardPort {
                 new CardCollection.SetEffect(
                     row.getString(1), row.getInt(2), row.getInt(3), row.getString(4)))
         .list();
+  }
+
+  @Override
+  public Map<String, Instant> refreshedAt(String serverName, Collection<String> characterNames) {
+    var result = new HashMap<String, Instant>();
+    if (characterNames.isEmpty()) return result;
+    jdbc.sql(
+            """
+        SELECT character_name, profile_refreshed_at FROM characters
+        WHERE server_name = :server AND character_name IN (:names) AND profile_refreshed_at IS NOT NULL
+        """)
+        .param("server", serverName)
+        .param("names", List.copyOf(characterNames))
+        .query(
+            (ResultSet row) -> {
+              result.put(row.getString(1), row.getObject(2, OffsetDateTime.class).toInstant());
+            });
+    return result;
   }
 
   @Override

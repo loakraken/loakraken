@@ -6,6 +6,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 
 public interface CharacterCardPort {
   /**
@@ -20,6 +21,9 @@ public interface CharacterCardPort {
   List<CardCollection.SetMember> members(Collection<String> cardNames);
 
   List<CardCollection.SetEffect> effects(Collection<String> setNames);
+
+  /** 같은 서버 캐릭터들의 마지막 프로필 관측 성공 시각. 관측한 적 없는 캐릭터는 빠진다. */
+  Map<String, Instant> refreshedAt(String serverName, Collection<String> characterNames);
 
   /** DEALER·SUPPORT 또는 null. */
   String position(String serverName, String characterName);

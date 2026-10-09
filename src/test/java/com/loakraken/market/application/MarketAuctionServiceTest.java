@@ -2,11 +2,10 @@ package com.loakraken.market.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
 
 import com.loakraken.common.api.BusinessException;
+import com.loakraken.common.lostark.LostArkMetrics;
+import com.loakraken.common.lostark.LostArkProperties;
 import com.loakraken.common.lostark.LostArkRequestGate;
 import com.loakraken.market.application.AuctionPort.AuctionCell;
 import com.loakraken.market.application.AuctionPort.AuctionListing;
@@ -31,14 +30,28 @@ import org.junit.jupiter.api.Test;
 
 class MarketAuctionServiceTest {
   private static final Instant NOW = Instant.parse("2026-10-09T03:00:00Z");
+  private final Clock clock = Clock.fixed(NOW, ZoneOffset.UTC);
+  private LostArkRequestGate gate = gate(90);
   private final FakeAuctions port = new FakeAuctions();
-  private final LostArkRequestGate gate = mock(LostArkRequestGate.class);
-  private final MarketAuctionService service =
-      new MarketAuctionService(port, port, gate, Clock.fixed(NOW, ZoneOffset.UTC));
+  private MarketAuctionService service = new MarketAuctionService(port, port, gate, clock);
+
+  /** 실제 메모리 게이트. 가짜 검색이 실제 클라이언트처럼 호출마다 acquire한다. */
+  private LostArkRequestGate gate(int budget) {
+    return new LostArkRequestGate(
+        clock,
+        new LostArkProperties(
+            java.net.URI.create("https://example.com"),
+            "test",
+            java.time.Duration.ofSeconds(3),
+            java.time.Duration.ofSeconds(5),
+            budget,
+            4,
+            java.time.Duration.ofMinutes(5)),
+        new LostArkMetrics(new io.micrometer.core.instrument.simple.SimpleMeterRegistry()));
+  }
 
   @Test
   void 보석_표는_20칸을_채우고_캐시된_칸은_다시_부르지_않으며_전일_대비를_준다() {
-    when(gate.backgroundAvailable(anyInt())).thenReturn(true);
     var tenFire = MarketAuctionService.gemQuery("겁화", 10, 1).key();
     port.previous.put(tenFire, 2_000_000L);
     var cells = service.gems();
@@ -56,17 +69,30 @@ class MarketAuctionServiceTest {
 
   @Test
   void 사용자_몫이_없으면_칸을_채우지_않고_PENDING으로_준다() {
-    when(gate.backgroundAvailable(anyInt())).thenReturn(true, true, true, false);
+    // 예산 43 − 사용자 몫 40 = 3칸만 채울 수 있다.
+    gate = gate(43);
+    service = new MarketAuctionService(port, port, gate, clock);
     var cells = service.gems();
     assertThat(port.searches).isEqualTo(3);
     assertThat(cells.stream().filter(cell -> cell.status() == MarketAuctionService.Status.PENDING))
         .hasSize(17);
     assertThat(cells.get(5).cell()).isNull();
+    // 칸 채우기가 사용자 몫을 남겼으므로 사용자 경로(reserve 0)는 아직 호출할 수 있다.
+    gate.acquire();
+    gate.release();
+  }
+
+  @Test
+  void 사용자_몫이_처음부터_없으면_공식_호출이_0이다() {
+    gate = gate(40);
+    service = new MarketAuctionService(port, port, gate, clock);
+    var cells = service.gems();
+    assertThat(port.searches).isZero();
+    assertThat(cells).allMatch(cell -> cell.status() == MarketAuctionService.Status.PENDING);
   }
 
   @Test
   void 장신구_표는_한_요청에_최대_24칸만_채운다() {
-    when(gate.backgroundAvailable(anyInt())).thenReturn(true);
     var slots = service.accessories(Grade.ANCIENT, Role.DEALER, 70);
     assertThat(slots).hasSize(3);
     assertThat(slots.get(0).cells()).hasSize(8);
@@ -122,7 +148,7 @@ class MarketAuctionServiceTest {
     assertThat(MarketAuctionService.changeRate(new AuctionCell(110L, 1, NOW), null)).isNull();
   }
 
-  private static final class FakeAuctions implements AuctionPort, AuctionSearchPort {
+  private final class FakeAuctions implements AuctionPort, AuctionSearchPort {
     int searches;
     final Map<String, AuctionCell> cells = new HashMap<>();
     final Map<String, Long> previous = new HashMap<>();
@@ -130,6 +156,8 @@ class MarketAuctionServiceTest {
 
     @Override
     public AuctionPage search(AuctionQuery query) {
+      gate.acquire();
+      gate.release();
       searches++;
       var items = new ArrayList<AuctionListing>();
       items.add(new AuctionListing("매물", "고대", 80, 0L, 100L, 100L, NOW, 0, List.of()));

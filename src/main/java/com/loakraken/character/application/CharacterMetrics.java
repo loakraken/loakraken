@@ -57,6 +57,7 @@ public class CharacterMetrics {
     INVALID,
     READ_ERROR,
     WRITE_SUCCESS,
-    WRITE_ERROR
+    WRITE_ERROR,
+    NOT_FOUND_HIT
   }
 }

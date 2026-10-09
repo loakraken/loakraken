@@ -40,6 +40,14 @@ lostark:
     # 비우면 API 키 SHA-256 앞 12자. 운영·스테이징은 명시합니다.
     key-id: ${LOSTARK_GATE_KEY_ID:}
     command-timeout: ${LOSTARK_GATE_COMMAND_TIMEOUT:100ms}
+  # 클라이언트별 분당 한도(#108). official은 요청이 실제로 일으킨 공식 호출 수입니다. docs/backend-operations.md 참고.
+  client-limit:
+    enabled: ${CLIENT_LIMIT_ENABLED:true}
+    official-per-minute: ${CLIENT_LIMIT_OFFICIAL:20}
+    stats-per-minute: ${CLIENT_LIMIT_STATS:60}
+    general-per-minute: ${CLIENT_LIMIT_GENERAL:240}
+    bot-per-minute: ${CLIENT_LIMIT_BOT:300}
+    exempt-internal: ${CLIENT_LIMIT_EXEMPT_INTERNAL:true}
 
 character:
   snapshots:

@@ -132,7 +132,7 @@ public class StatsQueryService {
 
   public DistributionResult distribution(
       StatsConditions conditions, Metric metric, BigDecimal width, BigDecimal percentileOf) {
-    var binWidth = width == null ? defaultWidth(metric) : width.stripTrailingZeros();
+    var binWidth = width == null ? defaultWidth(metric) : StatsConditions.strip(width);
     var distribution =
         cached(
             "distribution:" + metric + ":" + binWidth.toPlainString() + ":" + key(conditions),
@@ -165,7 +165,11 @@ public class StatsQueryService {
         metric,
         binWidth,
         distribution.bins(),
-        standing(conditions, metric, percentileOf, distribution.meta().aggregatedAt()));
+        standing(
+            conditions,
+            metric,
+            StatsConditions.strip(percentileOf),
+            distribution.meta().aggregatedAt()));
   }
 
   public SnapshotsResult snapshots() {

@@ -14,6 +14,10 @@ public final class StatsRules {
   public static final String RULE_VERSION = "stats-v1";
   public static final String SNAPSHOT_LATEST = "latest";
   public static final int MIN_SAMPLE = 30;
+
+  /** 범위·구간 폭·백분위 값의 소수 자릿수(#108). */
+  public static final int VALUE_SCALE = 2;
+
   public static final BigDecimal DEFAULT_ITEM_LEVEL_MIN = new BigDecimal("1640");
   public static final int DEFAULT_ACTIVE_DAYS = 30;
   public static final Set<Integer> ACTIVE_DAYS = Set.of(7, 30, 90);

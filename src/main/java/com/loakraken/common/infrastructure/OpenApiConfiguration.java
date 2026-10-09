@@ -38,4 +38,52 @@ class OpenApiConfiguration {
         .servers(List.of(new Server().url("/").description("현재 API 서버")))
         .components(new Components().addSchemas("ErrorResponse", errorSchema));
   }
+
+  /** 모든 /api/v1 작업은 클라이언트별 유입 제한(#108)으로 429 CLIENT_RATE_LIMITED와 Retry-After를 받을 수 있다. */
+  @Bean
+  org.springdoc.core.customizers.OpenApiCustomizer clientRateLimitResponse() {
+    return openApi -> {
+      if (openApi.getPaths() == null) return;
+      openApi
+          .getPaths()
+          .forEach(
+              (path, item) -> {
+                if (!path.startsWith("/api/v1/")) return;
+                item.readOperations()
+                    .forEach(
+                        operation -> {
+                          var responses = operation.getResponses();
+                          if (responses == null) return;
+                          var existing = responses.get("429");
+                          if (existing != null) {
+                            if (existing.getDescription() == null
+                                || !existing.getDescription().contains(CLIENT_LIMITED))
+                              existing.setDescription(
+                                  (existing.getDescription() == null
+                                          ? ""
+                                          : existing.getDescription() + " / ")
+                                      + CLIENT_LIMITED_DESCRIPTION);
+                            return;
+                          }
+                          responses.addApiResponse(
+                              "429",
+                              new io.swagger.v3.oas.models.responses.ApiResponse()
+                                  .description(CLIENT_LIMITED_DESCRIPTION)
+                                  .content(
+                                      new io.swagger.v3.oas.models.media.Content()
+                                          .addMediaType(
+                                              "application/json",
+                                              new io.swagger.v3.oas.models.media.MediaType()
+                                                  .schema(
+                                                      new Schema<>()
+                                                          .$ref(
+                                                              "#/components/schemas/ErrorResponse")))));
+                        });
+              });
+    };
+  }
+
+  private static final String CLIENT_LIMITED = "CLIENT_RATE_LIMITED";
+  private static final String CLIENT_LIMITED_DESCRIPTION =
+      CLIENT_LIMITED + ": 이 클라이언트의 분당 요청·공식 호출 한도 초과. Retry-After(초) 뒤 다시 시도";
 }

@@ -34,6 +34,10 @@ class MarketHistoryWarmup {
   private final MarketBoardService boards;
   private final Clock clock;
   private final MarketWarmupProperties properties;
+  private final java.util.concurrent.atomic.AtomicLong lastHistorySuccess =
+      new java.util.concurrent.atomic.AtomicLong();
+  private final java.util.concurrent.atomic.AtomicLong lastBoardSuccess =
+      new java.util.concurrent.atomic.AtomicLong();
   // 리더 임대로 한 인스턴스만 돌므로 분당 상한은 인스턴스 안에서 센다.
   private long callWindow = -1;
   private int callsInWindow;
@@ -59,12 +63,36 @@ class MarketHistoryWarmup {
     this.registry = registry;
     this.gate = gate;
     this.lease = lease;
+    gauge(registry, "warmup_history", lastHistorySuccess);
+    gauge(registry, "warmup_board", lastBoardSuccess);
+  }
+
+  /** 마지막 성공 시각(epoch 초) 게이지(#143). 0이면 이 인스턴스에서 아직 성공하지 않았다. */
+  private static void gauge(
+      MeterRegistry registry, String job, java.util.concurrent.atomic.AtomicLong value) {
+    io.micrometer.core.instrument.Gauge.builder(
+            "loakraken.background.last_success",
+            value,
+            java.util.concurrent.atomic.AtomicLong::doubleValue)
+        .tag("job", job)
+        .baseUnit("seconds")
+        .description("마지막으로 성공한 시각(epoch 초). 0이면 아직 없음")
+        .register(registry);
   }
 
   @Scheduled(
       fixedDelayString = "${market.warmup.interval:9m}",
       initialDelayString = "${market.warmup.initial-delay:20s}")
   void warm() {
+    org.slf4j.MDC.put("entryPoint", "warmup");
+    try {
+      warmHistory();
+    } finally {
+      org.slf4j.MDC.remove("entryPoint");
+    }
+  }
+
+  private void warmHistory() {
     if (lostArk.apiKey().isBlank()) return;
     // 임대는 주기보다 길게 잡아 다음 주기까지 유지한다.
     if (!lease.hold(LEASE, properties.interval().plusMinutes(1))) return;
@@ -97,6 +125,15 @@ class MarketHistoryWarmup {
       fixedDelayString = "${market.warmup.board-interval:30s}",
       initialDelayString = "${market.warmup.initial-delay:20s}")
   void warmBoards() {
+    org.slf4j.MDC.put("entryPoint", "warmup");
+    try {
+      warmBoardTabs();
+    } finally {
+      org.slf4j.MDC.remove("entryPoint");
+    }
+  }
+
+  private void warmBoardTabs() {
     if (lostArk.apiKey().isBlank()) return;
     if (!lease.hold(BOARD_LEASE, properties.boardInterval().plusSeconds(30))) return;
     for (var tab : properties.boardTabs()) {
@@ -107,6 +144,7 @@ class MarketHistoryWarmup {
       try {
         gate.withReserve(RESERVE, () -> boards.refreshDefaultPage(tab));
         recordBoard(Outcome.REFRESHED);
+        lastBoardSuccess.set(clock.instant().getEpochSecond());
       } catch (BusinessException exception) {
         recordBoard(Outcome.FAILED);
         log.warn("시세 보드 예열에 실패했습니다. tab={}, code={}", tab, exception.errorCode().code());
@@ -143,6 +181,7 @@ class MarketHistoryWarmup {
   }
 
   private void record(Outcome outcome) {
+    if (outcome == Outcome.REFRESHED) lastHistorySuccess.set(clock.instant().getEpochSecond());
     registry
         .counter(
             "loakraken.market.warmup",

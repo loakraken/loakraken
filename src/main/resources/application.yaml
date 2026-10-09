@@ -74,6 +74,13 @@ home:
     calendar-ttl: ${HOME_CALENDAR_CACHE_TTL:30m}
     news-ttl: ${HOME_NEWS_CACHE_TTL:10m}
 
+management:
+  metrics:
+    distribution:
+      # p95·p99를 Prometheus에서 계산하도록 HTTP 요청 지연 히스토그램을 낸다(#143).
+      percentiles-histogram:
+        http.server.requests: true
+
 springdoc:
   paths-to-match: /api/v1/**
   override-with-generic-response: false

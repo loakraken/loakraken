@@ -32,6 +32,9 @@ public class CharacterCollectorService {
   private final LostArkProperties lostArk;
   private final MeterRegistry registry;
   private final Clock clock;
+  // 마지막 성공 시각(epoch 초). 0이면 이 인스턴스에서 아직 성공하지 않았다(#143).
+  private final java.util.concurrent.atomic.AtomicLong lastSuccess =
+      new java.util.concurrent.atomic.AtomicLong();
   private boolean profileTurn = true;
 
   public CharacterCollectorService(
@@ -55,6 +58,14 @@ public class CharacterCollectorService {
     this.lostArk = lostArk;
     this.registry = registry;
     this.clock = clock;
+    io.micrometer.core.instrument.Gauge.builder(
+            "loakraken.background.last_success",
+            lastSuccess,
+            java.util.concurrent.atomic.AtomicLong::doubleValue)
+        .tag("job", "collector")
+        .baseUnit("seconds")
+        .description("마지막으로 성공한 시각(epoch 초). 0이면 아직 없음")
+        .register(registry);
   }
 
   static final String LEASE = "stats-collector";
@@ -148,6 +159,7 @@ public class CharacterCollectorService {
   }
 
   private void record(Task task, String outcome) {
+    if ("success".equals(outcome)) lastSuccess.set(clock.instant().getEpochSecond());
     registry
         .counter(
             "loakraken.stats.collector",

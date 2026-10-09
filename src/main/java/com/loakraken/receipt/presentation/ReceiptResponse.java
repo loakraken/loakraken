@@ -16,7 +16,7 @@ public record ReceiptResponse(
     @Schema(description = "장비 재련 계산 규칙 버전") String refiningRuleVersion,
     String serverName,
     String characterName,
-    Instant generatedAt,
+    @Schema(description = "이 영수증을 계산한 시각") Instant computedAt,
     @Schema(description = "재료·보석 시세 중 가장 이른 관측 시각. 시세를 쓰지 않았으면 null") @NullableResponse
         Instant priceObservedAt,
     ReceiptTotalResponse total,
@@ -32,7 +32,7 @@ public record ReceiptResponse(
         refiningRuleVersion,
         receipt.serverName(),
         receipt.characterName(),
-        receipt.generatedAt(),
+        receipt.computedAt(),
         receipt.priceObservedAt(),
         new ReceiptTotalResponse(receipt.totalGold(), List.of("EQUIPMENT", "GEM")),
         new ReceiptEquipmentResponse(
@@ -42,7 +42,11 @@ public record ReceiptResponse(
         receipt.notIncluded().stream()
             .map(item -> new ReceiptNotIncludedResponse(item.kind(), "VERIFYING", item.count()))
             .toList(),
-        new ReceiptCoverageResponse(receipt.rosterCharacters(), receipt.ready(), receipt.pending()),
+        new ReceiptCoverageResponse(
+            receipt.rosterCharacters(),
+            receipt.ready(),
+            receipt.pending(),
+            receipt.nextAvailableAt()),
         ReceiptService.assumptions());
   }
 
@@ -171,5 +175,13 @@ public record ReceiptResponse(
       @Schema(description = "VERIFYING(산정 기준 검증 중)") String reason,
       int count) {}
 
-  public record ReceiptCoverageResponse(int rosterCharacters, int ready, int pending) {}
+  public record ReceiptCoverageResponse(
+      int rosterCharacters,
+      int ready,
+      @Schema(description = "아직 전투정보를 받지 못한 캐릭터 수(다시 요청하면 최대 8명씩 채움)") int pending,
+      @Schema(
+              description =
+                  "남은 캐릭터를 이어 받을 수 있는 시각. 상한으로 멈췄으면 지금, 공식 한도·장애로 멈췄으면 1분 뒤. 남은 사람이 없으면 null")
+          @NullableResponse
+          Instant nextAvailableAt) {}
 }

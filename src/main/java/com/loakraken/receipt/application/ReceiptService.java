@@ -74,7 +74,7 @@ public class ReceiptService {
   public record Receipt(
       String serverName,
       String characterName,
-      Instant generatedAt,
+      Instant computedAt,
       Instant priceObservedAt,
       BigDecimal equipmentGold,
       List<CharacterReceipt> characters,
@@ -82,7 +82,8 @@ public class ReceiptService {
       List<NotIncluded> notIncluded,
       int rosterCharacters,
       int ready,
-      int pending) {
+      int pending,
+      Instant nextAvailableAt) {
     public BigDecimal totalGold() {
       return equipmentGold.add(gems.gold());
     }
@@ -210,7 +211,18 @@ public class ReceiptService {
             new NotIncluded("ACCESSORY", accessories)),
         roster.size(),
         ready,
-        roster.size() - ready);
+        roster.size() - ready,
+        nextAvailableAt(roster.size() - ready, stopped));
+  }
+
+  /**
+   * 남은 캐릭터를 이어 받을 수 있는 시각. 남은 사람이 없으면 null. 8명 상한으로 멈췄으면 지금 바로, 공식 한도·장애로 멈췄으면 1분 뒤(클라이언트 공식 호출 창이
+   * 1분이다).
+   */
+  private Instant nextAvailableAt(int pending, boolean stopped) {
+    if (pending == 0) return null;
+    var now = clock.instant();
+    return stopped ? now.plusSeconds(60) : now;
   }
 
   public String refiningRuleVersion() {

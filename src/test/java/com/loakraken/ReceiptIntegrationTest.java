@@ -108,6 +108,9 @@ class ReceiptIntegrationTest {
     assertThat(data.at("/coverage/rosterCharacters").asInt()).isEqualTo(10);
     assertThat(data.at("/coverage/ready").asInt()).isEqualTo(8);
     assertThat(data.at("/coverage/pending").asInt()).isEqualTo(2);
+    // 8명 상한으로 멈췄으니 바로 이어 받을 수 있다.
+    assertThat(data.at("/coverage/nextAvailableAt").asText()).isNotBlank();
+    assertThat(data.path("computedAt").asText()).isNotBlank();
     assertThat(data.at("/equipment/characters/9/status").asText()).isEqualTo("PENDING");
     assertThat(data.at("/equipment/characters/9/gold").isNull()).isTrue();
     var main = data.at("/equipment/characters/0");
@@ -131,6 +134,7 @@ class ReceiptIntegrationTest {
     var second = get("/api/v1/characters/receipt?characterName=" + encode(MAIN));
     var again = mapper.readTree(second.body()).path("data");
     assertThat(again.at("/coverage/ready").asInt()).isEqualTo(10);
+    assertThat(again.at("/coverage/nextAvailableAt").isNull()).isTrue();
     // 앞의 8명은 캐시를 쓰고 남은 2명만 새로 받는다.
     verify(detailsPort, times(10)).fetchArmory(anyString());
   }

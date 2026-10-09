@@ -29,6 +29,10 @@ class PostgresCharacterCollectionRepository implements CharacterCollectionPort {
             """
         SELECT character_name, server_name FROM characters
         WHERE item_level >= :min AND (profile_checked_at IS NULL OR profile_checked_at < :stale)
+          AND NOT EXISTS (
+            SELECT 1 FROM public_exclusion e
+            WHERE e.character_name = characters.character_name
+              AND (e.server_name IS NULL OR e.server_name = characters.server_name))
         ORDER BY profile_checked_at NULLS FIRST, item_level DESC, character_name
         LIMIT 1
         """)
@@ -43,7 +47,11 @@ class PostgresCharacterCollectionRepository implements CharacterCollectionPort {
     return jdbc.sql(
             """
         SELECT character_name, server_name FROM characters
-        WHERE roster_scanned_at IS NULL OR roster_scanned_at < :stale
+        WHERE (roster_scanned_at IS NULL OR roster_scanned_at < :stale)
+          AND NOT EXISTS (
+            SELECT 1 FROM public_exclusion e
+            WHERE e.character_name = characters.character_name
+              AND (e.server_name IS NULL OR e.server_name = characters.server_name))
         ORDER BY roster_scanned_at NULLS FIRST, item_level DESC, character_name
         LIMIT 1
         """)
@@ -56,6 +64,10 @@ class PostgresCharacterCollectionRepository implements CharacterCollectionPort {
                 jdbc.sql(
                         """
                     SELECT character_name, server_name FROM characters WHERE roster_key IS NULL
+                      AND NOT EXISTS (
+                        SELECT 1 FROM public_exclusion e
+                        WHERE e.character_name = characters.character_name
+                          AND (e.server_name IS NULL OR e.server_name = characters.server_name))
                     ORDER BY item_level DESC, character_name LIMIT 1
                     """)
                     .query((row, index) -> new Target(row.getString(1), row.getString(2)))
@@ -67,7 +79,11 @@ class PostgresCharacterCollectionRepository implements CharacterCollectionPort {
   public int saveRoster(List<CharacterSibling> siblings, Instant now) {
     int discovered = 0;
     var rosterKey = rosterKey(siblings);
+    // 공개 제외(B9 ③) 캐릭터는 원정대에서 보여도 새로 기록하지 않는다. 이미 있는 행도 갱신하지 않는다.
+    var excluded = excluded(siblings);
     for (var sibling : siblings) {
+      if (sibling != null
+          && excluded.contains(sibling.serverName() + "|" + sibling.characterName())) continue;
       if (sibling == null
           || sibling.characterName() == null
           || sibling.serverName() == null
@@ -97,6 +113,32 @@ class PostgresCharacterCollectionRepository implements CharacterCollectionPort {
       if (Boolean.TRUE.equals(inserted)) discovered++;
     }
     return discovered;
+  }
+
+  /** 원정대 중 공개 제외 목록에 있는 "서버|이름". 서버가 비어 있는 제외는 모든 서버에 적용한다. */
+  private java.util.Set<String> excluded(List<CharacterSibling> siblings) {
+    var names =
+        siblings.stream()
+            .filter(s -> s != null && s.characterName() != null)
+            .map(CharacterSibling::characterName)
+            .distinct()
+            .toList();
+    if (names.isEmpty()) return java.util.Set.of();
+    var rows =
+        jdbc.sql(
+                "SELECT character_name, server_name FROM public_exclusion WHERE character_name IN (:names)")
+            .param("names", names)
+            .query((row, index) -> new String[] {row.getString(1), row.getString(2)})
+            .list();
+    var result = new HashSet<String>();
+    for (var sibling : siblings) {
+      if (sibling == null || sibling.characterName() == null) continue;
+      for (var row : rows)
+        if (row[0].equals(sibling.characterName())
+            && (row[1] == null || row[1].equals(sibling.serverName())))
+          result.add(sibling.serverName() + "|" + sibling.characterName());
+    }
+    return result;
   }
 
   /** 원정대 캐릭터 중 이미 키가 있으면 그 키를 쓰고, 없으면 새로 만든다. */

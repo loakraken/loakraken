@@ -125,6 +125,26 @@ class CritEffectTableTest {
         .extracting(t -> t.key() + "/" + t.on())
         .contains("단련/true", "단련 치명타 피해/false");
     assertThat(both.limitations()).anyMatch(line -> line.contains("동시에 적용되지 않아 끔"));
+    // 치명타 피해 토글은 스킬별 치명타 적중률 기본에 더하지 않는다.
+    var damageOnly =
+        calculate(
+            "기상술사",
+            nodes,
+            List.of(categorized("우산", "일반 스킬")),
+            null,
+            new Assumptions(
+                false,
+                false,
+                0,
+                null,
+                null,
+                null,
+                null,
+                null,
+                true,
+                java.util.Map.of("단련 치명타 피해", true)));
+    assertThat(skill(damageOnly, "우산").base())
+        .isEqualByComparingTo(damageOnly.crit().observedRate());
   }
 
   @Test

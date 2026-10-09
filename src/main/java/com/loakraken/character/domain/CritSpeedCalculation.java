@@ -436,7 +436,11 @@ public final class CritSpeedCalculation {
     // 직업 상태 가정(정답표 표의 피냄새·직업 버프)은 스킬별 치적 기본에도 넣는다.
     var classStateCrit =
         sources.stream()
-            .filter(source -> source.kind() == Kind.ASSUMED && source.classState())
+            .filter(
+                source ->
+                    source.kind() == Kind.ASSUMED
+                        && source.axis() == Axis.CRIT
+                        && source.classState())
             .map(Source::value)
             .reduce(BigDecimal.ZERO, BigDecimal::add);
 

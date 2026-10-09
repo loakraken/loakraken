@@ -17,6 +17,7 @@ final class LostArkSkillTooltip {
   private static final Pattern GEM_DAMAGE = Pattern.compile("피해 [0-9.]+% 증가$");
   private static final Pattern GEM_COOLDOWN = Pattern.compile("재사용 대기시간 [0-9.]+% 감소$");
   private static final String GEM_TITLE = "보석 효과";
+  private static final Pattern CATEGORY = Pattern.compile("\\s*\\[([^\\]]+)\\]\\s*");
 
   private LostArkSkillTooltip() {}
 
@@ -28,8 +29,9 @@ final class LostArkSkillTooltip {
       Integer partBreakLevel,
       Boolean counter,
       List<CharacterLoadout.SkillGemEffect> gemEffects,
-      CharacterLoadout.AttackType attackType) {
-    static final Parsed UNKNOWN = new Parsed(null, null, List.of(), null);
+      CharacterLoadout.AttackType attackType,
+      String category) {
+    static final Parsed UNKNOWN = new Parsed(null, null, List.of(), null, null);
   }
 
   static Parsed parse(String tooltip) {
@@ -46,8 +48,14 @@ final class LostArkSkillTooltip {
     CharacterLoadout.AttackType attackType = null;
     boolean attackLabel = false;
     var gems = new ArrayList<CharacterLoadout.SkillGemEffect>();
+    String category = null;
     for (var element : root.values()) {
       var value = element.path("value");
+      if ("CommonSkillTitle".equals(text(element.path("type")))) {
+        // 스킬 분류: "[해방 스킬]", "[둔갑 스킬]", "[일반 스킬]"(공식 Tooltip 제목, 10-10 확인)
+        var level = CATEGORY.matcher(LostArkText.plain(text(value.path("level"))));
+        if (category == null && level.matches()) category = level.group(1).strip();
+      }
       if ("ItemPartBox".equals(text(element.path("type")))) {
         if (GEM_TITLE.equals(LostArkText.plain(text(value.path("Element_000")))))
           for (var line : LostArkText.plain(text(value.path("Element_001"))).lines().toList())
@@ -69,7 +77,7 @@ final class LostArkSkillTooltip {
       }
     }
     if (attackType == null && !attackLabel) attackType = CharacterLoadout.AttackType.NONE;
-    return new Parsed(partBreak, counter, gems, attackType);
+    return new Parsed(partBreak, counter, gems, attackType, category);
   }
 
   /** 아크 패시브 노드 Tooltip의 MultiTextBox 효과 문구를 이어 붙인다. 없거나 해석할 수 없으면 null. */

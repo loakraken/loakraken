@@ -18,7 +18,7 @@ class CritEffectTableTest {
       "일반 상태에서 분노 게이지가 항상 최대치로 유지되며, 폭주 시 어둠의 힘을 이용한 광기 상태가 된다. 광기 상태에서는 공격속도 및 이동속도가 15.0%, 치명타 적중률이 30.0% 증가하며 분노 게이지가 자연소모되지 않는다.";
 
   @Test
-  void 일치_포함_노드는_조건_문구와_관계없이_더하고_갈림은_빼며_표에_없는_노드는_합산하지_않는다() {
+  void 일치_포함_노드는_조건_문구와_관계없이_더하고_핵심_상태는_기본_켬_토글로_더하며_스킬_한정은_빼고_표에_없는_노드는_합산하지_않는다() {
     var result =
         calculate(
             "버서커",
@@ -34,10 +34,110 @@ class CritEffectTableTest {
     assertThat(values(result, Axis.CRIT, Category.ARK_PASSIVE)).containsExactly("광기 Lv.3=30");
     assertThat(values(result, Axis.CRIT_DAMAGE, Category.ARK_PASSIVE))
         .containsExactly("분노 자극 Lv.1=3");
+    // 데모닉 혼돈 강화 "악마화 중"은 핵심 상태라 기본 켬 토글(PM 총괄 23:24)
+    assertThat(values(result, Axis.CRIT, Category.ASSUMPTION))
+        .containsExactly("악마화 상태 가정(혼돈 강화 Lv.3)=30");
+    assertThat(result.toggles())
+        .extracting(t -> t.key() + "/" + t.coreState() + "/" + t.on())
+        .containsExactly("혼돈 강화/true/true");
     assertThat(result.limitations())
-        .anyMatch(line -> line.contains("혼돈 강화 Lv.3 30%(로펙은 포함)"))
         .anyMatch(line -> line.contains("관통 필살 Lv.3 100%(적룡필살에만)"))
-        .anyMatch(line -> line.contains("격노의 악장 Lv.2 8%"));
+        .anyMatch(line -> line.contains("격노의 악장 Lv.2 8%"))
+        .noneMatch(line -> line.contains("로펙"));
+  }
+
+  @Test
+  void 상황_조건_효과는_기본_끔이고_요청_토글로_켠다() {
+    var nodes =
+        List.of(
+            node(
+                "깨달음 4티어 연가비기 Lv.3",
+                "연가비기 사용 시 연가공법을 발동시켜 16.0초 동안 치명타 적중률이 20.0% 증가하며, 적중 시 최대 마나의 15.0%를 즉시 회복한다."),
+            node(
+                "깨달음 3티어 단련 Lv.2",
+                "우산 스킬 사용 후 치명타 적중률이 8.0초간 2.0% 증가하고, 기상 스킬 사용 후 치명타 피해량이 8.0초간 8.0% 증가한다. 단, 두 효과는 동시에 적용되지 않는다."),
+            node(
+                "깨달음 3티어 전술 훈련 Lv.1",
+                "일반 스킬의 치명타 적중률이 0.8% 증가하며, 방어 태세 중에는 1.6% 증가한다. 전장의 방패 치명타 적중률이 1.6% 증가한다."),
+            node(
+                "깨달음 2티어 피스메이커 - 샷건 Lv.3",
+                "샷건 스탠스로 변경 시 치명타 적중률이 10.0%, 적에게 주는 피해가 28.0% 증가하는 효과를 9초동안 획득한다."));
+    var off = calculate("워로드", nodes, List.of(), null, Assumptions.NONE);
+    // 전술 훈련은 "일반 스킬 0.8"을 기본으로 읽는다(방어 태세 1.6이 아님).
+    assertThat(values(off, Axis.CRIT, Category.ARK_PASSIVE)).containsExactly("전술 훈련 Lv.1=0.8");
+    assertThat(values(off, Axis.CRIT, Category.ASSUMPTION)).isEmpty();
+    assertThat(off.toggles())
+        .extracting(
+            t -> t.key() + "=" + t.value().stripTrailingZeros().toPlainString() + "/" + t.on())
+        .containsExactlyInAnyOrder(
+            "연가비기=20/false",
+            "단련=2/false",
+            "단련 치명타 피해=8/false",
+            "전술 훈련=0.8/false",
+            "피스메이커 - 샷건=10/false");
+    var on =
+        calculate(
+            "워로드",
+            nodes,
+            List.of(),
+            null,
+            new Assumptions(
+                false,
+                false,
+                0,
+                null,
+                null,
+                null,
+                null,
+                null,
+                true,
+                java.util.Map.of("연가비기", true, "전술 훈련", true, "단련 치명타 피해", true)));
+    assertThat(values(on, Axis.CRIT, Category.ASSUMPTION))
+        .containsExactlyInAnyOrder("연가공법 16초 유지 가정(연가비기 Lv.3)=20", "방어 태세 가정(전술 훈련 Lv.1)=0.8");
+    assertThat(values(on, Axis.CRIT_DAMAGE, Category.ASSUMPTION))
+        .containsExactly("기상 스킬 사용 후 8초 가정(단련 Lv.2)=8");
+  }
+
+  @Test
+  void 스킬_분류_한정_노드는_공식_분류가_같은_스킬에만_배수까지_더한다() {
+    var nodes =
+        List.of(
+            node("깨달음 2티어 날카로운 해머 Lv.3", "해방 스킬 사용 중 소모한 코어 당 치명타 적중률이 6.0% 증가한다."),
+            node("깨달음 3티어 분노의 망치 Lv.3", "해방 스킬 사용 시 소모한 코어 당 치명타 피해가 17.0% 증가한다."));
+    var skills =
+        List.of(
+            categorized("풀 스윙", "해방 스킬"),
+            categorized("헤비 크러쉬", "집속 스킬"),
+            categorized("옛 캐시", null));
+    var result = calculate("디스트로이어", nodes, skills, null, Assumptions.NONE);
+    assertThat(values(result, Axis.CRIT, Category.ARK_PASSIVE)).isEmpty();
+    var base = result.crit().observedRate();
+    var damage = result.crit().damage().total();
+    assertThat(skill(result, "풀 스윙").total()).isEqualByComparingTo(base.add(new BigDecimal("18")));
+    assertThat(skill(result, "풀 스윙").damage())
+        .isEqualByComparingTo(damage.add(new BigDecimal("51")));
+    assertThat(skill(result, "헤비 크러쉬").total()).isEqualByComparingTo(base);
+    assertThat(skill(result, "헤비 크러쉬").damage()).isEqualByComparingTo(damage);
+    // 분류를 모르는 스킬(갱신 전 캐시)에는 추정해서 더하지 않는다.
+    assertThat(skill(result, "옛 캐시").total()).isEqualByComparingTo(base);
+    assertThat(result.limitations())
+        .anyMatch(line -> line.contains("날카로운 해머 Lv.3 18%(해방 스킬에만, 코어 3개 소모)"))
+        .anyMatch(line -> line.contains("분노의 망치 Lv.3 51%(해방 스킬에만, 코어 3개 소모)"));
+  }
+
+  private static CharacterLoadout.Skill categorized(String name, String category) {
+    return new CharacterLoadout.Skill(
+        name,
+        null,
+        12,
+        null,
+        null,
+        null,
+        List.of(),
+        null,
+        List.of(),
+        CharacterLoadout.AttackType.NONE,
+        category);
   }
 
   private static final String FOOTSTEPS =
@@ -201,7 +301,7 @@ class CritEffectTableTest {
   @Test
   void 표의_노드_이름은_레벨과_관계없이_찾는다() {
     assertThat(CritEffectTable.node("광기 Lv.3").rate()).isEqualTo(CritEffectTable.Decision.INCLUDE);
-    assertThat(CritEffectTable.node("곡예사 Lv.1").damage()).isEqualTo(CritEffectTable.Decision.SPLIT);
+    assertThat(CritEffectTable.node("곡예사 Lv.1").damage()).isEqualTo(CritEffectTable.Decision.SKILL);
     assertThat(CritEffectTable.node("없는 노드 Lv.1")).isNull();
   }
 

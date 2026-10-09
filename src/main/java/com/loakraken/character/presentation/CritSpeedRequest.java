@@ -9,9 +9,11 @@ import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
+import java.util.Map;
 
 public record CritSpeedRequest(
     @Schema(description = "계산할 캐릭터명", example = "모험가", requiredMode = Schema.RequiredMode.REQUIRED)
@@ -55,7 +57,12 @@ public record CritSpeedRequest(
       @Schema(
               description =
                   "직업 상태 가정(예: 리퍼 갈증 '피냄새' 혼돈 상태 치명타 적중률). 생략하면 켬(목표 사이트와 같은 기준). false면 관측값만")
-          Boolean classState) {}
+          Boolean classState,
+      @Schema(
+              description =
+                  "효과별 켜기·끄기(응답 toggles[].key). 생략한 효과는 기본값: 직업 핵심 상태·자기 버프는 classState, 상황 조건(스킬 직후 N초 등)은 끔")
+          @Size(max = 32)
+          Map<@Size(max = 64) String, @NotNull Boolean> toggles) {}
 
   CritSpeedCalculation.Assumptions toAssumptions() {
     if (assumptions == null) return CritSpeedCalculation.Assumptions.NONE;
@@ -68,7 +75,8 @@ public record CritSpeedRequest(
         assumptions.extraCritRate(),
         assumptions.extraAttackSpeed(),
         assumptions.extraMoveSpeed(),
-        assumptions.classState() == null || assumptions.classState());
+        assumptions.classState() == null || assumptions.classState(),
+        assumptions.toggles());
   }
 
   String normalizedName() {

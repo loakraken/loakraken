@@ -21,7 +21,11 @@ public record CritSpeedResponse(
     @Schema(
             description =
                 "스킬별 치명타 적중률(레벨 2 이상 스킬, 이름순). base(crit.observedRate) + 백 어택 +10 + 선택 트라이포드 치명타 적중률 합. 가정 입력은 더하지 않는다")
-        List<CritSpeedSkillResponse> skills) {
+        List<CritSpeedSkillResponse> skills,
+    @Schema(
+            description =
+                "켜고 끌 수 있는 효과(이 캐릭터에 해당하는 것만). 요청 assumptions.toggles에 key로 넣어 바꾼다. coreState=true는 기본 켬")
+        List<CritSpeedToggleResponse> toggles) {
 
   static CritSpeedResponse from(CritSpeedService.CritSpeedResult value) {
     var result = value.result();
@@ -95,7 +99,26 @@ public record CritSpeedResponse(
                             row.optimal()))
                 .toList()),
         result.limitations(),
-        result.skills().stream().map(CritSpeedSkillResponse::from).toList());
+        result.skills().stream().map(CritSpeedSkillResponse::from).toList(),
+        result.toggles().stream().map(CritSpeedToggleResponse::from).toList());
+  }
+
+  public record CritSpeedToggleResponse(
+      @Schema(description = "요청 assumptions.toggles 키(노드 이름 또는 버프 이름)") String key,
+      @Schema(description = "화면 표시 이름(예: 악마화 상태 가정)") String label,
+      @Schema(description = "직업 핵심 상태·자기 버프면 true(기본 켬), 상황 조건이면 false(기본 끔)") boolean coreState,
+      @Schema(description = "이번 계산에서 켰는지") boolean on,
+      @Schema(description = "켜면 더하는 치명타 적중률(%)") BigDecimal value,
+      @Schema(description = "공식 원문 또는 근거") String text) {
+    static CritSpeedToggleResponse from(CritSpeedCalculation.ToggleState toggle) {
+      return new CritSpeedToggleResponse(
+          toggle.key(),
+          toggle.label(),
+          toggle.coreState(),
+          toggle.on(),
+          toggle.value(),
+          toggle.text());
+    }
   }
 
   public record CritSpeedSkillResponse(
@@ -115,7 +138,13 @@ public record CritSpeedResponse(
       @Schema(description = "조건부 문구('…시', '…의 치명타 적중률')라 합산하지 않은 트라이포드")
           List<CritSpeedSkillTripodResponse> conditional,
       @Schema(description = "이 스킬에만 붙는 아크 패시브 노드 치명타 적중률 합(예: 관통 필살 → 적룡필살)") BigDecimal node,
-      @Schema(description = "합산한 스킬 한정 노드(공식 문구 포함)") List<CritSpeedSkillTripodResponse> nodes) {
+      @Schema(description = "합산한 스킬 한정 노드(공식 문구 포함)") List<CritSpeedSkillTripodResponse> nodes,
+      @Schema(
+              description =
+                  "이 스킬의 치명타 피해(%): 기본 치명타 피해(crit.damage.total) + 이 스킬에만 붙는 노드(예: 분노의 망치 → 해방 스킬)")
+          BigDecimal damage,
+      @Schema(description = "합산한 스킬 한정 치명타 피해 노드(공식 문구 포함)")
+          List<CritSpeedSkillTripodResponse> damageNodes) {
     static CritSpeedSkillResponse from(CritSpeedCalculation.SkillCrit skill) {
       return new CritSpeedSkillResponse(
           skill.name(),
@@ -128,7 +157,9 @@ public record CritSpeedResponse(
           skill.tripods().stream().map(CritSpeedSkillTripodResponse::from).toList(),
           skill.conditional().stream().map(CritSpeedSkillTripodResponse::from).toList(),
           skill.node(),
-          skill.nodes().stream().map(CritSpeedSkillTripodResponse::from).toList());
+          skill.nodes().stream().map(CritSpeedSkillTripodResponse::from).toList(),
+          skill.damage(),
+          skill.damageNodes().stream().map(CritSpeedSkillTripodResponse::from).toList());
     }
   }
 

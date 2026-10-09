@@ -33,6 +33,25 @@ class LostArkSkillTooltipTest {
             new CharacterLoadout.SkillGemEffect("[블레이드] 기타 효과", null));
   }
 
+  /** 공식 combat-skills Tooltip 제목(2026-10-10 디스트로이어 표본 형식). */
+  @Test
+  void 스킬_분류는_제목의_대괄호_값이고_없으면_null이다() {
+    var parsed =
+        LostArkSkillTooltip.parse(
+            """
+            {"Element_001":{"type":"CommonSkillTitle","value":{"leftText":"재사용 대기시간 22초","level":"[해방 스킬]","middleText":"","name":"차지"}},
+             "Element_005":{"type":"SingleTextBox","value":"공격 타입 : 헤드 어택"}}
+            """);
+    assertThat(parsed.category()).isEqualTo("해방 스킬");
+    assertThat(
+            LostArkSkillTooltip.parse(
+                    """
+                    {"Element_005":{"type":"SingleTextBox","value":"부위 파괴 : 레벨 1"}}
+                    """)
+                .category())
+        .isNull();
+  }
+
   @Test
   void 카운터_가능은_true이고_부위_파괴가_없으면_null이다() {
     var parsed =

@@ -204,7 +204,8 @@ class StatsIntegrationTest {
     var rank = data("/api/v1/characters/rank?characterName=" + encode("통계캐30"));
     assertThat(rank.path("serverName").asText()).isEqualTo(SERVER);
     assertThat(rank.path("included").asBoolean()).isTrue();
-    assertThat(rank.path("entries").size()).isEqualTo(6);
+    // 전투력·아이템 레벨 × 전체·서버·직업·서버 내 직업(#170)
+    assertThat(rank.path("entries").size()).isEqualTo(8);
     JsonNode serverCombat = null;
     for (var entry : rank.path("entries"))
       if (entry.path("metric").asText().equals("COMBAT_POWER")
@@ -215,6 +216,12 @@ class StatsIntegrationTest {
     assertThat(serverCombat.path("total").asLong()).isEqualTo(40);
     assertThat(serverCombat.path("topPercent").decimalValue()).isEqualByComparingTo("12.5");
     assertThat(serverCombat.path("tier").asText()).isEqualTo("TOP25");
+    var serverClass = entry(rank, "COMBAT_POWER", "SERVER_CLASS");
+    assertThat(serverClass.path("scopeValue").asText())
+        .isEqualTo(SERVER + "/" + rank.path("className").asText());
+    assertThat(serverClass.path("total").asLong())
+        .isBetween(1L, serverCombat.path("total").asLong());
+    assertThat(serverClass.path("rank").asLong()).isBetween(1L, serverCombat.path("rank").asLong());
     ApiContractFixture.write(
         "character-rank.json",
         get("/api/v1/characters/rank?characterName=" + encode("통계캐30")).body());

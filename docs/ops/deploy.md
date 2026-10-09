@@ -210,6 +210,8 @@ GitHub는 서버에 접속하지 않는다. Deploy 워크플로가 GHCR 채널 �
 ```
 
 1. develop/master에 병합되면 CI가 빌드·테스트하고, **통과한 커밋만** `ci.yml` publish job이 `sha-<커밋7자>` 태그로 api·배포 번들(`loakraken-deploy`)을, web 저장소의 `frontend-ci.yml` publish job이 web 이미지를 올린다. 테스트가 실패한 커밋은 이미지가 없으므로 Deploy에서 태그를 찾지 못해 배포되지 않는다.
+   - 같은 브랜치에 연달아 push하면 CI가 앞 실행을 취소한다(concurrency). 그래서 앞 커밋은 이미지 없이 끝날 수 있다. 배포는 최신 커밋 기준이라 의도된 동작이다.
+   - 업로드를 CI 워크플로의 후속 job(`needs`)으로 둔 이유: 기본 브랜치가 master라 `workflow_run` 트리거는 master에 반영된 워크플로만 쓴다. develop에서 바로 효과를 내려고 이 방식을 골랐다. master 반영 뒤 분리가 필요하면 다시 검토한다.
 2. Actions → Deploy → 환경·`api_tag`·`web_tag`를 넣고 실행한다. production은 `sha-` 태그만 받고 `confirm`에 `production`을 입력해야 한다(실수 방지). **Claude 세션은 production으로 실행하지 않는다**(PM 총괄 결정 10-10, 사용자만). 배포 번들은 `api_tag`와 같은 커밋을 쓴다. 실행 요약에 옮긴 digest가 남는다.
 3. 서버의 `loakraken-pull-deploy@<환경>.timer`가 2분 안에 바뀐 태그를 본다. `pull-deploy.sh`가 하는 일:
    1. 채널 태그 3개를 받아 digest를 확인한다. `.deployed`와 같으면 끝, `.failed`(실패했던 릴리스)와 같으면 다시 시도하지 않는다.

@@ -34,6 +34,18 @@
   - edge 컨테이너에서는 `api` 이름이 해석되지 않는다.
   - Docker Desktop은 접속 주소가 게이트웨이(172.x)로 보인다. Linux 서버는 외부 접속의 원래 IP가 유지된다(iptables DNAT). **서버를 처음 띄우면 실제 클라이언트 IP가 백엔드에 닿는지 확인한다.** 게이트웨이 주소만 보이면 edge를 `network_mode: host`로 바꾸는 것을 검토한다.
 
+## 헬스 체크와 사이트 주소 (#129)
+
+| 대상 | 주소 | 용도 |
+|---|---|---|
+| api liveness | `:9090/actuator/health/liveness` | 프로세스 생존. DB·Valkey가 멈춰도 UP(불필요한 재시작 방지) |
+| api readiness | `:9090/actuator/health/readiness` | DB·Valkey 포함. compose 헬스 체크와 `up --wait`가 이 값을 본다. Valkey 정지 시 503 확인 |
+| web | `:3000/about` | 백엔드를 부르지 않는 경로 |
+
+- 관리(actuator) 포트 9090은 앱 포트 8080과 나눴다. 8080에는 actuator가 없다(404). 9090도 health만 노출한다(지표는 백엔드가 prometheus 레지스트리를 넣은 뒤 연다).
+- web의 `SITE_URL`은 필수다. 운영 `https://loakraken.gg`이면 robots가 허용하고 sitemap·canonical이 이 주소를 쓴다. 스테이징(`http://127.0.0.1:8081`)은 `Disallow: /`다. 같은 이미지를 쓰고 값은 실행할 때만 넣는다.
+- 백엔드 로그는 ECS JSON(`LOGGING_STRUCTURED_FORMAT_CONSOLE=ecs`)이다. 로컬 확인에서 클라이언트 IP는 찍히지 않았다.
+
 ## 로그 보존
 
 - 컨테이너 로그는 서비스마다 10MB × 5개까지만 남긴다(`json-file` 회전).

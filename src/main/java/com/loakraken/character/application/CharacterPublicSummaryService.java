@@ -36,6 +36,20 @@ public class CharacterPublicSummaryService {
       Instant observedAt,
       DataSource dataSource,
       boolean indexable) {
+    Summary notIndexable() {
+      return new Summary(
+          characterName,
+          serverName,
+          className,
+          characterLevel,
+          itemLevel,
+          combatPower,
+          arkPassiveTitle,
+          observedAt,
+          dataSource,
+          false);
+    }
+
     Summary hidden() {
       return new Summary(
           characterName, null, null, null, null, null, null, null, dataSource, false);
@@ -53,7 +67,9 @@ public class CharacterPublicSummaryService {
     } catch (DataAccessException exception) {
       throw new CharacterException(CharacterErrorCode.CHARACTER_STORAGE_UNAVAILABLE);
     }
-    return excluded ? summary.hidden() : summary;
+    if (excluded) return summary.hidden();
+    // 원정대 목록에서만 발견해 전투력 관측이 없으면 내용이 빈약해 색인하지 않는다(#180, PM-백엔드 #177 P2).
+    return summary.combatPower() == null ? summary.notIndexable() : summary;
   }
 
   private Summary live(String name) {

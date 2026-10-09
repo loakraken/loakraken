@@ -108,6 +108,18 @@ class CharacterPublicSummaryIntegrationTest {
   }
 
   @Test
+  void 전투력_관측이_없으면_값은_주되_indexable_false다() throws Exception {
+    var id = character("공개요약원정대만", OffsetDateTime.now(ZoneOffset.UTC));
+    jdbc.sql("UPDATE characters SET combat_power = NULL WHERE character_id = :id")
+        .param("id", id)
+        .update();
+    var data = mapper.readTree(get("공개요약원정대만").body()).path("data");
+    assertThat(data.path("indexable").asBoolean()).isFalse();
+    assertThat(data.path("serverName").asText()).isEqualTo(SERVER);
+    assertThat(data.path("combatPower").isNull()).isTrue();
+  }
+
+  @Test
   void 공개_제외_캐릭터는_indexable_false이고_이름_외_값이_없다() throws Exception {
     character("공개요약제외", OffsetDateTime.now(ZoneOffset.UTC));
     jdbc.sql(

@@ -75,6 +75,8 @@ public final class CritEffectTable {
           new NodeRule("충격 폭발", Decision.SKILL, null),
           new NodeRule("암살자의 발자취", Decision.SKILL, null),
           new NodeRule("평화주의자", Decision.INCLUDE, null),
+          // "… '퀵 드로우' 버프가 9초간 지속된다. 퀵 드로우 : 치명타 적중률이 1.0% 증가한다." 두 사이트 포함(계산 검증 10-10 01:55)
+          new NodeRule("퀵 드로우", Decision.INCLUDE, null),
           new NodeRule("라이플 숙련", Decision.INCLUDE, null),
           new NodeRule("급소 전문가", null, Decision.EXCLUDE),
           new NodeRule("정밀 사격 훈련", Decision.INCLUDE, Decision.INCLUDE),
@@ -83,7 +85,7 @@ public final class CritEffectTable {
           new NodeRule("코어 인챈트", Decision.INCLUDE, null),
           new NodeRule("페일 노트", null, Decision.INCLUDE),
           new NodeRule("마에스트로", Decision.INCLUDE, null),
-          new NodeRule("격노의 악장", null, Decision.EXCLUDE),
+          new NodeRule("격노의 악장", null, Decision.INCLUDE),
           new NodeRule("교감 강화", Decision.SKILL, null),
           new NodeRule("고대의 힘", Decision.SKILL, null),
           new NodeRule("기민함", Decision.INCLUDE, Decision.INCLUDE),
@@ -332,4 +334,52 @@ public final class CritEffectTable {
           "재빠른 공격", CritSpeedCalculation.Axis.CRIT_DAMAGE);
 
   static final Pattern ANY_CRIT = Pattern.compile("치명타 (?:적중률|피해)");
+
+  /**
+   * 직업 아크 그리드 코어(질서의 해·달·별) 판정(계산 검증 10-10 01:55, PM-백엔드 01:46). INCLUDE는 달성 구간의 "치명타 적중률·피해량이 X%
+   * 증가한다." 문장을 기본에 더하고, WEAK_POINT는 급소 노출(치적 시너지)로, SITUATIONAL은 기본 끔 토글로 둔다. 표에 없는 직업 코어의 치명 문구는
+   * "분류 중"으로 남긴다.
+   */
+  public enum CoreDecision {
+    INCLUDE,
+    WEAK_POINT,
+    SITUATIONAL
+  }
+
+  public record ClassCore(String core, CoreDecision decision, String label) {}
+
+  public static final List<ClassCore> CLASS_CORES =
+      List.of(
+          // 스트라이커 질서의 별 "초극뇌연격" 18~20P "치명타 피해량이 0.52% 증가한다." — 두 사이트 포함(환업 +1.56)
+          new ClassCore("초극뇌연격", CoreDecision.INCLUDE, null),
+          // 데빌헌터 질서의 해 "샷건 오버로드" 14P "… 급소 노출 효과가 적용되어 … 치명타 저항률이 5.0초 동안 10.0% 감소" — 두 사이트 시너지 10
+          new ClassCore("샷건 오버로드", CoreDecision.WEAK_POINT, null),
+          // 워로드 질서의 해 "천둥" 17P "'운명: 천둥'을 소모하면 20.0초 간 … 자신의 치명타 적중률이 6.0% 증가" — 상황 조건(PM 23:24)
+          new ClassCore("천둥", CoreDecision.SITUATIONAL, "운명: 천둥의 가호 20초 가정"));
+
+  static ClassCore classCore(String slotName) {
+    if (slotName == null) return null;
+    for (var core : CLASS_CORES) if (slotName.endsWith(" : " + core.core())) return core;
+    return null;
+  }
+
+  /**
+   * 팔찌의 상황 조건 효과(적중 시 8초, 기본 끔 토글, PM-백엔드 01:46 (가)). 대상의 치명타 저항 감소는 치명타 적중률, 치명타 피해 저항 감소는 치명타 피해로
+   * 본다.
+   */
+  public record BraceletToggle(
+      String key, CritSpeedCalculation.Axis axis, String label, Pattern pattern) {}
+
+  public static final List<BraceletToggle> BRACELET_TOGGLES =
+      List.of(
+          new BraceletToggle(
+              "팔찌 치명타 저항 감소",
+              CritSpeedCalculation.Axis.CRIT,
+              "팔찌 치명타 저항 감소 8초 가정",
+              Pattern.compile("공격 적중 시 8초 동안 대상의 치명타 저항을\\s*([0-9]+(?:\\.[0-9]+)?)% 감소")),
+          new BraceletToggle(
+              "팔찌 치명타 피해 저항 감소",
+              CritSpeedCalculation.Axis.CRIT_DAMAGE,
+              "팔찌 치명타 피해 저항 감소 8초 가정",
+              Pattern.compile("공격 적중 시 8초 동안 대상의 치명타 피해 저항을\\s*([0-9]+(?:\\.[0-9]+)?)% 감소")));
 }

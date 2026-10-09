@@ -429,7 +429,8 @@ public final class CritSpeedCalculation {
     }
     equipmentSources(loadout, sources);
     cardSources(loadout, sources);
-    gridCoreSources(loadout, sources);
+    gridCoreSources(loadout, input, sources, toggles, unclassified, conditionalRate);
+    braceletToggles(loadout, input, sources, toggles, conditionalRate, conditional);
     classBuffSources(profile, loadout, input, sources, toggles);
     assumptionSources(input, sources);
     agilitySources(agility, sources);
@@ -1032,7 +1033,13 @@ public final class CritSpeedCalculation {
   }
 
   /** 공용 아크 그리드 코어: 현재 포인트로 달성한 구간 문구의 치명타 적중률·피해를 더한다. */
-  private static void gridCoreSources(CharacterLoadout loadout, List<Source> sources) {
+  private static void gridCoreSources(
+      CharacterLoadout loadout,
+      Assumptions input,
+      List<Source> sources,
+      List<ToggleState> toggles,
+      List<String> unclassified,
+      List<String> conditionalRate) {
     if (loadout.arkGrid() == null) return;
     for (var slot : loadout.arkGrid().slots()) {
       if (slot == null || slot.name() == null || slot.core() == null || slot.point() == null)
@@ -1061,6 +1068,139 @@ public final class CritSpeedCalculation {
                   total,
                   String.join(" ", texts)));
       }
+      if (CritEffectTable.COMMON_CORES.keySet().stream().noneMatch(slot.name()::endsWith))
+        classCoreSources(slot, input, sources, toggles, unclassified, conditionalRate);
+    }
+  }
+
+  /** 직업 코어를 이름 표(CritEffectTable.CLASS_CORES)로 판정한다. 급소 노출(WEAK_POINT)은 직업 버프 표에서 처리한다. */
+  private static void classCoreSources(
+      CharacterLoadout.GridSlot slot,
+      Assumptions input,
+      List<Source> sources,
+      List<ToggleState> toggles,
+      List<String> unclassified,
+      List<String> conditionalRate) {
+    var rule = CritEffectTable.classCore(slot.name());
+    if (rule == null) {
+      boolean crit =
+          slot.core().options().stream()
+              .anyMatch(
+                  option ->
+                      option != null
+                          && option.text() != null
+                          && option.threshold() <= slot.point()
+                          && CritEffectTable.ANY_CRIT.matcher(option.text()).find());
+      if (crit) unclassified.add(slot.name());
+      return;
+    }
+    if (rule.decision() == CritEffectTable.CoreDecision.SITUATIONAL) {
+      for (var option : slot.core().options()) {
+        if (option == null || option.text() == null || option.threshold() > slot.point()) continue;
+        var matcher = RATE_VALUE.matcher(option.text());
+        if (!matcher.find()) continue;
+        var value = signed(matcher.group(1), matcher.group(2));
+        boolean on = input.on(rule.core(), false);
+        toggles.add(
+            new ToggleState(
+                rule.core(), rule.label(), Axis.CRIT, false, on, scale(value), option.text()));
+        if (on)
+          sources.add(
+              new Source(
+                  Kind.ASSUMED,
+                  Category.ASSUMPTION,
+                  Axis.CRIT,
+                  rule.label() + "(" + slot.name() + ")",
+                  value,
+                  option.text()));
+        else
+          conditionalRate.add(slot.name() + " " + plain(value) + "%(" + rule.label() + ", 켜기 가능)");
+      }
+      return;
+    }
+    if (rule.decision() != CritEffectTable.CoreDecision.INCLUDE) return;
+    for (var axis : List.of(Axis.CRIT, Axis.CRIT_DAMAGE)) {
+      var pattern = axis == Axis.CRIT ? CORE_RATE_ONLY : CORE_DAMAGE_ONLY;
+      var total = BigDecimal.ZERO;
+      var texts = new ArrayList<String>();
+      for (var option : slot.core().options()) {
+        if (option == null || option.text() == null || option.threshold() > slot.point()) continue;
+        var matcher = pattern.matcher(option.text().strip());
+        if (!matcher.matches()) continue;
+        total = total.add(new BigDecimal(matcher.group(1)));
+        texts.add(option.text());
+      }
+      if (total.signum() != 0)
+        sources.add(
+            new Source(
+                Kind.OBSERVED,
+                Category.ARK_GRID,
+                axis,
+                slot.name() + " " + slot.point() + "P",
+                total,
+                String.join(" ", texts)));
+    }
+  }
+
+  private static final Pattern CORE_RATE_ONLY =
+      Pattern.compile("치명타 적중률이\\s*" + NUMBER + "%\\s*증가한다\\.");
+  private static final Pattern CORE_DAMAGE_ONLY =
+      Pattern.compile("치명타 피해(?:량이|가)\\s*" + NUMBER + "%\\s*증가한다\\.");
+
+  /** 직업 코어의 급소 노출: "급소 노출 효과가 적용되어, 대상이 자신 및 파티원에게 받는 치명타 저항률이 … X% 감소" */
+  private static final Pattern CORE_WEAK_POINT =
+      Pattern.compile("급소 노출 효과가 적용되어[^.]*?치명타 저항률이(?:\\s*[0-9.]+초 동안)?\\s*" + NUMBER + "%\\s*감소");
+
+  /** 달성한 직업 코어(표의 WEAK_POINT) 옵션 중 급소 노출(치적 시너지) 문구. 없으면 null. */
+  private static CharacterLoadout.CoreOption coreWeakPoint(CharacterLoadout loadout) {
+    if (loadout.arkGrid() == null) return null;
+    for (var slot : loadout.arkGrid().slots()) {
+      if (slot == null || slot.core() == null || slot.point() == null) continue;
+      var rule = CritEffectTable.classCore(slot.name());
+      if (rule == null || rule.decision() != CritEffectTable.CoreDecision.WEAK_POINT) continue;
+      for (var option : slot.core().options())
+        if (option != null
+            && option.text() != null
+            && option.threshold() <= slot.point()
+            && CORE_WEAK_POINT.matcher(option.text()).find()) return option;
+    }
+    return null;
+  }
+
+  /** 팔찌의 적중 시 8초 효과(대상 치명타 저항·치명타 피해 저항 감소). 기본 끔 토글. */
+  private static void braceletToggles(
+      CharacterLoadout loadout,
+      Assumptions input,
+      List<Source> sources,
+      List<ToggleState> toggles,
+      List<String> conditionalRate,
+      List<String> conditionalDamage) {
+    for (var equipment : loadout.equipment()) {
+      if (equipment == null || equipment.detail() == null) continue;
+      for (var bracelet : equipment.detail().braceletEffects()) {
+        if (bracelet == null || bracelet.text() == null) continue;
+        for (var rule : CritEffectTable.BRACELET_TOGGLES) {
+          var matcher = rule.pattern().matcher(bracelet.text());
+          if (!matcher.find()) continue;
+          var value = new BigDecimal(matcher.group(1));
+          boolean on = input.on(rule.key(), false);
+          toggles.add(
+              new ToggleState(
+                  rule.key(), rule.label(), rule.axis(), false, on, scale(value), bracelet.text()));
+          if (on)
+            sources.add(
+                new Source(
+                    Kind.ASSUMED,
+                    Category.ASSUMPTION,
+                    rule.axis(),
+                    rule.label() + "(팔찌)",
+                    value,
+                    bracelet.text()));
+          else
+            (rule.axis() == Axis.CRIT ? conditionalRate : conditionalDamage)
+                .add("팔찌 " + plain(value) + "%(" + rule.label() + ", 켜기 가능)");
+        }
+      }
     }
   }
 
@@ -1077,6 +1217,17 @@ public final class CritSpeedCalculation {
       String text = buff.basis();
       if (buff.skill() == null && buff.tripod() == null) value = buff.value();
       if (buff.skill() != null && hasSkill(loadout, buff.skill())) value = buff.value();
+      if (buff.tripod() != null && buff.tripod().equals("급소 노출")) {
+        // 직업 코어(예: 데빌헌터 "샷건 오버로드" 14P)가 급소 노출을 거는 경우도 같은 시너지다(중복 적용 없음).
+        var core = coreWeakPoint(loadout);
+        if (core != null) {
+          var matcher = CORE_WEAK_POINT.matcher(core.text());
+          if (matcher.find()) {
+            value = new BigDecimal(matcher.group(1));
+            text = core.text();
+          }
+        }
+      }
       if (buff.tripod() != null) {
         var tripod = selectedTripod(loadout, buff.tripod());
         if (tripod != null) {

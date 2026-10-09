@@ -33,7 +33,7 @@ class CritEffectTableTest {
             Assumptions.NONE);
     assertThat(values(result, Axis.CRIT, Category.ARK_PASSIVE)).containsExactly("광기 Lv.3=30");
     assertThat(values(result, Axis.CRIT_DAMAGE, Category.ARK_PASSIVE))
-        .containsExactly("분노 자극 Lv.1=3");
+        .containsExactly("분노 자극 Lv.1=3", "격노의 악장 Lv.2=8");
     // 데모닉 혼돈 강화 "악마화 중"은 핵심 상태라 기본 켬 토글(PM 총괄 23:24)
     assertThat(values(result, Axis.CRIT, Category.ASSUMPTION))
         .containsExactly("악마화 상태 가정(혼돈 강화 Lv.3)=30");
@@ -42,8 +42,137 @@ class CritEffectTableTest {
         .containsExactly("혼돈 강화/true/true");
     assertThat(result.limitations())
         .anyMatch(line -> line.contains("관통 필살 Lv.3 100%(적룡필살에만)"))
-        .anyMatch(line -> line.contains("격노의 악장 Lv.2 8%"))
         .noneMatch(line -> line.contains("로펙"));
+  }
+
+  /** 계산 검증 10-10 01:55 환업·데니멀즈·소녀양점순 공식 코어 문구. */
+  @Test
+  void 직업_코어는_이름_표로_판정하고_표에_없는_치명_문구는_분류_중으로_남긴다() {
+    var grid =
+        new CharacterLoadout.ArkGrid(
+            List.of(
+                core(
+                    "질서의 별 코어 : 초극뇌연격",
+                    20,
+                    List.of(
+                        new CharacterLoadout.CoreOption(10, "오의 : 뇌호격의 피해량이 3.0% 증가한다."),
+                        new CharacterLoadout.CoreOption(18, "치명타 피해량이 0.52% 증가한다."),
+                        new CharacterLoadout.CoreOption(19, "치명타 피해량이 0.52% 증가한다."),
+                        new CharacterLoadout.CoreOption(20, "치명타 피해량이 0.52% 증가한다."))),
+                core(
+                    "질서의 해 코어 : 샷건 오버로드",
+                    20,
+                    List.of(
+                        new CharacterLoadout.CoreOption(
+                            14,
+                            "샷건 스킬이 적에게 적중 시 급소 노출 효과가 적용되어, 대상이 자신 및 파티원에게 받는 치명타 저항률이 5.0초 동안 10.0% 감소한다."))),
+                core(
+                    "질서의 해 코어 : 천둥",
+                    19,
+                    List.of(
+                        new CharacterLoadout.CoreOption(
+                            17,
+                            "'운명: 천둥'을 소모하면 20.0초 간 '운명: 천둥의 가호' 효과를 획득한다. '운명: 천둥의 가호' : 자신의 치명타 적중률이 6.0% 증가하고, 이동 속도가 10.0% 증가한다."))),
+                core(
+                    "질서의 달 코어 : 표에 없는 코어",
+                    20,
+                    List.of(new CharacterLoadout.CoreOption(14, "치명타 적중률이 5.0% 증가한다.")))),
+            List.of());
+    var result = calculate("데빌헌터", List.of(), List.of(), grid, Assumptions.NONE);
+    assertThat(values(result, Axis.CRIT_DAMAGE, Category.ARK_GRID))
+        .containsExactly("질서의 별 코어 : 초극뇌연격 20P=1.56");
+    assertThat(values(result, Axis.CRIT, Category.ARK_GRID)).isEmpty();
+    // 샷건 오버로드의 급소 노출은 자기 시너지 10(트라이포드 없이도)
+    assertThat(values(result, Axis.CRIT, Category.ASSUMPTION)).containsExactly("급소 노출 시너지(자신)=10");
+    assertThat(result.toggles())
+        .extracting(
+            t -> t.key() + "=" + t.value().stripTrailingZeros().toPlainString() + "/" + t.on())
+        .contains("천둥=6/false");
+    assertThat(result.limitations())
+        .anyMatch(line -> line.contains("분류 중") && line.contains("질서의 달 코어 : 표에 없는 코어"));
+  }
+
+  /** PM-백엔드 10-10 01:46 P1: 켠 상황 조건 토글도 스킬별 치명타 적중률 기본에 들어간다. */
+  @Test
+  void 켠_치명타_적중률_토글은_스킬별_기본에도_들어간다() {
+    var nodes =
+        List.of(
+            node(
+                "깨달음 4티어 연가비기 Lv.3",
+                "연가비기 사용 시 연가공법을 발동시켜 16.0초 동안 치명타 적중률이 20.0% 증가하며, 적중 시 최대 마나의 15.0%를 즉시 회복한다."));
+    var skills = List.of(categorized("난무 스킬", "일반 스킬"));
+    var off = calculate("창술사", nodes, skills, null, Assumptions.NONE);
+    var on =
+        calculate(
+            "창술사",
+            nodes,
+            skills,
+            null,
+            new Assumptions(
+                false,
+                false,
+                0,
+                null,
+                null,
+                null,
+                null,
+                null,
+                true,
+                java.util.Map.of("연가비기", true)));
+    assertThat(skill(on, "난무 스킬").base())
+        .isEqualByComparingTo(skill(off, "난무 스킬").base().add(new BigDecimal("20")));
+    assertThat(on.crit().totalRate())
+        .isEqualByComparingTo(off.crit().totalRate().add(new BigDecimal("20")));
+  }
+
+  /** PHNTM 팔찌(2026-10-10 공식 문구): 적중 시 8초 효과는 상황 조건이라 기본 끔. */
+  @Test
+  void 팔찌_적중_시_8초_치명_저항_감소는_기본_끔_토글이다() {
+    var bracelet =
+        new CharacterLoadout.Equipment(
+            "팔찌",
+            "팔찌",
+            null,
+            "고대",
+            new CharacterLoadout.EquipmentDetail(
+                null,
+                null,
+                null,
+                4,
+                null,
+                List.of(),
+                List.of(),
+                List.of(),
+                List.of(
+                    new CharacterLoadout.BraceletEffect(
+                        "몬스터에게 공격 적중 시 8초 동안 대상의 치명타 저항을 2.5% 감소시킨다.", null),
+                    new CharacterLoadout.BraceletEffect(
+                        "몬스터에게 공격 적중 시 8초 동안 대상의 치명타 피해 저항을 3.6% 감소시킨다.", null))));
+    var profile =
+        new CharacterProfile(
+            "표본", "카단", "홀리나이트", 70, null, null, null, null, null, null, List.of());
+    var loadout = new CharacterLoadout(List.of(bracelet), null, null, null, null, null);
+    var off = CritSpeedCalculation.calculate(profile, loadout, Assumptions.NONE);
+    assertThat(off.crit().totalRate()).isEqualByComparingTo("0");
+    assertThat(off.toggles())
+        .extracting(t -> t.key() + "/" + t.axis() + "/" + t.on())
+        .containsExactly("팔찌 치명타 저항 감소/CRIT/false", "팔찌 치명타 피해 저항 감소/CRIT_DAMAGE/false");
+    var on =
+        CritSpeedCalculation.calculate(
+            profile,
+            loadout,
+            new Assumptions(
+                false,
+                false,
+                0,
+                null,
+                null,
+                null,
+                null,
+                null,
+                true,
+                java.util.Map.of("팔찌 치명타 저항 감소", true)));
+    assertThat(on.crit().totalRate()).isEqualByComparingTo("2.5");
   }
 
   @Test

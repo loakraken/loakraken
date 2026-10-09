@@ -9,6 +9,7 @@
 | 아크 그리드 젬 가공 | [arkgrid-gem.md](arkgrid-gem.md) | `verification/arkgrid-gem/` | 성공 확률 재현(로아또 7/7, 반올림 범위). 기대 비용은 근사(−9.8~+0.3%), 미검증 |
 | 재련 기대 시도 수 | [refining.md](refining.md) | `verification/refining/` | 로펙 최적 루트 3사례 일치(기대 시도 차 0.0043 이내, 최대 시도 같음). 골드 비용은 대상 아님 |
 | 돌파고(어빌리티 스톤 세공) | [ability-stone.md](ability-stone.md) | `verification/ability-stone/` | 확률 규칙 일치(공식 결과표 4개 최대 0.00093%p, 일로아 2사례) |
+| 경매 입찰가 | [auction.md](auction.md) | `verification/auction/` | 일로아·로아랩 교차 일치(선점 반올림 1G 차). 수수료 5%·10% 재입찰은 공식 문구 미확인(추정) |
 
 ## 규칙
 

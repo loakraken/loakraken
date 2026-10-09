@@ -209,7 +209,7 @@ const results = HYPOTHESES.map((h) => {
     residuals: res.map((x) => ({ id: x.id, residualPct: Number(x.pct.toFixed(2)) })) };
   const cv = crossValidate(h);
   out.crossValidation = { folds: 5, all: summary(cv), itemLevel1740Plus: summary(cv.filter((x) => x.itemLevel >= 1740)) };
-  if (h.probe) out.probeCi95 = Object.fromEntries(h.probe.map((k, t) => [k, bootstrap(h)[t]]));
+  if (h.probe) { const ci = bootstrap(h); out.probeCi95 = Object.fromEntries(h.probe.map((k, t) => [k, ci[t]])); }
   return out;
 });
 

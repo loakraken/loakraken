@@ -49,6 +49,9 @@ services:
     logging: *default-logging
     environment:
       LOAKRAKEN_API_ORIGIN: http://api:8080
+      # 사이트 기준 URL(metadataBase·canonical·sitemap·robots, web #96). 서버 전용·요청 시점에 읽는다.
+      # 운영만 https://loakraken.gg이고, 다른 값이면 robots가 색인을 막는다. 빠뜨리지 않게 필수로 둔다.
+      SITE_URL: "${SITE_URL:?SITE_URL이 필요합니다(운영 https://loakraken.gg)}"
     depends_on:
       api:
         condition: service_healthy
@@ -89,6 +92,13 @@ services:
       STATS_COLLECTOR_ENABLED: ${STATS_COLLECTOR_ENABLED:-false}
       MARKET_WARMUP_ENABLED: ${MARKET_WARMUP_ENABLED:-false}
       API_DOCS_ENABLED: "false"
+      # 관리(actuator) 포트를 앱 포트와 나눈다. internal·data망 안에서만 닿고 edge는 이 망에 없다.
+      MANAGEMENT_SERVER_PORT: "9090"
+      # liveness는 프로세스 생존, readiness는 DB·Valkey까지 확인한다(출시 점검표 R2).
+      MANAGEMENT_ENDPOINT_HEALTH_PROBES_ENABLED: "true"
+      MANAGEMENT_ENDPOINT_HEALTH_GROUP_READINESS_INCLUDE: readinessState,db,redis
+      # 구조화 로그(JSON, ECS 형식). 감시 설계의 로그 원칙(docs/ops/deploy.md).
+      LOGGING_STRUCTURED_FORMAT_CONSOLE: ecs
       # 클라이언트 IP 헤더를 믿는 프록시를 web 한 곳으로 한정한다(Tomcat RemoteIpValve 정규식). 사설 대역 전체를 믿지 않는다.
       SERVER_TOMCAT_REMOTEIP_INTERNALPROXIES: ${TRUSTED_PROXY_REGEX:-172\.31\.250\.10}
     secrets:
@@ -109,7 +119,7 @@ services:
         - CMD
         - bash
         - -c
-        - "exec 3<>/dev/tcp/127.0.0.1/8080 && printf 'GET /actuator/health HTTP/1.0\\r\\nHost: localhost\\r\\n\\r\\n' >&3 && grep -q '\"status\":\"UP\"' <&3"
+        - "exec 3<>/dev/tcp/127.0.0.1/9090 && printf 'GET /actuator/health/readiness HTTP/1.0\\r\\nHost: localhost\\r\\n\\r\\n' >&3 && grep -q '\"status\":\"UP\"' <&3"
       interval: 15s
       timeout: 5s
       start_period: 90s

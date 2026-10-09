@@ -87,6 +87,32 @@ class ReceiptDomainTest {
             EquipmentReceipt.calculate(RULES, items, forbid).parts().getFirst().gold());
   }
 
+  /** PM 총괄 10-10 03:00: 책 발동 확률이 공개되지 않아 기본은 책 제외, assumeBook이면 책 효과 항상 적용 가정. */
+  @Test
+  void 책은_기본으로_쓰지_않고_가정을_켜면_더_싼_쪽으로_쓴다() {
+    var items = List.of(item("투구", "+19 운명의 업화 투구", 19, 4));
+    var names = EquipmentReceipt.materialNames(RULES, items);
+    // 책이 공짜면 가정을 켰을 때 쓴다.
+    var freeBook = prices(new BigDecimal("100"));
+    names.stream()
+        .filter(name -> name.contains("재봉술"))
+        .forEach(name -> freeBook.put(name, BigDecimal.ZERO));
+    var off = EquipmentReceipt.calculate(RULES, items, freeBook).parts().getFirst();
+    assertThat(off.stages()).noneMatch(EquipmentReceipt.StageCost::book);
+    var on = EquipmentReceipt.calculate(RULES, items, freeBook, true).parts().getFirst();
+    assertThat(on.stages()).anyMatch(EquipmentReceipt.StageCost::book);
+    assertThat(on.gold()).isLessThan(off.gold());
+    // 책을 빼도(업화) 숨결 사용·미사용 중 싼 쪽은 그대로 고른다.
+    var freeBreath = prices(new BigDecimal("100"));
+    names.stream()
+        .filter(name -> name.contains("숨결"))
+        .forEach(name -> freeBreath.put(name, BigDecimal.ZERO));
+    var breath = EquipmentReceipt.calculate(RULES, items, freeBreath).parts().getFirst();
+    assertThat(breath.stages())
+        .allMatch(EquipmentReceipt.StageCost::breath)
+        .noneMatch(EquipmentReceipt.StageCost::book);
+  }
+
   @Test
   void 재료_시세가_없으면_그_부위는_PRICE_UNAVAILABLE이다() {
     var items = List.of(item("무기", "+12 운명의 전율 검", 12, 4));

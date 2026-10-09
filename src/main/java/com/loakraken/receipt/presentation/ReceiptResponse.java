@@ -47,7 +47,7 @@ public record ReceiptResponse(
             receipt.ready(),
             receipt.pending(),
             receipt.nextAvailableAt()),
-        ReceiptService.assumptions());
+        ReceiptService.assumptions(receipt.assumeBook()));
   }
 
   public record ReceiptTotalResponse(

@@ -72,6 +72,18 @@ public final class EquipmentReceipt {
       RefiningRules rules,
       List<CharacterLoadout.Equipment> items,
       Map<String, BigDecimal> unitPrices) {
+    return calculate(rules, items, unitPrices, false);
+  }
+
+  /**
+   * assumeBook이 false면 책(재봉술·야금술)을 쓰지 않는 조합만 본다. 게임 재련 창에 "특수 재료 별 효과는 확률에 따라 적용되지 않을 수 있습니다"라고 나오고
+   * 그 확률이 공개되지 않아, 확인된 값만 내기 위해서다(PM 총괄 10-10 03:00). true면 책 효과가 항상 적용된다고 가정한다(일로아·로아와와 같은 가정).
+   */
+  public static Result calculate(
+      RefiningRules rules,
+      List<CharacterLoadout.Equipment> items,
+      Map<String, BigDecimal> unitPrices,
+      boolean assumeBook) {
     var parts = new ArrayList<Part>();
     var excluded = new ArrayList<Excluded>();
     for (var item : items) {
@@ -113,7 +125,7 @@ public final class EquipmentReceipt {
       var total = BigDecimal.ZERO;
       boolean priced = true;
       for (int next = FROM_STAGE + 1; next <= stage; next++) {
-        var cost = cheapest(target.track(), grade, next, unitPrices);
+        var cost = cheapest(target.track(), grade, next, unitPrices, assumeBook);
         if (cost == null) {
           priced = false;
           break;
@@ -140,7 +152,7 @@ public final class EquipmentReceipt {
     // 상급 재련 단계는 공식 응답 해석이 아직 없어, 4티어 장비가 있으면 캐릭터마다 한 줄로 알린다.
     if (!parts.isEmpty())
       excluded.add(
-          new Excluded(null, null, Reason.ADVANCED_REFINING, "상급 재련이 있다면 산정하지 않습니다(공식 확률 공개 전)."));
+          new Excluded(null, null, Reason.ADVANCED_REFINING, "상급 재련은 아직 산정하지 않습니다(재련 v2 준비 중)."));
     var gold = parts.stream().map(Part::gold).reduce(BigDecimal.ZERO, BigDecimal::add);
     return new Result(List.copyOf(parts), List.copyOf(excluded), gold);
   }
@@ -149,12 +161,14 @@ public final class EquipmentReceipt {
       RefiningRules.Track track,
       RefiningRules.Grade grade,
       int stage,
-      Map<String, BigDecimal> unitPrices) {
+      Map<String, BigDecimal> unitPrices,
+      boolean assumeBook) {
     var rule = track.stage(stage);
     boolean growth = grade == RefiningRules.Grade.UPHWA && stage <= GROWTH_SUPPORT_MAX_STAGE;
     StageCost best = null;
     for (boolean breath : rule.breath() == null ? List.of(false) : List.of(false, true))
-      for (boolean book : rule.book() == null ? List.of(false) : List.of(false, true)) {
+      for (boolean book :
+          rule.book() == null || !assumeBook ? List.of(false) : List.of(false, true)) {
         var plan =
             RefiningPlan.calculate(
                 track,

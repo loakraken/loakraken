@@ -1,6 +1,6 @@
 # 운영 배포 절차 (초안)
 
-운영 서버는 아직 정해지지 않았다. 도메인은 `loakraken.gg`로 정했다(구입 전). 이 문서는 사업자와 무관한 "Linux 서버 1대 + docker compose" 기준이며, 서버가 정해지면 그대로 적용한다. 서버 계정 생성·결제·DNS 변경·비밀값 등록은 사용자가 직접 한다.
+운영 구성은 **AWS Lightsail 서울 4GB + 앞단 Cloudflare 무료 프록시 + DB 외부 백업 Cloudflare R2**다(사용자 결정 2026-10-09). 도메인은 `loakraken.gg`(Porkbun 등록, DNS는 Cloudflare로 옮김). Cloudflare 관련 설정은 [cloudflare.md](cloudflare.md)를 따른다. 이 문서의 compose·배포 절차는 사업자와 무관하게 쓴다. 서버 계정 생성·결제·DNS 변경·비밀값 등록은 사용자가 직접 한다.
 
 ## 구성
 
@@ -117,7 +117,7 @@ sudo chmod 444 /opt/loakraken/$ENV/secrets/*
    - Environments `production`(승인자 지정), `staging`
    - 환경 비밀값: `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_SSH_KEY`, `DEPLOY_KNOWN_HOSTS`
    - 저장소 변수 `PUBLISH_IMAGES=true`(두 저장소). 이전에는 이미지가 GHCR에 올라가지 않는다.
-8. DNS: `loakraken.gg`의 A(그리고 IPv6가 있으면 AAAA) 레코드를 서버 IP로 둔다. `SITE_ADDRESS=loakraken.gg`이면 Caddy가 Let's Encrypt 인증서를 자동 발급·갱신한다(80/443이 열려 있어야 함).
+8. DNS: Porkbun에서 네임서버를 Cloudflare로 바꾸고, Cloudflare에서 `loakraken.gg` A(그리고 IPv6가 있으면 AAAA) 레코드를 Lightsail 고정 IP로 **프록시 켬(주황 구름)**으로 둔다. SSL 모드는 Full(strict), 원 서버 인증서는 Cloudflare Origin CA(`secrets/tls/`). `stack.env`의 `CADDYFILE=Caddyfile.cloudflare`. 자세한 내용은 [cloudflare.md](cloudflare.md).
 
 ## 배포
 

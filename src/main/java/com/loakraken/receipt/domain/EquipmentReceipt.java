@@ -86,7 +86,11 @@ public final class EquipmentReceipt {
       int stage = stage(item);
       if (grade == null) {
         excluded.add(
-            new Excluded(item.type(), item.name(), Reason.UNSUPPORTED_GRADE, "업화·전율 장비만 산정합니다."));
+            new Excluded(
+                item.type(),
+                item.name(),
+                Reason.UNSUPPORTED_GRADE,
+                "업화·전율 외 장비(결단 등)는 산정하지 않습니다."));
         continue;
       }
       if (stage <= FROM_STAGE) {
@@ -136,8 +140,7 @@ public final class EquipmentReceipt {
     // 상급 재련 단계는 공식 응답 해석이 아직 없어, 4티어 장비가 있으면 캐릭터마다 한 줄로 알린다.
     if (!parts.isEmpty())
       excluded.add(
-          new Excluded(
-              null, null, Reason.ADVANCED_REFINING, "상급 재련은 재련 v2(공식 확률 공지 기반) 전까지 산정하지 않습니다."));
+          new Excluded(null, null, Reason.ADVANCED_REFINING, "상급 재련이 있다면 산정하지 않습니다(공식 확률 공개 전)."));
     var gold = parts.stream().map(Part::gold).reduce(BigDecimal.ZERO, BigDecimal::add);
     return new Result(List.copyOf(parts), List.copyOf(excluded), gold);
   }

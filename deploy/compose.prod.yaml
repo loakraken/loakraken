@@ -57,6 +57,9 @@ services:
       # 사이트 기준 URL(metadataBase·canonical·sitemap·robots, web #96). 서버 전용·요청 시점에 읽는다.
       # 운영만 https://loakraken.gg이고, 다른 값이면 robots가 색인을 막는다. 빠뜨리지 않게 필수로 둔다.
       SITE_URL: "${SITE_URL:?SITE_URL이 필요합니다(운영 https://loakraken.gg)}"
+      # 기능 플래그(web #233): 치명 계산 도구(치적) 노출. on|off, 비우면 web 기본값(SITE_URL이 운영 주소일 때만 숨김).
+      # 운영 stack.env는 off를 명시한다(PM 총괄 결정 10-09: 첫 운영 배포 제외). 스테이징은 비워 두어 보인다.
+      CRIT_SPEED_TOOL: "${CRIT_SPEED_TOOL:-}"
       # Node 힙 상한. 컨테이너 한도(WEB_MEM_LIMIT)보다 작게 둬 한도에 닿기 전에 GC가 돈다(2GB 서버 기준, docs/ops/deploy.md "메모리 예산").
       NODE_OPTIONS: "${WEB_NODE_OPTIONS:---max-old-space-size=256}"
     depends_on:

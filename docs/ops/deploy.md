@@ -66,11 +66,12 @@
 | `deploy/pull/pull-deploy.sh` | 서버가 채널 태그를 따라가 배포하고, 실패하면 되돌린다 |
 | `deploy/pull/loakraken-pull-deploy@.service`·`.timer` | 위 스크립트를 2분마다 실행(systemd, `@production`·`@staging`) |
 | `deploy/monitor/host-check.sh`·`loakraken-host-check@.service`·`.timer` | 서버 자원 점검(5분, 메모리·스왑·디스크·컨테이너 → 기록·Slack). "자원 점검" 참고 |
-| `.github/workflows/image.yml` | 이미지 빌드(PR은 빌드 확인만, push는 `PUBLISH_IMAGES=true`일 때 GHCR에 api·배포 번들 업로드) |
+| `.github/workflows/ci.yml` | 빌드·테스트. develop·master push에서 **통과한 커밋만** `PUBLISH_IMAGES=true`일 때 GHCR에 api·배포 번들 업로드(publish job) |
+| `.github/workflows/image.yml` | PR에서 이미지·번들 빌드 확인만 |
 | `.github/workflows/deploy.yml` | 릴리스 지정(환경 선택 + 이미지 태그 → GHCR 채널 태그 이동, 운영은 `sha-` 태그와 확인 입력). 서버에 접속하지 않는다 |
 | `deploy/pull/approve.sh` | **운영 승인**: 사용자가 서버에서 새 릴리스의 커밋·비교 링크를 보고 y/N으로 승인하면 바로 배포 |
 
-프론트 이미지는 `loakraken-web` 저장소의 `Dockerfile`·`image.yml`이 만든다.
+프론트 이미지는 `loakraken-web` 저장소의 `Dockerfile`과 `frontend-ci.yml` publish job(검사 통과 뒤)이 만든다.
 
 ## 환경과 키 규칙
 
@@ -203,12 +204,14 @@ sudo chmod 444 /opt/loakraken/$ENV/secrets/*
 GitHub는 서버에 접속하지 않는다. Deploy 워크플로가 GHCR 채널 태그(`:production`·`:staging`)를 옮기고, 서버가 그 태그를 따라간다(PM 총괄 결정 2026-10-09). **운영은 사용자가 서버에서 승인한 릴리스만 배포한다**(PM 총괄 결정 2026-10-10, 아래 "운영 승인").
 
 ```
-병합 → image.yml: sha- 태그로 api·web·배포 번들 업로드
+병합 → CI(빌드·테스트) 통과 → publish: sha- 태그로 api·web·배포 번들 업로드(테스트 실패 커밋은 이미지가 없어 배포 불가)
      → Actions › Deploy 실행(환경·태그 입력, 운영은 사용자만) → 채널 태그 이동
      → 서버 타이머(2분): 스테이징은 바로 배포 / 운영은 Slack에 "승인 대기" → 사용자가 서버에서 approve.sh → 배포 → Slack #alerts에 결과
 ```
 
-1. develop/master에 병합되면 `image.yml`이 `sha-<커밋7자>` 태그로 api·배포 번들(`loakraken-deploy`)을, web 저장소의 `image.yml`이 web 이미지를 올린다.
+1. develop/master에 병합되면 CI가 빌드·테스트하고, **통과한 커밋만** `ci.yml` publish job이 `sha-<커밋7자>` 태그로 api·배포 번들(`loakraken-deploy`)을, web 저장소의 `frontend-ci.yml` publish job이 web 이미지를 올린다. 테스트가 실패한 커밋은 이미지가 없으므로 Deploy에서 태그를 찾지 못해 배포되지 않는다.
+   - 같은 브랜치에 연달아 push하면 CI가 앞 실행을 취소한다(concurrency). 그래서 앞 커밋은 이미지 없이 끝날 수 있다. 배포는 최신 커밋 기준이라 의도된 동작이다.
+   - 업로드를 CI 워크플로의 후속 job(`needs`)으로 둔 이유: 기본 브랜치가 master라 `workflow_run` 트리거는 master에 반영된 워크플로만 쓴다. develop에서 바로 효과를 내려고 이 방식을 골랐다. master 반영 뒤 분리가 필요하면 다시 검토한다.
 2. Actions → Deploy → 환경·`api_tag`·`web_tag`를 넣고 실행한다. production은 `sha-` 태그만 받고 `confirm`에 `production`을 입력해야 한다(실수 방지). **Claude 세션은 production으로 실행하지 않는다**(PM 총괄 결정 10-10, 사용자만). 배포 번들은 `api_tag`와 같은 커밋을 쓴다. 실행 요약에 옮긴 digest가 남는다.
 3. 서버의 `loakraken-pull-deploy@<환경>.timer`가 2분 안에 바뀐 태그를 본다. `pull-deploy.sh`가 하는 일:
    1. 채널 태그 3개를 받아 digest를 확인한다. `.deployed`와 같으면 끝, `.failed`(실패했던 릴리스)와 같으면 다시 시도하지 않는다.
@@ -307,7 +310,7 @@ $C up -d --wait
 
 `pull-deploy.sh`는 root로 돌고, 배포 번들 안의 스크립트(`pull/`·`backup/`)와 compose 파일을 그대로 실행한다. 그래서 **서버 root 권한을 지키는 선은 코드 리뷰와 운영 승인**이다.
 
-- 번들은 `image.yml`이 develop·master에 병합된 커밋으로만 만든다(PR에서는 빌드 확인만, 업로드하지 않음).
+- 번들은 `ci.yml` publish job이 develop·master에 병합되고 **빌드·테스트를 통과한** 커밋으로만 만든다(PR에서는 빌드 확인만, 업로드하지 않음).
 - 운영 채널은 Deploy 작업이 `sha-` 태그 번들만 옮기고, 서버는 사용자가 approve.sh로 승인한 digest만 고정해 실행한다.
 - 그러므로 `deploy/**`를 바꾸는 PR은 PM-백엔드 검토를 거친다(셸 스크립트·compose 변경은 서버 root 권한 변경과 같다고 보고 본다).
 - GHCR 쓰기 권한(packages: write)은 Actions 작업에만 있다. 사람의 개인 토큰에 쓰기 권한을 주지 않는다. 서버의 GHCR 토큰은 읽기 전용이다.

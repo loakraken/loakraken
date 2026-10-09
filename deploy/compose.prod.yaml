@@ -184,7 +184,7 @@ services:
         printf 'requirepass %s\n' "$$(cat /run/secrets/valkey_password)" > /tmp/valkey.conf &&
         chgrp valkey /tmp/valkey.conf &&
         exec docker-entrypoint.sh /tmp/valkey.conf --appendonly yes
-        --maxmemory ${VALKEY_MAXMEMORY:-96mb} --maxmemory-policy volatile-lru
+        --maxmemory ${VALKEY_MAXMEMORY:-96mb} --maxmemory-policy volatile-lru --maxmemory-samples 10
     secrets:
       - valkey_password
     volumes:

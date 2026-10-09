@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # 서버 자원 점검(2GB 서버용 최소 감시). systemd 타이머(loakraken-host-check@<환경>.timer)가 5분마다 실행한다.
 #
-# - 기록: host-metrics.log 한 줄(시각 메모리% 스왑MB 디스크% 재시작수) → 4GB 증설 판단 자료(docs/ops/deploy.md "4GB로 올리는 기준")
+# - 기록: host-metrics.log 한 줄(시각 메모리% 스왑MB 디스크% 재시작수 Valkey축출수) → 4GB 증설 판단 자료(docs/ops/deploy.md "4GB로 올리는 기준")
 # - 알림(Slack, 같은 문제는 처음 한 번과 복구 때만):
-#   메모리 90% 이상이면서 스왑 512MB 이상이 3회 연속 / 디스크 85% 이상 / 컨테이너 unhealthy / 컨테이너 재시작 수 증가
+#   메모리 90% 이상이면서 스왑 512MB 이상이 3회 연속 / 디스크 85% 이상 / 컨테이너 unhealthy / 컨테이너 재시작 수 증가 / Valkey 축출 급증
 # 알림 문구에는 개인정보를 넣지 않는다. 스택 디렉터리(/opt/loakraken/<환경>)에서 root로 실행한다.
 set -euo pipefail
 
@@ -51,7 +51,17 @@ while read -r name health count; do
 done < <(docker ps -aq --filter "label=com.docker.compose.project=${STACK_NAME}" \
   | xargs -r docker inspect --format '{{index .Config.Labels "com.docker.compose.service"}} {{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}} {{.RestartCount}}')
 
-printf '%s mem=%s%% swap=%sMB disk=%s%% restarts=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$mem_pct" "$swap_mb" "$disk_pct" "$restarts" >> host-metrics.log
+# Valkey 축출 수(누적). 캐시가 계속 밀려나면 공식 API 호출이 늘어나는 신호다. 암호는 컨테이너 안 비밀 파일에서 읽는다.
+valkey_id="$(docker ps -q --filter "label=com.docker.compose.project=${STACK_NAME}" --filter "label=com.docker.compose.service=valkey" | head -n 1)"
+evicted=-1
+if [[ -n "$valkey_id" ]]; then
+  # shellcheck disable=SC2016  # 변수는 valkey 컨테이너 안에서 펼친다.
+  evicted="$(docker exec "$valkey_id" sh -c 'VALKEYCLI_AUTH="$(cat /run/secrets/valkey_password)" valkey-cli info stats' 2>/dev/null \
+    | tr -d '\r' | sed -n 's/^evicted_keys://p')"
+  evicted="${evicted:--1}"
+fi
+
+printf '%s mem=%s%% swap=%sMB disk=%s%% restarts=%s evicted=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$mem_pct" "$swap_mb" "$disk_pct" "$restarts" "$evicted" >> host-metrics.log
 tail -n "$KEEP_LINES" host-metrics.log > host-metrics.log.tmp && mv host-metrics.log.tmp host-metrics.log
 
 # 메모리: 순간 치솟음은 무시하고 3회(15분) 연속일 때만 알린다.
@@ -81,3 +91,15 @@ if (( restarts > last_restarts )); then
   notify "컨테이너 재시작 $(( restarts - last_restarts ))회 발생(메모리 한도 초과 가능성). docker compose ps·docker inspect --format '{{.State.OOMKilled}}'로 확인"
 fi
 echo "$restarts" > .host-alerts/restarts.count
+
+# 5분 사이 축출이 EVICT_ALERT개를 넘으면 알린다(Valkey가 다시 시작돼 누적이 줄면 기준만 새로 잡는다).
+EVICT_ALERT="${EVICT_ALERT:-100}"
+if (( evicted >= 0 )); then
+  last_evicted=$(cat .host-alerts/evicted.count 2>/dev/null || echo "$evicted")
+  if (( evicted - last_evicted > EVICT_ALERT )); then
+    raise evict "Valkey 축출 5분에 $(( evicted - last_evicted ))개. 캐시가 밀려나 공식 호출이 늘 수 있음(VALKEY_MAXMEMORY 검토)"
+  elif (( evicted == last_evicted )); then
+    clear_alert evict "Valkey 축출 멈춤"
+  fi
+  echo "$evicted" > .host-alerts/evicted.count
+fi

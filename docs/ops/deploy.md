@@ -93,7 +93,7 @@ PM 총괄 결정(2026-10-09, 사용자): 자금 사정으로 **Lightsail 서울 
 | api | `API_MEM_LIMIT` 768m | JVM 힙 65% ≈ 500MB(`API_JAVA_OPTS`) | 336MB |
 | web | `WEB_MEM_LIMIT` 384m | Node 힙 256MB(`WEB_NODE_OPTIONS`) | 72MB |
 | postgres | `POSTGRES_MEM_LIMIT` 384m | 기본 shared_buffers 128MB | 44MB |
-| valkey | `VALKEY_MEM_LIMIT` 128m | `maxmemory` 96MB(`VALKEY_MAXMEMORY`), 만료 키 중 덜 쓴 것부터 지움 | 4MB |
+| valkey | `VALKEY_MEM_LIMIT` 128m | `maxmemory` 96MB(`VALKEY_MAXMEMORY`), 만료 키 중 덜 쓴 것부터 지움(백엔드 키는 거의 모두 TTL이 있어 사실상 "덜 쓴 키부터". 게이트 창·blocked-until·수집기 임대는 자주 읽혀 지워질 가능성이 낮다. 시세 예열 임대는 9분에 한 번 읽어 지워질 수 있지만 운영이 1인스턴스라 영향 없음. noeviction은 가득 차면 캐시·게이트 503으로 사이트가 멈춰 쓰지 않는다, PM-백엔드 #162 검토) | 4MB |
 | edge(Caddy) | `EDGE_MEM_LIMIT` 128m | | 13MB |
 | 합계 | 한도 합 약 1.8GB | | 약 470MB |
 
@@ -123,6 +123,7 @@ swapon --show && free -h
 1. **외부 가동 확인**: 외부 무료 가동 확인 서비스가 `https://loakraken.gg/about`을 몇 분마다 부르고, 실패하면 Slack #alerts로 알린다(볼트 "감시와 알림 설계" 9절의 가동 확인용 웹훅).
 2. **서버 자원 점검** `monitor/host-check.sh`(systemd 타이머, 5분 간격)
    - `host-metrics.log`에 한 줄씩 남긴다: 시각, 메모리 사용률, 스왑 사용량, 디스크 사용률, 컨테이너 재시작 수. 30일치만 둔다. 4GB 증설 판단 자료다.
+   - Valkey 축출 수(`evicted_keys` 누적)도 기록한다. 5분 사이 100개 넘게 밀려나면 알린다. 캐시가 계속 밀려나면 공식 API 호출이 늘어나는 신호이므로 `VALKEY_MAXMEMORY`·`VALKEY_MEM_LIMIT`을 올린다.
    - Slack 알림: 메모리 90% 이상이면서 스왑 512MB 이상이 15분(3회) 이어질 때, 디스크 85% 이상, unhealthy 컨테이너, 컨테이너 재시작(메모리 한도 초과 가능성). 같은 문제는 처음 한 번과 복구 때만 알린다.
 
 설치(pull 배포 설치 뒤, 환경마다 1회):
@@ -183,7 +184,7 @@ sudo chmod 444 /opt/loakraken/$ENV/secrets/*
 
 1. Ubuntu LTS 등 Linux 서버, Docker Engine + compose 플러그인 설치. 2GB 서버는 먼저 스왑 2GB를 만든다(위 "스왑 2GB").
 2. 방화벽(Lightsail): 443은 Cloudflare 대역만, 80은 닫음, 22는 관리자 IP만 + "Allow Lightsail browser SSH/RDP" 선택. 자세한 내용은 [cloudflare.md](cloudflare.md) "Lightsail 방화벽".
-3. SSH 설정: 키 인증만 쓴다. `/etc/ssh/sshd_config.d/90-loakraken.conf`에 `PasswordAuthentication no`, `PermitRootLogin no`를 넣고 `sudo sshd -t && sudo systemctl reload ssh`. 브라우저 SSH는 Lightsail이 관리하는 키로 기본 사용자(ubuntu)에 접속하므로 이 설정과 함께 쓸 수 있다. 서버에 배포용 SSH 키는 두지 않는다(GitHub가 서버에 접속하지 않음).
+3. SSH 설정: 키 인증만 쓴다. `/etc/ssh/sshd_config.d/00-loakraken.conf`에 `PasswordAuthentication no`, `KbdInteractiveAuthentication no`, `PermitRootLogin no`를 넣고 `sudo sshd -t && sudo systemctl reload ssh`. sshd는 설정 파일을 이름 순서로 읽고 **처음 나온 값**을 쓰므로 `00-`으로 시작하게 한다(클라우드 이미지의 `60-cloudimg-settings.conf`보다 먼저). 확인: `sudo sshd -T | grep -E '^(passwordauthentication|kbdinteractiveauthentication|permitrootlogin) '`가 모두 `no`. 설정 후 창을 닫기 전에 새 창에서 키 로그인이 되는지 확인한다. 브라우저 SSH는 Lightsail이 관리하는 키로 기본 사용자(ubuntu)에 접속하므로 이 설정과 함께 쓸 수 있다. 서버에 배포용 SSH 키는 두지 않는다(GitHub가 서버에 접속하지 않음).
 4. `/opt/loakraken/production/stack.env`를 `deploy/stack.production.env.example`에서, `/opt/loakraken/staging/stack.env`를 `deploy/stack.staging.env.example`에서 만든다. `DEPLOY_CHANNEL`·`DEPLOY_REGISTRY`가 들어 있는지 확인한다.
 5. 위 "비밀값" 파일을 환경별로 만든다. Slack 알림을 받으려면 `secrets/slack_webhook_alerts`(웹훅 URL 한 줄, 444)도 만든다.
 6. GHCR 읽기: 사용자가 `read:packages` 권한만 있는 토큰으로 서버에서 `sudo docker login ghcr.io`를 한 번 한다. pull 배포는 root로 돌므로 root 계정에 로그인해야 한다.

@@ -29,7 +29,8 @@ new="$(
 if [[ "${1:-}" == "--write" ]]; then
   printf '%s\n' "$new" > "$target"
   echo "갱신했습니다: $target (${count}개 대역)"
-elif [[ -f "$target" ]] && diff -q <(printf '%s\n' "$new") "$target" >/dev/null; then
+# Windows 체크아웃(CRLF)도 내용이 같으면 변경 없음으로 본다.
+elif [[ -f "$target" ]] && diff -q <(printf '%s\n' "$new") <(tr -d '\r' < "$target") >/dev/null; then
   echo "변경 없음(${count}개 대역)"
   exit 0
 else

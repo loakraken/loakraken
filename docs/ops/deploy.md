@@ -80,7 +80,7 @@
 - compose secrets로 각 컨테이너의 `/run/secrets/`에 파일로만 마운트한다. 환경변수에 들어가지 않아 `docker inspect`에 보이지 않는다.
 - 백엔드는 `SPRING_CONFIG_IMPORT=optional:configtree:/run/secrets/`로 파일 이름(`DB_PASSWORD`, `LOSTARK_API_KEY`, `spring.data.redis.password`)을 설정 키로 읽는다.
 - 권한: 디렉터리는 root 전용(700), 파일은 444. 컨테이너 사용자(postgres·valkey·uid 10001)가 읽어야 하므로 파일은 읽기 허용, 디렉터리로 호스트의 다른 사용자를 막는다.
-- 남은 한계: Valkey 암호는 `valkey-server --requirepass` 인자로 넘겨 컨테이너 안 프로세스 목록에 보인다. 필요하면 ACL 파일 방식으로 바꾼다.
+- Valkey 암호는 프로세스 인자에 넣지 않는다. 시작할 때 컨테이너 안 `/tmp/valkey.conf`(valkey 그룹만 읽기)에 쓰고 `valkey` 사용자로 실행한다. 헬스 체크도 `-a` 대신 `VALKEYCLI_AUTH` 환경 변수로 인증한다(#119).
 
 서버에서 사용자가 직접 실행한다(값은 화면에 출력하지 않는다). `ENV`는 `production` 또는 `staging`.
 

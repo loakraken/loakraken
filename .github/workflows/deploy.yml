@@ -77,6 +77,8 @@ jobs:
         run: |
           scp -i ~/.ssh/deploy_key deploy/compose.prod.yaml deploy/Caddyfile \
             "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/"
+          # 외부 백업 스크립트(docs/ops/backup.md). 실행 권한을 유지해 올린다.
+          scp -i ~/.ssh/deploy_key -p -r deploy/backup "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/"
 
       - name: Back up database, pull images, start
         run: |

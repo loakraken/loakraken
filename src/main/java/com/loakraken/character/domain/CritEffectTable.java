@@ -409,7 +409,8 @@ public final class CritEffectTable {
           // 직업 핵심 상태(각성형 변신·직업 게이지)
           new SpeedRule("광기", SpeedDecision.CORE_STATE, "광기 상태 가정", "광기 상태에서는 공격속도 및 이동속도가 15.0%"),
           new SpeedRule("환수 각성", SpeedDecision.CORE_STATE, "환수 각성 상태 가정", "환수 각성 상태에서는 … 20.0% 증가"),
-          new SpeedRule("고독한 기사", SpeedDecision.CORE_STATE, "진격 태세 가정", "진격 태세 동안 이동속도가 10.0% 감소"),
+          new SpeedRule(
+              "고독한 기사", SpeedDecision.SITUATIONAL, "진격 태세 가정", "두 사이트 제외(진격 태세 동안 이동속도가 10.0% 감소)"),
           new SpeedRule(
               "두 번째 동료", SpeedDecision.CORE_STATE, "실버호크 소환 가정", "실버호크 소환 중 … 이동속도가 8.0% 증가"),
           new SpeedRule(

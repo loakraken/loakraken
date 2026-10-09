@@ -151,6 +151,41 @@ class CritEffectTableTest {
     assertThat(gunner.limitations()).anyMatch(line -> line.contains("기동 타격 - 표에 없는 트라이포드(분류 중)"));
   }
 
+  /** #203 재대조(10-10): 속공 준비 "공격 속도가 4.0초 간 30.0%"는 토글로 읽고, 고독한 기사 이속 −10은 두 사이트 제외라 기본 끔. */
+  @Test
+  void 지속_시간이_낀_공이속_문구를_읽고_고독한_기사는_기본_끔이다() {
+    var quick =
+        new CharacterLoadout.Skill(
+            "마운틴 크래쉬",
+            null,
+            12,
+            null,
+            null,
+            null,
+            List.of(
+                new CharacterLoadout.Tripod(
+                    1, 2, "속공 준비", null, "스킬 사용 시 공격 속도가 4.0초 간 30.0% 증가한다.")),
+            null,
+            List.of(),
+            CharacterLoadout.AttackType.NONE);
+    var knight = node("깨달음 1티어 고독한 기사 Lv.3", "Z 스킬이 진격 태세 스킬로 변경된다. 진격 태세 동안 이동속도가 10.0% 감소한다.");
+    var result = calculate("워로드", List.of(knight), List.of(quick), null, Assumptions.NONE);
+    assertThat(result.toggles())
+        .extracting(
+            t ->
+                t.key()
+                    + "/"
+                    + t.axis()
+                    + "="
+                    + t.value().stripTrailingZeros().toPlainString()
+                    + "/"
+                    + t.on())
+        .contains("속공 준비/ATTACK_SPEED=30/false", "고독한 기사/MOVE_SPEED=-10/false");
+    // 신속 1.32만
+    assertThat(result.speed().attack().total()).isEqualByComparingTo("1.32");
+    assertThat(result.speed().move().total()).isEqualByComparingTo("1.32");
+  }
+
   /** PM-백엔드 10-10 01:46 P1: 켠 상황 조건 토글도 스킬별 치명타 적중률 기본에 들어간다. */
   @Test
   void 켠_치명타_적중률_토글은_스킬별_기본에도_들어간다() {

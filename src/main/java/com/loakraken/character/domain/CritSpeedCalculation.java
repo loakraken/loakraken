@@ -71,10 +71,16 @@ public final class CritSpeedCalculation {
   private static final Pattern BOTH_SPEED =
       Pattern.compile(
           "공격(?: ?속도)?(?: 및 |와 )이동 ?속도(?:가)?\\s*\\+?\\s*" + NUMBER + "%(?!\\s*만큼)" + DIRECTION);
+
+  /** "공격 속도가 4.0초 간 30.0% 증가"처럼 값 앞에 지속 시간이 오는 문구(속공 준비)도 읽는다. */
+  private static final String DURATION = "(?:[0-9.]+초\\s*(?:간|동안)\\s*)?";
+
   private static final Pattern ATTACK_SPEED =
-      Pattern.compile("(의 )?공격 ?속도(?:가)?\\s*\\+?\\s*" + NUMBER + "%(?!\\s*만큼)" + DIRECTION);
+      Pattern.compile(
+          "(의 )?공격 ?속도(?:가)?\\s*" + DURATION + "\\+?\\s*" + NUMBER + "%(?!\\s*만큼)" + DIRECTION);
   private static final Pattern MOVE_SPEED =
-      Pattern.compile("(의 )?이동 ?속도(?:가)?\\s*\\+?\\s*" + NUMBER + "%(?!\\s*만큼)" + DIRECTION);
+      Pattern.compile(
+          "(의 )?이동 ?속도(?:가)?\\s*" + DURATION + "\\+?\\s*" + NUMBER + "%(?!\\s*만큼)" + DIRECTION);
   private static final Pattern LEVEL = Pattern.compile("Lv\\.(\\d+)");
   private static final Pattern BRACELET_STACKS = Pattern.compile("\\(최대 (\\d+)중첩\\)");
   private static final String BLUNT_THORN = "뭉툭한 가시";

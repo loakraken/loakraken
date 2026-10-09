@@ -12,6 +12,7 @@ on:
       - build.gradle
       - settings.gradle
       - gradle/**
+      - deploy/**
       - .github/workflows/image.yml
   push:
     branches: [develop, master]
@@ -44,6 +45,13 @@ jobs:
           cache-from: type=gha,scope=backend-image
           cache-to: type=gha,mode=max,scope=backend-image
           provenance: false
+      - name: Build deploy bundle
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: deploy
+          file: deploy/Dockerfile.bundle
+          push: false
+          provenance: false
 
   publish:
     if: github.event_name != 'pull_request' && vars.PUBLISH_IMAGES == 'true'
@@ -75,4 +83,21 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha,scope=backend-image
           cache-to: type=gha,mode=max,scope=backend-image
+          provenance: false
+      # 배포 번들(compose·Caddyfile·스크립트). 서버의 pull 배포가 api와 같은 sha- 태그로 가져간다.
+      - uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
+        id: bundle-meta
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/loakraken-deploy
+          tags: |
+            type=sha,prefix=sha-,format=short
+            type=ref,event=branch
+      - name: Publish deploy bundle
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: deploy
+          file: deploy/Dockerfile.bundle
+          push: true
+          tags: ${{ steps.bundle-meta.outputs.tags }}
+          labels: ${{ steps.bundle-meta.outputs.labels }}
           provenance: false

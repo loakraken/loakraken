@@ -48,7 +48,7 @@
 | `GET /api/v1/stats/servers` | 서버별 인원·비율, 아이템 레벨·전투력 중앙값 |
 | `GET /api/v1/stats/distribution?metric=&width=&percentileOf=` | 히스토그램. 기본 폭은 아이템 레벨 10, 전투력 100이고 최대 300구간이다. 값이 있는 구간만 준다. percentileOf는 순위·상위 %·티어 |
 | `GET /api/v1/stats/snapshots` | 현재는 latest만. 일별 06:00 KST 스냅샷은 3단계 |
-| `GET /api/v1/rankings?metric=&page=&size=` | 전투력(기본)·아이템 레벨 순위. 동률은 같은 순위(RANK). 페이지 크기 기본 50·최대 100, 최대 10,000위 |
+| `GET /api/v1/rankings?metric=&page=&size=` | 전투력(기본)·아이템 레벨 순위. 동률은 같은 순위(RANK). 페이지 크기 기본 50·최대 100, 최대 10,000위. 공개 제외 목록([public_exclusion](popular-characters.md))을 모집단에서 빼고 순위를 매긴다. `/characters/rank`·`percentileOf`도 같은 모집단이고, 제외된 본인은 `rankVisibility=HIDDEN`이다 |
 | `GET /api/v1/characters/rank?characterName=` | 전투력·아이템 레벨 × 전체·서버·직업 순위. 같은 필터를 받는다. 모집단 밖이면 `included=false`, entries 빈 배열 |
 
 - 상위 %: `rank / total × 100`이고 소수 둘째 자리에서 올림한다. 1위/30명은 3.34다.

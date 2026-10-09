@@ -214,7 +214,10 @@ public class StatsQueryService {
         });
   }
 
-  /** 캐릭터의 전체·서버·직업 순위. 캐릭터는 이 모집단 조건(필터)에 들어 있어야 순위가 나온다. */
+  /**
+   * 캐릭터의 전체·서버·직업 순위. 캐릭터는 이 모집단 조건(필터)에 들어 있어야 순위가 나온다. 순위 모집단은 공개 제외 목록을 뺀 것이라 랭킹 목록의 순위와 같다. 제외
+   * 목록에 있는 본인은 rankVisibility=HIDDEN이고 순위·백분위·티어를 주지 않는다(PM 총괄 결정 2026-10-09).
+   */
   public CharacterRankResult characterRank(String characterName, StatsConditions conditions) {
     var target =
         guard(() -> stats.target(characterName))
@@ -225,7 +228,8 @@ public class StatsQueryService {
         () -> {
           var now = clock.instant();
           var since = conditions.since(now);
-          boolean included = stats.contains(conditions, since, target);
+          boolean hidden = stats.excluded(target);
+          boolean included = !hidden && stats.contains(conditions, since, target);
           var entries = new ArrayList<RankEntry>();
           if (included) {
             for (var metric : Metric.values()) {
@@ -258,6 +262,7 @@ public class StatsQueryService {
               target.itemLevel(),
               target.combatPower(),
               target.refreshedAt(),
+              hidden ? RankVisibility.HIDDEN : RankVisibility.VISIBLE,
               included,
               conditions,
               now,
@@ -360,6 +365,11 @@ public class StatsQueryService {
 
   public static BigDecimal defaultWidth(Metric metric) {
     return metric == Metric.ITEM_LEVEL ? BigDecimal.TEN : BigDecimal.valueOf(100);
+  }
+
+  public enum RankVisibility {
+    VISIBLE,
+    HIDDEN
   }
 
   public enum Scope {
@@ -466,6 +476,7 @@ public class StatsQueryService {
       BigDecimal itemLevel,
       BigDecimal combatPower,
       Instant refreshedAt,
+      RankVisibility rankVisibility,
       boolean included,
       StatsConditions conditions,
       Instant aggregatedAt,

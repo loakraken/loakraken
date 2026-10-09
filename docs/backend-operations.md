@@ -29,6 +29,7 @@ Actuator가 제공하는 MeterRegistry에 기록한다. 태그는 코드의 고�
 | loakraken.character.views.writes | Counter | outcome=success/failure | 캐릭터 조회수 비동기 기록 결과(대기열 초과로 버린 조회 포함, [조회수](character-views.md)). 캐릭터명은 태그에 포함하지 않음 |
 | loakraken.stats.collector | Counter | task=profile/roster/none, outcome=success/not_found/failed/yielded/storage_failed | 통계 표본 수집기 회차 결과([수집기](stats-collector.md)). 캐릭터명은 태그에 포함하지 않음 |
 | loakraken.stats.collector.discovered | Counter | 없음 | 원정대로 새로 발견한 캐릭터 수 |
+| loakraken.character.popular.writes | Counter | outcome=success/failure | 인기 검색 고유 조회 비동기 기록 결과([인기 검색](popular-characters.md)). IP·캐릭터명은 태그에 포함하지 않음 |
 | loakraken.character.cards.writes | Counter | outcome=success/failure | 카드 기록·포지션·보석 평균 비동기 쓰기 결과([카드 기록](card-collection.md)). 대기열이 차서 버린 관측도 failure |
 
 통계 표본 수집기는 기본으로 꺼져 있다. 운영에서는 수집을 맡을 인스턴스 하나에만 `STATS_COLLECTOR_ENABLED=true`를 준다([수집기](stats-collector.md)).

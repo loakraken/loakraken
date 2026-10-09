@@ -226,6 +226,60 @@ class StatsIntegrationTest {
   }
 
   @Test
+  void 공개_제외_목록은_개인_순위_모집단에서_빠지고_본인은_순위_비공개다() throws Exception {
+    표본();
+    jdbc.sql(
+            "INSERT INTO public_exclusion (character_name, server_name, reason_code) VALUES ('통계캐34', :s, 'REQUEST')")
+        .param("s", SERVER)
+        .update();
+    try {
+      var ranking = data("/api/v1/rankings?metric=COMBAT_POWER&size=3&server=" + encode(SERVER));
+      assertThat(ranking.at("/meta/population").asLong()).isEqualTo(39);
+      assertThat(ranking.at("/rows/0/characterName").asText()).isEqualTo("통계캐33");
+      assertThat(ranking.at("/rows/0/rank").asLong()).isEqualTo(1);
+      // 목록 1위는 그 캐릭터의 본인 순위에서도 1위다(같은 모집단).
+      var next = data("/api/v1/characters/rank?characterName=" + encode("통계캐33"));
+      assertThat(next.path("rankVisibility").asText()).isEqualTo("VISIBLE");
+      var serverCombat = entry(next, "COMBAT_POWER", "SERVER");
+      assertThat(serverCombat.path("rank").asLong()).isEqualTo(1);
+      assertThat(serverCombat.path("total").asLong()).isEqualTo(39);
+      // 제외된 본인은 순위 비공개다. 순위·백분위·티어가 어디에도 없다.
+      var hidden = get("/api/v1/characters/rank?characterName=" + encode("통계캐34"));
+      var self = mapper.readTree(hidden.body()).path("data");
+      assertThat(self.path("rankVisibility").asText()).isEqualTo("HIDDEN");
+      assertThat(self.path("included").asBoolean()).isFalse();
+      assertThat(self.path("entries").size()).isZero();
+      assertThat(self.path("combatPower").decimalValue()).isEqualByComparingTo("3340");
+      assertThat(hidden.body()).doesNotContain("topPercent", "\"tier\"", "percentile");
+      ApiContractFixture.write("character-rank-hidden.json", hidden.body());
+      // 제외된 캐릭터의 값을 percentileOf에 넣어도 제외 반영 모집단 기준이고, 그 캐릭터를 특정할 정보가 없다.
+      var percentile =
+          get(
+              "/api/v1/stats/distribution?metric=COMBAT_POWER&percentileOf=3340&server="
+                  + encode(SERVER));
+      var of = mapper.readTree(percentile.body()).at("/data/percentileOf");
+      assertThat(of.path("rank").asLong()).isEqualTo(1);
+      assertThat(of.path("total").asLong()).isEqualTo(39);
+      assertThat(percentile.body()).doesNotContain("통계캐34");
+      // 개인을 드러내지 않는 집계에는 그대로 들어간다.
+      assertThat(
+              data("/api/v1/stats/summary?server=" + encode(SERVER))
+                  .at("/meta/population")
+                  .asLong())
+          .isEqualTo(40);
+    } finally {
+      jdbc.sql("DELETE FROM public_exclusion WHERE character_name = '통계캐34'").update();
+    }
+  }
+
+  private static JsonNode entry(JsonNode rank, String metric, String scope) {
+    for (var entry : rank.path("entries"))
+      if (entry.path("metric").asText().equals(metric)
+          && entry.path("scope").asText().equals(scope)) return entry;
+    throw new AssertionError(metric + " " + scope + " 항목이 없습니다.");
+  }
+
+  @Test
   void 같은_조건은_10분_캐시를_쓴다() throws Exception {
     표본();
     var first = data("/api/v1/stats/summary?server=" + encode(SERVER));

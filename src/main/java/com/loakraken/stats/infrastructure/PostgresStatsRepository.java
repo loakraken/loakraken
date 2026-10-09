@@ -157,7 +157,7 @@ class PostgresStatsRepository implements StatsPort {
   public Standing standing(
       StatsConditions conditions, Instant since, Metric metric, BigDecimal value) {
     String column = metric.column();
-    return population(conditions, since)
+    return population(conditions, since, true)
         .statement(
             "SELECT COUNT(*) FILTER (WHERE "
                 + column
@@ -175,7 +175,7 @@ class PostgresStatsRepository implements StatsPort {
     String tie = metric == Metric.COMBAT_POWER ? "item_level" : "combat_power";
     var rows = new ArrayList<RankingRow>();
     long[] total = {0};
-    population(conditions, since)
+    population(conditions, since, true)
         .statement(
             "SELECT character_name, server_name, class_name, position, item_level, combat_power,"
                 + " RANK() OVER (ORDER BY "
@@ -204,7 +204,7 @@ class PostgresStatsRepository implements StatsPort {
     // 요청 페이지가 범위를 넘으면 행이 없어 total을 따로 센다.
     if (rows.isEmpty())
       total[0] =
-          population(conditions, since)
+          population(conditions, since, true)
               .statement("SELECT COUNT(*) FROM pop", jdbc)
               .query(Long.class)
               .single();
@@ -250,8 +250,21 @@ class PostgresStatsRepository implements StatsPort {
   }
 
   @Override
+  public boolean excluded(Target target) {
+    return jdbc.sql(
+            """
+        SELECT EXISTS (SELECT 1 FROM public_exclusion e
+          WHERE e.character_name = :name AND (e.server_name IS NULL OR e.server_name = :server))
+        """)
+        .param("name", target.characterName())
+        .param("server", target.serverName())
+        .query(Boolean.class)
+        .single();
+  }
+
+  @Override
   public boolean contains(StatsConditions conditions, Instant since, Target target) {
-    return population(conditions, since)
+    return population(conditions, since, true)
         .statement(
             "SELECT EXISTS (SELECT 1 FROM pop WHERE server_name = :tServer AND character_name = :tName)",
             jdbc)
@@ -263,6 +276,14 @@ class PostgresStatsRepository implements StatsPort {
 
   /** 모집단 CTE와 그 바인딩 값. */
   private static Population population(StatsConditions c, Instant since) {
+    return population(c, since, false);
+  }
+
+  /**
+   * excludePublic이면 공개 제외 목록(public_exclusion)의 캐릭터를 모집단에서 뺀다. 개인 순위·백분위(랭킹, 캐릭터 순위, percentileOf)에
+   * 쓰고, 개인을 드러내지 않는 집계(요약·직업·서버·히스토그램)에는 쓰지 않는다(PM 총괄 결정 2026-10-09).
+   */
+  private static Population population(StatsConditions c, Instant since, boolean excludePublic) {
     var where =
         new StringBuilder(
             "c.combat_power IS NOT NULL AND c.profile_refreshed_at >= :since AND c.item_level >= :ilMin");
@@ -305,6 +326,10 @@ class PostgresStatsRepository implements StatsPort {
              WHERE o.roster_key = c.roster_key AND o.server_name = c.server_name
                AND (o.item_level > c.item_level
                     OR (o.item_level = c.item_level AND o.character_name < c.character_name))))""");
+    if (excludePublic)
+      where.append(
+          " AND NOT EXISTS (SELECT 1 FROM public_exclusion e WHERE e.character_name = c.character_name"
+              + " AND (e.server_name IS NULL OR e.server_name = c.server_name))");
     String cte =
         "WITH pop AS (SELECT c.character_name, c.server_name, c.class_name, c.item_level,"
             + " c.combat_power, c.position, c.gem_mean_level FROM characters c WHERE "

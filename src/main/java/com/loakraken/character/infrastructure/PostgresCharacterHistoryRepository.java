@@ -154,6 +154,49 @@ class PostgresCharacterHistoryRepository implements CharacterHistoryPort {
 
   @Override
   @Transactional(readOnly = true, timeout = 3)
+  public List<RosterTitle> rosterTitles(
+      String serverName, java.util.Collection<String> characterNames) {
+    if (characterNames.isEmpty()) return List.of();
+    return jdbc.sql(
+            """
+      SELECT title, first_observed_at, last_observed_at, character_name FROM (
+        SELECT t.title, t.first_observed_at, c.character_name,
+          MAX(t.last_observed_at) OVER (PARTITION BY t.title) AS last_observed_at,
+          ROW_NUMBER() OVER (PARTITION BY t.title ORDER BY t.first_observed_at, c.character_name) AS rn
+        FROM character_title_observation t JOIN characters c ON c.character_id = t.character_id
+        WHERE c.server_name = :server AND c.character_name IN (:names)
+      ) x WHERE rn = 1
+      ORDER BY first_observed_at, title
+      """)
+        .param("server", serverName)
+        .param("names", List.copyOf(characterNames))
+        .query(
+            (rs, row) ->
+                new RosterTitle(
+                    rs.getString("title"),
+                    rs.getObject("first_observed_at", OffsetDateTime.class).toInstant(),
+                    rs.getObject("last_observed_at", OffsetDateTime.class).toInstant(),
+                    rs.getString("character_name")))
+        .list();
+  }
+
+  @Override
+  public int titleObservedCharacters(
+      String serverName, java.util.Collection<String> characterNames) {
+    if (characterNames.isEmpty()) return 0;
+    return jdbc.sql(
+            """
+      SELECT COUNT(DISTINCT t.character_id)
+      FROM character_title_observation t JOIN characters c ON c.character_id = t.character_id
+      WHERE c.server_name = :server AND c.character_name IN (:names)
+      """)
+        .param("server", serverName)
+        .param("names", List.copyOf(characterNames))
+        .query(Integer.class)
+        .single();
+  }
+
+  @Override
   public List<CharacterTitleObservation> titles(String characterName, String serverName) {
     return jdbc.sql(
             """

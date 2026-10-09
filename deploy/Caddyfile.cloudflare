@@ -1,0 +1,38 @@
+# LOAKraken 엣지 프록시 — Cloudflare 프록시 뒤 운영용(사용자 결정 2026-10-09). stack.env의 CADDYFILE=Caddyfile.cloudflare로 고른다.
+#
+# 실제 클라이언트 IP
+#   Cloudflare IP 대역(cloudflare-ips.caddy, update-ips.sh로 갱신)에서 온 요청만 믿고, 그때만 CF-Connecting-IP를 실제 IP로 쓴다.
+#   다른 곳에서 온 요청은 접속 주소가 실제 IP이며 CF-Connecting-IP·X-Forwarded-For는 무시한다(위조 방지).
+#   web(Next)에는 X-Forwarded-For를 실제 IP 하나로 덮어써 넘기고, Next가 그대로 백엔드로 넘긴다(#108 유입 제한 기준).
+#
+# HTTPS
+#   Cloudflare SSL 모드 Full(strict) + Cloudflare Origin CA 인증서(비밀 디렉터리의 tls/origin.pem·origin.key).
+#   원 서버는 Lightsail 방화벽에서 443을 Cloudflare 대역에만 연다. ACME 자동 발급은 쓰지 않는다.
+{
+	admin off
+	servers {
+		import /etc/caddy/cloudflare-ips.caddy
+		client_ip_headers CF-Connecting-IP
+	}
+}
+
+{$SITE_ADDRESS} {
+	tls /etc/caddy/tls/origin.pem /etc/caddy/tls/origin.key
+
+	encode zstd gzip
+
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		X-Frame-Options "DENY"
+		-Server
+		-Via
+	}
+
+	reverse_proxy web:3000 {
+		header_up X-Forwarded-For {client_ip}
+		# 실제 IP는 위 한 줄로만 넘긴다. Cloudflare 밖에서 위조한 CF-Connecting-IP가 web까지 가지 않게 지운다.
+		header_up -CF-Connecting-IP
+	}
+}

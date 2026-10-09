@@ -24,3 +24,18 @@ filename_encryption = standard
 directory_name_encryption = true
 password = <rclone obscure 결과>
 password2 = <rclone obscure 결과>
+
+# ---- 운영 결정(2026-10-09): 외부 백업은 Cloudflare R2 ----
+# R2 대시보드에서 버킷(예: loakraken-backup)을 만들고 Location은 Asia-Pacific(apac) 힌트를 고른다(보장 아님).
+# API 토큰은 "Object Read & Write"를 그 버킷 하나로만 제한해 만든다. 아래 offsite 대신 이 형식을 쓴다.
+#
+# [offsite]
+# type = s3
+# provider = Cloudflare
+# endpoint = https://<계정 ID>.r2.cloudflarestorage.com
+# region = auto
+# access_key_id = <R2 접근 키 ID>
+# secret_access_key = <R2 비밀 접근 키>
+# no_check_bucket = true
+#
+# [offsite-crypt]의 remote는 offsite:<버킷 이름>/loakraken 그대로 쓴다.

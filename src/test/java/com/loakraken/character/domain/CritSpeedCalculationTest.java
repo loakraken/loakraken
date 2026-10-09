@@ -10,6 +10,7 @@ import com.loakraken.character.domain.CritSpeedCalculation.NodeSource;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 
 class CritSpeedCalculationTest {
@@ -200,6 +201,69 @@ class CritSpeedCalculationTest {
         .filteredOn(source -> source.axis() == Axis.MOVE_SPEED)
         .extracting(source -> source.value().stripTrailingZeros().toPlainString())
         .containsExactly("5");
+  }
+
+  /** #198 승갈통(2026-10-10 공식 팔찌 문구): 두 사이트는 중첩형 공이속을 최대 중첩(×6)으로 본다. */
+  @Test
+  void 팔찌_중첩형_공이속은_최대_중첩으로_더한다() {
+    var bracelet =
+        new CharacterLoadout.Equipment(
+            "팔찌",
+            "팔찌",
+            null,
+            "고대",
+            new CharacterLoadout.EquipmentDetail(
+                null,
+                null,
+                null,
+                4,
+                null,
+                List.of(),
+                List.of(),
+                List.of(),
+                List.of(
+                    new CharacterLoadout.BraceletEffect(
+                        "공격 적중 시 매 초마다 10초 동안 무기 공격력이 1160, 공격 및 이동 속도가 1% 증가한다. (최대 6중첩)", null),
+                    new CharacterLoadout.BraceletEffect("공격 및 이동 속도가 4% 증가한다.", null))));
+    var loadout = new CharacterLoadout(List.of(bracelet), null, null, null, null, null);
+    var result = CritSpeedCalculation.calculate(profile("576", "77"), loadout, Assumptions.NONE);
+    assertThat(result.sources())
+        .filteredOn(
+            source -> source.category() == Category.BRACELET && source.axis() == Axis.ATTACK_SPEED)
+        .extracting(
+            source -> source.name() + "=" + source.value().stripTrailingZeros().toPlainString())
+        .containsExactly("팔찌(최대 6중첩 가정)=6", "팔찌=4");
+    // 신속 1.32 + 6 + 4
+    assertThat(result.speed().attack().total()).isEqualByComparingTo("11.32");
+  }
+
+  /** #198 Tii·분신싸개(리퍼 달의 소리): 두 사이트는 "페르소나 상태로 전환 시" 공격 속도 +10을 넣지 않는다. */
+  @Test
+  void 공이속_노드는_표로_판정하고_상황_조건은_기본_끔_표에_없으면_넣지_않는다() {
+    var nodes =
+        List.of(
+            node(
+                "깨달음 2티어 달의 소리 Lv.3",
+                "페르소나 상태로 전환 시 급습 강화 효과 대신 달의 소리 효과를 획득한다. 달의 소리 효과가 존재하면 급습 스킬의 피해량이 90.0% 증가하고 추가로 공격 속도가 10.0% 증가한다."),
+            node("진화 2티어 파괴 전차 Lv.1", "진화형 피해가 12.0% 증가하고, 공격 속도가 4.0% 증가합니다."),
+            node("깨달음 4티어 표에 없는 노드 Lv.1", "공격 속도가 7.0% 증가한다."));
+    var off =
+        CritSpeedCalculation.calculate(profile("576", "77"), loadout(nodes), Assumptions.NONE);
+    // 신속 1.32 + 파괴 전차 4
+    assertThat(off.speed().attack().total()).isEqualByComparingTo("5.32");
+    assertThat(off.limitations())
+        .anyMatch(
+            line ->
+                line.contains("달의 소리 Lv.3(달의 소리 효과 가정, 켜기 가능)")
+                    && line.contains("표에 없는 노드 Lv.1(분류 중)"));
+    var on =
+        CritSpeedCalculation.calculate(
+            profile("576", "77"),
+            loadout(nodes),
+            new Assumptions(
+                false, false, 0, null, null, null, null, null, true, Map.of("달의 소리", true)));
+    assertThat(on.speed().attack().total()).isEqualByComparingTo("15.32");
+    assertThat(on.speed().attack().assumed()).isEqualByComparingTo("10");
   }
 
   @Test

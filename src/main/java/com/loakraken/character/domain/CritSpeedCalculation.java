@@ -15,7 +15,7 @@ import java.util.regex.Pattern;
  * 스탯 계산에만 쓴다. 뭉툭한 가시·음속 돌파는 장착 노드의 공식 문구에서 수치를 읽고, 미장착이면 2026-10-05 공식 Lv.2 문구를 기준값으로 쓴다.
  */
 public final class CritSpeedCalculation {
-  public static final String RULE_VERSION = "crit-speed-v4";
+  public static final String RULE_VERSION = "crit-speed-v5";
 
   /**
    * 치명타 피해 앞(같은 문장)에 오면 조건부로 보고 합산하지 않는 말. 로펙·일로아는 "폭주 중"·"마력 해방 중"(각성 상태)은 넣고 "사신화 상태에서"· "페르소나
@@ -69,12 +69,14 @@ public final class CritSpeedCalculation {
               + DIRECTION);
 
   private static final Pattern BOTH_SPEED =
-      Pattern.compile("공격 및 이동 ?속도(?:가)?\\s*\\+?\\s*" + NUMBER + "%(?!\\s*만큼)" + DIRECTION);
+      Pattern.compile(
+          "공격(?: ?속도)?(?: 및 |와 )이동 ?속도(?:가)?\\s*\\+?\\s*" + NUMBER + "%(?!\\s*만큼)" + DIRECTION);
   private static final Pattern ATTACK_SPEED =
       Pattern.compile("(의 )?공격 ?속도(?:가)?\\s*\\+?\\s*" + NUMBER + "%(?!\\s*만큼)" + DIRECTION);
   private static final Pattern MOVE_SPEED =
       Pattern.compile("(의 )?이동 ?속도(?:가)?\\s*\\+?\\s*" + NUMBER + "%(?!\\s*만큼)" + DIRECTION);
   private static final Pattern LEVEL = Pattern.compile("Lv\\.(\\d+)");
+  private static final Pattern BRACELET_STACKS = Pattern.compile("\\(최대 (\\d+)중첩\\)");
   private static final String BLUNT_THORN = "뭉툭한 가시";
   private static final String SUPERSONIC = "음속 돌파";
 
@@ -399,6 +401,7 @@ public final class CritSpeedCalculation {
     var agility = new BigDecimal[2];
     var skillBonuses = new ArrayList<NodeBonus>();
     var toggles = new ArrayList<ToggleState>();
+    var speedNotes = new ArrayList<String>();
     engravingSources(loadout, sources, conditional);
     BluntThornRule equippedThorn = null;
     SupersonicRule equippedSupersonic = null;
@@ -424,7 +427,8 @@ public final class CritSpeedCalculation {
             unclassified,
             agility,
             skillBonuses,
-            toggles);
+            toggles,
+            speedNotes);
       }
     }
     equipmentSources(loadout, sources);
@@ -537,6 +541,8 @@ public final class CritSpeedCalculation {
       limitations.add(
           "기본 치명타 적중률에 넣지 않은 효과(공식 문구의 조건·대상 스킬, 스킬 한정은 스킬별 치명타 적중률에 반영): "
               + String.join(", ", conditionalRate));
+    if (!speedNotes.isEmpty())
+      limitations.add("기본 공격·이동 속도에 넣지 않은 효과: " + String.join(", ", speedNotes));
     if (!unclassified.isEmpty())
       limitations.add("직업별 치명 효과 표에 아직 없어 합산하지 않은 효과(분류 중): " + String.join(", ", unclassified));
     if (!conditional.isEmpty())
@@ -667,7 +673,23 @@ public final class CritSpeedCalculation {
       }
       for (var bracelet : detail.braceletEffects()) {
         if (bracelet == null || bracelet.text() == null) continue;
-        scan(Category.BRACELET, equipment.type(), bracelet.text(), sources, false);
+        var scanned = new ArrayList<Source>();
+        scan(Category.BRACELET, equipment.type(), bracelet.text(), scanned, false);
+        var stacks = BRACELET_STACKS.matcher(bracelet.text());
+        for (var source : scanned) {
+          boolean speed = source.axis() == Axis.ATTACK_SPEED || source.axis() == Axis.MOVE_SPEED;
+          // "공격 적중 시 매 초마다 … 공격 및 이동 속도가 1% 증가한다. (최대 6중첩)" → 두 사이트는 최대 중첩(×6)으로 본다(#198).
+          if (speed && stacks.reset().find())
+            sources.add(
+                new Source(
+                    source.kind(),
+                    source.category(),
+                    source.axis(),
+                    source.name() + "(최대 " + stacks.group(1) + "중첩 가정)",
+                    source.value().multiply(new BigDecimal(stacks.group(1))),
+                    source.text()));
+          else sources.add(source);
+        }
       }
     }
   }
@@ -826,12 +848,20 @@ public final class CritSpeedCalculation {
       List<String> unclassified,
       BigDecimal[] agility,
       List<NodeBonus> skillBonuses,
-      List<ToggleState> toggles) {
+      List<ToggleState> toggles,
+      List<String> speedNotes) {
     var scanned = new ArrayList<Source>();
     scan(Category.ARK_PASSIVE, name, text, scanned, true, new ArrayList<>());
-    for (var source : scanned)
-      if (source.axis() == Axis.ATTACK_SPEED || source.axis() == Axis.MOVE_SPEED)
-        sources.add(source);
+    nodeSpeed(
+        name,
+        text,
+        scanned.stream()
+            .filter(s -> s.axis() == Axis.ATTACK_SPEED || s.axis() == Axis.MOVE_SPEED)
+            .toList(),
+        input,
+        sources,
+        speedNotes,
+        toggles);
     var rule = CritEffectTable.node(name);
     if (rule == null) {
       if (CritEffectTable.ANY_CRIT.matcher(text).find()) unclassified.add(name);
@@ -902,6 +932,46 @@ public final class CritSpeedCalculation {
           sources.add(
               new Source(Kind.OBSERVED, Category.ARK_PASSIVE, Axis.CRIT_DAMAGE, name, value, text));
       } else if (value != null) conditionalDamage.add(name + " " + plain(value) + "%");
+    }
+  }
+
+  /** 노드의 공격·이동 속도를 공이속 표(#198)로 판정한다. 표에 없으면 "분류 중"으로 남긴다. */
+  private static void nodeSpeed(
+      String name,
+      String text,
+      List<Source> speeds,
+      Assumptions input,
+      List<Source> sources,
+      List<String> notes,
+      List<ToggleState> toggles) {
+    if (speeds.isEmpty()) return;
+    var rule = CritEffectTable.speed(name);
+    if (rule == null) {
+      notes.add(name + "(분류 중)");
+      return;
+    }
+    switch (rule.decision()) {
+      case INCLUDE -> sources.addAll(speeds);
+      case EXCLUDE -> notes.add(name + "(" + rule.basis() + ")");
+      case CORE_STATE, SITUATIONAL -> {
+        boolean core = rule.decision() == CritEffectTable.SpeedDecision.CORE_STATE;
+        boolean on = input.on(rule.node(), core);
+        for (var speed : speeds) {
+          toggles.add(
+              new ToggleState(
+                  rule.node(), rule.label(), speed.axis(), core, on, scale(speed.value()), text));
+          if (on)
+            sources.add(
+                new Source(
+                    Kind.ASSUMED,
+                    Category.ASSUMPTION,
+                    speed.axis(),
+                    rule.label() + "(" + name + ")",
+                    speed.value(),
+                    text));
+        }
+        if (!on) notes.add(name + "(" + rule.label() + ", 켜기 가능)");
+      }
     }
   }
 

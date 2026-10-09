@@ -38,8 +38,12 @@ class CritEffectTableTest {
     assertThat(values(result, Axis.CRIT, Category.ASSUMPTION))
         .containsExactly("악마화 상태 가정(혼돈 강화 Lv.3)=30");
     assertThat(result.toggles())
-        .extracting(t -> t.key() + "/" + t.coreState() + "/" + t.on())
-        .containsExactly("혼돈 강화/true/true");
+        .extracting(t -> t.key() + "/" + t.axis() + "/" + t.coreState() + "/" + t.on())
+        .containsExactlyInAnyOrder(
+            "혼돈 강화/CRIT/true/true",
+            // 광기 "공격속도 및 이동속도가 15.0%"는 핵심 상태 공이속 토글(#198)
+            "광기/ATTACK_SPEED/true/true",
+            "광기/MOVE_SPEED/true/true");
     assertThat(result.limitations())
         .anyMatch(line -> line.contains("관통 필살 Lv.3 100%(적룡필살에만)"))
         .noneMatch(line -> line.contains("로펙"));

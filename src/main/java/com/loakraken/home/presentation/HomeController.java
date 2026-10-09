@@ -2,7 +2,9 @@ package com.loakraken.home.presentation;
 
 import com.loakraken.common.api.ApiResponse;
 import com.loakraken.home.application.HomeQueryService;
+import com.loakraken.home.application.PatchNoteService;
 import com.loakraken.home.domain.NewsFeed;
+import com.loakraken.home.domain.PatchNotice;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -49,9 +51,11 @@ import org.springframework.web.bind.annotation.RestController;
 public class HomeController {
   static final ZoneId KST = ZoneId.of("Asia/Seoul");
   private final HomeQueryService service;
+  private final PatchNoteService patchNotes;
 
-  public HomeController(HomeQueryService service) {
+  public HomeController(HomeQueryService service, PatchNoteService patchNotes) {
     this.service = service;
+    this.patchNotes = patchNotes;
   }
 
   @GetMapping("/schedule")
@@ -82,5 +86,24 @@ public class HomeController {
     return ApiResponse.of(
         HomeSuccessCode.HOME_NEWS_SUCCESS,
         HomeNewsResponse.from(service.news(), limit, category, now));
+  }
+
+  @GetMapping("/patch-notes")
+  @Operation(
+      summary = "패치 이력",
+      description =
+          "공식 공지 중 패치 공지(업데이트 내역·밸런스·클라이언트 패치·점검 완료)를 공지 번호로 쌓은 목록입니다(patch-notice-v1). 소식 캐시(10분)를 공유하므로 공식 호출이 늘지 않습니다. "
+              + "공식 API는 최근 약 3개월만 주므로 그보다 앞선 이력은 LOAKraken이 관측을 시작한 뒤부터 쌓입니다. 본문은 수집하지 않고 공식 원문 링크를 줍니다. "
+              + "503 HOME_CACHE_UNAVAILABLE·HOME_STORAGE_UNAVAILABLE, 400 INVALID_REQUEST")
+  public ApiResponse<HomePatchNotesResponse> patchNotes(
+      @RequestParam(required = false) PatchNotice.Category category,
+      @RequestParam(defaultValue = "1") @Min(1) @Max(100) int page,
+      @RequestParam(defaultValue = "20") @Min(1) @Max(PatchNoteService.MAX_SIZE) int size) {
+    // 소식 캐시를 먼저 거치면, 캐시가 비었을 때 새 공지를 받아 쌓는다.
+    var news = service.news();
+    return ApiResponse.of(
+        HomeSuccessCode.HOME_PATCH_NOTES_SUCCESS,
+        HomePatchNotesResponse.from(
+            patchNotes.list(category, page, size, news.fetchedAt()), category, page, size));
   }
 }

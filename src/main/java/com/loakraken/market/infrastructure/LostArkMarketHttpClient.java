@@ -56,6 +56,22 @@ class LostArkMarketHttpClient {
     return payload;
   }
 
+  /** 경매장 검색. 즉시 구매가 오름차순이다. */
+  <T> T requestAuction(AuctionPort.AuctionQuery query, Class<T> responseType) {
+    if (properties.apiKey().isBlank()) throw error(LostArkErrorCode.LOST_ARK_NOT_CONFIGURED);
+    T payload =
+        execute(
+            Endpoint.AUCTION_ITEMS,
+            client
+                .post()
+                .uri("/auctions/items")
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(mapper.writeValueAsString(AuctionRequest.from(query))),
+            responseType);
+    if (payload == null) throw error(LostArkErrorCode.LOST_ARK_API_ERROR);
+    return payload;
+  }
+
   /** 공식 API는 없는 상품 ID에 200과 본문 null을 반환한다. 그 경우 null을 돌려준다. */
   <T> T requestItem(long itemId, Class<T> responseType) {
     if (properties.apiKey().isBlank()) throw error(LostArkErrorCode.LOST_ARK_NOT_CONFIGURED);
@@ -114,6 +130,40 @@ class LostArkMarketHttpClient {
   private BusinessException error(LostArkErrorCode code) {
     return new BusinessException(code);
   }
+
+  private record AuctionRequest(
+      @JsonProperty("CategoryCode") int categoryCode,
+      @JsonProperty("ItemTier") int itemTier,
+      @JsonProperty("ItemGrade") String itemGrade,
+      @JsonProperty("ItemName") String itemName,
+      @JsonProperty("ItemGradeQuality") Integer itemGradeQuality,
+      @JsonProperty("EtcOptions") java.util.List<EtcOption> etcOptions,
+      @JsonProperty("Sort") String sort,
+      @JsonProperty("SortCondition") String sortCondition,
+      @JsonProperty("PageNo") int pageNo) {
+    static AuctionRequest from(AuctionPort.AuctionQuery query) {
+      return new AuctionRequest(
+          query.categoryCode(),
+          query.itemTier(),
+          query.itemGrade(),
+          query.itemName(),
+          query.minQuality(),
+          query.etcOptions().stream()
+              .map(
+                  option ->
+                      new EtcOption(option.first(), option.second(), option.min(), option.max()))
+              .toList(),
+          "BUY_PRICE",
+          "ASC",
+          query.pageNo());
+    }
+  }
+
+  private record EtcOption(
+      @JsonProperty("FirstOption") int first,
+      @JsonProperty("SecondOption") int second,
+      @JsonProperty("MinValue") int min,
+      @JsonProperty("MaxValue") int max) {}
 
   private record Request(
       @JsonProperty("CategoryCode") int categoryCode,

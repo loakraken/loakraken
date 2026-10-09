@@ -48,6 +48,21 @@
 | 503 CARD_COLLECTION_DISABLED·CARD_COLLECTION_UNAVAILABLE | 기능 꺼짐·DB 오류 |
 | 503 LOST_ARK_NOT_CONFIGURED·CHARACTER_CACHE_UNAVAILABLE | 키 없음·캐시 오류 |
 
+## 기록 채우기 `POST /api/v1/characters/card-collection/refresh?characterName=`
+
+우리 기록은 지금부터 쌓인다. 그래서 처음에는 일로아·로아와보다 빈칸이 많다. 원정대의 기록되지 않은 캐릭터를 한 번에 조회해 채운다(PM #96 P2-2, 프론트 A안).
+
+- 대상: 같은 서버 원정대 중 최근 7일 안에 프로필 관측에 성공하지 못한 캐릭터
+  - 아이템 레벨이 높은 순으로 1회 최대 12명
+- 조회는 캐릭터 검색(armory)과 같은 경로다. 사용자 몫 게이트·캐시·카드 기록이 그대로 적용된다.
+- 공식 호출은 1회 최대 12회다. 원정대는 최대 24명이므로 분당 90회 예산의 13% 이내다. 원정대 목록은 `/siblings` 캐시를 쓴다.
+- 호출 한도·시간 초과·공식 오류를 만나면 멈춘다. 나머지는 `remaining`으로 돌려준다.
+- 같은 원정대(서버 + 원정대 이름 집합의 해시)는 10분에 1회만 받는다(Valkey `cards:v1:refresh:*`, SET NX).
+  - 쿨다운 중이면 429 `CARD_COLLECTION_REFRESH_COOLDOWN`과 `Retry-After`(초)를 준다.
+  - Valkey 장애 시에는 받지 않는다(503 CHARACTER_CACHE_UNAVAILABLE).
+- 응답: rosterCharacters, refreshed, skipped(최근 기록 있음), failed, remaining, nextAvailableAt
+- 카드 기록은 비동기로 저장한다. 응답 뒤 card-collection을 다시 조회하면 된다.
+
 ## 검증 (2026-10-08)
 
 - 언새늘(아만): 원정대 6명 검색(공식 호출 6회 + 원정대 1회), 5명 기록, 성 6장 30각. 일로아의 "원정대 카드 기록"(성 30각, 나머지 미기록)과 같다.

@@ -16,4 +16,5 @@ sh scripts/git-hooks/install.sh
 
 - 저장소 공용 `.git/hooks/pre-push`에 설치되어 같은 저장소의 작업 트리(`C:/LOAKraken/wt/*`) 모두에 적용된다.
 - 훅을 바꾼 PR이 병합되면 다시 실행한다.
+- 원격 브랜치의 최신 커밋을 아직 받지 않았으면(fetch 전) 일반 push도 강제 push로 보고 막는다. 이때는 먼저 `git fetch`를 하고, 원격이 앞서 있으면 rebase한 뒤 다시 push한다.
 - `git push --no-verify`로 넘을 수 있다. 실수를 막는 장치이므로 규칙(커밋과 PR 규칙)은 그대로 지킨다.

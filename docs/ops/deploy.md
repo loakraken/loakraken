@@ -64,6 +64,7 @@
 | `deploy/Dockerfile.bundle` | 배포 번들 이미지 `loakraken-deploy`(compose·Caddyfile·cloudflare·backup·pull 파일을 담음) |
 | `deploy/pull/pull-deploy.sh` | 서버가 채널 태그를 따라가 배포하고, 실패하면 되돌린다 |
 | `deploy/pull/loakraken-pull-deploy@.service`·`.timer` | 위 스크립트를 2분마다 실행(systemd, `@production`·`@staging`) |
+| `deploy/monitor/host-check.sh`·`loakraken-host-check@.service`·`.timer` | 서버 자원 점검(5분, 메모리·스왑·디스크·컨테이너 → 기록·Slack). "자원 점검" 참고 |
 | `.github/workflows/image.yml` | 이미지 빌드(PR은 빌드 확인만, push는 `PUBLISH_IMAGES=true`일 때 GHCR에 api·배포 번들 업로드) |
 | `.github/workflows/deploy.yml` | 배포 승인(환경 선택 + 이미지 태그 → GHCR 채널 태그 이동, 운영은 `sha-` 태그만). 서버에 접속하지 않는다 |
 
@@ -80,7 +81,77 @@
 - 운영 키는 운영 스택의 비밀 파일에만 둔다. 스테이징·로컬에 넣지 않는다.
 - 개발 키는 로컬 수집기(분당 약 20회)와 다른 팀 로컬 인스턴스도 함께 쓴다. 그래서 스테이징 점검 중 429가 날 수 있다. 운영에는 영향이 없다.
 - 출시 전에 필요하면 스테이징 전용 클라이언트를 다시 검토한다(계정당 최대 5개). 여러 키를 돌려 써서 한도를 우회하지 않는다.
-- 같은 서버에 두 스택을 올리므로 `STACK_NAME`, `SECRETS_DIR`, `INTERNAL_SUBNET`·`WEB_INTERNAL_IP`·`TRUSTED_PROXY_REGEX`, edge 포트가 서로 달라야 한다(예시 파일에 반영).
+- 같은 서버에 두 스택을 올리면 `STACK_NAME`, `SECRETS_DIR`, `INTERNAL_SUBNET`·`WEB_INTERNAL_IP`·`TRUSTED_PROXY_REGEX`, edge 포트가 서로 달라야 한다(예시 파일에 반영).
+- **2GB 서버에서는 스테이징을 상시 띄우지 않는다**(아래 "메모리 예산"). 스테이징 점검은 로컬 점검(맨 아래)으로 하고, 서버에서 꼭 필요하면 운영 트래픽이 적은 시간에 잠깐 띄웠다가 `docker compose -p loakraken-staging ... down`으로 내린다. 4GB로 올린 뒤 상시 스테이징을 다시 검토한다.
+
+## 메모리 예산 (Lightsail 2GB)
+
+PM 총괄 결정(2026-10-09, 사용자): 자금 사정으로 **Lightsail 서울 2GB($12/월, 2 vCPU, 60GB SSD, 전송 3TB)** 로 시작하고, 부족이 실측되면 4GB($24)로 올린다. 공식 가격: https://aws.amazon.com/lightsail/pricing/ (2026-10-09 확인, 스냅숏 $0.05/GB-월).
+
+| 서비스 | 컨테이너 한도(기본값) | 안쪽 상한 | 로컬 실측(유휴·가벼운 요청, 10-09) |
+|---|---|---|---|
+| api | `API_MEM_LIMIT` 768m | JVM 힙 65% ≈ 500MB(`API_JAVA_OPTS`) | 336MB |
+| web | `WEB_MEM_LIMIT` 384m | Node 힙 256MB(`WEB_NODE_OPTIONS`) | 72MB |
+| postgres | `POSTGRES_MEM_LIMIT` 384m | 기본 shared_buffers 128MB | 44MB |
+| valkey | `VALKEY_MEM_LIMIT` 128m | `maxmemory` 96MB(`VALKEY_MAXMEMORY`), 만료 키 중 덜 쓴 것부터 지움(백엔드 키는 거의 모두 TTL이 있어 사실상 "덜 쓴 키부터". 게이트 창·blocked-until·수집기 임대는 자주 읽혀 지워질 가능성이 낮다. 시세 예열 임대는 9분에 한 번 읽어 지워질 수 있지만 운영이 1인스턴스라 영향 없음. noeviction은 가득 차면 캐시·게이트 503으로 사이트가 멈춰 쓰지 않는다, PM-백엔드 #162 검토) | 4MB |
+| edge(Caddy) | `EDGE_MEM_LIMIT` 128m | | 13MB |
+| 합계 | 한도 합 약 1.8GB | | 약 470MB |
+
+- OS·Docker·systemd 몫으로 약 300MB를 남긴다. 한도 합(1.8GB)은 동시에 모두 차지 않는다는 전제이고, 넘치는 순간은 아래 스왑 2GB가 받는다.
+- 실측은 공식 API 키 없이(호출 0회) 로컬에서 운영 이미지로 잰 값이다. 운영에서는 수집기·캐시로 api가 더 커진다. 그래서 아래 "자원 점검" 기록으로 1~2주 지켜본다.
+- 한도는 `stack.env`에서 바꾼다(위 변수). 4GB로 올리면 `API_MEM_LIMIT=1280m`, `WEB_MEM_LIMIT=768m`, `POSTGRES_MEM_LIMIT=768m`, `VALKEY_MEM_LIMIT=256m`(10-09 이전 값)로 되돌린다.
+
+### 스왑 2GB (서버 최초 준비 때 1회)
+
+```bash
+sudo fallocate -l 2G /swapfile
+sudo chmod 600 /swapfile
+sudo mkswap /swapfile
+sudo swapon /swapfile
+echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+echo 'vm.swappiness=10' | sudo tee /etc/sysctl.d/90-loakraken-swap.conf
+sudo sysctl --system
+swapon --show && free -h
+```
+
+`vm.swappiness=10`: 메모리가 정말 모자랄 때만 스왑을 쓴다. 스왑이 계속 쓰이면 느려지므로 증설 신호로 본다.
+
+### 자원 점검 (최소 감시)
+
+2GB에서는 감시 스택(VictoriaMetrics 등)을 서버에 올리지 않는다. 대신 다음 두 가지만 쓴다.
+
+1. **외부 가동 확인**: 외부 무료 가동 확인 서비스가 `https://loakraken.gg/about`을 몇 분마다 부르고, 실패하면 Slack #alerts로 알린다(볼트 "감시와 알림 설계" 9절의 가동 확인용 웹훅).
+2. **서버 자원 점검** `monitor/host-check.sh`(systemd 타이머, 5분 간격)
+   - `host-metrics.log`에 한 줄씩 남긴다: 시각, 메모리 사용률, 스왑 사용량, 디스크 사용률, 컨테이너 재시작 수. 30일치만 둔다. 4GB 증설 판단 자료다.
+   - Valkey 축출 수(`evicted_keys` 누적)도 기록한다. 5분 사이 100개 넘게 밀려나면 알린다. 캐시가 계속 밀려나면 공식 API 호출이 늘어나는 신호이므로 `VALKEY_MAXMEMORY`·`VALKEY_MEM_LIMIT`을 올린다.
+   - Slack 알림: 메모리 90% 이상이면서 스왑 512MB 이상이 15분(3회) 이어질 때, 디스크 85% 이상, unhealthy 컨테이너, 컨테이너 재시작(메모리 한도 초과 가능성). 같은 문제는 처음 한 번과 복구 때만 알린다.
+
+설치(pull 배포 설치 뒤, 환경마다 1회):
+
+```bash
+ENV=production
+cd /opt/loakraken/$ENV
+sudo cp monitor/loakraken-host-check@.service monitor/loakraken-host-check@.timer /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now loakraken-host-check@$ENV.timer
+sudo systemctl start loakraken-host-check@$ENV.service && tail -n 3 host-metrics.log
+```
+
+### 스냅숏 정책
+
+- Lightsail **자동 스냅숏은 켜지 않는다**. DB는 R2 암호화 백업([backup.md](backup.md), 매일)과 배포 전 덤프(`backups/pre-deploy-*`)가 기본이다.
+- **수동 스냅숏은 1개만** 둔다. 서버 준비를 마친 직후, 그리고 OS 업그레이드·Docker 업그레이드처럼 서버 자체를 바꾸기 전에 새로 만들고 이전 것은 지운다. 비용은 저장된 양 기준 $0.05/GB-월이다(사용량 10GB면 약 $0.5/월, 추정).
+- 서버를 통째로 잃으면: 스냅숏으로 새 인스턴스를 만들고 고정 IP를 옮긴 뒤, R2 최신 백업으로 DB를 복구한다(스냅숏 이후 데이터).
+
+### 4GB로 올리는 기준
+
+다음 중 하나가 **7일 동안 반복**되면 PM 총괄을 거쳐 사용자에게 증설($12 → $24/월)을 요청한다.
+
+- `host-metrics.log`에서 메모리 90% 이상 + 스왑 512MB 이상이 하루 여러 번 15분 넘게 이어짐(Slack 메모리 알림이 주 3회 이상)
+- 메모리 한도 초과로 컨테이너가 재시작됨(`docker inspect --format '{{.State.OOMKilled}}'` true) 주 1회 이상
+- 사이트 응답이 느려지고(외부 가동 확인의 응답 시간 상승) 그 시간에 스왑 사용이 늘어남
+
+올리는 순서(사용자 콘솔 작업 + 운영팀 안내): 수동 스냅숏 → 스냅숏에서 4GB 인스턴스 생성(같은 서울 리전) → 고정 IP를 새 인스턴스로 옮김 → 방화벽 규칙 확인(인스턴스별 설정) → `stack.env` 한도를 4GB 값으로 → `up -d --wait` → 이전 인스턴스 삭제. 고정 IP가 그대로라 DNS는 바꾸지 않는다.
 
 ## 비밀값
 
@@ -111,9 +182,9 @@ sudo chmod 444 /opt/loakraken/$ENV/secrets/*
 
 ## 서버 최초 준비
 
-1. Ubuntu LTS 등 Linux 서버, Docker Engine + compose 플러그인 설치
+1. Ubuntu LTS 등 Linux 서버, Docker Engine + compose 플러그인 설치. 2GB 서버는 먼저 스왑 2GB를 만든다(위 "스왑 2GB").
 2. 방화벽(Lightsail): 443은 Cloudflare 대역만, 80은 닫음, 22는 관리자 IP만 + "Allow Lightsail browser SSH/RDP" 선택. 자세한 내용은 [cloudflare.md](cloudflare.md) "Lightsail 방화벽".
-3. SSH 설정: 키 인증만 쓴다. `/etc/ssh/sshd_config.d/90-loakraken.conf`에 `PasswordAuthentication no`, `PermitRootLogin no`를 넣고 `sudo sshd -t && sudo systemctl reload ssh`. 브라우저 SSH는 Lightsail이 관리하는 키로 기본 사용자(ubuntu)에 접속하므로 이 설정과 함께 쓸 수 있다. 서버에 배포용 SSH 키는 두지 않는다(GitHub가 서버에 접속하지 않음).
+3. SSH 설정: 키 인증만 쓴다. `/etc/ssh/sshd_config.d/00-loakraken.conf`에 `PasswordAuthentication no`, `KbdInteractiveAuthentication no`, `PermitRootLogin no`를 넣고 `sudo sshd -t && sudo systemctl reload ssh`. sshd는 설정 파일을 이름 순서로 읽고 **처음 나온 값**을 쓰므로 `00-`으로 시작하게 한다(클라우드 이미지의 `60-cloudimg-settings.conf`보다 먼저). 확인: `sudo sshd -T | grep -E '^(passwordauthentication|kbdinteractiveauthentication|permitrootlogin) '`가 모두 `no`. 설정 후 창을 닫기 전에 새 창에서 키 로그인이 되는지 확인한다. 브라우저 SSH는 Lightsail이 관리하는 키로 기본 사용자(ubuntu)에 접속하므로 이 설정과 함께 쓸 수 있다. 서버에 배포용 SSH 키는 두지 않는다(GitHub가 서버에 접속하지 않음).
 4. `/opt/loakraken/production/stack.env`를 `deploy/stack.production.env.example`에서, `/opt/loakraken/staging/stack.env`를 `deploy/stack.staging.env.example`에서 만든다. `DEPLOY_CHANNEL`·`DEPLOY_REGISTRY`가 들어 있는지 확인한다.
 5. 위 "비밀값" 파일을 환경별로 만든다. Slack 알림을 받으려면 `secrets/slack_webhook_alerts`(웹훅 URL 한 줄, 444)도 만든다.
 6. GHCR 읽기: 사용자가 `read:packages` 권한만 있는 토큰으로 서버에서 `sudo docker login ghcr.io`를 한 번 한다. pull 배포는 root로 돌므로 root 계정에 로그인해야 한다.
@@ -123,7 +194,7 @@ sudo chmod 444 /opt/loakraken/$ENV/secrets/*
    - `loakraken-web` 패키지 설정 → Manage Actions access에 `loakraken` 저장소를 **Write**로 추가한다. Deploy 워크플로가 web 이미지의 채널 태그를 옮기려면 필요하다.
    - SSH 관련 비밀값(`DEPLOY_HOST` 등)은 만들지 않는다.
 8. DNS: Porkbun에서 네임서버를 Cloudflare로 바꾸고, Cloudflare에서 `loakraken.gg` A(그리고 IPv6가 있으면 AAAA) 레코드를 Lightsail 고정 IP로 **프록시 켬(주황 구름)**으로 둔다. SSL 모드는 Full(strict), 원 서버 인증서는 Cloudflare Origin CA(`secrets/tls/`). `stack.env`의 `CADDYFILE=Caddyfile.cloudflare`. 자세한 내용은 [cloudflare.md](cloudflare.md).
-9. 첫 배포 승인(아래 "배포" 1~2) 뒤 pull 배포를 설치한다(아래 "pull 배포 설치").
+9. 첫 배포 승인(아래 "배포" 1~2) 뒤 pull 배포를 설치한다(아래 "pull 배포 설치"). 이어서 자원 점검 타이머를 설치한다(위 "자원 점검").
 
 ## 배포 (서버가 가져오는 방식)
 

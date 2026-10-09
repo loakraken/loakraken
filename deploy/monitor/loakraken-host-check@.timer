@@ -1,0 +1,10 @@
+# 5분마다 메모리·스왑·디스크·컨테이너 상태를 기록하고, 문제가 있으면 Slack으로 알린다.
+[Unit]
+Description=LOAKraken host resource check timer (%i)
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=5min
+
+[Install]
+WantedBy=timers.target

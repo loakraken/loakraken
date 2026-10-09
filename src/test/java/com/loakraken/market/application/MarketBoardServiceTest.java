@@ -62,6 +62,19 @@ class MarketBoardServiceTest {
   }
 
   @Test
+  void 기본_보드_예열은_사용자_기본_보드와_같은_검색_키를_강제_갱신한다() {
+    stubPages(MarketTab.REFINING, 4, 11);
+    service.board(MarketTab.REFINING, null, MarketBoardRules.Sort.DEFAULT, 1);
+    var userKey = ArgumentCaptor.forClass(MarketSearch.class);
+    verify(markets).search(eq(MarketSource.ACTIVE_LISTING), userKey.capture());
+    service.refreshDefaultPage(MarketTab.REFINING);
+    var warmKey = ArgumentCaptor.forClass(MarketSearch.class);
+    verify(markets).refreshSearch(eq(MarketSource.ACTIVE_LISTING), warmKey.capture());
+    assertThat(warmKey.getValue()).isEqualTo(userKey.getValue());
+    assertThat(warmKey.getValue().itemTier()).isEqualTo(4);
+  }
+
+  @Test
   void 상승_정렬은_탭_전체를_순차_스캔해_등락률로_정렬하고_스캔을_저장한다() {
     stubPages(MarketTab.ENGRAVING_BOOK, null, 23);
     var board = service.board(MarketTab.ENGRAVING_BOOK, null, MarketBoardRules.Sort.RISE, 1);

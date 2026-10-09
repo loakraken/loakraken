@@ -73,6 +73,15 @@ public class MarketBoardService {
         rows(sorted.subList(from, to)));
   }
 
+  /**
+   * 탭의 기본 보드(defaultTier, 기본 정렬, 1페이지)를 캐시를 건너뛰고 다시 받아 저장한다. 예열 전용이다. 홈 요약과 시세 기본 탭이 이 키를 같이 쓴다.
+   */
+  public MarketResult refreshDefaultPage(MarketTab tab) {
+    return markets.refreshSearch(
+        MarketSource.ACTIVE_LISTING,
+        search(tab, tab.defaultTier(), MarketBoardRules.Sort.DEFAULT, 1));
+  }
+
   private MarketBoardScan scan(MarketTab tab, Integer tier) {
     var cached = cache.findBoardScan(tab, tier);
     if (cached.isPresent()) return cached.get();

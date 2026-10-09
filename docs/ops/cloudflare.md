@@ -37,6 +37,18 @@ deploy/cloudflare/update-ips.sh --write    # 대역 파일 갱신 → PR로 반�
 - Caddy의 자동 발급(ACME)은 Cloudflare 프록시 뒤에서 확인 과정이 막힐 수 있어 쓰지 않는다. **Origin CA 인증서**를 쓴다.
 - 인증서·키는 비밀값이다. 서버의 `/opt/loakraken/production/secrets/tls/origin.pem`·`origin.key`에만 둔다(디렉터리 700, 파일 400, root). compose가 edge에 읽기 전용으로 마운트한다.
 
+### HSTS는 한 곳에서만
+
+- HSTS(`Strict-Transport-Security`)는 **Caddy(원 서버)에서만** 보낸다(`max-age=31536000`). Cloudflare의 SSL/TLS → Edge Certificates → HSTS는 **켜지 않는다**. 두 곳에서 다른 값이 나가면 어느 값이 적용되는지 헷갈리고, preload·includeSubDomains를 실수로 켜면 되돌리기 어렵다.
+
+### 다른 Cloudflare 계정을 거친 요청 막기 (Authenticated Origin Pulls, 출시 전 적용 예정)
+
+- 방화벽은 "Cloudflare에서 온 요청"만 허용한다. 하지만 **다른 사람의 Cloudflare 영역**이 우리 원 서버 IP를 가리키면, 그 요청도 Cloudflare 대역에서 온다. 그러면 우리 영역의 WAF·속도 제한을 거치지 않는다(IP 위조는 아님).
+- 대책: Cloudflare **Authenticated Origin Pulls**(무료). Cloudflare가 원 서버에 클라이언트 인증서를 내밀게 하고, Caddy가 그 인증서만 받게 한다(mTLS).
+  - Cloudflare: SSL/TLS → Origin Server → Authenticated Origin Pulls 켜기(영역 단위)
+  - Caddy: `tls { client_auth { mode require_and_verify; trust_pool file <Cloudflare origin pull CA> } }`
+- 영역 단위 인증서는 Cloudflare 공용이라 다른 Cloudflare 계정의 요청도 통과할 수 있다. 완전히 막으려면 **우리 인증서를 올리는 호스트 단위** 방식을 쓴다. 적용 방식은 서버 준비 때 공식 문서로 다시 확인하고 별도 PR로 넣는다(출시 점검표 R18).
+
 ## Lightsail 방화벽
 
 | 규칙 | 출발지 | 이유 |

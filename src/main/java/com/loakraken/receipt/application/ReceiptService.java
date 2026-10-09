@@ -83,13 +83,19 @@ public class ReceiptService {
       int rosterCharacters,
       int ready,
       int pending,
-      Instant nextAvailableAt) {
+      Instant nextAvailableAt,
+      boolean assumeBook) {
     public BigDecimal totalGold() {
       return equipmentGold.add(gems.gold());
     }
   }
 
   public Receipt receipt(String characterName) {
+    return receipt(characterName, false);
+  }
+
+  /** assumeBook: 책(재봉술·야금술) 효과 항상 적용 가정. 기본 false(책 제외). */
+  public Receipt receipt(String characterName, boolean assumeBook) {
     var command = new SearchCharacterCommand(characterName);
     var siblings = characters.siblings(command).siblings();
     var self =
@@ -161,7 +167,8 @@ public class ReceiptService {
                 null));
         continue;
       }
-      var equipment = EquipmentReceipt.calculate(rules, loadout.equipment(), unitPrices);
+      var equipment =
+          EquipmentReceipt.calculate(rules, loadout.equipment(), unitPrices, assumeBook);
       equipmentGold = equipmentGold.add(equipment.gold());
       characterReceipts.add(
           new CharacterReceipt(
@@ -212,7 +219,8 @@ public class ReceiptService {
         roster.size(),
         ready,
         roster.size() - ready,
-        nextAvailableAt(roster.size() - ready, stopped));
+        nextAvailableAt(roster.size() - ready, stopped),
+        assumeBook);
   }
 
   /**
@@ -243,10 +251,16 @@ public class ReceiptService {
     return current == null || candidate.isBefore(current) ? candidate : current;
   }
 
-  /** 가정 문장(계산 검증 6절). 화면에 그대로 보인다. */
   public static List<String> assumptions() {
+    return assumptions(false);
+  }
+
+  /** 가정 문장(계산 검증 6절). 화면에 그대로 보인다. */
+  public static List<String> assumptions(boolean assumeBook) {
     return List.of(
-        "장비는 +10부터 현재 단계까지 단계마다 숨결(업화 책 포함) 사용 여부 중 더 싼 쪽의 기대 비용을 더합니다.",
+        assumeBook
+            ? "장비는 +10부터 현재 단계까지 단계마다 숨결·책 사용 조합 중 가장 싼 쪽의 기대 비용을 더합니다. 책 효과는 항상 적용된다고 가정합니다(일로아·로아와와 같은 가정)."
+            : "장비는 +10부터 현재 단계까지 단계마다 숨결 사용 여부 중 더 싼 쪽의 기대 비용을 더합니다. 책(재봉술·야금술)은 게임 문구 '특수 재료 별 효과는 확률에 따라 적용되지 않을 수 있습니다'의 확률이 공개되지 않아 넣지 않습니다.",
         "업화 18단계 이하는 성장 지원을 적용합니다.",
         "재료는 현재 최저가 1개당 시세로 환산합니다.",
         "보석은 거래 가능한 것만 경매장 최저 즉시 구매가로 환산하고, 귀속은 개수만 셉니다.");

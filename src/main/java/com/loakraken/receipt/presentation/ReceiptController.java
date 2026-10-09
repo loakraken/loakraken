@@ -14,6 +14,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import org.springdoc.core.customizers.OpenApiCustomizer;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpStatus;
@@ -25,10 +26,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @Validated
-@org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(
-    prefix = "receipt",
-    name = "enabled",
-    havingValue = "true")
+@ConditionalOnProperty(prefix = "receipt", name = "enabled", havingValue = "true")
 @Tag(name = "원정대 영수증", description = "검증된 항목 기준 원정대 환산(receipt-v1)")
 class ReceiptController {
   private final ReceiptService receipts;
@@ -72,10 +70,17 @@ class ReceiptController {
           @NotBlank
           @Size(max = 16)
           @Pattern(regexp = "[\\p{L}\\p{N}]+")
-          String characterName) {
+          String characterName,
+      @Parameter(
+              description =
+                  "책(재봉술·야금술) 효과 항상 적용 가정. 생략하면 false(책 제외). 게임 문구 '특수 재료 별 효과는 확률에 따라 적용되지 않을 수 있습니다'의 확률이 공개되지 않아 기본은 숨결만 쓴 확인된 값이다. true면 일로아·로아와와 같은 가정")
+          @RequestParam(required = false)
+          Boolean assumeBook) {
     return ApiResponse.of(
         ReceiptSuccessCode.RECEIPT_SUCCESS,
-        ReceiptResponse.from(receipts.receipt(characterName), receipts.refiningRuleVersion()));
+        ReceiptResponse.from(
+            receipts.receipt(characterName, Boolean.TRUE.equals(assumeBook)),
+            receipts.refiningRuleVersion()));
   }
 
   enum ReceiptSuccessCode implements SuccessCode {
@@ -95,10 +100,7 @@ class ReceiptController {
   }
 
   @Configuration(proxyBeanMethods = false)
-  @org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(
-      prefix = "receipt",
-      name = "enabled",
-      havingValue = "true")
+  @ConditionalOnProperty(prefix = "receipt", name = "enabled", havingValue = "true")
   static class ReceiptOpenApiConfiguration {
     @Bean
     OpenApiCustomizer receiptResponseContract() {

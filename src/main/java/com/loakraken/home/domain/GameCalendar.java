@@ -49,6 +49,25 @@ public record GameCalendar(List<Entry> entries) {
       return startTimes.stream().filter(time -> !time.isBefore(now)).findFirst().orElse(null);
     }
 
+    /**
+     * 그 날 보상을 공식 ItemLevel 그룹 순서대로 준다. 시간 지정이 없는 보상은 공통(timed=false), 그 날 회차를 가리키는 보상은 timed=true,
+     * 다른 날 회차만 가리키는 보상은 뺀다(rewardKindsOn과 같은 규칙). 보상이 남지 않은 그룹은 뺀다.
+     */
+    public List<RewardGroup> rewardGroupsOn(LocalDate date) {
+      var times = startTimesOn(date);
+      var groups = new java.util.LinkedHashMap<Integer, List<DayReward>>();
+      for (var reward : rewards) {
+        boolean timed = !reward.startTimes().isEmpty();
+        if (timed && reward.startTimes().stream().noneMatch(times::contains)) continue;
+        groups
+            .computeIfAbsent(reward.minItemLevel(), key -> new java.util.ArrayList<>())
+            .add(new DayReward(reward.name(), reward.icon(), reward.grade(), timed));
+      }
+      return groups.entrySet().stream()
+          .map(entry -> new RewardGroup(entry.getKey(), List.copyOf(entry.getValue())))
+          .toList();
+    }
+
     /** 그 날짜 회차들에 시간 지정으로 붙은 대표 보상 종류. */
     public Set<RewardKind> rewardKindsOn(LocalDate date) {
       var kinds = EnumSet.noneOf(RewardKind.class);
@@ -62,12 +81,29 @@ public record GameCalendar(List<Entry> entries) {
     }
   }
 
-  public record Reward(String name, String icon, String grade, List<LocalDateTime> startTimes) {
+  /**
+   * @param minItemLevel 공식 RewardItems 그룹의 ItemLevel. 카오스게이트·필드보스는 레벨별로 보상이 다르다.
+   */
+  public record Reward(
+      String name,
+      String icon,
+      String grade,
+      List<LocalDateTime> startTimes,
+      Integer minItemLevel) {
     public Reward {
       startTimes =
           startTimes == null ? List.of() : startTimes.stream().filter(Objects::nonNull).toList();
     }
+
+    public Reward(String name, String icon, String grade, List<LocalDateTime> startTimes) {
+      this(name, icon, grade, startTimes, null);
+    }
   }
+
+  /** 그 날 보상 한 줄. timed는 그 날 회차를 가리키는 StartTimes가 있는 보상이다. */
+  public record DayReward(String name, String icon, String grade, boolean timed) {}
+
+  public record RewardGroup(Integer minItemLevel, List<DayReward> rewards) {}
 
   public enum RewardKind {
     GOLD,

@@ -50,6 +50,7 @@ public record HomeScheduleResponse(
                         entry.minItemLevel(),
                         times(entry.startTimesOn(date)),
                         entry.rewardKindsOn(date),
+                        groups(entry, date),
                         time(entry.nextAt(now))))
             .toList(),
         timed(calendar.byCategory(GameCalendar.FIELD_BOSS), date, now),
@@ -72,6 +73,7 @@ public record HomeScheduleResponse(
                         entry.icon(),
                         entry.minItemLevel(),
                         times(entry.startTimesOn(date)),
+                        groups(entry, date),
                         time(entry.nextAt(now))))
             .toList(),
         weekly.stream()
@@ -111,7 +113,23 @@ public record HomeScheduleResponse(
                     entry.icon(),
                     entry.minItemLevel(),
                     times(entry.startTimesOn(date)),
+                    groups(entry, date),
                     time(entry.nextAt(now))))
+        .toList();
+  }
+
+  private static List<HomeRewardGroupResponse> groups(GameCalendar.Entry entry, LocalDate date) {
+    return entry.rewardGroupsOn(date).stream()
+        .map(
+            group ->
+                new HomeRewardGroupResponse(
+                    group.minItemLevel(),
+                    group.rewards().stream()
+                        .map(
+                            reward ->
+                                new HomeRewardResponse(
+                                    reward.name(), reward.icon(), reward.grade(), reward.timed()))
+                        .toList()))
         .toList();
   }
 
@@ -130,6 +148,10 @@ public record HomeScheduleResponse(
       List<OffsetDateTime> startTimes,
       @Schema(description = "그 날 회차에 시간 지정으로 붙은 대표 보상(GOLD, CARD_PACK, SILLING, PIRATE_COIN)")
           Set<GameCalendar.RewardKind> rewardKinds,
+      @Schema(
+              description =
+                  "그 날 보상. 공식 ItemLevel 그룹 순서이며, 시간 지정 보상은 그 날 회차를 가리킬 때만 넣는다(timed=true)")
+          List<HomeRewardGroupResponse> rewardGroups,
       @Schema(description = "현재 이후 첫 회차(이번 주 범위). 없으면 null") @NullableResponse
           OffsetDateTime nextAt) {}
 
@@ -138,6 +160,10 @@ public record HomeScheduleResponse(
       @NullableResponse String icon,
       @NullableResponse Integer minItemLevel,
       @Schema(description = "요청 날짜의 회차") List<OffsetDateTime> startTimes,
+      @Schema(
+              description =
+                  "그 날 보상. 공식 ItemLevel 그룹 순서이며, 시간 지정 보상은 그 날 회차를 가리킬 때만 넣는다(timed=true)")
+          List<HomeRewardGroupResponse> rewardGroups,
       @NullableResponse OffsetDateTime nextAt) {}
 
   public record HomeOtherResponse(
@@ -146,7 +172,21 @@ public record HomeScheduleResponse(
       @NullableResponse String icon,
       @NullableResponse Integer minItemLevel,
       List<OffsetDateTime> startTimes,
+      @Schema(
+              description =
+                  "그 날 보상. 공식 ItemLevel 그룹 순서이며, 시간 지정 보상은 그 날 회차를 가리킬 때만 넣는다(timed=true)")
+          List<HomeRewardGroupResponse> rewardGroups,
       @NullableResponse OffsetDateTime nextAt) {}
+
+  public record HomeRewardGroupResponse(
+      @NullableResponse @Schema(description = "공식 ItemLevel. 이 레벨 이상 보상") Integer minItemLevel,
+      List<HomeRewardResponse> rewards) {}
+
+  public record HomeRewardResponse(
+      String name,
+      @NullableResponse String icon,
+      @NullableResponse @Schema(description = "공식 등급 문자열") String grade,
+      @Schema(description = "true: 그 날 회차를 가리키는 시간 지정 보상, false: 시간 지정 없는 공통 보상") boolean timed) {}
 
   public record HomeGoldDayResponse(LocalDate date, List<String> islands) {}
 

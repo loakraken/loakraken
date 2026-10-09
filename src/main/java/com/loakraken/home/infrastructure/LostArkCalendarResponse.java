@@ -18,7 +18,9 @@ record LostArkCalendarResponse(
     @JsonProperty("RewardItems") List<RewardGroup> rewardItems) {
 
   @JsonIgnoreProperties(ignoreUnknown = true)
-  record RewardGroup(@JsonProperty("Items") List<RewardItem> items) {}
+  record RewardGroup(
+      @JsonProperty("ItemLevel") Integer itemLevel,
+      @JsonProperty("Items") List<RewardItem> items) {}
 
   @JsonIgnoreProperties(ignoreUnknown = true)
   record RewardItem(
@@ -44,15 +46,19 @@ record LostArkCalendarResponse(
                             ? List.of()
                             : item.rewardItems().stream()
                                 .filter(group -> group != null && group.items() != null)
-                                .flatMap(group -> group.items().stream())
-                                .filter(reward -> reward != null && reward.name() != null)
-                                .map(
-                                    reward ->
-                                        new GameCalendar.Reward(
-                                            reward.name().strip(),
-                                            reward.icon(),
-                                            reward.grade(),
-                                            reward.startTimes()))
+                                .flatMap(
+                                    group ->
+                                        group.items().stream()
+                                            .filter(
+                                                reward -> reward != null && reward.name() != null)
+                                            .map(
+                                                reward ->
+                                                    new GameCalendar.Reward(
+                                                        reward.name().strip(),
+                                                        reward.icon(),
+                                                        reward.grade(),
+                                                        reward.startTimes(),
+                                                        group.itemLevel())))
                                 .toList()))
             .toList());
   }

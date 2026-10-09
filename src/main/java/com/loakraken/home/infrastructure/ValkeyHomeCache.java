@@ -16,7 +16,7 @@ import tools.jackson.databind.json.JsonMapper;
 
 @Component
 class ValkeyHomeCache implements HomeCache {
-  static final String CALENDAR_KEY = "home:v1:calendar";
+  static final String CALENDAR_KEY = "home:v2:calendar";
   static final String NEWS_KEY = "home:v1:news";
   private final StringRedisTemplate redis;
   private final JsonMapper mapper;

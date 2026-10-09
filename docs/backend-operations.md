@@ -24,7 +24,7 @@
 - 리더 임대: `lostark:leader:stats-collector`(30초), `lostark:leader:market-warmup`(주기 + 1분)
   - 얻기는 `SET NX PX`다. 연장·해제는 "값이 내 인스턴스 ID일 때만" Lua로 한다.
   - 못 얻으면 수집기 지표에 `outcome=not_leader`가 남는다.
-- 백그라운드 합산 상한: 수집기 20/분 + 예열(9분에 19회, 1분 갱신 도입 시 15/분 상한) ≤ budget − reserve(50)
+- 백그라운드 합산 상한: 수집기 20/분 + 예열(이력 9분에 19회 + 기본 보드 30초마다 1회, 합산 15/분 상한, #154) ≤ budget − reserve(50)
 
 ## 실행 전제
 
@@ -51,7 +51,7 @@ Actuator가 제공하는 MeterRegistry에 기록한다. 태그는 코드의 고�
 | loakraken.lostark.gate | Counter | event=budget_reject/concurrency_reject/upstream_429/upstream_backoff_reject | 로컬 차단 사유와 외부 429 관측 |
 | loakraken.character.searches | Counter | outcome=success/failure | 검색 application 서비스 호출의 완료 결과 |
 | loakraken.market.cache.operations | Counter | kind=prices/options/item_history/board_scan, outcome=hit/miss/invalid/read_error/write_success/write_error | 거래소 캐시 연산 결과. 출처·검색 조건·해시·이름은 태그에 포함하지 않음 |
-| loakraken.market.warmup | Counter | outcome=refreshed/not_found/failed | 핵심 품목 이력 예열 결과(9분 주기, [시세 보드](market-board.md)). 상품 ID는 태그에 포함하지 않음 |
+| loakraken.market.warmup | Counter | target=history/board, outcome=refreshed/not_found/failed/capped | 핵심 품목 이력(9분)·기본 보드(30초) 예열 결과([시세 보드](market-board.md)). 상품 ID는 태그에 포함하지 않음 |
 | loakraken.character.views.writes | Counter | outcome=success/failure | 캐릭터 조회수 비동기 기록 결과(대기열 초과로 버린 조회 포함, [조회수](character-views.md)). 캐릭터명은 태그에 포함하지 않음 |
 | loakraken.stats.collector | Counter | task=profile/roster/none, outcome=success/not_found/failed/yielded/storage_failed | 통계 표본 수집기 회차 결과([수집기](stats-collector.md)). 캐릭터명은 태그에 포함하지 않음 |
 | loakraken.stats.collector.discovered | Counter | 없음 | 원정대로 새로 발견한 캐릭터 수 |

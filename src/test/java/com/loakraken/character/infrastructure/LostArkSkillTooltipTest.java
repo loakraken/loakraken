@@ -48,6 +48,31 @@ class LostArkSkillTooltipTest {
   }
 
   @ParameterizedTest
+  @CsvSource(
+      delimiter = '|',
+      value = {
+        "<BR>공격 타입: 백 어택|BACK_ATTACK",
+        "<BR>공격 타입 :헤드어택|HEAD_ATTACK",
+        "<BR>무력화 : 상|NONE",
+      })
+  void 공격_타입은_공백_차이를_허용한다(String line, CharacterLoadout.AttackType expected) {
+    var parsed =
+        LostArkSkillTooltip.parse(
+            "{\"Element_005\":{\"type\":\"SingleTextBox\",\"value\":\"" + line + "\"}}");
+    assertThat(parsed.attackType()).isEqualTo(expected);
+  }
+
+  @Test
+  void 공격_타입_줄은_있는데_값을_읽지_못하면_null이다() {
+    var parsed =
+        LostArkSkillTooltip.parse(
+            """
+            {"Element_005":{"type":"SingleTextBox","value":"<BR>공격 타입 : 측면 어택"}}
+            """);
+    assertThat(parsed.attackType()).isNull();
+  }
+
+  @ParameterizedTest
   @ValueSource(strings = {"", "  ", "not-json", "[1]", "\"text\""})
   void 해석할_수_없는_Tooltip은_카운터와_부위_파괴를_null로_둔다(String tooltip) {
     var parsed = LostArkSkillTooltip.parse(tooltip);

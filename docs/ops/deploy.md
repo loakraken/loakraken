@@ -67,7 +67,8 @@
 | `deploy/pull/loakraken-pull-deploy@.service`·`.timer` | 위 스크립트를 2분마다 실행(systemd, `@production`·`@staging`) |
 | `deploy/monitor/host-check.sh`·`loakraken-host-check@.service`·`.timer` | 서버 자원 점검(5분, 메모리·스왑·디스크·컨테이너 → 기록·Slack). "자원 점검" 참고 |
 | `.github/workflows/image.yml` | 이미지 빌드(PR은 빌드 확인만, push는 `PUBLISH_IMAGES=true`일 때 GHCR에 api·배포 번들 업로드) |
-| `.github/workflows/deploy.yml` | 배포 승인(환경 선택 + 이미지 태그 → GHCR 채널 태그 이동, 운영은 `sha-` 태그만). 서버에 접속하지 않는다 |
+| `.github/workflows/deploy.yml` | 릴리스 지정(환경 선택 + 이미지 태그 → GHCR 채널 태그 이동, 운영은 `sha-` 태그와 확인 입력). 서버에 접속하지 않는다 |
+| `deploy/pull/approve.sh` | **운영 승인**: 사용자가 서버에서 새 릴리스의 커밋·비교 링크를 보고 y/N으로 승인하면 바로 배포 |
 
 프론트 이미지는 `loakraken-web` 저장소의 `Dockerfile`·`image.yml`이 만든다.
 
@@ -190,7 +191,7 @@ sudo chmod 444 /opt/loakraken/$ENV/secrets/*
 5. 위 "비밀값" 파일을 환경별로 만든다. Slack 알림을 받으려면 `secrets/slack_webhook_alerts`(웹훅 URL 한 줄, 444)도 만든다.
 6. GHCR 읽기: 사용자가 `read:packages` 권한만 있는 토큰으로 서버에서 `sudo docker login ghcr.io`를 한 번 한다. pull 배포는 root로 돌므로 root 계정에 로그인해야 한다.
 7. GitHub 설정(사용자)
-   - loakraken 저장소 Environments: `production`(필수 승인자 = 사용자), `staging`
+   - Environments는 만들지 않는다. 조직 free 플랜 + 비공개 저장소라 쓸 수 없다(GitHub 공식 문서, 10-10 확인). 운영 승인은 서버 `approve.sh`가 한다(아래 "운영 승인").
    - 저장소 변수 `PUBLISH_IMAGES=true`(두 저장소). 이전에는 이미지가 GHCR에 올라가지 않는다.
    - `loakraken-web` 패키지 설정 → Manage Actions access에 `loakraken` 저장소를 **Write**로 추가한다. Deploy 워크플로가 web 이미지의 채널 태그를 옮기려면 필요하다.
    - SSH 관련 비밀값(`DEPLOY_HOST` 등)은 만들지 않는다.
@@ -199,18 +200,19 @@ sudo chmod 444 /opt/loakraken/$ENV/secrets/*
 
 ## 배포 (서버가 가져오는 방식)
 
-GitHub는 서버에 접속하지 않는다. 승인된 릴리스만 GHCR 채널 태그(`:production`·`:staging`)로 옮기고, 서버가 그 태그를 따라간다(PM 총괄 결정 2026-10-09).
+GitHub는 서버에 접속하지 않는다. Deploy 워크플로가 GHCR 채널 태그(`:production`·`:staging`)를 옮기고, 서버가 그 태그를 따라간다(PM 총괄 결정 2026-10-09). **운영은 사용자가 서버에서 승인한 릴리스만 배포한다**(PM 총괄 결정 2026-10-10, 아래 "운영 승인").
 
 ```
 병합 → image.yml: sha- 태그로 api·web·배포 번들 업로드
-     → Actions › Deploy 실행(환경·태그 입력) → production은 사용자 승인 → 채널 태그 이동
-     → 서버 타이머(2분) → 태그가 바뀌었으면 배포 → Slack #alerts에 결과
+     → Actions › Deploy 실행(환경·태그 입력, 운영은 사용자만) → 채널 태그 이동
+     → 서버 타이머(2분): 스테이징은 바로 배포 / 운영은 Slack에 "승인 대기" → 사용자가 서버에서 approve.sh → 배포 → Slack #alerts에 결과
 ```
 
 1. develop/master에 병합되면 `image.yml`이 `sha-<커밋7자>` 태그로 api·배포 번들(`loakraken-deploy`)을, web 저장소의 `image.yml`이 web 이미지를 올린다.
-2. Actions → Deploy → 환경·`api_tag`·`web_tag`를 넣고 실행한다. production은 GitHub Environments 승인 후에만 진행되며 `sha-` 태그만 받는다. 배포 번들은 `api_tag`와 같은 커밋을 쓴다. 실행 요약에 옮긴 digest가 남는다.
+2. Actions → Deploy → 환경·`api_tag`·`web_tag`를 넣고 실행한다. production은 `sha-` 태그만 받고 `confirm`에 `production`을 입력해야 한다(실수 방지). **Claude 세션은 production으로 실행하지 않는다**(PM 총괄 결정 10-10, 사용자만). 배포 번들은 `api_tag`와 같은 커밋을 쓴다. 실행 요약에 옮긴 digest가 남는다.
 3. 서버의 `loakraken-pull-deploy@<환경>.timer`가 2분 안에 바뀐 태그를 본다. `pull-deploy.sh`가 하는 일:
    1. 채널 태그 3개를 받아 digest를 확인한다. `.deployed`와 같으면 끝, `.failed`(실패했던 릴리스)와 같으면 다시 시도하지 않는다.
+   1-1. 운영(`DEPLOY_APPROVAL`이 비었거나 `required`)은 `.approved`(approve.sh가 기록)와 같을 때만 넘어간다. 아니면 `.pending`에 남기고 Slack에 "승인 대기"를 릴리스마다 한 번 보낸 뒤 끝낸다.
    2. 배포 번들을 풀어 compose·Caddyfile·cloudflare·backup·pull 파일을 바꾼다(직전 파일은 `.bundle.prev`에 보관).
    3. DB 백업(`backups/pre-deploy-*.dump`, 최근 14개 유지)
    4. 직전 이미지를 `images.prev.env`로 보관하고 `images.env`에 **digest로 고정**한 이미지를 쓴다.
@@ -219,6 +221,22 @@ GitHub는 서버에 접속하지 않는다. 승인된 릴리스만 GHCR 채널 �
 4. 배포 후 15분 관찰: 오류율, `loakraken.lostark.gate{event=upstream_429}`, 응답 지연
 
 배포 전 백업은 같은 서버 디스크에만 있다. 서버를 잃으면 함께 잃으므로 외부 정기 백업은 [backup.md](backup.md)를 따른다(출시 점검표 B6).
+
+### 운영 승인 (approve.sh)
+
+무료 플랜 비공개 저장소라 GitHub Environments 승인자를 쓸 수 없다(PM 총괄 결정 2026-10-10: 서버 승인 + Claude 세션의 운영 Deploy 금지). Claude 세션은 Lightsail 콘솔(브라우저 SSH)에 들어갈 수 없으므로 승인은 사람만 할 수 있다.
+
+서버 안에서(Lightsail 브라우저 SSH, 한 줄):
+
+```bash
+sudo /opt/loakraken/production/pull/approve.sh
+```
+
+- 새 릴리스와 지금 배포된 릴리스의 커밋(7자)·빌드 시각·GitHub 비교 링크(api·web)를 보여 주고 `Approve this release for production? [y/N]`를 묻는다. 브라우저 SSH에서 한글이 깨지므로 출력은 영문이다.
+- `y`: `.approved`에 기록하고 바로 배포를 실행한 뒤 `DEPLOY_OK` 또는 `DEPLOY_NOT_DONE`(journalctl 안내)을 보여 준다. 실패했던 릴리스를 승인하면 다시 시도한다. 승인 기록은 `deploy-history.log`에도 남는다.
+- 그 밖의 입력: `NOT_APPROVED`, 아무것도 바뀌지 않는다.
+- 스테이징은 `DEPLOY_APPROVAL=auto`라 승인 없이 따라간다.
+- 로컬 시험(10-10, 로컬 레지스트리): 승인 전 2회 실행은 승인 대기 알림 1회 뒤 대기만 기록, `n`이면 `.approved` 없음, `y`면 `.approved`가 대기 릴리스와 같아짐, 배포된 릴리스가 있으면 비교 링크(compare)를 보여 줌.
 
 ### pull 배포 설치 (환경마다 1회)
 
@@ -231,24 +249,18 @@ cid=$(sudo docker create ghcr.io/loakraken/loakraken-deploy:$ENV true)
 sudo docker cp "$cid:/bundle/pull" . && sudo docker rm "$cid"
 sudo cp pull/loakraken-pull-deploy@.service pull/loakraken-pull-deploy@.timer /etc/systemd/system/
 sudo systemctl daemon-reload
-sudo systemctl start loakraken-pull-deploy@$ENV.service     # 첫 배포를 바로 실행(결과는 아래 journalctl)
 sudo systemctl enable --now loakraken-pull-deploy@$ENV.timer
-journalctl -u loakraken-pull-deploy@$ENV.service -n 50
+sudo /opt/loakraken/$ENV/pull/approve.sh                     # 운영: 첫 릴리스를 보고 y로 승인하면 바로 배포
 ```
+
+스테이징은 승인 없이 타이머가 배포한다(`sudo systemctl start loakraken-pull-deploy.service`로 바로 실행 가능).
 
 ## 롤백
 
-평소 롤백도 **승인 절차를 거친다**. Actions → Deploy를 이전 `sha-` 태그로 다시 실행한다(`deploy-history.log`·실행 요약에서 직전 태그를 찾는다). 서버가 2분 안에 그 릴리스로 돌아간다.
+평소 롤백도 **승인 절차를 거친다**. 사용자가 Actions → Deploy를 이전 `sha-` 태그로 다시 실행하고(`deploy-history.log`·실행 요약에서 직전 태그를 찾는다), 서버에서 `approve.sh`로 승인하면 그 릴리스로 돌아간다.
 
 - 배포가 헬스 체크에서 실패하면 서버가 스스로 직전 릴리스로 되돌린다(위 3-6). 사람이 할 일은 원인 확인과 고친 릴리스 승인이다.
-- **실패한 릴리스 다시 시도**: 실패가 일시적이었거나(배포 순간 DB·Valkey 장애로 readiness 503) 비밀 파일을 고친 경우다. 같은 태그로 다시 승인해도 digest가 같아 계속 건너뛰므로, 서버에서 `.failed`를 지우고 바로 실행한다.
-
-```bash
-cd /opt/loakraken/production
-sudo rm .failed
-sudo systemctl start loakraken-pull-deploy@production.service
-journalctl -u loakraken-pull-deploy@production.service -n 50
-```
+- **실패한 릴리스 다시 시도**: 실패가 일시적이었거나(배포 순간 DB·Valkey 장애로 readiness 503) 비밀 파일을 고친 경우다. 운영은 `sudo /opt/loakraken/production/pull/approve.sh`로 같은 릴리스를 다시 승인하면 `.failed`를 지우고 바로 다시 시도한다(경고 문구가 나온다).
 
 - 레지스트리(GHCR) 장애로 이미지를 못 받으면 같은 오류는 처음 한 번만 Slack에 알리고, 복구되면 "복구됨"을 알린다(2분마다 반복하지 않음).
 - 긴급 수동 롤백(GitHub 장애 등, 관리자 SSH 또는 Lightsail 브라우저 SSH):
@@ -296,7 +308,7 @@ $C up -d --wait
 `pull-deploy.sh`는 root로 돌고, 배포 번들 안의 스크립트(`pull/`·`backup/`)와 compose 파일을 그대로 실행한다. 그래서 **서버 root 권한을 지키는 선은 코드 리뷰와 운영 승인**이다.
 
 - 번들은 `image.yml`이 develop·master에 병합된 커밋으로만 만든다(PR에서는 빌드 확인만, 업로드하지 않음).
-- 운영 채널은 승인된 Deploy 작업이 `sha-` 태그 번들만 옮긴다. 서버는 그 digest로 고정해 실행한다.
+- 운영 채널은 Deploy 작업이 `sha-` 태그 번들만 옮기고, 서버는 사용자가 approve.sh로 승인한 digest만 고정해 실행한다.
 - 그러므로 `deploy/**`를 바꾸는 PR은 PM-백엔드 검토를 거친다(셸 스크립트·compose 변경은 서버 root 권한 변경과 같다고 보고 본다).
 - GHCR 쓰기 권한(packages: write)은 Actions 작업에만 있다. 사람의 개인 토큰에 쓰기 권한을 주지 않는다. 서버의 GHCR 토큰은 읽기 전용이다.
 

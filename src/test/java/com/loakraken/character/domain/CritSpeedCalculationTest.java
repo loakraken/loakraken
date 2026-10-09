@@ -174,6 +174,42 @@ class CritSpeedCalculationTest {
     else assertThat(conditional).containsExactly(excluded);
   }
 
+  /** v4 허용 목록(#188): 스킬 주어 문장·상태 말이 아닌 조건은 아크 패시브 치명타 피해에서 뺀다. */
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.CsvSource(
+      delimiter = '|',
+      value = {
+        "노드 Lv.1|치명타 피해가 10.0% 증가한다.|10|",
+        "노드 Lv.1|적에게 주는 치명타 피해가 12.0% 증가한다.|12|",
+        "노드 Lv.1|더 썬의 적에게 주는 피해가 20.0% 증가하고, 치명타 피해가 30.0% 증가한다.||노드 Lv.1 30%",
+        "노드 Lv.1|생명력이 50.0% 이하일 때 치명타 피해가 15.0% 증가한다.||노드 Lv.1 15%",
+        "노드 Lv.1|퍼펙트 존 성공 시 치명타 피해가 8.0% 증가한다.||노드 Lv.1 8%",
+        "격분 Lv.3|폭주 중 적에게 주는 치명타 피해가 51.0% 증가한다.|51|",
+      })
+  void 아크_패시브_치명타_피해는_허용_노드나_조건_없는_일반_문구만_더한다(
+      String name, String text, String included, String excluded) {
+    var sources = new ArrayList<CritSpeedCalculation.Source>();
+    var conditional = new ArrayList<String>();
+    CritSpeedCalculation.scan(Category.ARK_PASSIVE, name, text, sources, true, conditional);
+    var damage =
+        sources.stream()
+            .filter(source -> source.axis() == Axis.CRIT_DAMAGE)
+            .map(source -> source.value().stripTrailingZeros().toPlainString())
+            .toList();
+    if (included == null) assertThat(damage).isEmpty();
+    else assertThat(damage).containsExactly(included);
+    if (excluded == null) assertThat(conditional).isEmpty();
+    else assertThat(conditional).containsExactly(excluded);
+  }
+
+  @Test
+  void 장비_팔찌_문구는_허용_목록과_관계없이_더한다() {
+    var sources = new ArrayList<CritSpeedCalculation.Source>();
+    CritSpeedCalculation.scan(
+        Category.BRACELET, "팔찌", "추가 피해가 2.5% 증가하고, 치명타 피해가 8.4% 증가한다.", sources, false);
+    assertThat(sources).anyMatch(source -> source.axis() == Axis.CRIT_DAMAGE);
+  }
+
   @Test
   void 조건_판정은_소수점을_문장_끝으로_보지_않는다() {
     String text = "사신화 상태에서 사용 시 피해가 1.5% 증가하고 치명타 피해가 2.0% 증가한다.";

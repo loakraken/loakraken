@@ -14,13 +14,23 @@ import java.util.regex.Pattern;
  * 스탯 계산에만 쓴다. 뭉툭한 가시·음속 돌파는 장착 노드의 공식 문구에서 수치를 읽고, 미장착이면 2026-10-05 공식 Lv.2 문구를 기준값으로 쓴다.
  */
 public final class CritSpeedCalculation {
-  public static final String RULE_VERSION = "crit-speed-v3";
+  public static final String RULE_VERSION = "crit-speed-v4";
 
   /**
    * 치명타 피해 앞(같은 문장)에 오면 조건부로 보고 합산하지 않는 말. 로펙·일로아는 "폭주 중"·"마력 해방 중"(각성 상태)은 넣고 "사신화 상태에서"· "페르소나
    * 상태일 때"는 뺀다(계산 검증 표본 5명, 10-09).
    */
   private static final List<String> CONDITIONAL_STATE = List.of("상태에서", "상태일 때");
+
+  /**
+   * 아크 패시브 치명타 피해 허용 목록(v4, #188). 두 사이트가 넣는 각성 상시 노드다. 이 밖의 아크 패시브 치명타 피해는 문장 앞에 아무 조건도 없을 때("치명타
+   * 피해가 X% 증가", "적에게 주는 치명타 피해가 X% 증가")만 더한다. 스킬 주어 문장("더 썬이 …하고, 치명타 피해가")·상태 말이 아닌 조건("…이하일 때",
+   * "…성공 시")은 조건부로 뺀다(계산 검증 #161 검증 결과).
+   */
+  private static final List<String> ARK_PASSIVE_DAMAGE_ALLOWED = List.of("격분", "발화");
+
+  private static final java.util.regex.Pattern NEUTRAL_PREFIX =
+      java.util.regex.Pattern.compile("^(?:적에게 주는)?$");
 
   /** 치명 27.944 = 치명타 적중률 1%. 공식 Tooltip 576→20.61%, 1800→64.42% 일치(2026-10-05). */
   static final BigDecimal CRIT_STAT_PER_PERCENT = new BigDecimal("27.944");
@@ -626,6 +636,22 @@ public final class CritSpeedCalculation {
     return TRIPOD_CONDITION.matcher(text.substring(sentence + 1, matchStart)).find();
   }
 
+  /** 허용 노드이거나, 같은 문장에서 치명타 피해 앞에 조건 없이 시작하는 일반 문구인지. */
+  static boolean arkPassiveDamageAllowed(String name, String text, int matchStart) {
+    if (name != null && ARK_PASSIVE_DAMAGE_ALLOWED.stream().anyMatch(name::startsWith)) return true;
+    return NEUTRAL_PREFIX.matcher(sentenceBefore(text, matchStart).strip()).matches();
+  }
+
+  private static String sentenceBefore(String text, int matchStart) {
+    int sentence = text.lastIndexOf('.', matchStart - 1);
+    while (sentence > 0
+        && sentence + 1 < text.length()
+        && Character.isDigit(text.charAt(sentence - 1))
+        && Character.isDigit(text.charAt(sentence + 1)))
+      sentence = text.lastIndexOf('.', sentence - 1);
+    return text.substring(sentence + 1, matchStart);
+  }
+
   /** 일치 위치가 속한 문장(마침표로 나눔)에서 앞쪽에 조건 상태 말이 있는지. */
   static boolean conditionalState(String text, int matchStart) {
     int sentence = text.lastIndexOf('.', matchStart - 1);
@@ -683,7 +709,9 @@ public final class CritSpeedCalculation {
     Matcher damage = CRIT_DAMAGE.matcher(text);
     while (damage.find()) {
       if (damage.group(1) != null) continue;
-      if (conditionalState(text, damage.start())) {
+      if (conditionalState(text, damage.start())
+          || (category == Category.ARK_PASSIVE
+              && !arkPassiveDamageAllowed(name, text, damage.start()))) {
         conditional.add(
             name
                 + " "

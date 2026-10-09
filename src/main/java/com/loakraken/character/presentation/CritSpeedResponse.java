@@ -17,7 +17,11 @@ public record CritSpeedResponse(
     @Schema(description = "합산한 출처. text는 공식 원문 또는 가정 설명") List<CritSpeedSourceResponse> sources,
     CritSpeedCritResponse crit,
     CritSpeedSpeedResponse speed,
-    @Schema(description = "계산에서 제외했거나 근사한 항목") List<String> limitations) {
+    @Schema(description = "계산에서 제외했거나 근사한 항목") List<String> limitations,
+    @Schema(
+            description =
+                "스킬별 치명타 적중률(레벨 2 이상 스킬, 이름순). base(crit.observedRate) + 백 어택 +10 + 선택 트라이포드 치명타 적중률 합. 가정 입력은 더하지 않는다")
+        List<CritSpeedSkillResponse> skills) {
 
   static CritSpeedResponse from(CritSpeedService.CritSpeedResult value) {
     var result = value.result();
@@ -90,7 +94,47 @@ public record CritSpeedResponse(
                             row.current(),
                             row.optimal()))
                 .toList()),
-        result.limitations());
+        result.limitations(),
+        result.skills().stream().map(CritSpeedSkillResponse::from).toList());
+  }
+
+  public record CritSpeedSkillResponse(
+      String name,
+      @Schema(description = "BACK_ATTACK·HEAD_ATTACK·NONE. 모르면 null") @NullableResponse
+          com.loakraken.character.domain.CharacterLoadout.AttackType attackType,
+      @Schema(description = "crit.observedRate") BigDecimal base,
+      @Schema(description = "백 어택이면 10, 아니면 0. 공격 타입을 모르면 null") @NullableResponse
+          BigDecimal backAttack,
+      @Schema(description = "선택 트라이포드 치명타 적중률 합. 갱신 전 캐시라 문구가 없으면 null") @NullableResponse
+          BigDecimal tripod,
+      @Schema(description = "base + backAttack + tripod. 하나라도 null이면 null") @NullableResponse
+          BigDecimal total,
+      @Schema(description = "total에 상한(100, 뭉툭한 가시 장착 시 그 상한) 적용") @NullableResponse
+          BigDecimal effective,
+      @Schema(description = "합산한 트라이포드") List<CritSpeedSkillTripodResponse> tripods,
+      @Schema(description = "조건부 문구('…시', '…의 치명타 적중률')라 합산하지 않은 트라이포드")
+          List<CritSpeedSkillTripodResponse> conditional) {
+    static CritSpeedSkillResponse from(CritSpeedCalculation.SkillCrit skill) {
+      return new CritSpeedSkillResponse(
+          skill.name(),
+          skill.attackType(),
+          skill.base(),
+          skill.backAttack(),
+          skill.tripod(),
+          skill.total(),
+          skill.effective(),
+          skill.tripods().stream().map(CritSpeedSkillTripodResponse::from).toList(),
+          skill.conditional().stream().map(CritSpeedSkillTripodResponse::from).toList());
+    }
+  }
+
+  public record CritSpeedSkillTripodResponse(
+      String name,
+      @Schema(description = "치명타 적중률 증가(%)") BigDecimal value,
+      @Schema(description = "공식 트라이포드 효과 문구") String text) {
+    static CritSpeedSkillTripodResponse from(CritSpeedCalculation.SkillTripod tripod) {
+      return new CritSpeedSkillTripodResponse(tripod.name(), tripod.value(), tripod.text());
+    }
   }
 
   public record CritSpeedSourceResponse(

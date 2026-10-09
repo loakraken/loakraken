@@ -407,9 +407,15 @@ record LostArkArmoryResponse(
       @JsonProperty("Slot") Integer slot,
       @JsonProperty("Name") String name,
       @JsonProperty("Icon") String icon,
-      @JsonProperty("IsSelected") Boolean selected) {
+      @JsonProperty("IsSelected") Boolean selected,
+      @JsonProperty("Tooltip") String tooltip) {
     CharacterLoadout.Tripod toDomain() {
-      return new CharacterLoadout.Tripod(tier, slot, LostArkText.plain(name), icon);
+      return new CharacterLoadout.Tripod(
+          tier,
+          slot,
+          LostArkText.plain(name),
+          icon,
+          tooltip == null ? null : LostArkText.plain(tooltip));
     }
   }
 

@@ -552,6 +552,14 @@ class OpenApiIntegrationTest {
     assertThat(schemas.at("/CritSpeedCritResponse/required").toString()).contains("damage");
     assertThat(schemas.at("/CritSpeedCritDamageResponse/required").toString())
         .contains("base", "observed", "total");
+    // 스킬별 치명타 적중률(#168): 추가 필드, 모르는 값은 null
+    assertThat(schemas.at("/CritSpeedResponse/required").toString()).contains("skills");
+    assertThat(schemas.at("/CritSpeedSkillResponse/required").toString())
+        .contains("name", "base", "total", "effective", "tripods", "conditional");
+    assertThat(schemas.at("/CritSpeedSkillResponse/properties/total/anyOf/1/type").asText())
+        .isEqualTo("null");
+    assertThat(schemas.at("/CritSpeedSkillTripodResponse/required").toString())
+        .contains("name", "value", "text");
     assertThat(schemas.at("/SkillResponse/required").toString()).contains("attackType");
     assertThat(schemas.at("/SkillResponse/properties/attackType/anyOf/0/enum").toString())
         .contains("BACK_ATTACK", "HEAD_ATTACK", "NONE");

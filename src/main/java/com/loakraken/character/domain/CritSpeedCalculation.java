@@ -242,8 +242,32 @@ public final class CritSpeedCalculation {
       boolean current,
       boolean optimal) {}
 
+  /**
+   * 스킬별 치명타 적중률(#168, 계산 검증 규칙 10-09: 클로아 17/17). total = base(crit.observedRate) + backAttack(백 어택
+   * +10) + tripod(선택 트라이포드 "치명타 적중률이 X% 증가" 합), effective는 상한(100, 뭉툭한 가시 장착 시 그 상한) 적용. 공격 타입을
+   * 모르거나 갱신 전 캐시라 트라이포드 문구가 없으면 해당 값과 total·effective가 null이다(추정 금지). conditional은 조건부 문구라 더하지 않은
+   * 트라이포드다.
+   */
+  public record SkillCrit(
+      String name,
+      CharacterLoadout.AttackType attackType,
+      BigDecimal base,
+      BigDecimal backAttack,
+      BigDecimal tripod,
+      BigDecimal total,
+      BigDecimal effective,
+      List<SkillTripod> tripods,
+      List<SkillTripod> conditional) {}
+
+  public record SkillTripod(String name, BigDecimal value, String text) {}
+
   public record Result(
-      String ruleVersion, List<Source> sources, Crit crit, Speed speed, List<String> limitations) {}
+      String ruleVersion,
+      List<Source> sources,
+      Crit crit,
+      Speed speed,
+      List<String> limitations,
+      List<SkillCrit> skills) {}
 
   public static Result calculate(
       CharacterProfile profile, CharacterLoadout loadout, Assumptions assumptions) {
@@ -355,10 +379,17 @@ public final class CritSpeedCalculation {
     limitations.add("특정 스킬·조건 한정 효과(예: '…의 치명타 적중률', 백어택 한정)는 자동 합산하지 않습니다.");
     limitations.add(
         "치명타 피해는 기본 200%에 장비·팔찌·각인·아크 패시브·카드의 일반 문구만 더합니다. 스킬 한정('방향성 공격 스킬의 치명타 피해' 등), 받는 치명타 피해, 특정 상태 한정('…상태에서')은 제외하고, 각성 중 상시 효과('폭주 중', '마력 해방 중')는 더합니다.");
+    var skills =
+        skillCrits(
+            loadout,
+            observedCrit,
+            equippedThorn == null ? CRIT_CAP : thornRule.critCap(),
+            limitations);
     if (!conditional.isEmpty())
       limitations.add(
           "특정 상태('…상태에서', '…상태일 때')에서만 붙는 치명타 피해는 합산하지 않았습니다: " + String.join(", ", conditional));
-    return new Result(RULE_VERSION, List.copyOf(sources), crit, speed, List.copyOf(limitations));
+    return new Result(
+        RULE_VERSION, List.copyOf(sources), crit, speed, List.copyOf(limitations), skills);
   }
 
   static final int TABLE_STEP = 200;
@@ -519,6 +550,80 @@ public final class CritSpeedCalculation {
         "직업 각인·트라이포드·버프·음식 등 요청 가정");
     assumed(
         sources, Axis.MOVE_SPEED, "이동 속도 가정", input.extraMoveSpeed(), "직업 각인·트라이포드·버프·음식 등 요청 가정");
+  }
+
+  /** 트라이포드의 치명타 적중률. "…의 치명타 적중률"은 스킬 일부(예: 폭발의) 한정이라 조건부로 둔다. */
+  private static final Pattern TRIPOD_CRIT =
+      Pattern.compile("(의 )?치명타 적중률(?:이)?\\s*\\+?\\s*" + NUMBER + "%" + DIRECTION);
+
+  /** 같은 문장에서 앞에 오면 조건부로 보는 말: "…시"(오버차지 시, 퍼펙트 존 성공 시), "…상태에서", "…일 때". */
+  private static final Pattern TRIPOD_CONDITION = Pattern.compile("(?:(?:^|\\s)시|상태에서|일 때)[ ,]");
+
+  /** 레벨을 올린(2 이상) 스킬만 이름순으로 계산한다. */
+  static List<SkillCrit> skillCrits(
+      CharacterLoadout loadout, BigDecimal observedCrit, BigDecimal cap, List<String> limitations) {
+    if (loadout.skills() == null) return List.of();
+    var result = new ArrayList<SkillCrit>();
+    boolean missingTooltip = false;
+    for (var skill : loadout.skills()) {
+      if (skill == null || skill.name() == null || skill.level() == null || skill.level() < 2)
+        continue;
+      var counted = new ArrayList<SkillTripod>();
+      var conditional = new ArrayList<SkillTripod>();
+      boolean known = true;
+      for (var tripod : skill.tripods()) {
+        if (tripod == null) continue;
+        if (tripod.effect() == null) {
+          known = false;
+          continue;
+        }
+        var matcher = TRIPOD_CRIT.matcher(tripod.effect());
+        while (matcher.find()) {
+          var value = signed(matcher.group(2), matcher.group(3));
+          var entry = new SkillTripod(tripod.name(), scale(value), tripod.effect());
+          if (matcher.group(1) != null || conditionalClause(tripod.effect(), matcher.start()))
+            conditional.add(entry);
+          else counted.add(entry);
+        }
+      }
+      if (!known) missingTooltip = true;
+      var tripodSum =
+          known
+              ? counted.stream().map(SkillTripod::value).reduce(BigDecimal.ZERO, BigDecimal::add)
+              : null;
+      var back =
+          skill.attackType() == null
+              ? null
+              : skill.attackType() == CharacterLoadout.AttackType.BACK_ATTACK
+                  ? BACK_ATTACK_CRIT
+                  : BigDecimal.ZERO;
+      var total = tripodSum == null || back == null ? null : observedCrit.add(back).add(tripodSum);
+      result.add(
+          new SkillCrit(
+              skill.name(),
+              skill.attackType(),
+              scale(observedCrit),
+              back == null ? null : scale(back),
+              tripodSum == null ? null : scale(tripodSum),
+              total == null ? null : scale(total),
+              total == null ? null : scale(total.min(cap)),
+              List.copyOf(counted),
+              List.copyOf(conditional)));
+    }
+    result.sort(java.util.Comparator.comparing(SkillCrit::name));
+    if (missingTooltip) limitations.add("갱신 전 캐시(최대 5분)라 트라이포드 효과를 읽지 못한 스킬은 스킬별 치명타 적중률을 비워 둡니다.");
+    return List.copyOf(result);
+  }
+
+  /** 일치 위치가 속한 문장 앞쪽에 "…시"·"…상태에서"·"…일 때" 조건이 있는지. */
+  static boolean conditionalClause(String text, int matchStart) {
+    int sentence = text.lastIndexOf('.', matchStart - 1);
+    while (sentence > 0
+        && sentence + 1 < text.length()
+        && Character.isDigit(text.charAt(sentence - 1))
+        && Character.isDigit(text.charAt(sentence + 1)))
+      sentence = text.lastIndexOf('.', sentence - 1);
+    return TRIPOD_CONDITION.matcher(text.substring(sentence + 1, matchStart)).find();
   }
 
   /** 일치 위치가 속한 문장(마침표로 나눔)에서 앞쪽에 조건 상태 말이 있는지. */

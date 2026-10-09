@@ -14,7 +14,13 @@ import java.util.regex.Pattern;
  * 스탯 계산에만 쓴다. 뭉툭한 가시·음속 돌파는 장착 노드의 공식 문구에서 수치를 읽고, 미장착이면 2026-10-05 공식 Lv.2 문구를 기준값으로 쓴다.
  */
 public final class CritSpeedCalculation {
-  public static final String RULE_VERSION = "crit-speed-v2";
+  public static final String RULE_VERSION = "crit-speed-v3";
+
+  /**
+   * 치명타 피해 앞(같은 문장)에 오면 조건부로 보고 합산하지 않는 말. 로펙·일로아는 "폭주 중"·"마력 해방 중"(각성 상태)은 넣고 "사신화 상태에서"· "페르소나
+   * 상태일 때"는 뺀다(계산 검증 표본 5명, 10-09).
+   */
+  private static final List<String> CONDITIONAL_STATE = List.of("상태에서", "상태일 때");
 
   /** 치명 27.944 = 치명타 적중률 1%. 공식 Tooltip 576→20.61%, 1800→64.42% 일치(2026-10-05). */
   static final BigDecimal CRIT_STAT_PER_PERCENT = new BigDecimal("27.944");
@@ -247,7 +253,8 @@ public final class CritSpeedCalculation {
     Integer critStat = statValue(profile, "치명");
     Integer swiftness = statValue(profile, "신속");
     BigDecimal critFromStat = statSources(profile, critStat, swiftness, sources, limitations);
-    engravingSources(loadout, sources);
+    var conditional = new ArrayList<String>();
+    engravingSources(loadout, sources, conditional);
     BluntThornRule equippedThorn = null;
     SupersonicRule equippedSupersonic = null;
     if (loadout.arkPassive() != null) {
@@ -262,7 +269,7 @@ public final class CritSpeedCalculation {
           equippedSupersonic = supersonic(effect, limitations);
           continue;
         }
-        scan(Category.ARK_PASSIVE, name, effect.effect(), sources, true);
+        scan(Category.ARK_PASSIVE, name, effect.effect(), sources, true, conditional);
       }
     }
     equipmentSources(loadout, sources);
@@ -347,7 +354,10 @@ public final class CritSpeedCalculation {
     limitations.add("아크 그리드 코어·젬, 스킬 룬·트라이포드의 치명타·속도 효과는 공식 원문 문구가 없어 가정 입력으로만 반영합니다.");
     limitations.add("특정 스킬·조건 한정 효과(예: '…의 치명타 적중률', 백어택 한정)는 자동 합산하지 않습니다.");
     limitations.add(
-        "치명타 피해는 기본 200%에 장비·팔찌·각인·아크 패시브·카드의 일반 문구만 더합니다. 스킬 한정('방향성 공격 스킬의 치명타 피해' 등)과 받는 치명타 피해는 제외합니다.");
+        "치명타 피해는 기본 200%에 장비·팔찌·각인·아크 패시브·카드의 일반 문구만 더합니다. 스킬 한정('방향성 공격 스킬의 치명타 피해' 등), 받는 치명타 피해, 특정 상태 한정('…상태에서')은 제외하고, 각성 중 상시 효과('폭주 중', '마력 해방 중')는 더합니다.");
+    if (!conditional.isEmpty())
+      limitations.add(
+          "특정 상태('…상태에서', '…상태일 때')에서만 붙는 치명타 피해는 합산하지 않았습니다: " + String.join(", ", conditional));
     return new Result(RULE_VERSION, List.copyOf(sources), crit, speed, List.copyOf(limitations));
   }
 
@@ -439,11 +449,18 @@ public final class CritSpeedCalculation {
     return critFromStat;
   }
 
-  private static void engravingSources(CharacterLoadout loadout, List<Source> sources) {
+  private static void engravingSources(
+      CharacterLoadout loadout, List<Source> sources, List<String> conditional) {
     if (loadout.engravings() == null) return;
     for (var engraving : loadout.engravings().arkPassiveEffects()) {
       if (engraving == null || engraving.description() == null) continue;
-      scan(Category.ENGRAVING, engraving.name(), engraving.description(), sources, true);
+      scan(
+          Category.ENGRAVING,
+          engraving.name(),
+          engraving.description(),
+          sources,
+          true,
+          conditional);
     }
   }
 
@@ -504,6 +521,19 @@ public final class CritSpeedCalculation {
         sources, Axis.MOVE_SPEED, "이동 속도 가정", input.extraMoveSpeed(), "직업 각인·트라이포드·버프·음식 등 요청 가정");
   }
 
+  /** 일치 위치가 속한 문장(마침표로 나눔)에서 앞쪽에 조건 상태 말이 있는지. */
+  static boolean conditionalState(String text, int matchStart) {
+    int sentence = text.lastIndexOf('.', matchStart - 1);
+    // 소수점(51.0)은 문장 끝이 아니다.
+    while (sentence > 0
+        && sentence + 1 < text.length()
+        && Character.isDigit(text.charAt(sentence - 1))
+        && Character.isDigit(text.charAt(sentence + 1)))
+      sentence = text.lastIndexOf('.', sentence - 1);
+    String before = text.substring(sentence + 1, matchStart);
+    return CONDITIONAL_STATE.stream().anyMatch(before::contains);
+  }
+
   private static void assumed(
       List<Source> sources, Axis axis, String name, BigDecimal value, String text) {
     if (value == null || value.signum() == 0) return;
@@ -513,6 +543,17 @@ public final class CritSpeedCalculation {
   /** 문구에서 치명타 적중률과 공격/이동 속도 증가를 찾는다. '…의' 한정 효과는 건너뛴다. */
   static void scan(
       Category category, String name, String text, List<Source> sources, boolean allowStacked) {
+    scan(category, name, text, sources, allowStacked, new ArrayList<>());
+  }
+
+  /** conditional에는 조건부라 합산하지 않은 치명타 피해를 "이름 값%"로 모은다. */
+  static void scan(
+      Category category,
+      String name,
+      String text,
+      List<Source> sources,
+      boolean allowStacked,
+      List<String> conditional) {
     var stackedSpans = new ArrayList<int[]>();
     if (allowStacked) {
       Matcher stacked = STACKED_CRIT.matcher(text);
@@ -537,6 +578,14 @@ public final class CritSpeedCalculation {
     Matcher damage = CRIT_DAMAGE.matcher(text);
     while (damage.find()) {
       if (damage.group(1) != null) continue;
+      if (conditionalState(text, damage.start())) {
+        conditional.add(
+            name
+                + " "
+                + signed(damage.group(2), damage.group(3)).stripTrailingZeros().toPlainString()
+                + "%");
+        continue;
+      }
       sources.add(
           new Source(
               Kind.OBSERVED,

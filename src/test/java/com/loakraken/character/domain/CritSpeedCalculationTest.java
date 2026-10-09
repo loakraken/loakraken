@@ -147,6 +147,41 @@ class CritSpeedCalculationTest {
     assertThat(supersonic.requiredAdditionalSwiftness()).isZero();
   }
 
+  /** 계산 검증 표본(10-09) 노드 문구 형식. 로펙·일로아 기준 포함 여부와 같아야 한다. */
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.CsvSource(
+      delimiter = '|',
+      value = {
+        "격분 Lv.3|폭주 중 적에게 주는 치명타 피해가 51.0% 증가한다. 폭주 종료 시 탈진의 지속시간이 감소된다.|51|",
+        "발화 Lv.3|마력 해방 중 무력화 피해량이 20.0% 증가하고, 치명타 피해가 55.0% 증가한다.|55|",
+        "어둠의 장송곡 Lv.3|데스 피날레의 적에게 주는 피해가 36.0% 증가하고, 사신화 상태에서 사용 시 적에게 주는 치명타 피해량이 45.0% 증가한다.||어둠의 장송곡 Lv.3 45%",
+        "곡예사 Lv.1|페르소나 사용 시 9.0m 이내로 돌진한다. 페르소나 상태일 때 급습 스킬 적중 시 적에게 주는 치명타 피해량이 3.0% 증가한다.||곡예사 Lv.1 3%",
+        "그림자 맹수 Lv.3|피니쉬 스텝의 치명타 적중률이 30.0% 증가한다. 페르소나 상태에서 공격 적중 시 치명타 피해가 15.0% 증가한다.||그림자 맹수 Lv.3 15%",
+      })
+  void 특정_상태에서만_붙는_치명타_피해는_조건부로_빼고_각성_중_효과는_더한다(
+      String name, String text, String included, String excluded) {
+    var sources = new ArrayList<CritSpeedCalculation.Source>();
+    var conditional = new ArrayList<String>();
+    CritSpeedCalculation.scan(Category.ARK_PASSIVE, name, text, sources, true, conditional);
+    var damage =
+        sources.stream()
+            .filter(source -> source.axis() == Axis.CRIT_DAMAGE)
+            .map(source -> source.value().stripTrailingZeros().toPlainString())
+            .toList();
+    if (included == null) assertThat(damage).isEmpty();
+    else assertThat(damage).containsExactly(included);
+    if (excluded == null) assertThat(conditional).isEmpty();
+    else assertThat(conditional).containsExactly(excluded);
+  }
+
+  @Test
+  void 조건_판정은_소수점을_문장_끝으로_보지_않는다() {
+    String text = "사신화 상태에서 사용 시 피해가 1.5% 증가하고 치명타 피해가 2.0% 증가한다.";
+    assertThat(CritSpeedCalculation.conditionalState(text, text.indexOf("치명타 피해"))).isTrue();
+    String next = "사신화 상태에서 피해가 증가한다. 치명타 피해가 2.0% 증가한다.";
+    assertThat(CritSpeedCalculation.conditionalState(next, next.indexOf("치명타 피해"))).isFalse();
+  }
+
   @Test
   void 스킬_한정_효과는_건너뛰고_공격_및_이동_속도는_양쪽에_더한다() {
     var sources = new ArrayList<CritSpeedCalculation.Source>();

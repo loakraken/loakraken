@@ -21,6 +21,10 @@
 
 	encode zstd gzip
 
+	# 요청 ID(O-8 로그 상관관계): 요청마다 새로 만들어 덮어쓴다. 사용자가 보낸 X-Request-Id는 버린다.
+	# web(#159)이 이 값을 백엔드로 이어 보내고, 응답에도 같은 값을 돌려줘 문의 때 추적에 쓴다.
+	request_header X-Request-Id {http.request.uuid}
+
 	header {
 		Strict-Transport-Security "max-age=31536000"
 		X-Content-Type-Options "nosniff"
@@ -28,6 +32,7 @@
 		X-Frame-Options "DENY"
 		-Server
 		-Via
+		X-Request-Id {http.request.uuid}
 	}
 
 	reverse_proxy web:3000 {

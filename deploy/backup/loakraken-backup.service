@@ -1,0 +1,17 @@
+# 운영 DB 외부 백업(1회 실행). loakraken-backup.timer가 매일 실행한다.
+# 설치: docs/ops/backup.md
+[Unit]
+Description=LOAKraken production database offsite backup
+Wants=network-online.target
+After=network-online.target docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+User=deploy
+Group=docker
+WorkingDirectory=/opt/loakraken/production
+Environment=BACKUP_RETENTION_DAYS=30
+ExecStart=/opt/loakraken/production/backup/backup.sh
+Nice=10
+IOSchedulingClass=idle

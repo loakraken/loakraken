@@ -152,18 +152,27 @@ services:
     image: valkey/valkey:9.1.2
     restart: unless-stopped
     logging: *default-logging
-    command:
+    # 암호를 프로세스 인자에 넣지 않는다. 컨테이너 안 설정 파일(valkey 그룹만 읽기)에 쓰고,
+    # 이미지 진입 스크립트에 .conf를 넘겨 valkey 사용자로 권한을 낮춰 실행한다(sh로 바로 실행하면 root로 돈다).
+    entrypoint:
+      - tini
+      - --
       - sh
       - -c
-      - exec valkey-server --appendonly yes --requirepass "$$(cat /run/secrets/valkey_password)"
+      - >-
+        umask 027 &&
+        printf 'requirepass %s\n' "$$(cat /run/secrets/valkey_password)" > /tmp/valkey.conf &&
+        chgrp valkey /tmp/valkey.conf &&
+        exec docker-entrypoint.sh /tmp/valkey.conf --appendonly yes
     secrets:
       - valkey_password
     volumes:
       - valkey-data:/data
     healthcheck:
+      # 인증은 인자(-a) 대신 환경 변수로 넘겨 프로세스 목록에 암호가 남지 않게 한다.
       test:
         - CMD-SHELL
-        - valkey-cli --no-auth-warning -a "$$(cat /run/secrets/valkey_password)" ping | grep -q PONG
+        - VALKEYCLI_AUTH="$$(cat /run/secrets/valkey_password)" valkey-cli ping | grep -q PONG
       interval: 5s
       timeout: 3s
       retries: 10

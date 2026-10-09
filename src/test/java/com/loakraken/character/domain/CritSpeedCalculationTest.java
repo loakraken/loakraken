@@ -334,8 +334,7 @@ class CritSpeedCalculationTest {
   void 상태_가정_표에_없는_노드는_가정하지_않는다() {
     assertThat(CritSpeedCalculation.classState("깨달음 1티어 다른 노드 Lv.3", "치명타 적중률이 23.0% 로 변경된다."))
         .isNull();
-    assertThat(CritSpeedCalculation.classState("깨달음 1티어 피냄새 Lv.3", "혼돈 게이지 획득량이 50.0% 증가한다."))
-        .isNull();
+    assertThat(CritSpeedCalculation.classState("피냄새 Lv.3", "혼돈 게이지 획득량이 50.0% 증가한다.")).isNull();
   }
 
   private static CharacterProfile profile(String crit, String swiftness) {

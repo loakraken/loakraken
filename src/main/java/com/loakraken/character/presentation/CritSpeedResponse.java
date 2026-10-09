@@ -113,7 +113,9 @@ public record CritSpeedResponse(
           BigDecimal effective,
       @Schema(description = "합산한 트라이포드") List<CritSpeedSkillTripodResponse> tripods,
       @Schema(description = "조건부 문구('…시', '…의 치명타 적중률')라 합산하지 않은 트라이포드")
-          List<CritSpeedSkillTripodResponse> conditional) {
+          List<CritSpeedSkillTripodResponse> conditional,
+      @Schema(description = "이 스킬에만 붙는 아크 패시브 노드 치명타 적중률 합(예: 관통 필살 → 적룡필살)") BigDecimal node,
+      @Schema(description = "합산한 스킬 한정 노드(공식 문구 포함)") List<CritSpeedSkillTripodResponse> nodes) {
     static CritSpeedSkillResponse from(CritSpeedCalculation.SkillCrit skill) {
       return new CritSpeedSkillResponse(
           skill.name(),
@@ -124,7 +126,9 @@ public record CritSpeedResponse(
           skill.total(),
           skill.effective(),
           skill.tripods().stream().map(CritSpeedSkillTripodResponse::from).toList(),
-          skill.conditional().stream().map(CritSpeedSkillTripodResponse::from).toList());
+          skill.conditional().stream().map(CritSpeedSkillTripodResponse::from).toList(),
+          skill.node(),
+          skill.nodes().stream().map(CritSpeedSkillTripodResponse::from).toList());
     }
   }
 

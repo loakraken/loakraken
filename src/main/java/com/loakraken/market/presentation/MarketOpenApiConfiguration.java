@@ -18,6 +18,12 @@ class MarketOpenApiConfiguration {
           MarketItemHistoryResponse.class, document.getComponents().getSchemas());
       ResponseContracts.apply(MarketBoardResponse.class, document.getComponents().getSchemas());
       ResponseContracts.apply(MarketTabsResponse.class, document.getComponents().getSchemas());
+      for (var type :
+          java.util.List.of(
+              AuctionResponses.AuctionGemBoardResponse.class,
+              AuctionResponses.AuctionAccessoryBoardResponse.class,
+              AuctionResponses.AuctionListingsResponse.class))
+        ResponseContracts.apply(type, document.getComponents().getSchemas());
     };
   }
 }

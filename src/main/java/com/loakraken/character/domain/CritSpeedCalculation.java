@@ -14,7 +14,7 @@ import java.util.regex.Pattern;
  * 스탯 계산에만 쓴다. 뭉툭한 가시·음속 돌파는 장착 노드의 공식 문구에서 수치를 읽고, 미장착이면 2026-10-05 공식 Lv.2 문구를 기준값으로 쓴다.
  */
 public final class CritSpeedCalculation {
-  public static final String RULE_VERSION = "crit-speed-v3";
+  public static final String RULE_VERSION = "crit-speed-v4";
 
   /**
    * 치명타 피해 앞(같은 문장)에 오면 조건부로 보고 합산하지 않는 말. 로펙·일로아는 "폭주 중"·"마력 해방 중"(각성 상태)은 넣고 "사신화 상태에서"· "페르소나
@@ -119,10 +119,46 @@ public final class CritSpeedCalculation {
       BigDecimal tripodCritRate,
       BigDecimal extraCritRate,
       BigDecimal extraAttackSpeed,
-      BigDecimal extraMoveSpeed) {
+      BigDecimal extraMoveSpeed,
+      boolean classState) {
+    /** 가정 입력이 없을 때. 직업 상태 가정은 목표 사이트와 같이 켠다(#189). */
     public static final Assumptions NONE =
-        new Assumptions(false, false, 0, null, null, null, null, null);
+        new Assumptions(false, false, 0, null, null, null, null, null, true);
+
+    public Assumptions(
+        boolean backAttack,
+        boolean critPet,
+        int critSynergyCount,
+        BigDecimal supportCritRate,
+        BigDecimal tripodCritRate,
+        BigDecimal extraCritRate,
+        BigDecimal extraAttackSpeed,
+        BigDecimal extraMoveSpeed) {
+      this(
+          backAttack,
+          critPet,
+          critSynergyCount,
+          supportCritRate,
+          tripodCritRate,
+          extraCritRate,
+          extraAttackSpeed,
+          extraMoveSpeed,
+          true);
+    }
   }
+
+  /**
+   * 직업 상태 가정 표(#189). 공식 노드 문구가 "어떤 상태에서 치명타 적중률이 X%로 바뀐다"인 경우, 목표 사이트(일로아·클로아)는 그 상태를 가정해 X를 더한다.
+   * 표에 있는 노드만 가정으로 더하고(출처 kind=ASSUMED, 이름에 상태와 노드), 요청 classState=false면 뺀다. 같은 구조의 다른 직업은 계산 검증
+   * 전수 표로 이 목록에 더한다.
+   */
+  record StateAssumption(String node, String state, Pattern pattern) {}
+
+  static final List<StateAssumption> CLASS_STATE_ASSUMPTIONS =
+      List.of(
+          // 리퍼 갈증: "혼돈 게이지가 가득차면 혼돈 효과가 강화되어 치명타 적중률이 23.0% 로 변경된다."(공식, 10-09 확인)
+          new StateAssumption(
+              "피냄새", "혼돈 상태", Pattern.compile("치명타 적중률이\\s*" + NUMBER + "%\\s*로 변경")));
 
   public record BluntThornRule(
       Integer level,
@@ -278,6 +314,7 @@ public final class CritSpeedCalculation {
     Integer swiftness = statValue(profile, "신속");
     BigDecimal critFromStat = statSources(profile, critStat, swiftness, sources, limitations);
     var conditional = new ArrayList<String>();
+    var classStateCrit = BigDecimal.ZERO;
     engravingSources(loadout, sources, conditional);
     BluntThornRule equippedThorn = null;
     SupersonicRule equippedSupersonic = null;
@@ -292,6 +329,13 @@ public final class CritSpeedCalculation {
         if (effect.description() != null && effect.description().contains(SUPERSONIC)) {
           equippedSupersonic = supersonic(effect, limitations);
           continue;
+        }
+        if (input.classState()) {
+          var state = classState(name, effect.effect());
+          if (state != null) {
+            sources.add(state);
+            classStateCrit = classStateCrit.add(state.value());
+          }
         }
         scan(Category.ARK_PASSIVE, name, effect.effect(), sources, true, conditional);
       }
@@ -380,9 +424,10 @@ public final class CritSpeedCalculation {
     limitations.add(
         "치명타 피해는 기본 200%에 장비·팔찌·각인·아크 패시브·카드의 일반 문구만 더합니다. 스킬 한정('방향성 공격 스킬의 치명타 피해' 등), 받는 치명타 피해, 특정 상태 한정('…상태에서')은 제외하고, 각성 중 상시 효과('폭주 중', '마력 해방 중')는 더합니다.");
     var skills =
+        // 스킬별 기본은 관측 + 직업 상태 가정(목표 사이트와 같은 기준, #189).
         skillCrits(
             loadout,
-            observedCrit,
+            observedCrit.add(classStateCrit),
             equippedThorn == null ? CRIT_CAP : thornRule.critCap(),
             limitations);
     if (!conditional.isEmpty())
@@ -624,6 +669,24 @@ public final class CritSpeedCalculation {
         && Character.isDigit(text.charAt(sentence + 1)))
       sentence = text.lastIndexOf('.', sentence - 1);
     return TRIPOD_CONDITION.matcher(text.substring(sentence + 1, matchStart)).find();
+  }
+
+  /** 표에 있는 직업 상태 노드면 가정 출처를 만든다. 아니면 null. */
+  static Source classState(String name, String text) {
+    if (name == null || text == null) return null;
+    for (var rule : CLASS_STATE_ASSUMPTIONS) {
+      if (!name.startsWith(rule.node())) continue;
+      var matcher = rule.pattern().matcher(text);
+      if (matcher.find())
+        return new Source(
+            Kind.ASSUMED,
+            Category.ASSUMPTION,
+            Axis.CRIT,
+            rule.state() + " 가정(" + name + ")",
+            new BigDecimal(matcher.group(1)),
+            text);
+    }
+    return null;
   }
 
   /** 일치 위치가 속한 문장(마침표로 나눔)에서 앞쪽에 조건 상태 말이 있는지. */

@@ -15,6 +15,7 @@ record LostArkCalendarResponse(
     @JsonProperty("ContentsIcon") String contentsIcon,
     @JsonProperty("MinItemLevel") Integer minItemLevel,
     @JsonProperty("StartTimes") List<LocalDateTime> startTimes,
+    @JsonProperty("Location") String location,
     @JsonProperty("RewardItems") List<RewardGroup> rewardItems) {
 
   @JsonIgnoreProperties(ignoreUnknown = true)
@@ -59,7 +60,8 @@ record LostArkCalendarResponse(
                                                         reward.grade(),
                                                         reward.startTimes(),
                                                         group.itemLevel())))
-                                .toList()))
+                                .toList(),
+                        item.location()))
             .toList());
   }
 }

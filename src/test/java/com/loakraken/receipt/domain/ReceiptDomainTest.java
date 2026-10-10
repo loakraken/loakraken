@@ -12,7 +12,7 @@ import java.util.Map;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.json.JsonMapper;
 
-/** 원정대 영수증(receipt-v1) 계산 규칙. 재련 규칙은 실제 리소스(t4-refining-v1)를 쓴다. */
+/** 원정대 영수증 계산 규칙. 재련 규칙은 실제 리소스(t4-refining-v2)를 쓴다. */
 class ReceiptDomainTest {
   private static final RefiningRules RULES =
       JsonMapper.builder()
@@ -22,7 +22,7 @@ class ReceiptDomainTest {
               RefiningRules.class);
 
   @Test
-  void 부위마다_10단계부터_현재까지_단계별_기대_비용을_더하고_제외_사유를_남긴다() {
+  void 부위마다_업화는_10단계_전율은_11단계부터_현재까지_단계별_기대_비용을_더하고_제외_사유를_남긴다() {
     var items =
         List.of(
             item("무기", "+19 운명의 전율 검", 19, 4),
@@ -39,9 +39,10 @@ class ReceiptDomainTest {
         .containsExactly("무기", "투구", "상의");
     var weapon = result.parts().get(0);
     assertThat(weapon.grade()).isEqualTo(RefiningRules.Grade.JEONYUL);
-    assertThat(weapon.fromStage()).isEqualTo(10);
+    // 전율은 +11부터 센다(두 사이트, #218 A).
+    assertThat(weapon.fromStage()).isEqualTo(11);
     assertThat(weapon.toStage()).isEqualTo(19);
-    assertThat(weapon.stages()).hasSize(9);
+    assertThat(weapon.stages()).hasSize(8);
     assertThat(weapon.gold()).isPositive();
     assertThat(weapon.stages()).noneMatch(EquipmentReceipt.StageCost::growthSupport);
     var helmet = result.parts().get(1);
@@ -54,9 +55,10 @@ class ReceiptDomainTest {
     assertThat(result.excluded())
         .extracting(EquipmentReceipt.Excluded::reason)
         .containsExactly(
-            EquipmentReceipt.Reason.UNSUPPORTED_GRADE,
-            EquipmentReceipt.Reason.ARM_GUARD,
-            EquipmentReceipt.Reason.ADVANCED_REFINING);
+            EquipmentReceipt.Reason.UNSUPPORTED_GRADE, EquipmentReceipt.Reason.ARM_GUARD);
+    // 고정 예시("결단 등") 대신 그 부위 장비 이름으로 알린다.
+    assertThat(result.excluded().getFirst().message())
+        .isEqualTo("「+20 빛나는 하의」: 업화·전율 장비가 아니라 산정하지 않습니다.");
     assertThat(result.gold()).isEqualByComparingTo(weapon.gold().add(helmet.gold()));
   }
 
@@ -116,7 +118,7 @@ class ReceiptDomainTest {
 
   /** #200: 성장 파편을 더하고, 사이트가 갈린 전율 21단계는 빼고 부위에 미확정 사유를 남긴다. */
   @Test
-  void 성장_비용을_더하고_전율_21단계는_미확정으로_남긴다() throws Exception {
+  void 성장_비용을_더하고_전율_21단계_한계_해방은_산정하지_않았다고_알린다() throws Exception {
     GrowthCosts growth;
     try (var input =
         ReceiptDomainTest.class.getResourceAsStream("/refining/t4-growth-costs.json")) {
@@ -132,9 +134,32 @@ class ReceiptDomainTest {
     // 전율 무기 성장 파편 12~20·22단계(21 제외): 57+63+70+76+83+90+98+105+112+128 = 882,000, 파편 1개 1G
     assertThat(with.gold().subtract(without.gold())).isEqualByComparingTo("882000");
     assertThat(with.excluded())
-        .filteredOn(e -> e.reason() == EquipmentReceipt.Reason.GROWTH_COST_UNCONFIRMED)
+        .extracting(EquipmentReceipt.Excluded::reason)
+        .doesNotContain(EquipmentReceipt.Reason.GROWTH_COST_UNCONFIRMED);
+    assertThat(with.excluded())
+        .filteredOn(e -> e.reason() == EquipmentReceipt.Reason.LIMIT_BREAK_UNPRICED)
         .extracting(EquipmentReceipt.Excluded::message)
-        .containsExactly("목표 21단계 성장 비용은 로아와(120,000 파편)와 일로아(0)가 갈려 게임 확인 전까지 빼고 계산했습니다.");
+        .containsExactly("「+22 운명의 전율 검」: 21단계 한계 해방 비용(고통의 가시·해방 비용)은 공식 수치가 없어 산정하지 않았습니다.");
+  }
+
+  /** 공식 Tooltip "[상급 재련] N단계"(equipment-tooltip-v5). 1단계 이상이면 부위마다, 모르는 이전 캐시면 캐릭터마다 한 줄. */
+  @Test
+  void 상급_재련은_단계가_있는_부위마다_알리고_모르면_한_줄로_알린다() {
+    var known =
+        EquipmentReceipt.calculate(
+            RULES,
+            List.of(
+                item("투구", "+18 운명의 업화 머리장식", 18, 4, 28), item("상의", "+19 운명의 업화 상의", 19, 4, 0)),
+            prices(BigDecimal.ONE));
+    assertThat(known.excluded())
+        .extracting(EquipmentReceipt.Excluded::message)
+        .containsExactly("「+18 운명의 업화 머리장식」 상급 재련 28단계: 아직 산정하지 않습니다(재련 v2 준비 중).");
+    var unknown =
+        EquipmentReceipt.calculate(
+            RULES, List.of(item("투구", "+18 운명의 업화 머리장식", 18, 4, null)), prices(BigDecimal.ONE));
+    assertThat(unknown.excluded())
+        .extracting(EquipmentReceipt.Excluded::message)
+        .containsExactly("상급 재련은 아직 산정하지 않습니다(재련 v2 준비 중).");
   }
 
   @Test
@@ -193,13 +218,20 @@ class ReceiptDomainTest {
 
   private static CharacterLoadout.Equipment item(
       String type, String name, Integer refine, int tier) {
+    return item(type, name, refine, tier, refine == null || tier != 4 ? null : 0);
+  }
+
+  /** advanced: 상급 재련 단계(null이면 이전 캐시처럼 모름). */
+  private static CharacterLoadout.Equipment item(
+      String type, String name, Integer refine, int tier, Integer advanced) {
     return new CharacterLoadout.Equipment(
         type,
         name,
         null,
         "고대",
         new CharacterLoadout.EquipmentDetail(
-            refine, 100, 1700, tier, null, List.of(), List.of(), List.of(), List.of()));
+            refine, 100, 1700, tier, null, List.of(), List.of(), List.of(), List.of(), null,
+            List.of(), null, List.of(), advanced));
   }
 
   private static CharacterLoadout.Gem gem(int slot, String name, int level) {

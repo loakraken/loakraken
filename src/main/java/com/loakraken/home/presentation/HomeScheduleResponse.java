@@ -51,7 +51,8 @@ public record HomeScheduleResponse(
                         times(entry.startTimesOn(date)),
                         entry.rewardKindsOn(date),
                         groups(entry, date),
-                        time(entry.nextAt(now))))
+                        time(entry.nextAt(now)),
+                        entry.location()))
             .toList(),
         timed(calendar.byCategory(GameCalendar.FIELD_BOSS), date, now),
         timed(calendar.byCategory(GameCalendar.CHAOS_GATE), date, now),
@@ -74,7 +75,8 @@ public record HomeScheduleResponse(
                         entry.minItemLevel(),
                         times(entry.startTimesOn(date)),
                         groups(entry, date),
-                        time(entry.nextAt(now))))
+                        time(entry.nextAt(now)),
+                        entry.location()))
             .toList(),
         weekly.stream()
             .map(
@@ -114,7 +116,8 @@ public record HomeScheduleResponse(
                     entry.minItemLevel(),
                     times(entry.startTimesOn(date)),
                     groups(entry, date),
-                    time(entry.nextAt(now))))
+                    time(entry.nextAt(now)),
+                    entry.location()))
         .toList();
   }
 
@@ -153,7 +156,9 @@ public record HomeScheduleResponse(
                   "그 날 보상. 공식 ItemLevel 그룹 순서이며, 시간 지정 보상은 그 날 회차를 가리킬 때만 넣는다(timed=true)")
           List<HomeRewardGroupResponse> rewardGroups,
       @Schema(description = "현재 이후 첫 회차(이번 주 범위). 없으면 null") @NullableResponse
-          OffsetDateTime nextAt) {}
+          OffsetDateTime nextAt,
+      @Schema(description = "공식 위치(Location). 없으면 null", example = "레갸르방크 대평원") @NullableResponse
+          String location) {}
 
   public record HomeTimedResponse(
       String name,
@@ -164,7 +169,9 @@ public record HomeScheduleResponse(
               description =
                   "그 날 보상. 공식 ItemLevel 그룹 순서이며, 시간 지정 보상은 그 날 회차를 가리킬 때만 넣는다(timed=true)")
           List<HomeRewardGroupResponse> rewardGroups,
-      @NullableResponse OffsetDateTime nextAt) {}
+      @NullableResponse OffsetDateTime nextAt,
+      @Schema(description = "공식 위치(Location). 없으면 null", example = "레갸르방크 대평원") @NullableResponse
+          String location) {}
 
   public record HomeOtherResponse(
       @Schema(description = "공식 범주 이름(섬, 항해, 로웬, 태초의 섬 등)") String category,
@@ -176,7 +183,9 @@ public record HomeScheduleResponse(
               description =
                   "그 날 보상. 공식 ItemLevel 그룹 순서이며, 시간 지정 보상은 그 날 회차를 가리킬 때만 넣는다(timed=true)")
           List<HomeRewardGroupResponse> rewardGroups,
-      @NullableResponse OffsetDateTime nextAt) {}
+      @NullableResponse OffsetDateTime nextAt,
+      @Schema(description = "공식 위치(Location). 없으면 null", example = "레갸르방크 대평원") @NullableResponse
+          String location) {}
 
   public record HomeRewardGroupResponse(
       @NullableResponse @Schema(description = "공식 ItemLevel. 이 레벨 이상 보상") Integer minItemLevel,

@@ -31,13 +31,25 @@ public record GameCalendar(List<Entry> entries) {
       String icon,
       Integer minItemLevel,
       List<LocalDateTime> startTimes,
-      List<Reward> rewards) {
+      List<Reward> rewards,
+      String location) {
     public Entry {
       startTimes =
           startTimes == null
               ? List.of()
               : startTimes.stream().filter(Objects::nonNull).sorted().distinct().toList();
       rewards = rewards == null ? List.of() : List.copyOf(rewards);
+      location = location == null || location.isBlank() ? null : location.strip();
+    }
+
+    public Entry(
+        String category,
+        String name,
+        String icon,
+        Integer minItemLevel,
+        List<LocalDateTime> startTimes,
+        List<Reward> rewards) {
+      this(category, name, icon, minItemLevel, startTimes, rewards, null);
     }
 
     public List<LocalDateTime> startTimesOn(LocalDate date) {

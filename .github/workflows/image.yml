@@ -6,6 +6,7 @@ name: Backend Image
 on:
   pull_request:
     branches: [develop, master]
+    types: [opened, synchronize, reopened, ready_for_review]
     paths:
       - Dockerfile
       - .dockerignore
@@ -24,6 +25,8 @@ concurrency:
 
 jobs:
   build-check:
+    # 초안 PR은 건너뛴다(Actions 시간 절약, 10-10).
+    if: ${{ !github.event.pull_request.draft }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:

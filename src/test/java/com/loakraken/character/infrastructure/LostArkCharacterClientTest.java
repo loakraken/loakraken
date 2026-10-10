@@ -189,7 +189,12 @@ class LostArkCharacterClientTest {
     var response = mapper.writeValueAsString(CharacterResponse.from(result));
     ApiContractFixture.write("character-full.json", response);
     assertThat(response)
-        .contains("테스트 무기", "원정대캐릭터", "\"parserVersion\":\"equipment-tooltip-v3\"")
+        .contains(
+            "테스트 무기",
+            "원정대캐릭터",
+            "\"parserVersion\":\"equipment-tooltip-v5\"",
+            // 트라이포드 효과는 공식 원문을 일반 텍스트로 내린다(아이템 툴팁 계약 10-10).
+            "\"effect\":\"치명타 적중률이 10.0% 증가한다.\"")
         .doesNotContain(
             "Tooltip", "ToolTip", "unparsed-secret-tooltip", "FutureField", "Element_00", "<FONT");
     assertThat(requests).hasValue(2);

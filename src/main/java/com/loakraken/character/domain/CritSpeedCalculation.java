@@ -15,7 +15,7 @@ import java.util.regex.Pattern;
  * 스탯 계산에만 쓴다. 뭉툭한 가시·음속 돌파는 장착 노드의 공식 문구에서 수치를 읽고, 미장착이면 2026-10-05 공식 Lv.2 문구를 기준값으로 쓴다.
  */
 public final class CritSpeedCalculation {
-  public static final String RULE_VERSION = "crit-speed-v5";
+  public static final String RULE_VERSION = "crit-speed-v6";
 
   /**
    * 치명타 피해 앞(같은 문장)에 오면 조건부로 보고 합산하지 않는 말. 로펙·일로아는 "폭주 중"·"마력 해방 중"(각성 상태)은 넣고 "사신화 상태에서"· "페르소나
@@ -1318,7 +1318,7 @@ public final class CritSpeedCalculation {
       boolean on = input.on(buff.label(), true);
       for (var axis : List.of(Axis.ATTACK_SPEED, Axis.MOVE_SPEED)) {
         var value = axis == Axis.ATTACK_SPEED ? buff.attack() : buff.move();
-        String text = "두 사이트 기본 포함(계산 검증 10-10)";
+        String text = "기본 포함(계산 검증 10-10)";
         toggles.add(
             new ToggleState(buff.label(), buff.label(), axis, true, on, scale(value), text));
         if (on)
@@ -1424,9 +1424,10 @@ public final class CritSpeedCalculation {
         }
       }
       if (value == null) continue;
-      boolean on = input.on(buff.label(), true);
+      boolean on = input.on(buff.label(), buff.defaultOn());
       toggles.add(
-          new ToggleState(buff.label(), buff.label(), Axis.CRIT, true, on, scale(value), text));
+          new ToggleState(
+              buff.label(), buff.label(), Axis.CRIT, buff.defaultOn(), on, scale(value), text));
       if (on)
         sources.add(
             new Source(Kind.ASSUMED, Category.ASSUMPTION, Axis.CRIT, buff.label(), value, text));

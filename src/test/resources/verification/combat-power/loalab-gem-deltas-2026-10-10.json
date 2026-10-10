@@ -1,0 +1,769 @@
+{
+ "checkedAt": "2026-10-10T19:31+09:00",
+ "source": {
+  "kind": "TARGET_SITE",
+  "site": "로아랩 딜러 전투력 시뮬레이터",
+  "url": "https://lo4.app/characters?name=<이름>&simulator=true",
+  "method": "보석 칸 레벨 드롭다운을 바꾸고 \"계산\"을 누른 표시 전투력. 바꿀 때마다 원래 레벨로 되돌리면 +0.00(같은 세션 확인)."
+ },
+ "baseline": {
+  "kind": "OFFICIAL_DISPLAY",
+  "field": "ArmoryProfile.CombatPower",
+  "note": "공식 값은 소수 둘째 자리까지만 온다"
+ },
+ "formula": {
+  "after": "combatPower × Π(1 + gemMultiplierPct(new)/100) / Π(1 + gemMultiplierPct(current)/100) × (1 + basePctSum(new)/100) / (1 + basePctSum(current)/100)",
+  "gemMultiplierPct": {
+   "note": "4티어(광휘) 칸마다 0.64 × (레벨 + 1)%, 없음 0. 인벤 딜러 전투력 로직 분석(2025-07) 계수, 이 표본으로 확인",
+   "byLevel": {
+    "0": 0,
+    "6": 4.48,
+    "7": 5.12,
+    "8": 5.76,
+    "9": 6.4,
+    "10": 7.04
+   }
+  },
+  "gemBasePct": {
+   "byLevel": {
+    "0": 0,
+    "6": 0.45,
+    "7": 0.6,
+    "8": 0.8,
+    "9": 1,
+    "10": 1.2
+   },
+   "officialTooltip": [
+    6,
+    7,
+    10
+   ],
+   "note": "6·7·10은 공식 보석 효과 \"기본 공격력 n% 증가\"(언새늘·비극화·언로늘·Tii 등), 8·9는 공식 표본 없음 → 이 30건에서 역산(5명 일관)"
+  },
+  "basePctSum": "보석 \"기본 공격력 총합\" + 어빌리티 스톤 \"[레벨 보너스] 기본 공격력 +n%\" + 완갑 \"추가 효과\" \"기본 공격력 +n%\" (공식 Tooltip, 6명 조사에서 다른 출처 없음)",
+  "tolerance": 0.01,
+  "toleranceNote": "30건 중 20건 같음, 10건은 식이 0.01 작음(반올림 전 최대 0.0074). 공식 전투력이 소수 둘째 자리까지만 와서 로아랩 내부 반올림을 공개 값으로 완전히 재현할 수 없다"
+ },
+ "characters": [
+  {
+   "id": "언새늘",
+   "className": "블레이드",
+   "combatPower": 4052.77,
+   "currentGems": {
+    "tier": 4,
+    "levels": [
+     6,
+     6,
+     6,
+     6,
+     6,
+     6,
+     6,
+     6,
+     6,
+     6,
+     6
+    ],
+    "basePctTotal": 4.95
+   },
+   "abilityStoneLevelBonusPct": 1.5,
+   "armGuard": {
+    "refine": 13,
+    "pct": 1
+   },
+   "basePctSum": 7.45,
+   "cases": [
+    {
+     "change": "slot0 6->none",
+     "gemLevels": [
+      0,
+      6,
+      6,
+      6,
+      6,
+      6,
+      6,
+      6,
+      6,
+      6,
+      6
+     ],
+     "expectedTargetSite": 3862.75,
+     "formula": 3862.75,
+     "diff": 0
+    },
+    {
+     "change": "slot0 6->7",
+     "gemLevels": [
+      7,
+      6,
+      6,
+      6,
+      6,
+      6,
+      6,
+      6,
+      6,
+      6,
+      6
+     ],
+     "expectedTargetSite": 4083.29,
+     "formula": 4083.29,
+     "diff": 0
+    },
+    {
+     "change": "slot0 6->8",
+     "gemLevels": [
+      8,
+      6,
+      6,
+      6,
+      6,
+      6,
+      6,
+      6,
+      6,
+      6,
+      6
+     ],
+     "expectedTargetSite": 4115.79,
+     "formula": 4115.78,
+     "diff": -0.01
+    },
+    {
+     "change": "slot0 6->9",
+     "gemLevels": [
+      9,
+      6,
+      6,
+      6,
+      6,
+      6,
+      6,
+      6,
+      6,
+      6,
+      6
+     ],
+     "expectedTargetSite": 4148.37,
+     "formula": 4148.37,
+     "diff": 0
+    },
+    {
+     "change": "slot0 6->10",
+     "gemLevels": [
+      10,
+      6,
+      6,
+      6,
+      6,
+      6,
+      6,
+      6,
+      6,
+      6,
+      6
+     ],
+     "expectedTargetSite": 4181.05,
+     "formula": 4181.05,
+     "diff": 0
+    },
+    {
+     "change": "all 6->7",
+     "gemLevels": [
+      7,
+      7,
+      7,
+      7,
+      7,
+      7,
+      7,
+      7,
+      7,
+      7,
+      7
+     ],
+     "expectedTargetSite": 4400.93,
+     "formula": 4400.93,
+     "diff": 0
+    }
+   ]
+  },
+  {
+   "id": "c01",
+   "className": "리퍼",
+   "combatPower": 11028.4,
+   "currentGems": {
+    "tier": 4,
+    "levels": [
+     10,
+     10,
+     10,
+     10,
+     10,
+     10,
+     10,
+     10,
+     10,
+     10,
+     10
+    ],
+    "basePctTotal": 13.2
+   },
+   "abilityStoneLevelBonusPct": 1.5,
+   "armGuard": {
+    "refine": 25,
+    "pct": 3
+   },
+   "basePctSum": 17.7,
+   "cases": [
+    {
+     "change": "slot0 10->none",
+     "gemLevels": [
+      0,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10
+     ],
+     "expectedTargetSite": 10198.02,
+     "formula": 10198.02,
+     "diff": 0
+    },
+    {
+     "change": "slot0 10->6",
+     "gemLevels": [
+      6,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10
+     ],
+     "expectedTargetSite": 10696.05,
+     "formula": 10696.05,
+     "diff": 0
+    },
+    {
+     "change": "slot0 10->7",
+     "gemLevels": [
+      7,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10
+     ],
+     "expectedTargetSite": 10775.37,
+     "formula": 10775.37,
+     "diff": 0
+    },
+    {
+     "change": "slot0 10->8",
+     "gemLevels": [
+      8,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10
+     ],
+     "expectedTargetSite": 10859.49,
+     "formula": 10859.49,
+     "diff": 0
+    },
+    {
+     "change": "slot0 10->9",
+     "gemLevels": [
+      9,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10
+     ],
+     "expectedTargetSite": 10943.84,
+     "formula": 10943.83,
+     "diff": -0.01
+    },
+    {
+     "change": "all 10->9",
+     "gemLevels": [
+      9,
+      9,
+      9,
+      9,
+      9,
+      9,
+      9,
+      9,
+      9,
+      9,
+      9
+     ],
+     "expectedTargetSite": 10131.39,
+     "formula": 10131.39,
+     "diff": 0
+    }
+   ]
+  },
+  {
+   "id": "c02",
+   "className": "슬레이어",
+   "combatPower": 7107.32,
+   "currentGems": {
+    "tier": 4,
+    "levels": [
+     10,
+     10,
+     10,
+     10,
+     10,
+     10,
+     10,
+     10,
+     10,
+     10,
+     10
+    ],
+    "basePctTotal": 13.2
+   },
+   "abilityStoneLevelBonusPct": 1.5,
+   "armGuard": {
+    "refine": 25,
+    "pct": 3
+   },
+   "basePctSum": 17.7,
+   "cases": [
+    {
+     "change": "slot0 10->none",
+     "gemLevels": [
+      0,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10
+     ],
+     "expectedTargetSite": 6572.18,
+     "formula": 6572.18,
+     "diff": 0
+    },
+    {
+     "change": "slot0 10->6",
+     "gemLevels": [
+      6,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10
+     ],
+     "expectedTargetSite": 6893.14,
+     "formula": 6893.13,
+     "diff": -0.01
+    },
+    {
+     "change": "slot0 10->7",
+     "gemLevels": [
+      7,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10
+     ],
+     "expectedTargetSite": 6944.26,
+     "formula": 6944.25,
+     "diff": -0.01
+    },
+    {
+     "change": "slot0 10->8",
+     "gemLevels": [
+      8,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10
+     ],
+     "expectedTargetSite": 6998.47,
+     "formula": 6998.46,
+     "diff": -0.01
+    },
+    {
+     "change": "slot0 10->9",
+     "gemLevels": [
+      9,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10
+     ],
+     "expectedTargetSite": 7052.82,
+     "formula": 7052.82,
+     "diff": 0
+    },
+    {
+     "change": "all 10->9",
+     "gemLevels": [
+      9,
+      9,
+      9,
+      9,
+      9,
+      9,
+      9,
+      9,
+      9,
+      9,
+      9
+     ],
+     "expectedTargetSite": 6529.23,
+     "formula": 6529.23,
+     "diff": 0
+    }
+   ]
+  },
+  {
+   "id": "c03",
+   "className": "데모닉",
+   "combatPower": 10286.45,
+   "currentGems": {
+    "tier": 4,
+    "levels": [
+     10,
+     10,
+     10,
+     10,
+     10,
+     10,
+     10,
+     10,
+     10,
+     10,
+     10
+    ],
+    "basePctTotal": 13.2
+   },
+   "abilityStoneLevelBonusPct": 1.5,
+   "armGuard": {
+    "refine": 25,
+    "pct": 3
+   },
+   "basePctSum": 17.7,
+   "cases": [
+    {
+     "change": "slot0 10->none",
+     "gemLevels": [
+      0,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10
+     ],
+     "expectedTargetSite": 9511.94,
+     "formula": 9511.94,
+     "diff": 0
+    },
+    {
+     "change": "slot0 10->6",
+     "gemLevels": [
+      6,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10
+     ],
+     "expectedTargetSite": 9976.46,
+     "formula": 9976.46,
+     "diff": 0
+    },
+    {
+     "change": "slot0 10->7",
+     "gemLevels": [
+      7,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10
+     ],
+     "expectedTargetSite": 10050.44,
+     "formula": 10050.44,
+     "diff": 0
+    },
+    {
+     "change": "slot0 10->8",
+     "gemLevels": [
+      8,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10
+     ],
+     "expectedTargetSite": 10128.91,
+     "formula": 10128.9,
+     "diff": -0.01
+    },
+    {
+     "change": "slot0 10->9",
+     "gemLevels": [
+      9,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10
+     ],
+     "expectedTargetSite": 10207.58,
+     "formula": 10207.57,
+     "diff": -0.01
+    },
+    {
+     "change": "all 10->9",
+     "gemLevels": [
+      9,
+      9,
+      9,
+      9,
+      9,
+      9,
+      9,
+      9,
+      9,
+      9,
+      9
+     ],
+     "expectedTargetSite": 9449.79,
+     "formula": 9449.78,
+     "diff": -0.01
+    }
+   ]
+  },
+  {
+   "id": "c04",
+   "className": "기상술사",
+   "combatPower": 10764.59,
+   "currentGems": {
+    "tier": 4,
+    "levels": [
+     10,
+     10,
+     10,
+     10,
+     10,
+     10,
+     10,
+     10,
+     10,
+     10,
+     10
+    ],
+    "basePctTotal": 13.2
+   },
+   "abilityStoneLevelBonusPct": 1.5,
+   "armGuard": {
+    "refine": 25,
+    "pct": 3
+   },
+   "basePctSum": 17.7,
+   "cases": [
+    {
+     "change": "slot0 10->none",
+     "gemLevels": [
+      0,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10
+     ],
+     "expectedTargetSite": 9954.07,
+     "formula": 9954.07,
+     "diff": 0
+    },
+    {
+     "change": "slot0 10->6",
+     "gemLevels": [
+      6,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10
+     ],
+     "expectedTargetSite": 10440.19,
+     "formula": 10440.19,
+     "diff": 0
+    },
+    {
+     "change": "slot0 10->7",
+     "gemLevels": [
+      7,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10
+     ],
+     "expectedTargetSite": 10517.62,
+     "formula": 10517.61,
+     "diff": -0.01
+    },
+    {
+     "change": "slot0 10->8",
+     "gemLevels": [
+      8,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10
+     ],
+     "expectedTargetSite": 10599.72,
+     "formula": 10599.72,
+     "diff": 0
+    },
+    {
+     "change": "slot0 10->9",
+     "gemLevels": [
+      9,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10
+     ],
+     "expectedTargetSite": 10682.05,
+     "formula": 10682.05,
+     "diff": 0
+    },
+    {
+     "change": "all 10->9",
+     "gemLevels": [
+      9,
+      9,
+      9,
+      9,
+      9,
+      9,
+      9,
+      9,
+      9,
+      9,
+      9
+     ],
+     "expectedTargetSite": 9889.04,
+     "formula": 9889.03,
+     "diff": -0.01
+    }
+   ]
+  }
+ ]
+}

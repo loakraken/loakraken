@@ -70,7 +70,7 @@ class CritSpeedIntegrationTest {
     assertThat(response.statusCode()).isEqualTo(200);
     var json = mapper.readTree(response.body());
     assertThat(json.path("code").asText()).isEqualTo("CHARACTER_CRIT_SPEED_SUCCESS");
-    assertThat(json.at("/data/ruleVersion").asText()).isEqualTo("crit-speed-v5");
+    assertThat(json.at("/data/ruleVersion").asText()).isEqualTo("crit-speed-v6");
     assertThat(json.at("/data/characterName").asText()).isEqualTo(NAME);
     assertThat(json.at("/data/crit/observedRate").decimalValue()).isEqualByComparingTo("25.71");
     assertThat(json.at("/data/crit/assumedRate").decimalValue()).isEqualByComparingTo("10");
@@ -91,6 +91,8 @@ class CritSpeedIntegrationTest {
     verify(detailsPort, times(1)).fetchArmory(NAME);
     verify(detailsPort, never()).fetchSiblings(anyString());
     ApiContractFixture.write("crit-speed.json", response.body());
+    // 다른 사이트 이름·간접 표현 금지(#261).
+    assertThat(response.body()).doesNotContain(SiteNames.FORBIDDEN);
   }
 
   @ParameterizedTest

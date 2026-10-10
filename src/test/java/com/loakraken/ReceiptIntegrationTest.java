@@ -106,7 +106,7 @@ class ReceiptIntegrationTest {
     assertThat(first.statusCode()).as(first.body()).isEqualTo(200);
     var data = mapper.readTree(first.body()).path("data");
     assertThat(data.path("ruleVersion").asText()).isEqualTo("receipt-v2");
-    assertThat(data.path("refiningRuleVersion").asText()).isEqualTo("t4-refining-v1");
+    assertThat(data.path("refiningRuleVersion").asText()).isEqualTo("t4-refining-v2");
     assertThat(data.at("/coverage/rosterCharacters").asInt()).isEqualTo(10);
     assertThat(data.at("/coverage/ready").asInt()).isEqualTo(8);
     assertThat(data.at("/coverage/pending").asInt()).isEqualTo(2);
@@ -118,7 +118,7 @@ class ReceiptIntegrationTest {
     var main = data.at("/equipment/characters/0");
     assertThat(main.path("status").asText()).isEqualTo("READY");
     assertThat(main.at("/parts/0/toStage").asInt()).isEqualTo(19);
-    assertThat(main.at("/parts/0/stages").size()).isEqualTo(9);
+    assertThat(main.at("/parts/0/stages").size()).isEqualTo(8);
     assertThat(main.path("excluded").toString()).contains("ADVANCED_REFINING");
     // 보석: 캐릭터마다 거래 가능 겁화 10 1개 + 귀속 1개
     assertThat(data.at("/gems/tradable").asInt()).isEqualTo(8);
@@ -132,6 +132,8 @@ class ReceiptIntegrationTest {
     assertThat(data.path("assumptions").size()).isGreaterThan(0);
     verify(detailsPort, times(8)).fetchArmory(anyString());
     ApiContractFixture.write("character-receipt.json", first.body());
+    // 다른 사이트 이름·간접 표현 금지(#261).
+    assertThat(first.body()).doesNotContain(SiteNames.FORBIDDEN);
 
     var second = get("/api/v1/characters/receipt?characterName=" + encode(MAIN));
     var again = mapper.readTree(second.body()).path("data");

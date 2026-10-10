@@ -14,11 +14,17 @@ import java.util.Set;
 
 /**
  * 장비 재련 기대 비용(receipt-v1, 계산 검증 1차 규칙 6절). 부위마다 +10에서 현재 단계까지 t4-refining-v1 한 단계 기대 비용을 더한다. 단계마다
- * 숨결(업화 11~20단계는 책도) 사용·미사용 조합 중 기대 비용이 가장 싼 쪽을 쓴다. 업화 18단계 이하는 성장 지원을 적용한다. 재료는 현재 최저가 1개당 골드로
- * 환산한다.
+ * 숨결(책 조합은 assumeBook일 때 업화 11~20·전율 12~19단계) 사용·미사용 조합 중 기대 비용이 가장 싼 쪽을 쓴다. 업화 18단계 이하는 성장 지원을
+ * 적용한다. 재료는 현재 최저가 1개당 골드로 환산한다.
  */
 public final class EquipmentReceipt {
   public static final int FROM_STAGE = 10;
+
+  /** 등급별 산정 시작 단계. 업화는 +10부터, 전율은 +11부터 센다(로아와·일로아 모두 전율 +11 시작, 계산 검증 10-10 09:02 #218 A). */
+  static int fromStage(RefiningRules.Grade grade) {
+    return grade == RefiningRules.Grade.JEONYUL ? 11 : FROM_STAGE;
+  }
+
   private static final List<String> ARMOR = List.of("투구", "상의", "하의", "장갑", "어깨");
   private static final String WEAPON = "무기";
   private static final String ARM_GUARD = "완갑";
@@ -32,9 +38,14 @@ public final class EquipmentReceipt {
     ARM_GUARD,
     ADVANCED_REFINING,
     PRICE_UNAVAILABLE,
-    /** 성장(경험치) 비용 값이 사이트마다 갈려 그 단계만 빼고 계산한 부위(전율 목표 21단계). */
-    GROWTH_COST_UNCONFIRMED
+    /** 성장(경험치) 비용 값이 사이트마다 갈려 그 단계만 빼고 계산한 부위. 2026-10-10 전율 21단계 확정 뒤로 쓰지 않는다(계약 호환으로 남김). */
+    GROWTH_COST_UNCONFIRMED,
+    /** 전율 20→21단계 한계 해방(고통의 가시·해방 비용). 공식 수치가 없어 산정하지 않은 부위. */
+    LIMIT_BREAK_UNPRICED
   }
+
+  /** 전율은 20단계 도달 뒤 한계 해방으로 21단계가 된다(공지 13339, 2026-01-07). */
+  static final int JEONYUL_LIMIT_BREAK_STAGE = 21;
 
   public record StageCost(
       int stage, BigDecimal gold, boolean breath, boolean book, boolean growthSupport) {}
@@ -59,7 +70,7 @@ public final class EquipmentReceipt {
     for (var item : items) {
       var target = target(rules, item);
       if (target == null) continue;
-      for (int stage = FROM_STAGE + 1; stage <= target.toStage(); stage++) {
+      for (int stage = fromStage(target.track().grade()) + 1; stage <= target.toStage(); stage++) {
         var rule = target.track().stage(stage);
         for (var material : rule.materials()) names.add(material.name());
         if (rule.shard() > 0) names.add(RefiningPlan.SHARD);
@@ -111,32 +122,26 @@ public final class EquipmentReceipt {
       if (grade == null) {
         excluded.add(
             new Excluded(
-                item.type(),
-                item.name(),
-                Reason.UNSUPPORTED_GRADE,
-                "업화·전율 외 장비(결단 등)는 산정하지 않습니다."));
+                item.type(), item.name(), Reason.UNSUPPORTED_GRADE, unsupportedGradeMessage(item)));
         continue;
       }
-      if (stage <= FROM_STAGE) {
+      int from = fromStage(grade);
+      if (stage <= from) {
         parts.add(
-            new Part(
-                item.type(), item.name(), grade, FROM_STAGE, stage, BigDecimal.ZERO, List.of()));
+            new Part(item.type(), item.name(), grade, from, stage, BigDecimal.ZERO, List.of()));
         continue;
       }
       var target = target(rules, item);
       if (target == null) {
         excluded.add(
             new Excluded(
-                item.type(),
-                item.name(),
-                Reason.UNSUPPORTED_STAGE,
-                "재련 규칙(t4-refining-v1)이 지원하지 않는 단계입니다."));
+                item.type(), item.name(), Reason.UNSUPPORTED_STAGE, "재련 규칙이 지원하지 않는 단계입니다."));
         continue;
       }
       var stages = new ArrayList<StageCost>();
       var total = BigDecimal.ZERO;
       boolean priced = true;
-      for (int next = FROM_STAGE + 1; next <= stage; next++) {
+      for (int next = from + 1; next <= stage; next++) {
         var cost = cheapest(target.track(), grade, next, unitPrices, assumeBook, growthCosts);
         if (cost == null) {
           priced = false;
@@ -156,12 +161,12 @@ public final class EquipmentReceipt {
               item.type(),
               item.name(),
               grade,
-              FROM_STAGE,
+              from,
               stage,
               total.setScale(0, RoundingMode.HALF_UP),
               List.copyOf(stages)));
       if (growthCosts != null)
-        for (int next = FROM_STAGE + 1; next <= stage; next++) {
+        for (int next = from + 1; next <= stage; next++) {
           var growthStage = growthCosts.stage(grade, target.track().equipmentType(), next);
           if (growthStage.isPresent() && !growthStage.get().confirmed())
             excluded.add(
@@ -171,13 +176,37 @@ public final class EquipmentReceipt {
                     Reason.GROWTH_COST_UNCONFIRMED,
                     "목표 "
                         + next
-                        + "단계 성장 비용은 로아와("
+                        + "단계 성장 비용은 확인한 값이 엇갈려("
                         + String.format("%,d", growthStage.get().shard())
-                        + " 파편)와 일로아(0)가 갈려 게임 확인 전까지 빼고 계산했습니다."));
+                        + " 파편 또는 0) 게임 확인 전까지 빼고 계산했습니다."));
         }
+      if (grade == RefiningRules.Grade.JEONYUL
+          && from < JEONYUL_LIMIT_BREAK_STAGE
+          && stage >= JEONYUL_LIMIT_BREAK_STAGE)
+        excluded.add(
+            new Excluded(
+                item.type(),
+                item.name(),
+                Reason.LIMIT_BREAK_UNPRICED,
+                "「" + item.name() + "」: 21단계 한계 해방 비용(고통의 가시·해방 비용)은 공식 수치가 없어 산정하지 않았습니다."));
     }
-    // 상급 재련 단계는 공식 응답 해석이 아직 없어, 4티어 장비가 있으면 캐릭터마다 한 줄로 알린다.
-    if (!parts.isEmpty())
+    // 상급 재련: 공식 Tooltip "[상급 재련] N단계"(equipment-tooltip-v5)로 부위마다 알린다. 단계를 모르는 이전 캐시 부위가 있으면
+    // 캐릭터마다 한 줄로 알린다. 비용은 재련 v2 전까지 산정하지 않는다.
+    boolean unknownAdvanced = false;
+    for (var item : items) {
+      if (item == null || item.type() == null || grade(item) == null) continue;
+      if (!WEAPON.equals(item.type()) && !ARMOR.contains(item.type())) continue;
+      Integer level = item.detail() == null ? null : item.detail().advancedRefineLevel();
+      if (level == null) unknownAdvanced = true;
+      else if (level > 0)
+        excluded.add(
+            new Excluded(
+                item.type(),
+                item.name(),
+                Reason.ADVANCED_REFINING,
+                "「" + item.name() + "」 상급 재련 " + level + "단계: 아직 산정하지 않습니다(재련 v2 준비 중)."));
+    }
+    if (unknownAdvanced)
       excluded.add(
           new Excluded(null, null, Reason.ADVANCED_REFINING, "상급 재련은 아직 산정하지 않습니다(재련 v2 준비 중)."));
     var gold = parts.stream().map(Part::gold).reduce(BigDecimal.ZERO, BigDecimal::add);
@@ -237,7 +266,7 @@ public final class EquipmentReceipt {
     if (!WEAPON.equals(item.type()) && !ARMOR.contains(item.type())) return null;
     var grade = grade(item);
     int stage = stage(item);
-    if (grade == null || stage <= FROM_STAGE) return null;
+    if (grade == null || stage <= fromStage(grade)) return null;
     var type =
         WEAPON.equals(item.type())
             ? RefiningRules.EquipmentType.WEAPON
@@ -248,8 +277,15 @@ public final class EquipmentReceipt {
     } catch (RuntimeException exception) {
       return null;
     }
-    if (FROM_STAGE + 1 < track.minTargetStage() || stage > track.maxTargetStage()) return null;
+    if (fromStage(grade) + 1 < track.minTargetStage() || stage > track.maxTargetStage())
+      return null;
     return new Target(track, stage);
+  }
+
+  /** 그 부위 장비 이름으로 알린다(고정 예시를 쓰지 않는다, PM-백엔드 10-10 11:06 P2). */
+  static String unsupportedGradeMessage(CharacterLoadout.Equipment item) {
+    String name = item.name() == null || item.name().isBlank() ? item.type() : item.name();
+    return "「" + name + "」: 업화·전율 장비가 아니라 산정하지 않습니다.";
   }
 
   /** 이름으로 등급을 정한다. 4티어가 아니면 null. */

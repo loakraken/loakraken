@@ -17,7 +17,12 @@ import tools.jackson.databind.json.JsonMapper;
 // 영수증·젬 가공·치명 계산은 운영에서 꺼질 수 있지만 계약 산출물(openapi-contract)에는 경로·스키마가 있어야 웹이 화면을 만든다(프론트 10-10 02:31).
 @SpringBootTest(
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-    properties = {"receipt.enabled=true", "gem.enabled=true", "crit-speed.enabled=true"})
+    properties = {
+      "receipt.enabled=true",
+      "gem.enabled=true",
+      "crit-speed.enabled=true",
+      "combat-power-sim.enabled=true"
+    })
 class OpenApiIntegrationTest {
   @LocalServerPort private int port;
 
@@ -46,6 +51,8 @@ class OpenApiIntegrationTest {
                 .asText())
         .startsWith("LOST_ARK_RATE_LIMITED");
     ApiContractFixture.write("openapi.json", response.body());
+    // 다른 사이트 이름 금지(#261): OpenAPI 설명·예시는 계약 산출물로 웹에 넘어간다.
+    assertThat(response.body()).doesNotContain(SiteNames.FORBIDDEN);
     assertThat(
             document
                 .at("/components/schemas/CharacterLoadoutResponse/properties/gems/anyOf/1/type")

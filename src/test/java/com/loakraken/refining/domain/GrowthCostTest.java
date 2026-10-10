@@ -55,7 +55,7 @@ class GrowthCostTest {
   }
 
   @Test
-  void 사이트가_갈린_전율_21단계는_성장_비용을_빼고_미확정으로_남긴다() throws IOException {
+  void 전율_21단계는_한계_해방이라_일반_성장_비용이_0으로_확정이다() throws IOException {
     var rules = read("/refining/t4-refining-rules.json", RefiningRules.class);
     var growth = read("/refining/t4-growth-costs.json", GrowthCosts.class);
     var track = rules.track(RefiningRules.Grade.JEONYUL, RefiningRules.EquipmentType.WEAPON);
@@ -63,7 +63,8 @@ class GrowthCostTest {
         RefiningPlan.calculate(
             track, RefiningRules.Grade.JEONYUL, options(20, 22, true, true), growth);
     var stage21 = plan.stages().getFirst().growth();
-    assertThat(stage21.confirmed()).isFalse();
+    // 공지 13339(2026-01-07): 20단계 도달 뒤 한계 해방으로 성장 완료 → 일반 성장 비용 0(확정)
+    assertThat(stage21.confirmed()).isTrue();
     assertThat(stage21.shard()).isEqualByComparingTo(BigDecimal.ZERO);
     var stage22 = plan.stages().getLast().growth();
     assertThat(stage22.confirmed()).isTrue();

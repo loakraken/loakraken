@@ -86,8 +86,12 @@ class CritEffectTableTest {
     assertThat(values(result, Axis.CRIT_DAMAGE, Category.ARK_GRID))
         .containsExactly("질서의 별 코어 : 초극뇌연격 20P=1.56");
     assertThat(values(result, Axis.CRIT, Category.ARK_GRID)).isEmpty();
-    // 샷건 오버로드의 급소 노출은 자기 시너지 10(트라이포드 없이도)
-    assertThat(values(result, Axis.CRIT, Category.ASSUMPTION)).containsExactly("급소 노출 시너지(자신)=10");
+    // 샷건 오버로드의 급소 노출은 자기 시너지 10(트라이포드 없이도) — 스킬 버프 가정이라 기본 끔(10-10 18:26)
+    assertThat(values(result, Axis.CRIT, Category.ASSUMPTION)).isEmpty();
+    assertThat(result.toggles())
+        .extracting(
+            t -> t.key() + "=" + t.value().stripTrailingZeros().toPlainString() + "/" + t.on())
+        .contains("급소 노출 시너지(자신)=10/false");
     assertThat(result.toggles())
         .extracting(
             t -> t.key() + "=" + t.value().stripTrailingZeros().toPlainString() + "/" + t.on())
@@ -141,13 +145,13 @@ class CritEffectTableTest {
             "깨달음 1티어 아르데타인의 기술 Lv.3",
             "배터리 최대량이 20.0% 증가하고 진화된 드론 전투 기술을 적용하여 드론의 이동속도가 증가한다. 또한 드론이 부착된 상태에서 자신의 이동속도가 10.0% 증가한다.");
     var gunner = calculate("스카우터", List.of(drone), List.of(nimble), null, Assumptions.NONE);
-    // 신속 1.32 + 날렵함 19.2(두 사이트 포함 → 기본 켬)
-    assertThat(gunner.speed().attack().total()).isEqualByComparingTo("20.52");
-    // + 드론 부착 10(자신의 이동속도, 기본 켬)
-    assertThat(gunner.speed().move().total()).isEqualByComparingTo("30.52");
+    // 날렵함은 트라이포드 버프 가정이라 기본 끔(10-10 18:26) → 신속 1.32만
+    assertThat(gunner.speed().attack().total()).isEqualByComparingTo("1.32");
+    // 이동 속도: 신속 1.32 + 드론 부착 10(자신의 이동속도, 핵심 상태라 기본 켬)
+    assertThat(gunner.speed().move().total()).isEqualByComparingTo("11.32");
     assertThat(gunner.toggles())
         .extracting(t -> t.key() + "/" + t.axis() + "/" + t.on())
-        .contains("날렵함/ATTACK_SPEED/true", "아르데타인의 기술/MOVE_SPEED/true");
+        .contains("날렵함/ATTACK_SPEED/false", "아르데타인의 기술/MOVE_SPEED/true");
     assertThat(gunner.limitations()).anyMatch(line -> line.contains("기동 타격 - 표에 없는 트라이포드(분류 중)"));
   }
 
@@ -464,9 +468,32 @@ class CritEffectTableTest {
   @Test
   void 노드_문구에_없는_직업_버프는_직업_스킬_트라이포드로_더하고_끄면_뺀다() {
     var skills = List.of(skill("용맹의 포효", "급소 노출", "빠른 준비"), skill("뇌명각", "급소 노출", "섬뢰"));
-    var on = calculate("배틀마스터", List.of(), skills, null, Assumptions.NONE);
+    // 스킬·트라이포드 버프 가정은 기본 끔(중복 기능은 로아랩 기준, PM 총괄 승인 10-10 18:26)
+    var defaults = calculate("배틀마스터", List.of(), skills, null, Assumptions.NONE);
+    assertThat(values(defaults, Axis.CRIT, Category.ASSUMPTION)).isEmpty();
+    assertThat(defaults.toggles())
+        .extracting(t -> t.key() + "/" + t.coreState() + "/" + t.on())
+        .containsExactly("용맹의 포효 버프 유지 가정/false/false", "급소 노출 시너지(자신)/false/false");
+    var on =
+        calculate(
+            "배틀마스터",
+            List.of(),
+            skills,
+            null,
+            new Assumptions(
+                false,
+                false,
+                0,
+                null,
+                null,
+                null,
+                null,
+                null,
+                true,
+                java.util.Map.of("용맹의 포효 버프 유지 가정", true, "급소 노출 시너지(자신)", true)));
     assertThat(values(on, Axis.CRIT, Category.ASSUMPTION))
         .containsExactly("용맹의 포효 버프 유지 가정=20", "급소 노출 시너지(자신)=10");
+    // 아이덴티티 상태(폭주)는 기본 켬 유지
     var slayer = calculate("슬레이어", List.of(), List.of(), null, Assumptions.NONE);
     assertThat(values(slayer, Axis.CRIT, Category.ASSUMPTION)).containsExactly("폭주 상태 가정=30");
     var off =

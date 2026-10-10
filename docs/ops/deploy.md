@@ -42,10 +42,12 @@
 | api readiness | `:9090/actuator/health/readiness` | DB·Valkey 포함. compose 헬스 체크와 `up --wait`가 이 값을 본다. Valkey 정지 시 503 확인 |
 | web | `:3000/about` | 백엔드를 부르지 않는 경로 |
 
-- 관리(actuator) 포트 9090은 앱 포트 8080과 나눴다. 8080에는 actuator가 없다(404). 9090도 health만 노출한다(지표는 백엔드가 prometheus 레지스트리를 넣은 뒤 연다).
+- 관리(actuator) 포트 9090은 앱 포트 8080과 나눴다. 8080에는 actuator가 없다(404). 9090은 health·prometheus만 노출한다(백엔드 #166). 지표 주소는 `http://api:9090/actuator/prometheus`(internal·data망 안에서만 닿고 edge는 닿지 않음). 수집기 동작 확인 예: `loakraken_background_last_success_seconds{job="collector"}`.
 - web의 `SITE_URL`은 필수다. 운영 `https://loakraken.gg`이면 robots가 허용하고 sitemap·canonical이 이 주소를 쓴다. 스테이징(`http://127.0.0.1:8081`)은 `Disallow: /`다. 같은 이미지를 쓰고 값은 실행할 때만 넣는다.
+- web 기능 플래그 `RECEIPT_TOOL`(원정대 영수증): 운영 `stack.env`는 `off`(PM 총괄 10-11, 계산 재대조 전까지). api `RECEIPT_ENABLED=false`와 함께 숨긴다. 스테이징도 api와 맞춰 off(계산 검증 때 둘 다 켬).
 - 백엔드 기능 플래그(#214): `CRIT_SPEED_ENABLED`(치명 계산)·`GEM_ENABLED`(젬 가공)·`RECEIPT_ENABLED`(영수증)는 비우면 꺼짐이다. compose.prod.yaml이 api로 넘긴다. 스테이징은 `CRIT_SPEED_ENABLED=true`(web 치적 도구가 보이므로), 운영은 셋 다 `false`를 명시한다. 로컬 compose(8080 collector)는 치명 계산을 기본으로 켜고(`CRIT_SPEED_ENABLED:-true`), 영수증·젬 가공이나 계산 검증 8090 같은 따로 띄운 서버는 `.env`·실행 인자에 같은 변수를 `true`로 둔다.
 - web 기능 플래그 `CRIT_SPEED_TOOL`(web #233): 운영 `stack.env`는 `off`를 명시해 치명 계산 도구를 첫 운영 배포에서 뺀다(PM 총괄 결정 10-09). 비우면 web 기본값(`SITE_URL`이 운영 주소일 때만 숨김)을 따르므로, `SITE_URL`이 빠지거나 달라도 숨겨지도록 명시한다. 스테이징은 비워 두어 보인다. 공개할 때 `on`으로 바꾸고 `up -d`.
+- web 기능 플래그 `COMBAT_POWER_SIM`(전투력 시뮬레이터, web #365): 운영 `stack.env`는 `off`(PM 총괄·PM-프론트 10-10, 로아랩 대조 통과 전까지). 백엔드 `COMBAT_POWER_SIM_ENABLED=false`와 함께 이중으로 숨긴다. 스테이징은 비워 두어 보인다.
 - 백엔드 로그는 ECS JSON(`LOGGING_STRUCTURED_FORMAT_CONSOLE=ecs`)이다. 로컬 확인에서 클라이언트 IP는 찍히지 않았다.
 
 ## 로그 보존
@@ -307,6 +309,16 @@ $C up -d --wait
 - 원인을 고친 릴리스를 Deploy로 승인한 뒤 타이머를 다시 켠다(`sudo systemctl start loakraken-pull-deploy@production.timer`).
 - 로컬 확인(postgres 18.6): 덤프 → 열 이름 변경·표 추가·행 추가 → 위 명령으로 복원하면 원래 열·행만 남고 추가된 표는 사라졌다.
 
+## 저장소 공개와 GitHub 보안 설정 (10-10)
+
+두 저장소는 2026-10-10부터 공개다(사용자 결정, "배포 전까지 공개"). 공개 저장소에서는 Actions 시간 제한이 없고 룰셋·비밀값 스캔·푸시 보호를 무료로 쓴다. 설정 값과 이유는 볼트 "공개 저장소 보안 설정"에 있다(사용자가 설정).
+
+- Actions: 외부 기여자 포크 PR은 승인 필요, 기본 토큰 읽기 전용, 워크플로가 PR을 만들거나 승인하지 못함
+- 비밀값 스캔·푸시 보호·Dependabot 알림 켬
+- 룰셋: master·develop 삭제·강제 push 금지, PR 필수(승인 수 0, 검토는 담당 PM 판정), 필수 상태 검사 `build`(백엔드)·`Lint and production build`(웹), 선형 이력 요구는 끔(릴리스는 merge commit)
+- 운영 승인은 그대로 서버 `approve.sh`(Environments는 세션과 사람을 구분하지 못해 쓰지 않음)
+- **다시 비공개로 돌리면** 무료 플랜에서는 룰셋·비밀값 스캔·푸시 보호가 꺼지고 Actions 월 2,000분 제한이 다시 걸린다. 그때는 로컬 pre-push 훅(`scripts/git-hooks`)과 서버 승인만 남으므로, 전환 전에 PM 총괄과 CI 시간 대책(지출 한도·자체 러너)을 다시 정한다.
+
 ## 번들과 서버 권한
 
 `pull-deploy.sh`는 root로 돌고, 배포 번들 안의 스크립트(`pull/`·`backup/`)와 compose 파일을 그대로 실행한다. 그래서 **서버 root 권한을 지키는 선은 코드 리뷰와 운영 승인**이다.
@@ -321,6 +333,7 @@ $C up -d --wait
 - 운영 키 1개 = 90회/분(공식 100, 여유 10). 운영 스택의 모든 백엔드가 나눠 쓴다.
 - 현재 `up -d`는 api 컨테이너를 교체하므로 구·신이 겹치지 않는다(수십 초 중단). 겹쳐 띄우는 무중단 배포는 공유 호출 게이트(#107)가 들어온 뒤에만 한다.
 - 수집기·예열은 운영 stack.env에서만 true다.
+- 수집기 속도 `STATS_COLLECTOR_INTERVAL`(기본 3s)·`STATS_COLLECTOR_RESERVE`(기본 40, 사용자 요청에 남겨 두는 분당 몫). 공개 전 사용자 트래픽이 없을 때만 한시로 1s·25를 허용한다(수집기 약 60/분 + 예열 15 = 75 < 게이트 90, PM-백엔드 10-10). **도메인 공개 전에 3s·40으로 되돌린다.**
 
 ## 로컬 점검
 

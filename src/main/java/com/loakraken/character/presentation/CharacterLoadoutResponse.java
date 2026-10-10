@@ -49,7 +49,7 @@ public record CharacterLoadoutResponse(
       description =
           "공식 Tooltip에서 확인된 값만 담습니다. 확인되지 않은 값은 null이며 추정하지 않습니다. 엘릭서·초월·상급 재련은 아직 해석하지 않습니다.")
   public record EquipmentDetailResponse(
-      @Schema(description = "해석 규칙 버전", example = "equipment-tooltip-v3") String parserVersion,
+      @Schema(description = "해석 규칙 버전", example = "equipment-tooltip-v5") String parserVersion,
       @Schema(description = "장비 이름의 +N 재련 단계") @NullableResponse Integer refineLevel,
       @Schema(description = "품질 0~100. 품질이 적용되지 않는 장비는 null") @NullableResponse Integer quality,
       @Schema(description = "장비 아이템 레벨. 장신구 등 표시되지 않는 장비는 null") @NullableResponse
@@ -62,7 +62,18 @@ public record CharacterLoadoutResponse(
       @Schema(description = "장신구 연마 효과와 공식 Tooltip 색 기준 등급. 연마 효과가 없는 장비는 빈 목록")
           List<PolishEffectResponse> polishEffects,
       @Schema(description = "팔찌 효과와 공식 Tooltip 색 기준 등급. 팔찌가 아니면 빈 목록")
-          List<BraceletEffectResponse> braceletEffects) {
+          List<BraceletEffectResponse> braceletEffects,
+      @Schema(description = "공식 Tooltip 등급·부위 줄(예: 고대 머리 방어구). 이전 캐시면 null") @NullableResponse
+          String titleLine,
+      @Schema(description = "귀속·거래 줄 원문 순서(예: 캐릭터 귀속됨, 거래 제한 아이템 레벨 1680, 거래 2회 가능, 거래가능)")
+          List<String> tradeLines,
+      @Schema(description = "현재 단계 재련 경험치 막대. 없는 장비·이전 캐시면 null") @NullableResponse
+          RefineExpResponse refineExp,
+      @Schema(
+              description =
+                  "상급 재련 단계. 공식 Tooltip \"[상급 재련] N단계\"(1단계 이상일 때만 나옴), 재련 단계가 있는 4티어 장비에 문구가 없으면 0, 그 밖·이전 캐시면 null")
+          @NullableResponse
+          Integer advancedRefineLevel) {
     static EquipmentDetailResponse from(CharacterLoadout.EquipmentDetail value) {
       if (value == null) return null;
       return new EquipmentDetailResponse(
@@ -75,9 +86,19 @@ public record CharacterLoadoutResponse(
           value.effects().stream().map(EffectGroupResponse::from).toList(),
           value.stoneEngravings().stream().map(StoneEngravingResponse::from).toList(),
           value.polishEffects().stream().map(PolishEffectResponse::from).toList(),
-          value.braceletEffects().stream().map(BraceletEffectResponse::from).toList());
+          value.braceletEffects().stream().map(BraceletEffectResponse::from).toList(),
+          value.titleLine(),
+          value.tradeLines(),
+          value.refineExp() == null
+              ? null
+              : new RefineExpResponse(value.refineExp().current(), value.refineExp().max()),
+          value.advancedRefineLevel());
     }
   }
+
+  public record RefineExpResponse(
+      @Schema(description = "현재 경험치. 공식 값이 없으면 null") @NullableResponse Long current,
+      @Schema(description = "최대 경험치") long max) {}
 
   public record PointBonusResponse(String name, Integer value) {
     static PointBonusResponse from(CharacterLoadout.PointBonus value) {
@@ -332,11 +353,19 @@ public record CharacterLoadoutResponse(
               .map(
                   tripod ->
                       new TripodResponse(
-                          tripod.tier(), tripod.slot(), tripod.name(), tripod.icon()))
+                          tripod.tier(),
+                          tripod.slot(),
+                          tripod.name(),
+                          tripod.icon(),
+                          tripod.effect()))
               .toList(),
           value.rune() == null
               ? null
-              : new RuneResponse(value.rune().name(), value.rune().icon(), value.rune().grade()),
+              : new RuneResponse(
+                  value.rune().name(),
+                  value.rune().icon(),
+                  value.rune().grade(),
+                  value.rune().effect()),
           value.gemEffects().stream()
               .map(effect -> new SkillGemEffectResponse(effect.text(), effect.kind()))
               .toList(),
@@ -348,12 +377,15 @@ public record CharacterLoadoutResponse(
       @Schema(description = "0부터 시작하는 공식 단계") @NullableResponse Integer tier,
       @NullableResponse Integer slot,
       @NullableResponse String name,
-      @NullableResponse String icon) {}
+      @NullableResponse String icon,
+      @Schema(description = "트라이포드 효과 공식 원문. 이전 캐시면 null") @NullableResponse String effect) {}
 
   public record RuneResponse(
       @NullableResponse String name,
       @NullableResponse String icon,
-      @NullableResponse String grade) {}
+      @NullableResponse String grade,
+      @Schema(description = "공식 Tooltip '스킬 룬 효과' 원문. 이전 캐시면 null") @NullableResponse
+          String effect) {}
 
   public record SkillGemEffectResponse(
       @Schema(example = "[블레이드] 윈드 컷 피해 28.00% 증가") String text,

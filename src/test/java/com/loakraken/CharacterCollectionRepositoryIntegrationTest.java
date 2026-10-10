@@ -100,6 +100,16 @@ class CharacterCollectionRepositoryIntegrationTest {
   }
 
   @Test
+  void 시드는_원정대를_훑은_이름만_알고_있는_것으로_본다() {
+    // saveRoster는 원정대 전원을 훑은 것으로 표시한다(#255 시드 멱등).
+    assertThat(collection.rosterKnown("시드본캐")).isFalse();
+    collection.saveRoster(List.of(sibling("시드본캐", "1700"), sibling("시드부캐", "1640")), NOW);
+    assertThat(collection.rosterKnown("시드본캐")).isTrue();
+    assertThat(collection.rosterKnown("시드부캐")).isTrue();
+    assertThat(collection.rosterKnown("시드모름")).isFalse();
+  }
+
+  @Test
   void 프로필_갱신_대상은_최소_레벨_이상_미갱신_우선이고_검색_이력은_갱신으로_친다() {
     collection.saveRoster(
         List.of(sibling("본캐", "1700"), sibling("부캐", "1680"), sibling("저레벨", "1500")), NOW);

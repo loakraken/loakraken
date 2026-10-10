@@ -22,6 +22,8 @@ public enum CharacterErrorCode implements ErrorCode {
   CHARACTER_POPULAR_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "인기 검색을 조회할 수 없습니다."),
   /** 공개 요약(#145): 캐시에도 저장된 관측에도 없다. 공식 API는 부르지 않는다. */
   CHARACTER_NOT_CACHED(HttpStatus.NOT_FOUND, "아직 확인한 기록이 없는 캐릭터입니다."),
+  /** 전투력 시뮬레이터: 캐시가 바뀌어 바꿀 대상(장비 순번·보석 slot 등)이 캐릭터에 없다. 웹은 다시 불러오기를 띄운다. */
+  CHANGE_TARGET_NOT_FOUND(HttpStatus.CONFLICT, "캐릭터 정보가 바뀌어 바꿀 대상을 찾지 못했습니다. 다시 불러와 주세요."),
   CARD_COLLECTION_REFRESH_COOLDOWN(
       HttpStatus.TOO_MANY_REQUESTS, "원정대 기록은 10분에 한 번 채울 수 있습니다. 잠시 후 다시 시도해 주세요.");
 

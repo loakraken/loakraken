@@ -132,7 +132,17 @@ public record CharacterLoadout(
     }
   }
 
-  public record Rune(String name, String icon, String grade) {}
+  /** effect: 공식 Tooltip "스킬 룬 효과" 줄, extraLines: 그 밖의 줄(설명·획득처). 캐시된 이전 값이면 null·빈 목록. */
+  public record Rune(
+      String name, String icon, String grade, String effect, List<String> extraLines) {
+    public Rune {
+      extraLines = extraLines == null ? List.of() : List.copyOf(extraLines);
+    }
+
+    public Rune(String name, String icon, String grade) {
+      this(name, icon, grade, null, List.of());
+    }
+  }
 
   public enum GemEffectKind {
     DAMAGE,
@@ -153,14 +163,81 @@ public record CharacterLoadout(
       List<EffectGroup> effects,
       List<StoneEngraving> stoneEngravings,
       List<PolishEffect> polishEffects,
-      List<BraceletEffect> braceletEffects) {
-    public static final String PARSER_VERSION = "equipment-tooltip-v3";
+      List<BraceletEffect> braceletEffects,
+      String titleLine,
+      List<String> tradeLines,
+      RefineExp refineExp,
+      List<String> extraLines,
+      Integer advancedRefineLevel) {
+    public static final String PARSER_VERSION = "equipment-tooltip-v5";
+
+    /** 상급 재련 단계 없이(v4 이전 값). */
+    public EquipmentDetail(
+        Integer refineLevel,
+        Integer quality,
+        Integer itemLevel,
+        Integer tier,
+        PointBonus arkPassivePoint,
+        List<EffectGroup> effects,
+        List<StoneEngraving> stoneEngravings,
+        List<PolishEffect> polishEffects,
+        List<BraceletEffect> braceletEffects,
+        String titleLine,
+        List<String> tradeLines,
+        RefineExp refineExp,
+        List<String> extraLines) {
+      this(
+          refineLevel,
+          quality,
+          itemLevel,
+          tier,
+          arkPassivePoint,
+          effects,
+          stoneEngravings,
+          polishEffects,
+          braceletEffects,
+          titleLine,
+          tradeLines,
+          refineExp,
+          extraLines,
+          null);
+    }
 
     public EquipmentDetail {
+      tradeLines = tradeLines == null ? List.of() : List.copyOf(tradeLines);
+      extraLines = extraLines == null ? List.of() : List.copyOf(extraLines);
       effects = effects == null ? List.of() : List.copyOf(effects);
       stoneEngravings = stoneEngravings == null ? List.of() : List.copyOf(stoneEngravings);
       polishEffects = polishEffects == null ? List.of() : List.copyOf(polishEffects);
       braceletEffects = braceletEffects == null ? List.of() : List.copyOf(braceletEffects);
+    }
+
+    /** 툴팁 줄(v4) 없이. */
+    public EquipmentDetail(
+        Integer refineLevel,
+        Integer quality,
+        Integer itemLevel,
+        Integer tier,
+        PointBonus arkPassivePoint,
+        List<EffectGroup> effects,
+        List<StoneEngraving> stoneEngravings,
+        List<PolishEffect> polishEffects,
+        List<BraceletEffect> braceletEffects) {
+      this(
+          refineLevel,
+          quality,
+          itemLevel,
+          tier,
+          arkPassivePoint,
+          effects,
+          stoneEngravings,
+          polishEffects,
+          braceletEffects,
+          null,
+          List.of(),
+          null,
+          List.of(),
+          null);
     }
   }
 
@@ -169,6 +246,9 @@ public record CharacterLoadout(
     MID,
     LOW
   }
+
+  /** 공식 Tooltip "현재 단계 재련 경험치" 막대. current가 없으면 null. */
+  public record RefineExp(Long current, long max) {}
 
   public record PolishEffect(String name, String value, EffectGrade grade) {}
 
@@ -208,7 +288,22 @@ public record CharacterLoadout(
     }
   }
 
-  public record Gem(Integer slot, String name, String icon, Integer level, String grade) {}
+  /** extraLines: 공식 Tooltip의 효과 외 줄(보석 레벨·조율·분해불가·획득처 등). */
+  public record Gem(
+      Integer slot,
+      String name,
+      String icon,
+      Integer level,
+      String grade,
+      List<String> extraLines) {
+    public Gem {
+      extraLines = extraLines == null ? List.of() : List.copyOf(extraLines);
+    }
+
+    public Gem(Integer slot, String name, String icon, Integer level, String grade) {
+      this(slot, name, icon, level, grade, List.of());
+    }
+  }
 
   public record GemEffects(String description, List<GemSkill> skills) {
     public GemEffects {
@@ -230,13 +325,29 @@ public record CharacterLoadout(
     }
   }
 
+  /** extraLines: 공식 Tooltip의 설명·획득처 줄. */
   public record Card(
       Integer slot,
       String name,
       String icon,
       Integer awakeCount,
       Integer awakeTotal,
-      String grade) {}
+      String grade,
+      List<String> extraLines) {
+    public Card {
+      extraLines = extraLines == null ? List.of() : List.copyOf(extraLines);
+    }
+
+    public Card(
+        Integer slot,
+        String name,
+        String icon,
+        Integer awakeCount,
+        Integer awakeTotal,
+        String grade) {
+      this(slot, name, icon, awakeCount, awakeTotal, grade, List.of());
+    }
+  }
 
   public record CardSet(Integer index, List<Integer> cardSlots, List<Effect> items) {
     public CardSet {

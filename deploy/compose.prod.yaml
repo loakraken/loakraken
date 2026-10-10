@@ -67,6 +67,8 @@ services:
       # 기능 플래그(web #233): 치명 계산 도구(치적) 노출. on|off, 비우면 web 기본값(SITE_URL이 운영 주소일 때만 숨김).
       # 운영 stack.env는 off를 명시한다(PM 총괄 결정 10-09: 첫 운영 배포 제외). 스테이징은 비워 두어 보인다.
       CRIT_SPEED_TOOL: "${CRIT_SPEED_TOOL:-}"
+      # 전투력 시뮬레이터 화면(web #365). on|off, 비우면 web 기본값. 운영은 공개 기준(로아랩 대조) 전까지 off(백엔드 COMBAT_POWER_SIM_ENABLED=false와 이중 숨김).
+      COMBAT_POWER_SIM: "${COMBAT_POWER_SIM:-}"
       # Node 힙 상한. 컨테이너 한도(WEB_MEM_LIMIT)보다 작게 둬 한도에 닿기 전에 GC가 돈다(2GB 서버 기준, docs/ops/deploy.md "메모리 예산").
       NODE_OPTIONS: "${WEB_NODE_OPTIONS:---max-old-space-size=256}"
     depends_on:

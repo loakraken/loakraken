@@ -46,6 +46,7 @@
 - web의 `SITE_URL`은 필수다. 운영 `https://loakraken.gg`이면 robots가 허용하고 sitemap·canonical이 이 주소를 쓴다. 스테이징(`http://127.0.0.1:8081`)은 `Disallow: /`다. 같은 이미지를 쓰고 값은 실행할 때만 넣는다.
 - 백엔드 기능 플래그(#214): `CRIT_SPEED_ENABLED`(치명 계산)·`GEM_ENABLED`(젬 가공)·`RECEIPT_ENABLED`(영수증)는 비우면 꺼짐이다. compose.prod.yaml이 api로 넘긴다. 스테이징은 `CRIT_SPEED_ENABLED=true`(web 치적 도구가 보이므로), 운영은 셋 다 `false`를 명시한다. 로컬 compose(8080 collector)는 치명 계산을 기본으로 켜고(`CRIT_SPEED_ENABLED:-true`), 영수증·젬 가공이나 계산 검증 8090 같은 따로 띄운 서버는 `.env`·실행 인자에 같은 변수를 `true`로 둔다.
 - web 기능 플래그 `CRIT_SPEED_TOOL`(web #233): 운영 `stack.env`는 `off`를 명시해 치명 계산 도구를 첫 운영 배포에서 뺀다(PM 총괄 결정 10-09). 비우면 web 기본값(`SITE_URL`이 운영 주소일 때만 숨김)을 따르므로, `SITE_URL`이 빠지거나 달라도 숨겨지도록 명시한다. 스테이징은 비워 두어 보인다. 공개할 때 `on`으로 바꾸고 `up -d`.
+- web 기능 플래그 `COMBAT_POWER_SIM`(전투력 시뮬레이터, web #365): 운영 `stack.env`는 `off`(PM 총괄·PM-프론트 10-10, 로아랩 대조 통과 전까지). 백엔드 `COMBAT_POWER_SIM_ENABLED=false`와 함께 이중으로 숨긴다. 스테이징은 비워 두어 보인다.
 - 백엔드 로그는 ECS JSON(`LOGGING_STRUCTURED_FORMAT_CONSOLE=ecs`)이다. 로컬 확인에서 클라이언트 IP는 찍히지 않았다.
 
 ## 로그 보존

@@ -67,7 +67,6 @@
 | titleLine | 첫 `ItemTitle.leftStr0` | 등급·부위 줄 원문(예 "고대 머리 방어구"), 없으면 null |
 | tradeLines | `ItemTitle` 바로 뒤 `SingleTextBox`와 이어지는 `MultiTextBox` | 귀속·거래 줄 원문 순서(예 "캐릭터 귀속됨", "거래 제한 아이템 레벨 1680", "거래 2회 가능", "거래가능") |
 | refineExp | 제목에 `재련 경험치`가 있는 `Progress` | `{current, max}`(현재 값이 없으면 current null), 없으면 null |
-| extraLines | 위 필드와 효과 묶음이 담지 않은 `SingleTextBox`·`MultiTextBox`·`ShowMeTheMoney` | 원문 순서(내구도, 분해불가, 설명, 획득처 등). `|` 칸과 줄바꿈으로 나눈다 |
 | braceletEffects | 제목이 `팔찌 효과`인 `ItemPartBox` | `{text, grade}`. 효과 앞 아이콘 기준으로 나눠 두 줄 효과를 하나로 유지. grade는 효과의 첫 색 수치(연마와 같은 색 대응), 전투 특성 초록 `91FE02` 등은 null |
 
 - 연마 등급 근거: [공식 장신구 연마 확률표](https://lostark.game.onstove.com/Probability/장신구%20연마)(수정일 2024-07-10)는 효과마다 3단계를 색으로 구분하고 등장 확률 6.3%(파랑 `00B5FF`)·3.0%(보라)·0.7%를 공개한다. 2026-10-05 언새늘 원문의 색과 로아와·클로아·일로아의 상/중/하 표기가 같은 대응을 보였다. 팔찌 등급 근거: [공식 팔찌 T4 확률표](https://lostark.game.onstove.com/Probability/팔찌%20T4)(수정일 2025-12-30)는 유물·고대 팔찌 특수 효과마다 3단계 수치를 공개한다(고대 예: 치명타 피해 6.8/8.4/10.0%). 언새늘 고대 팔찌의 색이 같은 단계와 대응했다. 전투 특성(특화 등)은 공식 표에서 수치 구간형이라 등급을 만들지 않는다.
@@ -75,7 +74,7 @@
 - 알 수 없는 요소 타입은 무시한다. 엘릭서·초월·상급 재련은 실제 응답 표본을 확보하지 못해 해석하지 않으며, 해당 정보가 없다는 뜻이 아니다.
 - 해석 대상 요소는 2026-10-05 실제 응답 1건의 장비 17개 구조를 기준으로 했다. 실제 응답은 저장하지 않았고 테스트는 같은 구조의 합성 Tooltip을 사용한다.
 - 점수·추천·투자 효율은 제공하지 않는다.
-- 아이템 hover 툴팁용 줄(v4, PM-프론트·PM-백엔드 교차 확인 2026-10-10): 보석 `gems.items[].extraLines`(보석 레벨·조율·분해불가·획득처), 카드 `cards.items[].extraLines`(설명·획득처), 스킬 `tripods[].effect`(트라이포드 효과 원문)·`rune.effect`("스킬 룬 효과")·`rune.extraLines`도 같은 규칙이다. 공식 원문만 담고 추정하지 않는다. 같은 armory 응답에서 읽어 공식 호출은 늘지 않는다. 이전 캐시(최대 5분)는 새 필드가 null·빈 목록이다.
+- 아이템 hover 툴팁용 줄(v4, PM-프론트·PM-백엔드 교차 확인 2026-10-10): 검색 응답에는 짧은 필드(`titleLine`·`tradeLines`·`refineExp`, 스킬 `tripods[].effect`·`rune.effect`)만 둔다. 공식 Tooltip의 나머지 줄(`extraLines`: 내구도·분해불가·설명·획득처 등, `|` 칸과 줄바꿈 기준)은 캐릭터 검색 gzip을 +15% 넘게 키워(실측 +20.8~23.4%) `GET /api/v1/characters/item-tooltips?characterName=`로 나눴다. 이 경로는 캐릭터 캐시만 읽고 공식 호출이 없으며, 캐시가 없으면 404 `CHARACTER_NOT_CACHED`다. 검색 응답과는 장비 순번(index)·type, 보석·카드 slot, 스킬 name으로 잇는다. 공개 제외면 `hidden=true`·빈 목록. 이전 캐시(최대 5분)는 새 필드가 null·빈 목록이다.
 
 ## 전투 스킬
 

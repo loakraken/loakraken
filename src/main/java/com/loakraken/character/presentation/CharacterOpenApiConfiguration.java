@@ -27,6 +27,9 @@ class CharacterOpenApiConfiguration {
       ResponseContracts.apply(
           CharacterPublicSummaryController.CharacterPublicSummaryResponse.class,
           document.getComponents().getSchemas());
+      ResponseContracts.apply(
+          CharacterItemTooltipController.CharacterItemTooltipsResponse.class,
+          document.getComponents().getSchemas());
     };
   }
 }

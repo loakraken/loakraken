@@ -68,9 +68,7 @@ public record CharacterLoadoutResponse(
       @Schema(description = "귀속·거래 줄 원문 순서(예: 캐릭터 귀속됨, 거래 제한 아이템 레벨 1680, 거래 2회 가능, 거래가능)")
           List<String> tradeLines,
       @Schema(description = "현재 단계 재련 경험치 막대. 없는 장비·이전 캐시면 null") @NullableResponse
-          RefineExpResponse refineExp,
-      @Schema(description = "아이템 툴팁용 공식 Tooltip 나머지 줄(원문 순서). 이전 캐시면 빈 목록")
-          List<String> extraLines) {
+          RefineExpResponse refineExp) {
     static EquipmentDetailResponse from(CharacterLoadout.EquipmentDetail value) {
       if (value == null) return null;
       return new EquipmentDetailResponse(
@@ -88,8 +86,7 @@ public record CharacterLoadoutResponse(
           value.tradeLines(),
           value.refineExp() == null
               ? null
-              : new RefineExpResponse(value.refineExp().current(), value.refineExp().max()),
-          value.extraLines());
+              : new RefineExpResponse(value.refineExp().current(), value.refineExp().max()));
     }
   }
 
@@ -204,18 +201,11 @@ public record CharacterLoadoutResponse(
       @NullableResponse String name,
       @NullableResponse String icon,
       @NullableResponse Integer level,
-      @NullableResponse String grade,
-      @Schema(description = "아이템 툴팁용 공식 Tooltip 나머지 줄(원문 순서). 이전 캐시면 빈 목록")
-          List<String> extraLines) {
+      @NullableResponse String grade) {
     static GemResponse from(CharacterLoadout.Gem value) {
       if (value == null) return null;
       return new GemResponse(
-          value.slot(),
-          value.name(),
-          value.icon(),
-          value.level(),
-          value.grade(),
-          value.extraLines());
+          value.slot(), value.name(), value.icon(), value.level(), value.grade());
     }
   }
 
@@ -256,9 +246,7 @@ public record CharacterLoadoutResponse(
       @NullableResponse String icon,
       @NullableResponse Integer awakeCount,
       @NullableResponse Integer awakeTotal,
-      @NullableResponse String grade,
-      @Schema(description = "아이템 툴팁용 공식 Tooltip 나머지 줄(원문 순서). 이전 캐시면 빈 목록")
-          List<String> extraLines) {
+      @NullableResponse String grade) {
     static CardResponse from(CharacterLoadout.Card value) {
       if (value == null) return null;
       return new CardResponse(
@@ -267,8 +255,7 @@ public record CharacterLoadoutResponse(
           value.icon(),
           value.awakeCount(),
           value.awakeTotal(),
-          value.grade(),
-          value.extraLines());
+          value.grade());
     }
   }
 
@@ -372,8 +359,7 @@ public record CharacterLoadoutResponse(
                   value.rune().name(),
                   value.rune().icon(),
                   value.rune().grade(),
-                  value.rune().effect(),
-                  value.rune().extraLines()),
+                  value.rune().effect()),
           value.gemEffects().stream()
               .map(effect -> new SkillGemEffectResponse(effect.text(), effect.kind()))
               .toList(),
@@ -392,9 +378,8 @@ public record CharacterLoadoutResponse(
       @NullableResponse String name,
       @NullableResponse String icon,
       @NullableResponse String grade,
-      @Schema(description = "공식 Tooltip '스킬 룬 효과' 원문. 이전 캐시면 null") @NullableResponse String effect,
-      @Schema(description = "아이템 툴팁용 공식 Tooltip 나머지 줄(원문 순서). 이전 캐시면 빈 목록")
-          List<String> extraLines) {}
+      @Schema(description = "공식 Tooltip '스킬 룬 효과' 원문. 이전 캐시면 null") @NullableResponse
+          String effect) {}
 
   public record SkillGemEffectResponse(
       @Schema(example = "[블레이드] 윈드 컷 피해 28.00% 증가") String text,

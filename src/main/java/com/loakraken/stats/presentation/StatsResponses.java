@@ -10,7 +10,10 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 
-/** 통계·랭킹 응답. 표본이 30명 미만(sampleStatus=COLLECTING)이면 분위수·평균·백분위·티어는 null입니다. */
+/**
+ * 통계·랭킹 응답. 표본이 30명 미만(sampleStatus=COLLECTING)이면 분위수·백분위·티어는 null이고, 평균·중앙값·서포터 비율·보석 평균은 표본 1명
+ * 이상이면 참고값으로 줍니다(#273).
+ */
 public final class StatsResponses {
   private StatsResponses() {}
 
@@ -90,7 +93,7 @@ public final class StatsResponses {
       @Schema(description = "역할을 판정하지 못한 캐릭터 수") long unknownRole,
       @NullableResponse @Schema(description = "역할 판정 캐릭터 중 서포터 비율(%)") BigDecimal supportShare,
       @NullableResponse
-          @Schema(description = "4티어 보석(겁화·작열·광휘) 캐릭터별 평균 레벨의 평균. 보석 기록이 30명 미만이면 null")
+          @Schema(description = "4티어 보석(겁화·작열·광휘) 캐릭터별 평균 레벨의 평균. 보석 기록이 없으면 null(30명 미만이면 참고값)")
           BigDecimal gemMeanLevel,
       @Schema(description = "보석 평균을 계산한 캐릭터 수") long gemSample) {
     static StatsSummaryResponse from(StatsQueryService.SummaryResult result) {

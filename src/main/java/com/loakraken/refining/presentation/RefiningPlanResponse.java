@@ -133,7 +133,7 @@ public record RefiningPlanResponse(
 
   public record GrowthResponse(
       @Schema(description = "성장 운명의 파편(영지 연구 적용 뒤). 재료 합계의 운명의 파편에 들어 있다") BigDecimal shard,
-      @Schema(description = "성장 실링(로아와 값, 수량 표시용, 합계에 넣지 않음)") long silver,
+      @Schema(description = "성장 실링(목표 사이트 1곳의 값, 수량 표시용, 합계에 넣지 않음)") long silver,
       @Schema(description = "false면 값이 확정되지 않아 계산에서 뺀 단계(shard 0). 2026-10-10 기준 해당 단계 없음")
           boolean confirmed,
       @Schema(description = "영지 연구(× 0.8)를 적용했는지") boolean research) {}

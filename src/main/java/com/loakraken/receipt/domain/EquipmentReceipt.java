@@ -1,6 +1,7 @@
 package com.loakraken.receipt.domain;
 
 import com.loakraken.character.domain.CharacterLoadout;
+import com.loakraken.refining.domain.GrowthCosts;
 import com.loakraken.refining.domain.RefiningPlan;
 import com.loakraken.refining.domain.RefiningRules;
 import java.math.BigDecimal;
@@ -30,7 +31,9 @@ public final class EquipmentReceipt {
     UNSUPPORTED_STAGE,
     ARM_GUARD,
     ADVANCED_REFINING,
-    PRICE_UNAVAILABLE
+    PRICE_UNAVAILABLE,
+    /** 성장(경험치) 비용 값이 사이트마다 갈려 그 단계만 빼고 계산한 부위(전율 목표 21단계). */
+    GROWTH_COST_UNCONFIRMED
   }
 
   public record StageCost(
@@ -72,7 +75,15 @@ public final class EquipmentReceipt {
       RefiningRules rules,
       List<CharacterLoadout.Equipment> items,
       Map<String, BigDecimal> unitPrices) {
-    return calculate(rules, items, unitPrices, false);
+    return calculate(rules, items, unitPrices, false, null);
+  }
+
+  public static Result calculate(
+      RefiningRules rules,
+      List<CharacterLoadout.Equipment> items,
+      Map<String, BigDecimal> unitPrices,
+      boolean assumeBook) {
+    return calculate(rules, items, unitPrices, assumeBook, null);
   }
 
   /**
@@ -83,7 +94,8 @@ public final class EquipmentReceipt {
       RefiningRules rules,
       List<CharacterLoadout.Equipment> items,
       Map<String, BigDecimal> unitPrices,
-      boolean assumeBook) {
+      boolean assumeBook,
+      GrowthCosts growthCosts) {
     var parts = new ArrayList<Part>();
     var excluded = new ArrayList<Excluded>();
     for (var item : items) {
@@ -125,7 +137,7 @@ public final class EquipmentReceipt {
       var total = BigDecimal.ZERO;
       boolean priced = true;
       for (int next = FROM_STAGE + 1; next <= stage; next++) {
-        var cost = cheapest(target.track(), grade, next, unitPrices, assumeBook);
+        var cost = cheapest(target.track(), grade, next, unitPrices, assumeBook, growthCosts);
         if (cost == null) {
           priced = false;
           break;
@@ -148,6 +160,21 @@ public final class EquipmentReceipt {
               stage,
               total.setScale(0, RoundingMode.HALF_UP),
               List.copyOf(stages)));
+      if (growthCosts != null)
+        for (int next = FROM_STAGE + 1; next <= stage; next++) {
+          var growthStage = growthCosts.stage(grade, target.track().equipmentType(), next);
+          if (growthStage.isPresent() && !growthStage.get().confirmed())
+            excluded.add(
+                new Excluded(
+                    item.type(),
+                    item.name(),
+                    Reason.GROWTH_COST_UNCONFIRMED,
+                    "목표 "
+                        + next
+                        + "단계 성장 비용은 로아와("
+                        + String.format("%,d", growthStage.get().shard())
+                        + " 파편)와 일로아(0)가 갈려 게임 확인 전까지 빼고 계산했습니다."));
+        }
     }
     // 상급 재련 단계는 공식 응답 해석이 아직 없어, 4티어 장비가 있으면 캐릭터마다 한 줄로 알린다.
     if (!parts.isEmpty())
@@ -162,7 +189,8 @@ public final class EquipmentReceipt {
       RefiningRules.Grade grade,
       int stage,
       Map<String, BigDecimal> unitPrices,
-      boolean assumeBook) {
+      boolean assumeBook,
+      GrowthCosts growthCosts) {
     var rule = track.stage(stage);
     boolean growth = grade == RefiningRules.Grade.UPHWA && stage <= GROWTH_SUPPORT_MAX_STAGE;
     StageCost best = null;
@@ -173,7 +201,9 @@ public final class EquipmentReceipt {
             RefiningPlan.calculate(
                 track,
                 grade,
-                new RefiningPlan.Options(stage - 1, stage, breath, book, growth, 0, 0));
+                new RefiningPlan.Options(
+                    stage - 1, stage, breath, book, growth, 0, 0, growthCosts != null, true),
+                growthCosts);
         var stagePlan = plan.stages().getFirst();
         var gold = stagePlan.expectedGold();
         boolean priced = true;

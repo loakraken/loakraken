@@ -34,6 +34,10 @@ class RefiningPlanIntegrationTest {
     assertThat(json.path("code").asText()).isEqualTo("REFINING_PLAN_SUCCESS");
     assertThat(json.at("/data/ruleVersion").asText()).isEqualTo("t4-refining-v1");
     assertThat(json.at("/data/source/license").asText()).startsWith("MIT");
+    // 성장 비용은 생략하면 끔(PM-백엔드 10-10 09:10), 영지 연구는 생략하면 켬.
+    assertThat(json.at("/data/growthCost").asBoolean()).isFalse();
+    assertThat(json.at("/data/expResearch").asBoolean()).isTrue();
+    assertThat(json.at("/data/stages/0/growth").isNull()).isTrue();
     assertThat(json.at("/data/source/commit").asText()).startsWith("5b870d2");
     var stages = json.at("/data/stages");
     assertThat(stages.size()).isEqualTo(2);

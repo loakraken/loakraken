@@ -25,4 +25,7 @@ public interface CharacterCollectionPort {
   void markProfileMissing(Target target, Instant now);
 
   void markRosterScanned(Target target, Instant now);
+
+  /** 시드(#255): 이 이름의 캐릭터가 있고 원정대를 이미 훑었으면 true(시드를 다시 부르지 않는다). */
+  boolean rosterKnown(String characterName);
 }

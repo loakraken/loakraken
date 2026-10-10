@@ -109,6 +109,12 @@ services:
       VALKEY_PORT: "6379"
       # 공식 API 호출 한도를 쓰는 백그라운드 작업은 스택마다 명시한다(운영 1곳만 true).
       STATS_COLLECTOR_ENABLED: ${STATS_COLLECTOR_ENABLED:-false}
+      # 공개 전 한시 속도(PM-백엔드 10-10 23:26: 1s·25 허용, 도메인 공개 전에 3s·40으로 되돌림).
+      STATS_COLLECTOR_INTERVAL: ${STATS_COLLECTOR_INTERVAL:-3s}
+      STATS_COLLECTOR_RESERVE: ${STATS_COLLECTOR_RESERVE:-40}
+      # 시드 목록(#255): 쉼표 구분 이름. 값은 운영 서버 stack.env에만 둔다(저장소 커밋 금지).
+      STATS_SEED_ENABLED: ${STATS_SEED_ENABLED:-false}
+      STATS_SEED_NAMES: ${STATS_SEED_NAMES:-}
       MARKET_WARMUP_ENABLED: ${MARKET_WARMUP_ENABLED:-false}
       # 기능 플래그(#214): 비우면 꺼짐. 스테이징은 치명 계산을 켜고(web 치적 도구가 보임), 영수증·젬 가공은 검증 때만 켠다.
       CRIT_SPEED_ENABLED: ${CRIT_SPEED_ENABLED:-false}

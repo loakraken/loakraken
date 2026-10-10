@@ -117,10 +117,7 @@ public final class EquipmentReceipt {
       if (grade == null) {
         excluded.add(
             new Excluded(
-                item.type(),
-                item.name(),
-                Reason.UNSUPPORTED_GRADE,
-                "업화·전율 외 장비(결단 등)는 산정하지 않습니다."));
+                item.type(), item.name(), Reason.UNSUPPORTED_GRADE, unsupportedGradeMessage(item)));
         continue;
       }
       int from = fromStage(grade);
@@ -254,6 +251,12 @@ public final class EquipmentReceipt {
     if (fromStage(grade) + 1 < track.minTargetStage() || stage > track.maxTargetStage())
       return null;
     return new Target(track, stage);
+  }
+
+  /** 그 부위 장비 이름으로 알린다(고정 예시를 쓰지 않는다, PM-백엔드 10-10 11:06 P2). */
+  static String unsupportedGradeMessage(CharacterLoadout.Equipment item) {
+    String name = item.name() == null || item.name().isBlank() ? item.type() : item.name();
+    return "「" + name + "」은 산정하지 않습니다(업화·전율 장비만 산정).";
   }
 
   /** 이름으로 등급을 정한다. 4티어가 아니면 null. */

@@ -29,15 +29,17 @@ public class CharacterItemTooltipService {
   /** name은 검색 응답 loadout.skills[].name이다. */
   public record SkillLines(String name, List<String> runeExtraLines) {}
 
+  /** fetchedAt: 이 줄을 읽은 캐릭터 캐시의 수집 시각(검색 응답 fetchedAt과 같으면 순번이 맞다). 숨김이면 null. */
   public record Tooltips(
       String characterName,
       boolean hidden,
+      java.time.Instant fetchedAt,
       List<EquipmentLines> equipment,
       List<SlotLines> gems,
       List<SlotLines> cards,
       List<SkillLines> skills) {
     static Tooltips hidden(String characterName) {
-      return new Tooltips(characterName, true, List.of(), List.of(), List.of(), List.of());
+      return new Tooltips(characterName, true, null, List.of(), List.of(), List.of(), List.of());
     }
   }
 
@@ -63,10 +65,12 @@ public class CharacterItemTooltipService {
     if (excluded)
       return Tooltips.hidden(result == null ? name : result.details().profile().characterName());
     if (result == null) throw new CharacterException(CharacterErrorCode.CHARACTER_NOT_CACHED);
-    return from(result.details().profile().characterName(), result.details().loadout());
+    return from(
+        result.details().profile().characterName(), result.fetchedAt(), result.details().loadout());
   }
 
-  static Tooltips from(String characterName, CharacterLoadout loadout) {
+  static Tooltips from(
+      String characterName, java.time.Instant fetchedAt, CharacterLoadout loadout) {
     var equipment = new ArrayList<EquipmentLines>();
     for (int i = 0; i < loadout.equipment().size(); i++) {
       var item = loadout.equipment().get(i);
@@ -91,6 +95,7 @@ public class CharacterItemTooltipService {
     return new Tooltips(
         characterName,
         false,
+        fetchedAt,
         List.copyOf(equipment),
         List.copyOf(gems),
         List.copyOf(cards),

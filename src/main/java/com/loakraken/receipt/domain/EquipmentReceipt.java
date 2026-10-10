@@ -38,9 +38,14 @@ public final class EquipmentReceipt {
     ARM_GUARD,
     ADVANCED_REFINING,
     PRICE_UNAVAILABLE,
-    /** 성장(경험치) 비용 값이 사이트마다 갈려 그 단계만 빼고 계산한 부위(전율 목표 21단계). */
-    GROWTH_COST_UNCONFIRMED
+    /** 성장(경험치) 비용 값이 사이트마다 갈려 그 단계만 빼고 계산한 부위. 2026-10-10 전율 21단계 확정 뒤로 쓰지 않는다(계약 호환으로 남김). */
+    GROWTH_COST_UNCONFIRMED,
+    /** 전율 20→21단계 한계 해방(고통의 가시·해방 비용). 공식 수치가 없어 산정하지 않은 부위. */
+    LIMIT_BREAK_UNPRICED
   }
+
+  /** 전율은 20단계 도달 뒤 한계 해방으로 21단계가 된다(공지 13339, 2026-01-07). */
+  static final int JEONYUL_LIMIT_BREAK_STAGE = 21;
 
   public record StageCost(
       int stage, BigDecimal gold, boolean breath, boolean book, boolean growthSupport) {}
@@ -175,6 +180,15 @@ public final class EquipmentReceipt {
                         + String.format("%,d", growthStage.get().shard())
                         + " 파편 대 0)이 갈려 게임 확인 전까지 빼고 계산했습니다."));
         }
+      if (grade == RefiningRules.Grade.JEONYUL
+          && from < JEONYUL_LIMIT_BREAK_STAGE
+          && stage >= JEONYUL_LIMIT_BREAK_STAGE)
+        excluded.add(
+            new Excluded(
+                item.type(),
+                item.name(),
+                Reason.LIMIT_BREAK_UNPRICED,
+                "「" + item.name() + "」: 21단계 한계 해방 비용(고통의 가시·해방 비용)은 공식 수치가 없어 산정하지 않았습니다."));
     }
     // 상급 재련 단계는 공식 응답 해석이 아직 없어, 4티어 장비가 있으면 캐릭터마다 한 줄로 알린다.
     if (!parts.isEmpty())

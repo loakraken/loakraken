@@ -77,7 +77,7 @@ public record RefiningPlanResponse(
                     + growthCosts.research().text()
                     + "'를 적용했습니다(목표 사이트 중 한 곳의 기본과 같음). 다른 한 곳은 이 연구를 적용하지 않아, 끄면 그쪽과 같은 값입니다."
                 : "영지 연구(성장 경험치 감소)는 적용하지 않았습니다.",
-            "전율 목표 21단계 성장 비용은 목표 사이트 2곳의 값(방어구 72,000·무기 120,000 대 0)이 갈려 게임 확인 전까지 넣지 않습니다(growth.confirmed=false).",
+            "전율 목표 21단계는 일반 성장 대신 한계 해방(고통의 가시·해방 비용)으로 올라가 성장 비용이 0이고, 한계 해방 비용은 공식 수치가 없어 넣지 않습니다(공지 13339).",
             "강화 재봉술·야금술, 운명의 전율 책, 이벤트·익스프레스 추가 확률, 특수 재련은 계산하지 않습니다.",
             "골드 환산 시세는 포함하지 않습니다. 재료 견적 API로 기대·최악 수량을 환산할 수 있습니다."));
   }
@@ -134,7 +134,8 @@ public record RefiningPlanResponse(
   public record GrowthResponse(
       @Schema(description = "성장 운명의 파편(영지 연구 적용 뒤). 재료 합계의 운명의 파편에 들어 있다") BigDecimal shard,
       @Schema(description = "성장 실링(로아와 값, 수량 표시용, 합계에 넣지 않음)") long silver,
-      @Schema(description = "false면 사이트가 갈려 계산에서 뺀 단계(전율 목표 21단계), shard 0") boolean confirmed,
+      @Schema(description = "false면 값이 확정되지 않아 계산에서 뺀 단계(shard 0). 2026-10-10 기준 해당 단계 없음")
+          boolean confirmed,
       @Schema(description = "영지 연구(× 0.8)를 적용했는지") boolean research) {}
 
   public record GrowthSourceResponse(

@@ -1,0 +1,36 @@
+{
+ "ruleVersion": "combat-power-gem-v1",
+ "source": {
+  "damagePct": "보석 레벨별 전투력 배수: 인벤 「딜러 전투력 로직 분석 (25년 7월 9일 패치 반영)」 https://www.inven.co.kr/board/lostark/4821/106546 (2026-10-10 확인). 4티어 겁화·작열·광휘 공통, 칸마다 독립 배수로 곱한다",
+  "baseAttackPct": "보석 1개의 기본 공격력 %: 공식 armory 보석 효과 Option \"기본 공격력 n% 증가\"(6레벨 0.45, 10레벨 1.20 — 6명 실측) + 같은 인벤 글의 11칸 합(6~10레벨 4.95·6.6·8.8·11.0·13.2%)을 11로 나눈 값. 1~5레벨은 근거가 없어 비워 둔다. 0레벨은 보석 없음",
+  "crossCheckedWith": "목표 사이트 전투력 시뮬레이터 5명 30건(보석 빼기·6~10레벨·전체) ±0.01 일치(계산 검증 #244, src/test/resources/verification/combat-power/loalab-gem-deltas-2026-10-10.json). 8·9레벨 기본 공격력은 이 표본에서도 5명 일관. 사이트 이름과 측정 방법은 docs/combat-power-simulator.md",
+  "verifiedOn": "2026-10-10"
+ },
+ "tiers": [
+  {
+   "tier": 4,
+   "kinds": ["겁화", "작열", "광휘"],
+   "supported": true,
+   "levels": [
+    {"level": 0, "damagePct": 0, "baseAttackPct": 0},
+    {"level": 1, "damagePct": 1.28, "baseAttackPct": null},
+    {"level": 2, "damagePct": 1.92, "baseAttackPct": null},
+    {"level": 3, "damagePct": 2.56, "baseAttackPct": null},
+    {"level": 4, "damagePct": 3.20, "baseAttackPct": null},
+    {"level": 5, "damagePct": 3.84, "baseAttackPct": null},
+    {"level": 6, "damagePct": 4.48, "baseAttackPct": 0.45},
+    {"level": 7, "damagePct": 5.12, "baseAttackPct": 0.60},
+    {"level": 8, "damagePct": 5.76, "baseAttackPct": 0.80},
+    {"level": 9, "damagePct": 6.40, "baseAttackPct": 1.00},
+    {"level": 10, "damagePct": 7.04, "baseAttackPct": 1.20}
+   ]
+  },
+  {
+   "tier": 3,
+   "kinds": ["멸화", "홍염"],
+   "supported": false,
+   "note": "3티어 배수(인벤 0.48~6.40%)는 목표 사이트 표본으로 아직 확인하지 않았다",
+   "levels": []
+  }
+ ]
+}

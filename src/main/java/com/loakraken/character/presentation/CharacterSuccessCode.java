@@ -14,7 +14,9 @@ enum CharacterSuccessCode implements SuccessCode {
   CHARACTER_CARD_COLLECTION_REFRESH_SUCCESS,
   CHARACTER_TITLES_SUCCESS,
   CHARACTER_PUBLIC_SUMMARY_SUCCESS,
-  CHARACTER_ITEM_TOOLTIPS_SUCCESS;
+  CHARACTER_ITEM_TOOLTIPS_SUCCESS,
+  CHARACTER_COMBAT_POWER_OPTIONS_SUCCESS,
+  CHARACTER_COMBAT_POWER_SIMULATE_SUCCESS;
 
   public HttpStatus httpStatus() {
     return HttpStatus.OK;
@@ -36,6 +38,8 @@ enum CharacterSuccessCode implements SuccessCode {
       case CHARACTER_TITLES_SUCCESS -> "원정대 칭호 조회에 성공했습니다.";
       case CHARACTER_PUBLIC_SUMMARY_SUCCESS -> "캐릭터 공개 요약 조회에 성공했습니다.";
       case CHARACTER_ITEM_TOOLTIPS_SUCCESS -> "아이템 툴팁 줄 조회에 성공했습니다.";
+      case CHARACTER_COMBAT_POWER_OPTIONS_SUCCESS -> "전투력 시뮬레이터 입력 범위 조회에 성공했습니다.";
+      case CHARACTER_COMBAT_POWER_SIMULATE_SUCCESS -> "전투력 시뮬레이션에 성공했습니다.";
       default -> "캐릭터 조회에 성공했습니다.";
     };
   }

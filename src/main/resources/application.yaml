@@ -94,6 +94,10 @@ gem:
 crit-speed:
   enabled: ${CRIT_SPEED_ENABLED:false}
 
+# 전투력 시뮬레이터 API: 계산식(목표 사이트 실측 대조) 확정 전까지 기본 꺼짐
+combat-power-sim:
+  enabled: ${COMBAT_POWER_SIM_ENABLED:false}
+
 home:
   cache:
     calendar-ttl: ${HOME_CALENDAR_CACHE_TTL:30m}

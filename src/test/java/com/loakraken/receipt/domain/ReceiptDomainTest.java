@@ -22,7 +22,7 @@ class ReceiptDomainTest {
               RefiningRules.class);
 
   @Test
-  void 부위마다_10단계부터_현재까지_단계별_기대_비용을_더하고_제외_사유를_남긴다() {
+  void 부위마다_업화는_10단계_전율은_11단계부터_현재까지_단계별_기대_비용을_더하고_제외_사유를_남긴다() {
     var items =
         List.of(
             item("무기", "+19 운명의 전율 검", 19, 4),
@@ -39,9 +39,10 @@ class ReceiptDomainTest {
         .containsExactly("무기", "투구", "상의");
     var weapon = result.parts().get(0);
     assertThat(weapon.grade()).isEqualTo(RefiningRules.Grade.JEONYUL);
-    assertThat(weapon.fromStage()).isEqualTo(10);
+    // 전율은 +11부터 센다(두 사이트, #218 A).
+    assertThat(weapon.fromStage()).isEqualTo(11);
     assertThat(weapon.toStage()).isEqualTo(19);
-    assertThat(weapon.stages()).hasSize(9);
+    assertThat(weapon.stages()).hasSize(8);
     assertThat(weapon.gold()).isPositive();
     assertThat(weapon.stages()).noneMatch(EquipmentReceipt.StageCost::growthSupport);
     var helmet = result.parts().get(1);

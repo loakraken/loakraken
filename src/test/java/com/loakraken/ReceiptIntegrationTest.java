@@ -118,7 +118,7 @@ class ReceiptIntegrationTest {
     var main = data.at("/equipment/characters/0");
     assertThat(main.path("status").asText()).isEqualTo("READY");
     assertThat(main.at("/parts/0/toStage").asInt()).isEqualTo(19);
-    assertThat(main.at("/parts/0/stages").size()).isEqualTo(9);
+    assertThat(main.at("/parts/0/stages").size()).isEqualTo(8);
     assertThat(main.path("excluded").toString()).contains("ADVANCED_REFINING");
     // 보석: 캐릭터마다 거래 가능 겁화 10 1개 + 귀속 1개
     assertThat(data.at("/gems/tradable").asInt()).isEqualTo(8);

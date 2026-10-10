@@ -27,6 +27,8 @@ public class CharacterCollectorService {
   private final CharacterHistoryService history;
   private final CharacterCardService cards;
   private final CharacterCollectionPolicy policy;
+  private final CharacterSeedList seeds;
+  private final CharacterPublicSummaryPort stored;
   private final LostArkRequestGate gate;
   private final LeaderLease lease;
   private final LostArkProperties lostArk;
@@ -43,6 +45,8 @@ public class CharacterCollectorService {
       CharacterHistoryService history,
       CharacterCardService cards,
       CharacterCollectionPolicy policy,
+      CharacterSeedList seeds,
+      CharacterPublicSummaryPort stored,
       LostArkRequestGate gate,
       LeaderLease lease,
       LostArkProperties lostArk,
@@ -53,6 +57,8 @@ public class CharacterCollectorService {
     this.history = history;
     this.cards = cards;
     this.policy = policy;
+    this.seeds = seeds;
+    this.stored = stored;
     this.gate = gate;
     this.lease = lease;
     this.lostArk = lostArk;
@@ -66,6 +72,10 @@ public class CharacterCollectorService {
         .baseUnit("seconds")
         .description("마지막으로 성공한 시각(epoch 초). 0이면 아직 없음")
         .register(registry);
+    io.micrometer.core.instrument.Gauge.builder(
+            "loakraken.stats.seed.pending", seeds, CharacterSeedList::pendingCount)
+        .description("아직 원정대를 훑지 않은 시드 이름 수")
+        .register(registry);
   }
 
   static final String LEASE = "stats-collector";
@@ -74,6 +84,7 @@ public class CharacterCollectorService {
   public enum Task {
     PROFILE,
     ROSTER,
+    SEED,
     NONE
   }
 
@@ -89,6 +100,8 @@ public class CharacterCollectorService {
       return Task.NONE;
     }
     try {
+      // 시드(#255)가 남아 있으면 먼저 훑는다. 원정대가 표본을 넓히는 시작점이라서다.
+      if (seed()) return Task.SEED;
       var first = profileTurn ? Task.PROFILE : Task.ROSTER;
       profileTurn = !profileTurn;
       if (run(first)) return first;
@@ -142,6 +155,41 @@ public class CharacterCollectorService {
       handle(task, exception, () -> collection.markRosterScanned(target.get(), now));
     }
     return true;
+  }
+
+  /**
+   * 시드 하나의 원정대를 훑는다(#255). 공개 제외 이름과 이미 원정대를 훑은 이름은 공식 호출 없이 건너뛰고 다음 이름을 본다. 공식 호출을 했으면 true. 일시
+   * 장애는 그 이름을 남겨 다음 회차에 다시 시도한다.
+   */
+  private boolean seed() {
+    for (var name = seeds.peek(); name != null; name = seeds.peek()) {
+      if (stored.excludedAnyServer(name) || collection.rosterKnown(name)) {
+        seeds.done(name);
+        registry.counter("loakraken.stats.seed", "outcome", "skipped").increment();
+        continue;
+      }
+      var now = clock.instant();
+      var target = name;
+      try {
+        var siblings = gate.withReserve(policy.reserve(), () -> details.fetchSiblings(target));
+        int discovered = collection.saveRoster(siblings, now);
+        seeds.done(name);
+        record(Task.SEED, "success");
+        registry.counter("loakraken.stats.seed", "outcome", "success").increment();
+        if (discovered > 0)
+          registry.counter("loakraken.stats.collector.discovered").increment(discovered);
+      } catch (BusinessException exception) {
+        handle(
+            Task.SEED,
+            exception,
+            () -> {
+              seeds.done(target);
+              registry.counter("loakraken.stats.seed", "outcome", "failed").increment();
+            });
+      }
+      return true;
+    }
+    return false;
   }
 
   /** 없는 캐릭터와 해석 실패는 다시 고르지 않게 표시하고, 한도·일시 장애는 다음 회차에 다시 시도한다. */

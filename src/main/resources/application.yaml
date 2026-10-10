@@ -90,9 +90,9 @@ receipt:
 gem:
   enabled: ${GEM_ENABLED:false}
 
-# 치명타·공이속 계산 API: 운영은 웹 공개 판단 전까지 CRIT_SPEED_ENABLED=false
+# 치명타·공이속 계산 API: 웹 공개 판단 전까지 기본 꺼짐(개발·검증 서버는 CRIT_SPEED_ENABLED=true)
 crit-speed:
-  enabled: ${CRIT_SPEED_ENABLED:true}
+  enabled: ${CRIT_SPEED_ENABLED:false}
 
 home:
   cache:

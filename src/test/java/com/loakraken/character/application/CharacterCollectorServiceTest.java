@@ -213,6 +213,23 @@ class CharacterCollectorServiceTest {
   }
 
   @Test
+  void 시드와_프로필_갱신을_번갈아_한다() {
+    // #271: 시드가 수천 줄이어도 그동안 전투력 표본(프로필 갱신)이 계속 쌓여야 한다.
+    seeds = new CharacterSeedList(new CharacterSeedPolicy(true, List.of("시드하나", "시드둘"), ""));
+    when(details.fetchSiblings(anyString())).thenReturn(List.of());
+    when(collection.nextProfileDue(any(), any())).thenReturn(Optional.of(target));
+    when(details.fetchArmory("모험가"))
+        .thenThrow(new CharacterException(CharacterErrorCode.CHARACTER_NOT_FOUND));
+    var service = service("key", true);
+    assertThat(service.tick()).isEqualTo(Task.SEED);
+    assertThat(service.tick()).isEqualTo(Task.PROFILE);
+    assertThat(service.tick()).isEqualTo(Task.SEED);
+    assertThat(seeds.pendingCount()).isZero();
+    // 시드가 끝나면 기존 수집만 한다.
+    assertThat(service.tick()).isNotEqualTo(Task.SEED);
+  }
+
+  @Test
   void 할_일이_없으면_호출하지_않는다() {
     when(collection.nextProfileDue(any(), any())).thenReturn(Optional.empty());
     when(collection.nextRosterDue(any())).thenReturn(Optional.empty());

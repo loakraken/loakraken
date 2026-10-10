@@ -174,9 +174,9 @@ public final class EquipmentReceipt {
                     Reason.GROWTH_COST_UNCONFIRMED,
                     "목표 "
                         + next
-                        + "단계 성장 비용은 로아와("
+                        + "단계 성장 비용은 목표 사이트 2곳의 값("
                         + String.format("%,d", growthStage.get().shard())
-                        + " 파편)와 일로아(0)가 갈려 게임 확인 전까지 빼고 계산했습니다."));
+                        + " 파편 대 0)이 갈려 게임 확인 전까지 빼고 계산했습니다."));
         }
     }
     // 상급 재련 단계는 공식 응답 해석이 아직 없어, 4티어 장비가 있으면 캐릭터마다 한 줄로 알린다.

@@ -135,7 +135,7 @@ class ReceiptDomainTest {
     assertThat(with.excluded())
         .filteredOn(e -> e.reason() == EquipmentReceipt.Reason.GROWTH_COST_UNCONFIRMED)
         .extracting(EquipmentReceipt.Excluded::message)
-        .containsExactly("목표 21단계 성장 비용은 로아와(120,000 파편)와 일로아(0)가 갈려 게임 확인 전까지 빼고 계산했습니다.");
+        .containsExactly("목표 21단계 성장 비용은 목표 사이트 2곳의 값(120,000 파편 대 0)이 갈려 게임 확인 전까지 빼고 계산했습니다.");
   }
 
   @Test

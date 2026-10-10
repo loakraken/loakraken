@@ -454,9 +454,17 @@ public final class CritEffectTable {
           // 건슬링어 기동 타격 "구르기 이후 8.0초 동안 공격 속도와 이동 속도가 19.2% 증가한다." — 두 사이트 포함(한국남자)
           new TripodSpeed("날렵함", SpeedDecision.INCLUDE, "날렵함 8초 유지 가정", "두 사이트 포함"),
           // 배틀마스터 붕천퇴 "적에게 콤보 공격 적중 시 4.0초간 공격속도가 19.2% 증가하고 이동속도가 19.2% 증가한다." — 일로아만(리쿠)
-          new TripodSpeed("바람의 축복", SpeedDecision.SITUATIONAL, "바람의 축복 4초 가정", "일로아만 포함, PM 판단 대기"),
+          new TripodSpeed(
+              "바람의 축복",
+              SpeedDecision.SITUATIONAL,
+              "바람의 축복 4초 가정",
+              "목표 사이트 1곳만 포함, 공식 문구 상황 조건이라 기본 끔"),
           // 버서커 마운틴 크래쉬 "스킬 사용 시 공격 속도가 4.0초 간 30.0% 증가한다." — 일로아만(TheG0D)
-          new TripodSpeed("속공 준비", SpeedDecision.SITUATIONAL, "속공 준비 4초 가정", "일로아만 포함, PM 판단 대기"));
+          new TripodSpeed(
+              "속공 준비",
+              SpeedDecision.SITUATIONAL,
+              "속공 준비 4초 가정",
+              "목표 사이트 1곳만 포함, 공식 문구 상황 조건이라 기본 끔"));
 
   static TripodSpeed tripodSpeed(String name) {
     for (var rule : TRIPOD_SPEEDS) if (rule.tripod().equals(name)) return rule;

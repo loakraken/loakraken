@@ -101,6 +101,10 @@ services:
       # 공식 API 호출 한도를 쓰는 백그라운드 작업은 스택마다 명시한다(운영 1곳만 true).
       STATS_COLLECTOR_ENABLED: ${STATS_COLLECTOR_ENABLED:-false}
       MARKET_WARMUP_ENABLED: ${MARKET_WARMUP_ENABLED:-false}
+      # 기능 플래그(#214): 비우면 꺼짐. 스테이징은 치명 계산을 켜고(web 치적 도구가 보임), 영수증·젬 가공은 검증 때만 켠다.
+      CRIT_SPEED_ENABLED: ${CRIT_SPEED_ENABLED:-false}
+      GEM_ENABLED: ${GEM_ENABLED:-false}
+      RECEIPT_ENABLED: ${RECEIPT_ENABLED:-false}
       API_DOCS_ENABLED: "false"
       # 관리(actuator) 포트를 앱 포트와 나눈다. internal·data망 안에서만 닿고 edge는 이 망에 없다.
       MANAGEMENT_SERVER_PORT: "9090"

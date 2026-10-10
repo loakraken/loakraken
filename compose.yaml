@@ -73,6 +73,10 @@ services:
       SPRING_DATA_REDIS_PORT: "6379"
       STATS_COLLECTOR_ENABLED: ${COLLECTOR_STATS_ENABLED:-true}
       MARKET_WARMUP_ENABLED: ${COLLECTOR_WARMUP_ENABLED:-true}
+      # 기능 플래그(#214): 로컬은 대조용으로 치명 계산을 켜고, 영수증·젬 가공은 .env에서 켤 때만.
+      CRIT_SPEED_ENABLED: ${CRIT_SPEED_ENABLED:-true}
+      GEM_ENABLED: ${GEM_ENABLED:-false}
+      RECEIPT_ENABLED: ${RECEIPT_ENABLED:-false}
 
     secrets:
       - source: lostark_api_key

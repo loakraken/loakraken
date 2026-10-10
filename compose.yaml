@@ -73,6 +73,10 @@ services:
       SPRING_DATA_REDIS_PORT: "6379"
       STATS_COLLECTOR_ENABLED: ${COLLECTOR_STATS_ENABLED:-true}
       MARKET_WARMUP_ENABLED: ${COLLECTOR_WARMUP_ENABLED:-true}
+      # 개발용 API(프론트 로컬 개발이 8080을 씀)라 기능 플래그는 기본 켬(운영은 기본 꺼짐).
+      RECEIPT_ENABLED: ${COLLECTOR_RECEIPT_ENABLED:-true}
+      GEM_ENABLED: ${COLLECTOR_GEM_ENABLED:-true}
+      CRIT_SPEED_ENABLED: ${COLLECTOR_CRIT_SPEED_ENABLED:-true}
 
     secrets:
       - source: lostark_api_key

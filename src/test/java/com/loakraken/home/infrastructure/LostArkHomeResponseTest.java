@@ -17,10 +17,10 @@ class LostArkHomeResponseTest {
     var json =
         """
         [{"CategoryName":"모험 섬","ContentsName":"라일라이 아일랜드","ContentsIcon":"https://cdn-lostark.game.onstove.com/i.png",
-          "MinItemLevel":635,"StartTimes":["2026-10-12T13:00:00","2026-10-12T11:00:00"],"Location":"x",
+          "MinItemLevel":635,"StartTimes":["2026-10-12T13:00:00","2026-10-12T11:00:00"],"Location":" 라일라이 아일랜드 ",
           "RewardItems":[{"ItemLevel":0,"Items":[{"Name":"골드","Icon":null,"Grade":"일반","StartTimes":["2026-10-12T11:00:00"]},
             {"Name":"실링","Icon":null,"Grade":"일반","StartTimes":null}]},null]},
-         {"CategoryName":"필드보스","ContentsName":"세베크 아툰","StartTimes":null,"RewardItems":null},
+         {"CategoryName":"필드보스","ContentsName":"세베크 아툰","StartTimes":null,"Location":"","RewardItems":null},
          {"CategoryName":null,"ContentsName":"이름만"},null]
         """;
     var calendar =
@@ -36,6 +36,9 @@ class LostArkHomeResponseTest {
     assertThat(island.rewardKindsOn(LocalDate.parse("2026-10-12")))
         .containsExactly(GameCalendar.RewardKind.GOLD);
     assertThat(calendar.entries().get(1).startTimes()).isEmpty();
+    // 공식 Location은 앞뒤 공백을 지우고, 빈 값은 null이다(web #349 위치 줄).
+    assertThat(island.location()).isEqualTo("라일라이 아일랜드");
+    assertThat(calendar.entries().get(1).location()).isNull();
   }
 
   @Test

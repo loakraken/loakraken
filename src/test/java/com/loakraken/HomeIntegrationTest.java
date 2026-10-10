@@ -39,7 +39,7 @@ class HomeIntegrationTest {
   @BeforeEach
   @AfterEach
   void clearCache() {
-    redis.delete(List.of("home:v2:calendar", "home:v1:news"));
+    redis.delete(List.of("home:v3:calendar", "home:v1:news"));
   }
 
   @Test

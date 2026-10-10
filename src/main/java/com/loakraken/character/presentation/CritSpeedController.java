@@ -20,8 +20,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * 치명타·공이속 계산. 웹 공개 판단 전까지 운영에서 끌 수 있게 crit-speed.enabled로 연다(PM-백엔드 10-10 09:00, 운영 stack.env에서
- * CRIT_SPEED_ENABLED=false). 개발·검증 서버 기본은 켬.
+ * 치명타·공이속 계산. 웹 공개 판단 전까지 crit-speed.enabled(CRIT_SPEED_ENABLED, 기본 false)로 연다(PM-백엔드 10-10 09:00,
+ * 배포·운영 09:04: 운영 env에 값을 넣지 않아도 꺼져야 안전). 개발·검증 서버에서만 켠다.
  */
 @ConditionalOnProperty(prefix = "crit-speed", name = "enabled", havingValue = "true")
 @RestController

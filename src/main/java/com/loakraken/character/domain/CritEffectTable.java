@@ -273,14 +273,19 @@ public final class CritEffectTable {
     return TOGGLES.stream().filter(toggle -> toggle.node().equals(base)).toList();
   }
 
-  /** 노드 문구에 없는 직업 버프. 직업·장착 스킬·선택 트라이포드로 판정한다. 값은 정답표(두 사이트 일치) 값이고 문구가 있으면 문구 값을 쓴다. */
+  /**
+   * 노드 문구에 없는 직업 버프. 직업·장착 스킬·선택 트라이포드로 판정한다. 값은 정답표(두 사이트 일치) 값이고 문구가 있으면 문구 값을 쓴다. defaultOn:
+   * 아이덴티티·각성 상태(폭주)는 기본 켬, 스킬·트라이포드 버프 가정은 기본 끔(중복 기능은 로아랩 기준, PM 총괄 승인 10-10 18:26, 계산 검증 「치명 규칙
+   * 로아랩 재대조」).
+   */
   public record ClassBuff(
       String label,
       String className,
       String skill,
       String tripod,
       BigDecimal value,
-      String basis) {}
+      String basis,
+      boolean defaultOn) {}
 
   public static final List<ClassBuff> CLASS_BUFFS =
       List.of(
@@ -290,42 +295,48 @@ public final class CritEffectTable {
               null,
               null,
               new BigDecimal("30"),
-              "슬레이어 폭주 상태 치명타 적중률(두 사이트 기본 포함)"),
+              "슬레이어 폭주 상태 치명타 적중률(아이덴티티 상태, 기본 켬)",
+              true),
           new ClassBuff(
               "용맹의 포효 버프 유지 가정",
               "배틀마스터",
               "용맹의 포효",
               null,
               new BigDecimal("20"),
-              "용맹의 포효 8초 버프(두 사이트 기본 포함)"),
+              "용맹의 포효 8초 버프(스킬·트라이포드 버프 가정, 기본 끔. 켜면 목표 사이트 일부의 기본값과 같습니다)",
+              false),
           new ClassBuff(
               "번개의 속삭임 버프 유지 가정",
               "스트라이커",
               "번개의 속삭임",
               null,
               new BigDecimal("10"),
-              "번개의 속삭임 12초 버프(두 사이트 기본 포함)"),
+              "번개의 속삭임 12초 버프(스킬·트라이포드 버프 가정, 기본 끔. 켜면 목표 사이트 일부의 기본값과 같습니다)",
+              false),
           new ClassBuff(
               "급소 노출 시너지(자신)",
               null,
               null,
               "급소 노출",
               new BigDecimal("10"),
-              "자기 스킬 트라이포드 '급소 노출' 치명타 적중률 시너지(두 사이트 기본 포함)"),
+              "자기 스킬 트라이포드 '급소 노출' 치명타 적중률 시너지(스킬·트라이포드 버프 가정, 기본 끔. 켜면 목표 사이트 일부의 기본값과 같습니다)",
+              false),
           new ClassBuff(
               "나를 위한 연주 버프 상시 유지 가정",
               "바드",
               null,
               "나를 위한 연주",
               new BigDecimal("20"),
-              "천상의 연주 트라이포드 '나를 위한 연주'(두 사이트 기본 포함)"),
+              "천상의 연주 트라이포드 '나를 위한 연주'(스킬·트라이포드 버프 가정, 기본 끔. 켜면 목표 사이트 일부의 기본값과 같습니다)",
+              false),
           new ClassBuff(
               "빛의 성장 버프 상시 유지 가정",
               "서머너",
               null,
               "빛의 성장",
               new BigDecimal("11.8"),
-              "슈르디 트라이포드 '빛의 성장'(두 사이트 기본 포함)"));
+              "슈르디 트라이포드 '빛의 성장'(스킬·트라이포드 버프 가정, 기본 끔. 켜면 목표 사이트 일부의 기본값과 같습니다)",
+              false));
 
   /** 공용 아크 그리드 코어. 두 사이트가 기본에 넣는다. 직업 코어의 치명 효과는 일로아 기준으로 넣지 않는다. */
   public static final Map<String, CritSpeedCalculation.Axis> COMMON_CORES =
@@ -452,7 +463,11 @@ public final class CritEffectTable {
   public static final List<TripodSpeed> TRIPOD_SPEEDS =
       List.of(
           // 건슬링어 기동 타격 "구르기 이후 8.0초 동안 공격 속도와 이동 속도가 19.2% 증가한다." — 두 사이트 포함(한국남자)
-          new TripodSpeed("날렵함", SpeedDecision.INCLUDE, "날렵함 8초 유지 가정", "두 사이트 포함"),
+          new TripodSpeed(
+              "날렵함",
+              SpeedDecision.SITUATIONAL,
+              "날렵함 8초 유지 가정",
+              "트라이포드 버프 가정, 기본 끔. 켜면 목표 사이트 일부의 기본값과 같습니다"),
           // 배틀마스터 붕천퇴 "적에게 콤보 공격 적중 시 4.0초간 공격속도가 19.2% 증가하고 이동속도가 19.2% 증가한다." — 일로아만(리쿠)
           new TripodSpeed(
               "바람의 축복",

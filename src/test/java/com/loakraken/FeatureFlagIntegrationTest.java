@@ -16,7 +16,12 @@ import tools.jackson.databind.json.JsonMapper;
 @Import(TestcontainersConfiguration.class)
 @SpringBootTest(
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-    properties = {"gem.enabled=false", "crit-speed.enabled=false", "receipt.enabled=false"})
+    properties = {
+      "gem.enabled=false",
+      "crit-speed.enabled=false",
+      "receipt.enabled=false",
+      "combat-power-sim.enabled=false"
+    })
 class FeatureFlagIntegrationTest {
   @LocalServerPort int port;
   private final HttpClient client = HttpClient.newHttpClient();
@@ -25,6 +30,7 @@ class FeatureFlagIntegrationTest {
   void 꺼진_젬_가공과_치명_계산은_404이고_계약에_없다() throws Exception {
     assertThat(post("/api/v1/gems/synthesis-plans").statusCode()).isEqualTo(404);
     assertThat(post("/api/v1/characters/crit-speed").statusCode()).isEqualTo(404);
+    assertThat(post("/api/v1/characters/combat-power/simulate").statusCode()).isEqualTo(404);
     var docs =
         client.send(
             HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/v3/api-docs")).build(),
@@ -33,6 +39,7 @@ class FeatureFlagIntegrationTest {
     assertThat(paths.has("/api/v1/gems/synthesis-plans")).isFalse();
     assertThat(paths.has("/api/v1/characters/crit-speed")).isFalse();
     assertThat(paths.has("/api/v1/characters/receipt")).isFalse();
+    assertThat(paths.has("/api/v1/characters/combat-power/simulate")).isFalse();
     // 다른 캐릭터 경로는 그대로다.
     assertThat(paths.has("/api/v1/characters/search")).isTrue();
   }

@@ -34,12 +34,13 @@ public record RefiningPlanRequest(
     @Min(0) @Max(10) @Schema(description = "첫 단계에서 이미 실패한 횟수", defaultValue = "0")
         Integer currentFailedAttempts,
     @Schema(
-            description = "장비 성장(경험치) 비용(단계당 1회 운명의 파편, #200)을 더함. 두 사이트(로아와·일로아)가 기본으로 넣어 생략하면 켬",
-            defaultValue = "true")
+            description =
+                "장비 성장(경험치) 비용(단계당 1회 운명의 파편, #200)을 더함. 두 사이트(로아와·일로아)는 기본으로 넣지만, 웹이 토글·표시를 넣고 true를 보낼 때까지 공개 합계가 바뀌지 않게 생략하면 끔(PM-백엔드 10-10 09:10)",
+            defaultValue = "false")
         Boolean growthCost,
     @Schema(
             description =
-                "원정대 영지 연구 '티어 4 Lv.1590 장비 11~14단계 재련 필요 경험치 20% 감소' 적용(업화 목표 11~14단계 성장 파편 × 0.8). 생략하면 켬",
+                "원정대 영지 연구 '티어 4 Lv.1590 장비 11~14단계 재련 필요 경험치 20% 감소' 적용(업화 목표 11~14단계 성장 파편 × 0.8). growthCost=true일 때만 의미가 있다. 생략하면 켬",
             defaultValue = "true")
         Boolean expResearch) {
   @AssertTrue(message = "목표 단계는 현재 단계보다 커야 합니다.")
@@ -58,7 +59,7 @@ public record RefiningPlanRequest(
         growthSupport == null || growthSupport,
         currentArtisanEnergy == null ? 0 : currentArtisanEnergy.movePointRight(2).intValueExact(),
         currentFailedAttempts == null ? 0 : currentFailedAttempts,
-        growthCost == null || growthCost,
+        Boolean.TRUE.equals(growthCost),
         expResearch == null || expResearch);
   }
 }

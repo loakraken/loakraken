@@ -167,8 +167,41 @@ public record CharacterLoadout(
       String titleLine,
       List<String> tradeLines,
       RefineExp refineExp,
-      List<String> extraLines) {
-    public static final String PARSER_VERSION = "equipment-tooltip-v4";
+      List<String> extraLines,
+      Integer advancedRefineLevel) {
+    public static final String PARSER_VERSION = "equipment-tooltip-v5";
+
+    /** 상급 재련 단계 없이(v4 이전 값). */
+    public EquipmentDetail(
+        Integer refineLevel,
+        Integer quality,
+        Integer itemLevel,
+        Integer tier,
+        PointBonus arkPassivePoint,
+        List<EffectGroup> effects,
+        List<StoneEngraving> stoneEngravings,
+        List<PolishEffect> polishEffects,
+        List<BraceletEffect> braceletEffects,
+        String titleLine,
+        List<String> tradeLines,
+        RefineExp refineExp,
+        List<String> extraLines) {
+      this(
+          refineLevel,
+          quality,
+          itemLevel,
+          tier,
+          arkPassivePoint,
+          effects,
+          stoneEngravings,
+          polishEffects,
+          braceletEffects,
+          titleLine,
+          tradeLines,
+          refineExp,
+          extraLines,
+          null);
+    }
 
     public EquipmentDetail {
       tradeLines = tradeLines == null ? List.of() : List.copyOf(tradeLines);
@@ -203,7 +236,8 @@ public record CharacterLoadout(
           null,
           List.of(),
           null,
-          List.of());
+          List.of(),
+          null);
     }
   }
 

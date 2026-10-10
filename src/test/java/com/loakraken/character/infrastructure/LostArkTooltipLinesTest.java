@@ -47,6 +47,24 @@ class LostArkTooltipLinesTest {
     assertThat(lines.extraLines()).containsExactly("분해불가, 품질 업그레이드 불가", "내구도 62 / 175");
   }
 
+  /** 계산 검증 10-10 18:10 비극화 투구 형식. */
+  @Test
+  void 상급_재련_문구는_단계로_읽고_나머지_줄에_넣지_않는다() {
+    var lines =
+        LostArkTooltipLines.parse(
+            """
+            {"Element_001":{"type":"ItemTitle","value":{"leftStr0":"고대 머리 방어구"}},
+             "Element_002":{"type":"SingleTextBox","value":"캐릭터 귀속됨"},
+             "Element_003":{"type":"MultiTextBox","value":"|거래 불가"},
+             "Element_004":{"type":"SingleTextBox","value":"<FONT SIZE='14'><FONT COLOR='#A8EA6C'>[상급 재련]</FONT> <FONT COLOR='#FFD200'>28</FONT>단계</FONT>"},
+             "Element_009":{"type":"SingleTextBox","value":"분해불가"}}
+            """,
+            null);
+    assertThat(lines.advancedRefineLevel()).isEqualTo(28);
+    assertThat(lines.tradeLines()).containsExactly("캐릭터 귀속됨", "거래 불가");
+    assertThat(lines.extraLines()).containsExactly("분해불가");
+  }
+
   @Test
   void 보석의_보석_레벨_줄은_거래_줄이_아니고_룬은_효과_줄을_따로_담는다() {
     var gem =

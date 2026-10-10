@@ -55,9 +55,7 @@ class ReceiptDomainTest {
     assertThat(result.excluded())
         .extracting(EquipmentReceipt.Excluded::reason)
         .containsExactly(
-            EquipmentReceipt.Reason.UNSUPPORTED_GRADE,
-            EquipmentReceipt.Reason.ARM_GUARD,
-            EquipmentReceipt.Reason.ADVANCED_REFINING);
+            EquipmentReceipt.Reason.UNSUPPORTED_GRADE, EquipmentReceipt.Reason.ARM_GUARD);
     // 고정 예시("결단 등") 대신 그 부위 장비 이름으로 알린다.
     assertThat(result.excluded().getFirst().message())
         .isEqualTo("「+20 빛나는 하의」: 업화·전율 장비가 아니라 산정하지 않습니다.");
@@ -144,6 +142,26 @@ class ReceiptDomainTest {
         .containsExactly("「+22 운명의 전율 검」: 21단계 한계 해방 비용(고통의 가시·해방 비용)은 공식 수치가 없어 산정하지 않았습니다.");
   }
 
+  /** 공식 Tooltip "[상급 재련] N단계"(equipment-tooltip-v5). 1단계 이상이면 부위마다, 모르는 이전 캐시면 캐릭터마다 한 줄. */
+  @Test
+  void 상급_재련은_단계가_있는_부위마다_알리고_모르면_한_줄로_알린다() {
+    var known =
+        EquipmentReceipt.calculate(
+            RULES,
+            List.of(
+                item("투구", "+18 운명의 업화 머리장식", 18, 4, 28), item("상의", "+19 운명의 업화 상의", 19, 4, 0)),
+            prices(BigDecimal.ONE));
+    assertThat(known.excluded())
+        .extracting(EquipmentReceipt.Excluded::message)
+        .containsExactly("「+18 운명의 업화 머리장식」 상급 재련 28단계: 아직 산정하지 않습니다(재련 v2 준비 중).");
+    var unknown =
+        EquipmentReceipt.calculate(
+            RULES, List.of(item("투구", "+18 운명의 업화 머리장식", 18, 4, null)), prices(BigDecimal.ONE));
+    assertThat(unknown.excluded())
+        .extracting(EquipmentReceipt.Excluded::message)
+        .containsExactly("상급 재련은 아직 산정하지 않습니다(재련 v2 준비 중).");
+  }
+
   @Test
   void 재료_시세가_없으면_그_부위는_PRICE_UNAVAILABLE이다() {
     var items = List.of(item("무기", "+12 운명의 전율 검", 12, 4));
@@ -200,13 +218,20 @@ class ReceiptDomainTest {
 
   private static CharacterLoadout.Equipment item(
       String type, String name, Integer refine, int tier) {
+    return item(type, name, refine, tier, refine == null || tier != 4 ? null : 0);
+  }
+
+  /** advanced: 상급 재련 단계(null이면 이전 캐시처럼 모름). */
+  private static CharacterLoadout.Equipment item(
+      String type, String name, Integer refine, int tier, Integer advanced) {
     return new CharacterLoadout.Equipment(
         type,
         name,
         null,
         "고대",
         new CharacterLoadout.EquipmentDetail(
-            refine, 100, 1700, tier, null, List.of(), List.of(), List.of(), List.of()));
+            refine, 100, 1700, tier, null, List.of(), List.of(), List.of(), List.of(), null,
+            List.of(), null, List.of(), advanced));
   }
 
   private static CharacterLoadout.Gem gem(int slot, String name, int level) {

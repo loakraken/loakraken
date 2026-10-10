@@ -190,8 +190,23 @@ public final class EquipmentReceipt {
                 Reason.LIMIT_BREAK_UNPRICED,
                 "「" + item.name() + "」: 21단계 한계 해방 비용(고통의 가시·해방 비용)은 공식 수치가 없어 산정하지 않았습니다."));
     }
-    // 상급 재련 단계는 공식 응답 해석이 아직 없어, 4티어 장비가 있으면 캐릭터마다 한 줄로 알린다.
-    if (!parts.isEmpty())
+    // 상급 재련: 공식 Tooltip "[상급 재련] N단계"(equipment-tooltip-v5)로 부위마다 알린다. 단계를 모르는 이전 캐시 부위가 있으면
+    // 캐릭터마다 한 줄로 알린다. 비용은 재련 v2 전까지 산정하지 않는다.
+    boolean unknownAdvanced = false;
+    for (var item : items) {
+      if (item == null || item.type() == null || grade(item) == null) continue;
+      if (!WEAPON.equals(item.type()) && !ARMOR.contains(item.type())) continue;
+      Integer level = item.detail() == null ? null : item.detail().advancedRefineLevel();
+      if (level == null) unknownAdvanced = true;
+      else if (level > 0)
+        excluded.add(
+            new Excluded(
+                item.type(),
+                item.name(),
+                Reason.ADVANCED_REFINING,
+                "「" + item.name() + "」 상급 재련 " + level + "단계: 아직 산정하지 않습니다(재련 v2 준비 중)."));
+    }
+    if (unknownAdvanced)
       excluded.add(
           new Excluded(null, null, Reason.ADVANCED_REFINING, "상급 재련은 아직 산정하지 않습니다(재련 v2 준비 중)."));
     var gold = parts.stream().map(Part::gold).reduce(BigDecimal.ZERO, BigDecimal::add);

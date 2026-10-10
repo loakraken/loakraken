@@ -192,7 +192,7 @@ class LostArkCharacterClientTest {
         .contains(
             "테스트 무기",
             "원정대캐릭터",
-            "\"parserVersion\":\"equipment-tooltip-v4\"",
+            "\"parserVersion\":\"equipment-tooltip-v5\"",
             // 트라이포드 효과는 공식 원문을 일반 텍스트로 내린다(아이템 툴팁 계약 10-10).
             "\"effect\":\"치명타 적중률이 10.0% 증가한다.\"")
         .doesNotContain(

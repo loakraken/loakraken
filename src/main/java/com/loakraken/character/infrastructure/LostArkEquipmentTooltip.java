@@ -85,8 +85,14 @@ final class LostArkEquipmentTooltip {
       }
     }
     var tooltipLines = LostArkTooltipLines.parse(tooltip, null);
+    Integer refineLevel = number(REFINE, LostArkText.plain(name), 1, 99);
+    // 상급 재련은 1단계 이상일 때만 문구가 있다(계산 검증 10-10 18:10). 재련 단계가 있는 4티어 장비는 문구가 없으면 0단계다.
+    Integer advancedRefine =
+        tooltipLines.advancedRefineLevel() != null
+            ? tooltipLines.advancedRefineLevel()
+            : refineLevel != null && Integer.valueOf(4).equals(tier) ? 0 : null;
     return new CharacterLoadout.EquipmentDetail(
-        number(REFINE, LostArkText.plain(name), 1, 99),
+        refineLevel,
         quality,
         itemLevel,
         tier,
@@ -98,7 +104,8 @@ final class LostArkEquipmentTooltip {
         tooltipLines.titleLine(),
         tooltipLines.tradeLines(),
         tooltipLines.refineExp(),
-        tooltipLines.extraLines());
+        tooltipLines.extraLines(),
+        advancedRefine);
   }
 
   private static List<CharacterLoadout.BraceletEffect> bracelet(String source) {

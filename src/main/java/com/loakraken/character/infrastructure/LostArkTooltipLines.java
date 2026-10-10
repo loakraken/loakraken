@@ -22,13 +22,18 @@ final class LostArkTooltipLines {
   private static final JsonMapper MAPPER = JsonMapper.builder().build();
   private static final String REFINE_EXP = "재련 경험치";
 
+  /** "[상급 재련] 28단계"(계산 검증 10-10 18:10: 1단계 이상일 때만 SingleTextBox에 나오고 0단계면 문구가 없다). */
+  private static final java.util.regex.Pattern ADVANCED_REFINE =
+      java.util.regex.Pattern.compile("\\[상급 재련\\]\\s*(\\d{1,3})\\s*단계");
+
   record Lines(
       String titleLine,
       List<String> tradeLines,
       CharacterLoadout.RefineExp refineExp,
       List<String> effectLines,
-      List<String> extraLines) {
-    static final Lines EMPTY = new Lines(null, List.of(), null, List.of(), List.of());
+      List<String> extraLines,
+      Integer advancedRefineLevel) {
+    static final Lines EMPTY = new Lines(null, List.of(), null, List.of(), List.of(), null);
   }
 
   private LostArkTooltipLines() {}
@@ -47,6 +52,7 @@ final class LostArkTooltipLines {
     var effect = new ArrayList<String>();
     var extra = new ArrayList<String>();
     CharacterLoadout.RefineExp refineExp = null;
+    Integer advancedRefine = null;
     // ItemTitle 바로 뒤 SingleTextBox·MultiTextBox까지만 귀속·거래 줄로 본다.
     int afterTitle = -1;
     for (var element : root.values()) {
@@ -64,6 +70,11 @@ final class LostArkTooltipLines {
         }
         case "SingleTextBox", "MultiTextBox", "ShowMeTheMoney" -> {
           var lines = lines(text(value));
+          var advanced = ADVANCED_REFINE.matcher(String.join(" ", lines));
+          if (advancedRefine == null && advanced.find()) {
+            advancedRefine = Integer.parseInt(advanced.group(1));
+            continue;
+          }
           if (afterTitle >= 1 && afterTitle <= 2 && tradeSlot(type, afterTitle))
             trade.addAll(lines);
           else extra.addAll(lines);
@@ -85,7 +96,12 @@ final class LostArkTooltipLines {
       }
     }
     return new Lines(
-        titleLine, List.copyOf(trade), refineExp, List.copyOf(effect), List.copyOf(extra));
+        titleLine,
+        List.copyOf(trade),
+        refineExp,
+        List.copyOf(effect),
+        List.copyOf(extra),
+        advancedRefine);
   }
 
   /** ItemTitle 다음 첫 요소는 SingleTextBox(귀속·거래 제한), 둘째 요소는 MultiTextBox(거래 가능 여부)일 때만 귀속·거래 줄이다. */

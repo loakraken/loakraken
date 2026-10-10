@@ -49,7 +49,7 @@ public record CharacterLoadoutResponse(
       description =
           "공식 Tooltip에서 확인된 값만 담습니다. 확인되지 않은 값은 null이며 추정하지 않습니다. 엘릭서·초월·상급 재련은 아직 해석하지 않습니다.")
   public record EquipmentDetailResponse(
-      @Schema(description = "해석 규칙 버전", example = "equipment-tooltip-v4") String parserVersion,
+      @Schema(description = "해석 규칙 버전", example = "equipment-tooltip-v5") String parserVersion,
       @Schema(description = "장비 이름의 +N 재련 단계") @NullableResponse Integer refineLevel,
       @Schema(description = "품질 0~100. 품질이 적용되지 않는 장비는 null") @NullableResponse Integer quality,
       @Schema(description = "장비 아이템 레벨. 장신구 등 표시되지 않는 장비는 null") @NullableResponse
@@ -68,7 +68,12 @@ public record CharacterLoadoutResponse(
       @Schema(description = "귀속·거래 줄 원문 순서(예: 캐릭터 귀속됨, 거래 제한 아이템 레벨 1680, 거래 2회 가능, 거래가능)")
           List<String> tradeLines,
       @Schema(description = "현재 단계 재련 경험치 막대. 없는 장비·이전 캐시면 null") @NullableResponse
-          RefineExpResponse refineExp) {
+          RefineExpResponse refineExp,
+      @Schema(
+              description =
+                  "상급 재련 단계. 공식 Tooltip \"[상급 재련] N단계\"(1단계 이상일 때만 나옴), 재련 단계가 있는 4티어 장비에 문구가 없으면 0, 그 밖·이전 캐시면 null")
+          @NullableResponse
+          Integer advancedRefineLevel) {
     static EquipmentDetailResponse from(CharacterLoadout.EquipmentDetail value) {
       if (value == null) return null;
       return new EquipmentDetailResponse(
@@ -86,7 +91,8 @@ public record CharacterLoadoutResponse(
           value.tradeLines(),
           value.refineExp() == null
               ? null
-              : new RefineExpResponse(value.refineExp().current(), value.refineExp().max()));
+              : new RefineExpResponse(value.refineExp().current(), value.refineExp().max()),
+          value.advancedRefineLevel());
     }
   }
 

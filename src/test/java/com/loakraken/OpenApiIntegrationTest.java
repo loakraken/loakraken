@@ -51,6 +51,8 @@ class OpenApiIntegrationTest {
                 .asText())
         .startsWith("LOST_ARK_RATE_LIMITED");
     ApiContractFixture.write("openapi.json", response.body());
+    // 다른 사이트 이름 금지(#261): OpenAPI 설명·예시는 계약 산출물로 웹에 넘어간다.
+    assertThat(response.body()).doesNotContain(SiteNames.FORBIDDEN);
     assertThat(
             document
                 .at("/components/schemas/CharacterLoadoutResponse/properties/gems/anyOf/1/type")

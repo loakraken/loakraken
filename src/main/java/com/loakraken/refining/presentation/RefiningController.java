@@ -29,7 +29,7 @@ class RefiningController {
       summary = "티어 4 재련 기대 비용",
       description =
           "운명의 업화·운명의 전율 무기/방어구의 현재 단계부터 목표 단계(11~25)까지 기대·중앙값·90%·최대 시도 수와 재료·골드를 계산합니다. "
-              + "외부 API·DB를 사용하지 않습니다. 단계별 수치는 공개 데이터(아이스펭, MIT)를 다른 서비스와 전수 대조한 값이며 공식 표가 아닙니다.")
+              + "외부 API·DB를 사용하지 않습니다. 단계별 수치는 MIT 라이선스 공개 데이터(고지는 저장소 NOTICE)를 다른 계산 사이트와 전수 대조한 값이며 공식 표가 아닙니다.")
   @ApiResponses({
     @io.swagger.v3.oas.annotations.responses.ApiResponse(
         responseCode = "200",

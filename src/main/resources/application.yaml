@@ -91,7 +91,7 @@ stats:
 receipt:
   enabled: ${RECEIPT_ENABLED:false}
 
-# 젬 가공 계획 API: 첫 운영 릴리스에서 기본 꺼짐(웹 미사용, 로아또 대조 전)
+# 젬 가공 계획 API: 첫 운영 릴리스에서 기본 꺼짐(웹 미사용, 다른 계산 사이트 대조 전)
 gem:
   enabled: ${GEM_ENABLED:false}
 

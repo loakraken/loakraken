@@ -49,13 +49,13 @@
 - 공식 원정대 API는 없는 캐릭터에 200 `[]`를 반환한다(2026-10-05 1회 확인). 원정대에는 조회한 캐릭터 자신이 포함되므로 단독 원정대 조회의 빈 목록과 공식 404는 `404 CHARACTER_NOT_FOUND`다. 결합 검색에서는 전투정보 확인 뒤의 원정대 오류를 기존처럼 502로 처리한다.
 - 화면을 나누면 캐릭터 상세는 1회, 원정대 탭을 열 때 1회를 사용한다. 원정대 실패가 캐릭터 상세를 막지 않는다.
 
-## 장비 Tooltip 해석 — equipment-tooltip-v3
+## 장비 Tooltip 해석 — equipment-tooltip-v4
 
 각 `equipment[].detail`은 공식 장비 Tooltip(JSON 문자열)에서 확인된 값만 구조화한다. Tooltip이 없거나 JSON이 아니거나 객체가 아니면 `detail=null`이며 검색은 실패하지 않는다. 원본 Tooltip 문자열은 공개 응답과 캐시에 포함하지 않는다.
 
 | 필드 | 원천 | 규칙 |
 |---|---|---|
-| parserVersion | 고정값 | `equipment-tooltip-v3` (v2 연마 등급, v3 팔찌 등급) |
+| parserVersion | 고정값 | `equipment-tooltip-v4` (v2 연마 등급, v3 팔찌 등급, v4 아이템 툴팁 줄) |
 | refineLevel | 장비 이름의 `+N` 접두 | 1~99, 없으면 null |
 | quality | 첫 `ItemTitle.qualityValue` | 0~100 정수. `-1`(품질 미적용)·문자열·범위 밖은 null |
 | itemLevel | 첫 `ItemTitle.leftStr2`의 `아이템 레벨 N` | 장신구처럼 표시되지 않으면 null |
@@ -64,6 +64,10 @@
 | effects | 그 밖의 `ItemPartBox`(기본/추가/연마/팔찌 효과)와 `IndentStringGroup` | `{title, lines}`. 마크업을 제거하고 `<BR>` 기준 줄로 나눈다 |
 | stoneEngravings | `IndentStringGroup` 제목 `무작위 각인 효과` | `[이름] Lv.N` 형식만 `{name, level}`. 레벨 보너스 줄은 effects에만 남는다 |
 | polishEffects | 제목이 `연마 효과`인 `ItemPartBox`의 각 줄 | `{name, value, grade}`. `이름 +값` 형식만. grade는 수치 색 `FE9600`=HIGH, `CE43FC`=MID, `00B5FF`=LOW, 그 외 null |
+| titleLine | 첫 `ItemTitle.leftStr0` | 등급·부위 줄 원문(예 "고대 머리 방어구"), 없으면 null |
+| tradeLines | `ItemTitle` 바로 뒤 `SingleTextBox`와 이어지는 `MultiTextBox` | 귀속·거래 줄 원문 순서(예 "캐릭터 귀속됨", "거래 제한 아이템 레벨 1680", "거래 2회 가능", "거래가능") |
+| refineExp | 제목에 `재련 경험치`가 있는 `Progress` | `{current, max}`(현재 값이 없으면 current null), 없으면 null |
+| extraLines | 위 필드와 효과 묶음이 담지 않은 `SingleTextBox`·`MultiTextBox`·`ShowMeTheMoney` | 원문 순서(내구도, 분해불가, 설명, 획득처 등). `|` 칸과 줄바꿈으로 나눈다 |
 | braceletEffects | 제목이 `팔찌 효과`인 `ItemPartBox` | `{text, grade}`. 효과 앞 아이콘 기준으로 나눠 두 줄 효과를 하나로 유지. grade는 효과의 첫 색 수치(연마와 같은 색 대응), 전투 특성 초록 `91FE02` 등은 null |
 
 - 연마 등급 근거: [공식 장신구 연마 확률표](https://lostark.game.onstove.com/Probability/장신구%20연마)(수정일 2024-07-10)는 효과마다 3단계를 색으로 구분하고 등장 확률 6.3%(파랑 `00B5FF`)·3.0%(보라)·0.7%를 공개한다. 2026-10-05 언새늘 원문의 색과 로아와·클로아·일로아의 상/중/하 표기가 같은 대응을 보였다. 팔찌 등급 근거: [공식 팔찌 T4 확률표](https://lostark.game.onstove.com/Probability/팔찌%20T4)(수정일 2025-12-30)는 유물·고대 팔찌 특수 효과마다 3단계 수치를 공개한다(고대 예: 치명타 피해 6.8/8.4/10.0%). 언새늘 고대 팔찌의 색이 같은 단계와 대응했다. 전투 특성(특화 등)은 공식 표에서 수치 구간형이라 등급을 만들지 않는다.
@@ -71,6 +75,7 @@
 - 알 수 없는 요소 타입은 무시한다. 엘릭서·초월·상급 재련은 실제 응답 표본을 확보하지 못해 해석하지 않으며, 해당 정보가 없다는 뜻이 아니다.
 - 해석 대상 요소는 2026-10-05 실제 응답 1건의 장비 17개 구조를 기준으로 했다. 실제 응답은 저장하지 않았고 테스트는 같은 구조의 합성 Tooltip을 사용한다.
 - 점수·추천·투자 효율은 제공하지 않는다.
+- 아이템 hover 툴팁용 줄(v4, PM-프론트·PM-백엔드 교차 확인 2026-10-10): 보석 `gems.items[].extraLines`(보석 레벨·조율·분해불가·획득처), 카드 `cards.items[].extraLines`(설명·획득처), 스킬 `tripods[].effect`(트라이포드 효과 원문)·`rune.effect`("스킬 룬 효과")·`rune.extraLines`도 같은 규칙이다. 공식 원문만 담고 추정하지 않는다. 같은 armory 응답에서 읽어 공식 호출은 늘지 않는다. 이전 캐시(최대 5분)는 새 필드가 null·빈 목록이다.
 
 ## 전투 스킬
 

@@ -154,9 +154,16 @@ record LostArkArmoryResponse(
       @JsonProperty("Name") String name,
       @JsonProperty("Icon") String icon,
       @JsonProperty("Level") Integer level,
-      @JsonProperty("Grade") String grade) {
+      @JsonProperty("Grade") String grade,
+      @JsonProperty("Tooltip") String tooltip) {
     CharacterLoadout.Gem toDomain() {
-      return new CharacterLoadout.Gem(slot, LostArkText.plain(name), icon, level, grade);
+      return new CharacterLoadout.Gem(
+          slot,
+          LostArkText.plain(name),
+          icon,
+          level,
+          grade,
+          LostArkTooltipLines.parse(tooltip, null).extraLines());
     }
   }
 
@@ -203,10 +210,17 @@ record LostArkArmoryResponse(
       @JsonProperty("Icon") String icon,
       @JsonProperty("AwakeCount") Integer awakeCount,
       @JsonProperty("AwakeTotal") Integer awakeTotal,
-      @JsonProperty("Grade") String grade) {
+      @JsonProperty("Grade") String grade,
+      @JsonProperty("Tooltip") String tooltip) {
     CharacterLoadout.Card toDomain() {
       return new CharacterLoadout.Card(
-          slot, LostArkText.plain(name), icon, awakeCount, awakeTotal, grade);
+          slot,
+          LostArkText.plain(name),
+          icon,
+          awakeCount,
+          awakeTotal,
+          grade,
+          LostArkTooltipLines.parse(tooltip, null).extraLines());
     }
   }
 
@@ -424,9 +438,16 @@ record LostArkArmoryResponse(
   record Rune(
       @JsonProperty("Name") String name,
       @JsonProperty("Icon") String icon,
-      @JsonProperty("Grade") String grade) {
+      @JsonProperty("Grade") String grade,
+      @JsonProperty("Tooltip") String tooltip) {
     CharacterLoadout.Rune toDomain() {
-      return new CharacterLoadout.Rune(LostArkText.plain(name), icon, grade);
+      var lines = LostArkTooltipLines.parse(tooltip, "스킬 룬 효과");
+      return new CharacterLoadout.Rune(
+          LostArkText.plain(name),
+          icon,
+          grade,
+          lines.effectLines().isEmpty() ? null : String.join("\n", lines.effectLines()),
+          lines.extraLines());
     }
   }
 

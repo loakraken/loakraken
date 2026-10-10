@@ -84,6 +84,7 @@ final class LostArkEquipmentTooltip {
         default -> {}
       }
     }
+    var tooltipLines = LostArkTooltipLines.parse(tooltip, null);
     return new CharacterLoadout.EquipmentDetail(
         number(REFINE, LostArkText.plain(name), 1, 99),
         quality,
@@ -93,7 +94,11 @@ final class LostArkEquipmentTooltip {
         effects,
         stoneEngravings,
         polishEffects,
-        braceletEffects);
+        braceletEffects,
+        tooltipLines.titleLine(),
+        tooltipLines.tradeLines(),
+        tooltipLines.refineExp(),
+        tooltipLines.extraLines());
   }
 
   private static List<CharacterLoadout.BraceletEffect> bracelet(String source) {

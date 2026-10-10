@@ -104,8 +104,8 @@ public class CombatPowerController {
           @Size(max = 16)
           @Pattern(regexp = "\\s*[\\p{L}\\p{N}]+\\s*")
           String characterName,
-      @Schema(description = "바꾼 항목(순서대로 적용, 최대 64개)") @NotNull @Size(max = 64) @Valid
-          List<ChangeRequest> changes) {
+      @Schema(description = "바꾼 항목(순서대로 적용, 최대 64개)") @NotNull @Size(max = 64)
+          List<@Valid ChangeRequest> changes) {
     List<CombatPowerSimulationService.Change> toChanges() {
       return changes.stream().map(ChangeRequest::toChange).toList();
     }

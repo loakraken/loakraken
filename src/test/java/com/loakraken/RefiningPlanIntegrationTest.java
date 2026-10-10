@@ -32,7 +32,7 @@ class RefiningPlanIntegrationTest {
     ApiContractFixture.write("refining-plan.json", response.body());
     var json = mapper.readTree(response.body());
     assertThat(json.path("code").asText()).isEqualTo("REFINING_PLAN_SUCCESS");
-    assertThat(json.at("/data/ruleVersion").asText()).isEqualTo("t4-refining-v1");
+    assertThat(json.at("/data/ruleVersion").asText()).isEqualTo("t4-refining-v2");
     assertThat(json.at("/data/source/license").asText()).startsWith("MIT");
     // 성장 비용은 생략하면 끔(PM-백엔드 10-10 09:10), 영지 연구는 생략하면 켬.
     assertThat(json.at("/data/growthCost").asBoolean()).isFalse();

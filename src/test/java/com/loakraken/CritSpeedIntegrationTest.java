@@ -28,7 +28,9 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import tools.jackson.databind.json.JsonMapper;
 
 @Import(TestcontainersConfiguration.class)
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@SpringBootTest(
+    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+    properties = "crit-speed.enabled=true")
 class CritSpeedIntegrationTest {
   private static final String NAME = "치적계산캐릭터";
   @LocalServerPort private int port;

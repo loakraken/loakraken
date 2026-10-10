@@ -17,7 +17,6 @@ class CharacterOpenApiConfiguration {
           CharacterSiblingsResponse.class, document.getComponents().getSchemas());
       ResponseContracts.apply(
           CharacterHistoryResponse.class, document.getComponents().getSchemas());
-      ResponseContracts.apply(CritSpeedResponse.class, document.getComponents().getSchemas());
       ResponseContracts.apply(CharacterViewsResponse.class, document.getComponents().getSchemas());
       ResponseContracts.apply(CardCollectionResponse.class, document.getComponents().getSchemas());
       ResponseContracts.apply(

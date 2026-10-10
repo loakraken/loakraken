@@ -1,13 +1,18 @@
 package com.loakraken.character.application;
 
 import com.loakraken.character.domain.CharacterLoadout;
+import com.loakraken.character.domain.CombatPowerGemModel;
 import com.loakraken.common.api.BusinessException;
 import com.loakraken.common.api.ErrorCode;
 import java.math.BigDecimal;
+import java.math.MathContext;
 import java.math.RoundingMode;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import org.springframework.dao.DataAccessException;
 import org.springframework.http.HttpStatus;
@@ -17,12 +22,20 @@ import org.springframework.stereotype.Service;
  * 전투력 시뮬레이터(계약 v0, A단계). 볼트 「전투력 시뮬레이터 API 계약 초안」·PM-백엔드 18:27·PM-프론트 18:31 교차 확인.
  *
  * <p><b>공식 API를 부르지 않는다</b>: 캐릭터 캐시만 읽고, 없으면 CHARACTER_NOT_CACHED(404)다. 바꾼 항목(changes)을 검증하고 순서대로
- * 합친다. 공개 제외 캐릭터는 캐시가 없을 때와 같은 404다. 전투력 계산식은 계산 검증의 목표 사이트 실측 대조(Q1·Q2)로 항목별로 확정되기 전까지 모든 항목을
- * UNSUPPORTED로 값 없이 낸다(추정 금지). 그래서 이 단계의 after는 공식 전투력 그대로이고 partial=true다.
+ * 합친다. 공개 제외 캐릭터는 캐시가 없을 때와 같은 404다. 전투력 계산식은 계산 검증의 목표 사이트 실측 대조(Q1·Q2)로 항목별로 확정되기 전까지 그 항목을
+ * UNSUPPORTED로 값 없이 낸다(추정 금지).
+ *
+ * <p>B단계(#243): 보석(GEM_LEVEL·GEM_LEVEL_ALL)을 계산한다({@link CombatPowerGemModel}). after = before ×
+ * 모델(바뀐 세팅) / 모델(현재 세팅)이고, contributions[].delta는 순서대로 적용한 누적 전투력을 소수 둘째 자리로 반올림한 값의 차이라 합이 delta와
+ * 같다.
  */
 @Service
 public class CombatPowerSimulationService {
-  public static final String RULE_VERSION = "combat-power-sim-v0";
+  public static final String RULE_VERSION = "combat-power-sim-v1";
+  private static final MathContext MATH = MathContext.DECIMAL64;
+  private static final String GEM_BASIS =
+      "보석 레벨별 배수와 기본 공격력 %(보석·스톤 레벨 보너스·완갑 추가 효과, 공식 툴팁)로 바뀐 비율을 공식 전투력에 곱했습니다.";
+  private static final String NO_OFFICIAL_BASIS = "공식 전투력이 없어 계산하지 않습니다.";
   private static final Set<String> GRADES = Set.of("LOW", "MID", "HIGH");
   private static final List<String> CORE_GRADES = List.of("영웅", "전설", "유물", "고대");
   private static final Set<String> WEAPON_ARMOR = Set.of("무기", "투구", "상의", "하의", "장갑", "어깨");
@@ -30,10 +43,15 @@ public class CombatPowerSimulationService {
 
   private final CharacterCache cache;
   private final CharacterPublicSummaryPort stored;
+  private final CombatPowerGemModel.Coefficients gemCoefficients;
 
-  public CombatPowerSimulationService(CharacterCache cache, CharacterPublicSummaryPort stored) {
+  public CombatPowerSimulationService(
+      CharacterCache cache,
+      CharacterPublicSummaryPort stored,
+      CombatPowerGemModel.Coefficients gemCoefficients) {
     this.cache = cache;
     this.stored = stored;
+    this.gemCoefficients = gemCoefficients;
   }
 
   public enum Kind {
@@ -113,30 +131,75 @@ public class CombatPowerSimulationService {
     }
     if (result == null) throw new CharacterException(CharacterErrorCode.CHARACTER_NOT_CACHED);
     var loadout = result.details().loadout();
+    var gemModel = CombatPowerGemModel.of(gemCoefficients, loadout);
     // 같은 대상은 뒤의 변경이 이긴다. 순서는 처음 나온 자리를 지킨다.
-    var merged = new LinkedHashMap<String, Contribution>();
-    for (var change : changes) {
-      var contribution = describe(loadout, change);
-      merged.put(key(change), contribution);
-    }
-    var contributions = List.copyOf(merged.values());
+    var merged = new LinkedHashMap<String, Planned>();
+    for (var change : changes) merged.put(key(change), describe(loadout, gemModel, change));
     var official = result.details().profile().combatPower();
     // 반올림은 서버에서 끝낸다(PM-프론트 18:31 (g)): 전투력 소수 둘째 자리, deltaPercent 소수 셋째 자리.
     var before = official == null ? null : official.setScale(2, RoundingMode.HALF_UP);
+    var current = before == null ? null : gemModel.ratio(Map.of());
+    var levels = new HashMap<Integer, Integer>();
+    var running = before;
+    var contributions = new ArrayList<Contribution>();
+    int unsupported = 0;
+    for (var planned : merged.values()) {
+      if (planned.gemLevels() != null && planned.reason() == null && current != null) {
+        var next = new HashMap<>(levels);
+        next.putAll(planned.gemLevels());
+        var ratio = gemModel.ratio(next);
+        if (ratio != null) {
+          levels = next;
+          var value =
+              before.multiply(ratio).divide(current, MATH).setScale(2, RoundingMode.HALF_UP);
+          contributions.add(planned.ok(value.subtract(running), GEM_BASIS));
+          running = value;
+          continue;
+        }
+      }
+      unsupported++;
+      String basis = planned.reason();
+      if (basis == null)
+        basis =
+            planned.gemLevels() != null && before == null ? NO_OFFICIAL_BASIS : UNSUPPORTED_BASIS;
+      contributions.add(planned.unsupported(basis));
+    }
+    var delta = before == null ? null : running.subtract(before);
     return new Result(
         result.details().profile().characterName(),
         result.fetchedAt(),
         before,
         null,
-        before,
-        before == null ? null : BigDecimal.ZERO.setScale(2),
-        before == null ? null : BigDecimal.ZERO.setScale(3),
-        !contributions.isEmpty(),
-        contributions,
-        contributions.size(),
+        running,
+        delta,
+        before == null || before.signum() == 0
+            ? null
+            : delta.multiply(BigDecimal.valueOf(100)).divide(before, 3, RoundingMode.HALF_UP),
+        unsupported > 0,
+        List.copyOf(contributions),
+        unsupported,
         List.of(
             "현재 세팅은 캐릭터 캐시(수집 시각 fetchedAt)를 기준으로 합니다.",
-            "before는 공식 전투력입니다. 계산식이 확정된 항목만 after에 반영하고, 나머지는 UNSUPPORTED로 값 없이 알립니다."));
+            "before는 공식 전투력입니다. 계산식이 확정된 항목만 after에 반영하고, 나머지는 UNSUPPORTED로 값 없이 알립니다.",
+            "계산한 항목은 순서대로 적용합니다. contributions[].delta의 합은 delta와 같습니다."));
+  }
+
+  /** 검증을 마친 변경 하나. gemLevels가 있으면 보석 변경(칸 → 레벨)이고, reason이 있으면 계산하지 않는 이유다. */
+  private record Planned(
+      Change change,
+      String target,
+      String from,
+      String to,
+      Map<Integer, Integer> gemLevels,
+      String reason) {
+    Contribution ok(BigDecimal delta, String basis) {
+      return new Contribution(change.kind().name(), target, from, to, delta, Status.OK, basis);
+    }
+
+    Contribution unsupported(String basis) {
+      return new Contribution(
+          change.kind().name(), target, from, to, null, Status.UNSUPPORTED, basis);
+    }
   }
 
   private static String key(Change change) {
@@ -154,12 +217,19 @@ public class CombatPowerSimulationService {
     };
   }
 
-  private static Contribution describe(CharacterLoadout loadout, Change change) {
+  private static Planned describe(
+      CharacterLoadout loadout, CombatPowerGemModel.Model gemModel, Change change) {
     if (change.kind() == null) throw invalid("kind가 필요합니다.");
     return switch (change.kind()) {
       case GEM_LEVEL_ALL -> {
         range("level", change.level(), 1, 10);
-        yield unsupported(change, "보석 전체", null, String.valueOf(change.level()));
+        var targets = new LinkedHashMap<Integer, Integer>();
+        String reason = gemModel.unsupportedReason();
+        for (var slot : gemModel.slots().keySet()) {
+          targets.put(slot, change.level());
+          if (reason == null) reason = gemModel.cannotSet(slot, change.level());
+        }
+        yield new Planned(change, "보석 전체", null, String.valueOf(change.level()), targets, reason);
       }
       case GEM_LEVEL -> {
         range("level", change.level(), 1, 10);
@@ -175,11 +245,13 @@ public class CombatPowerSimulationService {
                     .findFirst()
                     .orElse(null);
         if (gem == null) throw notFound("보석 slot " + change.slot());
-        yield unsupported(
+        yield new Planned(
             change,
             "보석 " + gem.slot() + "번(" + gem.name() + ")",
             str(gem.level()),
-            str(change.level()));
+            str(change.level()),
+            Map.of(gem.slot(), change.level()),
+            gemModel.cannotSet(gem.slot(), change.level()));
       }
       case EQUIPMENT_REFINE, EQUIPMENT_ADVANCED_REFINE, EQUIPMENT_QUALITY -> {
         var item = equipment(loadout, change.index());
@@ -197,8 +269,8 @@ public class CombatPowerSimulationService {
           yield unsupported(change, item.name(), str(detail.refineLevel()), str(change.refine()));
         }
         range("level", change.level(), 0, 40);
-        // 현재 상급 재련 단계(from)는 #234(advancedRefineLevel) 병합 뒤 채운다.
-        yield unsupported(change, item.name(), null, str(change.level()));
+        yield unsupported(
+            change, item.name(), str(detail.advancedRefineLevel()), str(change.level()));
       }
       case POLISH -> {
         var item = equipment(loadout, change.index());
@@ -315,9 +387,8 @@ public class CombatPowerSimulationService {
     return loadout.equipment().get(index);
   }
 
-  private static Contribution unsupported(Change change, String target, String from, String to) {
-    return new Contribution(
-        change.kind().name(), target, from, to, null, Status.UNSUPPORTED, UNSUPPORTED_BASIS);
+  private static Planned unsupported(Change change, String target, String from, String to) {
+    return new Planned(change, target, from, to, null, UNSUPPORTED_BASIS);
   }
 
   private static String str(Object value) {

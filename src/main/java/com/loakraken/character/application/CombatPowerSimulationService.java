@@ -2,6 +2,7 @@ package com.loakraken.character.application;
 
 import com.loakraken.character.domain.CharacterLoadout;
 import com.loakraken.character.domain.CombatPowerGemModel;
+import com.loakraken.character.domain.CombatPowerPolishValues;
 import com.loakraken.common.api.BusinessException;
 import com.loakraken.common.api.ErrorCode;
 import java.math.BigDecimal;
@@ -44,14 +45,17 @@ public class CombatPowerSimulationService {
   private final CharacterCache cache;
   private final CharacterPublicSummaryPort stored;
   private final CombatPowerGemModel.Coefficients gemCoefficients;
+  private final CombatPowerPolishValues polishValues;
 
   public CombatPowerSimulationService(
       CharacterCache cache,
       CharacterPublicSummaryPort stored,
-      CombatPowerGemModel.Coefficients gemCoefficients) {
+      CombatPowerGemModel.Coefficients gemCoefficients,
+      CombatPowerPolishValues polishValues) {
     this.cache = cache;
     this.stored = stored;
     this.gemCoefficients = gemCoefficients;
+    this.polishValues = polishValues;
   }
 
   public enum Kind {
@@ -439,6 +443,7 @@ public class CombatPowerSimulationService {
       List<String> coreGrades,
       int corePointMax,
       List<String> polishGrades,
+      CombatPowerPolishValues polishValues,
       List<String> notes) {}
 
   public Options options() {
@@ -456,8 +461,10 @@ public class CombatPowerSimulationService {
         CORE_GRADES,
         20,
         List.of("LOW", "MID", "HIGH"),
+        polishValues,
         List.of(
             "숫자 범위는 B단계에서 공식 근거로 확정합니다(verified=false).",
-            "연마 옵션별 상중하 수치와 팔찌 부여 효과 목록은 공식 확률표로 B단계에서 추가합니다."));
+            "연마 수치(polishValues)는 공식 장비 툴팁 표본으로 확인한 고대 장신구 값이고, 확인하지 못한 칸은 null입니다.",
+            "팔찌 등급 수치는 표본을 늘려 추가합니다."));
   }
 }

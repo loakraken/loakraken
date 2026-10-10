@@ -1,0 +1,30 @@
+{
+ "version": "polish-values-v1",
+ "source": {
+  "name": "공식 armory 장비 툴팁(GET /armories/characters/{name}/equipment) 장신구 \"연마 효과\" 줄. 등급은 줄 글자색(#FE9600 상·#CE43FC 중·#00B5FF 하, 파서 LostArkEquipmentTooltip과 같은 규칙)",
+  "sample": "고대 장신구를 낀 캐릭터 30명(로컬 표본 DB에서 아이템 레벨 상위 400명 중 13명 간격), 2026-10-10 23:2x KST. 옵션·등급마다 값이 하나뿐인지 확인했다",
+  "missing": "표본에 그 등급 줄이 없던 칸은 null(추정 금지). 유물 장신구는 같은 옵션도 값이 달라(예: 공격력 % 0.66) 아직 넣지 않았다",
+  "verifiedOn": "2026-10-10"
+ },
+ "accessoryGrade": "고대",
+ "options": [
+  {"option": "추가 피해", "percent": true, "low": "+0.70%", "mid": "+1.60%", "high": "+2.60%"},
+  {"option": "적에게 주는 피해", "percent": true, "low": "+0.55%", "mid": "+1.20%", "high": "+2.00%"},
+  {"option": "공격력", "percent": true, "low": "+0.40%", "mid": "+0.95%", "high": "+1.55%"},
+  {"option": "무기 공격력", "percent": true, "low": "+0.80%", "mid": "+1.80%", "high": "+3.00%"},
+  {"option": "치명타 적중률", "percent": true, "low": "+0.40%", "mid": "+0.95%", "high": "+1.55%"},
+  {"option": "치명타 피해", "percent": true, "low": "+1.10%", "mid": "+2.40%", "high": "+4.00%"},
+  {"option": "공격력", "percent": false, "low": "+80", "mid": "+195", "high": "+390"},
+  {"option": "무기 공격력", "percent": false, "low": "+195", "mid": "+480", "high": "+960"},
+  {"option": "낙인력", "percent": true, "low": "+2.15%", "mid": "+4.80%", "high": "+8.00%"},
+  {"option": "아군 공격력 강화 효과", "percent": true, "low": "+1.35%", "mid": "+3.00%", "high": "+5.00%"},
+  {"option": "아군 피해량 강화 효과", "percent": true, "low": "+2.00%", "mid": null, "high": "+7.50%"},
+  {"option": "세레나데, 신앙, 조화 게이지 획득량", "percent": true, "low": "+1.60%", "mid": "+3.60%", "high": "+6.00%"},
+  {"option": "파티원 회복 효과", "percent": true, "low": "+0.95%", "mid": "+2.10%", "high": "+3.50%"},
+  {"option": "파티원 보호막 효과", "percent": true, "low": "+0.95%", "mid": "+2.10%", "high": "+3.50%"},
+  {"option": "상태이상 공격 지속시간", "percent": true, "low": "+0.20%", "mid": "+0.50%", "high": "+1.00%"},
+  {"option": "최대 생명력", "percent": false, "low": "+1300", "mid": "+3250", "high": "+6500"},
+  {"option": "최대 마나", "percent": false, "low": "+6", "mid": "+15", "high": null},
+  {"option": "전투 중 생명력 회복량", "percent": false, "low": "+10", "mid": "+25", "high": null}
+ ]
+}

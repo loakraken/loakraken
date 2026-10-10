@@ -38,6 +38,7 @@ public class CharacterCollectorService {
   private final java.util.concurrent.atomic.AtomicLong lastSuccess =
       new java.util.concurrent.atomic.AtomicLong();
   private boolean profileTurn = true;
+  private boolean seedTurn = true;
 
   public CharacterCollectorService(
       CharacterDetailsPort details,
@@ -100,13 +101,20 @@ public class CharacterCollectorService {
       return Task.NONE;
     }
     try {
-      // 시드(#255)가 남아 있으면 먼저 훑는다. 원정대가 표본을 넓히는 시작점이라서다.
-      if (seed()) return Task.SEED;
+      // 시드(#255)와 기존 수집(프로필·원정대)을 번갈아 한다(#271). 시드가 수천 줄이어도 그동안 전투력 표본이 계속 쌓이게 하려는 것이다.
+      // 한쪽에 할 일이 없으면 다른 쪽을 한다.
+      if (seedTurn && seeds.pendingCount() > 0) {
+        seedTurn = false;
+        if (seed()) return Task.SEED;
+      } else {
+        seedTurn = true;
+      }
       var first = profileTurn ? Task.PROFILE : Task.ROSTER;
       profileTurn = !profileTurn;
       if (run(first)) return first;
       var second = first == Task.PROFILE ? Task.ROSTER : Task.PROFILE;
-      return run(second) ? second : Task.NONE;
+      if (run(second)) return second;
+      return seed() ? Task.SEED : Task.NONE;
     } catch (DataAccessException exception) {
       record(Task.NONE, "storage_failed");
       log.warn("통계 표본 수집 저장에 실패했습니다. 예외 유형={}", exception.getClass().getSimpleName());

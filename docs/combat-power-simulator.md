@@ -28,8 +28,8 @@ A단계는 **계약과 입력 검증만** 연다. 전투력 계산식은 계산 
 
 | kind | 대상 | 바꿀 값 | 범위(예시) |
 |---|---|---|---|
-| `GEM_LEVEL_ALL` | 보석 전체 | `level` | 1–10 |
-| `GEM_LEVEL` | `slot`(검색 응답 gems.items[].slot) | `level` | 1–10 |
+| `GEM_LEVEL_ALL` | 보석 전체 | `level`(0은 모두 빼기) | 0–10 |
+| `GEM_LEVEL` | `slot`(검색 응답 gems.items[].slot) | `level`(0은 빼기) | 0–10 |
 | `EQUIPMENT_REFINE` | `index`(검색 응답 loadout.equipment 순번, 무기·방어구) | `refine` | 10–25 |
 | `EQUIPMENT_ADVANCED_REFINE` | `index`(무기·방어구) | `level` | 0–40 |
 | `EQUIPMENT_QUALITY` | `index`(품질이 있는 장비) | `quality` | 0–100 |
@@ -90,7 +90,7 @@ A단계는 **계약과 입력 검증만** 연다. 전투력 계산식은 계산 
   - 3티어 보석(멸화·홍염)이 있을 때(배수를 표본으로 아직 확인하지 않음)
   - 1~5레벨로 바꿀 때(기본 공격력 % 근거 없음)
   - 공식 전투력이 없을 때
-- 보석 빼기(0레벨)는 계수표에 있지만 API 입력은 아직 1~10만 받는다.
+- 보석 빼기는 `level` 0이다(배수 0, 기본 공격력 0). #244 표본의 빼기 10건으로 확인했다. `to`는 "0"이다.
 
 ## 단계
 

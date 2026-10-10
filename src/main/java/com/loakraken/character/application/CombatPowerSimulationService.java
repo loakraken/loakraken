@@ -222,7 +222,7 @@ public class CombatPowerSimulationService {
     if (change.kind() == null) throw invalid("kind가 필요합니다.");
     return switch (change.kind()) {
       case GEM_LEVEL_ALL -> {
-        range("level", change.level(), 1, 10);
+        range("level", change.level(), 0, 10);
         var targets = new LinkedHashMap<Integer, Integer>();
         String reason = gemModel.unsupportedReason();
         for (var slot : gemModel.slots().keySet()) {
@@ -232,7 +232,7 @@ public class CombatPowerSimulationService {
         yield new Planned(change, "보석 전체", null, String.valueOf(change.level()), targets, reason);
       }
       case GEM_LEVEL -> {
-        range("level", change.level(), 1, 10);
+        range("level", change.level(), 0, 10);
         var gem =
             loadout.gems() == null
                 ? null
@@ -445,7 +445,7 @@ public class CombatPowerSimulationService {
     return new Options(
         RULE_VERSION,
         false,
-        List.of(1, 2, 3, 4, 5, 6, 7, 8, 9, 10),
+        List.of(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10),
         10,
         25,
         40,

@@ -125,7 +125,13 @@ class CombatPowerSimulationIntegrationTest {
 
     var outOfRange = simulate("시뮬검증", "[{\"kind\": \"GEM_LEVEL\", \"slot\": 0, \"level\": 11}]");
     assertThat(outOfRange.statusCode()).isEqualTo(400);
-    assertThat(outOfRange.body()).contains("INVALID_REQUEST", "level", "1~10");
+    assertThat(outOfRange.body()).contains("INVALID_REQUEST", "level", "0~10");
+
+    // 보석 빼기(0레벨): 3000 × (1/1.0576) × (1 + 2.50%)/(1 + 3.30%) = 2814.64.
+    var removed = simulate("시뮬검증", "[{\"kind\": \"GEM_LEVEL\", \"slot\": 0, \"level\": 0}]");
+    assertThat(removed.statusCode()).isEqualTo(200);
+    assertThat(removed.body())
+        .contains("\"after\":2814.64", "\"delta\":-185.36", "\"status\":\"OK\"");
 
     var unknownKind = simulate("시뮬검증", "[{\"kind\": \"CARD_SET\"}]");
     assertThat(unknownKind.statusCode()).isEqualTo(400);
@@ -160,7 +166,7 @@ class CombatPowerSimulationIntegrationTest {
     ApiContractFixture.write("combat-power-options.json", response.body());
     var data = mapper.readTree(response.body()).path("data");
     assertThat(data.path("verified").asBoolean()).isFalse();
-    assertThat(data.path("gemLevels").size()).isEqualTo(10);
+    assertThat(data.path("gemLevels").size()).isEqualTo(11);
     assertThat(data.path("refineMax").asInt()).isEqualTo(25);
     verifyNoInteractions(detailsPort);
   }

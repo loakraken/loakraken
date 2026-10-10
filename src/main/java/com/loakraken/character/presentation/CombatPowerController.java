@@ -104,8 +104,8 @@ public class CombatPowerController {
           @Size(max = 16)
           @Pattern(regexp = "\\s*[\\p{L}\\p{N}]+\\s*")
           String characterName,
-      @Schema(description = "바꾼 항목(순서대로 적용, 최대 64개)") @NotNull @Size(max = 64) @Valid
-          List<ChangeRequest> changes) {
+      @Schema(description = "바꾼 항목(순서대로 적용, 최대 64개)") @NotNull @Size(max = 64)
+          List<@Valid ChangeRequest> changes) {
     List<CombatPowerSimulationService.Change> toChanges() {
       return changes.stream().map(ChangeRequest::toChange).toList();
     }
@@ -117,7 +117,7 @@ public class CombatPowerController {
       @Schema(description = "보석 slot(GEM_LEVEL)") Integer slot,
       @Schema(description = "검색 응답 loadout.equipment 순번(EQUIPMENT_*·POLISH)") Integer index,
       @Schema(description = "연마·팔찌 효과 줄 번호(0부터)") Integer line,
-      @Schema(description = "보석 레벨·상급 재련 단계·각인·스톤 레벨") Integer level,
+      @Schema(description = "보석 레벨(0은 보석 빼기)·상급 재련 단계·각인·스톤 레벨") Integer level,
       @Schema(description = "재련 단계(EQUIPMENT_REFINE)") Integer refine,
       @Schema(description = "품질(EQUIPMENT_QUALITY)") Integer quality,
       @Schema(description = "연마 옵션 이름(POLISH)") @Size(max = 32) String option,

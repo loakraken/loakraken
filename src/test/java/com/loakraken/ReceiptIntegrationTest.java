@@ -132,6 +132,8 @@ class ReceiptIntegrationTest {
     assertThat(data.path("assumptions").size()).isGreaterThan(0);
     verify(detailsPort, times(8)).fetchArmory(anyString());
     ApiContractFixture.write("character-receipt.json", first.body());
+    // 다른 사이트 이름·간접 표현 금지(#261).
+    assertThat(first.body()).doesNotContain(SiteNames.FORBIDDEN);
 
     var second = get("/api/v1/characters/receipt?characterName=" + encode(MAIN));
     var again = mapper.readTree(second.body()).path("data");

@@ -85,6 +85,8 @@ class CombatPowerSimulationIntegrationTest {
             """);
     assertThat(response.statusCode()).isEqualTo(200);
     ApiContractFixture.write("character-combat-power-simulate.json", response.body());
+    // 다른 사이트 이름·간접 표현 금지(#261).
+    assertThat(response.body()).doesNotContain(SiteNames.FORBIDDEN);
     var data = mapper.readTree(response.body()).path("data");
     assertThat(data.path("ruleVersion").asText()).isEqualTo("combat-power-sim-v1");
     // 시뮬레이션이 읽은 캐시가 검색 응답과 같은지 웹이 비교한다(PM-프론트 18:31).

@@ -303,7 +303,7 @@ public final class CritEffectTable {
               "용맹의 포효",
               null,
               new BigDecimal("20"),
-              "용맹의 포효 8초 버프(스킬·트라이포드 버프 가정, 기본 끔. 켜면 목표 사이트 일부의 기본값과 같습니다)",
+              "용맹의 포효 8초 버프(스킬·트라이포드 버프 가정, 기본 끔)",
               false),
           new ClassBuff(
               "번개의 속삭임 버프 유지 가정",
@@ -311,7 +311,7 @@ public final class CritEffectTable {
               "번개의 속삭임",
               null,
               new BigDecimal("10"),
-              "번개의 속삭임 12초 버프(스킬·트라이포드 버프 가정, 기본 끔. 켜면 목표 사이트 일부의 기본값과 같습니다)",
+              "번개의 속삭임 12초 버프(스킬·트라이포드 버프 가정, 기본 끔)",
               false),
           new ClassBuff(
               "급소 노출 시너지(자신)",
@@ -319,7 +319,7 @@ public final class CritEffectTable {
               null,
               "급소 노출",
               new BigDecimal("10"),
-              "자기 스킬 트라이포드 '급소 노출' 치명타 적중률 시너지(스킬·트라이포드 버프 가정, 기본 끔. 켜면 목표 사이트 일부의 기본값과 같습니다)",
+              "자기 스킬 트라이포드 '급소 노출' 치명타 적중률 시너지(스킬·트라이포드 버프 가정, 기본 끔)",
               false),
           new ClassBuff(
               "나를 위한 연주 버프 상시 유지 가정",
@@ -327,7 +327,7 @@ public final class CritEffectTable {
               null,
               "나를 위한 연주",
               new BigDecimal("20"),
-              "천상의 연주 트라이포드 '나를 위한 연주'(스킬·트라이포드 버프 가정, 기본 끔. 켜면 목표 사이트 일부의 기본값과 같습니다)",
+              "천상의 연주 트라이포드 '나를 위한 연주'(스킬·트라이포드 버프 가정, 기본 끔)",
               false),
           new ClassBuff(
               "빛의 성장 버프 상시 유지 가정",
@@ -335,7 +335,7 @@ public final class CritEffectTable {
               null,
               "빛의 성장",
               new BigDecimal("11.8"),
-              "슈르디 트라이포드 '빛의 성장'(스킬·트라이포드 버프 가정, 기본 끔. 켜면 목표 사이트 일부의 기본값과 같습니다)",
+              "슈르디 트라이포드 '빛의 성장'(스킬·트라이포드 버프 가정, 기본 끔)",
               false));
 
   /** 공용 아크 그리드 코어. 두 사이트가 기본에 넣는다. 직업 코어의 치명 효과는 일로아 기준으로 넣지 않는다. */
@@ -410,7 +410,7 @@ public final class CritEffectTable {
   private static final List<SpeedRule> SPEED_RULES =
       List.of(
           // 두 사이트 일치(츄델 기민함 48 = 신속 29.25 + 질풍노도 12)
-          new SpeedRule("질풍노도", SpeedDecision.INCLUDE, null, "두 사이트 포함"),
+          new SpeedRule("질풍노도", SpeedDecision.INCLUDE, null, "기본 포함"),
           // "진화형 피해가 12.0% 증가하고, 공격 속도가 4.0% 증가합니다."
           new SpeedRule("파괴 전차", SpeedDecision.INCLUDE, null, "조건 없는 문구"),
           // "이동 속도가 10.0% 증가하고, …"
@@ -421,13 +421,13 @@ public final class CritEffectTable {
           new SpeedRule("광기", SpeedDecision.CORE_STATE, "광기 상태 가정", "광기 상태에서는 공격속도 및 이동속도가 15.0%"),
           new SpeedRule("환수 각성", SpeedDecision.CORE_STATE, "환수 각성 상태 가정", "환수 각성 상태에서는 … 20.0% 증가"),
           new SpeedRule(
-              "고독한 기사", SpeedDecision.SITUATIONAL, "진격 태세 가정", "두 사이트 제외(진격 태세 동안 이동속도가 10.0% 감소)"),
+              "고독한 기사", SpeedDecision.SITUATIONAL, "진격 태세 가정", "기본 제외(진격 태세 동안 이동속도가 10.0% 감소)"),
           new SpeedRule(
               "두 번째 동료", SpeedDecision.CORE_STATE, "실버호크 소환 가정", "실버호크 소환 중 … 이동속도가 8.0% 증가"),
           new SpeedRule(
               "아르데타인의 기술", SpeedDecision.CORE_STATE, "드론 부착 가정", "드론이 부착된 상태에서 자신의 이동속도가 10.0% 증가"),
           // 상황 조건(스킬·전환 직후 N초, 모드·스탠스)
-          new SpeedRule("달의 소리", SpeedDecision.SITUATIONAL, "달의 소리 효과 가정", "두 사이트 제외(페르소나 전환 시)"),
+          new SpeedRule("달의 소리", SpeedDecision.SITUATIONAL, "달의 소리 효과 가정", "기본 제외(페르소나 전환 시)"),
           new SpeedRule("피스메이커 - 핸드건", SpeedDecision.SITUATIONAL, "핸드건 스탠스 변경 후 9초 가정", "9초동안"),
           new SpeedRule("평화주의자", SpeedDecision.SITUATIONAL, "스탠스 변경 후 12초 가정", "12.0초동안"),
           new SpeedRule("전술 이동", SpeedDecision.SITUATIONAL, "이동기 사용 후 8초 가정", "8.0초 동안"),
@@ -463,23 +463,12 @@ public final class CritEffectTable {
   public static final List<TripodSpeed> TRIPOD_SPEEDS =
       List.of(
           // 건슬링어 기동 타격 "구르기 이후 8.0초 동안 공격 속도와 이동 속도가 19.2% 증가한다." — 두 사이트 포함(한국남자)
-          new TripodSpeed(
-              "날렵함",
-              SpeedDecision.SITUATIONAL,
-              "날렵함 8초 유지 가정",
-              "트라이포드 버프 가정, 기본 끔. 켜면 목표 사이트 일부의 기본값과 같습니다"),
+          new TripodSpeed("날렵함", SpeedDecision.SITUATIONAL, "날렵함 8초 유지 가정", "트라이포드 버프 가정, 기본 끔"),
           // 배틀마스터 붕천퇴 "적에게 콤보 공격 적중 시 4.0초간 공격속도가 19.2% 증가하고 이동속도가 19.2% 증가한다." — 일로아만(리쿠)
           new TripodSpeed(
-              "바람의 축복",
-              SpeedDecision.SITUATIONAL,
-              "바람의 축복 4초 가정",
-              "목표 사이트 1곳만 포함, 공식 문구 상황 조건이라 기본 끔"),
+              "바람의 축복", SpeedDecision.SITUATIONAL, "바람의 축복 4초 가정", "공식 문구 상황 조건이라 기본 끔"),
           // 버서커 마운틴 크래쉬 "스킬 사용 시 공격 속도가 4.0초 간 30.0% 증가한다." — 일로아만(TheG0D)
-          new TripodSpeed(
-              "속공 준비",
-              SpeedDecision.SITUATIONAL,
-              "속공 준비 4초 가정",
-              "목표 사이트 1곳만 포함, 공식 문구 상황 조건이라 기본 끔"));
+          new TripodSpeed("속공 준비", SpeedDecision.SITUATIONAL, "속공 준비 4초 가정", "공식 문구 상황 조건이라 기본 끔"));
 
   static TripodSpeed tripodSpeed(String name) {
     for (var rule : TRIPOD_SPEEDS) if (rule.tripod().equals(name)) return rule;

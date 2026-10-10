@@ -91,6 +91,8 @@ class CritSpeedIntegrationTest {
     verify(detailsPort, times(1)).fetchArmory(NAME);
     verify(detailsPort, never()).fetchSiblings(anyString());
     ApiContractFixture.write("crit-speed.json", response.body());
+    // 다른 사이트 이름·간접 표현 금지(#261).
+    assertThat(response.body()).doesNotContain(SiteNames.FORBIDDEN);
   }
 
   @ParameterizedTest

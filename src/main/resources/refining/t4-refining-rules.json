@@ -4,7 +4,7 @@
   "name": "MIT 라이선스 공개 재련 데이터(출처·저작권 고지는 저장소 NOTICE)",
   "commit": "5b870d267dc05245bfc1f55ad1cb4a2d9bbab765",
   "license": "MIT(고지는 저장소 NOTICE)",
-  "crossCheckedWith": "다른 계산 사이트 강화 최적화 단계 데이터 60/60 일치; 전율 책(12~19단계, 증가 = 그 단계 기본 성공률)은 목표 사이트 2곳의 회차별 전략·재료 일치(계산 검증 2026-10-10). 사이트 이름은 docs/refining-plan.md",
+  "crossCheckedWith": "강화 최적화 단계 데이터 60/60 일치; 전율 책(12~19단계, 증가 = 그 단계 기본 성공률)은 회차별 전략·재료 대조 일치(계산 검증 2026-10-10). 대조 방법은 docs/refining-plan.md",
   "verifiedOn": "2026-10-05"
  },
  "tracks": [

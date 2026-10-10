@@ -7,9 +7,12 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
 
+// 첫 운영 릴리스에서는 웹이 쓰지 않고 비용이 로아또와 아직 맞지 않아 기본 꺼짐(gem.enabled, PM-백엔드 10-10 09:00).
+@ConditionalOnProperty(prefix = "gem", name = "enabled", havingValue = "true")
 @RestController
 @RequestMapping(value = "/api/v1/gems", produces = MediaType.APPLICATION_JSON_VALUE)
 @Tag(name = "보석", description = "공식 합성 규칙에 따른 티어 4 보석 수량 계획")

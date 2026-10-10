@@ -13,7 +13,9 @@ import org.springframework.context.annotation.Import;
 import tools.jackson.databind.json.JsonMapper;
 
 @Import(TestcontainersConfiguration.class)
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@SpringBootTest(
+    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+    properties = "gem.enabled=true")
 class GemSynthesisIntegrationTest {
   @LocalServerPort int port;
   private final JsonMapper mapper = new JsonMapper();

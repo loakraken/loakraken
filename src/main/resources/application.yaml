@@ -86,6 +86,14 @@ stats:
 receipt:
   enabled: ${RECEIPT_ENABLED:false}
 
+# 젬 가공 계획 API: 첫 운영 릴리스에서 기본 꺼짐(웹 미사용, 로아또 대조 전)
+gem:
+  enabled: ${GEM_ENABLED:false}
+
+# 치명타·공이속 계산 API: 운영은 웹 공개 판단 전까지 CRIT_SPEED_ENABLED=false
+crit-speed:
+  enabled: ${CRIT_SPEED_ENABLED:true}
+
 home:
   cache:
     calendar-ttl: ${HOME_CALENDAR_CACHE_TTL:30m}

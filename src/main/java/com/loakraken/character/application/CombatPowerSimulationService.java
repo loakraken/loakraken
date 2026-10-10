@@ -39,7 +39,7 @@ public class CombatPowerSimulationService {
   private static final Set<String> GRADES = Set.of("LOW", "MID", "HIGH");
   private static final List<String> CORE_GRADES = List.of("영웅", "전설", "유물", "고대");
   private static final Set<String> WEAPON_ARMOR = Set.of("무기", "투구", "상의", "하의", "장갑", "어깨");
-  private static final String UNSUPPORTED_BASIS = "전투력 계산식이 아직 확정되지 않았습니다(목표 사이트 실측 대조 대기).";
+  private static final String UNSUPPORTED_BASIS = "이 항목의 전투력 계산식을 아직 확인하고 있어 계산하지 않았습니다.";
 
   private final CharacterCache cache;
   private final CharacterPublicSummaryPort stored;

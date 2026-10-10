@@ -176,9 +176,9 @@ public final class EquipmentReceipt {
                     Reason.GROWTH_COST_UNCONFIRMED,
                     "목표 "
                         + next
-                        + "단계 성장 비용은 목표 사이트 2곳의 값("
+                        + "단계 성장 비용은 확인한 값이 엇갈려("
                         + String.format("%,d", growthStage.get().shard())
-                        + " 파편 대 0)이 갈려 게임 확인 전까지 빼고 계산했습니다."));
+                        + " 파편 또는 0) 게임 확인 전까지 빼고 계산했습니다."));
         }
       if (grade == RefiningRules.Grade.JEONYUL
           && from < JEONYUL_LIMIT_BREAK_STAGE

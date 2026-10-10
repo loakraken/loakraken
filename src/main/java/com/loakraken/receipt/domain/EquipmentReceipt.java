@@ -19,6 +19,12 @@ import java.util.Set;
  */
 public final class EquipmentReceipt {
   public static final int FROM_STAGE = 10;
+
+  /** 등급별 산정 시작 단계. 업화는 +10부터, 전율은 +11부터 센다(로아와·일로아 모두 전율 +11 시작, 계산 검증 10-10 09:02 #218 A). */
+  static int fromStage(RefiningRules.Grade grade) {
+    return grade == RefiningRules.Grade.JEONYUL ? 11 : FROM_STAGE;
+  }
+
   private static final List<String> ARMOR = List.of("투구", "상의", "하의", "장갑", "어깨");
   private static final String WEAPON = "무기";
   private static final String ARM_GUARD = "완갑";
@@ -59,7 +65,7 @@ public final class EquipmentReceipt {
     for (var item : items) {
       var target = target(rules, item);
       if (target == null) continue;
-      for (int stage = FROM_STAGE + 1; stage <= target.toStage(); stage++) {
+      for (int stage = fromStage(target.track().grade()) + 1; stage <= target.toStage(); stage++) {
         var rule = target.track().stage(stage);
         for (var material : rule.materials()) names.add(material.name());
         if (rule.shard() > 0) names.add(RefiningPlan.SHARD);
@@ -117,10 +123,10 @@ public final class EquipmentReceipt {
                 "업화·전율 외 장비(결단 등)는 산정하지 않습니다."));
         continue;
       }
-      if (stage <= FROM_STAGE) {
+      int from = fromStage(grade);
+      if (stage <= from) {
         parts.add(
-            new Part(
-                item.type(), item.name(), grade, FROM_STAGE, stage, BigDecimal.ZERO, List.of()));
+            new Part(item.type(), item.name(), grade, from, stage, BigDecimal.ZERO, List.of()));
         continue;
       }
       var target = target(rules, item);
@@ -136,7 +142,7 @@ public final class EquipmentReceipt {
       var stages = new ArrayList<StageCost>();
       var total = BigDecimal.ZERO;
       boolean priced = true;
-      for (int next = FROM_STAGE + 1; next <= stage; next++) {
+      for (int next = from + 1; next <= stage; next++) {
         var cost = cheapest(target.track(), grade, next, unitPrices, assumeBook, growthCosts);
         if (cost == null) {
           priced = false;
@@ -156,12 +162,12 @@ public final class EquipmentReceipt {
               item.type(),
               item.name(),
               grade,
-              FROM_STAGE,
+              from,
               stage,
               total.setScale(0, RoundingMode.HALF_UP),
               List.copyOf(stages)));
       if (growthCosts != null)
-        for (int next = FROM_STAGE + 1; next <= stage; next++) {
+        for (int next = from + 1; next <= stage; next++) {
           var growthStage = growthCosts.stage(grade, target.track().equipmentType(), next);
           if (growthStage.isPresent() && !growthStage.get().confirmed())
             excluded.add(
@@ -237,7 +243,7 @@ public final class EquipmentReceipt {
     if (!WEAPON.equals(item.type()) && !ARMOR.contains(item.type())) return null;
     var grade = grade(item);
     int stage = stage(item);
-    if (grade == null || stage <= FROM_STAGE) return null;
+    if (grade == null || stage <= fromStage(grade)) return null;
     var type =
         WEAPON.equals(item.type())
             ? RefiningRules.EquipmentType.WEAPON
@@ -248,7 +254,8 @@ public final class EquipmentReceipt {
     } catch (RuntimeException exception) {
       return null;
     }
-    if (FROM_STAGE + 1 < track.minTargetStage() || stage > track.maxTargetStage()) return null;
+    if (fromStage(grade) + 1 < track.minTargetStage() || stage > track.maxTargetStage())
+      return null;
     return new Target(track, stage);
   }
 

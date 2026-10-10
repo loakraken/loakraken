@@ -2,6 +2,7 @@ plugins {
     id 'java'
     id 'org.springframework.boot' version '4.1.1'
     id 'io.spring.dependency-management' version '1.1.7'
+    id 'com.diffplug.spotless' version '8.10.3'
 }
 
 group = 'com.loakraken'
@@ -26,6 +27,7 @@ dependencies {
     // Web
     implementation 'org.springframework.boot:spring-boot-starter-webmvc'
     implementation 'org.springframework.boot:spring-boot-starter-validation'
+    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:3.1.1'
 
     // Persistence
     implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
@@ -42,7 +44,7 @@ dependencies {
 
     // Observability
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
-    // runtimeOnly 'io.micrometer:micrometer-registry-prometheus'
+    runtimeOnly 'io.micrometer:micrometer-registry-prometheus'
 
     // Lombok
     compileOnly 'org.projectlombok:lombok'
@@ -70,4 +72,14 @@ dependencyManagement {
 
 tasks.named('test') {
     useJUnitPlatform()
+    outputs.dir(layout.buildDirectory.dir('generated'))
+    // 시세 이력 예열이 테스트 중 공식 API를 부르거나 호출 예산 검증을 흔들지 않게 끈다.
+    systemProperty 'market.warmup.enabled', 'false'
+    systemProperty 'stats.collector.enabled', 'false'
+}
+
+spotless {
+    java {
+        googleJavaFormat('1.36.0')
+    }
 }

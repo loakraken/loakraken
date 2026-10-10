@@ -6,8 +6,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 @SpringBootApplication
 public class LoakrakenApplication {
 
-    public static void main(String[] args) {
-        SpringApplication.run(LoakrakenApplication.class, args);
-    }
-
+  public static void main(String[] args) {
+    SpringApplication.run(LoakrakenApplication.class, args);
+  }
 }

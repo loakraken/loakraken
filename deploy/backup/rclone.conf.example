@@ -1,0 +1,41 @@
+# 외부 백업 저장소 설정 예시. 실제 파일은 서버의 ${SECRETS_DIR}/rclone.conf(권한 400, root 소유)에 둔다.
+# 값(키·비밀번호)은 이 파일·저장소·문서에 쓰지 않는다. 사용자가 서버에서 `rclone config`로 만들거나 아래 형식에 직접 채운다.
+#
+# offsite      : 서버 밖 S3 호환 저장소(서버 사업자의 객체 저장소, Backblaze B2, Cloudflare R2 등. 서버와 다른 사업자·지역을 권장)
+# offsite-crypt: offsite 위에 얹은 암호화 계층. 파일 내용과 이름을 암호화해 올린다. backup.sh는 이 원격만 쓴다.
+#
+# crypt의 password·password2는 `rclone obscure <비밀번호>` 결과를 넣는다(난독화일 뿐 암호화가 아니므로 이 파일 자체를 비밀로 다룬다).
+# **암호화 비밀번호를 잃으면 백업을 복원할 수 없다.** 비밀번호는 서버 밖(사용자 비밀번호 관리자)에도 보관한다.
+
+[offsite]
+type = s3
+provider = Other
+endpoint = https://<S3 엔드포인트>
+region = <지역 또는 auto>
+access_key_id = <접근 키>
+secret_access_key = <비밀 키>
+acl = private
+no_check_bucket = true
+
+[offsite-crypt]
+type = crypt
+remote = offsite:<버킷 이름>/loakraken
+filename_encryption = standard
+directory_name_encryption = true
+password = <rclone obscure 결과>
+password2 = <rclone obscure 결과>
+
+# ---- 운영 결정(2026-10-09): 외부 백업은 Cloudflare R2 ----
+# R2 대시보드에서 버킷(예: loakraken-backup)을 만들고 Location은 Asia-Pacific(apac) 힌트를 고른다(보장 아님).
+# API 토큰은 "Object Read & Write"를 그 버킷 하나로만 제한해 만든다. 아래 offsite 대신 이 형식을 쓴다.
+#
+# [offsite]
+# type = s3
+# provider = Cloudflare
+# endpoint = https://<계정 ID>.r2.cloudflarestorage.com
+# region = auto
+# access_key_id = <R2 접근 키 ID>
+# secret_access_key = <R2 비밀 접근 키>
+# no_check_bucket = true
+#
+# [offsite-crypt]의 remote는 offsite:<버킷 이름>/loakraken 그대로 쓴다.

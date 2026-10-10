@@ -1,7 +1,117 @@
+server:
+  # 신뢰 프록시(사설망·루프백)가 보낸 X-Forwarded-For만 원격 주소로 쓴다(Tomcat RemoteIpValve). 외부에서 직접 보낸 헤더는 무시한다.
+  forward-headers-strategy: native
+  # JSON 응답을 gzip으로 보낸다. 홈 일정은 400KB → 8KB 수준이다(#118 P2, docs/home.md).
+  compression:
+    enabled: true
+    mime-types: application/json
+    min-response-size: 2KB
+
 spring:
   application:
     name: loakraken
 
+  jackson:
+    deserialization:
+      accept-float-as-int: false
+    datatype:
+      enum:
+        fail-on-numbers-for-enums: true
+
   threads:
     virtual:
       enabled: true
+
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+
+  data:
+    redis:
+      connect-timeout: 1s
+      timeout: 1s
+
+lostark:
+  api-key: ${LOSTARK_API_KEY:}
+  connect-timeout: 3s
+  read-timeout: 5s
+  # 공식 한도 100회/분에 여유를 둔 예산입니다. 게이트가 Valkey면 같은 키를 쓰는 모든 인스턴스 합산입니다(#107).
+  requests-per-minute: 90
+  max-concurrent-requests: 4
+  summary-ttl: 5m
+  gate:
+    store: ${LOSTARK_GATE_STORE:valkey}
+    # 비우면 API 키 SHA-256 앞 12자. 운영·스테이징은 명시합니다.
+    key-id: ${LOSTARK_GATE_KEY_ID:}
+    command-timeout: ${LOSTARK_GATE_COMMAND_TIMEOUT:100ms}
+  # 클라이언트별 분당 한도(#108). official은 요청이 실제로 일으킨 공식 호출 수입니다. docs/backend-operations.md 참고.
+  client-limit:
+    enabled: ${CLIENT_LIMIT_ENABLED:true}
+    official-per-minute: ${CLIENT_LIMIT_OFFICIAL:20}
+    stats-per-minute: ${CLIENT_LIMIT_STATS:60}
+    general-per-minute: ${CLIENT_LIMIT_GENERAL:240}
+    bot-per-minute: ${CLIENT_LIMIT_BOT:120}
+    exempt-internal: ${CLIENT_LIMIT_EXEMPT_INTERNAL:true}
+
+character:
+  snapshots:
+    enabled: ${CHARACTER_SNAPSHOTS_ENABLED:false}
+  history:
+    enabled: ${CHARACTER_HISTORY_ENABLED:true}
+  views:
+    enabled: ${CHARACTER_VIEWS_ENABLED:true}
+
+market:
+  cache:
+    prices-ttl: ${MARKET_PRICES_CACHE_TTL:30s}
+    options-ttl: ${MARKET_OPTIONS_CACHE_TTL:10m}
+    history-ttl: ${MARKET_HISTORY_CACHE_TTL:10m}
+    board-scan-ttl: ${MARKET_BOARD_SCAN_CACHE_TTL:3m}
+  warmup:
+    enabled: ${MARKET_WARMUP_ENABLED:false}
+    interval: ${MARKET_WARMUP_INTERVAL:9m}
+    # 홈 요약·시세 기본 탭(board?tab=REFINING) 강제 갱신 주기. 가격 캐시 TTL과 같게 둡니다(#154).
+    board-interval: ${MARKET_WARMUP_BOARD_INTERVAL:30s}
+    # 예열 전체(이력·보드)의 분당 공식 호출 상한입니다.
+    max-calls-per-minute: ${MARKET_WARMUP_MAX_CALLS_PER_MINUTE:15}
+
+stats:
+  collector:
+    enabled: ${STATS_COLLECTOR_ENABLED:false}
+    interval: ${STATS_COLLECTOR_INTERVAL:3s}
+    reserve: ${STATS_COLLECTOR_RESERVE:40}
+
+# 원정대 영수증(#174)은 계산 일치 원칙(사용자 지시 10-09) 검증 전까지 공개하지 않는다. 검증 서버에서만 켠다.
+receipt:
+  enabled: ${RECEIPT_ENABLED:false}
+
+# 젬 가공 계획 API: 첫 운영 릴리스에서 기본 꺼짐(웹 미사용, 로아또 대조 전)
+gem:
+  enabled: ${GEM_ENABLED:false}
+
+# 치명타·공이속 계산 API: 웹 공개 판단 전까지 기본 꺼짐(개발·검증 서버는 CRIT_SPEED_ENABLED=true)
+crit-speed:
+  enabled: ${CRIT_SPEED_ENABLED:false}
+
+home:
+  cache:
+    calendar-ttl: ${HOME_CALENDAR_CACHE_TTL:30m}
+    news-ttl: ${HOME_NEWS_CACHE_TTL:10m}
+
+management:
+  metrics:
+    distribution:
+      # p95·p99를 Prometheus에서 계산하도록 HTTP 요청 지연 히스토그램을 낸다(#143).
+      percentiles-histogram:
+        http.server.requests: true
+
+springdoc:
+  paths-to-match: /api/v1/**
+  override-with-generic-response: false
+  remove-broken-reference-definitions: false
+  api-docs:
+    version: OPENAPI_3_1
+  swagger-ui:
+    path: /swagger-ui.html
+    disable-swagger-default-url: true

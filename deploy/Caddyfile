@@ -1,0 +1,28 @@
+# LOAKraken 엣지 프록시. SITE_ADDRESS가 도메인이면 Caddy가 HTTPS 인증서를 자동 발급·갱신한다.
+# 로컬 점검에서는 SITE_ADDRESS=:80 으로 HTTP만 연다.
+#
+# 바깥에서 들어온 X-Forwarded-For는 믿지 않는다(trusted_proxies 미설정).
+# Caddy가 실제 접속 주소로 X-Forwarded-For를 설정하고, Next가 이 값을 백엔드로 그대로 넘긴다.
+{
+	admin off
+}
+
+{$SITE_ADDRESS} {
+	encode zstd gzip
+
+	# 요청 ID(O-8 로그 상관관계): 요청마다 새로 만들어 덮어쓴다. 사용자가 보낸 X-Request-Id는 버린다.
+	# web(#159)이 이 값을 백엔드로 이어 보내고, 응답에도 같은 값을 돌려줘 문의 때 추적에 쓴다.
+	request_header X-Request-Id {http.request.uuid}
+
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		X-Frame-Options "DENY"
+		-Server
+		-Via
+		X-Request-Id {http.request.uuid}
+	}
+
+	reverse_proxy web:3000
+}

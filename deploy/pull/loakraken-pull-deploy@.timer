@@ -1,0 +1,11 @@
+# 2분마다 채널 태그를 확인한다. 바뀌지 않았으면 이미지 목록(manifest)만 확인하고 끝난다.
+[Unit]
+Description=LOAKraken pull deploy check (%i)
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=2min
+RandomizedDelaySec=20s
+
+[Install]
+WantedBy=timers.target

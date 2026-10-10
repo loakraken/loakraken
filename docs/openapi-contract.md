@@ -1,0 +1,39 @@
+# OpenAPI 응답 계약
+
+`/v3/api-docs`의 OpenAPI 3.1 명세를 기준으로 프론트 타입을 생성합니다.
+문서 버전은 `1.0.0`, API 경로는 `/api/v1`입니다.
+서버 주소 `/`는 문서를 제공하는 현재 서버를 의미하며 테스트의 임시 포트가 고정되지 않습니다.
+
+## 필수 필드와 null
+
+응답 record의 필드는 null이어도 항상 직렬화됩니다. 따라서 모든 필드를 required로 표시하고,
+null을 허용하는 필드에는 별도로 `anyOf`의 원래 스키마 또는 null 타입을 선언합니다.
+필드 존재 여부와 null 허용 여부는 서로 다른 계약입니다.
+
+`@NullableResponse`는 공개 응답 record component에만 사용합니다.
+OpenAPI customizer가 CharacterResponse와 CharacterSnapshotHistoryResponse에서 연결된 응답 record만 순회해 계약을 반영합니다.
+외부 DTO·도메인·요청 모델에는 영향을 주지 않습니다.
+
+기존 nullable 주석으로 생성된 `$ref`와 `type: null`의 동시 선언은 객체와 null 모두를 거절할 수 있어 사용하지 않습니다.
+참조 대상 스키마는 객체 타입으로 유지하며, 해당 필드에서만 객체 또는 null을 허용합니다.
+[OpenAPI 3.1 명세](https://spec.openapis.org/oas/v3.1.2.html)와
+[Swagger Core 3.1 타입 처리](https://github.com/swagger-api/swagger-core/wiki/Swagger-2.X---OpenAPI-3.1)를 기준으로 검증했습니다.
+
+## 자동 검증
+
+Java 통합 테스트가 실제 문서와 부분 데이터 검색, 잘못된 요청 응답을 파일로 생성합니다.
+전체 전투정보 fixture도 생산 코드의 DTO→도메인→응답 경로를 거쳐 생성합니다.
+`Accept: application/xml`로 JSON 이외의 응답을 요구하면 406과 공통 JSON 오류를 반환합니다.
+오류 처리에서 JSON Content-Type을 명시해 콘텐츠 협상 실패가 공통 오류 계약을 바꾸지 않게 합니다.
+GitHub Actions는 Java 단위·통합 테스트로 실제 HTTP 동작과 주요 명세의 required/nullable 계약을 검증하고,
+생성한 OpenAPI와 테스트 응답을 `openapi-contract` 산출물로 보관합니다.
+전체 JSON Schema 대조는 개발 환경의 선택 검사이며 CI 필수 검사에 포함하지 않습니다.
+
+## 2026-10-04 계약 검토
+
+- 린트: 오류 0, 경고 0. 406·502·503·504를 비일반적 GET 응답으로 분류하는 참고 알림 4개는 실제 오류 계약이므로 유지했습니다.
+- 변경 탐지: required 응답 필드 추가 128개와 임시 서버 주소 교체 1개를 호환성 경고로 분류했습니다. 요청 필드 추가·응답 필드 제거·실제 반환 타입 변경은 없습니다.
+- 이번 보정은 기존 런타임 응답을 문서에 맞춘 것입니다. 기존 문서로 생성한 클라이언트는 재생성하고 nullable 필드를 처리해야 합니다.
+- 범용 설계 점수: 57.53/F. 공개 단건 조회에 인증·페이지네이션·일괄 작업 등이 없는 점도 감점하므로 출시 승인 지표로 사용하지 않습니다. 이 점수를 올리려고 실제로 없는 인증이나 캐시 헤더를 문서에 추가하지 않았습니다.
+
+Java 테스트는 명시적으로 검증한 응답·명세 항목을 확인합니다. 모든 JSON Schema 제약을 자동 대조하지 않으며, 실제 공식 API 키 호출, 운영 성능·보안 점검과 프론트 화면 검증을 대신하지 않습니다.

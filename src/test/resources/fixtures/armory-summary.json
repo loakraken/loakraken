@@ -1,0 +1,40 @@
+{
+  "ArmoryProfile": {
+    "CharacterName": "모험가", "ServerName": "루페온", "CharacterClassName": "바드",
+    "CharacterLevel": 70, "ItemAvgLevel": "1,700.50", "CombatPower": "12,345.67",
+    "UsingSkillPoint": 482, "TotalSkillPoint": 483,
+    "Tendencies": [{"Type": "지성", "Point": 532, "MaxPoint": 1000}, {"Type": "담력", "Point": 507, "MaxPoint": 1000}],
+    "Decorations": {"Symbol": "symbol.png", "Emblems": ["emblem-1.png", null]},
+    "HonorPoint": 6, "TownName": "테스트영지", "TownLevel": 70, "GuildMemberGrade": "길드원"
+  },
+  "ArmoryEquipment": [
+    {"Type": "무기", "Name": "테스트 무기", "Icon": "weapon.png", "Grade": "고대", "Tooltip": "unparsed-secret-tooltip"},
+    {"Type": "투구", "Name": "+19 테스트 투구", "Icon": "helmet.png", "Grade": "고대", "Tooltip": "{\"Element_001\":{\"type\":\"ItemTitle\",\"value\":{\"leftStr2\":\"<FONT SIZE='14'>아이템 레벨 1770 (티어 4)</FONT>\",\"qualityValue\":95}},\"Element_004\":{\"type\":\"ItemPartBox\",\"value\":{\"Element_000\":\"기본 효과\",\"Element_001\":\"물리 방어력 +9734<BR>민첩 +120150\"}},\"Element_008\":{\"type\":\"ItemPartBox\",\"value\":{\"Element_000\":\"아크 패시브 포인트 효과\",\"Element_001\":\"진화 +24\"}}}"}
+  ],
+  "ArmoryEngraving": {
+    "Engravings": [{"Slot": 0, "Name": "테스트 각인", "Icon": "engraving.png"}],
+    "Effects": [{"Icon": "effect.png", "Name": "각인 효과", "Description": "효과 설명"}],
+    "ArkPassiveEffects": [{"AbilityStoneLevel": null, "Grade": "유물", "Level": 4, "Name": "패시브 각인", "Description": "각인 설명"}]
+  },
+  "ArmoryGem": {
+    "Gems": [{"Slot": 0, "Name": "테스트 보석", "Icon": "gem.png", "Level": 9, "Grade": "전설"}],
+    "Effects": {"Description": "보석 효과", "Skills": [{"GemSlot": 0, "Name": "스킬명", "Description": ["효과1", "효과2"], "Option": "옵션", "Icon": "skill.png"}]}
+  },
+  "ArmoryCard": {
+    "Cards": [{"Slot": 0, "Name": "테스트 카드", "Icon": "card.png", "AwakeCount": 5, "AwakeTotal": 5, "Grade": "전설"}],
+    "Effects": [{"Index": 0, "CardSlots": [0], "Items": [{"Name": "세트명", "Description": "세트 효과"}]}]
+  },
+  "ArkPassive": {
+    "Title": "아크패시브", "IsArkPassive": true,
+    "Points": [{"Name": "진화", "Value": 120, "Description": "포인트 설명"}],
+    "Effects": [{"Name": "패시브명", "Description": "패시브 설명", "Icon": "passive.png", "ToolTip": "unparsed-secret-tooltip"}]
+  },
+  "ArkGrid": {
+    "Slots": [{"Index": 0, "Icon": "core.png", "Name": "테스트 코어", "Point": 14, "Grade": "유물", "Gems": [{"Index": 0, "Icon": "grid-gem.png", "IsActive": false, "Grade": "희귀"}]}],
+    "Effects": [{"Name": "그리드 효과", "Level": 2, "Tooltip": "unparsed-secret-tooltip"}]
+  },
+  "ArmoryAvatars": [{"Type":"무기 아바타","Name":"<P ALIGN='CENTER'><FONT COLOR='#F99200'>테스트 아바타 (귀속)</FONT></P>","Icon":"avatar.png","Grade":"전설","IsSet":false,"IsInner":true,"Tooltip":"{\"Element_004\":{\"type\":\"ItemPartBox\",\"value\":{\"Element_000\":\"기본 효과\",\"Element_001\":\"민첩 +2.00%\"}},\"Element_006\":{\"type\":\"SymbolString\",\"value\":{\"contentStr\":\"지성 : 5\",\"titleStr\":\"성향\"}}}"},{"Type":"이동 효과","Name":"효과","Icon":"move.png","Grade":"영웅","IsSet":false,"IsInner":false,"Tooltip":"unparsed-secret-tooltip"}],
+  "Collectibles": [{"Type":"모코코 씨앗","Icon":"mococo.png","Point":952,"MaxPoint":1480,"CollectiblePoints":[{"PointName":"아르테미스","Point":51,"MaxPoint":51},null]}],
+  "ArmorySkills": [{"Name":"테스트 스킬","Icon":"skill.png","Level":14,"Type":"일반","SkillType":0,"Tripods":[{"Tier":0,"Slot":1,"Name":"<FONT COLOR='#FFBB63'>약점 노출</FONT>","Icon":"t1.png","IsSelected":true,"Tooltip":"unparsed-secret-tooltip"},{"Tier":0,"Slot":2,"Name":"미선택","Icon":"t2.png","IsSelected":false,"Tooltip":"x"}],"Rune":{"Name":"광분","Icon":"rune.png","Grade":"전설","Tooltip":"unparsed-secret-tooltip"},"Tooltip":"{\"Element_005\":{\"type\":\"SingleTextBox\",\"value\":\"<BR>부위 파괴 : 레벨 1<BR>카운터 : 가능\"},\"Element_008\":{\"type\":\"ItemPartBox\",\"value\":{\"Element_000\":\"보석 효과\",\"Element_001\":\"[바드] 테스트 스킬 피해 28.00% 증가\"}}}"},{"Name":"기본 스킬","Icon":"basic.png","Level":1,"Type":"일반","SkillType":0,"Tripods":[],"Rune":null,"Tooltip":"unparsed-secret-tooltip"}],
+  "FutureField": "ignored"
+}

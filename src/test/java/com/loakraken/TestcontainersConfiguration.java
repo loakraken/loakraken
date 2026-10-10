@@ -8,18 +8,18 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 import org.testcontainers.utility.DockerImageName;
 
 @TestConfiguration(proxyBeanMethods = false)
-class TestcontainersConfiguration {
+public class TestcontainersConfiguration {
 
-    @Bean
-    @ServiceConnection
-    PostgreSQLContainer postgresContainer() {
-        return new PostgreSQLContainer(DockerImageName.parse("postgres:latest"));
-    }
+  @Bean
+  @ServiceConnection
+  PostgreSQLContainer postgresContainer() {
+    return new PostgreSQLContainer(DockerImageName.parse("postgres:18.6"));
+  }
 
-    @Bean
-    @ServiceConnection(name = "redis")
-    GenericContainer<?> redisContainer() {
-        return new GenericContainer<>(DockerImageName.parse("redis:latest")).withExposedPorts(6379);
-    }
-
+  @Bean
+  @ServiceConnection(name = "redis")
+  GenericContainer<?> valkeyContainer() {
+    return new GenericContainer<>(DockerImageName.parse("valkey/valkey:9.1.2"))
+        .withExposedPorts(6379);
+  }
 }

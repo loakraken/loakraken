@@ -1,0 +1,237 @@
+# LOAKraken 운영 스택 초안: 사업자와 무관한 Linux 서버 1대 + docker compose.
+# 절차·비밀 파일 준비는 docs/ops/deploy.md를 따른다.
+#
+#   docker compose -f compose.prod.yaml --env-file stack.env up -d --wait
+#
+# 공개 포트는 edge(80/443)뿐이다. web·api·postgres·valkey는 호스트에 포트를 열지 않는다.
+# 망: public(edge↔web), internal(web↔api, 공식 API 호출을 위한 외부 통신 허용), data(api↔postgres·valkey, 외부 통신 차단).
+# 비밀값은 compose secrets로 파일 마운트(/run/secrets/...)하며 환경변수·이미지·저장소에 두지 않는다.
+
+name: ${STACK_NAME:-loakraken}
+
+# 컨테이너 로그는 서비스마다 10MB × 5개까지만 남긴다(디스크 보호, 오래된 로그 자동 삭제).
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
+services:
+  edge:
+    image: caddy:2.11.7-alpine
+    restart: unless-stopped
+    logging: *default-logging
+    ports:
+      - "${EDGE_HTTP_PORT:-80}:80"
+      - "${EDGE_HTTPS_PORT:-443}:443"
+      - "${EDGE_HTTPS_PORT:-443}:443/udp"
+    environment:
+      SITE_ADDRESS: "${SITE_ADDRESS:?SITE_ADDRESS가 필요합니다(예 loakraken.gg)}"
+    volumes:
+      # 운영(Cloudflare 프록시)은 CADDYFILE=Caddyfile.cloudflare. 기본 Caddyfile은 로컬 점검·프록시 없는 구성용.
+      - ./${CADDYFILE:-Caddyfile}:/etc/caddy/Caddyfile:ro
+      - ./cloudflare/trusted-proxies.caddy:/etc/caddy/cloudflare-ips.caddy:ro
+      # Cloudflare Origin CA 인증서(origin.pem·origin.key). Cloudflare 모드에서만 쓴다.
+      - ${SECRETS_DIR:?SECRETS_DIR가 필요합니다}/tls:/etc/caddy/tls:ro
+      - edge-data:/data
+      - edge-config:/config
+    depends_on:
+      web:
+        condition: service_healthy
+    networks:
+      - public
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    mem_limit: ${EDGE_MEM_LIMIT:-128m}
+
+  web:
+    image: "${WEB_IMAGE:?WEB_IMAGE가 필요합니다}"
+    restart: unless-stopped
+    logging: *default-logging
+    environment:
+      LOAKRAKEN_API_ORIGIN: http://api:8080
+      # 사이트 기준 URL(metadataBase·canonical·sitemap·robots, web #96). 서버 전용·요청 시점에 읽는다.
+      # 운영만 https://loakraken.gg이고, 다른 값이면 robots가 색인을 막는다. 빠뜨리지 않게 필수로 둔다.
+      SITE_URL: "${SITE_URL:?SITE_URL이 필요합니다(운영 https://loakraken.gg)}"
+      # 기능 플래그(web #233): 치명 계산 도구(치적) 노출. on|off, 비우면 web 기본값(SITE_URL이 운영 주소일 때만 숨김).
+      # 운영 stack.env는 off를 명시한다(PM 총괄 결정 10-09: 첫 운영 배포 제외). 스테이징은 비워 두어 보인다.
+      CRIT_SPEED_TOOL: "${CRIT_SPEED_TOOL:-}"
+      # Node 힙 상한. 컨테이너 한도(WEB_MEM_LIMIT)보다 작게 둬 한도에 닿기 전에 GC가 돈다(2GB 서버 기준, docs/ops/deploy.md "메모리 예산").
+      NODE_OPTIONS: "${WEB_NODE_OPTIONS:---max-old-space-size=256}"
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:3000/about').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+      interval: 15s
+      timeout: 5s
+      start_period: 30s
+      retries: 5
+    mem_limit: ${WEB_MEM_LIMIT:-384m}
+    networks:
+      public:
+      internal:
+        # 백엔드는 이 주소에서 온 X-Forwarded-For만 믿는다(api의 SERVER_TOMCAT_REMOTEIP_INTERNALPROXIES).
+        ipv4_address: ${WEB_INTERNAL_IP:-172.31.250.10}
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+  api:
+    image: "${API_IMAGE:?API_IMAGE가 필요합니다}"
+    restart: unless-stopped
+    logging: *default-logging
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      # /run/secrets의 파일 이름을 설정 키로 읽는다(DB_PASSWORD, LOSTARK_API_KEY, spring.data.redis.password).
+      SPRING_CONFIG_IMPORT: optional:configtree:/run/secrets/
+      DB_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-loakraken}
+      DB_USERNAME: ${POSTGRES_USER:-loakraken}
+      VALKEY_HOST: valkey
+      VALKEY_PORT: "6379"
+      # 공식 API 호출 한도를 쓰는 백그라운드 작업은 스택마다 명시한다(운영 1곳만 true).
+      STATS_COLLECTOR_ENABLED: ${STATS_COLLECTOR_ENABLED:-false}
+      MARKET_WARMUP_ENABLED: ${MARKET_WARMUP_ENABLED:-false}
+      # 기능 플래그(#214): 비우면 꺼짐. 스테이징은 치명 계산을 켜고(web 치적 도구가 보임), 영수증·젬 가공은 검증 때만 켠다.
+      CRIT_SPEED_ENABLED: ${CRIT_SPEED_ENABLED:-false}
+      GEM_ENABLED: ${GEM_ENABLED:-false}
+      RECEIPT_ENABLED: ${RECEIPT_ENABLED:-false}
+      API_DOCS_ENABLED: "false"
+      # 관리(actuator) 포트를 앱 포트와 나눈다. internal·data망 안에서만 닿고 edge는 이 망에 없다.
+      MANAGEMENT_SERVER_PORT: "9090"
+      # liveness는 프로세스 생존, readiness는 DB·Valkey까지 확인한다(출시 점검표 R2).
+      MANAGEMENT_ENDPOINT_HEALTH_PROBES_ENABLED: "true"
+      MANAGEMENT_ENDPOINT_HEALTH_GROUP_READINESS_INCLUDE: readinessState,db,redis
+      # 구조화 로그(JSON, ECS 형식). 감시 설계의 로그 원칙(docs/ops/deploy.md).
+      LOGGING_STRUCTURED_FORMAT_CONSOLE: ecs
+      # JVM 힙 = 컨테이너 한도의 65%(768m이면 약 500MB). 나머지는 메타스페이스·스레드·코드 캐시 몫(2GB 서버 기준).
+      JAVA_TOOL_OPTIONS: "${API_JAVA_OPTS:--XX:MaxRAMPercentage=65 -XX:+ExitOnOutOfMemoryError}"
+      # 클라이언트 IP 헤더를 믿는 프록시를 web 한 곳으로 한정한다(Tomcat RemoteIpValve 정규식). 사설 대역 전체를 믿지 않는다.
+      SERVER_TOMCAT_REMOTEIP_INTERNALPROXIES: ${TRUSTED_PROXY_REGEX:-172\.31\.250\.10}
+    secrets:
+      - source: db_password
+        target: DB_PASSWORD
+      - source: valkey_password
+        target: spring.data.redis.password
+      - source: lostark_api_key
+        target: LOSTARK_API_KEY
+    depends_on:
+      postgres:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
+    healthcheck:
+      # 운영 이미지에는 curl·wget이 없어 bash /dev/tcp로 health를 확인한다.
+      test:
+        - CMD
+        - bash
+        - -c
+        - "exec 3<>/dev/tcp/127.0.0.1/9090 && printf 'GET /actuator/health/readiness HTTP/1.0\\r\\nHost: localhost\\r\\n\\r\\n' >&3 && grep -q '\"status\":\"UP\"' <&3"
+      interval: 15s
+      timeout: 5s
+      start_period: 90s
+      retries: 5
+    mem_limit: ${API_MEM_LIMIT:-768m}
+    networks:
+      - internal
+      - data
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+  postgres:
+    image: postgres:18.6
+    restart: unless-stopped
+    logging: *default-logging
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-loakraken}
+      POSTGRES_USER: ${POSTGRES_USER:-loakraken}
+      POSTGRES_PASSWORD_FILE: /run/secrets/db_password
+    secrets:
+      - db_password
+    volumes:
+      - postgres-data:/var/lib/postgresql
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    mem_limit: ${POSTGRES_MEM_LIMIT:-384m}
+    networks:
+      - data
+    security_opt:
+      - no-new-privileges:true
+
+  valkey:
+    image: valkey/valkey:9.1.2
+    restart: unless-stopped
+    logging: *default-logging
+    # 암호를 프로세스 인자에 넣지 않는다. 컨테이너 안 설정 파일(valkey 그룹만 읽기)에 쓰고,
+    # 이미지 진입 스크립트에 .conf를 넘겨 valkey 사용자로 권한을 낮춰 실행한다(sh로 바로 실행하면 root로 돈다).
+    # maxmemory를 컨테이너 한도보다 작게 둬, 캐시가 커져도 OOM으로 죽지 않고 만료 시간이 있는 키부터 덜 쓴 순서로 지운다.
+    entrypoint:
+      - tini
+      - --
+      - sh
+      - -c
+      - >-
+        umask 027 &&
+        printf 'requirepass %s\n' "$$(cat /run/secrets/valkey_password)" > /tmp/valkey.conf &&
+        chgrp valkey /tmp/valkey.conf &&
+        exec docker-entrypoint.sh /tmp/valkey.conf --appendonly yes
+        --maxmemory ${VALKEY_MAXMEMORY:-96mb} --maxmemory-policy volatile-lru --maxmemory-samples 10
+    secrets:
+      - valkey_password
+    volumes:
+      - valkey-data:/data
+    healthcheck:
+      # 인증은 인자(-a) 대신 환경 변수로 넘겨 프로세스 목록에 암호가 남지 않게 한다.
+      test:
+        - CMD-SHELL
+        - VALKEYCLI_AUTH="$$(cat /run/secrets/valkey_password)" valkey-cli ping | grep -q PONG
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    mem_limit: ${VALKEY_MEM_LIMIT:-128m}
+    networks:
+      - data
+    security_opt:
+      - no-new-privileges:true
+
+secrets:
+  db_password:
+    file: ${SECRETS_DIR:?SECRETS_DIR가 필요합니다(스택별 경로, 예 /opt/loakraken/production/secrets)}/db_password
+  valkey_password:
+    file: ${SECRETS_DIR:?SECRETS_DIR가 필요합니다}/valkey_password
+  lostark_api_key:
+    file: ${SECRETS_DIR:?SECRETS_DIR가 필요합니다}/lostark_api_key
+
+networks:
+  # edge ↔ web만 연결한다.
+  public:
+  # web↔api. api가 공식 API를 불러야 해서 외부 통신을 막지 않는다. 서브넷을 고정해 web 주소를 신뢰 프록시로 쓴다.
+  internal:
+    ipam:
+      config:
+        - subnet: ${INTERNAL_SUBNET:-172.31.250.0/24}
+  # api↔postgres·valkey. 외부 통신이 없는 망(DB·캐시는 인터넷에 나가지 않는다).
+  data:
+    internal: true
+
+volumes:
+  edge-data:
+  edge-config:
+  postgres-data:
+  valkey-data:

@@ -3,6 +3,13 @@ description: "새로운 기능 개발을 위한 이슈 템플릿"
 labels: ["feature"]
 title: "[FEAT] "
 body:
+  - type: markdown
+    attributes:
+      value: |
+        ## 🌿 GitFlow 안내
+        이슈 생성 후 발급된 번호로 `develop`에서 `feat/{issueNumber}-{english-kebab-case}` 브랜치를 만듭니다.
+        PR 대상은 `develop`입니다. 하나의 이슈는 하나의 명확한 기능을 다룹니다.
+
   - type: textarea
     id: summary
     attributes:
@@ -23,10 +30,17 @@ body:
       label: ✅ 체크리스트 (구현할 내용)
       description: 구현 항목을 체크박스로 작성해주세요.
       placeholder: |
-        e.g.
-        - [ ] API 설계 및 엔드포인트 구현 (/api/v1/new-feature)
-        - [ ] 데이터베이스 스키마 수정 (Table 추가)
-        - [ ] 프론트엔드 UI/UX 작업
+        - [ ] 캐릭터 프로필 외부 응답 DTO 정의
+        - [ ] Domain 변환 및 조회 서비스 구현
+        - [ ] 정상 조회 및 미존재 응답 검증
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance-criteria
+    attributes:
+      label: 🎯 완료 조건 및 검증 계획
+      description: 어떤 동작을 확인하면 완료인지, 정상·실패 상황을 어떻게 검증할지 작성해 주세요.
     validations:
       required: true
 

@@ -1,0 +1,11 @@
+# 매일 04:30(한국 시간)에 운영 DB 외부 백업을 실행한다. 서버가 꺼져 있었으면 켜진 뒤 한 번 실행한다.
+[Unit]
+Description=Daily LOAKraken offsite backup
+
+[Timer]
+OnCalendar=*-*-* 04:30:00 Asia/Seoul
+RandomizedDelaySec=10m
+Persistent=true
+
+[Install]
+WantedBy=timers.target

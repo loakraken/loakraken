@@ -1,0 +1,53 @@
+#!/bin/sh
+# master·develop 보호용 로컬 pre-push 훅(PM 총괄 요청 2026-10-09).
+# 조직 무료 플랜 + 비공개 저장소라 GitHub 브랜치 보호·룰셋을 쓸 수 없어 로컬에서 막는다.
+# 출시 뒤 공개·유료 전환 때 GitHub 룰셋으로 옮기고 이 훅은 지운다.
+#
+# 막는 것
+#   1. master·develop로 직접 push(병합은 `gh pr merge`로만 한다. 서버에서 병합하므로 이 훅을 거치지 않는다)
+#   2. master·develop 원격 삭제
+#   3. 강제 push(빨리 감기가 아닌 push). PR 브랜치를 rebase한 뒤에는
+#        LOAKRAKEN_ALLOW_FORCE=1 git push --force-with-lease
+#      처럼 이번 한 번만 허용한다(master·develop은 이 값으로도 허용하지 않는다).
+#
+# 설치: scripts/git-hooks/install.sh (작업 트리 전체가 같은 훅을 쓴다)
+# 이 훅은 실수를 막는 장치다. `git push --no-verify`로 넘을 수 있으므로 규칙(커밋과 PR 규칙)은 그대로 지킨다.
+
+zero=0000000000000000000000000000000000000000
+status=0
+
+while read -r _local_ref local_sha remote_ref remote_sha; do
+  case "$remote_ref" in
+    refs/heads/master | refs/heads/develop)
+      branch=${remote_ref#refs/heads/}
+      if [ "$local_sha" = "$zero" ]; then
+        echo "pre-push: 원격 ${branch} 삭제는 막혀 있습니다." >&2
+      else
+        echo "pre-push: ${branch}로 직접 push할 수 없습니다. PR을 만들고 승인 뒤 gh pr merge로 병합하세요." >&2
+      fi
+      status=1
+      continue
+      ;;
+  esac
+
+  # 새 브랜치 만들기·브랜치 삭제는 강제 push가 아니다.
+  [ "$local_sha" = "$zero" ] && continue
+  [ "$remote_sha" = "$zero" ] && continue
+
+  # 원격 커밋이 지금 보내는 커밋의 조상이면 빨리 감기(일반 push)다.
+  if git cat-file -e "${remote_sha}^{commit}" 2>/dev/null &&
+    git merge-base --is-ancestor "$remote_sha" "$local_sha"; then
+    continue
+  fi
+
+  if [ "${LOAKRAKEN_ALLOW_FORCE:-}" = "1" ]; then
+    echo "pre-push: ${remote_ref#refs/heads/} 강제 push를 허용합니다(LOAKRAKEN_ALLOW_FORCE=1)." >&2
+    continue
+  fi
+  echo "pre-push: ${remote_ref#refs/heads/}에 빨리 감기가 아닌 push(강제 push)입니다." >&2
+  echo "  원격이 앞서 있으면 git fetch 뒤 rebase하세요. PR 브랜치를 rebase했다면:" >&2
+  echo "  LOAKRAKEN_ALLOW_FORCE=1 git push --force-with-lease" >&2
+  status=1
+done
+
+exit $status

@@ -1,0 +1,16 @@
+# 이미지 빌드에 필요한 것은 gradlew, gradle/, settings.gradle, build.gradle, src/ 뿐이다.
+.git
+.github
+.gradle
+.idea
+build
+docs
+deploy
+scripts
+*.iml
+*.md
+.env
+.env.*
+compose.yaml
+Dockerfile
+.dockerignore

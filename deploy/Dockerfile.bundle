@@ -1,0 +1,4 @@
+# 배포 번들 이미지(loakraken-deploy). 운영 서버가 pull 배포 때 compose·Caddyfile·스크립트를 같은 커밋 기준으로 받는다.
+# 비밀값은 들어가지 않는다(저장소 deploy/ 그대로). 빌드: image.yml, 컨텍스트 deploy/.
+FROM busybox:1.37.0
+COPY . /bundle

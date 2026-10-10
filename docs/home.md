@@ -10,9 +10,9 @@
 
 | 필드 | 내용 |
 |---|---|
-| `adventureIslands[]` | 그 날 열리는 모험 섬: `name, icon, minItemLevel, startTimes[], rewardKinds[], nextAt` |
-| `fieldBosses[]`, `chaosGates[]` | `name, icon, minItemLevel, startTimes[]`(그 날 회차), `nextAt`. 카오스게이트는 지역별 공식 항목을 그대로 준다. |
-| `others[]` | 섬·항해·로웬·태초의 섬 등 그 날 회차가 있는 기타 일정: `category`(공식 범주명), `name, icon, minItemLevel, startTimes[], nextAt` |
+| `adventureIslands[]` | 그 날 열리는 모험 섬: `name, icon, minItemLevel, startTimes[], rewardKinds[], nextAt, location` |
+| `fieldBosses[]`, `chaosGates[]` | `name, icon, minItemLevel, startTimes[]`(그 날 회차), `nextAt`, `location`. 카오스게이트는 지역별 공식 항목을 그대로 준다. |
+| `others[]` | 섬·항해·로웬·태초의 섬 등 그 날 회차가 있는 기타 일정: `category`(공식 범주명), `name, icon, minItemLevel, startTimes[], nextAt, location` |
 | `goldIslandDays[]` | 이번 주 골드 회차가 있는 날: `{date, islands[]}` |
 | `weekly[]` | 이번 주 날짜별 모험 섬: `{date, islands[{name, rewardKinds}]}` |
 
@@ -22,6 +22,7 @@
 - `rewardKinds`는 그 날 회차를 가리키는 **시간 지정 보상만**으로 판단한다. 시간 지정이 없는 공통 보상(상시 실링 등)은 쓰지 않는다.
 - 이름 판별: `골드` → GOLD, `… 카드 팩 …` → CARD_PACK, `실링` → SILLING, `해적 주화`·`대양의 주화 상자` → PIRATE_COIN
 - `nextAt`은 서버 현재 시각 이후 첫 회차다. 이번 주에 남은 회차가 없으면 null이다.
+- `location`은 공식 캘린더 `Location`(예: 로웬 "레갸르방크 대평원", 항해 "[대항해] 기에나의 바다")이다. 비어 있으면 null이다.
 
 ## GET /api/v1/home/news?limit=10&category=
 
@@ -42,7 +43,7 @@
 | 일정 | 30분 | `home.cache.calendar-ttl` | `HOME_CALENDAR_CACHE_TTL` | 1회 |
 | 소식(공지+이벤트) | 10분 | `home.cache.news-ttl` | `HOME_NEWS_CACHE_TTL` | 2회 |
 
-- Valkey 키: `home:v2:calendar`(보상 ItemLevel 그룹을 담으면서 v2), `home:v1:news`
+- Valkey 키: `home:v3:calendar`(보상 ItemLevel 그룹을 담으면서 v2, 공식 위치 Location을 담으면서 v3), `home:v1:news`
 - 동시 요청은 합친다.
 - 캐시 장애는 `503 HOME_CACHE_UNAVAILABLE`이다.
 - 외부 오류는 기존 429/502/503/504를 그대로 쓴다.

@@ -58,6 +58,9 @@ class ReceiptDomainTest {
             EquipmentReceipt.Reason.UNSUPPORTED_GRADE,
             EquipmentReceipt.Reason.ARM_GUARD,
             EquipmentReceipt.Reason.ADVANCED_REFINING);
+    // 고정 예시("결단 등") 대신 그 부위 장비 이름으로 알린다.
+    assertThat(result.excluded().getFirst().message())
+        .isEqualTo("「+20 빛나는 하의」: 업화·전율 장비가 아니라 산정하지 않습니다.");
     assertThat(result.gold()).isEqualByComparingTo(weapon.gold().add(helmet.gold()));
   }
 

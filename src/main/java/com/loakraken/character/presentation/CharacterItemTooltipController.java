@@ -62,6 +62,11 @@ public class CharacterItemTooltipController {
   public record CharacterItemTooltipsResponse(
       String characterName,
       @Schema(description = "공개 제외 캐릭터면 true") boolean hidden,
+      @Schema(
+              description =
+                  "이 줄을 읽은 캐릭터 캐시의 수집 시각. 캐릭터 검색 응답 fetchedAt과 다르면 순번이 어긋났을 수 있으니 버리고 다시 부른다. 숨김이면 null")
+          @com.loakraken.common.api.NullableResponse
+          java.time.Instant fetchedAt,
       List<EquipmentLinesResponse> equipment,
       List<SlotLinesResponse> gems,
       List<SlotLinesResponse> cards,
@@ -70,6 +75,7 @@ public class CharacterItemTooltipController {
       return new CharacterItemTooltipsResponse(
           value.characterName(),
           value.hidden(),
+          value.fetchedAt(),
           value.equipment().stream()
               .map(item -> new EquipmentLinesResponse(item.index(), item.type(), item.extraLines()))
               .toList(),

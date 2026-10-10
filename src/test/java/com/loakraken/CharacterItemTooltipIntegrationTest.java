@@ -73,6 +73,9 @@ class CharacterItemTooltipIntegrationTest {
     ApiContractFixture.write("character-item-tooltips.json", response.body());
     var data = mapper.readTree(response.body()).path("data");
     assertThat(data.path("hidden").asBoolean()).isFalse();
+    // 검색 응답과 같은 캐시 시각이면 순번이 맞다(PM-프론트 11:49 P2).
+    assertThat(data.path("fetchedAt").asText())
+        .isEqualTo(mapper.readTree(search.body()).at("/data/fetchedAt").asText());
     // 줄이 없는 장비(0번)는 빼고, 순번·type으로 검색 응답 항목과 잇는다.
     assertThat(data.at("/equipment").size()).isEqualTo(1);
     assertThat(data.at("/equipment/0/index").asInt()).isEqualTo(1);
@@ -96,6 +99,7 @@ class CharacterItemTooltipIntegrationTest {
     var data = mapper.readTree(response.body()).path("data");
     assertThat(data.path("hidden").asBoolean()).isTrue();
     assertThat(data.path("equipment").size()).isZero();
+    assertThat(data.path("fetchedAt").isNull()).isTrue();
     verifyNoInteractions(detailsPort);
   }
 

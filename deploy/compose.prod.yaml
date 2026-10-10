@@ -38,6 +38,13 @@ services:
     depends_on:
       web:
         condition: service_healthy
+    healthcheck:
+      # Caddyfile의 컨테이너 내부 전용 확인 포트(127.0.0.1:2080). Caddy가 멈추거나 설정 오류로 뜨지 않으면 unhealthy.
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:2080/"]
+      interval: 15s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
     networks:
       - public
     security_opt:

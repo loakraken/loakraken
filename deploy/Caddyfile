@@ -26,3 +26,9 @@
 
 	reverse_proxy web:3000
 }
+
+# 컨테이너 헬스 체크 전용(compose healthcheck). 컨테이너 안 127.0.0.1에만 열고 호스트로 내보내지 않는다.
+:2080 {
+	bind 127.0.0.1
+	respond "ok" 200
+}

@@ -306,6 +306,16 @@ $C up -d --wait
 - 원인을 고친 릴리스를 Deploy로 승인한 뒤 타이머를 다시 켠다(`sudo systemctl start loakraken-pull-deploy@production.timer`).
 - 로컬 확인(postgres 18.6): 덤프 → 열 이름 변경·표 추가·행 추가 → 위 명령으로 복원하면 원래 열·행만 남고 추가된 표는 사라졌다.
 
+## 저장소 공개와 GitHub 보안 설정 (10-10)
+
+두 저장소는 2026-10-10부터 공개다(사용자 결정, "배포 전까지 공개"). 공개 저장소에서는 Actions 시간 제한이 없고 룰셋·비밀값 스캔·푸시 보호를 무료로 쓴다. 설정 값과 이유는 볼트 "공개 저장소 보안 설정"에 있다(사용자가 설정).
+
+- Actions: 외부 기여자 포크 PR은 승인 필요, 기본 토큰 읽기 전용, 워크플로가 PR을 만들거나 승인하지 못함
+- 비밀값 스캔·푸시 보호·Dependabot 알림 켬
+- 룰셋: master·develop 삭제·강제 push 금지, PR 필수(승인 수 0, 검토는 담당 PM 판정), 필수 상태 검사 `build`(백엔드)·`Lint and production build`(웹), 선형 이력 요구는 끔(릴리스는 merge commit)
+- 운영 승인은 그대로 서버 `approve.sh`(Environments는 세션과 사람을 구분하지 못해 쓰지 않음)
+- **다시 비공개로 돌리면** 무료 플랜에서는 룰셋·비밀값 스캔·푸시 보호가 꺼지고 Actions 월 2,000분 제한이 다시 걸린다. 그때는 로컬 pre-push 훅(`scripts/git-hooks`)과 서버 승인만 남으므로, 전환 전에 PM 총괄과 CI 시간 대책(지출 한도·자체 러너)을 다시 정한다.
+
 ## 번들과 서버 권한
 
 `pull-deploy.sh`는 root로 돌고, 배포 번들 안의 스크립트(`pull/`·`backup/`)와 compose 파일을 그대로 실행한다. 그래서 **서버 root 권한을 지키는 선은 코드 리뷰와 운영 승인**이다.

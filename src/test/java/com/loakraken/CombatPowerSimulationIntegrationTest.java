@@ -60,7 +60,7 @@ class CombatPowerSimulationIntegrationTest {
   }
 
   @Test
-  void 검색_뒤에는_캐시로_계산하고_계산식_확정_전에는_모두_UNSUPPORTED다() throws Exception {
+  void 검색_뒤에는_캐시로_보석만_계산하고_나머지는_UNSUPPORTED다() throws Exception {
     when(detailsPort.fetch(anyString()))
         .thenAnswer(invocation -> fetched(invocation.getArgument(0)));
     var search = get("/api/v1/characters/search?characterName=" + encode("시뮬캐시"));
@@ -90,26 +90,29 @@ class CombatPowerSimulationIntegrationTest {
     // 시뮬레이션이 읽은 캐시가 검색 응답과 같은지 웹이 비교한다(PM-프론트 18:31).
     assertThat(data.path("fetchedAt").asText())
         .isEqualTo(mapper.readTree(search.body()).at("/data/fetchedAt").asText());
-    assertThat(data.path("before").decimalValue()).isEqualByComparingTo("3000");
-    assertThat(data.path("after").decimalValue()).isEqualByComparingTo("3000");
+    // 보석 8 → 10(뒤의 변경이 이김): 3000 × (1.0704/1.0576) × (1 + 3.70%)/(1 + 3.30%) = 3048.07.
+    // 기본 공격력 % = 보석 0.80 → 1.20 + 스톤 레벨 보너스 1.50 + 완갑 추가 효과 1.00.
     assertThat(response.body())
         .contains(
-            "\"before\":3000.00", "\"after\":3000.00", "\"delta\":0.00", "\"deltaPercent\":0.000");
+            "\"before\":3000.00", "\"after\":3048.07", "\"delta\":48.07", "\"deltaPercent\":1.602");
     assertThat(data.path("modelBefore").isNull()).isTrue();
     assertThat(data.path("partial").asBoolean()).isTrue();
     // 같은 보석 slot은 뒤의 변경(10)이 이기고 자리는 처음 나온 곳을 지킨다.
     var contributions = data.path("contributions");
     assertThat(contributions.size()).isEqualTo(9);
-    assertThat(data.path("unsupportedCount").asInt()).isEqualTo(9);
+    assertThat(data.path("unsupportedCount").asInt()).isEqualTo(8);
     assertThat(contributions.at("/0/kind").asText()).isEqualTo("GEM_LEVEL");
     assertThat(contributions.at("/0/from").asText()).isEqualTo("8");
     assertThat(contributions.at("/0/to").asText()).isEqualTo("10");
+    assertThat(contributions.at("/0/status").asText()).isEqualTo("OK");
+    assertThat(contributions.at("/0/delta").decimalValue()).isEqualByComparingTo("48.07");
     assertThat(contributions.at("/1/from").asText()).isEqualTo("20");
-    for (var item : contributions) {
-      assertThat(item.path("status").asText()).isEqualTo("UNSUPPORTED");
-      assertThat(item.path("delta").isNull()).isTrue();
-      assertThat(item.path("basis").asText()).doesNotContain("로아", "lo4", "아이스펭");
+    for (int i = 1; i < contributions.size(); i++) {
+      assertThat(contributions.get(i).path("status").asText()).isEqualTo("UNSUPPORTED");
+      assertThat(contributions.get(i).path("delta").isNull()).isTrue();
     }
+    for (var item : contributions)
+      assertThat(item.path("basis").asText()).doesNotContain("로아", "lo4", "아이스펭");
     verify(detailsPort, times(1)).fetch(anyString());
   }
 
@@ -212,7 +215,9 @@ class CombatPowerSimulationIntegrationTest {
                 null,
                 4,
                 null,
-                List.of(),
+                List.of(
+                    new CharacterLoadout.EffectGroup(
+                        "무작위 각인 효과", List.of("[원한] Lv.1", "[레벨 보너스] 기본 공격력 +1.50%"))),
                 List.of(new CharacterLoadout.StoneEngraving("원한", 1)),
                 List.of(),
                 List.of()));
@@ -232,6 +237,22 @@ class CombatPowerSimulationIntegrationTest {
                 List.of(),
                 List.of(),
                 List.of(new CharacterLoadout.BraceletEffect("특화 +100", EffectGrade.LOW))));
+    var armGuard =
+        new CharacterLoadout.Equipment(
+            "완갑",
+            "+13 테스트 완갑",
+            null,
+            "고대",
+            new CharacterLoadout.EquipmentDetail(
+                null,
+                null,
+                null,
+                4,
+                null,
+                List.of(new CharacterLoadout.EffectGroup("추가 효과", List.of("기본 공격력 +1.00%"))),
+                List.of(),
+                List.of(),
+                List.of()));
     var engravings =
         new CharacterLoadout.Engravings(
             List.of(),
@@ -239,7 +260,12 @@ class CombatPowerSimulationIntegrationTest {
             List.of(new CharacterLoadout.PassiveEngraving(1, "유물", 3, "원한", "설명")));
     var gems =
         new CharacterLoadout.Gems(
-            List.of(new CharacterLoadout.Gem(0, "8레벨 겁화의 보석", null, 8, "전설")), null);
+            List.of(new CharacterLoadout.Gem(0, "8레벨 겁화의 보석", null, 8, "고대")),
+            new CharacterLoadout.GemEffects(
+                "기본 공격력 총합 : 0.80%",
+                List.of(
+                    new CharacterLoadout.GemSkill(
+                        0, "테스트 스킬", List.of("피해 32.00% 증가"), "기본 공격력 0.80% 증가", null))));
     var arkPassive =
         new CharacterLoadout.ArkPassive(
             "진화", true, List.of(new CharacterLoadout.PassivePoint("진화", 100, "")), List.of());
@@ -249,7 +275,7 @@ class CombatPowerSimulationIntegrationTest {
             List.of());
     var loadout =
         new CharacterLoadout(
-            List.of(weapon, necklace, stone, bracelet),
+            List.of(weapon, necklace, stone, bracelet, armGuard),
             engravings,
             gems,
             null,

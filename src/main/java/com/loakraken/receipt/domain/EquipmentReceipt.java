@@ -14,8 +14,8 @@ import java.util.Set;
 
 /**
  * 장비 재련 기대 비용(receipt-v1, 계산 검증 1차 규칙 6절). 부위마다 +10에서 현재 단계까지 t4-refining-v1 한 단계 기대 비용을 더한다. 단계마다
- * 숨결(업화 11~20단계는 책도) 사용·미사용 조합 중 기대 비용이 가장 싼 쪽을 쓴다. 업화 18단계 이하는 성장 지원을 적용한다. 재료는 현재 최저가 1개당 골드로
- * 환산한다.
+ * 숨결(책 조합은 assumeBook일 때 업화 11~20·전율 12~19단계) 사용·미사용 조합 중 기대 비용이 가장 싼 쪽을 쓴다. 업화 18단계 이하는 성장 지원을
+ * 적용한다. 재료는 현재 최저가 1개당 골드로 환산한다.
  */
 public final class EquipmentReceipt {
   public static final int FROM_STAGE = 10;
@@ -133,10 +133,7 @@ public final class EquipmentReceipt {
       if (target == null) {
         excluded.add(
             new Excluded(
-                item.type(),
-                item.name(),
-                Reason.UNSUPPORTED_STAGE,
-                "재련 규칙(t4-refining-v1)이 지원하지 않는 단계입니다."));
+                item.type(), item.name(), Reason.UNSUPPORTED_STAGE, "재련 규칙이 지원하지 않는 단계입니다."));
         continue;
       }
       var stages = new ArrayList<StageCost>();

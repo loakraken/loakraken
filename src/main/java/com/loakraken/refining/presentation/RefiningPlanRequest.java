@@ -20,7 +20,9 @@ public record RefiningPlanRequest(
     @NotNull @Min(10) @Max(24) @Schema(description = "현재 재련 단계", example = "18") Integer fromStage,
     @NotNull @Min(11) @Max(25) @Schema(description = "목표 재련 단계", example = "20") Integer toStage,
     @Schema(description = "매 시도 숨결을 최대 개수로 사용", defaultValue = "false") Boolean useBreath,
-    @Schema(description = "책(재봉술·야금술)을 사용할 수 있는 단계에서 사용. 업화 11~20단계만 지원", defaultValue = "false")
+    @Schema(
+            description = "책(재봉술·야금술)을 사용할 수 있는 단계에서 사용. 업화 11~20단계·전율 12~19단계(책 증가 = 그 단계 기본 성공률)",
+            defaultValue = "false")
         Boolean useBook,
     @Schema(
             description = "업화 목표 18단계 이하 재련 골드 20% 감소(공식 성장 지원). 상시 효과라 생략하면 켬(계산 검증 10-10 7절)",

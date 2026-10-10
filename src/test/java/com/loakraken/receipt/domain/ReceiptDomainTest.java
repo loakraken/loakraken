@@ -12,7 +12,7 @@ import java.util.Map;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.json.JsonMapper;
 
-/** 원정대 영수증(receipt-v1) 계산 규칙. 재련 규칙은 실제 리소스(t4-refining-v1)를 쓴다. */
+/** 원정대 영수증 계산 규칙. 재련 규칙은 실제 리소스(t4-refining-v2)를 쓴다. */
 class ReceiptDomainTest {
   private static final RefiningRules RULES =
       JsonMapper.builder()

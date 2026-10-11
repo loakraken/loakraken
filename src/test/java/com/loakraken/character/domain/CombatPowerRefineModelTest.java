@@ -99,7 +99,7 @@ class CombatPowerRefineModelTest {
         .contains("기본 공격력 % 합");
     var model =
         CombatPowerRefineModel.of(coefficients, loadout, stats("188163"), new BigDecimal("7.45"));
-    assertThat(model.cannotSet(1, 26)).contains("11~25단계");
+    assertThat(model.cannotSet(1, 26)).contains("26단계의 수치를 아직 확인하지 않아");
   }
 
   @Test
@@ -188,7 +188,8 @@ class CombatPowerRefineModelTest {
             Map.of(1, new CombatPowerRefineModel.Target(22, 32)), BigDecimal.ZERO, BigDecimal.ZERO);
     assertThat(same).isEqualByComparingTo("1");
     // 전율 상의(순번 2)의 상급 재련은 계산하지 않는다.
-    assertThat(model.cannotSetAdvanced(2, 10)).contains("전율 장비의 상급 재련");
+    // E21: 전율 장비에는 상급 재련이 없다(공식 가이드·툴팁, 검증 표본 official-jeonyul-refine-stats).
+    assertThat(model.cannotSetAdvanced(2, 10)).isEqualTo("전율 장비에는 상급 재련이 없습니다.");
   }
 
   @Test
@@ -459,5 +460,28 @@ class CombatPowerRefineModelTest {
         false,
         inner,
         List.of("민첩 +" + pct.setScale(2, RoundingMode.HALF_UP).toPlainString() + "%"));
+  }
+
+  @Test
+  void 전율_재련_단계표는_공식_아이템_사전_0에서_25단계와_같다() throws IOException {
+    // E20: 공식 아이템 사전 6부위 × 0~25(검증 표본). 예전에는 11~25만 있어 0~10단계 변화는 계산하지 않았다.
+    var sample =
+        new JsonMapper()
+            .readTree(
+                new ClassPathResource(
+                        "verification/combat-power/official-jeonyul-refine-stats-2026-10-12.json")
+                    .getInputStream())
+            .path("table");
+    int cells = 0;
+    for (var part : sample.propertyNames())
+      for (int level = 0; level <= 25; level++) {
+        assertThat(
+                CombatPowerRefineModel.stat(
+                    coefficients, part, CombatPowerRefineModel.Family.JEONYUL, level, 0))
+            .as(part + " " + level)
+            .isEqualByComparingTo(sample.path(part).path(String.valueOf(level)).decimalValue());
+        cells++;
+      }
+    assertThat(cells).isEqualTo(6 * 26);
   }
 }

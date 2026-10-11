@@ -14,6 +14,7 @@ import com.loakraken.market.application.MaterialUnitPriceService;
 import com.loakraken.market.domain.MaterialPriceBasis;
 import com.loakraken.receipt.domain.EquipmentReceipt;
 import com.loakraken.receipt.domain.GemReceipt;
+import com.loakraken.receipt.domain.OptimalStageCache;
 import com.loakraken.refining.application.RefiningPlanService;
 import java.math.BigDecimal;
 import java.time.Clock;
@@ -40,6 +41,7 @@ public class ReceiptService {
   private final RefiningPlanService refining;
   private final MaterialUnitPriceService materials;
   private final MarketAuctionService auctions;
+  private final OptimalStageCache optimalCache;
   private final Clock clock;
 
   public ReceiptService(
@@ -48,12 +50,14 @@ public class ReceiptService {
       RefiningPlanService refining,
       MaterialUnitPriceService materials,
       MarketAuctionService auctions,
+      OptimalStageCache optimalCache,
       Clock clock) {
     this.characters = characters;
     this.cache = cache;
     this.refining = refining;
     this.materials = materials;
     this.auctions = auctions;
+    this.optimalCache = optimalCache;
     this.clock = clock;
   }
 
@@ -177,7 +181,8 @@ public class ReceiptService {
               unitPrices,
               assumeBook,
               refining.growthCosts(),
-              stageCache);
+              stageCache,
+              optimalCache);
       equipmentGold = equipmentGold.add(equipment.gold());
       characterReceipts.add(
           new CharacterReceipt(

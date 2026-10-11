@@ -110,17 +110,28 @@ public final class EquipmentReceipt {
       Map<String, BigDecimal> unitPrices,
       boolean assumeBook,
       GrowthCosts growthCosts) {
-    return calculate(rules, items, unitPrices, assumeBook, growthCosts, new java.util.HashMap<>());
+    return calculate(
+        rules,
+        items,
+        unitPrices,
+        assumeBook,
+        growthCosts,
+        new java.util.HashMap<>(),
+        OptimalStageCache.NONE);
   }
 
-  /** cache: 같은 시세·같은 트랙·단계(방어구 5부위, 원정대의 여러 캐릭터)는 한 번만 계산한다. 한 영수증 안에서만 나눠 쓴다. */
+  /**
+   * cache: 같은 시세·같은 트랙·단계(방어구 5부위, 원정대의 여러 캐릭터)는 한 번만 계산한다(영수증 하나 안). optimalCache: 회차별 최적 계산 결과를
+   * 요청 사이에 나눠 쓴다(#292).
+   */
   public static Result calculate(
       RefiningRules rules,
       List<CharacterLoadout.Equipment> items,
       Map<String, BigDecimal> unitPrices,
       boolean assumeBook,
       GrowthCosts growthCosts,
-      Map<String, java.util.Optional<StageCost>> cache) {
+      Map<String, java.util.Optional<StageCost>> cache,
+      OptimalStageCache optimalCache) {
     var parts = new ArrayList<Part>();
     var excluded = new ArrayList<Excluded>();
     for (var item : items) {
@@ -164,6 +175,7 @@ public final class EquipmentReceipt {
                     key ->
                         java.util.Optional.ofNullable(
                             cheapest(
+                                optimalCache,
                                 target.track(),
                                 grade,
                                 targetStage,
@@ -241,20 +253,7 @@ public final class EquipmentReceipt {
     return new Result(List.copyOf(parts), List.copyOf(excluded), gold);
   }
 
-  /**
-   * 회차별 최적 계산 결과를 요청 사이에 나눠 쓴다(PM-백엔드 #287 P1). 키는 트랙·단계·성장 지원·책 허용과 그 단계 재료 시세 값이라, 시세가 바뀌면 새로
-   * 계산한다. 크기는 512개로 제한한다(오래 안 쓴 것부터 버림).
-   */
-  private static final Map<String, java.util.Optional<RefiningOptimal.Result>> OPTIMAL_CACHE =
-      java.util.Collections.synchronizedMap(
-          new java.util.LinkedHashMap<>(64, 0.75f, true) {
-            @Override
-            protected boolean removeEldestEntry(
-                Map.Entry<String, java.util.Optional<RefiningOptimal.Result>> eldest) {
-              return size() > 512;
-            }
-          });
-
+  /** 회차별 최적 캐시 키: 트랙·단계·성장 지원·책 허용과 그 단계 재료·숨결·책 시세 값(#287·#292). */
   private static String optimalKey(
       RefiningRules.Track track,
       RefiningRules.Stage rule,
@@ -277,6 +276,7 @@ public final class EquipmentReceipt {
 
   /** 한 단계의 회차별 최적 기대 비용(#284). 기본 재료 시세가 없으면 null. 성장 비용(단계당 1회 파편)은 시도 수와 무관해 더한다. */
   private static StageCost cheapest(
+      OptimalStageCache optimalCache,
       RefiningRules.Track track,
       RefiningRules.Grade grade,
       int stage,
@@ -287,17 +287,12 @@ public final class EquipmentReceipt {
     boolean growth = grade == RefiningRules.Grade.UPHWA && stage <= GROWTH_SUPPORT_MAX_STAGE;
     boolean bookAllowed = assumeBook && rule.book() != null;
     var optimal =
-        OPTIMAL_CACHE
-            .computeIfAbsent(
+        optimalCache
+            .get(
                 optimalKey(track, rule, growth, bookAllowed, unitPrices),
-                key ->
-                    java.util.Optional.ofNullable(
-                        RefiningOptimal.calculate(
-                            rule,
-                            growth ? 0.8 : 1,
-                            unitPrices,
-                            rule.breath() != null,
-                            bookAllowed)))
+                () ->
+                    RefiningOptimal.calculate(
+                        rule, growth ? 0.8 : 1, unitPrices, rule.breath() != null, bookAllowed))
             .orElse(null);
     if (optimal == null) return null;
     var gold = BigDecimal.valueOf(optimal.expectedGold());

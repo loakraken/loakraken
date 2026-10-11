@@ -35,11 +35,21 @@ public final class RefiningOptimal {
 
   private record Buffers(double[] rowA, double[] rowB, byte[][] picks) {}
 
-  private static final ThreadLocal<Buffers> BUFFERS =
-      ThreadLocal.withInitial(
-          () ->
-              new Buffers(
-                  new double[FULL + 1], new double[FULL + 1], new byte[BONUS_FAILURES + 1][FULL]));
+  /**
+   * 계산 버퍼 풀(#292). 요청이 가상 스레드라 ThreadLocal은 요청마다 새로 생긴다. 다 쓴 버퍼(약 2.7MB)를 최대 4벌 보관해 요청 사이에 다시 쓴다.
+   */
+  private static final int POOL_SIZE = 4;
+
+  private static final java.util.concurrent.ArrayBlockingQueue<Buffers> POOL =
+      new java.util.concurrent.ArrayBlockingQueue<>(POOL_SIZE);
+
+  private static Buffers borrow() {
+    var buffers = POOL.poll();
+    return buffers != null
+        ? buffers
+        : new Buffers(
+            new double[FULL + 1], new double[FULL + 1], new byte[BONUS_FAILURES + 1][FULL]);
+  }
 
   private RefiningOptimal() {}
 
@@ -97,8 +107,8 @@ public final class RefiningOptimal {
         fail[n][c] = 1 - p;
         increment[n][c] = (int) Math.round(p * RefiningPlan.ARTISAN_RATE * FULL);
       }
-    // 두 줄과 선택표는 스레드마다 한 번 만들고 다시 쓴다(PM-백엔드 #287 P1). 매번 모든 칸을 새로 채운다.
-    var buffers = BUFFERS.get();
+    // 두 줄과 선택표는 풀에서 빌려 다시 쓴다(#287 P1·#292). 매번 모든 칸을 새로 채운다.
+    var buffers = borrow();
     var picks = buffers.picks();
     var rowA = buffers.rowA();
     var rowB = buffers.rowB();
@@ -177,6 +187,8 @@ public final class RefiningOptimal {
       energy += increment[n][c];
       failures++;
     }
-    return new Result(current[0], usesBreath, usesBook, List.copyOf(path));
+    double expected = current[0];
+    POOL.offer(buffers);
+    return new Result(expected, usesBreath, usesBook, List.copyOf(path));
   }
 }

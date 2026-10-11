@@ -130,4 +130,23 @@ class LostArkTooltipLinesTest {
     assertThat(lines.tier()).isEqualTo(4);
     assertThat(lines.tradeLines()).containsExactly("장착, 합성, 조율 가능 아이템 레벨 1640", "캐릭터 귀속됨", "거래 불가");
   }
+
+  @Test
+  void 아크_그리드_코어는_제목_뒤_거래_불가와_분해불가_획득처를_나머지_줄로_읽는다() {
+    // #288, 2026-10-10 공식 armory 코어 형식: ItemTitle 바로 뒤가 MultiTextBox라 귀속·거래 칸이 아니다.
+    var lines =
+        LostArkTooltipLines.parse(
+            """
+            {"Element_000":{"type":"NameTagBox","value":"질서의 해 코어 : 살상연희"},
+             "Element_001":{"type":"ItemTitle","value":{"leftStr0":"유물 아크 그리드 코어","leftStr2":""}},
+             "Element_002":{"type":"MultiTextBox","value":"|거래 불가"},
+             "Element_003":{"type":"ItemPartBox","value":{"Element_000":"코어 타입","Element_001":"질서 - 해"}},
+             "Element_008":{"type":"SingleTextBox","value":"분해불가"},
+             "Element_011":{"type":"SingleTextBox","value":"[카제로스 레이드] 4막 : 파멸의 성채"}}
+            """,
+            null);
+    assertThat(lines.titleLine()).isEqualTo("유물 아크 그리드 코어");
+    assertThat(lines.tradeLines()).isEmpty();
+    assertThat(lines.extraLines()).containsExactly("거래 불가", "분해불가", "[카제로스 레이드] 4막 : 파멸의 성채");
+  }
 }

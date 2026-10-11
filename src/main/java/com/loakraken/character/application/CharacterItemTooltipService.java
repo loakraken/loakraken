@@ -31,6 +31,17 @@ public class CharacterItemTooltipService {
   /** name은 검색 응답 loadout.skills[].name이다. */
   public record SkillLines(String name, List<String> runeExtraLines) {}
 
+  /** index는 검색 응답 loadout.arkGrid.slots[].index, gems[].index는 그 코어의 gems[].index(#288). */
+  public record GridLines(
+      Integer index,
+      String titleLine,
+      List<String> tradeLines,
+      List<String> extraLines,
+      List<GridGemLines> gems) {}
+
+  public record GridGemLines(
+      Integer index, String titleLine, List<String> tradeLines, List<String> extraLines) {}
+
   /** fetchedAt: 이 줄을 읽은 캐릭터 캐시의 수집 시각(검색 응답 fetchedAt과 같으면 순번이 맞다). 숨김이면 null. */
   public record Tooltips(
       String characterName,
@@ -39,9 +50,11 @@ public class CharacterItemTooltipService {
       List<EquipmentLines> equipment,
       List<SlotLines> gems,
       List<SlotLines> cards,
-      List<SkillLines> skills) {
+      List<SkillLines> skills,
+      List<GridLines> arkGrid) {
     static Tooltips hidden(String characterName) {
-      return new Tooltips(characterName, true, null, List.of(), List.of(), List.of(), List.of());
+      return new Tooltips(
+          characterName, true, null, List.of(), List.of(), List.of(), List.of(), List.of());
     }
   }
 
@@ -100,6 +113,29 @@ public class CharacterItemTooltipService {
       for (var skill : loadout.skills())
         if (skill != null && skill.rune() != null && !skill.rune().extraLines().isEmpty())
           skills.add(new SkillLines(skill.name(), skill.rune().extraLines()));
+    var arkGrid = new ArrayList<GridLines>();
+    if (loadout.arkGrid() != null)
+      for (var slot : loadout.arkGrid().slots()) {
+        if (slot == null) continue;
+        var gemLines = new ArrayList<GridGemLines>();
+        for (var gem : slot.gems())
+          if (gem != null && gem.lines() != null)
+            gemLines.add(
+                new GridGemLines(
+                    gem.index(),
+                    gem.lines().titleLine(),
+                    gem.lines().tradeLines(),
+                    gem.lines().extraLines()));
+        if (slot.lines() == null && gemLines.isEmpty()) continue;
+        var lines = slot.lines();
+        arkGrid.add(
+            new GridLines(
+                slot.index(),
+                lines == null ? null : lines.titleLine(),
+                lines == null ? List.of() : lines.tradeLines(),
+                lines == null ? List.of() : lines.extraLines(),
+                List.copyOf(gemLines)));
+      }
     return new Tooltips(
         characterName,
         false,
@@ -107,6 +143,7 @@ public class CharacterItemTooltipService {
         List.copyOf(equipment),
         List.copyOf(gems),
         List.copyOf(cards),
-        List.copyOf(skills));
+        List.copyOf(skills),
+        List.copyOf(arkGrid));
   }
 }

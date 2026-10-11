@@ -86,6 +86,12 @@ class CharacterItemTooltipIntegrationTest {
     assertThat(data.at("/cards/0/extraLines/0").asText()).isEqualTo("카드 설명");
     assertThat(data.at("/skills/0/name").asText()).isEqualTo("테스트 스킬");
     assertThat(data.at("/skills/0/runeExtraLines/0").asText()).isEqualTo("룬 설명");
+    // 아크 그리드 코어·젬 툴팁 줄(#288): 검색 응답 slots[].index·gems[].index로 잇는다.
+    assertThat(data.at("/arkGrid/0/index").asInt()).isEqualTo(0);
+    assertThat(data.at("/arkGrid/0/titleLine").asText()).isEqualTo("유물 아크 그리드 코어");
+    assertThat(data.at("/arkGrid/0/extraLines/1").asText()).isEqualTo("분해불가");
+    assertThat(data.at("/arkGrid/0/gems/0/tradeLines/0").asText()).isEqualTo("가공 완료");
+    assertThat(search.body()).doesNotContain("가공 완료");
     verify(detailsPort, times(1)).fetch(anyString());
   }
 
@@ -158,9 +164,31 @@ class CharacterItemTooltipIntegrationTest {
             new CharacterLoadout.Rune("속행", null, "전설", "효과", List.of("룬 설명")),
             List.of(),
             null);
+    var arkGrid =
+        new CharacterLoadout.ArkGrid(
+            List.of(
+                new CharacterLoadout.GridSlot(
+                    0,
+                    null,
+                    "질서의 해 코어",
+                    17,
+                    "유물",
+                    List.of(
+                        new CharacterLoadout.GridGem(
+                            0,
+                            null,
+                            true,
+                            "전설",
+                            null,
+                            new CharacterLoadout.TooltipLines(
+                                "전설 아크 그리드 젬", List.of("가공 완료", "거래 불가"), List.of()))),
+                    null,
+                    new CharacterLoadout.TooltipLines(
+                        "유물 아크 그리드 코어", List.of(), List.of("거래 불가", "분해불가")))),
+            List.of());
     var loadout =
         new CharacterLoadout(
-            List.of(weapon, earring), null, gems, cards, null, null, List.of(skill));
+            List.of(weapon, earring), null, gems, cards, null, arkGrid, List.of(skill));
     return new FetchedCharacter(
         CharacterTestFixture.details(profile, loadout, List.of()), "{}", "[]");
   }

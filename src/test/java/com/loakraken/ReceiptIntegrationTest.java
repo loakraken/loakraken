@@ -141,6 +141,16 @@ class ReceiptIntegrationTest {
     assertThat(again.at("/coverage/nextAvailableAt").isNull()).isTrue();
     // 앞의 8명은 캐시를 쓰고 남은 2명만 새로 받는다.
     verify(detailsPort, times(10)).fetchArmory(anyString());
+
+    // 기본은 책 포함(#279, PM 총괄 10-11 결정), false를 명시하면 책 제외.
+    assertThat(data.at("/assumptions/0").asText()).contains("책 효과는 항상 적용된다고 가정합니다");
+    var withoutBook =
+        mapper
+            .readTree(
+                get("/api/v1/characters/receipt?assumeBook=false&characterName=" + encode(MAIN))
+                    .body())
+            .path("data");
+    assertThat(withoutBook.at("/assumptions/0").asText()).contains("넣지 않습니다");
   }
 
   @Test

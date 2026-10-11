@@ -12,6 +12,7 @@
 | 경매 입찰가 | [auction.md](auction.md) | `verification/auction/` | 일로아·로아랩 교차 일치(선점 반올림 1G 차). 수수료 5%·10% 재입찰은 공식 문구 미확인(추정) |
 | 스킬 쿨타임(보석 반영) | [skill-cooldown.md](skill-cooldown.md) | `verification/skill/` | 공식 원문 쿨타임 × (1 − 보석 쿨감) 확정(5명 51개 스킬, 2026-10-12). 아이덴티티·노드·신속 감소와 1타 피해는 제외 |
 | 스펙업 비용 근거 | [spec-up-cost.md](spec-up-cost.md) | `verification/spec-up/` | 각인서 레벨당 5권 확정(공식 가이드 + 목표 사이트 비용 구조), 스톤 보너스(합 ≥ 5 → 1.5%) 공식 문구 확인. 무기 품질 업그레이드 비용은 공식 확률 미공개로 UNSUPPORTED |
+| 로아샵 효율 | [loa-shop.md](loa-shop.md) | `verification/loa-shop/` | 구성품 골드 환산·로크/디코 원화·이득 식 확정(목표 사이트 화면 값 원 단위 재현, 2026-10-12). 시세 없는 상자는 공식 확률 × 시세 |
 
 ## 규칙
 

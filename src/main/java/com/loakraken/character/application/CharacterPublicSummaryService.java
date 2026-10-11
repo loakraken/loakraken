@@ -49,28 +49,21 @@ public class CharacterPublicSummaryService {
           dataSource,
           false);
     }
-
-    /** 처리정지 목록: 이름 외 값과 dataSource까지 null이다(관측 여부를 드러내지 않음, #194). */
-    static Summary hidden(String characterName) {
-      return new Summary(characterName, null, null, null, null, null, null, null, null, false);
-    }
   }
 
   public Summary summary(String characterName) {
     var name = new SearchCharacterCommand(characterName).characterName();
     var summary = live(name);
-    if (summary == null) summary = storedSummary(name);
-    boolean excluded;
-    try {
-      // 기록이 없어도 처리정지 목록 이름이면 404 대신 같은 숨김 응답을 준다. 관측 여부를 드러내지 않는다(#194).
-      excluded =
-          summary == null
-              ? stored.excludedAnyServer(name)
-              : stored.excluded(summary.characterName(), summary.serverName());
-    } catch (DataAccessException exception) {
-      throw new CharacterException(CharacterErrorCode.CHARACTER_STORAGE_UNAVAILABLE);
+    if (summary == null) {
+      summary = storedSummary(name);
+      // 처리정지 목록 캐릭터는 저장된 관측을 쓰지 않는다. 응답은 기록이 없는 캐릭터와 같다(#363).
+      try {
+        if (summary != null && stored.excluded(summary.characterName(), summary.serverName()))
+          summary = null;
+      } catch (DataAccessException exception) {
+        throw new CharacterException(CharacterErrorCode.CHARACTER_STORAGE_UNAVAILABLE);
+      }
     }
-    if (excluded) return Summary.hidden(summary == null ? name : summary.characterName());
     if (summary == null) throw new CharacterException(CharacterErrorCode.CHARACTER_NOT_CACHED);
     // 원정대 목록에서만 발견해 전투력 관측이 없으면 내용이 빈약해 색인하지 않는다(#180, PM-백엔드 #177 P2).
     return summary.combatPower() == null ? summary.notIndexable() : summary;

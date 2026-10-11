@@ -142,9 +142,9 @@ class CollectibleRankingIntegrationTest {
                 + encode("수집본캐")
                 + "&server="
                 + encode(SERVER));
-    ApiContractFixture.write("rankings-collectibles-standing-hidden.json", hidden.body());
+    // #363: 처리정지 목록 캐릭터는 기록 없는 이름과 같은 NOT_OBSERVED다(EXCLUDED는 더 이상 쓰지 않음).
     var hiddenData = mapper.readTree(hidden.body()).path("data");
-    assertThat(hiddenData.path("reason").asText()).isEqualTo("EXCLUDED");
+    assertThat(hiddenData.path("reason").asText()).isEqualTo("NOT_OBSERVED");
     assertThat(hiddenData.path("serverName").isNull()).isTrue();
     assertThat(hiddenData.path("rank").isNull()).isTrue();
     // 캐릭터 단위도 같은 원정대 캐릭터는 같은 순위다.

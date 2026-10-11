@@ -189,7 +189,7 @@ class CombatPowerSimulationIntegrationTest {
   }
 
   @Test
-  void 공개_제외_이름은_캐시가_있어도_404다() throws Exception {
+  void 처리정지_목록이어도_캐시가_있으면_일반_캐릭터와_같게_계산한다() throws Exception {
     when(detailsPort.fetch(anyString()))
         .thenAnswer(invocation -> fetched(invocation.getArgument(0)));
     assertThat(get("/api/v1/characters/search?characterName=" + encode("시뮬제외")).statusCode())
@@ -197,9 +197,10 @@ class CombatPowerSimulationIntegrationTest {
     jdbc.sql(
             "INSERT INTO public_exclusion (character_name, server_name, reason_code) VALUES ('시뮬제외', NULL, 'USER_REQUEST')")
         .update();
+    // #363: 404로 처리정지 여부를 드러내지 않는다. 저장하지 않는 메모리 계산이다.
     var response = simulate("시뮬제외", "[]");
-    assertThat(response.statusCode()).isEqualTo(404);
-    assertThat(response.body()).contains("CHARACTER_NOT_CACHED").doesNotContain("시뮬서버");
+    assertThat(response.statusCode()).isEqualTo(200);
+    assertThat(response.body()).doesNotContain("CHARACTER_NOT_CACHED");
   }
 
   @Test

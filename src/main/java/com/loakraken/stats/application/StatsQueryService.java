@@ -508,12 +508,15 @@ public class StatsQueryService {
 
   /**
    * 캐릭터의 전체·서버·직업·서버 내 직업 순위. 캐릭터는 이 모집단 조건(필터)에 들어 있어야 순위가 나온다. 순위 모집단은 처리정지 목록을 뺀 것이라 랭킹 목록의 순위와
-   * 같다. 제외 목록에 있는 본인은 rankVisibility=HIDDEN이고 순위·백분위·티어를 주지 않는다(PM 총괄 결정 2026-10-09).
+   * 같다. 처리정지 목록에 있는 본인은 관측이 없는 캐릭터와 같은 404다(#363). rankVisibility는 늘 VISIBLE이다.
    */
   public CharacterRankResult characterRank(String characterName, StatsConditions conditions) {
     var target =
         guard(() -> stats.target(characterName))
             .orElseThrow(() -> new BusinessException(StatsErrorCode.STATS_CHARACTER_NOT_OBSERVED));
+    // 처리정지 목록 캐릭터는 관측이 없는 캐릭터와 같은 404다(#363, 처리정지 여부를 드러내지 않음).
+    if (guard(() -> stats.excluded(target)))
+      throw new BusinessException(StatsErrorCode.STATS_CHARACTER_NOT_OBSERVED);
     return cached(
         // v2: 서버 내 직업(SERVER_CLASS) 칸 추가(#170). 이전 캐시가 새 칸 없이 남지 않게 키를 바꾼다.
         "rank:v2:" + target.serverName() + ":" + target.characterName() + ":" + key(conditions),
@@ -521,8 +524,7 @@ public class StatsQueryService {
         () -> {
           var now = clock.instant();
           var since = conditions.since(now);
-          boolean hidden = stats.excluded(target);
-          boolean included = !hidden && stats.contains(conditions, since, target);
+          boolean included = stats.contains(conditions, since, target);
           var entries = new ArrayList<RankEntry>();
           if (included) {
             for (var metric : Metric.values()) {
@@ -563,7 +565,7 @@ public class StatsQueryService {
               target.itemLevel(),
               target.combatPower(),
               target.refreshedAt(),
-              hidden ? RankVisibility.HIDDEN : RankVisibility.VISIBLE,
+              RankVisibility.VISIBLE,
               included,
               conditions,
               now,

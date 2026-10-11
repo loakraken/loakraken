@@ -254,15 +254,13 @@ class StatsIntegrationTest {
       var serverCombat = entry(next, "COMBAT_POWER", "SERVER");
       assertThat(serverCombat.path("rank").asLong()).isEqualTo(1);
       assertThat(serverCombat.path("total").asLong()).isEqualTo(39);
-      // 제외된 본인은 순위 비공개다. 순위·백분위·티어가 어디에도 없다.
+      // 처리정지 목록의 본인은 관측이 없는 캐릭터와 같은 404다(#363). 순위·백분위·티어도 값도 없다.
       var hidden = get("/api/v1/characters/rank?characterName=" + encode("통계캐34"));
-      var self = mapper.readTree(hidden.body()).path("data");
-      assertThat(self.path("rankVisibility").asText()).isEqualTo("HIDDEN");
-      assertThat(self.path("included").asBoolean()).isFalse();
-      assertThat(self.path("entries").size()).isZero();
-      assertThat(self.path("combatPower").decimalValue()).isEqualByComparingTo("3340");
-      assertThat(hidden.body()).doesNotContain("topPercent", "\"tier\"", "percentile");
-      ApiContractFixture.write("character-rank-hidden.json", hidden.body());
+      var unknown = get("/api/v1/characters/rank?characterName=" + encode("통계없는이름"));
+      assertThat(hidden.statusCode()).isEqualTo(404).isEqualTo(unknown.statusCode());
+      assertThat(mapper.readTree(hidden.body()).path("code").asText())
+          .isEqualTo(mapper.readTree(unknown.body()).path("code").asText());
+      assertThat(hidden.body()).doesNotContain("3340", "rankVisibility");
       // 제외된 캐릭터의 값을 percentileOf에 넣어도 제외 반영 모집단 기준이고, 그 캐릭터를 특정할 정보가 없다.
       var percentile =
           get(

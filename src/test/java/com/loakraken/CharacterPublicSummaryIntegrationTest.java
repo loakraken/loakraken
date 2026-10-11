@@ -120,31 +120,27 @@ class CharacterPublicSummaryIntegrationTest {
   }
 
   @Test
-  void 공개_제외_캐릭터는_indexable_false이고_이름_외_값이_없다() throws Exception {
+  void 처리정지_목록_캐릭터는_저장된_관측을_쓰지_않고_기록_없는_캐릭터와_같은_404다() throws Exception {
+    // #363: 운영자가 기록을 지우기 전 남은 관측이 있어도 쓰지 않는다. 예전 숨김 응답(indexable=false, null 값) 없음.
     character("공개요약제외", OffsetDateTime.now(ZoneOffset.UTC));
     jdbc.sql(
             "INSERT INTO public_exclusion (character_name, server_name, reason_code) VALUES ('공개요약제외', NULL, 'USER_REQUEST')")
         .update();
-    var data = mapper.readTree(get("공개요약제외").body()).path("data");
-    assertThat(data.path("indexable").asBoolean()).isFalse();
-    assertThat(data.path("characterName").asText()).isEqualTo("공개요약제외");
-    assertThat(data.path("serverName").isNull()).isTrue();
-    assertThat(data.path("itemLevel").isNull()).isTrue();
-    assertThat(data.path("observedAt").isNull()).isTrue();
-    assertThat(data.path("dataSource").isNull()).isTrue();
+    var response = get("공개요약제외");
+    assertThat(response.statusCode()).isEqualTo(404);
+    assertThat(response.body()).contains("CHARACTER_NOT_CACHED").doesNotContain("indexable");
   }
 
   @Test
-  void 기록이_없는_공개_제외_이름도_404가_아니라_같은_숨김_응답이다() throws Exception {
+  void 기록이_없는_처리정지_목록_이름도_일반_이름과_같은_404다() throws Exception {
     jdbc.sql(
             "INSERT INTO public_exclusion (character_name, server_name, reason_code) VALUES ('공개요약제외기록없음', '다른서버', 'USER_REQUEST')")
         .update();
-    var response = get("공개요약제외기록없음");
-    assertThat(response.statusCode()).isEqualTo(200);
-    var data = mapper.readTree(response.body()).path("data");
-    assertThat(data.path("indexable").asBoolean()).isFalse();
-    assertThat(data.path("dataSource").isNull()).isTrue();
-    assertThat(data.path("serverName").isNull()).isTrue();
+    var stopped = get("공개요약제외기록없음");
+    var unknown = get("공개요약없는이름");
+    assertThat(stopped.statusCode()).isEqualTo(404).isEqualTo(unknown.statusCode());
+    assertThat(mapper.readTree(stopped.body()).path("code").asText())
+        .isEqualTo(mapper.readTree(unknown.body()).path("code").asText());
     verifyNoInteractions(detailsPort);
   }
 

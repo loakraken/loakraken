@@ -102,16 +102,16 @@ class CharacterItemTooltipIntegrationTest {
   }
 
   @Test
-  void 공개_제외_이름은_캐시가_없어도_숨김_응답이다() throws Exception {
+  void 처리정지_목록_이름도_캐시가_없으면_일반_이름과_같은_404다() throws Exception {
+    // #363: 처리정지 여부를 응답으로 드러내지 않는다(예전 hidden=true 응답 없음).
     jdbc.sql(
             "INSERT INTO public_exclusion (character_name, server_name, reason_code) VALUES ('툴팁제외', NULL, 'USER_REQUEST')")
         .update();
-    var response = get("/api/v1/characters/item-tooltips", "툴팁제외");
-    assertThat(response.statusCode()).isEqualTo(200);
-    var data = mapper.readTree(response.body()).path("data");
-    assertThat(data.path("hidden").asBoolean()).isTrue();
-    assertThat(data.path("equipment").size()).isZero();
-    assertThat(data.path("fetchedAt").isNull()).isTrue();
+    var stopped = get("/api/v1/characters/item-tooltips", "툴팁제외");
+    var unknown = get("/api/v1/characters/item-tooltips", "툴팁없는이름");
+    assertThat(stopped.statusCode()).isEqualTo(404).isEqualTo(unknown.statusCode());
+    assertThat(mapper.readTree(stopped.body()).path("code").asText())
+        .isEqualTo(mapper.readTree(unknown.body()).path("code").asText());
     verifyNoInteractions(detailsPort);
   }
 

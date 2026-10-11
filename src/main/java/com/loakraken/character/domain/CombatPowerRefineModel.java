@@ -88,9 +88,14 @@ public final class CombatPowerRefineModel {
 
     /** 장비 index → 새 단계로 바꾼 상태의 전투력 비. 계산할 수 없으면 null. */
     public BigDecimal ratio(Map<Integer, Integer> levels) {
+      return ratio(levels, BigDecimal.ZERO);
+    }
+
+    /** 재련 단계 변화와 함께 고정 무기 공격력이 weaponFlatDelta만큼 바뀐 상태(팔찌 #327)의 전투력 비. */
+    public BigDecimal ratio(Map<Integer, Integer> levels, BigDecimal weaponFlatDelta) {
       if (unsupportedReason != null) return null;
       var nextS = s;
-      var nextW = w;
+      var nextW = w.add(weaponFlatDelta.multiply(BigDecimal.ONE.add(weaponPct), MATH), MATH);
       for (var entry : levels.entrySet()) {
         var part = parts.get(entry.getKey());
         if (part == null) return null;
@@ -161,12 +166,9 @@ public final class CombatPowerRefineModel {
           accessoryFlat = accessoryFlat.add(new BigDecimal(plain.group(1).replace(",", "")));
         else if (reason == null) reason = "장신구 무기 공격력 연마 값(" + value + ")을 읽지 못해 계산하지 않았습니다.";
       }
-      for (var bracelet : item.detail().braceletEffects())
-        if (bracelet != null
-            && bracelet.text() != null
-            && bracelet.text().contains(WEAPON_ATTACK)
-            && reason == null) reason = "팔찌의 무기 공격력 반영 방식을 아직 확인하지 않아 재련 변화는 계산하지 않았습니다.";
     }
+    // 팔찌 "무기 공격력 +N"·"무기 공격력이 N 증가한다"의 고정 N도 W에 넣는다(버프 부분은 빼고, 계산 검증 10-11 23:45).
+    accessoryFlat = accessoryFlat.add(CombatPowerBraceletModel.weaponFlat(loadout));
     if (flatWeapon == null && reason == null)
       reason = "무기 공격력(무기 Tooltip 기본 효과)을 읽지 못해 계산하지 않았습니다.";
     var karma = karmaLevel(loadout);

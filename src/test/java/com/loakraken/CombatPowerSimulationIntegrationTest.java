@@ -88,7 +88,7 @@ class CombatPowerSimulationIntegrationTest {
     // 다른 사이트 이름·간접 표현 금지(#261).
     assertThat(response.body()).doesNotContain(SiteNames.FORBIDDEN);
     var data = mapper.readTree(response.body()).path("data");
-    assertThat(data.path("ruleVersion").asText()).isEqualTo("combat-power-sim-v4");
+    assertThat(data.path("ruleVersion").asText()).isEqualTo("combat-power-sim-v5");
     // 시뮬레이션이 읽은 캐시가 검색 응답과 같은지 웹이 비교한다(PM-프론트 18:31).
     assertThat(data.path("fetchedAt").asText())
         .isEqualTo(mapper.readTree(search.body()).at("/data/fetchedAt").asText());
@@ -407,6 +407,92 @@ class CombatPowerSimulationIntegrationTest {
     var loadout =
         new CharacterLoadout(
             List.of(weapon, helmet), engravings, null, null, null, null, List.of());
+    return new FetchedCharacter(
+        CharacterTestFixture.details(profile, loadout, List.of()), "{}", "[]");
+  }
+
+  @Test
+  void 팔찌_줄을_빼거나_바꾸고_팔찌_전투력_기여를_준다() throws Exception {
+    // #327: 언새늘과 같은 팔찌(전투 특성 합 2,469, 도약 70) → 기여 12.60%, 추가 피해 +3.50% 빼기 3,345.24 → 3,257.54.
+    when(detailsPort.fetch(anyString()))
+        .thenAnswer(invocation -> fetchedBracelet(invocation.getArgument(0)));
+    assertThat(get("/api/v1/characters/search?characterName=" + encode("시뮬팔찌")).statusCode())
+        .isEqualTo(200);
+    var response =
+        simulate("시뮬팔찌", "[{\"kind\": \"BRACELET_EFFECT\", \"line\": 3, \"name\": \"없음\"}]");
+    assertThat(response.statusCode()).isEqualTo(200);
+    var data = mapper.readTree(response.body()).path("data");
+    assertThat(data.at("/contributions/0/status").asText()).isEqualTo("OK");
+    assertThat(data.path("after").decimalValue()).isEqualByComparingTo("3257.54");
+    var upgrade =
+        mapper
+            .readTree(
+                simulate(
+                        "시뮬팔찌",
+                        "[{\"kind\": \"BRACELET_EFFECT\", \"line\": 3, \"name\": \"추가 피해\", \"grade\": \"HIGH\"}]")
+                    .body())
+            .path("data");
+    assertThat(upgrade.at("/contributions/0/to").asText()).isEqualTo("추가 피해 HIGH");
+    assertThat(upgrade.path("after").decimalValue()).isEqualByComparingTo("3357.77");
+    var contributions =
+        get("/api/v1/characters/combat-power/contributions?characterName=" + encode("시뮬팔찌"));
+    assertThat(contributions.statusCode()).isEqualTo(200);
+    ApiContractFixture.write("character-combat-power-contributions.json", contributions.body());
+    var items = mapper.readTree(contributions.body()).at("/data/items");
+    assertThat(items.at("/0/kind").asText()).isEqualTo("BRACELET");
+    assertThat(items.at("/0/status").asText()).isEqualTo("OK");
+    assertThat(items.at("/0/contributionPct").decimalValue()).isEqualByComparingTo("12.60");
+    assertThat(contributions.body()).doesNotContain(SiteNames.FORBIDDEN);
+    var options =
+        mapper.readTree(get("/api/v1/characters/combat-power/options").body()).path("data");
+    assertThat(options.at("/braceletOptions").size()).isEqualTo(13);
+    assertThat(options.toString()).contains("추가 피해 +3.50%");
+  }
+
+  private FetchedCharacter fetchedBracelet(String name) {
+    var profile =
+        new CharacterProfile(
+            name,
+            SERVER,
+            "버서커",
+            70,
+            new BigDecimal("1700"),
+            new BigDecimal("3345.24"),
+            null,
+            null,
+            null,
+            null,
+            List.of(
+                new CharacterProfile.Stat("치명", "669", List.of()),
+                new CharacterProfile.Stat("특화", "1700", List.of()),
+                new CharacterProfile.Stat("신속", "100", List.of())));
+    var bracelet =
+        new CharacterLoadout.Equipment(
+            "팔찌",
+            "테스트 팔찌",
+            null,
+            "고대",
+            new CharacterLoadout.EquipmentDetail(
+                null,
+                null,
+                null,
+                4,
+                new CharacterLoadout.PointBonus("도약", 18),
+                List.of(),
+                List.of(),
+                List.of(),
+                List.of(
+                    new CharacterLoadout.BraceletEffect("특화 +81", EffectGrade.MID),
+                    new CharacterLoadout.BraceletEffect("전투자원 자연 회복량 +8.00%", EffectGrade.MID),
+                    new CharacterLoadout.BraceletEffect("치명타 피해 +8.40%", EffectGrade.MID),
+                    new CharacterLoadout.BraceletEffect("추가 피해 +3.50%", EffectGrade.MID),
+                    new CharacterLoadout.BraceletEffect(
+                        "추가 피해가 2.5% 증가한다.\n악마 및 대악마 계열 피해량이 2.5% 증가한다.", EffectGrade.LOW))));
+    var arkPassive =
+        new CharacterLoadout.ArkPassive(
+            "진화", true, List.of(new CharacterLoadout.PassivePoint("도약", 70, "")), List.of());
+    var loadout =
+        new CharacterLoadout(List.of(bracelet), null, null, null, arkPassive, null, List.of());
     return new FetchedCharacter(
         CharacterTestFixture.details(profile, loadout, List.of()), "{}", "[]");
   }

@@ -18,7 +18,8 @@ import org.springframework.context.annotation.Configuration;
   CharacterViewPolicy.class,
   CharacterCollectionPolicy.class,
   CharacterPopularPolicy.class,
-  CharacterSeedPolicy.class
+  CharacterSeedPolicy.class,
+  com.loakraken.character.application.RosterCombatPowerPolicy.class
 })
 class CharacterConfiguration {
   /** 통계 수집기 시드 목록(#255). 꺼져 있으면 빈 목록이다. */

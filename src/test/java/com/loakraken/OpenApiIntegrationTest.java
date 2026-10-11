@@ -123,6 +123,30 @@ class OpenApiIntegrationTest {
                     "/components/schemas/CharacterSuggestItemResponse/properties/characterImage/anyOf/1/type")
                 .asText())
         .isEqualTo("null");
+    // 원정대 캐릭터별 전투력(L19): 필수와 nullable(기록 없음·쿨다운 없음).
+    assertThat(document.at("/components/schemas/RosterCombatPowerResponse/required").toString())
+        .contains("items", "missingCount", "refreshAvailableAt");
+    assertThat(
+            document.at("/components/schemas/RosterCombatPowerRefreshResponse/required").toString())
+        .contains("items", "fetched", "remaining", "refreshAvailableAt");
+    assertThat(document.at("/components/schemas/RosterCombatPowerItemResponse/required").toString())
+        .contains("characterName", "serverName", "combatPower", "combatPowerObservedAt");
+    for (var field : List.of("combatPower", "combatPowerObservedAt", "className", "itemLevel"))
+      assertThat(
+              document
+                  .at(
+                      "/components/schemas/RosterCombatPowerItemResponse/properties/"
+                          + field
+                          + "/anyOf/1/type")
+                  .asText())
+          .as(field)
+          .isEqualTo("null");
+    assertThat(
+            document
+                .at(
+                    "/components/schemas/RosterCombatPowerResponse/properties/refreshAvailableAt/anyOf/1/type")
+                .asText())
+        .isEqualTo("null");
     var search = document.at("/paths/~1api~1v1~1characters~1search/get/parameters");
     assertThat(search.toString()).contains("includeSiblings");
     assertThat(document.at("/paths/~1api~1v1~1characters~1history/get/responses").has("503"))

@@ -25,7 +25,8 @@ public enum CharacterErrorCode implements ErrorCode {
   /** 전투력 시뮬레이터: 캐시가 바뀌어 바꿀 대상(장비 순번·보석 slot 등)이 캐릭터에 없다. 웹은 다시 불러오기를 띄운다. */
   CHANGE_TARGET_NOT_FOUND(HttpStatus.CONFLICT, "캐릭터 정보가 바뀌어 바꿀 대상을 찾지 못했습니다. 다시 불러와 주세요."),
   CARD_COLLECTION_REFRESH_COOLDOWN(
-      HttpStatus.TOO_MANY_REQUESTS, "원정대 기록은 10분에 한 번 채울 수 있습니다. 잠시 후 다시 시도해 주세요.");
+      HttpStatus.TOO_MANY_REQUESTS, "원정대 기록은 10분에 한 번 채울 수 있습니다. 잠시 후 다시 시도해 주세요."),
+  ROSTER_REFRESH_COOLDOWN(HttpStatus.CONFLICT, "원정대 전투력은 10분에 한 번 불러올 수 있습니다. 잠시 후 다시 시도해 주세요.");
 
   private final HttpStatus httpStatus;
   private final String message;

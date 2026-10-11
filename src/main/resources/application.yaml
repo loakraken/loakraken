@@ -53,6 +53,8 @@ lostark:
     general-per-minute: ${CLIENT_LIMIT_GENERAL:240}
     bot-per-minute: ${CLIENT_LIMIT_BOT:120}
     exempt-internal: ${CLIENT_LIMIT_EXEMPT_INTERNAL:true}
+    # 원정대 전투력 불러오기(L19): 클라이언트당 분당 요청 수
+    roster-refresh-per-minute: ${CLIENT_LIMIT_ROSTER_REFRESH:2}
 
 character:
   snapshots:

@@ -5,6 +5,7 @@ import com.loakraken.character.application.CharacterErrorCode;
 import com.loakraken.character.application.CharacterException;
 import com.loakraken.character.application.FetchedCharacter;
 import com.loakraken.character.domain.CharacterDetails;
+import com.loakraken.character.domain.CharacterProfile;
 import com.loakraken.character.domain.CharacterSibling;
 import com.loakraken.common.api.BusinessException;
 import com.loakraken.common.lostark.LostArkErrorCode;
@@ -84,6 +85,25 @@ class LostArkCharacterClient implements CharacterDetailsPort {
     // 공식 원정대 API는 없는 캐릭터에 200과 빈 배열을 반환한다. 원정대에는 조회한 캐릭터 자신이 포함된다.
     if (result.isEmpty()) throw new CharacterException(CharacterErrorCode.CHARACTER_NOT_FOUND);
     return result;
+  }
+
+  @Override
+  public CharacterProfile fetchProfile(String characterName, int reserve) {
+    // 공식 /armories/characters/{name}/profiles(약 7KB)에 CombatPower가 있다(2026-10-12 확인). 전체 armory보다
+    // 가볍다.
+    var payload =
+        gate.withReserve(
+            reserve,
+            () ->
+                request(
+                    Endpoint.PROFILE,
+                    "/armories/characters/{name}/profiles",
+                    characterName,
+                    LostArkProfileResponse.class,
+                    CharacterErrorCode.CHARACTER_NOT_FOUND));
+    if (payload.value() == null)
+      throw new CharacterException(CharacterErrorCode.CHARACTER_NOT_FOUND);
+    return LostArkProfileMapper.from(payload.value());
   }
 
   private Payload<LostArkArmoryResponse> armory(String characterName) {

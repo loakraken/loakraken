@@ -15,7 +15,7 @@ class JeonyulBookTest {
         JeonyulBookTest.class.getResourceAsStream("/refining/t4-refining-rules.json")) {
       rules = JsonMapper.builder().build().readValue(input, RefiningRules.class);
     }
-    assertThat(rules.ruleVersion()).isEqualTo("t4-refining-v2");
+    assertThat(rules.ruleVersion()).isEqualTo("t4-refining-v3");
     var weapon = rules.track(RefiningRules.Grade.JEONYUL, RefiningRules.EquipmentType.WEAPON);
     var armor = rules.track(RefiningRules.Grade.JEONYUL, RefiningRules.EquipmentType.ARMOR);
     for (int stage = 12; stage <= 19; stage++) {
@@ -34,5 +34,27 @@ class JeonyulBookTest {
             RefiningRules.Grade.JEONYUL,
             new RefiningPlan.Options(18, 19, true, true, false, 0, 0));
     assertThat(plan.stages().getFirst().firstAttemptSuccessRateBp()).isEqualTo(900);
+  }
+
+  @Test
+  void 전율_17_19단계_숨결은_20개_0_15퍼센트이고_다른_단계는_그대로다() throws IOException {
+    // t4-refining-v3(PM 총괄 2026-10-11 결정): 17~19만 25개 × 0.12% → 20개 × 0.15%(최대 3%는 같고 필요한 숨결 수가
+    // 준다).
+    RefiningRules rules;
+    try (var input =
+        JeonyulBookTest.class.getResourceAsStream("/refining/t4-refining-rules.json")) {
+      rules = JsonMapper.builder().build().readValue(input, RefiningRules.class);
+    }
+    for (var type : RefiningRules.EquipmentType.values()) {
+      var track = rules.track(RefiningRules.Grade.JEONYUL, type);
+      for (int stage = 17; stage <= 19; stage++) {
+        assertThat(track.stage(stage).breath().maxCount()).as(type + " " + stage).isEqualTo(20);
+        assertThat(track.stage(stage).breath().rateBp()).as(type + " " + stage).isEqualTo(15);
+      }
+      assertThat(track.stage(16).breath().maxCount()).isEqualTo(20);
+      assertThat(track.stage(16).breath().rateBp()).isEqualTo(20);
+      assertThat(track.stage(20).breath().maxCount()).isEqualTo(25);
+      assertThat(track.stage(20).breath().rateBp()).isEqualTo(6);
+    }
   }
 }

@@ -11,6 +11,7 @@
 | 돌파고(어빌리티 스톤 세공) | [ability-stone.md](ability-stone.md) | `verification/ability-stone/` | 확률 규칙 일치(공식 결과표 4개 최대 0.00093%p, 일로아 2사례) |
 | 경매 입찰가 | [auction.md](auction.md) | `verification/auction/` | 일로아·로아랩 교차 일치(선점 반올림 1G 차). 수수료 5%·10% 재입찰은 공식 문구 미확인(추정) |
 | 스킬 쿨타임(보석 반영) | [skill-cooldown.md](skill-cooldown.md) | `verification/skill/` | 공식 원문 쿨타임 × (1 − 보석 쿨감) 확정(5명 51개 스킬, 2026-10-12). 아이덴티티·노드·신속 감소와 1타 피해는 제외 |
+| 스펙업 비용 근거 | [spec-up-cost.md](spec-up-cost.md) | `verification/spec-up/` | 각인서 레벨당 5권 확정(공식 가이드 + 목표 사이트 비용 구조), 스톤 보너스(합 ≥ 5 → 1.5%) 공식 문구 확인. 무기 품질 업그레이드 비용은 공식 확률 미공개로 UNSUPPORTED |
 
 ## 규칙
 

@@ -2,6 +2,7 @@ package com.loakraken.receipt.domain;
 
 import com.loakraken.character.domain.CharacterLoadout;
 import com.loakraken.refining.domain.GrowthCosts;
+import com.loakraken.refining.domain.RefiningOptimal;
 import com.loakraken.refining.domain.RefiningPlan;
 import com.loakraken.refining.domain.RefiningRules;
 import java.math.BigDecimal;
@@ -99,7 +100,9 @@ public final class EquipmentReceipt {
 
   /**
    * assumeBook이 false면 책(재봉술·야금술)을 쓰지 않는 조합만 본다. 게임 재련 창에 "특수 재료 별 효과는 확률에 따라 적용되지 않을 수 있습니다"라고 나오고
-   * 그 확률이 공개되지 않아, 확인된 값만 내기 위해서다(PM 총괄 10-10 03:00). true면 책 효과가 항상 적용된다고 가정한다(일로아·로아와와 같은 가정).
+   * 그 확률이 공개되지 않아, 확인된 값만 내기 위해서다(PM 총괄 10-10 03:00). true면 책 효과가 항상 적용된다고 가정한다.
+   *
+   * <p>단계마다 회차별 최적 전략(#284, {@link RefiningOptimal})으로 시도마다 숨결·책 사용 여부를 골라 기대 비용이 가장 작은 값을 쓴다.
    */
   public static Result calculate(
       RefiningRules rules,
@@ -107,6 +110,17 @@ public final class EquipmentReceipt {
       Map<String, BigDecimal> unitPrices,
       boolean assumeBook,
       GrowthCosts growthCosts) {
+    return calculate(rules, items, unitPrices, assumeBook, growthCosts, new java.util.HashMap<>());
+  }
+
+  /** cache: 같은 시세·같은 트랙·단계(방어구 5부위, 원정대의 여러 캐릭터)는 한 번만 계산한다. 한 영수증 안에서만 나눠 쓴다. */
+  public static Result calculate(
+      RefiningRules rules,
+      List<CharacterLoadout.Equipment> items,
+      Map<String, BigDecimal> unitPrices,
+      boolean assumeBook,
+      GrowthCosts growthCosts,
+      Map<String, java.util.Optional<StageCost>> cache) {
     var parts = new ArrayList<Part>();
     var excluded = new ArrayList<Excluded>();
     for (var item : items) {
@@ -142,7 +156,21 @@ public final class EquipmentReceipt {
       var total = BigDecimal.ZERO;
       boolean priced = true;
       for (int next = from + 1; next <= stage; next++) {
-        var cost = cheapest(target.track(), grade, next, unitPrices, assumeBook, growthCosts);
+        int targetStage = next;
+        var cost =
+            cache
+                .computeIfAbsent(
+                    target.track().equipmentType() + ":" + grade + ":" + next,
+                    key ->
+                        java.util.Optional.ofNullable(
+                            cheapest(
+                                target.track(),
+                                grade,
+                                targetStage,
+                                unitPrices,
+                                assumeBook,
+                                growthCosts)))
+                .orElse(null);
         if (cost == null) {
           priced = false;
           break;
@@ -213,6 +241,41 @@ public final class EquipmentReceipt {
     return new Result(List.copyOf(parts), List.copyOf(excluded), gold);
   }
 
+  /**
+   * 회차별 최적 계산 결과를 요청 사이에 나눠 쓴다(PM-백엔드 #287 P1). 키는 트랙·단계·성장 지원·책 허용과 그 단계 재료 시세 값이라, 시세가 바뀌면 새로
+   * 계산한다. 크기는 512개로 제한한다(오래 안 쓴 것부터 버림).
+   */
+  private static final Map<String, java.util.Optional<RefiningOptimal.Result>> OPTIMAL_CACHE =
+      java.util.Collections.synchronizedMap(
+          new java.util.LinkedHashMap<>(64, 0.75f, true) {
+            @Override
+            protected boolean removeEldestEntry(
+                Map.Entry<String, java.util.Optional<RefiningOptimal.Result>> eldest) {
+              return size() > 512;
+            }
+          });
+
+  private static String optimalKey(
+      RefiningRules.Track track,
+      RefiningRules.Stage rule,
+      boolean growth,
+      boolean bookAllowed,
+      Map<String, BigDecimal> unitPrices) {
+    var key = new StringBuilder();
+    key.append(track.grade()).append(':').append(track.equipmentType()).append(':');
+    key.append(rule.targetStage()).append(':').append(growth).append(':').append(bookAllowed);
+    for (var material : rule.materials())
+      key.append('|').append(material.name()).append('=').append(unitPrices.get(material.name()));
+    key.append('|')
+        .append(RefiningPlan.SHARD)
+        .append('=')
+        .append(unitPrices.get(RefiningPlan.SHARD));
+    if (rule.breath() != null) key.append('|').append(unitPrices.get(rule.breath().name()));
+    if (bookAllowed) key.append('|').append(unitPrices.get(rule.book().name()));
+    return key.toString();
+  }
+
+  /** 한 단계의 회차별 최적 기대 비용(#284). 기본 재료 시세가 없으면 null. 성장 비용(단계당 1회 파편)은 시도 수와 무관해 더한다. */
   private static StageCost cheapest(
       RefiningRules.Track track,
       RefiningRules.Grade grade,
@@ -222,41 +285,42 @@ public final class EquipmentReceipt {
       GrowthCosts growthCosts) {
     var rule = track.stage(stage);
     boolean growth = grade == RefiningRules.Grade.UPHWA && stage <= GROWTH_SUPPORT_MAX_STAGE;
-    StageCost best = null;
-    for (boolean breath : rule.breath() == null ? List.of(false) : List.of(false, true))
-      for (boolean book :
-          rule.book() == null || !assumeBook ? List.of(false) : List.of(false, true)) {
-        var plan =
-            RefiningPlan.calculate(
-                track,
-                grade,
-                new RefiningPlan.Options(
-                    stage - 1, stage, breath, book, growth, 0, 0, growthCosts != null, true),
-                growthCosts);
-        var stagePlan = plan.stages().getFirst();
-        var gold = stagePlan.expectedGold();
-        boolean priced = true;
-        for (var quantity : stagePlan.expectedMaterials()) {
-          if (quantity.amount().signum() == 0) continue;
-          var price = unitPrices.get(quantity.name());
-          if (price == null) {
-            priced = false;
-            break;
-          }
-          gold = gold.add(quantity.amount().multiply(price));
-        }
-        if (!priced) continue;
-        if (best == null || gold.compareTo(best.gold()) < 0)
-          best = new StageCost(stage, gold, breath, book, growth);
+    boolean bookAllowed = assumeBook && rule.book() != null;
+    var optimal =
+        OPTIMAL_CACHE
+            .computeIfAbsent(
+                optimalKey(track, rule, growth, bookAllowed, unitPrices),
+                key ->
+                    java.util.Optional.ofNullable(
+                        RefiningOptimal.calculate(
+                            rule,
+                            growth ? 0.8 : 1,
+                            unitPrices,
+                            rule.breath() != null,
+                            bookAllowed)))
+            .orElse(null);
+    if (optimal == null) return null;
+    var gold = BigDecimal.valueOf(optimal.expectedGold());
+    if (growthCosts != null) {
+      var plan =
+          RefiningPlan.calculate(
+              track,
+              grade,
+              new RefiningPlan.Options(stage - 1, stage, false, false, growth, 0, 0, true, true),
+              growthCosts);
+      var stageGrowth = plan.stages().getFirst().growth();
+      if (stageGrowth != null && stageGrowth.shard().signum() > 0) {
+        var shardPrice = unitPrices.get(RefiningPlan.SHARD);
+        if (shardPrice == null) return null;
+        gold = gold.add(stageGrowth.shard().multiply(shardPrice));
       }
-    return best == null
-        ? null
-        : new StageCost(
-            best.stage(),
-            best.gold().setScale(0, RoundingMode.HALF_UP),
-            best.breath(),
-            best.book(),
-            best.growthSupport());
+    }
+    return new StageCost(
+        stage,
+        gold.setScale(0, RoundingMode.HALF_UP),
+        optimal.usesBreath(),
+        optimal.usesBook(),
+        growth);
   }
 
   private record Target(RefiningRules.Track track, int toStage) {}

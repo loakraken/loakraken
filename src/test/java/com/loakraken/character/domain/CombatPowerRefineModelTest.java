@@ -381,4 +381,83 @@ class CombatPowerRefineModelTest {
             List.of(),
             List.of()));
   }
+
+  @Test
+  void 아바타_주스탯은_공식_툴팁_퍼센트를_읽고_부위마다_큰_값을_더한다() throws IOException {
+    // E29 표본(official-avatar-stat-2026-10-12.json): 한벌이 아닌 34줄은 전설 2%·영웅 1%로 표와 같다.
+    var sample =
+        new JsonMapper()
+            .readTree(
+                new ClassPathResource(
+                        "verification/combat-power/official-avatar-stat-2026-10-12.json")
+                    .getInputStream());
+    var byId = new java.util.LinkedHashMap<String, List<CharacterLoadout.Avatar>>();
+    var expected = new java.util.LinkedHashMap<String, Map<String, BigDecimal>>();
+    for (var row : sample.path("rows")) {
+      var id = row.path("id").asText();
+      var type = row.path("type").asText();
+      var pct = row.path("officialStatPct").decimalValue();
+      byId.computeIfAbsent(id, key -> new ArrayList<>())
+          .add(avatar(type, row.path("grade").asText(), row.path("inner").asBoolean(), pct));
+      var slots = expected.computeIfAbsent(id, key -> new java.util.HashMap<>());
+      if (row.path("onePiece").asBoolean()) {
+        var half = pct.divide(BigDecimal.TWO);
+        slots.merge("상의 아바타", half, BigDecimal::max);
+        slots.merge("하의 아바타", half, BigDecimal::max);
+      } else slots.merge(type, pct, BigDecimal::max);
+    }
+    for (var entry : byId.entrySet()) {
+      var stat = CombatPowerRefineModel.avatarStat(coefficients, entry.getValue());
+      var sum =
+          expected.get(entry.getKey()).values().stream().reduce(BigDecimal.ZERO, BigDecimal::add);
+      assertThat(stat.sum().multiply(BigDecimal.valueOf(100)))
+          .as(entry.getKey())
+          .isEqualByComparingTo(sum);
+      assertThat(stat.reason()).isNull();
+    }
+  }
+
+  @Test
+  void 한벌_아바타는_상의_칸의_퍼센트를_상의와_하의에_나눈다() {
+    // 한벌만(영웅, 공식 2%): 상의 1% + 하의 1% = 2%. 예전에는 상의 칸을 1%로 보고 하의를 놓쳤다.
+    var onePiece = avatar("상의 아바타", "영웅", false, new BigDecimal("2"));
+    assertThat(CombatPowerRefineModel.avatarStat(coefficients, List.of(onePiece)).sum())
+        .isEqualByComparingTo("0.02");
+    // 한벌 + 안쪽 전설 상의·하의(각 2%): 부위마다 큰 값 → 4%.
+    assertThat(
+            CombatPowerRefineModel.avatarStat(
+                    coefficients,
+                    List.of(
+                        onePiece,
+                        avatar("상의 아바타", "전설", true, new BigDecimal("2")),
+                        avatar("하의 아바타", "전설", true, new BigDecimal("2"))))
+                .sum())
+        .isEqualByComparingTo("0.04");
+    // 한벌 + 안쪽 전설 상의만: 상의 2% + 하의 1%(한벌 절반) = 3%.
+    assertThat(
+            CombatPowerRefineModel.avatarStat(
+                    coefficients,
+                    List.of(onePiece, avatar("상의 아바타", "전설", true, new BigDecimal("2"))))
+                .sum())
+        .isEqualByComparingTo("0.03");
+    // 공식 줄이 없으면 등급 표(영웅 1%), 표에도 없는 등급이면 이유 문장.
+    var noLine = new CharacterLoadout.Avatar("무기 아바타", "무기", null, "영웅", false, false, List.of());
+    assertThat(CombatPowerRefineModel.avatarStat(coefficients, List.of(noLine)).sum())
+        .isEqualByComparingTo("0.01");
+    var unknown = new CharacterLoadout.Avatar("무기 아바타", "무기", null, "희귀", false, false, List.of());
+    assertThat(CombatPowerRefineModel.avatarStat(coefficients, List.of(unknown)).reason())
+        .contains("희귀");
+  }
+
+  private static CharacterLoadout.Avatar avatar(
+      String type, String grade, boolean inner, BigDecimal pct) {
+    return new CharacterLoadout.Avatar(
+        type,
+        grade + " " + type,
+        null,
+        grade,
+        false,
+        inner,
+        List.of("민첩 +" + pct.setScale(2, RoundingMode.HALF_UP).toPlainString() + "%"));
+  }
 }

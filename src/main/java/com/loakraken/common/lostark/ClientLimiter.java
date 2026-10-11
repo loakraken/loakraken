@@ -33,7 +33,7 @@ public class ClientLimiter {
   /** 제한을 끈 상태. 단위 테스트용 게이트가 쓴다. */
   public static final ClientLimiter DISABLED =
       new ClientLimiter(
-          new ClientLimitProperties(false, 0, 0, 0, 0, true),
+          new ClientLimitProperties(false, 0, 0, 0, 0, true, 0),
           new ClientLimitStore.Memory(),
           Clock.systemUTC(),
           null,
@@ -62,7 +62,8 @@ public class ClientLimiter {
     OFFICIAL,
     STATS,
     GENERAL,
-    BOT
+    BOT,
+    ROSTER_REFRESH
   }
 
   /** 판정 결과. 거절이면 retryAfterSeconds는 지금 창이 끝날 때까지 남은 초(1 이상)다. */

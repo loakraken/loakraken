@@ -48,6 +48,8 @@ class ClientLimitFilter extends OncePerRequestFilter {
       var decision = limiter.check(ClientLimiter.Bucket.BOT, BOT_CLIENT);
       if (decision.allowed() && stats(path(request)))
         decision = limiter.check(ClientLimiter.Bucket.STATS, BOT_CLIENT);
+      if (decision.allowed() && rosterRefresh(request))
+        decision = limiter.check(ClientLimiter.Bucket.ROSTER_REFRESH, BOT_CLIENT);
       if (!decision.allowed()) {
         reject(response, decision);
         return;
@@ -66,6 +68,8 @@ class ClientLimitFilter extends OncePerRequestFilter {
     var decision = limiter.check(ClientLimiter.Bucket.GENERAL, client);
     if (decision.allowed() && stats(path(request)))
       decision = limiter.check(ClientLimiter.Bucket.STATS, client);
+    if (decision.allowed() && rosterRefresh(request))
+      decision = limiter.check(ClientLimiter.Bucket.ROSTER_REFRESH, client);
     if (!decision.allowed()) {
       reject(response, decision);
       return;
@@ -82,6 +86,12 @@ class ClientLimitFilter extends OncePerRequestFilter {
     } finally {
       limiter.exit();
     }
+  }
+
+  /** 원정대 전투력 불러오기(L19): 공식 호출을 최대 12회 일으키므로 클라이언트당 분당 2회로 따로 센다. */
+  static boolean rosterRefresh(HttpServletRequest request) {
+    return "POST".equals(request.getMethod())
+        && path(request).equals("/api/v1/characters/roster-combat-power/refresh");
   }
 
   static boolean stats(String path) {

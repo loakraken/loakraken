@@ -34,6 +34,7 @@ public class LostArkMetrics {
 
   public enum Endpoint {
     ARMORY,
+    PROFILE,
     SIBLINGS,
     MARKET_ITEMS,
     MARKET_TRADES,

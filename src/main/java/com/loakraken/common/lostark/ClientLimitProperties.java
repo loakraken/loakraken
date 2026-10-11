@@ -11,6 +11,8 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
  * @param statsPerMinute /stats/**·/rankings·/characters/rank 요청 수(DB 집계)
  * @param generalPerMinute /api/v1/** 전체 요청 수
  * @param botPerMinute 검색봇 표시 요청 전체(모든 봇 주소 합산). 봇 표시는 흉내 낼 수 있으므로 generalPerMinute보다 클 수 없다
+ * @param rosterRefreshPerMinute 원정대 전투력 불러오기(POST /api/v1/characters/roster-combat-power/refresh)
+ *     요청 수(L19)
  * @param exemptInternal 원격 주소가 루프백·사설망이면 세지 않는다. 운영에서는 웹이 실제 IP를 X-Forwarded-For로 넘기므로, 사설 주소는 헤더가
  *     빠진 내부 요청이다
  */
@@ -21,7 +23,8 @@ public record ClientLimitProperties(
     @DefaultValue("60") int statsPerMinute,
     @DefaultValue("240") int generalPerMinute,
     @DefaultValue("120") int botPerMinute,
-    @DefaultValue("true") boolean exemptInternal) {
+    @DefaultValue("true") boolean exemptInternal,
+    @DefaultValue("2") int rosterRefreshPerMinute) {
   public ClientLimitProperties {
     if (enabled && botPerMinute > generalPerMinute)
       throw new IllegalArgumentException("봇 한도는 일반 클라이언트 한도보다 클 수 없습니다.");
@@ -33,6 +36,7 @@ public record ClientLimitProperties(
       case STATS -> statsPerMinute;
       case GENERAL -> generalPerMinute;
       case BOT -> botPerMinute;
+      case ROSTER_REFRESH -> rosterRefreshPerMinute;
     };
   }
 }

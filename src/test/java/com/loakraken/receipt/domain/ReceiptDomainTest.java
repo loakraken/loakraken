@@ -142,7 +142,7 @@ class ReceiptDomainTest {
         .containsExactly("「+22 운명의 전율 검」: 21단계 한계 해방 비용(고통의 가시·해방 비용)은 공식 수치가 없어 산정하지 않았습니다.");
   }
 
-  /** 공식 Tooltip "[상급 재련] N단계"(equipment-tooltip-v5). 1단계 이상이면 부위마다, 모르는 이전 캐시면 캐릭터마다 한 줄. */
+  /** 공식 Tooltip "[상급 재련] N단계"(equipment-tooltip-v6). 1단계 이상이면 부위마다, 모르는 이전 캐시면 캐릭터마다 한 줄. */
   @Test
   void 상급_재련은_단계가_있는_부위마다_알리고_모르면_한_줄로_알린다() {
     var known =

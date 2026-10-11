@@ -105,7 +105,8 @@ final class LostArkEquipmentTooltip {
         tooltipLines.tradeLines(),
         tooltipLines.refineExp(),
         tooltipLines.extraLines(),
-        advancedRefine);
+        advancedRefine,
+        tooltipLines.extraLineSections());
   }
 
   private static List<CharacterLoadout.BraceletEffect> bracelet(String source) {

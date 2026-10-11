@@ -16,6 +16,9 @@ import tools.jackson.databind.json.JsonMapper;
  *   <li>refineExp: "재련 경험치" Progress의 현재·최대
  *   <li>effectLines: 제목이 effectTitle인 ItemPartBox의 본문 줄(룬 "스킬 룬 효과")
  *   <li>extraLines: 위와 다른 해석기(효과 묶음·연마·팔찌·카드 등)가 담지 않은 나머지 텍스트 줄을 원문 순서대로(내구도, 분해불가, 설명, 획득처 등)
+ *   <li>extraLineSections: extraLines와 같은 길이로, 각 줄 바로 앞에 나온 섹션 제목(ItemPartBox·IndentStringGroup 제목,
+ *       예 "팔찌 효과"). 앞에 섹션이 없으면 빈 문자열(#285)
+ *   <li>itemLevel·tier: ItemTitle의 "아이템 레벨 n (티어 m)"(#285, 보석 툴팁)
  * </ul>
  */
 final class LostArkTooltipLines {
@@ -26,14 +29,22 @@ final class LostArkTooltipLines {
   private static final java.util.regex.Pattern ADVANCED_REFINE =
       java.util.regex.Pattern.compile("\\[상급 재련\\]\\s*(\\d{1,3})\\s*단계");
 
+  private static final java.util.regex.Pattern ITEM_LEVEL =
+      java.util.regex.Pattern.compile("아이템 레벨 (\\d{1,4})");
+  private static final java.util.regex.Pattern TIER = java.util.regex.Pattern.compile("티어 (\\d)");
+
   record Lines(
       String titleLine,
       List<String> tradeLines,
       CharacterLoadout.RefineExp refineExp,
       List<String> effectLines,
       List<String> extraLines,
-      Integer advancedRefineLevel) {
-    static final Lines EMPTY = new Lines(null, List.of(), null, List.of(), List.of(), null);
+      Integer advancedRefineLevel,
+      List<String> extraLineSections,
+      Integer itemLevel,
+      Integer tier) {
+    static final Lines EMPTY =
+        new Lines(null, List.of(), null, List.of(), List.of(), null, List.of(), null, null);
   }
 
   private LostArkTooltipLines() {}
@@ -51,6 +62,10 @@ final class LostArkTooltipLines {
     var trade = new ArrayList<String>();
     var effect = new ArrayList<String>();
     var extra = new ArrayList<String>();
+    var sections = new ArrayList<String>();
+    String section = "";
+    Integer itemLevel = null;
+    Integer tier = null;
     CharacterLoadout.RefineExp refineExp = null;
     Integer advancedRefine = null;
     // ItemTitle 바로 뒤 SingleTextBox·MultiTextBox까지만 귀속·거래 줄로 본다.
@@ -66,6 +81,9 @@ final class LostArkTooltipLines {
             String line = LostArkText.plain(text(value.path("leftStr0")));
             titleLine = line == null || line.isEmpty() ? null : line;
             afterTitle = 0;
+            String levelText = LostArkText.plain(text(value.path("leftStr2")));
+            itemLevel = number(ITEM_LEVEL, levelText);
+            tier = number(TIER, levelText);
           }
         }
         case "SingleTextBox", "MultiTextBox", "ShowMeTheMoney" -> {
@@ -77,7 +95,10 @@ final class LostArkTooltipLines {
           }
           if (afterTitle >= 1 && afterTitle <= 2 && tradeSlot(type, afterTitle))
             trade.addAll(lines);
-          else extra.addAll(lines);
+          else {
+            extra.addAll(lines);
+            for (int i = 0; i < lines.size(); i++) sections.add(section);
+          }
         }
         case "Progress" -> {
           String title = LostArkText.plain(text(value.path("title")));
@@ -88,9 +109,14 @@ final class LostArkTooltipLines {
                     value.path("maximum").longValue());
         }
         case "ItemPartBox" -> {
-          if (effectTitle != null
-              && effectTitle.equals(LostArkText.plain(text(value.path("Element_000")))))
+          String title = LostArkText.plain(text(value.path("Element_000")));
+          if (title != null && !title.isEmpty()) section = title;
+          if (effectTitle != null && effectTitle.equals(title))
             effect.addAll(lines(text(value.path("Element_001"))));
+        }
+        case "IndentStringGroup" -> {
+          String title = LostArkText.plain(text(value.path("Element_000").path("topStr")));
+          if (title != null && !title.isEmpty()) section = title;
         }
         default -> {}
       }
@@ -101,7 +127,16 @@ final class LostArkTooltipLines {
         refineExp,
         List.copyOf(effect),
         List.copyOf(extra),
-        advancedRefine);
+        advancedRefine,
+        List.copyOf(sections),
+        itemLevel,
+        tier);
+  }
+
+  private static Integer number(java.util.regex.Pattern pattern, String text) {
+    if (text == null) return null;
+    var matcher = pattern.matcher(text);
+    return matcher.find() ? Integer.valueOf(matcher.group(1)) : null;
   }
 
   /** ItemTitle 다음 첫 요소는 SingleTextBox(귀속·거래 제한), 둘째 요소는 MultiTextBox(거래 가능 여부)일 때만 귀속·거래 줄이다. */

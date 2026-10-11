@@ -90,4 +90,44 @@ class LostArkTooltipLinesTest {
     assertThat(rune.effectLines()).containsExactly("스킬 사용 시 일정 확률로 전체 재사용 대기 시간이 16% 감소");
     assertThat(rune.extraLines()).containsExactly("스킬에 강력한 힘을 부여할 수 있는 특별한 룬이다.");
   }
+
+  @Test
+  void 나머지_줄마다_바로_앞_섹션_제목을_같은_길이로_담는다() {
+    // #285: 팔찌 "효과 부여 불가"가 "팔찌 효과" 뒤, 아크 패시브 포인트 앞에 있는지 웹이 알 수 있게 한다.
+    var lines =
+        LostArkTooltipLines.parse(
+            """
+            {"Element_001":{"type":"ItemTitle","value":{"leftStr0":"고대 팔찌","leftStr2":"아이템 레벨 1640 (티어 4)"}},
+             "Element_002":{"type":"SingleTextBox","value":"캐릭터 귀속됨"},
+             "Element_003":{"type":"MultiTextBox","value":"|거래 불가"},
+             "Element_004":{"type":"SingleTextBox","value":"분해불가"},
+             "Element_005":{"type":"ItemPartBox","value":{"Element_000":"팔찌 효과","Element_001":"치명 +100"}},
+             "Element_006":{"type":"SingleTextBox","value":"효과 부여 불가"},
+             "Element_007":{"type":"IndentStringGroup","value":{"Element_000":{"topStr":"아크 패시브 포인트 효과","contentStr":{}}}},
+             "Element_008":{"type":"SingleTextBox","value":"[제작] 대도시"}}
+            """,
+            null);
+    assertThat(lines.extraLines()).containsExactly("분해불가", "효과 부여 불가", "[제작] 대도시");
+    assertThat(lines.extraLineSections()).containsExactly("", "팔찌 효과", "아크 패시브 포인트 효과");
+    assertThat(lines.itemLevel()).isEqualTo(1640);
+    assertThat(lines.tier()).isEqualTo(4);
+  }
+
+  @Test
+  void 보석은_등급_줄과_아이템_레벨_티어_귀속_거래_줄을_읽는다() {
+    var lines =
+        LostArkTooltipLines.parse(
+            """
+            {"Element_000":{"type":"NameTagBox","value":"10레벨 겁화의 보석"},
+             "Element_001":{"type":"ItemTitle","value":{"leftStr0":"전설 보석","leftStr2":"아이템 레벨 1640 (티어 4)"}},
+             "Element_002":{"type":"SingleTextBox","value":"장착, 합성, 조율 가능 아이템 레벨 1640<BR>캐릭터 귀속됨"},
+             "Element_003":{"type":"MultiTextBox","value":"|거래 불가"},
+             "Element_004":{"type":"ItemPartBox","value":{"Element_000":"효과","Element_001":"피해 44.00% 증가"}}}
+            """,
+            null);
+    assertThat(lines.titleLine()).isEqualTo("전설 보석");
+    assertThat(lines.itemLevel()).isEqualTo(1640);
+    assertThat(lines.tier()).isEqualTo(4);
+    assertThat(lines.tradeLines()).containsExactly("장착, 합성, 조율 가능 아이템 레벨 1640", "캐릭터 귀속됨", "거래 불가");
+  }
 }

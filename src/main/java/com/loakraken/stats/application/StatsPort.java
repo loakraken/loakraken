@@ -82,6 +82,27 @@ public interface StatsPort {
 
   record RankingPage(long total, List<RankingRow> rows) {}
 
+  /**
+   * 수집품 랭킹 행(#295). 원정대 단위면 대표(아이템 레벨이 가장 높은 공개 캐릭터), 캐릭터 단위면 그 캐릭터다. point·maxPoint는 원정대 합(공식
+   * Point·MaxPoint).
+   */
+  record CollectibleRow(
+      long rank,
+      java.util.UUID rosterKey,
+      String characterName,
+      String serverName,
+      String className,
+      BigDecimal itemLevel,
+      long characterCount,
+      long point,
+      long maxPoint,
+      Instant observedAt) {}
+
+  record CollectiblePage(long total, List<CollectibleRow> rows) {}
+
+  /** 공식 수집품 종류 하나(공식 순서). */
+  record CollectibleType(String type, int point, int maxPoint) {}
+
   record Coverage(long observedCharacters, long knownCharacters, long discoveredAccounts) {}
 
   record Target(
@@ -92,4 +113,15 @@ public interface StatsPort {
       BigDecimal itemLevel,
       BigDecimal combatPower,
       Instant refreshedAt) {}
+
+  /**
+   * 수집품 랭킹(#295). since 뒤에 관측한 원정대 가운데 Σ Point > 0인 것을 진행도(Σ Point / Σ MaxPoint) → Σ Point 순으로 같은
+   * 순위(RANK)를 매긴다. 공개 제외 캐릭터는 대표·캐릭터 행·캐릭터 수에서 빼고, 공개 캐릭터가 없는 원정대는 뺀다. server가 있으면 그 서버 원정대만.
+   */
+  CollectiblePage collectibleRanking(
+      String server, Instant since, boolean characterUnit, int offset, int limit);
+
+  /** 원정대별 수집품 종류(공식 순서). */
+  java.util.Map<java.util.UUID, List<CollectibleType>> collectibleTypes(
+      java.util.Collection<java.util.UUID> rosterKeys);
 }

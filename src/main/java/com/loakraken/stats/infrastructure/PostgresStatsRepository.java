@@ -168,6 +168,82 @@ class PostgresStatsRepository implements StatsPort {
         .single();
   }
 
+  /** 수집품 랭킹 공통 CTE(#295). */
+  private static final String COLLECTIBLE_RANKED =
+      """
+      WITH totals AS (
+        SELECT roster_key, SUM(point) AS point, SUM(max_point) AS max_point, MAX(observed_at) AS observed_at
+        FROM roster_collectible GROUP BY roster_key
+        HAVING MAX(observed_at) >= :since AND SUM(point) > 0 AND SUM(max_point) > 0),
+      members AS (
+        SELECT c.roster_key, c.character_name, c.server_name, c.class_name, c.item_level,
+          ROW_NUMBER() OVER (PARTITION BY c.roster_key ORDER BY c.item_level DESC NULLS LAST, c.character_name) AS rn,
+          COUNT(*) OVER (PARTITION BY c.roster_key) AS member_count
+        FROM characters c JOIN totals t ON t.roster_key = c.roster_key
+        WHERE NOT EXISTS (
+            SELECT 1 FROM public_exclusion e
+            WHERE e.character_name = c.character_name AND (e.server_name IS NULL OR e.server_name = c.server_name))
+          AND (CAST(:server AS VARCHAR) IS NULL OR c.server_name = CAST(:server AS VARCHAR))),
+      ranked AS (
+        SELECT t.roster_key, t.point, t.max_point, t.observed_at, m.character_name, m.server_name, m.class_name,
+          m.item_level, m.member_count,
+          RANK() OVER (ORDER BY ROUND(t.point * 100.0 / t.max_point, 2) DESC, t.point DESC) AS rank
+        FROM totals t JOIN members m ON m.roster_key = t.roster_key AND (:characterUnit OR m.rn = 1))
+      """;
+
+  @Override
+  public CollectiblePage collectibleRanking(
+      String server, Instant since, boolean characterUnit, int offset, int limit) {
+    long total =
+        jdbc.sql(COLLECTIBLE_RANKED + "SELECT COUNT(*) FROM ranked")
+            .param("since", since.atOffset(ZoneOffset.UTC))
+            .param("server", server)
+            .param("characterUnit", characterUnit)
+            .query(Long.class)
+            .single();
+    var rows =
+        jdbc.sql(
+                COLLECTIBLE_RANKED
+                    + "SELECT * FROM ranked ORDER BY rank, character_name LIMIT :limit OFFSET :offset")
+            .param("since", since.atOffset(ZoneOffset.UTC))
+            .param("server", server)
+            .param("characterUnit", characterUnit)
+            .param("limit", limit)
+            .param("offset", offset)
+            .query(
+                (row, index) ->
+                    new CollectibleRow(
+                        row.getLong("rank"),
+                        row.getObject("roster_key", java.util.UUID.class),
+                        row.getString("character_name"),
+                        row.getString("server_name"),
+                        row.getString("class_name"),
+                        row.getBigDecimal("item_level"),
+                        row.getLong("member_count"),
+                        row.getLong("point"),
+                        row.getLong("max_point"),
+                        row.getTimestamp("observed_at").toInstant()))
+            .list();
+    return new CollectiblePage(total, rows);
+  }
+
+  @Override
+  public java.util.Map<java.util.UUID, List<CollectibleType>> collectibleTypes(
+      java.util.Collection<java.util.UUID> rosterKeys) {
+    var result = new java.util.LinkedHashMap<java.util.UUID, List<CollectibleType>>();
+    if (rosterKeys.isEmpty()) return result;
+    jdbc.sql(
+            "SELECT roster_key, type, point, max_point FROM roster_collectible WHERE roster_key IN (:keys) ORDER BY roster_key, sort_order")
+        .param("keys", rosterKeys)
+        .query(
+            (java.sql.ResultSet row) -> {
+              result
+                  .computeIfAbsent(row.getObject(1, java.util.UUID.class), key -> new ArrayList<>())
+                  .add(new CollectibleType(row.getString(2), row.getInt(3), row.getInt(4)));
+            });
+    return result;
+  }
+
   @Override
   public RankingPage ranking(
       StatsConditions conditions, Instant since, Metric metric, int offset, int limit) {

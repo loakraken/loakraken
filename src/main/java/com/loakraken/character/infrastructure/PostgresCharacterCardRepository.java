@@ -33,6 +33,52 @@ class PostgresCharacterCardRepository implements CharacterCardPort {
 
   @Override
   @Transactional(timeout = 5)
+  public void recordCollectibles(
+      String serverName,
+      String characterName,
+      List<com.loakraken.character.domain.CharacterLoadout.Collectible> collectibles,
+      java.time.Instant observedAt) {
+    var owner =
+        jdbc.sql(
+                "SELECT character_id, roster_key FROM characters WHERE server_name = :server AND character_name = :name")
+            .param("server", serverName)
+            .param("name", characterName)
+            .query(
+                (row, index) ->
+                    new UUID[] {row.getObject(1, UUID.class), row.getObject(2, UUID.class)})
+            .optional();
+    if (owner.isEmpty() || owner.get()[1] == null) return;
+    var at = utc(observedAt);
+    int order = 0;
+    for (var collectible : collectibles) {
+      order++;
+      if (collectible == null
+          || collectible.type() == null
+          || collectible.type().isBlank()
+          || collectible.point() == null
+          || collectible.maxPoint() == null) continue;
+      jdbc.sql(
+              """
+          INSERT INTO roster_collectible (roster_key, type, sort_order, point, max_point, observed_at, source_character_id)
+          VALUES (:roster, :type, :order, :point, :max, :at, :source)
+          ON CONFLICT (roster_key, type) DO UPDATE SET sort_order = EXCLUDED.sort_order, point = EXCLUDED.point,
+            max_point = EXCLUDED.max_point, observed_at = EXCLUDED.observed_at,
+            source_character_id = EXCLUDED.source_character_id
+          WHERE roster_collectible.observed_at <= EXCLUDED.observed_at
+          """)
+          .param("roster", owner.get()[1])
+          .param("type", collectible.type().strip())
+          .param("order", order)
+          .param("point", collectible.point())
+          .param("max", collectible.maxPoint())
+          .param("at", at)
+          .param("source", owner.get()[0])
+          .update();
+    }
+  }
+
+  @Override
+  @Transactional(timeout = 5)
   public void record(Observation observation) {
     var at = utc(observation.observedAt());
     var learned = observation.learned();

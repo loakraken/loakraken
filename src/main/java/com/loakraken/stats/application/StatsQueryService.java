@@ -184,6 +184,57 @@ public class StatsQueryService {
                 summary.meta().population())));
   }
 
+  /**
+   * 수집품(내실) 랭킹(#295, 볼트 「랭킹 확장 설계 초안」 v1). 조건 중 server·activeDays만 쓴다. 모집단은 원정대(또는 캐릭터 행) 수이고, 30
+   * 미만이면 sampleStatus=COLLECTING이지만 값·순위는 그대로 준다(참고값 원칙).
+   */
+  public CollectibleRankingResult collectibleRanking(
+      StatsConditions conditions, boolean characterUnit, int page, int size) {
+    int offset = (page - 1) * size;
+    if (offset > MAX_RANKING_OFFSET)
+      throw new BusinessException(StatsErrorCode.STATS_INVALID_RANGE);
+    String unit = characterUnit ? "CHARACTER" : "ROSTER";
+    return cached(
+        "collectibles:" + unit + ":" + page + ":" + size + ":" + key(conditions),
+        CollectibleRankingResult.class,
+        () -> {
+          var now = clock.instant();
+          var result =
+              stats.collectibleRanking(
+                  conditions.server(), conditions.since(now), characterUnit, offset, size);
+          var types =
+              stats.collectibleTypes(
+                  result.rows().stream()
+                      .map(StatsPort.CollectibleRow::rosterKey)
+                      .distinct()
+                      .toList());
+          return new CollectibleRankingResult(
+              meta(conditions, result.total(), now),
+              unit,
+              page,
+              size,
+              result.rows().stream()
+                  .map(
+                      row ->
+                          new RankedCollectible(
+                              row.rank(),
+                              row.characterName(),
+                              row.serverName(),
+                              row.className(),
+                              row.itemLevel(),
+                              row.characterCount(),
+                              BigDecimal.valueOf(row.point())
+                                  .multiply(HUNDRED)
+                                  .divide(
+                                      BigDecimal.valueOf(row.maxPoint()), 2, RoundingMode.HALF_UP),
+                              row.point(),
+                              row.maxPoint(),
+                              row.observedAt(),
+                              types.getOrDefault(row.rosterKey(), List.of())))
+                  .toList());
+        });
+  }
+
   public RankingResult ranking(StatsConditions conditions, Metric metric, int page, int size) {
     int offset = (page - 1) * size;
     if (offset > MAX_RANKING_OFFSET)
@@ -471,6 +522,23 @@ public class StatsQueryService {
       BigDecimal combatPower,
       BigDecimal topPercent,
       Tier tier) {}
+
+  /** 수집품 랭킹 결과(#295). unit은 ROSTER·CHARACTER(응답에서는 문자열). */
+  public record CollectibleRankingResult(
+      Meta meta, String unit, int page, int size, List<RankedCollectible> rows) {}
+
+  public record RankedCollectible(
+      long rank,
+      String characterName,
+      String serverName,
+      String className,
+      BigDecimal itemLevel,
+      long characterCount,
+      BigDecimal progressPercent,
+      long point,
+      long maxPoint,
+      Instant observedAt,
+      List<StatsPort.CollectibleType> types) {}
 
   public record RankingResult(
       Meta meta, Metric metric, int page, int size, List<RankedCharacter> rows) {}

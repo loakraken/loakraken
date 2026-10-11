@@ -64,6 +64,26 @@
 | 404 STATS_CHARACTER_NOT_OBSERVED | 전투력을 기록한 적 없는 캐릭터(검색하면 기록된다) |
 | 503 STATS_UNAVAILABLE | DB 오류 |
 
+## 수집품(내실) 랭킹 (#295)
+
+`GET /api/v1/rankings/collectibles?server=&activeDays=&unit=&page=&size=` — 기본 꺼짐(`ranking.collectibles.enabled`, `RANKING_COLLECTIBLES_ENABLED`). 설계는 볼트 「랭킹 확장 설계 초안」 v1이다.
+
+- 점수: 공식 armory `collectibles`의 Point·MaxPoint만 쓴다. 진행도 = Σ Point / Σ MaxPoint × 100(소수 둘째 자리).
+- 단위: 수집품은 원정대가 함께 모으므로 기본은 원정대(`unit=ROSTER`)다.
+  - 원정대 행의 `characterName`·`className`·`itemLevel`은 대표(아이템 레벨이 가장 높은 공개 캐릭터)다.
+  - `unit=CHARACTER`면 같은 원정대의 공개 캐릭터마다 같은 값으로 한 행씩 나온다.
+- 정렬: 진행도 → Σ Point 내림차순이고, 같으면 같은 순위(RANK)다. "먼저 모은 순"은 공식 데이터로 알 수 없어 쓰지 않는다.
+- 빠지는 것
+  - 하나도 모으지 않은 원정대(Σ Point = 0)
+  - `activeDays` 안에 수집품을 관측하지 않은 원정대
+  - 공개 제외 캐릭터. 대표·행·캐릭터 수에서 빠지고, 공개 캐릭터가 없는 원정대는 빠진다. 수집품 값은 원정대 공유라 다른 공개 캐릭터가 대표가 된다.
+- 표본: `meta`는 다른 통계와 같은 모양이고 `populationUnit`(ROSTER·CHARACTER)이 더해진다(모든 통계 응답에 추가, 기존 엔드포인트는 CHARACTER). 모집단이 30 미만이면 `sampleStatus=COLLECTING`이지만 값·순위는 그대로 준다(참고값, null로 비우는 필드 없음).
+- 응답의 `unit`은 문자열이다(값이 늘 수 있음). `types`는 공식 Type 문자열과 공식 순서의 배열이다.
+- 저장: 새 표 `roster_collectible`(V13). armory를 받을 때(사용자 검색·수집기 프로필 갱신, 카드 기록과 같은 비동기 작업자) 그 원정대 값을 덮어쓴다.
+  - 원정대 키가 아직 없는 캐릭터(원정대를 훑기 전)는 다음 관측에 기록된다.
+  - 공식 호출은 늘지 않는다(armory가 이미 collectibles를 받는다).
+- 계약 표본: `build/generated/rankings-collectibles.json`(정상, READY), `rankings-collectibles-empty.json`(빈 결과), `rankings-collectibles-collecting.json`(30 미만), `rankings-collectibles-tie.json`(동률).
+
 ## 검증 (2026-10-08, 로컬 8081)
 
 - 관측 33명, 원정대 4개, 모집단 30명(activeDays=90): READY

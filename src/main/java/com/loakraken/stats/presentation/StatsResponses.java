@@ -31,8 +31,17 @@ public final class StatsResponses {
               description = "COLLECTING(표본 30명 미만) 또는 READY",
               allowableValues = {"COLLECTING", "READY"})
           String sampleStatus,
-      StatsCoverageResponse coverage) {
+      StatsCoverageResponse coverage,
+      @Schema(
+              description =
+                  "population을 세는 단위(#295): CHARACTER(캐릭터), ROSTER(원정대), GUILD(길드). 문자열이며 값이 늘 수 있음",
+              example = "CHARACTER")
+          String populationUnit) {
     static StatsMetaResponse from(Meta meta) {
+      return from(meta, "CHARACTER");
+    }
+
+    static StatsMetaResponse from(Meta meta, String populationUnit) {
       return new StatsMetaResponse(
           meta.population(),
           StatsConditionsResponse.from(meta.conditions()),
@@ -41,7 +50,8 @@ public final class StatsResponses {
           meta.ruleVersion(),
           meta.minSample(),
           meta.sampleStatus().name(),
-          StatsCoverageResponse.from(meta.coverage()));
+          StatsCoverageResponse.from(meta.coverage()),
+          populationUnit);
     }
   }
 

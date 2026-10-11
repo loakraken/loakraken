@@ -15,6 +15,16 @@ public interface CharacterCardPort {
    */
   void record(Observation observation);
 
+  /**
+   * 수집품(#295): 이 캐릭터의 원정대 값(공식 Point·MaxPoint)을 덮어쓴다. 수집품은 원정대가 함께 모은다. 캐릭터가 없거나 원정대 키가 아직 없으면(원정대를
+   * 훑기 전) 아무것도 하지 않는다. 다음 관측에서 다시 기록된다.
+   */
+  void recordCollectibles(
+      String serverName,
+      String characterName,
+      List<com.loakraken.character.domain.CharacterLoadout.Collectible> collectibles,
+      Instant observedAt);
+
   /** 같은 서버의 원정대 캐릭터들이 기록한 카드. recordedBy는 그 최고 기록을 남긴 캐릭터다. */
   RosterCards rosterCards(String serverName, Collection<String> characterNames);
 

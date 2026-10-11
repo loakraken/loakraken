@@ -391,8 +391,9 @@ class PostgresStatsRepository implements StatsPort {
   }
 
   /**
-   * 길드 랭킹 공통 CTE(#301). 길드 이름은 프로필을 받을 때만 갱신되므로 관측 = 검색·프로필 갱신 중 늦은 시각이 since 뒤. %ORDER%는
-   * GuildSort에서만 오는 고정 식이다.
+   * 길드 랭킹 공통 CTE(#301). 길드 이름은 관측 이력 기록(profile_refreshed_at도 함께 갱신)에서만 쓰므로, 관측 =
+   * profile_refreshed_at이 since 뒤(검색 스냅숏만 갱신된 행은 길드 이름이 오래됐을 수 있어 뺀다). %ORDER%는 GuildSort에서만 오는 고정
+   * 식이다.
    */
   private static final String GUILD_RANKED =
       """
@@ -403,7 +404,7 @@ class PostgresStatsRepository implements StatsPort {
           COUNT(c.combat_power) AS cp_count
         FROM characters c
         WHERE c.guild_name IS NOT NULL AND c.item_level IS NOT NULL
-          AND GREATEST(c.profile_refreshed_at, c.last_synced_at) >= :since
+          AND c.profile_refreshed_at >= :since
           AND (CAST(:server AS VARCHAR) IS NULL OR c.server_name = CAST(:server AS VARCHAR))
           AND NOT EXISTS (
             SELECT 1 FROM public_exclusion e

@@ -72,8 +72,15 @@ class GuildRankingIntegrationTest {
     guild(SERVER, "오래길드", "길드오래", 1700, 1700, 1700, 1700);
     member(SERVER, "오래길드", "길드오래끝", 1700, null, Instant.now().minus(Duration.ofDays(40)));
 
+    // 검색 스냅숏만 최근이고 프로필(길드 이름) 관측이 오래된 행은 길드 이름이 낡았을 수 있어 뺀다.
+    guild(SERVER, "스냅숏길드", "길드스냅", 1700, 1700, 1700, 1700, 1700);
+    jdbc.sql("UPDATE characters SET profile_refreshed_at = :old WHERE guild_name = '스냅숏길드'")
+        .param("old", Instant.now().minus(Duration.ofDays(40)).atOffset(ZoneOffset.UTC))
+        .update();
+
     var response = get("/api/v1/rankings/guilds?server=" + encode(SERVER));
     assertThat(response.statusCode()).isEqualTo(200);
+    assertThat(response.body()).doesNotContain("스냅숏길드");
     ApiContractFixture.write("rankings-guilds-collecting.json", response.body());
     var data = mapper.readTree(response.body()).path("data");
     assertThat(data.path("sort").asText()).isEqualTo("AVG");

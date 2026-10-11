@@ -102,13 +102,10 @@ class ArkGridEfficiencyServiceTest {
 
       assertThat(value.status()).as(name).isEqualTo(Status.OK);
       assertThat(value.reasonCode()).isNull();
-      // c03 표본 37.25는 젬 합계를 4.69%로 반올림한 뒤 곱한 값이다(1.31106 × 1.0469 = 37.2549%). 정의(반올림 전 곱)대로면
-      // 1.31106 × 1.046903 = 37.2553% → 37.26이다. 나머지 4명은 두 방식이 같다.
-      var total =
-          "c03".equals(name)
-              ? new BigDecimal("37.26")
-              : expected.path("arkGridTotalPct").decimalValue();
-      assertThat(value.percent()).as(name + " 아크 그리드").isEqualByComparingTo(total);
+      // 반올림 전 곱이다(c03 = 1.31106 × 1.046903 − 1 = 37.2553% → 37.26, #423).
+      assertThat(value.percent())
+          .as(name + " 아크 그리드")
+          .isEqualByComparingTo(expected.path("arkGridTotalPct").decimalValue());
       assertThat(value.coresPercent())
           .as(name + " 코어 합")
           .isEqualByComparingTo(

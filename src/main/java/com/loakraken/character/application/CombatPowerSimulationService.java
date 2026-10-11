@@ -37,7 +37,7 @@ import org.springframework.stereotype.Service;
  */
 @Service
 public class CombatPowerSimulationService {
-  public static final String RULE_VERSION = "combat-power-sim-v6";
+  public static final String RULE_VERSION = "combat-power-sim-v7";
   private static final MathContext MATH = MathContext.DECIMAL64;
   private static final String GEM_BASIS =
       "보석 레벨별 배수와 기본 공격력 %(보석·스톤 레벨 보너스·완갑 추가 효과, 공식 툴팁)로 바뀐 비율을 공식 전투력에 곱했습니다.";
@@ -50,6 +50,9 @@ public class CombatPowerSimulationService {
   private static final Set<String> GRADES = Set.of("LOW", "MID", "HIGH");
   private static final List<String> CORE_GRADES = List.of("영웅", "전설", "유물", "고대");
   private static final Set<String> WEAPON_ARMOR = Set.of("무기", "투구", "상의", "하의", "장갑", "어깨");
+  private static final List<String> ARM_GUARD_GRADES = List.of("영웅", "전설", "유물", "고대");
+  private static final String ARM_GUARD_BASIS =
+      "팔 보호구 단계표(무기 공격력·주스탯·기본 공격력)와 등급 추가 효과(기본 공격력 %)로 기본 공격력을 다시 계산한 비율을 공식 전투력에 곱했습니다(펫 효과(힘민지 +1%)는 있다고 가정).";
   private static final String REFINE_BASIS =
       "재련 단계의 주스탯·무기 공격력 변화로 기본 공격력을 다시 계산한 비율을 공식 전투력에 곱했습니다(펫 효과(힘민지 +1%)는 있다고 가정).";
   private static final String BRACELET_BASIS =
@@ -97,7 +100,8 @@ public class CombatPowerSimulationService {
     ENGRAVING_LEVEL,
     STONE_ENGRAVING,
     ARK_PASSIVE_POINT,
-    ARK_GRID_CORE
+    ARK_GRID_CORE,
+    ARM_GUARD
   }
 
   /** 바꾼 항목 하나. kind마다 쓰는 필드가 다르다(계약 문서 2절). */
@@ -289,7 +293,7 @@ public class CombatPowerSimulationService {
     var before = official == null ? null : official.setScale(2, RoundingMode.HALF_UP);
     var engravings = currentEngravings(loadout);
     var weaponAddDamage = CombatPowerEquipmentModel.currentWeaponAddDamage(weaponDetail(loadout));
-    var state = new State(Map.of(), null, Map.of(), Map.of(), Map.of());
+    var state = new State(Map.of(), null, Map.of(), Map.of(), Map.of(), null);
     var running = before;
     var contributions = new ArrayList<Contribution>();
     int unsupported = 0;
@@ -354,6 +358,9 @@ public class CombatPowerSimulationService {
       int index, Integer level, Integer advanced, CombatPowerRefineModel.Target current)
       implements Effect {}
 
+  /** 팔 보호구 단계·등급(#341). */
+  private record ArmGuardEffect(CombatPowerRefineModel.ArmGuard target) implements Effect {}
+
   /** 팔찌 효과 줄(#327): 줄 번호 → 새 줄(빼기 포함). */
   private record BraceletEffect(int line, CombatPowerBraceletModel.Line next) implements Effect {}
 
@@ -366,16 +373,18 @@ public class CombatPowerSimulationService {
       BigDecimal weaponAddDamage,
       Map<String, EngravingLevels> engravings,
       Map<Integer, CombatPowerRefineModel.Target> refines,
-      Map<Integer, CombatPowerBraceletModel.Line> bracelet) {
+      Map<Integer, CombatPowerBraceletModel.Line> bracelet,
+      CombatPowerRefineModel.ArmGuard armGuard) {
     State apply(Effect effect, Map<String, CharacterLoadout.PassiveEngraving> currents) {
       return switch (effect) {
         case GemEffect gem -> {
           var next = new HashMap<>(gems);
           next.putAll(gem.levels());
-          yield new State(Map.copyOf(next), weaponAddDamage, engravings, refines, bracelet);
+          yield new State(
+              Map.copyOf(next), weaponAddDamage, engravings, refines, bracelet, armGuard);
         }
         case WeaponQualityEffect quality ->
-            new State(gems, quality.addDamage(), engravings, refines, bracelet);
+            new State(gems, quality.addDamage(), engravings, refines, bracelet, armGuard);
         case RefineEffect refine -> {
           var next = new HashMap<>(refines);
           var base = refines.getOrDefault(refine.index(), refine.current());
@@ -384,13 +393,15 @@ public class CombatPowerSimulationService {
               new CombatPowerRefineModel.Target(
                   refine.level() != null ? refine.level() : base.level(),
                   refine.advanced() != null ? refine.advanced() : base.advanced()));
-          yield new State(gems, weaponAddDamage, engravings, Map.copyOf(next), bracelet);
+          yield new State(gems, weaponAddDamage, engravings, Map.copyOf(next), bracelet, armGuard);
         }
         case BraceletEffect line -> {
           var next = new HashMap<>(bracelet);
           next.put(line.line(), line.next());
-          yield new State(gems, weaponAddDamage, engravings, refines, Map.copyOf(next));
+          yield new State(gems, weaponAddDamage, engravings, refines, Map.copyOf(next), armGuard);
         }
+        case ArmGuardEffect guard ->
+            new State(gems, weaponAddDamage, engravings, refines, bracelet, guard.target());
         case NeutralEffect neutral -> this;
         case EngravingEffect engraving -> {
           var next = new HashMap<>(engravings);
@@ -407,7 +418,7 @@ public class CombatPowerSimulationService {
               new EngravingLevels(
                   engraving.book() != null ? engraving.book() : base.book(),
                   engraving.stone() != null ? engraving.stone() : base.stone()));
-          yield new State(gems, weaponAddDamage, Map.copyOf(next), refines, bracelet);
+          yield new State(gems, weaponAddDamage, Map.copyOf(next), refines, bracelet, armGuard);
         }
       };
     }
@@ -470,10 +481,22 @@ public class CombatPowerSimulationService {
     // 재련 단계와 팔찌의 고정 무기 공격력은 같은 W 항을 쓴다.
     if (!state.refines().isEmpty()
         || weaponFlatDelta.signum() != 0
-        || mainStatDelta.signum() != 0) {
-      var refine = refineModel.ratioTargets(state.refines(), weaponFlatDelta, mainStatDelta);
+        || mainStatDelta.signum() != 0
+        || state.armGuard() != null) {
+      var refine =
+          refineModel.ratioFull(state.refines(), weaponFlatDelta, mainStatDelta, state.armGuard());
       if (refine == null) return null;
       ratio = ratio.multiply(refine, MATH);
+    }
+    // 팔 보호구 등급의 기본 공격력 %는 보석 변화까지 반영한 q에 더한다: (1 + q + Δ)/(1 + q).
+    if (state.armGuard() != null) {
+      var delta = refineModel.armGuardPctDelta(state.armGuard());
+      if (delta.signum() != 0) {
+        var pct = gemModel.baseAttackPct(state.gems());
+        if (pct == null) return null;
+        var q = BigDecimal.ONE.add(pct.divide(BigDecimal.valueOf(100), MATH), MATH);
+        ratio = ratio.multiply(q.add(delta, MATH).divide(q, MATH), MATH);
+      }
     }
     if (state.weaponAddDamage() != null) {
       if (weaponCurrent == null) return null;
@@ -552,6 +575,7 @@ public class CombatPowerSimulationService {
       case STONE_ENGRAVING -> "STONE:" + change.name();
       case ARK_PASSIVE_POINT -> "ARK_PASSIVE:" + change.tree();
       case ARK_GRID_CORE -> "ARK_GRID:" + change.slotIndex();
+      case ARM_GUARD -> "ARM_GUARD";
     };
   }
 
@@ -747,6 +771,7 @@ public class CombatPowerSimulationService {
         yield unsupported(
             change, "아크 패시브 " + point.name(), str(point.value()), str(change.points()));
       }
+      case ARM_GUARD -> armGuard(loadout, refineModel, change);
       case ARK_GRID_CORE -> {
         range("point", change.point(), 0, 20);
         if (change.grade() == null || !CORE_GRADES.contains(change.grade()))
@@ -779,6 +804,32 @@ public class CombatPowerSimulationService {
     return part == null
         ? new CombatPowerRefineModel.Target(0, 0)
         : new CombatPowerRefineModel.Target(part.level(), part.advanced());
+  }
+
+  private Planned armGuard(
+      CharacterLoadout loadout, CombatPowerRefineModel.Model refineModel, Change change) {
+    range("level", change.level(), 0, 25);
+    if (change.grade() == null || !ARM_GUARD_GRADES.contains(change.grade()))
+      throw invalid("grade는 " + ARM_GUARD_GRADES + " 중 하나여야 합니다.");
+    var item =
+        loadout.equipment().stream()
+            .filter(equipment -> equipment != null && "완갑".equals(equipment.type()))
+            .findFirst()
+            .orElse(null);
+    if (item == null) throw notFound("팔 보호구");
+    var current =
+        (item.detail() == null || item.detail().refineLevel() == null
+                ? ""
+                : "+" + item.detail().refineLevel() + " ")
+            + item.grade();
+    return new Planned(
+        change,
+        item.name(),
+        current,
+        "+" + change.level() + " " + change.grade(),
+        new ArmGuardEffect(new CombatPowerRefineModel.ArmGuard(change.level(), change.grade())),
+        ARM_GUARD_BASIS,
+        refineModel.cannotSetArmGuard(change.level(), change.grade()));
   }
 
   private static CharacterLoadout.Equipment equipment(CharacterLoadout loadout, Integer index) {

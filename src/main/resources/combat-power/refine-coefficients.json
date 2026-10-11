@@ -1,5 +1,5 @@
 {
-  "ruleVersion": "combat-power-refine-v2",
+  "ruleVersion": "combat-power-refine-v3",
   "source": "계산 검증 2026-10-11 18:05 모델 확정(대조 사이트 서버 계산 대조 통과, 표본 src/test/resources/verification/combat-power/loalab-refine-model-2026-10-11.json). 단계표는 공식 장비 Tooltip 31칸과 같다.",
   "petStatPct": 0.01,
   "petAssumption": "펫 효과(힘민지 +1%)는 공식 응답에 없어 있다고 가정한다(두 출처가 같은 가정, PM-백엔드 16:57).",
@@ -262,5 +262,188 @@
   "advancedBonus": {
     "30": 0.02,
     "40": 0.03
+  },
+  "armGuardSource": "팔 보호구(완갑) 단계·등급(표본 src/test/resources/verification/combat-power/loalab-bracer-armguard-2026-10-11.json, 공식 Tooltip 380명 + 대조 7건). confirmed=false는 5단계 주기로 채운 칸이라 계산하지 않는다.",
+  "armGuardTable": {
+    "0": {
+      "weaponAttack": 3500,
+      "mainStat": 10500,
+      "baseAttack": 0,
+      "confirmed": true
+    },
+    "1": {
+      "weaponAttack": 5350,
+      "mainStat": 10500,
+      "baseAttack": 0,
+      "confirmed": false
+    },
+    "2": {
+      "weaponAttack": 5350,
+      "mainStat": 16500,
+      "baseAttack": 0,
+      "confirmed": true
+    },
+    "3": {
+      "weaponAttack": 7210,
+      "mainStat": 16500,
+      "baseAttack": 0,
+      "confirmed": true
+    },
+    "4": {
+      "weaponAttack": 7210,
+      "mainStat": 22530,
+      "baseAttack": 0,
+      "confirmed": false
+    },
+    "5": {
+      "weaponAttack": 7210,
+      "mainStat": 22530,
+      "baseAttack": 850,
+      "confirmed": false
+    },
+    "6": {
+      "weaponAttack": 9077,
+      "mainStat": 22530,
+      "baseAttack": 850,
+      "confirmed": true
+    },
+    "7": {
+      "weaponAttack": 9077,
+      "mainStat": 28608,
+      "baseAttack": 850,
+      "confirmed": true
+    },
+    "8": {
+      "weaponAttack": 10969,
+      "mainStat": 28608,
+      "baseAttack": 850,
+      "confirmed": false
+    },
+    "9": {
+      "weaponAttack": 10969,
+      "mainStat": 34746,
+      "baseAttack": 850,
+      "confirmed": false
+    },
+    "10": {
+      "weaponAttack": 10969,
+      "mainStat": 34746,
+      "baseAttack": 2030,
+      "confirmed": true
+    },
+    "11": {
+      "weaponAttack": 12873,
+      "mainStat": 34746,
+      "baseAttack": 2030,
+      "confirmed": true
+    },
+    "12": {
+      "weaponAttack": 12873,
+      "mainStat": 40962,
+      "baseAttack": 2030,
+      "confirmed": true
+    },
+    "13": {
+      "weaponAttack": 14817,
+      "mainStat": 40962,
+      "baseAttack": 2030,
+      "confirmed": true
+    },
+    "14": {
+      "weaponAttack": 14817,
+      "mainStat": 47268,
+      "baseAttack": 2030,
+      "confirmed": true
+    },
+    "15": {
+      "weaponAttack": 14817,
+      "mainStat": 47268,
+      "baseAttack": 3690,
+      "confirmed": true
+    },
+    "16": {
+      "weaponAttack": 16778,
+      "mainStat": 47268,
+      "baseAttack": 3690,
+      "confirmed": true
+    },
+    "17": {
+      "weaponAttack": 16778,
+      "mainStat": 53682,
+      "baseAttack": 3690,
+      "confirmed": true
+    },
+    "18": {
+      "weaponAttack": 18794,
+      "mainStat": 53682,
+      "baseAttack": 3690,
+      "confirmed": true
+    },
+    "19": {
+      "weaponAttack": 18794,
+      "mainStat": 60216,
+      "baseAttack": 3690,
+      "confirmed": true
+    },
+    "20": {
+      "weaponAttack": 18794,
+      "mainStat": 60216,
+      "baseAttack": 5980,
+      "confirmed": true
+    },
+    "21": {
+      "weaponAttack": 20832,
+      "mainStat": 60216,
+      "baseAttack": 5980,
+      "confirmed": true
+    },
+    "22": {
+      "weaponAttack": 20832,
+      "mainStat": 66888,
+      "baseAttack": 5980,
+      "confirmed": true
+    },
+    "23": {
+      "weaponAttack": 22940,
+      "mainStat": 66888,
+      "baseAttack": 5980,
+      "confirmed": true
+    },
+    "24": {
+      "weaponAttack": 22940,
+      "mainStat": 73710,
+      "baseAttack": 5980,
+      "confirmed": true
+    },
+    "25": {
+      "weaponAttack": 22940,
+      "mainStat": 73710,
+      "baseAttack": 9050,
+      "confirmed": true
+    }
+  },
+  "armGuardGradePct": {
+    "영웅": 0,
+    "전설": 0.01,
+    "유물": 0.02,
+    "고대": 0.03
+  },
+  "armGuardGradeRange": {
+    "영웅": [
+      0,
+      10
+    ],
+    "전설": [
+      10,
+      15
+    ],
+    "유물": [
+      15,
+      20
+    ],
+    "고대": [
+      20,
+      25
+    ]
   }
 }

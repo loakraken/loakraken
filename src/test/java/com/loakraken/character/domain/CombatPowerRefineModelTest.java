@@ -191,6 +191,96 @@ class CombatPowerRefineModelTest {
     assertThat(model.cannotSetAdvanced(2, 10)).contains("전율 장비의 상급 재련");
   }
 
+  @Test
+  void 팔_보호구_단계와_등급을_바꾸면_표본_7건과_같다() {
+    // #341 표본(loalab-bracer-armguard-2026-10-11.json): 언새늘 완갑 +13 전설, q 7.45%(보석 4.95 + 스톤 1.50 +
+    // 완갑 1.00).
+    var base =
+        loadout(19, 19, "운명의 전율 검", "208130", "2030", "14817", List.of("+1.80%", "+0.80%"), 29);
+    var equipment = new ArrayList<>(base.equipment());
+    for (int i = 0; i < equipment.size(); i++)
+      if ("완갑".equals(equipment.get(i).type())) {
+        var guard = equipment.get(i);
+        equipment.set(
+            i,
+            new CharacterLoadout.Equipment(guard.type(), guard.name(), null, "전설", guard.detail()));
+      }
+    var loadout =
+        new CharacterLoadout(
+            equipment,
+            null,
+            null,
+            null,
+            base.arkPassive(),
+            null,
+            List.of(),
+            base.avatars(),
+            List.of());
+    // 완갑 단계는 일반 재련 단계 칸(refineLevel)에서 읽는다.
+    var model =
+        CombatPowerRefineModel.of(
+            coefficients, withGuardLevel(loadout, 13), stats("188163"), new BigDecimal("7.45"));
+    assertThat(model.armGuardReason()).isNull();
+    var cases =
+        Map.of(
+            "14/전설", "1.004434958",
+            "25/전설", "1.081164192",
+            "15/유물", "1.023350492",
+            "20/고대", "1.064382077",
+            "25/고대", "1.101288248",
+            "10/영웅", "0.977893544",
+            "15/전설", "1.013914368");
+    for (var entry : cases.entrySet()) {
+      var key = entry.getKey().split("/");
+      var target = new CombatPowerRefineModel.ArmGuard(Integer.parseInt(key[0]), key[1]);
+      assertThat(model.cannotSetArmGuard(target.level(), target.grade()))
+          .as(entry.getKey())
+          .isNull();
+      var ratio = model.ratioFull(Map.of(), BigDecimal.ZERO, BigDecimal.ZERO, target);
+      var q = new BigDecimal("1.0745");
+      ratio =
+          ratio
+              .multiply(q.add(model.armGuardPctDelta(target)))
+              .divide(q, java.math.MathContext.DECIMAL64);
+      // 전투력 3,345.24 기준 ±0.01 → 비율 차이 3e-6 이하.
+      assertThat(ratio.subtract(new BigDecimal(entry.getValue())).abs())
+          .as(entry.getKey())
+          .isLessThan(new BigDecimal("0.000003"));
+    }
+    // 5단계 주기로 채운 단계(+4)는 계산하지 않는다.
+    assertThat(model.cannotSetArmGuard(4, "영웅")).contains("아직 확인하지 않아");
+  }
+
+  /** 완갑 장비의 refineLevel을 level로 바꾼 로드아웃(테스트 도우미). */
+  private static CharacterLoadout withGuardLevel(CharacterLoadout loadout, int level) {
+    var equipment = new ArrayList<CharacterLoadout.Equipment>();
+    for (var item : loadout.equipment()) {
+      if (!"완갑".equals(item.type())) {
+        equipment.add(item);
+        continue;
+      }
+      var detail = item.detail();
+      equipment.add(
+          new CharacterLoadout.Equipment(
+              item.type(),
+              item.name(),
+              null,
+              item.grade(),
+              new CharacterLoadout.EquipmentDetail(
+                  level, null, null, 4, null, detail.effects(), List.of(), List.of(), List.of())));
+    }
+    return new CharacterLoadout(
+        equipment,
+        null,
+        null,
+        null,
+        loadout.arkPassive(),
+        null,
+        List.of(),
+        loadout.avatars(),
+        List.of());
+  }
+
   private static BigDecimal stat(
       String type, CombatPowerRefineModel.Family family, int level, int advanced) {
     return CombatPowerRefineModel.stat(coefficients, type, family, level, advanced);

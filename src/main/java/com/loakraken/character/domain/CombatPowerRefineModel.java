@@ -52,8 +52,15 @@ public final class CombatPowerRefineModel {
       List<BigDecimal> upgradeBetween,
       Map<String, BigDecimal> upgradePartMultiplier,
       Map<Integer, BigDecimal> upgradeWeaponExactT,
-      Map<Integer, BigDecimal> advancedBonus) {
+      Map<Integer, BigDecimal> advancedBonus,
+      String armGuardSource,
+      Map<Integer, ArmGuardLevel> armGuardTable,
+      Map<String, BigDecimal> armGuardGradePct,
+      Map<String, List<Integer>> armGuardGradeRange) {
     public Coefficients {
+      armGuardTable = armGuardTable == null ? Map.of() : Map.copyOf(armGuardTable);
+      armGuardGradePct = armGuardGradePct == null ? Map.of() : Map.copyOf(armGuardGradePct);
+      armGuardGradeRange = armGuardGradeRange == null ? Map.of() : Map.copyOf(armGuardGradeRange);
       avatarStatPctByGrade = Map.copyOf(avatarStatPctByGrade);
       avatarStatTypes = List.copyOf(avatarStatTypes);
       var table = new HashMap<String, Map<Integer, Long>>();
@@ -80,6 +87,13 @@ public final class CombatPowerRefineModel {
   /** 바꾼 뒤 일반 재련 단계·상급 재련 단계. */
   public record Target(int level, int advanced) {}
 
+  /** 팔 보호구 단계 하나(#341): 무기 공격력·주스탯·기본 공격력 +N. confirmed=false는 5단계 주기로 채운 칸(계산하지 않음). */
+  public record ArmGuardLevel(
+      long weaponAttack, long mainStat, long baseAttack, boolean confirmed) {}
+
+  /** 팔 보호구 단계·등급(영웅·전설·유물·고대). */
+  public record ArmGuard(int level, String grade) {}
+
   /** unsupportedReason이 있으면 재련 변화는 모두 계산하지 않는다. */
   public record Model(
       BigDecimal r,
@@ -91,7 +105,9 @@ public final class CombatPowerRefineModel {
       Map<Integer, Part> parts,
       Map<Integer, String> partReasons,
       Coefficients coefficients,
-      String unsupportedReason) {
+      String unsupportedReason,
+      ArmGuard armGuard,
+      String armGuardReason) {
     public Model {
       parts = parts == null ? Map.of() : Map.copyOf(parts);
       partReasons = partReasons == null ? Map.of() : Map.copyOf(partReasons);
@@ -128,6 +144,27 @@ public final class CombatPowerRefineModel {
       return parts.get(index);
     }
 
+    /** 팔 보호구를 level·grade로 바꿀 수 있는지. 안 되면 이유 문장. */
+    public String cannotSetArmGuard(int level, String grade) {
+      if (unsupportedReason != null) return unsupportedReason;
+      if (armGuardReason != null) return armGuardReason;
+      var row = coefficients.armGuardTable().get(level);
+      if (row == null || !row.confirmed()) return "이 팔 보호구 단계의 수치는 아직 확인하지 않아 계산하지 않았습니다.";
+      // 등급별 관측 범위(armGuardGradeRange)는 참고용이다. 대조 사이트도 범위 밖 조합을 같은 식으로 계산한다(표본 +25 전설).
+      if (coefficients.armGuardGradePct().get(grade) == null)
+        return "이 팔 보호구 등급(" + grade + ")의 효과는 아직 확인하지 않아 계산하지 않았습니다.";
+      return null;
+    }
+
+    /** 팔 보호구 등급을 바꿀 때 기본 공격력 % 변화(소수, 0.01 = 1%p). */
+    public BigDecimal armGuardPctDelta(ArmGuard target) {
+      if (armGuard == null || target == null) return BigDecimal.ZERO;
+      return coefficients
+          .armGuardGradePct()
+          .get(target.grade())
+          .subtract(coefficients.armGuardGradePct().get(armGuard.grade()));
+    }
+
     /** 장비 index → 새 일반 재련 단계(상급은 그대로)로 바꾼 상태의 전투력 비. 계산할 수 없으면 null. */
     public BigDecimal ratio(Map<Integer, Integer> levels) {
       return ratio(levels, BigDecimal.ZERO);
@@ -153,7 +190,30 @@ public final class CombatPowerRefineModel {
     /** 장비 index → (일반, 상급) 단계로 바꾼 상태의 전투력 비(#333). 계산할 수 없으면 null. */
     public BigDecimal ratioTargets(
         Map<Integer, Target> targets, BigDecimal weaponFlatDelta, BigDecimal mainStatDelta) {
+      return ratioFull(targets, weaponFlatDelta, mainStatDelta, null);
+    }
+
+    /**
+     * 위에 더해 팔 보호구 단계가 바뀐 상태(#341): S·W에 단계표 차이를 더하고 F를 새 단계 값으로 바꾼 (R' + F')/(R + F). 등급의 기본 공격력 %
+     * 변화(q)는 보석 모델 q와 함께 시뮬레이터가 곱한다.
+     */
+    public BigDecimal ratioFull(
+        Map<Integer, Target> targets,
+        BigDecimal weaponFlatDelta,
+        BigDecimal mainStatDelta,
+        ArmGuard armGuardTarget) {
       if (unsupportedReason != null) return null;
+      var nextF = f;
+      if (armGuardTarget != null) {
+        if (armGuard == null) return null;
+        var from = coefficients.armGuardTable().get(armGuard.level());
+        var to = coefficients.armGuardTable().get(armGuardTarget.level());
+        if (from == null || to == null || !to.confirmed()) return null;
+        weaponFlatDelta =
+            weaponFlatDelta.add(BigDecimal.valueOf(to.weaponAttack() - from.weaponAttack()));
+        mainStatDelta = mainStatDelta.add(BigDecimal.valueOf(to.mainStat() - from.mainStat()));
+        nextF = BigDecimal.valueOf(to.baseAttack());
+      }
       var nextS = s.add(mainStatDelta.multiply(statMultiplier, MATH), MATH);
       var nextW = w.add(weaponFlatDelta.multiply(BigDecimal.ONE.add(weaponPct), MATH), MATH);
       for (var entry : targets.entrySet()) {
@@ -169,7 +229,7 @@ public final class CombatPowerRefineModel {
       }
       if (nextS.signum() <= 0 || nextW.signum() <= 0) return null;
       var scale = nextS.divide(s, MATH).multiply(nextW.divide(w, MATH), MATH).sqrt(MATH);
-      return r.multiply(scale, MATH).add(f, MATH).divide(r.add(f, MATH), MATH);
+      return r.multiply(scale, MATH).add(nextF, MATH).divide(r.add(f, MATH), MATH);
     }
 
     private BigDecimal stat(Part part, int level, int advanced) {
@@ -303,8 +363,40 @@ public final class CombatPowerRefineModel {
       }
       statMultiplier = statMultiplier.add(best);
     }
+    ArmGuard armGuard = null;
+    String armGuardReason = "팔 보호구가 없어 계산하지 않았습니다.";
+    for (var item : loadout.equipment()) {
+      if (item == null || !ARM_GUARD.equals(item.type()) || item.detail() == null) continue;
+      var level = item.detail().refineLevel();
+      var row = level == null ? null : c.armGuardTable().get(level);
+      if (item.name() == null || !item.name().contains(JEONYUL))
+        armGuardReason = "전율 팔 보호구만 계산합니다.";
+      else if (row == null || !row.confirmed())
+        armGuardReason = "지금 팔 보호구 단계의 수치를 아직 확인하지 않아 계산하지 않았습니다.";
+      else if (c.armGuardGradePct().get(item.grade()) == null)
+        armGuardReason = "지금 팔 보호구 등급(" + item.grade() + ")의 효과는 아직 확인하지 않아 계산하지 않았습니다.";
+      else if (BigDecimal.valueOf(row.baseAttack()).compareTo(f) != 0)
+        armGuardReason = "지금 팔 보호구 수치가 단계표와 달라 계산하지 않았습니다.";
+      else {
+        armGuard = new ArmGuard(level, item.grade());
+        armGuardReason = null;
+      }
+      break;
+    }
     if (reason != null)
-      return new Model(null, null, null, null, null, null, parts, partReasons, c, reason);
+      return new Model(
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          parts,
+          partReasons,
+          c,
+          reason,
+          armGuard,
+          armGuardReason);
     weaponPct = weaponPct.add(c.karmaWeaponPctPerLevel().multiply(BigDecimal.valueOf(karma)));
     var q = baseAttackPct.divide(HUNDRED, MATH);
     var r = b.divide(BigDecimal.ONE.add(q), MATH).subtract(f, MATH);
@@ -320,9 +412,23 @@ public final class CombatPowerRefineModel {
           parts,
           partReasons,
           c,
-          "기본 공격력 분해 값이 맞지 않아 계산하지 않았습니다.");
+          "기본 공격력 분해 값이 맞지 않아 계산하지 않았습니다.",
+          armGuard,
+          armGuardReason);
     var s = SIX.multiply(r.multiply(r, MATH), MATH).divide(w, MATH);
-    return new Model(r, f, s, w, weaponPct, statMultiplier, parts, partReasons, c, null);
+    return new Model(
+        r,
+        f,
+        s,
+        w,
+        weaponPct,
+        statMultiplier,
+        parts,
+        partReasons,
+        c,
+        null,
+        armGuard,
+        armGuardReason);
   }
 
   private static BigDecimal baseAttack(List<CharacterProfile.Stat> stats) {

@@ -192,7 +192,8 @@ class StopListPathsIntegrationTest {
             null,
             List.of());
     var loadout = new CharacterLoadout(List.of(), null, null, null, null, null);
-    return new FetchedCharacter(CharacterTestFixture.details(profile, loadout, List.of()), "{}", "[]");
+    return new FetchedCharacter(
+        CharacterTestFixture.details(profile, loadout, List.of()), "{}", "[]");
   }
 
   private static List<String> names(JsonNode data) {

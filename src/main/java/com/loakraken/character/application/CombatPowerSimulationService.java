@@ -992,6 +992,13 @@ public class CombatPowerSimulationService {
     if (!CombatPowerEquipmentModel.supportsEngraving(equipmentCoefficients, effect.name()))
       reason = UNSUPPORTED_BASIS;
     else if (current == null) reason = "각인 정보가 없어 계산하지 않았습니다.";
+    else if (current.level() != null
+        && CombatPowerEquipmentModel.engravingFactor(
+                equipmentCoefficients,
+                effect.name(),
+                current.level(),
+                current.abilityStoneLevel() == null ? 0 : current.abilityStoneLevel())
+            == null) reason = LEVEL_UNCONFIRMED_BASIS;
     else if (!CombatPowerEquipmentModel.matchesOfficial(equipmentCoefficients, current))
       reason = "공식 각인 설명값이 계수표와 달라 계산하지 않았습니다.";
     return new Planned(change, target, from, to, effect, ENGRAVING_BASIS, reason);

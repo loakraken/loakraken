@@ -2,6 +2,7 @@ package com.loakraken.character.presentation;
 
 import com.loakraken.character.application.CharacterItemTooltipService;
 import com.loakraken.common.api.ApiResponse;
+import com.loakraken.common.api.NullableResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -65,7 +66,7 @@ public class CharacterItemTooltipController {
       @Schema(
               description =
                   "이 줄을 읽은 캐릭터 캐시의 수집 시각. 캐릭터 검색 응답 fetchedAt과 다르면 순번이 어긋났을 수 있으니 버리고 다시 부른다. 숨김이면 null")
-          @com.loakraken.common.api.NullableResponse
+          @NullableResponse
           java.time.Instant fetchedAt,
       List<EquipmentLinesResponse> equipment,
       List<SlotLinesResponse> gems,
@@ -96,7 +97,20 @@ public class CharacterItemTooltipController {
               .map(
                   item ->
                       new SkillLinesResponse(
-                          item.name(), item.runeExtraLines(), item.titleLines(), item.infoLines()))
+                          item.name(),
+                          item.runeExtraLines(),
+                          item.titleLines(),
+                          item.infoLines(),
+                          item.tripodOptions().stream()
+                              .map(
+                                  option ->
+                                      new TripodOptionResponse(
+                                          option.tier(),
+                                          option.slot(),
+                                          option.name(),
+                                          option.icon(),
+                                          option.selected()))
+                              .toList()))
               .toList(),
           value.arkGrid().stream()
               .map(
@@ -120,11 +134,9 @@ public class CharacterItemTooltipController {
   }
 
   public record GridLinesResponse(
-      @Schema(description = "검색 응답 arkGrid.slots[].index", example = "0")
-          @com.loakraken.common.api.NullableResponse
+      @Schema(description = "검색 응답 arkGrid.slots[].index", example = "0") @NullableResponse
           Integer index,
-      @Schema(description = "공식 Tooltip 등급 줄", example = "유물 아크 그리드 코어")
-          @com.loakraken.common.api.NullableResponse
+      @Schema(description = "공식 Tooltip 등급 줄", example = "유물 아크 그리드 코어") @NullableResponse
           String titleLine,
       @Schema(description = "공식 Tooltip 귀속·거래 줄(제목 바로 뒤)") List<String> tradeLines,
       @Schema(description = "공식 Tooltip 나머지 줄(원문 순서)", example = "[\"거래 불가\", \"분해불가\"]")
@@ -132,11 +144,9 @@ public class CharacterItemTooltipController {
       List<GridGemLinesResponse> gems) {}
 
   public record GridGemLinesResponse(
-      @Schema(description = "검색 응답 arkGrid.slots[].gems[].index", example = "0")
-          @com.loakraken.common.api.NullableResponse
+      @Schema(description = "검색 응답 arkGrid.slots[].gems[].index", example = "0") @NullableResponse
           Integer index,
-      @Schema(description = "공식 Tooltip 등급 줄", example = "전설 아크 그리드 젬")
-          @com.loakraken.common.api.NullableResponse
+      @Schema(description = "공식 Tooltip 등급 줄", example = "전설 아크 그리드 젬") @NullableResponse
           String titleLine,
       @Schema(description = "공식 Tooltip 귀속·거래 줄", example = "[\"가공 완료\", \"거래 불가\"]")
           List<String> tradeLines,
@@ -157,7 +167,7 @@ public class CharacterItemTooltipController {
 
   public record SlotLinesResponse(
       @Schema(description = "검색 응답 gems.items[].slot 또는 cards.items[].slot", example = "0")
-          @com.loakraken.common.api.NullableResponse
+          @NullableResponse
           Integer slot,
       @Schema(
               description = "공식 Tooltip 나머지 줄(원문 순서)",
@@ -179,5 +189,16 @@ public class CharacterItemTooltipController {
                   "공식 Tooltip 현재 레벨 정보 줄(원문 순서: PvE·스킬 레벨·마나 소모·부위 파괴·무력화·공격 타입·슈퍼아머 등). 다음 레벨 정보·트라이포드·룬·보석 효과는 빼고, 이전 캐시면 빈 목록",
               example =
                   "[\"PvE\", \"스킬 레벨 10\", \"마나 349 소모\", \"공격 타입 : 백 어택\", \"슈퍼아머 : 경직 면역\"]")
-          List<String> infoLines) {}
+          List<String> infoLines,
+      @Schema(
+              description =
+                  "공식 트라이포드 전체 선택지(선택 여부 포함, 공식 순서). 효과 문장은 검색 응답 skills[].tripods(선택된 것)에만 있음. 이전 캐시면 빈 목록")
+          List<TripodOptionResponse> tripodOptions) {}
+
+  public record TripodOptionResponse(
+      @Schema(description = "공식 Tier(0부터)", example = "0") @NullableResponse Integer tier,
+      @Schema(description = "공식 Slot(1부터)", example = "1") @NullableResponse Integer slot,
+      @Schema(example = "약점 노출") String name,
+      @NullableResponse String icon,
+      @Schema(description = "선택한 트라이포드면 true") boolean selected) {}
 }

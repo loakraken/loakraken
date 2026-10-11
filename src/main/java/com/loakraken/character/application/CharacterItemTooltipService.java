@@ -30,7 +30,11 @@ public class CharacterItemTooltipService {
 
   /** name은 검색 응답 loadout.skills[].name이다. titleLines·infoLines는 공식 스킬 Tooltip 원문 줄(#299). */
   public record SkillLines(
-      String name, List<String> runeExtraLines, List<String> titleLines, List<String> infoLines) {}
+      String name,
+      List<String> runeExtraLines,
+      List<String> titleLines,
+      List<String> infoLines,
+      List<CharacterLoadout.TripodOption> tripodOptions) {}
 
   /** index는 검색 응답 loadout.arkGrid.slots[].index, gems[].index는 그 코어의 gems[].index(#288). */
   public record GridLines(
@@ -114,9 +118,17 @@ public class CharacterItemTooltipService {
       for (var skill : loadout.skills()) {
         if (skill == null) continue;
         var runeLines = skill.rune() == null ? List.<String>of() : skill.rune().extraLines();
-        if (runeLines.isEmpty() && skill.titleLines().isEmpty() && skill.infoLines().isEmpty())
-          continue;
-        skills.add(new SkillLines(skill.name(), runeLines, skill.titleLines(), skill.infoLines()));
+        if (runeLines.isEmpty()
+            && skill.titleLines().isEmpty()
+            && skill.infoLines().isEmpty()
+            && skill.tripodOptions().isEmpty()) continue;
+        skills.add(
+            new SkillLines(
+                skill.name(),
+                runeLines,
+                skill.titleLines(),
+                skill.infoLines(),
+                skill.tripodOptions()));
       }
     var arkGrid = new ArrayList<GridLines>();
     if (loadout.arkGrid() != null)

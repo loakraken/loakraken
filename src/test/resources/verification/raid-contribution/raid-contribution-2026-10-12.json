@@ -1,0 +1,1127 @@
+{
+ "checkedAt": "2026-10-12",
+ "checklist": [
+  "L41"
+ ],
+ "status": "GATE_RANGES_CONFIRMED_EXCEPT_HOLD(관문별 status, HOLD 6관문은 화면 값 없음)",
+ "statusRule": "PM 총괄 기준(2026-10-12)·PM-백엔드 검토(#380): 두 출처 차이가 2%를 넘으면 공식 공지 번호·날짜로 설명돼야 CONFIRMED. 설명 못 하면 HOLD — 화면은 \"데이터 없음\", 추정값 금지. HOLD 해제 = 공지 재확인 또는 두 출처 최신 값 재확인으로 차이 2% 이하",
+ "unit": "억(피해량), 억/초(초당)",
+ "sourceRule": "사용자 결정(PM 총괄 2026-10-12 전달): 게임 데이터는 공식 → 인벤 → 목표 사이트 중 한 곳이면 반영. PM 판정: 관문마다 더 최근 자료, 인벤에 없거나 그 뒤 공식 변경이 있는 관문은 목표 사이트. 화면에는 출처 대신 기준 시점만 표시",
+ "definition": {
+  "low": "하한 = 커뮤니티 \"강투\" 기준(1인분 × 0.9). 인벤 이미지 = 딜 지분 15%",
+  "reference": "기준 1인분(인벤 이미지 = 딜 지분 16.6%). 출처에 없으면 null",
+  "high": "상한 = 커뮤니티 \"잔혈\" 기준(1인분 × 1.2). 인벤 이미지 = 딜 지분 20%",
+  "official": "보스 체력·칭호 기준은 공식 자료 없음. 칭호 이름은 화면에 쓰지 않거나 정의 문장을 붙인다(L41 조사 문서 4절)",
+  "position": "내 위치(%) = (내 피해량 − 하한) ÷ (상한 − 하한) × 100. 0 미만 = 하한 미만, 100 초과 = 상한 초과"
+ },
+ "bossMapping": "관문 ↔ 보스는 공식 공지 이름으로 대조(4막 1관문 = 욕망의 주인, 에키드나 · 2관문 = 심연의 파수꾼, 아르모체 · 3막 3관문 = 심연의 징벌자, 모르둠). 앞서 본 \"4막 1관 모르둠\"은 목표 사이트 기본 선택이 3막 익스트림 나이트메어였던 것",
+ "officialPatchReview": "2025-09-03 ~ 2026-10-09 업데이트·임시 점검 공지(13226 ~ 13569)에서 \"체력·HP·보호막\" 변경을 관문별로 대조",
+ "gates": [
+  {
+   "raid": "카제로스 레이드 1막 : 대지를 부수는 업화의 궤적",
+   "raidKey": "1막",
+   "difficulty": "노말",
+   "gate": 1,
+   "boss": "죽음의 왕 일리아칸",
+   "players": 8,
+   "low": 274,
+   "reference": null,
+   "high": 365,
+   "source": "인벤 4821/108048 본문 표",
+   "basisDate": "2025-09-15",
+   "reason": "목표 사이트에 없음, 인벤 단일 출처(게임 데이터 규칙)",
+   "status": "CONFIRMED",
+   "statusNote": "단일 출처(게임 데이터 규칙)"
+  },
+  {
+   "raid": "카제로스 레이드 1막 : 대지를 부수는 업화의 궤적",
+   "raidKey": "1막",
+   "difficulty": "노말",
+   "gate": 2,
+   "boss": "짓밟는 자, 에기르",
+   "players": 8,
+   "low": 340,
+   "reference": null,
+   "high": 450,
+   "source": "인벤 4821/108048 본문 표",
+   "basisDate": "2025-09-15",
+   "reason": "목표 사이트에 없음, 인벤 단일 출처(게임 데이터 규칙)",
+   "status": "CONFIRMED",
+   "statusNote": "단일 출처(게임 데이터 규칙)"
+  },
+  {
+   "raid": "카제로스 레이드 1막 : 대지를 부수는 업화의 궤적",
+   "raidKey": "1막",
+   "difficulty": "하드",
+   "gate": 1,
+   "boss": "죽음의 왕 일리아칸",
+   "players": 8,
+   "low": 450,
+   "reference": null,
+   "high": 600,
+   "source": "인벤 4821/108048 본문 표",
+   "basisDate": "2025-09-15",
+   "reason": "목표 사이트에 없음, 인벤 단일 출처(게임 데이터 규칙)",
+   "status": "CONFIRMED",
+   "statusNote": "단일 출처(게임 데이터 규칙)"
+  },
+  {
+   "raid": "카제로스 레이드 1막 : 대지를 부수는 업화의 궤적",
+   "raidKey": "1막",
+   "difficulty": "하드",
+   "gate": 2,
+   "boss": "짓밟는 자, 에기르",
+   "players": 8,
+   "low": 600,
+   "reference": null,
+   "high": 800,
+   "source": "인벤 4821/108048 본문 표",
+   "basisDate": "2025-09-15",
+   "reason": "목표 사이트에 없음, 인벤 단일 출처(게임 데이터 규칙)",
+   "status": "CONFIRMED",
+   "statusNote": "단일 출처(게임 데이터 규칙)"
+  },
+  {
+   "raid": "카제로스 레이드 2막 : 부유하는 악몽의 진혼곡",
+   "raidKey": "2막",
+   "difficulty": "노말",
+   "gate": 1,
+   "boss": "도륙하는 자, 나로크",
+   "players": 8,
+   "low": 450,
+   "reference": null,
+   "high": 600,
+   "source": "인벤 4821/108048 본문 표",
+   "basisDate": "2025-09-15",
+   "reason": "목표 사이트에 없음, 인벤 단일 출처(게임 데이터 규칙)",
+   "status": "CONFIRMED",
+   "statusNote": "단일 출처(게임 데이터 규칙)"
+  },
+  {
+   "raid": "카제로스 레이드 2막 : 부유하는 악몽의 진혼곡",
+   "raidKey": "2막",
+   "difficulty": "노말",
+   "gate": 2,
+   "boss": "몽환의 현시자, 아브렐슈드",
+   "players": 8,
+   "low": 610,
+   "reference": null,
+   "high": 810,
+   "source": "인벤 4821/108048 본문 표",
+   "basisDate": "2025-09-15",
+   "reason": "목표 사이트에 없음, 인벤 단일 출처(게임 데이터 규칙)",
+   "status": "CONFIRMED",
+   "statusNote": "단일 출처(게임 데이터 규칙)"
+  },
+  {
+   "raid": "카제로스 레이드 2막 : 부유하는 악몽의 진혼곡",
+   "raidKey": "2막",
+   "difficulty": "하드",
+   "gate": 1,
+   "boss": "도륙하는 자, 나로크",
+   "players": 8,
+   "low": 900,
+   "reference": null,
+   "high": 1200,
+   "source": "인벤 4821/108048 본문 표",
+   "basisDate": "2025-09-15",
+   "reason": "목표 사이트에 없음, 인벤 단일 출처(게임 데이터 규칙)",
+   "status": "CONFIRMED",
+   "statusNote": "단일 출처(게임 데이터 규칙)"
+  },
+  {
+   "raid": "카제로스 레이드 2막 : 부유하는 악몽의 진혼곡",
+   "raidKey": "2막",
+   "difficulty": "하드",
+   "gate": 2,
+   "boss": "몽환의 현시자, 아브렐슈드",
+   "players": 8,
+   "low": 1200,
+   "reference": null,
+   "high": 1600,
+   "source": "인벤 4821/108048 본문 표",
+   "basisDate": "2025-09-15",
+   "reason": "목표 사이트에 없음, 인벤 단일 출처(게임 데이터 규칙)",
+   "status": "CONFIRMED",
+   "statusNote": "단일 출처(게임 데이터 규칙)"
+  },
+  {
+   "raid": "카제로스 레이드 3막 : 칠흑, 폭풍의 밤",
+   "raidKey": "3막",
+   "difficulty": "노말",
+   "gate": 1,
+   "boss": "어둠의 주인, 카멘",
+   "players": 8,
+   "low": 510,
+   "reference": null,
+   "high": 680,
+   "source": "인벤 4821/108048 본문 표",
+   "basisDate": "2025-09-15",
+   "reason": "목표 사이트에 없음, 인벤 단일 출처(게임 데이터 규칙)",
+   "status": "CONFIRMED",
+   "statusNote": "단일 출처(게임 데이터 규칙)"
+  },
+  {
+   "raid": "카제로스 레이드 3막 : 칠흑, 폭풍의 밤",
+   "raidKey": "3막",
+   "difficulty": "노말",
+   "gate": 2,
+   "boss": "만개한 공포, 나이트레아",
+   "players": 8,
+   "low": 480,
+   "reference": null,
+   "high": 640,
+   "source": "인벤 4821/108048 본문 표",
+   "basisDate": "2025-09-15",
+   "reason": "목표 사이트에 없음, 인벤 단일 출처(게임 데이터 규칙)",
+   "status": "CONFIRMED",
+   "statusNote": "단일 출처(게임 데이터 규칙)"
+  },
+  {
+   "raid": "카제로스 레이드 3막 : 칠흑, 폭풍의 밤",
+   "raidKey": "3막",
+   "difficulty": "노말",
+   "gate": 3,
+   "boss": "심연의 징벌자, 모르둠",
+   "players": 8,
+   "low": 1050,
+   "reference": null,
+   "high": 1400,
+   "source": "인벤 4821/108048 본문 표",
+   "basisDate": "2025-09-15",
+   "reason": "목표 사이트에 없음, 인벤 단일 출처(게임 데이터 규칙)",
+   "status": "CONFIRMED",
+   "statusNote": "단일 출처(게임 데이터 규칙)"
+  },
+  {
+   "raid": "카제로스 레이드 3막 : 칠흑, 폭풍의 밤",
+   "raidKey": "3막",
+   "difficulty": "하드",
+   "gate": 1,
+   "boss": "어둠의 주인, 카멘",
+   "players": 8,
+   "low": 820,
+   "reference": null,
+   "high": 1100,
+   "source": "인벤 4821/108048 본문 표",
+   "basisDate": "2025-12-28",
+   "reason": "공지 13307(2025-12-10) 3막 하드 보스 체력 하향 → 인벤 수정일 5(2025-12-28) 반영",
+   "status": "CONFIRMED",
+   "statusNote": "단일 출처(게임 데이터 규칙)"
+  },
+  {
+   "raid": "카제로스 레이드 3막 : 칠흑, 폭풍의 밤",
+   "raidKey": "3막",
+   "difficulty": "하드",
+   "gate": 2,
+   "boss": "만개한 공포, 나이트레아",
+   "players": 8,
+   "low": 880,
+   "reference": null,
+   "high": 1170,
+   "source": "인벤 4821/108048 본문 표",
+   "basisDate": "2025-12-28",
+   "reason": "공지 13307(2025-12-10) 3막 하드 보스 체력 하향 → 인벤 수정일 5(2025-12-28) 반영",
+   "status": "CONFIRMED",
+   "statusNote": "단일 출처(게임 데이터 규칙)"
+  },
+  {
+   "raid": "카제로스 레이드 3막 : 칠흑, 폭풍의 밤",
+   "raidKey": "3막",
+   "difficulty": "하드",
+   "gate": 3,
+   "boss": "심연의 징벌자, 모르둠",
+   "players": 8,
+   "low": 1920,
+   "reference": null,
+   "high": 2560,
+   "source": "인벤 4821/108048 본문 표",
+   "basisDate": "2025-12-28",
+   "reason": "공지 13307(2025-12-10) 3막 하드 보스 체력 하향 → 인벤 수정일 5(2025-12-28) 반영",
+   "status": "CONFIRMED",
+   "statusNote": "단일 출처(게임 데이터 규칙)"
+  },
+  {
+   "raid": "카제로스 레이드 4막 : 파멸의 성채",
+   "raidKey": "4막",
+   "difficulty": "노말",
+   "gate": 1,
+   "boss": "욕망의 주인, 에키드나",
+   "players": 8,
+   "low": 802.1,
+   "reference": 891.2,
+   "high": 1069.4,
+   "perSecond": {
+    "reference": 1.4
+   },
+   "source": "목표 사이트(기준) 기여도 도구, 택틱 전부 해제·딜러",
+   "basisDate": "2026-10-12",
+   "basisNote": "목표 사이트 확인일",
+   "reason": "인벤 표(2025-09-15) 뒤 공식 변경: 공지 13354(2026-01-21): 에키드나 보호막 제거 패턴의 보호막 양 하향",
+   "otherSource": {
+    "source": "인벤 4821/108048",
+    "low": 740,
+    "high": 990,
+    "basisDate": "2025-09-15",
+    "diffLowPct": -7.7,
+    "diffHighPct": -7.4
+   },
+   "status": "HOLD",
+   "holdReason": "공지 13354(2026-01-21) 보호막 양 하향 뒤 값(목표 사이트)이 인벤보다 8.0~8.4% 큼. 조정 방향과 반대라 공지로 설명되지 않음"
+  },
+  {
+   "raid": "카제로스 레이드 4막 : 파멸의 성채",
+   "raidKey": "4막",
+   "difficulty": "노말",
+   "gate": 2,
+   "boss": "심연의 파수꾼, 아르모체",
+   "players": 8,
+   "low": 843.9,
+   "reference": 937.6,
+   "high": 1125.2,
+   "perSecond": {
+    "reference": 1
+   },
+   "source": "목표 사이트(기준) 기여도 도구, 택틱 전부 해제·딜러",
+   "basisDate": "2026-10-12",
+   "basisNote": "목표 사이트 확인일",
+   "reason": "인벤 표(2025-09-15) 뒤 공식 변경: 공지 13354(2026-01-21): 2관문 \"심연이 깃든 석상\" HP 하향",
+   "otherSource": {
+    "source": "인벤 4821/108048",
+    "low": 950,
+    "high": 1270,
+    "basisDate": "2025-09-15",
+    "diffLowPct": 12.6,
+    "diffHighPct": 12.9
+   },
+   "status": "CONFIRMED",
+   "statusNote": "차이 2% 초과, 공지 번호·날짜로 설명됨(reason)"
+  },
+  {
+   "raid": "카제로스 레이드 4막 : 파멸의 성채",
+   "raidKey": "4막",
+   "difficulty": "하드",
+   "gate": 1,
+   "boss": "욕망의 주인, 에키드나",
+   "players": 8,
+   "low": 1566.4,
+   "reference": 1740.4,
+   "high": 2088.5,
+   "perSecond": {
+    "reference": 2.6
+   },
+   "source": "목표 사이트(기준) 기여도 도구, 택틱 전부 해제·딜러",
+   "basisDate": "2026-10-12",
+   "basisNote": "목표 사이트 확인일",
+   "reason": "인벤 표(2025-09-15) 뒤 공식 변경: 공지 13354(2026-01-21): 에키드나 보호막 제거 패턴의 보호막 양 하향",
+   "otherSource": {
+    "source": "인벤 4821/108048",
+    "low": 1425,
+    "high": 1900,
+    "basisDate": "2025-09-15",
+    "diffLowPct": -9,
+    "diffHighPct": -9
+   },
+   "status": "HOLD",
+   "holdReason": "공지 13354(2026-01-21) 보호막 양 하향 뒤 값(목표 사이트)이 인벤보다 9.9% 큼. 조정 방향과 반대라 공지로 설명되지 않음"
+  },
+  {
+   "raid": "카제로스 레이드 4막 : 파멸의 성채",
+   "raidKey": "4막",
+   "difficulty": "하드",
+   "gate": 2,
+   "boss": "심연의 파수꾼, 아르모체",
+   "players": 8,
+   "low": 1687.9,
+   "reference": 1875.4,
+   "high": 2250.5,
+   "perSecond": {
+    "reference": 2.1
+   },
+   "source": "목표 사이트(기준) 기여도 도구, 택틱 전부 해제·딜러",
+   "basisDate": "2026-10-12",
+   "basisNote": "목표 사이트 확인일",
+   "reason": "인벤 표(2025-09-15) 뒤 공식 변경: 공지 13354(2026-01-21): 2관문 \"심연이 깃든 석상\" HP 하향",
+   "otherSource": {
+    "source": "인벤 4821/108048",
+    "low": 1575,
+    "high": 2100,
+    "basisDate": "2025-09-15",
+    "diffLowPct": -6.7,
+    "diffHighPct": -6.7
+   },
+   "status": "HOLD",
+   "holdReason": "공지 13354(2026-01-21) 석상 HP 하향 뒤 값(목표 사이트)이 인벤보다 7.2% 큼. 같은 공지의 노말 2관문과 방향이 반대"
+  },
+  {
+   "raid": "카제로스 레이드 종막 : 최후의 날",
+   "raidKey": "종막",
+   "difficulty": "노말",
+   "gate": 1,
+   "boss": "심연의 군주, 카제로스",
+   "players": 8,
+   "low": 1317.7,
+   "reference": 1464.1,
+   "high": 1756.9,
+   "perSecond": {
+    "reference": 1.4
+   },
+   "source": "목표 사이트(기준) 기여도 도구, 택틱 전부 해제·딜러",
+   "basisDate": "2026-10-12",
+   "basisNote": "목표 사이트 확인일",
+   "reason": "인벤 표(2025-10-21) 뒤 공식 변경: 공지 13472(2026-06-24): 1관문 노말/하드 공통, 기믹 실패 시 카제로스 보호막 버프 제거",
+   "otherSource": {
+    "source": "인벤 4821/108048",
+    "low": 1190,
+    "high": 1590,
+    "basisDate": "2025-10-21",
+    "diffLowPct": -9.7,
+    "diffHighPct": -9.5
+   },
+   "status": "HOLD",
+   "holdReason": "공지 13472(2026-06-24)는 기믹 실패 시 보호막 버프 제거라 기본 요구 피해량이 약 10% 달라지는 것을 설명하지 못함"
+  },
+  {
+   "raid": "카제로스 레이드 종막 : 최후의 날",
+   "raidKey": "종막",
+   "difficulty": "노말",
+   "gate": 2,
+   "boss": "대악마, 카제로스 → 죽음의 현신, 카제로스",
+   "players": 8,
+   "low": 1050,
+   "reference": null,
+   "high": 1400,
+   "source": "인벤 4821/108048 본문 표",
+   "basisDate": "2025-10-21",
+   "reason": "인벤 반영 뒤 요구 피해량을 바꾸는 공식 변경 없음(2025-09 이후 업데이트 공지 대조)",
+   "otherSource": {
+    "source": "목표 사이트(기준) 기여도 도구, 택틱 전부 해제·딜러",
+    "low": 1103.1,
+    "reference": 1225.7,
+    "high": 1470.8,
+    "basisDate": "2026-10-12",
+    "diffLowPct": 5.1,
+    "diffHighPct": 5.1
+   },
+   "status": "HOLD",
+   "holdReason": "목표 사이트가 인벤보다 5.1% 큼. 인벤 반영(2025-10-21) 뒤 이 차이를 설명하는 공지 없음"
+  },
+  {
+   "raid": "카제로스 레이드 종막 : 최후의 날",
+   "raidKey": "종막",
+   "difficulty": "하드",
+   "gate": 1,
+   "boss": "심연의 군주, 카제로스",
+   "players": 8,
+   "low": 2025,
+   "reference": null,
+   "high": 2700,
+   "source": "인벤 4821/108048 본문 표",
+   "basisDate": "2026-06-25",
+   "reason": "공지 13472(2026-06-24) 종막 하드 1·2관문 체력 하향 → 인벤 수정일 23(2026-06-25) 반영",
+   "otherSource": {
+    "source": "목표 사이트(기준) 기여도 도구, 택틱 전부 해제·딜러",
+    "low": 2053.2,
+    "reference": 2281.3,
+    "high": 2737.6,
+    "basisDate": "2026-10-12",
+    "diffLowPct": 1.4,
+    "diffHighPct": 1.4
+   },
+   "status": "CONFIRMED",
+   "statusNote": "두 출처 차이 2% 이하"
+  },
+  {
+   "raid": "카제로스 레이드 종막 : 최후의 날",
+   "raidKey": "종막",
+   "difficulty": "하드",
+   "gate": 2,
+   "boss": "대악마, 카제로스 → 죽음의 현신, 카제로스",
+   "players": 8,
+   "low": 3375,
+   "reference": null,
+   "high": 4490,
+   "source": "인벤 4821/108048 본문 표",
+   "basisDate": "2026-06-25",
+   "reason": "공지 13472(2026-06-24) 종막 하드 1·2관문 체력 하향 → 인벤 수정일 23(2026-06-25) 반영",
+   "otherSource": {
+    "source": "목표 사이트(기준) 기여도 도구, 택틱 전부 해제·딜러",
+    "low": 3517.3,
+    "reference": 3908.1,
+    "high": 4689.8,
+    "basisDate": "2026-10-12",
+    "diffLowPct": 4.2,
+    "diffHighPct": 4.4
+   },
+   "phases": [
+    {
+     "name": "2-1",
+     "low": 1900,
+     "high": 2530
+    },
+    {
+     "name": "2-2",
+     "low": 825,
+     "high": 1100
+    },
+    {
+     "name": "2-3",
+     "low": 650,
+     "high": 860
+    }
+   ],
+   "status": "CONFIRMED",
+   "statusNote": "차이 2% 초과, 공지 번호·날짜로 설명됨(reason)"
+  },
+  {
+   "raid": "그림자 레이드 '고통의 마녀, 세르카'",
+   "raidKey": "세르카",
+   "difficulty": "노말",
+   "gate": 1,
+   "boss": "고통의 마녀, 세르카",
+   "players": 4,
+   "low": 1100,
+   "reference": null,
+   "high": 1480,
+   "perSecond": {
+    "low": 1.8,
+    "high": 2.5
+   },
+   "source": "인벤 4821/108048 본문 표",
+   "basisDate": "2026-03-27",
+   "reason": "인벤 반영 뒤 요구 피해량을 바꾸는 공식 변경 없음(2025-09 이후 업데이트 공지 대조)",
+   "otherSource": {
+    "source": "목표 사이트(기준) 기여도 도구, 택틱 전부 해제·딜러",
+    "low": 1109.8,
+    "reference": 1233.1,
+    "high": 1479.7,
+    "basisDate": "2026-10-12",
+    "diffLowPct": 0.9,
+    "diffHighPct": 0
+   },
+   "status": "CONFIRMED",
+   "statusNote": "두 출처 차이 2% 이하"
+  },
+  {
+   "raid": "그림자 레이드 '고통의 마녀, 세르카'",
+   "raidKey": "세르카",
+   "difficulty": "노말",
+   "gate": 2,
+   "boss": "코르부스 툴 라크",
+   "players": 4,
+   "low": 1430,
+   "reference": null,
+   "high": 1900,
+   "perSecond": {
+    "low": 2.4,
+    "high": 3.2
+   },
+   "source": "인벤 4821/108048 본문 표",
+   "basisDate": "2026-03-27",
+   "reason": "인벤 반영 뒤 요구 피해량을 바꾸는 공식 변경 없음(2025-09 이후 업데이트 공지 대조)",
+   "otherSource": {
+    "source": "목표 사이트(기준) 기여도 도구, 택틱 전부 해제·딜러",
+    "low": 1430.5,
+    "reference": 1589.4,
+    "high": 1907.3,
+    "basisDate": "2026-10-12",
+    "diffLowPct": 0,
+    "diffHighPct": 0.4
+   },
+   "status": "CONFIRMED",
+   "statusNote": "두 출처 차이 2% 이하"
+  },
+  {
+   "raid": "그림자 레이드 '고통의 마녀, 세르카'",
+   "raidKey": "세르카",
+   "difficulty": "하드",
+   "gate": 1,
+   "boss": "고통의 마녀, 세르카",
+   "players": 4,
+   "low": 2300,
+   "reference": null,
+   "high": 3070,
+   "perSecond": {
+    "low": 3.8,
+    "high": 5.1
+   },
+   "source": "인벤 4821/108048 본문 표",
+   "basisDate": "2026-03-27",
+   "reason": "인벤 반영 뒤 요구 피해량을 바꾸는 공식 변경 없음(2025-09 이후 업데이트 공지 대조)",
+   "otherSource": {
+    "source": "목표 사이트(기준) 기여도 도구, 택틱 전부 해제·딜러",
+    "low": 2308.7,
+    "reference": 2565.2,
+    "high": 3078.3,
+    "basisDate": "2026-10-12",
+    "diffLowPct": 0.4,
+    "diffHighPct": 0.3
+   },
+   "status": "CONFIRMED",
+   "statusNote": "두 출처 차이 2% 이하"
+  },
+  {
+   "raid": "그림자 레이드 '고통의 마녀, 세르카'",
+   "raidKey": "세르카",
+   "difficulty": "하드",
+   "gate": 2,
+   "boss": "코르부스 툴 라크",
+   "players": 4,
+   "low": 2980,
+   "reference": null,
+   "high": 3970,
+   "perSecond": {
+    "low": 5,
+    "high": 6.6
+   },
+   "source": "인벤 4821/108048 본문 표",
+   "basisDate": "2026-03-27",
+   "reason": "인벤 반영 뒤 요구 피해량을 바꾸는 공식 변경 없음(2025-09 이후 업데이트 공지 대조)",
+   "otherSource": {
+    "source": "목표 사이트(기준) 기여도 도구, 택틱 전부 해제·딜러",
+    "low": 2975.9,
+    "reference": 3306.6,
+    "high": 3967.9,
+    "basisDate": "2026-10-12",
+    "diffLowPct": -0.1,
+    "diffHighPct": -0.1
+   },
+   "status": "CONFIRMED",
+   "statusNote": "두 출처 차이 2% 이하"
+  },
+  {
+   "raid": "그림자 레이드 '고통의 마녀, 세르카'",
+   "raidKey": "세르카",
+   "difficulty": "나이트메어",
+   "gate": 1,
+   "boss": "고통의 마녀, 세르카",
+   "players": 4,
+   "low": 3580,
+   "reference": null,
+   "high": 4770,
+   "perSecond": {
+    "low": 6,
+    "high": 8
+   },
+   "source": "인벤 4821/108048 본문 표",
+   "basisDate": "2026-03-27",
+   "reason": "인벤 반영 뒤 요구 피해량을 바꾸는 공식 변경 없음(2025-09 이후 업데이트 공지 대조)",
+   "otherSource": {
+    "source": "목표 사이트(기준) 기여도 도구, 택틱 전부 해제·딜러",
+    "low": 3582.4,
+    "reference": 3980.5,
+    "high": 4776.6,
+    "basisDate": "2026-10-12",
+    "diffLowPct": 0.1,
+    "diffHighPct": 0.1
+   },
+   "status": "CONFIRMED",
+   "statusNote": "두 출처 차이 2% 이하"
+  },
+  {
+   "raid": "그림자 레이드 '고통의 마녀, 세르카'",
+   "raidKey": "세르카",
+   "difficulty": "나이트메어",
+   "gate": 2,
+   "boss": "코르부스 툴 라크",
+   "players": 4,
+   "low": 4620,
+   "reference": null,
+   "high": 6160,
+   "perSecond": {
+    "low": 7.7,
+    "high": 10.3
+   },
+   "source": "인벤 4821/108048 본문 표",
+   "basisDate": "2026-03-27",
+   "reason": "인벤 반영 뒤 요구 피해량을 바꾸는 공식 변경 없음(2025-09 이후 업데이트 공지 대조)",
+   "otherSource": {
+    "source": "목표 사이트(기준) 기여도 도구, 택틱 전부 해제·딜러",
+    "low": 4617.7,
+    "reference": 5130.8,
+    "high": 6157,
+    "basisDate": "2026-10-12",
+    "diffLowPct": 0,
+    "diffHighPct": 0
+   },
+   "status": "CONFIRMED",
+   "statusNote": "두 출처 차이 2% 이하"
+  },
+  {
+   "raid": "어비스 던전 '지평의 성당'",
+   "raidKey": "성당",
+   "difficulty": "1단계",
+   "gate": 1,
+   "boss": "대주교, 아르세노스",
+   "players": 4,
+   "low": 994,
+   "reference": null,
+   "high": 1326,
+   "perSecond": {
+    "low": 1.7,
+    "high": 2.2
+   },
+   "source": "인벤 4821/108048 본문 표",
+   "basisDate": "2026-04-24",
+   "reason": "인벤 반영 뒤 요구 피해량을 바꾸는 공식 변경 없음(2025-09 이후 업데이트 공지 대조)",
+   "otherSource": {
+    "source": "목표 사이트(기준) 기여도 도구, 택틱 전부 해제·딜러",
+    "low": 994.3,
+    "reference": 1104.8,
+    "high": 1325.7,
+    "basisDate": "2026-10-12",
+    "diffLowPct": 0,
+    "diffHighPct": 0
+   },
+   "status": "CONFIRMED",
+   "statusNote": "두 출처 차이 2% 이하"
+  },
+  {
+   "raid": "어비스 던전 '지평의 성당'",
+   "raidKey": "성당",
+   "difficulty": "1단계",
+   "gate": 2,
+   "boss": "광신의 인도자, 아르세노스",
+   "players": 4,
+   "low": 937,
+   "reference": null,
+   "high": 1250,
+   "perSecond": {
+    "low": 1.6,
+    "high": 2.1
+   },
+   "source": "인벤 4821/108048 본문 표",
+   "basisDate": "2026-04-24",
+   "reason": "인벤 반영 뒤 요구 피해량을 바꾸는 공식 변경 없음(2025-09 이후 업데이트 공지 대조)",
+   "otherSource": {
+    "source": "목표 사이트(기준) 기여도 도구, 택틱 전부 해제·딜러",
+    "low": 937.4,
+    "reference": 1041.6,
+    "high": 1249.9,
+    "basisDate": "2026-10-12",
+    "diffLowPct": 0,
+    "diffHighPct": 0
+   },
+   "status": "CONFIRMED",
+   "statusNote": "두 출처 차이 2% 이하"
+  },
+  {
+   "raid": "어비스 던전 '지평의 성당'",
+   "raidKey": "성당",
+   "difficulty": "2단계",
+   "gate": 1,
+   "boss": "대주교, 아르세노스",
+   "players": 4,
+   "low": 2161,
+   "reference": null,
+   "high": 2882,
+   "perSecond": {
+    "low": 3.6,
+    "high": 4.8
+   },
+   "source": "인벤 4821/108048 본문 표",
+   "basisDate": "2026-04-24",
+   "reason": "공지 13416(2026-04-22) 2·3단계 보스 체력 하향 → 인벤 수정일 17(2026-04-24) 반영",
+   "otherSource": {
+    "source": "목표 사이트(기준) 기여도 도구, 택틱 전부 해제·딜러",
+    "low": 2375.1,
+    "reference": 2639,
+    "high": 3166.8,
+    "basisDate": "2026-10-12",
+    "diffLowPct": 9.9,
+    "diffHighPct": 9.9
+   },
+   "status": "CONFIRMED",
+   "statusNote": "차이 2% 초과, 공지 번호·날짜로 설명됨(reason)"
+  },
+  {
+   "raid": "어비스 던전 '지평의 성당'",
+   "raidKey": "성당",
+   "difficulty": "2단계",
+   "gate": 2,
+   "boss": "광신의 인도자, 아르세노스",
+   "players": 4,
+   "low": 2089,
+   "reference": null,
+   "high": 2786,
+   "perSecond": {
+    "low": 3.5,
+    "high": 4.6
+   },
+   "source": "인벤 4821/108048 본문 표",
+   "basisDate": "2026-04-24",
+   "reason": "공지 13416(2026-04-22) 2·3단계 보스 체력 하향 → 인벤 수정일 17(2026-04-24) 반영",
+   "otherSource": {
+    "source": "목표 사이트(기준) 기여도 도구, 택틱 전부 해제·딜러",
+    "low": 2295.8,
+    "reference": 2550.9,
+    "high": 3061.1,
+    "basisDate": "2026-10-12",
+    "diffLowPct": 9.9,
+    "diffHighPct": 9.9
+   },
+   "status": "CONFIRMED",
+   "statusNote": "차이 2% 초과, 공지 번호·날짜로 설명됨(reason)"
+  },
+  {
+   "raid": "어비스 던전 '지평의 성당'",
+   "raidKey": "성당",
+   "difficulty": "3단계",
+   "gate": 1,
+   "boss": "대주교, 아르세노스",
+   "players": 4,
+   "low": 3650,
+   "reference": null,
+   "high": 4866,
+   "perSecond": {
+    "low": 6.1,
+    "high": 8.1
+   },
+   "source": "인벤 4821/108048 본문 표",
+   "basisDate": "2026-04-24",
+   "reason": "공지 13416(2026-04-22) 2·3단계 보스 체력 하향 → 인벤 수정일 17(2026-04-24) 반영",
+   "otherSource": {
+    "source": "목표 사이트(기준) 기여도 도구, 택틱 전부 해제·딜러",
+    "low": 3649.7,
+    "reference": 4055.3,
+    "high": 4866.3,
+    "basisDate": "2026-10-12",
+    "diffLowPct": 0,
+    "diffHighPct": 0
+   },
+   "status": "CONFIRMED",
+   "statusNote": "두 출처 차이 2% 이하"
+  },
+  {
+   "raid": "어비스 던전 '지평의 성당'",
+   "raidKey": "성당",
+   "difficulty": "3단계",
+   "gate": 2,
+   "boss": "광신의 인도자, 아르세노스",
+   "players": 4,
+   "low": 3594,
+   "reference": null,
+   "high": 4792,
+   "perSecond": {
+    "low": 6,
+    "high": 8
+   },
+   "source": "인벤 4821/108048 본문 표",
+   "basisDate": "2026-04-24",
+   "reason": "공지 13416(2026-04-22) 2·3단계 보스 체력 하향 → 인벤 수정일 17(2026-04-24) 반영",
+   "otherSource": {
+    "source": "목표 사이트(기준) 기여도 도구, 택틱 전부 해제·딜러",
+    "low": 3593.9,
+    "reference": 3993.2,
+    "high": 4791.8,
+    "basisDate": "2026-10-12",
+    "diffLowPct": 0,
+    "diffHighPct": 0
+   },
+   "status": "CONFIRMED",
+   "statusNote": "두 출처 차이 2% 이하"
+  },
+  {
+   "raid": "그림자 레이드 '죽음의 계율자, 벨가르딘'",
+   "raidKey": "벨가르딘",
+   "difficulty": "노말",
+   "gate": 1,
+   "boss": null,
+   "players": 8,
+   "low": 2609,
+   "reference": 2898.9,
+   "high": 3478.6,
+   "perSecond": {
+    "reference": 4.8
+   },
+   "source": "목표 사이트(기준) 기여도 도구, 택틱 전부 해제·딜러",
+   "basisDate": "2026-10-12",
+   "basisNote": "목표 사이트 확인일",
+   "reason": "인벤 표(2026-08-05) 뒤 공식 변경: 공지 13551(2026-09-23): 홀딩 저스트 가드 반격 피해가 보스 HP 비율로 변경(인벤 표는 2026-08-05 임시본)",
+   "otherSource": {
+    "source": "인벤 4821/108048",
+    "low": 2601,
+    "high": 3469,
+    "basisDate": "2026-08-05",
+    "diffLowPct": -0.3,
+    "diffHighPct": -0.3
+   },
+   "status": "CONFIRMED",
+   "statusNote": "두 출처 차이 2% 이하"
+  },
+  {
+   "raid": "그림자 레이드 '죽음의 계율자, 벨가르딘'",
+   "raidKey": "벨가르딘",
+   "difficulty": "노말",
+   "gate": 2,
+   "boss": "페투스 안 크라그마",
+   "players": 8,
+   "low": 2925.9,
+   "reference": 3251,
+   "high": 3901.2,
+   "perSecond": {
+    "reference": 4.2
+   },
+   "source": "목표 사이트(기준) 기여도 도구, 택틱 전부 해제·딜러",
+   "basisDate": "2026-10-12",
+   "basisNote": "목표 사이트 확인일",
+   "reason": "인벤 표(2026-08-05) 뒤 공식 변경: 공지 13551(2026-09-23): 홀딩 저스트 가드 반격 피해가 보스 HP 비율로 변경(인벤 표는 2026-08-05 임시본)",
+   "otherSource": {
+    "source": "인벤 4821/108048",
+    "low": 2917,
+    "high": 3889,
+    "basisDate": "2026-08-05",
+    "diffLowPct": -0.3,
+    "diffHighPct": -0.3
+   },
+   "status": "CONFIRMED",
+   "statusNote": "두 출처 차이 2% 이하"
+  },
+  {
+   "raid": "그림자 레이드 '죽음의 계율자, 벨가르딘'",
+   "raidKey": "벨가르딘",
+   "difficulty": "하드",
+   "gate": 1,
+   "boss": null,
+   "players": 8,
+   "low": 4152.8,
+   "reference": 4614.3,
+   "high": 5537.1,
+   "perSecond": {
+    "reference": 7.7
+   },
+   "source": "목표 사이트(기준) 기여도 도구, 택틱 전부 해제·딜러",
+   "basisDate": "2026-10-12",
+   "basisNote": "목표 사이트 확인일",
+   "reason": "인벤 표(2026-08-05) 뒤 공식 변경: 공지 13551(2026-09-23): 홀딩 저스트 가드 반격 피해가 보스 HP 비율로 변경(인벤 표는 2026-08-05 임시본)",
+   "otherSource": {
+    "source": "인벤 4821/108048",
+    "low": 4142,
+    "high": 5523,
+    "basisDate": "2026-08-05",
+    "diffLowPct": -0.3,
+    "diffHighPct": -0.3
+   },
+   "status": "CONFIRMED",
+   "statusNote": "두 출처 차이 2% 이하"
+  },
+  {
+   "raid": "그림자 레이드 '죽음의 계율자, 벨가르딘'",
+   "raidKey": "벨가르딘",
+   "difficulty": "하드",
+   "gate": 2,
+   "boss": "페투스 안 크라그마",
+   "players": 8,
+   "low": 4701,
+   "reference": 5223.3,
+   "high": 6268,
+   "perSecond": {
+    "reference": 6.7
+   },
+   "source": "목표 사이트(기준) 기여도 도구, 택틱 전부 해제·딜러",
+   "basisDate": "2026-10-12",
+   "basisNote": "목표 사이트 확인일",
+   "reason": "인벤 표(2026-08-05) 뒤 공식 변경: 공지 13551(2026-09-23): 홀딩 저스트 가드 반격 피해가 보스 HP 비율로 변경(인벤 표는 2026-08-05 임시본)",
+   "otherSource": {
+    "source": "인벤 4821/108048",
+    "low": 4689,
+    "high": 6252,
+    "basisDate": "2026-08-05",
+    "diffLowPct": -0.3,
+    "diffHighPct": -0.3
+   },
+   "status": "CONFIRMED",
+   "statusNote": "두 출처 차이 2% 이하"
+  },
+  {
+   "raid": "그림자 레이드 '죽음의 계율자, 벨가르딘'",
+   "raidKey": "벨가르딘",
+   "difficulty": "나이트메어",
+   "gate": 1,
+   "boss": null,
+   "players": 8,
+   "low": 7427.4,
+   "reference": 8252.7,
+   "high": 9903.3,
+   "perSecond": {
+    "reference": 13.8
+   },
+   "source": "목표 사이트(기준) 기여도 도구, 택틱 전부 해제·딜러",
+   "basisDate": "2026-10-12",
+   "basisNote": "목표 사이트 확인일",
+   "reason": "인벤 표(2026-08-05) 뒤 공식 변경: 공지 13551(2026-09-23): 홀딩 저스트 가드 반격 피해가 보스 HP 비율로 변경(인벤 표는 2026-08-05 임시본)",
+   "otherSource": {
+    "source": "인벤 4821/108048",
+    "low": 7412,
+    "high": 9883,
+    "basisDate": "2026-08-05",
+    "diffLowPct": -0.2,
+    "diffHighPct": -0.2
+   },
+   "status": "CONFIRMED",
+   "statusNote": "두 출처 차이 2% 이하"
+  },
+  {
+   "raid": "그림자 레이드 '죽음의 계율자, 벨가르딘'",
+   "raidKey": "벨가르딘",
+   "difficulty": "나이트메어",
+   "gate": 2,
+   "boss": "페투스 안 크라그마",
+   "players": 8,
+   "low": 8407.7,
+   "reference": 9341.9,
+   "high": 11210.2,
+   "perSecond": {
+    "reference": 12
+   },
+   "source": "목표 사이트(기준) 기여도 도구, 택틱 전부 해제·딜러",
+   "basisDate": "2026-10-12",
+   "basisNote": "목표 사이트 확인일",
+   "reason": "인벤 표(2026-08-05) 뒤 공식 변경: 공지 13551(2026-09-23): 홀딩 저스트 가드 반격 피해가 보스 HP 비율로 변경(인벤 표는 2026-08-05 임시본)",
+   "otherSource": {
+    "source": "인벤 4821/108048",
+    "low": 8391,
+    "high": 11188,
+    "basisDate": "2026-08-05",
+    "diffLowPct": -0.2,
+    "diffHighPct": -0.2
+   },
+   "status": "CONFIRMED",
+   "statusNote": "두 출처 차이 2% 이하"
+  },
+  {
+   "raid": "카제로스 레이드 3막 익스트림(기간제, 2026-09-23 ~ 2026-10-21)",
+   "raidKey": "3막 익스트림",
+   "difficulty": "노말",
+   "gate": 1,
+   "boss": "심연의 징벌자, 모르둠",
+   "players": 8,
+   "low": 3528,
+   "reference": 3920,
+   "high": 4704,
+   "perSecond": {
+    "low": 2.6,
+    "reference": 2.9,
+    "high": 3.5
+   },
+   "source": "인벤 4821/108048 본문 이미지",
+   "basisDate": "2026-09-25",
+   "reason": "인벤 반영 뒤 요구 피해량을 바꾸는 공식 변경 없음(2025-09 이후 업데이트 공지 대조)",
+   "otherSource": {
+    "source": "목표 사이트(기준) 기여도 도구, 택틱 전부 해제·딜러",
+    "low": 3595.8,
+    "reference": 3995.4,
+    "high": 4794.4,
+    "basisDate": "2026-10-12",
+    "diffLowPct": 1.9,
+    "diffHighPct": 1.9
+   },
+   "status": "CONFIRMED",
+   "statusNote": "두 출처 차이 2% 이하"
+  },
+  {
+   "raid": "카제로스 레이드 3막 익스트림(기간제, 2026-09-23 ~ 2026-10-21)",
+   "raidKey": "3막 익스트림",
+   "difficulty": "하드",
+   "gate": 1,
+   "boss": "심연의 징벌자, 모르둠",
+   "players": 8,
+   "low": 8563,
+   "reference": 9514,
+   "high": 11417,
+   "perSecond": {
+    "low": 6.4,
+    "reference": 7.2,
+    "high": 8.6
+   },
+   "source": "인벤 4821/108048 본문 이미지",
+   "basisDate": "2026-09-25",
+   "reason": "인벤 반영 뒤 요구 피해량을 바꾸는 공식 변경 없음(2025-09 이후 업데이트 공지 대조)",
+   "otherSource": {
+    "source": "목표 사이트(기준) 기여도 도구, 택틱 전부 해제·딜러",
+    "low": 9035.5,
+    "reference": 10100,
+    "high": 12047.4,
+    "basisDate": "2026-10-12",
+    "diffLowPct": 5.5,
+    "diffHighPct": 5.5
+   },
+   "status": "HOLD",
+   "holdReason": "목표 사이트가 인벤보다 5.5% 큼. 2026-09-23 출시 뒤 하드 난이도 조정 공지 없음(13561 하향은 나이트메어만)"
+  },
+  {
+   "raid": "카제로스 레이드 3막 익스트림(기간제, 2026-09-23 ~ 2026-10-21)",
+   "raidKey": "3막 익스트림",
+   "difficulty": "나이트메어",
+   "gate": 1,
+   "boss": "심연의 징벌자, 모르둠",
+   "players": 8,
+   "low": 22504,
+   "reference": 24905,
+   "high": 30006,
+   "perSecond": {
+    "low": 17,
+    "reference": 18.8,
+    "high": 22.7
+   },
+   "source": "인벤 4821/108048 본문 이미지",
+   "basisDate": "2026-10-03",
+   "reason": "공지 13561(2026-10-03) 나이트메어 모르둠 HP 하향 → 인벤 수정일 31(2026-10-03, \"8% 하향\") 반영",
+   "otherSource": {
+    "source": "목표 사이트(기준) 기여도 도구, 택틱 전부 해제·딜러",
+    "low": 23634.6,
+    "reference": 26300,
+    "high": 31512.8,
+    "basisDate": "2026-10-12",
+    "diffLowPct": 5,
+    "diffHighPct": 5
+   },
+   "status": "CONFIRMED",
+   "statusNote": "차이 2% 초과, 공지 번호·날짜로 설명됨(reason)"
+  }
+ ],
+ "positionVectors": [
+  {
+   "gate": "세르카 하드 1관문",
+   "myDamage": 2200,
+   "positionPct": -13,
+   "band": "BELOW_LOW"
+  },
+  {
+   "gate": "세르카 하드 1관문",
+   "myDamage": 2300,
+   "positionPct": 0,
+   "band": "IN_RANGE"
+  },
+  {
+   "gate": "세르카 하드 1관문",
+   "myDamage": 2555.6,
+   "positionPct": 33.2,
+   "band": "IN_RANGE"
+  },
+  {
+   "gate": "세르카 하드 1관문",
+   "myDamage": 3070,
+   "positionPct": 100,
+   "band": "IN_RANGE"
+  },
+  {
+   "gate": "세르카 하드 1관문",
+   "myDamage": 3200,
+   "positionPct": 116.9,
+   "band": "ABOVE_HIGH"
+  }
+ ],
+ "open": [
+  "HOLD 6관문(4막 노말 1·하드 1·하드 2, 종막 노말 1·2, 3막 익스트림 하드): 공지 재대조 또는 두 출처 최신 값 재확인 필요",
+  "세르카 노말 1관문 하한/상한 비율 0.743(나머지 0.75±0.006): 인벤 반올림으로 봄",
+  "3막 익스트림은 2026-10-21 정기 점검 전까지 기간제. 이후 종막 익스트림(2026-10-21 ~ 11-18) 값 추가 필요",
+  "서포터 기준(목표 사이트 서폿 칸)과 공대장 택틱 보정은 대량 수집이 필요해 범위 밖"
+ ],
+ "ratioExceptions": [
+  {
+   "k": "세르카 노말 1관",
+   "r": 0.7432432432432432
+  }
+ ]
+}

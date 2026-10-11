@@ -82,6 +82,7 @@
 - 저장: 새 표 `roster_collectible`(V13). armory를 받을 때(사용자 검색·수집기 프로필 갱신, 카드 기록과 같은 비동기 작업자) 그 원정대 값을 덮어쓴다.
   - 원정대 키가 아직 없는 캐릭터(원정대를 훑기 전)는 다음 관측에 기록된다.
   - 공식 호출은 늘지 않는다(armory가 이미 collectibles를 받는다).
+- 캐릭터 기준 순위(#303): `GET /api/v1/rankings/collectibles/standing?characterName=&server=&activeDays=&unit=`. 같은 조건의 모집단에서 그 원정대(또는 캐릭터 행) 순위·전체·상위 %(30 미만이면 null)·진행도를 준다. 순위에 없으면 값은 null이고 `reason`(문자열): `EXCLUDED`(공개 제외, 서버·관측 여부도 숨김)·`NOT_OBSERVED`·`INACTIVE`·`NO_COLLECTIBLES`. 표본: `rankings-collectibles-standing.json`, `rankings-collectibles-standing-hidden.json`.
 - 계약 표본: `build/generated/rankings-collectibles.json`(정상, READY), `rankings-collectibles-empty.json`(빈 결과), `rankings-collectibles-collecting.json`(30 미만), `rankings-collectibles-tie.json`(동률).
 
 ## 원정대 랭킹 (#297)

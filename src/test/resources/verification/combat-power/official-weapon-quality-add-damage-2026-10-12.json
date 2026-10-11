@@ -1,0 +1,227 @@
+{
+ "checkedAt": "2026-10-12",
+ "checklist": [
+  "E25"
+ ],
+ "status": "FORMULA_KEPT · OFFICIAL_TABLE_DIFF_MAX_0.01PP",
+ "source": {
+  "official": "공식 API 무기 툴팁 \"추가 피해 n%\"를 우리 수집 요약(character_equipment_summary.features.weapon)에서 품질별로 집계. 캐릭터 이름은 넣지 않음. 새 공식 호출 0회",
+  "model": "combat-power-sim: 추가 피해 = 10 + 20 × (품질/100)²(반올림 없음, v3). 지금 값과 바꾼 값 모두 품질로 이 식을 쓴다(현재 값을 툴팁에서 읽지 않음)"
+ },
+ "sample": {
+  "qualities": 28,
+  "range": [
+   64,
+   100
+  ],
+  "characters": 786
+ },
+ "table": [
+  {
+   "quality": 64,
+   "officialAddDamagePct": 18.2,
+   "characters": 1,
+   "formula": 18.192,
+   "diffPct": 0.008
+  },
+  {
+   "quality": 70,
+   "officialAddDamagePct": 19.81,
+   "characters": 240,
+   "formula": 19.8,
+   "diffPct": 0.01
+  },
+  {
+   "quality": 71,
+   "officialAddDamagePct": 20.09,
+   "characters": 1,
+   "formula": 20.082,
+   "diffPct": 0.008
+  },
+  {
+   "quality": 72,
+   "officialAddDamagePct": 20.37,
+   "characters": 1,
+   "formula": 20.368,
+   "diffPct": 0.002
+  },
+  {
+   "quality": 75,
+   "officialAddDamagePct": 21.25,
+   "characters": 1,
+   "formula": 21.25,
+   "diffPct": 0
+  },
+  {
+   "quality": 76,
+   "officialAddDamagePct": 21.56,
+   "characters": 1,
+   "formula": 21.552,
+   "diffPct": 0.008
+  },
+  {
+   "quality": 77,
+   "officialAddDamagePct": 21.86,
+   "characters": 2,
+   "formula": 21.858,
+   "diffPct": 0.002
+  },
+  {
+   "quality": 79,
+   "officialAddDamagePct": 22.49,
+   "characters": 1,
+   "formula": 22.482,
+   "diffPct": 0.008
+  },
+  {
+   "quality": 80,
+   "officialAddDamagePct": 22.81,
+   "characters": 2,
+   "formula": 22.8,
+   "diffPct": 0.01
+  },
+  {
+   "quality": 81,
+   "officialAddDamagePct": 23.13,
+   "characters": 1,
+   "formula": 23.122,
+   "diffPct": 0.008
+  },
+  {
+   "quality": 82,
+   "officialAddDamagePct": 23.45,
+   "characters": 1,
+   "formula": 23.448,
+   "diffPct": 0.002
+  },
+  {
+   "quality": 84,
+   "officialAddDamagePct": 24.12,
+   "characters": 4,
+   "formula": 24.112,
+   "diffPct": 0.008
+  },
+  {
+   "quality": 85,
+   "officialAddDamagePct": 24.45,
+   "characters": 5,
+   "formula": 24.45,
+   "diffPct": 0
+  },
+  {
+   "quality": 86,
+   "officialAddDamagePct": 24.8,
+   "characters": 5,
+   "formula": 24.792,
+   "diffPct": 0.008
+  },
+  {
+   "quality": 87,
+   "officialAddDamagePct": 25.14,
+   "characters": 5,
+   "formula": 25.138,
+   "diffPct": 0.002
+  },
+  {
+   "quality": 88,
+   "officialAddDamagePct": 25.49,
+   "characters": 2,
+   "formula": 25.488,
+   "diffPct": 0.002
+  },
+  {
+   "quality": 89,
+   "officialAddDamagePct": 25.85,
+   "characters": 6,
+   "formula": 25.842,
+   "diffPct": 0.008
+  },
+  {
+   "quality": 90,
+   "officialAddDamagePct": 26.2,
+   "characters": 11,
+   "formula": 26.2,
+   "diffPct": 0
+  },
+  {
+   "quality": 91,
+   "officialAddDamagePct": 26.57,
+   "characters": 7,
+   "formula": 26.562,
+   "diffPct": 0.008
+  },
+  {
+   "quality": 92,
+   "officialAddDamagePct": 26.93,
+   "characters": 11,
+   "formula": 26.928,
+   "diffPct": 0.002
+  },
+  {
+   "quality": 93,
+   "officialAddDamagePct": 27.3,
+   "characters": 22,
+   "formula": 27.298,
+   "diffPct": 0.002
+  },
+  {
+   "quality": 94,
+   "officialAddDamagePct": 27.68,
+   "characters": 13,
+   "formula": 27.672,
+   "diffPct": 0.008
+  },
+  {
+   "quality": 95,
+   "officialAddDamagePct": 28.06,
+   "characters": 19,
+   "formula": 28.05,
+   "diffPct": 0.01
+  },
+  {
+   "quality": 96,
+   "officialAddDamagePct": 28.44,
+   "characters": 28,
+   "formula": 28.432,
+   "diffPct": 0.008
+  },
+  {
+   "quality": 97,
+   "officialAddDamagePct": 28.82,
+   "characters": 35,
+   "formula": 28.818,
+   "diffPct": 0.002
+  },
+  {
+   "quality": 98,
+   "officialAddDamagePct": 29.21,
+   "characters": 35,
+   "formula": 29.208,
+   "diffPct": 0.002
+  },
+  {
+   "quality": 99,
+   "officialAddDamagePct": 29.61,
+   "characters": 58,
+   "formula": 29.602,
+   "diffPct": 0.008
+  },
+  {
+   "quality": 100,
+   "officialAddDamagePct": 30,
+   "characters": 268,
+   "formula": 30,
+   "diffPct": 0
+  }
+ ],
+ "findings": [
+  "공식 툴팁 값과 식의 차이는 품질 28개 모두 0.01%p 이하(최대 0.01)",
+  "공식 값은 대부분 식을 소수 둘째 자리에서 올린 값이다. 다만 식이 딱 떨어지는 품질 중 70·80·95는 +0.01(19.81·22.81·28.06), 75·85·90·100은 그대로라 단순 반올림·단정밀도 계산 가설로는 재현되지 않는다 → 게임 안 품질별 표로 봄",
+  "전투력 영향: 추가 피해 0.01%p 차이는 전투력 약 0.008%(4,000 기준 0.3)",
+  "목표 사이트 시뮬레이터는 품질만 입력으로 받아 식으로 계산하고, 우리 모델도 지금·바꾼 값 모두 식을 써 그 사이트와 맞는다(v3, 10-11 대조)"
+ ],
+ "open": [
+  "품질 0~63 공식 표본 없음(수집 요약에 없음). 식으로 계산",
+  "공식 전투력이 툴팁 표 값과 식 중 어느 쪽을 쓰는지는 전투력 절대값 모델 없이는 가릴 수 없음(0.3 수준)"
+ ]
+}

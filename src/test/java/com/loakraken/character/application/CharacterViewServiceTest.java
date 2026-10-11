@@ -36,8 +36,8 @@ class CharacterViewServiceTest {
         .when(port)
         .increment(any(), any());
     var service = service(true);
-    service.record("모험가");
-    service.record("모험가");
+    service.record("모험가", "루페온");
+    service.record("모험가", "루페온");
     assertThat(done.await(5, TimeUnit.SECONDS)).isTrue();
     verify(port, timeout(5000).times(2)).increment(eq("모험가"), eq(LocalDate.parse("2026-10-09")));
     service.shutdown();
@@ -53,7 +53,7 @@ class CharacterViewServiceTest {
   @Test
   void 비활성이면_기록하지_않고_조회는_503_오류다() throws Exception {
     var service = service(false);
-    service.record("모험가");
+    service.record("모험가", "루페온");
     service.shutdown();
     verifyNoInteractions(port);
     assertThatThrownBy(() -> service.views("모험가", 7))
@@ -78,6 +78,15 @@ class CharacterViewServiceTest {
 
   private CharacterViewService service(boolean enabled) {
     return new CharacterViewService(
-        port, new CharacterViewPolicy(enabled), new CharacterMetrics(registry), clock);
+        port,
+        new CharacterViewPolicy(enabled),
+        new CharacterMetrics(registry),
+        clock,
+        openStopList());
+  }
+
+  /** 처리정지 목록이 비어 있음(#351). */
+  static CharacterStopList openStopList() {
+    return new CharacterStopList(org.mockito.Mockito.mock(CharacterPublicSummaryPort.class));
   }
 }

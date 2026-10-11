@@ -93,7 +93,7 @@ public class CharacterController {
     var result = queryService.search(request.toCommand());
     var profile = result.details().profile();
     // 조회수는 검색 화면 응답이 성공했을 때만 센다(F-8). 기록 실패는 응답을 막지 않는다.
-    views.record(profile.characterName());
+    views.record(profile.characterName(), profile.serverName());
     // 인기 검색(F-10)은 조회수와 따로 하루 1회 중복을 제거해 센다. 원격 주소는 신뢰 프록시를 거친 값이다.
     popular.record(profile.characterName(), profile.serverName(), http.getRemoteAddr());
     return ApiResponse.of(
@@ -105,7 +105,7 @@ public class CharacterController {
       summary = "인기 검색 캐릭터",
       description =
           "LOAKraken 캐릭터 검색으로 집계한 인기 캐릭터입니다(popular-v1). 순위 기준: 같은 클라이언트·같은 캐릭터를 KST 하루 1회만 센 고유 조회 수의 기간 합계(24h는 최근 24개 시간 버킷, 7d는 168개)이며, 고유 5회 이상인 캐릭터만 올립니다. "
-              + "조회 수 숫자는 공개하지 않습니다. 기간 전체 고유 조회가 30회 미만이면 sampleStatus=COLLECTING이고 목록이 비어 있습니다. 운영 제외 목록에 있는 캐릭터는 빠집니다. 10분 캐시이며 공식 API를 부르지 않습니다.")
+              + "조회 수 숫자는 공개하지 않습니다. 기간 전체 고유 조회가 30회 미만이면 sampleStatus=COLLECTING이고 목록이 비어 있습니다. 처리정지 목록에 있는 캐릭터는 빠집니다. 10분 캐시이며 공식 API를 부르지 않습니다.")
   @ApiResponses({
     @io.swagger.v3.oas.annotations.responses.ApiResponse(
         responseCode = "200",

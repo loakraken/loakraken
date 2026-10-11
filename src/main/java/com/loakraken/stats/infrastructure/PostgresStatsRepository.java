@@ -563,7 +563,7 @@ class PostgresStatsRepository implements StatsPort {
             .param("characterUnit", characterUnit)
             .query(Long.class)
             .single();
-    // 공개 제외 캐릭터는 관측 여부도 드러내지 않는다(공개 요약과 같음).
+    // 처리정지 목록 캐릭터는 관측 여부도 드러내지 않는다(공개 요약과 같음).
     boolean excluded =
         jdbc.sql(
                 """
@@ -775,7 +775,7 @@ class PostgresStatsRepository implements StatsPort {
   }
 
   /**
-   * excludePublic이면 공개 제외 목록(public_exclusion)의 캐릭터를 모집단에서 뺀다. 개인 순위·백분위(랭킹, 캐릭터 순위, percentileOf)에
+   * excludePublic이면 처리정지 목록(public_exclusion)의 캐릭터를 모집단에서 뺀다. 개인 순위·백분위(랭킹, 캐릭터 순위, percentileOf)에
    * 쓰고, 개인을 드러내지 않는 집계(요약·직업·서버·히스토그램)에는 쓰지 않는다(PM 총괄 결정 2026-10-09).
    */
   private static Population population(StatsConditions c, Instant since, boolean excludePublic) {

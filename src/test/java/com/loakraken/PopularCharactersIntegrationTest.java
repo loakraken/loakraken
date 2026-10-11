@@ -175,6 +175,69 @@ class PopularCharactersIntegrationTest {
       assertThat(get("/api/v1/characters/popular?" + query).statusCode()).as(query).isEqualTo(400);
   }
 
+  @Test
+  void 처리정지_목록_캐릭터는_검색해도_기록을_남기지_않고_응답은_일반_캐릭터와_같다() throws Exception {
+    // #351: 공식 실시간 응답은 그대로, 스냅샷·관측 이력·카드·조회수·인기는 남기지 않는다.
+    when(detailsPort.fetch(anyString())).thenReturn(character());
+    when(detailsPort.fetchArmory(anyString())).thenReturn(character());
+    jdbc.sql(
+            "INSERT INTO public_exclusion (character_name, server_name, reason_code) VALUES (:n, :s, 'PRIVACY_STOP')")
+        .param("n", SEARCHED)
+        .param("s", SERVER)
+        .update();
+    var stopped = get(searchPath(true));
+    assertThat(stopped.statusCode()).isEqualTo(200);
+    search("203.0.113.7");
+    Thread.sleep(1000); // 조회수·인기는 비동기로 쓴다.
+    assertThat(count("SELECT COUNT(*) FROM characters WHERE server_name = :s", SERVER)).isZero();
+    assertThat(
+            count(
+                "SELECT COALESCE(SUM(view_count), 0) FROM character_view_daily WHERE character_name = :s",
+                SEARCHED))
+        .isZero();
+    assertThat(
+            count(
+                "SELECT COALESCE(SUM(unique_views), 0) FROM character_popular_hourly WHERE character_name = :s",
+                SEARCHED))
+        .isZero();
+
+    // 목록에서 빼면 같은 검색이 기록을 남긴다(대조). 응답 필드 구성은 처리정지 때와 같다.
+    jdbc.sql("DELETE FROM public_exclusion").update();
+    var keys = redis.keys("character:v11:" + SEARCHED + ":*");
+    if (keys != null && !keys.isEmpty()) redis.delete(keys);
+    var normal = get(searchPath(true));
+    assertThat(normal.statusCode()).isEqualTo(200);
+    assertThat(fieldNames(mapper.readTree(stopped.body()).path("data")))
+        .isEqualTo(fieldNames(mapper.readTree(normal.body()).path("data")));
+    assertThat(count("SELECT COUNT(*) FROM characters WHERE server_name = :s", SERVER)).isOne();
+    long views = 0;
+    for (int i = 0; i < 100 && views < 1; i++) {
+      views =
+          count(
+              "SELECT COALESCE(SUM(view_count), 0) FROM character_view_daily WHERE character_name = :s",
+              SEARCHED);
+      Thread.sleep(50);
+    }
+    assertThat(views).isOne();
+  }
+
+  private long count(String sql, String value) {
+    return jdbc.sql(sql).param("s", value).query(Long.class).single();
+  }
+
+  private static List<String> fieldNames(JsonNode node) {
+    var names = new ArrayList<String>();
+    node.propertyNames().forEach(names::add);
+    return names;
+  }
+
+  private static String searchPath(boolean includeSiblings) {
+    return "/api/v1/characters/search?includeSiblings="
+        + includeSiblings
+        + "&characterName="
+        + URLEncoder.encode(SEARCHED, StandardCharsets.UTF_8);
+  }
+
   private void insert(String name, Instant hour, int views) {
     jdbc.sql(
             """

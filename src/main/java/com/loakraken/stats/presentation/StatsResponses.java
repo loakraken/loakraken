@@ -320,7 +320,7 @@ public final class StatsResponses {
       @NullableResponse Instant refreshedAt,
       @Schema(
               description =
-                  "순위 공개 여부. 이 값이 최우선이다. HIDDEN(운영 공개 제외 목록)이면 entries는 빈 배열이고 순위·백분위·티어는 어디에도 없다. 이때 다른 메타(included 등)로 순위 상태를 판단하지 않는다. VISIBLE이면 included와 entries의 sampleStatus로 판단한다",
+                  "순위 공개 여부. 이 값이 최우선이다. HIDDEN(운영 처리정지 목록)이면 entries는 빈 배열이고 순위·백분위·티어는 어디에도 없다. 이때 다른 메타(included 등)로 순위 상태를 판단하지 않는다. VISIBLE이면 included와 entries의 sampleStatus로 판단한다",
               allowableValues = {"VISIBLE", "HIDDEN"})
           String rankVisibility,
       @Schema(

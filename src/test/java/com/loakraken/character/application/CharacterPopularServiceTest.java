@@ -21,7 +21,8 @@ class CharacterPopularServiceTest {
               Duration.ofMinutes(10),
               Duration.ofDays(8)),
           new CharacterMetrics(new SimpleMeterRegistry()),
-          Clock.systemUTC());
+          Clock.systemUTC(),
+          openStopList());
 
   @Test
   void 클라이언트_키는_같은_날_같은_입력이면_같고_날이_바뀌면_달라지며_원문을_담지_않는다() {
@@ -51,5 +52,10 @@ class CharacterPopularServiceTest {
         .isEqualTo(CharacterPopularService.Period.LAST_7_DAYS);
     assertThatThrownBy(() -> CharacterPopularService.Period.of("1d"))
         .isInstanceOf(IllegalArgumentException.class);
+  }
+
+  /** 처리정지 목록이 비어 있음(#351). */
+  static CharacterStopList openStopList() {
+    return new CharacterStopList(org.mockito.Mockito.mock(CharacterPublicSummaryPort.class));
   }
 }

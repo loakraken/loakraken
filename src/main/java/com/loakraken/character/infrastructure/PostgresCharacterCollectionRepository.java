@@ -79,7 +79,7 @@ class PostgresCharacterCollectionRepository implements CharacterCollectionPort {
   public int saveRoster(List<CharacterSibling> siblings, Instant now) {
     int discovered = 0;
     var rosterKey = rosterKey(siblings);
-    // 공개 제외(B9 ③) 캐릭터는 원정대에서 보여도 새로 기록하지 않는다. 이미 있는 행도 갱신하지 않는다.
+    // 처리정지 목록(B9 ③) 캐릭터는 원정대에서 보여도 새로 기록하지 않는다. 이미 있는 행도 갱신하지 않는다.
     var excluded = excluded(siblings);
     for (var sibling : siblings) {
       if (sibling != null
@@ -115,7 +115,7 @@ class PostgresCharacterCollectionRepository implements CharacterCollectionPort {
     return discovered;
   }
 
-  /** 원정대 중 공개 제외 목록에 있는 "서버|이름". 서버가 비어 있는 제외는 모든 서버에 적용한다. */
+  /** 원정대 중 처리정지 목록에 있는 "서버|이름". 서버가 비어 있는 제외는 모든 서버에 적용한다. */
   private java.util.Set<String> excluded(List<CharacterSibling> siblings) {
     var names =
         siblings.stream()

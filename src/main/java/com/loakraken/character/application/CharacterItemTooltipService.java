@@ -8,8 +8,8 @@ import org.springframework.stereotype.Service;
 
 /**
  * 아이템 hover 툴팁의 나머지 줄(#227, PM-백엔드·PM-프론트 10-10 11:36·11:37 분리안). 캐릭터 검색 응답을 가볍게 두려고 공식 Tooltip의
- * extraLines만 따로 준다. <b>공식 API를 부르지 않는다</b>: 캐릭터 캐시만 읽고, 없으면 CHARACTER_NOT_CACHED(404)다. 공개 제외 캐릭터는
- * 검색·공개 요약과 같이 숨김(빈 목록)이다.
+ * extraLines만 따로 준다. <b>공식 API를 부르지 않는다</b>: 캐릭터 캐시만 읽고, 없으면 CHARACTER_NOT_CACHED(404)다. 처리정지 목록
+ * 캐릭터는 검색·공개 요약과 같이 숨김(빈 목록)이다.
  */
 @Service
 public class CharacterItemTooltipService {

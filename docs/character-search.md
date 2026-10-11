@@ -75,7 +75,7 @@
 - 알 수 없는 요소 타입은 무시한다. 엘릭서·초월은 실제 응답 표본을 확보하지 못해 해석하지 않으며, 해당 정보가 없다는 뜻이 아니다.
 - 해석 대상 요소는 2026-10-05 실제 응답 1건의 장비 17개 구조를 기준으로 했다. 실제 응답은 저장하지 않았고 테스트는 같은 구조의 합성 Tooltip을 사용한다.
 - 점수·추천·투자 효율은 제공하지 않는다.
-- 아이템 hover 툴팁용 줄(v4, PM-프론트·PM-백엔드 교차 확인 2026-10-10): 검색 응답에는 짧은 필드(`titleLine`·`tradeLines`·`refineExp`, 스킬 `tripods[].effect`·`rune.effect`)만 둔다. 공식 Tooltip의 나머지 줄(`extraLines`: 내구도·분해불가·설명·획득처 등, `|` 칸과 줄바꿈 기준)은 캐릭터 검색 gzip을 +15% 넘게 키워(실측 +20.8~23.4%) `GET /api/v1/characters/item-tooltips?characterName=`로 나눴다. 이 경로는 캐릭터 캐시만 읽고 공식 호출이 없으며, 캐시가 없으면 404 `CHARACTER_NOT_CACHED`다. 검색 응답과는 장비 순번(index)·type, 보석·카드 slot, 스킬 name으로 잇는다. 공개 제외면 `hidden=true`·빈 목록. 이전 캐시(최대 5분)는 새 필드가 null·빈 목록이다.
+- 아이템 hover 툴팁용 줄(v4, PM-프론트·PM-백엔드 교차 확인 2026-10-10): 검색 응답에는 짧은 필드(`titleLine`·`tradeLines`·`refineExp`, 스킬 `tripods[].effect`·`rune.effect`)만 둔다. 공식 Tooltip의 나머지 줄(`extraLines`: 내구도·분해불가·설명·획득처 등, `|` 칸과 줄바꿈 기준)은 캐릭터 검색 gzip을 +15% 넘게 키워(실측 +20.8~23.4%) `GET /api/v1/characters/item-tooltips?characterName=`로 나눴다. 이 경로는 캐릭터 캐시만 읽고 공식 호출이 없으며, 캐시가 없으면 404 `CHARACTER_NOT_CACHED`다. 검색 응답과는 장비 순번(index)·type, 보석·카드 slot, 스킬 name으로 잇는다. 처리정지 목록면 `hidden=true`·빈 목록. 이전 캐시(최대 5분)는 새 필드가 null·빈 목록이다.
 
 ## 전투 스킬
 

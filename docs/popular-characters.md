@@ -47,7 +47,9 @@
   - 재시작하면 salt를 새로 만들기 때문에, 같은 날 같은 클라이언트를 다시 센다.
 - **운영은 반드시 `SERVER_TOMCAT_REMOTEIP_INTERNALPROXIES`로 신뢰 프록시를 좁힌다.** 기본값은 사설 대역 전체이고, 운영 compose(#111)는 web 1곳으로 좁힌다.
 
-## 공개 제외 목록 `public_exclusion`
+## 처리정지 목록 `public_exclusion`
+
+운영자 전용 목록이다(표 이름은 예전 이름). 넣고 빼는 방법과 검색 때 기록을 남기지 않는 범위는 [ops/privacy-stop-list.md](ops/privacy-stop-list.md)를 본다(#351).
 
 개인 순위·백분위의 모집단에서 완전히 뺀다(PM 총괄 결정 2026-10-09). 그래서 목록 순위와 각자 페이지의 순위가 항상 같고, 순위 번호에 빈칸이 생기지 않는다.
 

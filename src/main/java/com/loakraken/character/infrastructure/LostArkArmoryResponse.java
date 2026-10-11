@@ -316,7 +316,8 @@ record LostArkArmoryResponse(
           point,
           grade,
           map(gems, GridGem::toDomain),
-          LostArkArkGridTooltip.core(tooltip));
+          LostArkArkGridTooltip.core(tooltip),
+          tooltipLines(tooltip));
     }
   }
 
@@ -339,8 +340,16 @@ record LostArkArmoryResponse(
       @JsonProperty("Tooltip") String tooltip) {
     CharacterLoadout.GridGem toDomain() {
       return new CharacterLoadout.GridGem(
-          index, icon, active, grade, LostArkArkGridTooltip.gem(tooltip));
+          index, icon, active, grade, LostArkArkGridTooltip.gem(tooltip), tooltipLines(tooltip));
     }
+  }
+
+  /** 코어·젬 툴팁 표시용 줄(#288). Tooltip이 없으면 null. */
+  static CharacterLoadout.TooltipLines tooltipLines(String tooltip) {
+    if (tooltip == null || tooltip.isBlank()) return null;
+    var lines = LostArkTooltipLines.parse(tooltip, null);
+    return new CharacterLoadout.TooltipLines(
+        lines.titleLine(), lines.tradeLines(), lines.extraLines());
   }
 
   @JsonIgnoreProperties(ignoreUnknown = true)

@@ -3,6 +3,7 @@ package com.loakraken.character.infrastructure;
 import com.loakraken.character.domain.CharacterLoadout;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.regex.Pattern;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
@@ -26,12 +27,10 @@ final class LostArkTooltipLines {
   private static final String REFINE_EXP = "재련 경험치";
 
   /** "[상급 재련] 28단계"(계산 검증 10-10 18:10: 1단계 이상일 때만 SingleTextBox에 나오고 0단계면 문구가 없다). */
-  private static final java.util.regex.Pattern ADVANCED_REFINE =
-      java.util.regex.Pattern.compile("\\[상급 재련\\]\\s*(\\d{1,3})\\s*단계");
+  private static final Pattern ADVANCED_REFINE = Pattern.compile("\\[상급 재련\\]\\s*(\\d{1,3})\\s*단계");
 
-  private static final java.util.regex.Pattern ITEM_LEVEL =
-      java.util.regex.Pattern.compile("아이템 레벨 (\\d{1,4})");
-  private static final java.util.regex.Pattern TIER = java.util.regex.Pattern.compile("티어 (\\d)");
+  private static final Pattern ITEM_LEVEL = Pattern.compile("아이템 레벨 (\\d{1,4})");
+  private static final Pattern TIER = Pattern.compile("티어 (\\d)");
 
   record Lines(
       String titleLine,
@@ -133,7 +132,7 @@ final class LostArkTooltipLines {
         tier);
   }
 
-  private static Integer number(java.util.regex.Pattern pattern, String text) {
+  private static Integer number(Pattern pattern, String text) {
     if (text == null) return null;
     var matcher = pattern.matcher(text);
     return matcher.find() ? Integer.valueOf(matcher.group(1)) : null;

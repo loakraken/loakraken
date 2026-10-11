@@ -435,6 +435,7 @@ public record CharacterLoadout(
   }
 
   /** core: 코어 Tooltip 해석(arkgrid-tooltip-v1). 해석할 수 없으면 null. */
+  /** lines: 공식 코어 Tooltip의 등급 줄·귀속·거래·나머지 줄(#288, item-tooltips 전용). */
   public record GridSlot(
       Integer index,
       String icon,
@@ -442,9 +443,21 @@ public record CharacterLoadout(
       Integer point,
       String grade,
       List<GridGem> gems,
-      CoreDetail core) {
+      CoreDetail core,
+      TooltipLines lines) {
     public GridSlot {
       gems = gems == null ? List.of() : List.copyOf(gems);
+    }
+
+    public GridSlot(
+        Integer index,
+        String icon,
+        String name,
+        Integer point,
+        String grade,
+        List<GridGem> gems,
+        CoreDetail core) {
+      this(index, icon, name, point, grade, gems, core, null);
     }
 
     public GridSlot(
@@ -471,9 +484,26 @@ public record CharacterLoadout(
     }
   }
 
-  /** detail: 젬 Tooltip 해석. 해석할 수 없으면 null. */
+  /** 툴팁 표시용 공식 Tooltip 줄(#288). titleLine은 등급 줄, tradeLines는 귀속·거래, extraLines는 나머지 줄을 원문 순서로. */
+  public record TooltipLines(String titleLine, List<String> tradeLines, List<String> extraLines) {
+    public TooltipLines {
+      tradeLines = tradeLines == null ? List.of() : List.copyOf(tradeLines);
+      extraLines = extraLines == null ? List.of() : List.copyOf(extraLines);
+    }
+  }
+
+  /** detail: 젬 Tooltip 해석. 해석할 수 없으면 null. lines: 툴팁 표시용 줄(#288, item-tooltips 전용). */
   public record GridGem(
-      Integer index, String icon, Boolean active, String grade, GemDetail detail) {
+      Integer index,
+      String icon,
+      Boolean active,
+      String grade,
+      GemDetail detail,
+      TooltipLines lines) {
+    public GridGem(Integer index, String icon, Boolean active, String grade, GemDetail detail) {
+      this(index, icon, active, grade, detail, null);
+    }
+
     public GridGem(Integer index, String icon, Boolean active, String grade) {
       this(index, icon, active, grade, null);
     }

@@ -70,7 +70,11 @@ public class CharacterItemTooltipController {
       List<EquipmentLinesResponse> equipment,
       List<SlotLinesResponse> gems,
       List<SlotLinesResponse> cards,
-      List<SkillLinesResponse> skills) {
+      List<SkillLinesResponse> skills,
+      @Schema(
+              description =
+                  "아크 그리드 코어·젬 툴팁 줄(#288). 키는 검색 응답 arkGrid.slots[].index와 그 gems[].index")
+          List<GridLinesResponse> arkGrid) {
     static CharacterItemTooltipsResponse from(CharacterItemTooltipService.Tooltips value) {
       return new CharacterItemTooltipsResponse(
           value.characterName(),
@@ -90,9 +94,50 @@ public class CharacterItemTooltipController {
               .toList(),
           value.skills().stream()
               .map(item -> new SkillLinesResponse(item.name(), item.runeExtraLines()))
+              .toList(),
+          value.arkGrid().stream()
+              .map(
+                  slot ->
+                      new GridLinesResponse(
+                          slot.index(),
+                          slot.titleLine(),
+                          slot.tradeLines(),
+                          slot.extraLines(),
+                          slot.gems().stream()
+                              .map(
+                                  gem ->
+                                      new GridGemLinesResponse(
+                                          gem.index(),
+                                          gem.titleLine(),
+                                          gem.tradeLines(),
+                                          gem.extraLines()))
+                              .toList()))
               .toList());
     }
   }
+
+  public record GridLinesResponse(
+      @Schema(description = "검색 응답 arkGrid.slots[].index", example = "0")
+          @com.loakraken.common.api.NullableResponse
+          Integer index,
+      @Schema(description = "공식 Tooltip 등급 줄", example = "유물 아크 그리드 코어")
+          @com.loakraken.common.api.NullableResponse
+          String titleLine,
+      @Schema(description = "공식 Tooltip 귀속·거래 줄(제목 바로 뒤)") List<String> tradeLines,
+      @Schema(description = "공식 Tooltip 나머지 줄(원문 순서)", example = "[\"거래 불가\", \"분해불가\"]")
+          List<String> extraLines,
+      List<GridGemLinesResponse> gems) {}
+
+  public record GridGemLinesResponse(
+      @Schema(description = "검색 응답 arkGrid.slots[].gems[].index", example = "0")
+          @com.loakraken.common.api.NullableResponse
+          Integer index,
+      @Schema(description = "공식 Tooltip 등급 줄", example = "전설 아크 그리드 젬")
+          @com.loakraken.common.api.NullableResponse
+          String titleLine,
+      @Schema(description = "공식 Tooltip 귀속·거래 줄", example = "[\"가공 완료\", \"거래 불가\"]")
+          List<String> tradeLines,
+      @Schema(description = "공식 Tooltip 나머지 줄(원문 순서)") List<String> extraLines) {}
 
   public record EquipmentLinesResponse(
       @Schema(description = "검색 응답 loadout.equipment 배열 순번(0부터)", example = "0") int index,

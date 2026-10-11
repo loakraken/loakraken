@@ -122,8 +122,7 @@ public final class CombatPowerRefineModel {
     /** 장비 index의 상급 재련을 advanced로 바꿀 수 있는지(일반 단계는 그대로). */
     public String cannotSetAdvanced(int index, int advanced) {
       var part = parts.get(index);
-      if (part != null && part.family() == Family.JEONYUL)
-        return "전율 장비의 상급 재련 수치는 아직 확인하지 않아 계산하지 않았습니다(업화 장비만).";
+      if (part != null && part.family() == Family.JEONYUL) return "전율 장비에는 상급 재련이 없습니다.";
       return cannotSetTarget(index, part == null ? 0 : part.level(), advanced);
     }
 
@@ -136,7 +135,7 @@ public final class CombatPowerRefineModel {
       if (stat(part, level, advanced) == null)
         return part.family() == Family.UPGRADE && "무기".equals(part.type())
             ? "이 단계 조합의 무기 수치를 아직 확인하지 않아 계산하지 않았습니다."
-            : "이 장비 " + level + "단계의 수치를 아직 확인하지 않아 계산하지 않았습니다(11~25단계만).";
+            : "이 장비 " + level + "단계의 수치를 아직 확인하지 않아 계산하지 않았습니다.";
       return null;
     }
 
@@ -349,11 +348,10 @@ public final class CombatPowerRefineModel {
       }
       if (item.name() == null || !item.name().contains(JEONYUL))
         partReasons.put(index, "전율·업화 장비만 계산합니다(에스더 등 그 밖의 장비 단계표는 아직 확인하지 않음).");
-      else if (advanced != 0)
-        partReasons.put(index, "전율 장비의 상급 재련 수치는 아직 확인하지 않아 계산하지 않았습니다(업화 장비만).");
+      else if (advanced != 0) partReasons.put(index, "전율 장비에는 상급 재련이 없습니다.");
       else if (level == null
           || !c.jeonyulStatTable().getOrDefault(item.type(), Map.of()).containsKey(level))
-        partReasons.put(index, "지금 재련 단계의 수치를 아직 확인하지 않아 계산하지 않았습니다(11~25단계만).");
+        partReasons.put(index, "지금 재련 단계의 수치를 아직 확인하지 않아 계산하지 않았습니다.");
       else parts.put(index, new Part(index, item.type(), Family.JEONYUL, level, 0));
     }
     String reason = null;

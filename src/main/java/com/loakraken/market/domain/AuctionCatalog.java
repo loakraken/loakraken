@@ -15,6 +15,16 @@ public final class AuctionCatalog {
   public static final String RULE_VERSION = "auction-board-v1";
   public static final int GEM_CATEGORY = 210000;
   public static final int POLISH_OPTION = 7;
+
+  /** 공식 `/auctions/options` 장신구 기본 효과(1) 중 힘·민첩·지능(11). 2026-10-12 확인(N13 0단계). */
+  public static final int BASE_EFFECT_OPTION = 1;
+
+  public static final int MAIN_STAT_SECOND = 11;
+
+  /** 공식 `/auctions/options` 아크 패시브(8) 중 깨달음(1). 목걸이·귀걸이·반지에 적용. 2026-10-12 확인(N13 0단계). */
+  public static final int ARK_PASSIVE_OPTION = 8;
+
+  public static final int ENLIGHTENMENT_SECOND = 1;
   public static final int TIER = 4;
   public static final List<String> GEM_KINDS = List.of("겁화", "작열");
   public static final int MAX_GEM_LEVEL = 10;
@@ -158,6 +168,19 @@ public final class AuctionCatalog {
             case EARRING -> List.of(PolishOption.WEAPON_ATTACK_PERCENT);
             case RING -> List.of(PolishOption.ALLY_DAMAGE, PolishOption.ALLY_ATTACK);
           };
+    };
+  }
+
+  /**
+   * 연마 효과가 그 부위에 붙을 수 있는지. 공식 `/auctions/options` 연마 효과의 Categorys(2026-10-12 확인): 목걸이 41~44, 귀걸이
+   * 45~48, 반지 49~52.
+   */
+  public static boolean fits(Slot slot, PolishOption option) {
+    int code = option.code();
+    return switch (slot) {
+      case NECKLACE -> code >= 41 && code <= 44;
+      case EARRING -> code >= 45 && code <= 48;
+      case RING -> code >= 49 && code <= 52;
     };
   }
 

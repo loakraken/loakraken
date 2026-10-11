@@ -22,7 +22,7 @@ class ClientLimiterTest {
 
   @Test
   void 버킷마다_분당_한도를_넘으면_창이_끝날_때까지_거절한다() {
-    var limiter = limiter(new ClientLimitProperties(true, 2, 2, 3, 3, true, 2));
+    var limiter = limiter(new ClientLimitProperties(true, 2, 2, 3, 3, true, 2, 6));
     String client = limiter.clientKey("203.0.113.7");
     for (int i = 0; i < 3; i++)
       assertThat(limiter.check(ClientLimiter.Bucket.GENERAL, client).allowed()).isTrue();
@@ -49,7 +49,7 @@ class ClientLimiterTest {
 
   @Test
   void 클라이언트_키는_주소를_담지_않고_같은_주소면_같다() {
-    var limiter = limiter(new ClientLimitProperties(true, 2, 2, 3, 3, true, 2));
+    var limiter = limiter(new ClientLimitProperties(true, 2, 2, 3, 3, true, 2, 6));
     String key = limiter.clientKey("203.0.113.7");
     assertThat(key).hasSize(32).doesNotContain("203").isEqualTo(limiter.clientKey("203.0.113.7"));
     assertThat(key).isNotEqualTo(limiter.clientKey("203.0.113.8"));
@@ -59,7 +59,7 @@ class ClientLimiterTest {
   void 저장소_장애면_제한하지_않고_지표를_남긴다() {
     var limiter =
         new ClientLimiter(
-            new ClientLimitProperties(true, 1, 1, 1, 1, true, 2),
+            new ClientLimitProperties(true, 1, 1, 1, 1, true, 2, 6),
             (key, ttl) -> {
               throw new ClientLimitStore.Unavailable(new IllegalStateException("down"));
             },
@@ -74,7 +74,7 @@ class ClientLimiterTest {
 
   @Test
   void 공식_호출은_요청_클라이언트에만_매기고_공유_예산을_쓰기_전에_거절한다() {
-    var limiter = limiter(new ClientLimitProperties(true, 2, 10, 10, 10, true, 2));
+    var limiter = limiter(new ClientLimitProperties(true, 2, 10, 10, 10, true, 2, 6));
     var gateStore = new MemoryGateStore(clock);
     var gate =
         new LostArkRequestGate(
@@ -127,7 +127,7 @@ class ClientLimiterTest {
 
   @Test
   void 끄면_세지_않는다() {
-    var limiter = limiter(new ClientLimitProperties(false, 0, 0, 0, 0, true, 2));
+    var limiter = limiter(new ClientLimitProperties(false, 0, 0, 0, 0, true, 2, 6));
     assertThat(limiter.check(ClientLimiter.Bucket.GENERAL, "c").allowed()).isTrue();
     limiter.enter("c");
     try {
@@ -139,7 +139,7 @@ class ClientLimiterTest {
 
   @Test
   void 필터는_공개_주소를_세고_내부_주소는_세지_않는다() throws Exception {
-    var limiter = limiter(new ClientLimitProperties(true, 2, 1, 3, 3, true, 2));
+    var limiter = limiter(new ClientLimitProperties(true, 2, 1, 3, 3, true, 2, 6));
     var filter = new ClientLimitFilter(limiter);
     for (int i = 0; i < 5; i++)
       assertThat(run(filter, "/api/v1/markets/tabs", "127.0.0.1", null).getStatus()).isEqualTo(200);
@@ -166,7 +166,7 @@ class ClientLimiterTest {
 
   @Test
   void 봇은_주소와_관계없이_BOT_버킷_하나를_같이_쓴다() throws Exception {
-    var limiter = limiter(new ClientLimitProperties(true, 2, 10, 10, 2, true, 2));
+    var limiter = limiter(new ClientLimitProperties(true, 2, 10, 10, 2, true, 2, 6));
     var filter = new ClientLimitFilter(limiter);
     assertThat(run(filter, "/api/v1/characters/search", "66.249.66.1", "1").getStatus())
         .isEqualTo(200);
@@ -181,7 +181,7 @@ class ClientLimiterTest {
 
   @Test
   void 봇_표시_요청도_통계_경로는_봇_공유_STATS_한도를_받는다() throws Exception {
-    var limiter = limiter(new ClientLimitProperties(true, 20, 60, 240, 120, true, 2));
+    var limiter = limiter(new ClientLimitProperties(true, 20, 60, 240, 120, true, 2, 6));
     var filter = new ClientLimitFilter(limiter);
     for (int i = 0; i < 60; i++)
       assertThat(run(filter, "/api/v1/rankings", "66.249.66." + (i % 200), "1").getStatus())
@@ -196,18 +196,18 @@ class ClientLimiterTest {
 
   @Test
   void 봇_한도는_일반_클라이언트_한도보다_클_수_없다() {
-    var defaults = new ClientLimitProperties(true, 20, 60, 240, 120, true, 2);
+    var defaults = new ClientLimitProperties(true, 20, 60, 240, 120, true, 2, 6);
     assertThat(defaults.botPerMinute()).isLessThanOrEqualTo(defaults.generalPerMinute());
     org.assertj.core.api.Assertions.assertThatThrownBy(
-            () -> new ClientLimitProperties(true, 20, 60, 240, 241, true, 2))
+            () -> new ClientLimitProperties(true, 20, 60, 240, 241, true, 2, 6))
         .isInstanceOf(IllegalArgumentException.class);
     // 끈 상태는 검사하지 않는다.
-    new ClientLimitProperties(false, 0, 0, 0, 1, true, 2);
+    new ClientLimitProperties(false, 0, 0, 0, 1, true, 2, 6);
   }
 
   @Test
   void 필터는_요청을_처리하는_동안만_클라이언트를_스레드에_둔다() throws Exception {
-    var limiter = limiter(new ClientLimitProperties(true, 1, 10, 10, 10, true, 2));
+    var limiter = limiter(new ClientLimitProperties(true, 1, 10, 10, 10, true, 2, 6));
     var filter = new ClientLimitFilter(limiter);
     var request = request("/api/v1/characters/search", "203.0.113.9", null);
     var calls = new java.util.concurrent.atomic.AtomicInteger();

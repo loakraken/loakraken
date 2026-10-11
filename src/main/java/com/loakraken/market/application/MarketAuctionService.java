@@ -31,8 +31,9 @@ import org.springframework.stereotype.Service;
  * 경매장 보석·장신구 시세 표(auction-board-v1).
  *
  * <p>표의 칸마다 공식 검색이 1회 든다(보석 20칸, 장신구 표 19~24칸). 사용자 검색을 보호하기 위해 칸을 따로 3분 캐시하고, 비어 있는 칸만 {@code
- * gate.withReserve(RESERVE, …)}로 채운다. 공유 게이트가 사용자 몫(reserve)을 남기는지 판정과 기록을 한 번에 하므로, 다른 요청·인스턴스가
- * 끼어들어도 사용자 몫을 파고들지 않는다(#130). 한 요청에 최대 {@link #MAX_FETCH_PER_REQUEST}칸, 동시에 한 요청만 채운다. 채우지 못한 칸은
+ * gate.withUserReserve(RESERVE, …)}로 채운다. 공유 게이트가 사용자 몫(reserve)을 남기는지 판정과 기록을 한 번에 하므로, 다른
+ * 요청·인스턴스가 끼어들어도 사용자 몫을 파고들지 않는다(#130). 칸 채우기도 요청 클라이언트의 분당 공식 호출 한도(OFFICIAL)에 매기므로, 한도에 걸리면 남은 칸은
+ * 다음 요청으로 미룬다(보안 감사 10-12). 한 요청에 최대 {@link #MAX_FETCH_PER_REQUEST}칸, 동시에 한 요청만 채운다. 채우지 못한 칸은
  * PENDING으로 준다. 전일 대비는 우리가 관측한 KST 날짜별 마지막 최저가로 계산한다.
  */
 @Service
@@ -201,7 +202,8 @@ public class MarketAuctionService {
           if (cells.get(query.key()) != null) continue;
           if (fetched == MAX_FETCH_PER_REQUEST) break;
           try {
-            var cell = toCell(gate.withReserve(RESERVE, () -> search.search(query)));
+            // 사용자 요청 중 호출이므로 요청 클라이언트의 공식 호출 한도에도 매긴다(보안 감사 10-12 gate/auction-fill-uncharged).
+            var cell = toCell(gate.withUserReserve(RESERVE, () -> search.search(query)));
             fetched++;
             cells.put(query.key(), cell);
             remember(query.key(), cell);

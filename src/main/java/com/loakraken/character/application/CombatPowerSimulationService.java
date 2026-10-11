@@ -261,6 +261,114 @@ public class CombatPowerSimulationService {
         "BRACELET", "팔찌", Status.OK, pct, after, "팔찌 효과를 모두 빼고 팔찌 도약 포인트도 뺀 전투력과 지금 전투력의 차이입니다.");
   }
 
+  /** 팔찌 효율(#345). percent는 지금 전투력이 팔찌를 뺀 전투력보다 몇 % 높은지, lines는 그 줄만 뺐을 때의 같은 값(팔찌 도약은 따로 한 줄). */
+  public record BraceletEfficiency(
+      BigDecimal percent,
+      Status status,
+      String reason,
+      List<BraceletLineEfficiency> lines,
+      String ruleVersion) {
+    public String reasonCode() {
+      return status == Status.OK ? null : CombatPowerReasons.classify(reason).code();
+    }
+  }
+
+  public record BraceletLineEfficiency(
+      String text, BigDecimal percent, Status status, String reason) {
+    public String reasonCode() {
+      return status == Status.OK ? null : CombatPowerReasons.classify(reason).code();
+    }
+  }
+
+  /**
+   * 캐릭터 응답의 팔찌 효율(#345, PM 총괄 10-11 21:21·21:46). 지금 전투력 ÷ 팔찌(효과 줄 전부 + 팔찌 도약)를 뺀 전투력 − 1이다. 전투력 기여
+   * API는 1 − 뺀 ÷ 지금이라 값이 다르다(같은 모델, 표현만 다름). 줄별은 그 줄만 뺐을 때(전투 특성 줄은 T에서 그 줄만)이고 팔찌 도약은 따로 한 줄이다. 곱
+   * 구조라 줄별 합과 전체는 다를 수 있다. 시뮬레이터 플래그와 무관하고 공식 호출이 없다. 팔찌가 없으면 null.
+   */
+  public BraceletEfficiency braceletEfficiency(CharacterResult result) {
+    var loadout = result.details().loadout();
+    var stats = result.details().profile().stats();
+    var bracelet = CombatPowerBraceletModel.of(braceletCoefficients, loadout, stats);
+    if (bracelet == null) return null;
+    var leapText = bracelet.braceletLeap() > 0 ? "팔찌 도약 +" + bracelet.braceletLeap() : null;
+    String blocked = roleReason(result);
+    if (blocked == null && result.details().profile().combatPower() == null)
+      blocked = NO_OFFICIAL_BASIS;
+    if (blocked != null) {
+      var reason = blocked;
+      var lines = new ArrayList<BraceletLineEfficiency>();
+      for (var line : bracelet.lines())
+        lines.add(new BraceletLineEfficiency(line.text(), null, Status.UNSUPPORTED, reason));
+      if (leapText != null)
+        lines.add(new BraceletLineEfficiency(leapText, null, Status.UNSUPPORTED, reason));
+      return new BraceletEfficiency(
+          null, Status.UNSUPPORTED, reason, List.copyOf(lines), RULE_VERSION);
+    }
+    var gemModel = CombatPowerGemModel.of(gemCoefficients, loadout);
+    var refine =
+        CombatPowerRefineModel.of(
+            refineCoefficients, loadout, stats, gemModel.currentBaseAttackPct());
+    var removed =
+        CombatPowerBraceletModel.option(
+            braceletCoefficients, CombatPowerBraceletModel.REMOVE, null);
+    var lines = new ArrayList<BraceletLineEfficiency>();
+    for (int i = 0; i < bracelet.lines().size(); i++) {
+      var line = bracelet.lines().get(i);
+      var reason = bracelet.cannotReplace(i, removed);
+      var ratio = reason == null ? removalRatio(bracelet.factor(Map.of(i, removed)), refine) : null;
+      if (reason == null && ratio == null) reason = refine.unsupportedReason();
+      lines.add(
+          ratio == null
+              ? new BraceletLineEfficiency(line.text(), null, Status.UNSUPPORTED, reason)
+              : new BraceletLineEfficiency(line.text(), efficiencyPct(ratio), Status.OK, null));
+    }
+    if (leapText != null) {
+      var leap = bracelet.leapRatio();
+      lines.add(
+          leap == null
+              ? new BraceletLineEfficiency(leapText, null, Status.UNSUPPORTED, LEAP_UNREAD)
+              : new BraceletLineEfficiency(leapText, efficiencyPct(leap), Status.OK, null));
+    }
+    var total = removalRatio(bracelet.without(), refine);
+    if (total == null) {
+      var reason = bracelet.firstUnknown();
+      if (reason == null) reason = refine.unsupportedReason();
+      if (reason == null) reason = "전투 특성 합이나 도약 포인트를 읽지 못해 계산하지 않았습니다.";
+      return new BraceletEfficiency(
+          null, Status.UNSUPPORTED, reason, List.copyOf(lines), RULE_VERSION);
+    }
+    return new BraceletEfficiency(
+        efficiencyPct(total),
+        Status.OK,
+        "팔찌 효과를 모두 빼고 팔찌 도약 포인트도 뺀 전투력보다 지금 전투력이 몇 % 높은지입니다.",
+        List.copyOf(lines),
+        RULE_VERSION);
+  }
+
+  private static final String LEAP_UNREAD = "도약 포인트 합을 읽지 못해 계산하지 않았습니다.";
+
+  /** 팔찌 변화의 전투력 비(W·S 항은 재련 모델로). 계산할 수 없으면 null. */
+  private static BigDecimal removalRatio(
+      CombatPowerBraceletModel.Factor factor, CombatPowerRefineModel.Model refine) {
+    if (factor == null) return null;
+    var ratio = factor.ratio();
+    if (factor.weaponFlatDelta().signum() != 0 || factor.mainStatDelta().signum() != 0) {
+      var weapon = refine.ratio(Map.of(), factor.weaponFlatDelta(), factor.mainStatDelta());
+      if (weapon == null) return null;
+      ratio = ratio.multiply(weapon, MATH);
+    }
+    return ratio;
+  }
+
+  /** 뺀 전투력 ÷ 지금 = ratio일 때 지금이 뺀 쪽보다 몇 % 높은지(지금 ÷ 뺀 − 1, PM 총괄 10-11 21:46). */
+  private static BigDecimal efficiencyPct(BigDecimal ratio) {
+    return BigDecimal.ONE
+        .divide(ratio, MATH)
+        .subtract(BigDecimal.ONE, MATH)
+        .multiply(BigDecimal.valueOf(100))
+        .setScale(2, RoundingMode.HALF_UP);
+  }
+
   /** 딜러가 아니면(서포터·판정 불가) 계산하지 않는 이유. 딜러면 null. 판정은 깨달음 노드(CharacterPosition). */
   public static String roleReason(CharacterResult result) {
     var profile = result.details().profile();

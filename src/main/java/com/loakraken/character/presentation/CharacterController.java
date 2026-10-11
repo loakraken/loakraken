@@ -4,7 +4,9 @@ import com.loakraken.character.application.CharacterCardRefreshService;
 import com.loakraken.character.application.CharacterCardService;
 import com.loakraken.character.application.CharacterPopularService;
 import com.loakraken.character.application.CharacterQueryService;
+import com.loakraken.character.application.CharacterResult;
 import com.loakraken.character.application.CharacterViewService;
+import com.loakraken.character.application.CombatPowerSimulationService;
 import com.loakraken.common.api.ApiResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -30,18 +32,34 @@ public class CharacterController {
   private final CharacterCardService cards;
   private final CharacterPopularService popular;
   private final CharacterCardRefreshService cardRefresh;
+  private final CombatPowerSimulationService simulator;
+  private static final org.slf4j.Logger log =
+      org.slf4j.LoggerFactory.getLogger(CharacterController.class);
 
   public CharacterController(
       CharacterQueryService queryService,
       CharacterViewService views,
       CharacterCardService cards,
       CharacterPopularService popular,
-      CharacterCardRefreshService cardRefresh) {
+      CharacterCardRefreshService cardRefresh,
+      CombatPowerSimulationService simulator) {
     this.queryService = queryService;
     this.views = views;
     this.cards = cards;
     this.popular = popular;
     this.cardRefresh = cardRefresh;
+    this.simulator = simulator;
+  }
+
+  /** 팔찌 효율(#345). 메모리 계산이고 실패해도 검색 응답은 막지 않는다(null). */
+  private CombatPowerSimulationService.BraceletEfficiency braceletEfficiency(
+      CharacterResult result) {
+    try {
+      return simulator.braceletEfficiency(result);
+    } catch (RuntimeException exception) {
+      log.warn("팔찌 효율을 계산하지 못했습니다. 예외 유형={}", exception.getClass().getSimpleName());
+      return null;
+    }
   }
 
   @GetMapping("/search")
@@ -97,7 +115,8 @@ public class CharacterController {
     // 인기 검색(F-10)은 조회수와 따로 하루 1회 중복을 제거해 센다. 원격 주소는 신뢰 프록시를 거친 값이다.
     popular.record(profile.characterName(), profile.serverName(), http.getRemoteAddr());
     return ApiResponse.of(
-        CharacterSuccessCode.CHARACTER_SEARCH_SUCCESS, CharacterResponse.from(result));
+        CharacterSuccessCode.CHARACTER_SEARCH_SUCCESS,
+        CharacterResponse.from(result, braceletEfficiency(result)));
   }
 
   @GetMapping("/popular")

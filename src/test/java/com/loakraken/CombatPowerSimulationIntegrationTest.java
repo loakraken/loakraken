@@ -416,8 +416,26 @@ class CombatPowerSimulationIntegrationTest {
     // #327: 언새늘과 같은 팔찌(전투 특성 합 2,469, 도약 70) → 기여 12.60%, 추가 피해 +3.50% 빼기 3,345.24 → 3,257.54.
     when(detailsPort.fetch(anyString()))
         .thenAnswer(invocation -> fetchedBracelet(invocation.getArgument(0)));
-    assertThat(get("/api/v1/characters/search?characterName=" + encode("시뮬팔찌")).statusCode())
-        .isEqualTo(200);
+    var search = get("/api/v1/characters/search?characterName=" + encode("시뮬팔찌"));
+    assertThat(search.statusCode()).isEqualTo(200);
+    // 검색 응답 팔찌 효율(#345): 지금 ÷ 팔찌 뺀 전투력 − 1(기여 12.60%와 같은 모델 → 1/0.874 − 1 = 14.42%).
+    // 줄별은 그 줄만 뺐을 때, 팔찌 도약은 마지막 한 줄. 시뮬레이터 플래그와 무관.
+    ApiContractFixture.write("character-search-bracelet-efficiency.json", search.body());
+    var efficiency = mapper.readTree(search.body()).at("/data/braceletEfficiency");
+    assertThat(efficiency.path("status").asText()).isEqualTo("OK");
+    assertThat(efficiency.path("percent").decimalValue()).isEqualByComparingTo("14.42");
+    assertThat(efficiency.path("reasonCode").isNull()).isTrue();
+    assertThat(efficiency.at("/lines/0/text").asText()).isEqualTo("특화 +81");
+    assertThat(efficiency.at("/lines/0/percent").decimalValue()).isEqualByComparingTo("1.42");
+    assertThat(efficiency.at("/lines/1/percent").decimalValue()).isEqualByComparingTo("0.00");
+    // 추가 피해 +3.50% = 1.026922 − 1 = 2.69%.
+    assertThat(efficiency.at("/lines/3/percent").decimalValue()).isEqualByComparingTo("2.69");
+    // 팔찌 도약 18(도약 합 70) = 1.14 / 1.104 − 1 = 3.26%.
+    var leapLine = efficiency.path("lines").get(efficiency.path("lines").size() - 1);
+    assertThat(leapLine.path("text").asText()).isEqualTo("팔찌 도약 +18");
+    assertThat(leapLine.path("percent").decimalValue()).isEqualByComparingTo("3.26");
+    assertThat(leapLine.path("status").asText()).isEqualTo("OK");
+    assertThat(efficiency.path("ruleVersion").asText()).startsWith("combat-power-sim-");
     var response =
         simulate("시뮬팔찌", "[{\"kind\": \"BRACELET_EFFECT\", \"line\": 3, \"name\": \"없음\"}]");
     assertThat(response.statusCode()).isEqualTo(200);
@@ -461,6 +479,16 @@ class CombatPowerSimulationIntegrationTest {
     for (var name : List.of("시뮬바드서폿", "시뮬바드모름"))
       assertThat(get("/api/v1/characters/search?characterName=" + encode(name)).statusCode())
           .isEqualTo(200);
+    // 검색 응답 팔찌 효율도 같은 상수로 UNSUPPORTED(#345).
+    var supportSearch =
+        mapper
+            .readTree(get("/api/v1/characters/search?characterName=" + encode("시뮬바드서폿")).body())
+            .at("/data/braceletEfficiency");
+    assertThat(supportSearch.path("status").asText()).isEqualTo("UNSUPPORTED");
+    assertThat(supportSearch.path("reasonCode").asText()).isEqualTo("SUPPORTER_MODEL_PENDING");
+    assertThat(supportSearch.at("/lines/0/reasonCode").asText())
+        .isEqualTo("SUPPORTER_MODEL_PENDING");
+    assertThat(supportSearch.path("percent").isNull()).isTrue();
     var support =
         mapper
             .readTree(

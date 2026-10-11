@@ -113,6 +113,65 @@ class CollectibleRankingIntegrationTest {
     assertThat(characters.at("/rows/0/rank").asLong()).isEqualTo(1);
     assertThat(characters.at("/rows/1/rank").asLong()).isEqualTo(1);
     assertThat(characters.at("/rows/2/rank").asLong()).isEqualTo(3);
+
+    // 캐릭터 기준 순위(#303): 같은 조건의 모집단에서 그 원정대 순위.
+    var standingResponse =
+        get(
+            "/api/v1/rankings/collectibles/standing?characterName="
+                + encode("수집삼캐")
+                + "&server="
+                + encode(SERVER));
+    assertThat(standingResponse.statusCode()).isEqualTo(200);
+    ApiContractFixture.write("rankings-collectibles-standing.json", standingResponse.body());
+    var standing = mapper.readTree(standingResponse.body()).path("data");
+    assertThat(standing.path("rank").asLong()).isEqualTo(1);
+    assertThat(standing.path("total").asLong()).isEqualTo(2);
+    assertThat(standing.path("serverName").asText()).isEqualTo(SERVER);
+    assertThat(standing.path("progressPercent").decimalValue()).isEqualByComparingTo("99.67");
+    // 30 미만이라 상위 %는 비우고 순위는 준다.
+    assertThat(standing.path("topPercent").isNull()).isTrue();
+    assertThat(standing.path("reason").isNull()).isTrue();
+    assertThat(standing.at("/meta/populationUnit").asText()).isEqualTo("ROSTER");
+    assertThat(standingReason("수집둘째")).isNull();
+    assertThat(standingReason("수집빈손")).isEqualTo("NO_COLLECTIBLES");
+    assertThat(standingReason("수집옛날")).isEqualTo("INACTIVE");
+    assertThat(standingReason("수집없는이름")).isEqualTo("NOT_OBSERVED");
+    var hidden =
+        get(
+            "/api/v1/rankings/collectibles/standing?characterName="
+                + encode("수집본캐")
+                + "&server="
+                + encode(SERVER));
+    ApiContractFixture.write("rankings-collectibles-standing-hidden.json", hidden.body());
+    var hiddenData = mapper.readTree(hidden.body()).path("data");
+    assertThat(hiddenData.path("reason").asText()).isEqualTo("EXCLUDED");
+    assertThat(hiddenData.path("serverName").isNull()).isTrue();
+    assertThat(hiddenData.path("rank").isNull()).isTrue();
+    // 캐릭터 단위도 같은 원정대 캐릭터는 같은 순위다.
+    var byCharacter =
+        mapper
+            .readTree(
+                get("/api/v1/rankings/collectibles/standing?unit=CHARACTER&characterName="
+                        + encode("수집둘째")
+                        + "&server="
+                        + encode(SERVER))
+                    .body())
+            .path("data");
+    assertThat(byCharacter.path("rank").asLong()).isEqualTo(3);
+    assertThat(byCharacter.path("total").asLong()).isEqualTo(3);
+  }
+
+  private String standingReason(String name) throws Exception {
+    var node =
+        mapper
+            .readTree(
+                get("/api/v1/rankings/collectibles/standing?characterName="
+                        + encode(name)
+                        + "&server="
+                        + encode(SERVER))
+                    .body())
+            .at("/data/reason");
+    return node.isNull() ? null : node.asText();
   }
 
   @Test

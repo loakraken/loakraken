@@ -287,6 +287,46 @@ public class StatsQueryService {
         });
   }
 
+  /**
+   * 캐릭터 기준 수집품 순위(#303, 볼트 「수집품 순위·보유율 설계 메모」 1절). 순위 모집단은 수집품 랭킹과 같다. 30 미만이면 topPercent는 null(기존
+   * 순위 조회와 같음)이고 rank는 그대로 준다.
+   */
+  public CollectibleStandingResult collectibleStanding(
+      StatsConditions conditions, String characterName, boolean characterUnit) {
+    String unit = characterUnit ? "CHARACTER" : "ROSTER";
+    return cached(
+        "collectibles-standing:" + unit + ":" + characterName + ":" + key(conditions),
+        CollectibleStandingResult.class,
+        () -> {
+          var now = clock.instant();
+          var standing =
+              stats.collectibleStanding(
+                  characterName, conditions.server(), conditions.since(now), characterUnit);
+          var status = SampleStatus.of(standing.total());
+          var top =
+              standing.rank() != null && status == SampleStatus.READY
+                  ? StatsRules.topPercent(
+                      Math.min(standing.rank(), standing.total()), standing.total())
+                  : null;
+          return new CollectibleStandingResult(
+              meta(conditions, standing.total(), now),
+              unit,
+              standing.characterName(),
+              standing.serverName(),
+              standing.rank(),
+              standing.total(),
+              top,
+              standing.point() == null
+                  ? null
+                  : BigDecimal.valueOf(standing.point())
+                      .multiply(HUNDRED)
+                      .divide(BigDecimal.valueOf(standing.maxPoint()), 2, RoundingMode.HALF_UP),
+              standing.point(),
+              standing.maxPoint(),
+              standing.reason());
+        });
+  }
+
   /** 길드 랭킹 최소 관측 길드원 수(PM-백엔드 10-11 10:46 질문 1 답). */
   public static final int GUILD_MIN_MEMBERS = 5;
 
@@ -726,6 +766,20 @@ public class StatsQueryService {
       long usedCharacters,
       BigDecimal value,
       List<StatsPort.RosterMember> composition) {}
+
+  /** 캐릭터 기준 수집품 순위 결과(#303). reason이 있으면 rank·값은 null. */
+  public record CollectibleStandingResult(
+      Meta meta,
+      String unit,
+      String characterName,
+      String serverName,
+      Long rank,
+      long total,
+      BigDecimal topPercent,
+      BigDecimal progressPercent,
+      Long point,
+      Long maxPoint,
+      String reason) {}
 
   /** 길드 랭킹 결과(#301). sort는 응답에서 문자열. */
   public record GuildRankingResult(

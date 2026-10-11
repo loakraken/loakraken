@@ -88,6 +88,84 @@ public class CollectibleRankingController {
                 conditions, characterUnit, page == null ? 1 : page, size == null ? 50 : size)));
   }
 
+  @GetMapping(
+      value = "/api/v1/rankings/collectibles/standing",
+      produces = MediaType.APPLICATION_JSON_VALUE)
+  @Operation(
+      summary = "캐릭터 기준 수집품 순위",
+      description =
+          "그 캐릭터 원정대의 수집품 랭킹 순위·전체·상위 %·진행도입니다. 모집단·정렬·동률은 수집품 랭킹과 같습니다. "
+              + "순위에 없으면 rank 등은 null이고 reason에 이유 코드(문자열, 값이 늘 수 있음)를 줍니다: EXCLUDED(공개 제외, 관측 여부도 숨김), NOT_OBSERVED(캐릭터·원정대·수집품 관측 없음), "
+              + "INACTIVE(activeDays 안 관측 없음), NO_COLLECTIBLES(모은 수집품 없음). 모집단이 30 미만이면 topPercent는 null이고 rank는 그대로 줍니다(참고값). "
+              + "400 INVALID_REQUEST·STATS_INVALID_RANGE, 503 STATS_UNAVAILABLE")
+  @StatsController.StandardErrors
+  public ApiResponse<CollectibleStandingResponse> standing(
+      @Parameter(description = "캐릭터 이름", required = true)
+          @RequestParam
+          @Size(min = 1, max = 16)
+          @Pattern(regexp = "[\\p{L}\\p{N}]+")
+          String characterName,
+      @Parameter(description = "서버 이름. 없으면 전체")
+          @RequestParam(required = false)
+          @Size(max = 16)
+          @Pattern(regexp = "[\\p{L}\\p{N}]+")
+          String server,
+      @Parameter(description = "최근 며칠 안에 관측한 원정대(7·30·90, 기본 30)") @RequestParam(required = false)
+          Integer activeDays,
+      @Parameter(description = "ROSTER(기본, 원정대) 또는 CHARACTER(캐릭터)")
+          @RequestParam(required = false)
+          @Pattern(regexp = "ROSTER|CHARACTER")
+          String unit) {
+    var conditions =
+        new StatsConditions(
+            server,
+            null,
+            null,
+            activeDays == null ? StatsConditions.defaults().activeDays() : activeDays,
+            null,
+            null,
+            null,
+            null,
+            false);
+    boolean characterUnit = "CHARACTER".equals(unit);
+    var result = stats.collectibleStanding(conditions, characterName.strip(), characterUnit);
+    return ApiResponse.of(
+        StatsSuccessCode.COLLECTIBLE_STANDING_SUCCESS,
+        new CollectibleStandingResponse(
+            StatsResponses.StatsMetaResponse.from(result.meta(), result.unit()),
+            result.unit(),
+            result.characterName(),
+            result.serverName(),
+            result.rank(),
+            result.total(),
+            result.topPercent(),
+            result.progressPercent(),
+            result.point(),
+            result.maxPoint(),
+            result.reason()));
+  }
+
+  public record CollectibleStandingResponse(
+      StatsResponses.StatsMetaResponse meta,
+      @Schema(description = "ROSTER 또는 CHARACTER(문자열, 값이 늘 수 있음)", example = "ROSTER") String unit,
+      String characterName,
+      @Schema(description = "서버 이름(공개 제외·관측 없음이면 null)") @NullableResponse String serverName,
+      @Schema(description = "같은 값은 같은 순위. 순위에 없으면 null") @NullableResponse Long rank,
+      @Schema(description = "같은 조건의 순위 모집단 수") long total,
+      @Schema(description = "상위 몇 %(소수 둘째 자리 올림, 다른 통계와 같음). 모집단 30 미만이거나 순위가 없으면 null")
+          @NullableResponse
+          BigDecimal topPercent,
+      @Schema(description = "Σ Point / Σ MaxPoint × 100, 소수 둘째 자리. 순위가 없으면 null") @NullableResponse
+          BigDecimal progressPercent,
+      @NullableResponse Long point,
+      @NullableResponse Long maxPoint,
+      @Schema(
+              description =
+                  "순위에 없는 이유(문자열, 값이 늘 수 있음): EXCLUDED, NOT_OBSERVED, INACTIVE, NO_COLLECTIBLES. 순위가 있으면 null",
+              example = "INACTIVE")
+          @NullableResponse
+          String reason) {}
+
   public record CollectibleRankingResponse(
       StatsResponses.StatsMetaResponse meta,
       @Schema(description = "ROSTER 또는 CHARACTER(문자열, 값이 늘 수 있음)", example = "ROSTER") String unit,
@@ -151,9 +229,12 @@ public class CollectibleRankingController {
   static class CollectibleRankingOpenApiConfiguration {
     @Bean
     OpenApiCustomizer collectibleRankingResponseContract() {
-      return document ->
-          ResponseContracts.apply(
-              CollectibleRankingRowResponse.class, document.getComponents().getSchemas());
+      return document -> {
+        ResponseContracts.apply(
+            CollectibleRankingRowResponse.class, document.getComponents().getSchemas());
+        ResponseContracts.apply(
+            CollectibleStandingResponse.class, document.getComponents().getSchemas());
+      };
     }
   }
 }

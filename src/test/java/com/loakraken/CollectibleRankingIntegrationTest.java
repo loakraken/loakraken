@@ -146,6 +146,15 @@ class CollectibleRankingIntegrationTest {
     assertThat(data.at("/meta/sampleStatus").asText()).isEqualTo("READY");
     assertThat(data.at("/rows").size()).isEqualTo(3);
     assertThat(data.at("/rows/0/characterName").asText()).isEqualTo("수집표본30");
+    // 범위를 넘은 페이지도 전체 수는 그대로다.
+    var beyond =
+        mapper
+            .readTree(
+                get("/api/v1/rankings/collectibles?size=50&page=2&server=" + encode(TIE_SERVER))
+                    .body())
+            .path("data");
+    assertThat(beyond.path("rows").size()).isZero();
+    assertThat(beyond.at("/meta/population").asLong()).isEqualTo(31);
   }
 
   @Test
@@ -167,6 +176,20 @@ class CollectibleRankingIntegrationTest {
             .query((row, index) -> row.getString(1) + "=" + row.getInt(2) + "@" + row.getInt(3))
             .list();
     assertThat(rows).containsExactly("모코코 씨앗=952@1", "섬의 마음=100@2");
+    // 이번 관측에 없는 종류(공식 종류가 바뀌거나 사라짐)는 지워 합계에 섞이지 않게 한다.
+    cards.recordCollectibles(
+        SERVER,
+        "수집기록",
+        java.util.List.of(
+            new com.loakraken.character.domain.CharacterLoadout.Collectible(
+                "모코코 씨앗", null, 960, 1480, java.util.List.of())),
+        Instant.now());
+    assertThat(
+            jdbc.sql("SELECT type || '=' || point FROM roster_collectible WHERE roster_key = :k")
+                .param("k", key)
+                .query(String.class)
+                .list())
+        .containsExactly("모코코 씨앗=960");
     // 원정대 키가 없는 캐릭터(원정대를 훑기 전)는 기록하지 않는다.
     cards.recordCollectibles(
         SERVER,

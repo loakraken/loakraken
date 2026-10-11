@@ -235,6 +235,58 @@ public class StatsQueryService {
         });
   }
 
+  /**
+   * 원정대 랭킹(#297, 볼트 「랭킹 확장 설계 초안」 v1 2절). 조건 중 server·activeDays만 쓴다. 모집단은 순위에 든 원정대 수이고, 30 미만이면
+   * sampleStatus=COLLECTING이지만 값·순위는 그대로 준다(참고값 원칙). 값은 소수 둘째 자리(HALF_UP)다.
+   */
+  public RosterRankingResult rosterRanking(
+      StatsConditions conditions,
+      StatsPort.RosterBasis basis,
+      StatsPort.RosterAggregate aggregate,
+      int page,
+      int size) {
+    int offset = (page - 1) * size;
+    if (offset > MAX_RANKING_OFFSET)
+      throw new BusinessException(StatsErrorCode.STATS_INVALID_RANGE);
+    return cached(
+        "rosters:" + basis + ":" + aggregate + ":" + page + ":" + size + ":" + key(conditions),
+        RosterRankingResult.class,
+        () -> {
+          var now = clock.instant();
+          var since = conditions.since(now);
+          var result =
+              stats.rosterRanking(conditions.server(), since, basis, aggregate, offset, size);
+          var composition =
+              stats.rosterComposition(
+                  result.rows().stream().map(StatsPort.RosterRow::rosterKey).distinct().toList(),
+                  conditions.server(),
+                  since,
+                  basis);
+          return new RosterRankingResult(
+              meta(conditions, result.total(), now),
+              basis.name(),
+              aggregate.name(),
+              page,
+              size,
+              result.excluded(),
+              result.rows().stream()
+                  .map(
+                      row ->
+                          new RankedRoster(
+                              row.rank(),
+                              row.characterName(),
+                              row.serverName(),
+                              row.className(),
+                              row.itemLevel(),
+                              row.combatPower(),
+                              row.characterCount(),
+                              row.usedCharacters(),
+                              row.score().setScale(2, RoundingMode.HALF_UP),
+                              composition.getOrDefault(row.rosterKey(), List.of())))
+                  .toList());
+        });
+  }
+
   public RankingResult ranking(StatsConditions conditions, Metric metric, int page, int size) {
     int offset = (page - 1) * size;
     if (offset > MAX_RANKING_OFFSET)
@@ -539,6 +591,28 @@ public class StatsQueryService {
       long maxPoint,
       Instant observedAt,
       List<StatsPort.CollectibleType> types) {}
+
+  /** 원정대 랭킹 결과(#297). basis·aggregate는 응답에서 문자열. */
+  public record RosterRankingResult(
+      Meta meta,
+      String basis,
+      String aggregate,
+      int page,
+      int size,
+      long excludedRosters,
+      List<RankedRoster> rows) {}
+
+  public record RankedRoster(
+      long rank,
+      String characterName,
+      String serverName,
+      String className,
+      BigDecimal itemLevel,
+      BigDecimal combatPower,
+      long characterCount,
+      long usedCharacters,
+      BigDecimal value,
+      List<StatsPort.RosterMember> composition) {}
 
   public record RankingResult(
       Meta meta, Metric metric, int page, int size, List<RankedCharacter> rows) {}

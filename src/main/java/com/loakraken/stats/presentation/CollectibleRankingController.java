@@ -131,7 +131,8 @@ public class CollectibleRankingController {
           String characterName,
       @NullableResponse String className,
       @NullableResponse BigDecimal itemLevel,
-      @Schema(description = "원정대의 공개 캐릭터 수(LOAKraken이 아는 캐릭터)") long characterCount,
+      @Schema(description = "이 원정대에서 확인한 공개 캐릭터 수(실제 원정대 인원이 아니라 관측된 캐릭터 가운데 공개 제외를 뺀 수)")
+          long characterCount,
       @Schema(description = "Σ Point / Σ MaxPoint × 100, 소수 둘째 자리", example = "99.84")
           BigDecimal progressPercent,
       @Schema(description = "원정대 수집품 Point 합") long point,

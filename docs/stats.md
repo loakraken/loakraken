@@ -84,6 +84,24 @@
   - 공식 호출은 늘지 않는다(armory가 이미 collectibles를 받는다).
 - 계약 표본: `build/generated/rankings-collectibles.json`(정상, READY), `rankings-collectibles-empty.json`(빈 결과), `rankings-collectibles-collecting.json`(30 미만), `rankings-collectibles-tie.json`(동률).
 
+## 원정대 랭킹 (#297)
+
+`GET /api/v1/rankings/rosters?server=&activeDays=&basis=&aggregate=&page=&size=` — 기본 꺼짐(`ranking.rosters.enabled`, `RANKING_ROSTERS_ENABLED`). 설계는 볼트 「랭킹 확장 설계 초안」 v1 2절이다.
+
+- 원정대: 같은 `roster_key`(수집기가 공식 원정대 목록을 훑을 때 준 키, 서버별)다. 키가 없는 캐릭터는 넣지 않는다.
+- 모집단 캐릭터: 검색·프로필 갱신·원정대 확인 중 가장 늦은 관측이 `activeDays` 안인 공개 캐릭터. 공개 제외 캐릭터는 대표·구성·인원·값에서 모두 빠진다.
+- 기준(`basis`)
+  - `ITEM_LEVEL`(기본): 아이템 레벨(원정대 확인 때 전원 값을 받음)
+  - `COMBAT_POWER`: `activeDays` 안에 관측한 전투력만. 아이템 레벨 1640 이상인데 전투력을 관측하지 못한 캐릭터가 있는 원정대는 빼고 `excludedRosters`에 수를 준다(일부만 관측해 평균이 부풀거나 합이 깎이지 않게).
+  - `ROSTER_LEVEL`: 원정대 레벨(armory 프로필 ExpeditionLevel, `characters.expedition_level`, V14). 원정대마다 하나라 `aggregate`를 쓰지 않고, 구성은 아이템 레벨 상위다.
+- 합산(`aggregate`): `TOP6_AVG`(기본)·`TOP6_SUM`·`ALL_AVG`. 인원이 6명보다 적으면 있는 인원으로 계산하고 `usedCharacters`(화면의 n/6)를 준다.
+- 정렬: 값(소수 둘째 자리) 내림차순이고, 같으면 같은 순위(RANK)다.
+- 대표: 아이템 레벨이 가장 높은 공개 캐릭터(행의 `characterName`·`className`·`itemLevel`·`combatPower`). `composition`은 기준 상위 최대 6명([{characterName, className, value}])이다.
+- 표본: `meta`는 다른 통계와 같은 모양이고 `populationUnit=ROSTER`. 30 미만이면 `sampleStatus=COLLECTING`이지만 값·순위는 그대로 준다.
+- 응답의 `basis`·`aggregate`는 문자열이다(값이 늘 수 있음). 요청은 지원 값만 받는다(그 밖은 400).
+- 저장: 프로필을 받을 때(사용자 검색·수집기 갱신) `expedition_level`을 갱신하고 값이 없으면 이전 값을 둔다. 공식 호출은 늘지 않는다.
+- 계약 표본: `build/generated/rankings-rosters.json`(정상, READY), `rankings-rosters-empty.json`, `rankings-rosters-collecting.json`(30 미만), `rankings-rosters-tie.json`(동률).
+
 ## 검증 (2026-10-08, 로컬 8081)
 
 - 관측 33명, 원정대 4개, 모집단 30명(activeDays=90): READY

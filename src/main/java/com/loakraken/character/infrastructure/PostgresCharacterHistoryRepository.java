@@ -32,11 +32,13 @@ class PostgresCharacterHistoryRepository implements CharacterHistoryPort {
     var characterId =
         jdbc.sql(
                 """
-      INSERT INTO characters (character_id, character_name, server_name, class_name, item_level, combat_power, last_synced_at, profile_refreshed_at, profile_checked_at)
-      VALUES (:id, :name, :server, :className, :itemLevel, :combatPower, :fetchedAt, :fetchedAt, :fetchedAt)
+      INSERT INTO characters (character_id, character_name, server_name, class_name, item_level, combat_power, expedition_level, last_synced_at, profile_refreshed_at, profile_checked_at)
+      VALUES (:id, :name, :server, :className, :itemLevel, :combatPower, :expeditionLevel, :fetchedAt, :fetchedAt, :fetchedAt)
       ON CONFLICT (server_name, character_name) DO UPDATE SET
         class_name = EXCLUDED.class_name, item_level = EXCLUDED.item_level,
-        combat_power = EXCLUDED.combat_power, last_synced_at = EXCLUDED.last_synced_at,
+        combat_power = EXCLUDED.combat_power,
+        expedition_level = COALESCE(EXCLUDED.expedition_level, characters.expedition_level),
+        last_synced_at = EXCLUDED.last_synced_at,
         profile_refreshed_at = EXCLUDED.profile_refreshed_at, profile_checked_at = EXCLUDED.profile_checked_at
       WHERE characters.last_synced_at <= EXCLUDED.last_synced_at
       RETURNING character_id
@@ -47,6 +49,7 @@ class PostgresCharacterHistoryRepository implements CharacterHistoryPort {
             .param("className", profile.className())
             .param("itemLevel", profile.itemLevel())
             .param("combatPower", profile.combatPower())
+            .param("expeditionLevel", profile.expeditionLevel())
             .param("fetchedAt", at)
             .query(UUID.class)
             .optional();

@@ -128,6 +128,8 @@ services:
       COMBAT_POWER_SIM_ENABLED: ${COMBAT_POWER_SIM_ENABLED:-false}
       # 수집품(내실) 랭킹(#295): 웹 화면이 준비될 때까지 꺼짐.
       RANKING_COLLECTIBLES_ENABLED: ${RANKING_COLLECTIBLES_ENABLED:-false}
+      # 수집품 보유율 예열(#305): 수집품 랭킹을 켤 때 함께 돈다(공식 호출 없음, 9분마다 서버 수만큼 DB 집계).
+      RANKING_COLLECTIBLES_WARMUP_ENABLED: ${RANKING_COLLECTIBLES_WARMUP_ENABLED:-true}
       # 원정대 랭킹(#297): 웹 화면이 준비될 때까지 꺼짐.
       RANKING_ROSTERS_ENABLED: ${RANKING_ROSTERS_ENABLED:-false}
       # 길드 랭킹(#301): 웹 화면이 준비될 때까지 꺼짐.

@@ -91,6 +91,8 @@ stats:
 ranking:
   collectibles:
     enabled: ${RANKING_COLLECTIBLES_ENABLED:false}
+    # 수집품 보유율 예열(#305): 랭킹이 켜져 있을 때만 돈다. 테스트·로컬은 꺼 둔다.
+    warmup-enabled: ${RANKING_COLLECTIBLES_WARMUP_ENABLED:false}
   rosters:
     # 원정대 랭킹(#297): 웹 화면이 준비될 때까지 꺼짐.
     enabled: ${RANKING_ROSTERS_ENABLED:false}

@@ -53,7 +53,7 @@ class GuildRankingIntegrationTest {
         .param("t", TIE_SERVER)
         .update();
     jdbc.sql("DELETE FROM public_exclusion WHERE character_name LIKE '길드%'").update();
-    var keys = redis.keys("stats:*guilds*");
+    var keys = redis.keys("stats:v1:*");
     if (keys != null && !keys.isEmpty()) redis.delete(keys);
   }
 

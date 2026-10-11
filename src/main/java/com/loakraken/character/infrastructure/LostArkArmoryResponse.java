@@ -157,13 +157,18 @@ record LostArkArmoryResponse(
       @JsonProperty("Grade") String grade,
       @JsonProperty("Tooltip") String tooltip) {
     CharacterLoadout.Gem toDomain() {
+      var lines = LostArkTooltipLines.parse(tooltip, null);
       return new CharacterLoadout.Gem(
           slot,
           LostArkText.plain(name),
           icon,
           level,
           grade,
-          LostArkTooltipLines.parse(tooltip, null).extraLines());
+          lines.extraLines(),
+          lines.titleLine(),
+          lines.itemLevel(),
+          lines.tier(),
+          lines.tradeLines());
     }
   }
 

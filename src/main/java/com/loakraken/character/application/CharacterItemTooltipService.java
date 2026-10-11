@@ -22,7 +22,9 @@ public class CharacterItemTooltipService {
   }
 
   /** index는 검색 응답 loadout.equipment 배열 순번(0부터), type은 그 항목의 type이다. */
-  public record EquipmentLines(int index, String type, List<String> extraLines) {}
+  /** extraLineSections는 extraLines와 같은 길이로 각 줄 바로 앞 섹션 제목(없으면 빈 문자열, 캐시가 v6 이전이면 빈 목록, #285). */
+  public record EquipmentLines(
+      int index, String type, List<String> extraLines, List<String> extraLineSections) {}
 
   public record SlotLines(Integer slot, List<String> extraLines) {}
 
@@ -75,7 +77,13 @@ public class CharacterItemTooltipService {
     for (int i = 0; i < loadout.equipment().size(); i++) {
       var item = loadout.equipment().get(i);
       if (item == null || item.detail() == null || item.detail().extraLines().isEmpty()) continue;
-      equipment.add(new EquipmentLines(i, item.type(), item.detail().extraLines()));
+      var sections = item.detail().extraLineSections();
+      equipment.add(
+          new EquipmentLines(
+              i,
+              item.type(),
+              item.detail().extraLines(),
+              sections.size() == item.detail().extraLines().size() ? sections : List.of()));
     }
     var gems = new ArrayList<SlotLines>();
     if (loadout.gems() != null)

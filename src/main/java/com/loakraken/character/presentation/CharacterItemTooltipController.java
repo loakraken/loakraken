@@ -77,7 +77,10 @@ public class CharacterItemTooltipController {
           value.hidden(),
           value.fetchedAt(),
           value.equipment().stream()
-              .map(item -> new EquipmentLinesResponse(item.index(), item.type(), item.extraLines()))
+              .map(
+                  item ->
+                      new EquipmentLinesResponse(
+                          item.index(), item.type(), item.extraLines(), item.extraLineSections()))
               .toList(),
           value.gems().stream()
               .map(item -> new SlotLinesResponse(item.slot(), item.extraLines()))
@@ -97,7 +100,12 @@ public class CharacterItemTooltipController {
       @Schema(
               description = "공식 Tooltip 나머지 줄(원문 순서)",
               example = "[\"분해불가, 품질 업그레이드 불가\", \"[제작] 대도시\", \"내구도 62 / 175\"]")
-          List<String> extraLines) {}
+          List<String> extraLines,
+      @Schema(
+              description =
+                  "extraLines와 같은 길이로, 각 줄 바로 앞에 나온 공식 Tooltip 섹션 제목(예: '팔찌 효과', '아크 패시브 포인트 효과'). 앞에 섹션이 없으면 빈 문자열. 캐시가 이전 형식이면 빈 목록이라 웹은 지금처럼 끝에 둔다(#285)",
+              example = "[\"\", \"팔찌 효과\", \"팔찌 효과\"]")
+          List<String> extraLineSections) {}
 
   public record SlotLinesResponse(
       @Schema(description = "검색 응답 gems.items[].slot 또는 cards.items[].slot", example = "0")

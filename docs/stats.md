@@ -99,6 +99,19 @@
   - 예열(`ranking.collectibles.warmup-enabled`, 운영 기본 켬): 9분마다 기본 기간 × (전체 + 서버별)을 다시 집계해 캐시(10분)를 덮어쓴다. 인스턴스 하나만 돈다(Valkey 임대). 지표: `loakraken.stats.warmup{job=collectible_ownership}`, `loakraken.background.last_success`.
 - 계약 표본: `build/generated/collectibles-ownership.json`(정상), `-empty`, `-collecting`, `-duplicate-name`(다른 종류의 같은 이름).
 
+## 칭호 장착 확인 비율 (#311)
+
+`GET /api/v1/titles/equipped?server=&activeDays=&title=` — 기본 꺼짐(`ranking.titles.enabled`, `RANKING_TITLES_ENABLED`). PM 총괄 10-11 15:02 판정이다.
+
+- 공식 프로필에는 **장착 중인 칭호 하나만** 있어 가진 칭호 전체는 알 수 없다. 그래서 "보유율"이 아니라 **장착 확인 비율**만 준다(API·응답 문구에 "보유율"을 쓰지 않는다).
+- 분모 N(`meta.population`): `activeDays` 안에 프로필을 관측한 공개 캐릭터가 있는 원정대 수(원정대 키가 있는 캐릭터만).
+- 분자 n(`equippedRosters`): 그 가운데 같은 기간에 그 칭호를 장착한 공개 캐릭터가 확인된 원정대 수. 같은 원정대의 여러 캐릭터는 한 번만 센다.
+- 화면 문구: "표본 원정대 N개 중 n개에서 장착 확인".
+- `title`을 주면 그 칭호만, 없으면 확인된 칭호 전체(원정대 수 내림차순, 같으면 칭호 코드 포인트 순). 전체 결과 하나를 캐시하고 `title`은 거기서 고른다.
+- 30 미만이면 `sampleStatus=COLLECTING`이지만 비율은 그대로 준다. N = 0이면 비율은 null이다.
+- 저장 변경 없음: 기존 `character_title_observation`(관측 이력 기록)을 쓴다. 공식 호출은 늘지 않는다.
+- 계약 표본: `build/generated/titles-equipped.json`(정상), `-empty`, `-collecting`, `-same-roster`(같은 원정대 중복).
+
 ## 원정대 랭킹 (#297)
 
 `GET /api/v1/rankings/rosters?server=&activeDays=&basis=&aggregate=&page=&size=` — 기본 꺼짐(`ranking.rosters.enabled`, `RANKING_ROSTERS_ENABLED`). 설계는 볼트 「랭킹 확장 설계 초안」 v1 2절이다.

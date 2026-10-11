@@ -608,6 +608,44 @@ class PostgresStatsRepository implements StatsPort {
         .orElse(new CollectibleStanding("NOT_OBSERVED", name, serverName, null, total, null, null));
   }
 
+  /** 칭호 장착 확인 공통 CTE(#311): 프로필을 관측한 공개 캐릭터(원정대 키가 있는). */
+  private static final String TITLE_MEMBERS =
+      """
+      WITH members AS (
+        SELECT c.character_id, c.roster_key FROM characters c
+        WHERE c.roster_key IS NOT NULL AND c.profile_refreshed_at >= :since
+          AND (CAST(:server AS VARCHAR) IS NULL OR c.server_name = CAST(:server AS VARCHAR))
+          AND NOT EXISTS (
+            SELECT 1 FROM public_exclusion e
+            WHERE e.character_name = c.character_name AND (e.server_name IS NULL OR e.server_name = c.server_name)))
+      """;
+
+  @Override
+  public TitleEquip titleEquip(String server, Instant since, String title) {
+    long population =
+        jdbc.sql(TITLE_MEMBERS + "SELECT COUNT(DISTINCT roster_key) FROM members")
+            .param("since", since.atOffset(ZoneOffset.UTC))
+            .param("server", server)
+            .query(Long.class)
+            .single();
+    var titles =
+        jdbc.sql(
+                TITLE_MEMBERS
+                    + """
+                SELECT t.title, COUNT(DISTINCT m.roster_key) AS rosters
+                FROM character_title_observation t JOIN members m ON m.character_id = t.character_id
+                WHERE t.last_observed_at >= :since
+                  AND (CAST(:title AS VARCHAR) IS NULL OR t.title = CAST(:title AS VARCHAR))
+                GROUP BY t.title ORDER BY rosters DESC, t.title COLLATE "C"
+                """)
+            .param("since", since.atOffset(ZoneOffset.UTC))
+            .param("server", server)
+            .param("title", title)
+            .query((row, index) -> new TitleEquipRow(row.getString(1), row.getLong(2)))
+            .list();
+    return new TitleEquip(population, titles);
+  }
+
   @Override
   public java.util.Map<java.util.UUID, List<CollectibleType>> collectibleTypes(
       java.util.Collection<java.util.UUID> rosterKeys) {

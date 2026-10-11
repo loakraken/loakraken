@@ -236,4 +236,16 @@ public interface StatsPort {
 
   /** 수집품 항목을 관측한 원정대의 서버 이름(예열 대상, #305). */
   List<String> collectibleServers();
+
+  /** 칭호 하나의 장착 확인 원정대 수(#311). */
+  record TitleEquipRow(String title, long rosters) {}
+
+  /** population: 조건에 맞는 관측 원정대 수(분모 N). */
+  record TitleEquip(long population, List<TitleEquipRow> titles) {}
+
+  /**
+   * 칭호 장착 확인(#311). 분모는 since 뒤에 프로필(칭호가 보이는 관측)을 받은 공개 캐릭터가 있는 원정대, 분자는 그 가운데 since 뒤에 그 칭호를 장착한
+   * 공개 캐릭터가 확인된 원정대다. 공식 프로필에는 장착 칭호만 있어 보유 여부는 알 수 없다. title이 있으면 그 칭호만.
+   */
+  TitleEquip titleEquip(String server, Instant since, String title);
 }

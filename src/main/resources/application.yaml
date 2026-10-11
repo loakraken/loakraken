@@ -96,6 +96,9 @@ ranking:
   rosters:
     # 원정대 랭킹(#297): 웹 화면이 준비될 때까지 꺼짐.
     enabled: ${RANKING_ROSTERS_ENABLED:false}
+  titles:
+    # 칭호 장착 확인 비율(#311): 웹 화면이 준비될 때까지 꺼짐.
+    enabled: ${RANKING_TITLES_ENABLED:false}
   guilds:
     # 길드 랭킹(#301): 웹 화면이 준비될 때까지 꺼짐.
     enabled: ${RANKING_GUILDS_ENABLED:false}

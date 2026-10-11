@@ -130,10 +130,10 @@ class CombatPowerEquipmentModelTest {
 
   @Test
   void 확인하지_않은_조합은_배수를_주지_않는다() {
-    // 돌격대장 스톤 1·예리한 둔기는 계산하지 않는다.
+    // 돌격대장 스톤 1·슈퍼 차지(두 출처 값이 다름)는 계산하지 않는다.
     assertThat(CombatPowerEquipmentModel.engravingFactor(COEFFICIENTS, "돌격대장", 4, 1)).isNull();
-    assertThat(CombatPowerEquipmentModel.engravingFactor(COEFFICIENTS, "예리한 둔기", 4, 3)).isNull();
-    assertThat(CombatPowerEquipmentModel.supportsEngraving(COEFFICIENTS, "예리한 둔기")).isFalse();
+    assertThat(CombatPowerEquipmentModel.engravingFactor(COEFFICIENTS, "슈퍼 차지", 4, 3)).isNull();
+    assertThat(CombatPowerEquipmentModel.supportsEngraving(COEFFICIENTS, "슈퍼 차지")).isFalse();
     // 무기 추가 피해 = 10 + 20 × (품질/100)², 반올림 없음(계산 검증 10-11 17:25). 툴팁은 올림 값(95 → 28.06)이라 쓰지 않는다.
     assertThat(CombatPowerEquipmentModel.weaponAddDamage(99)).isEqualByComparingTo("29.602");
     assertThat(CombatPowerEquipmentModel.weaponAddDamage(95)).isEqualByComparingTo("28.05");

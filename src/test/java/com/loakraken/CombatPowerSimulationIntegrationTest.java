@@ -126,8 +126,9 @@ class CombatPowerSimulationIntegrationTest {
   }
 
   @Test
-  void 무기_품질과_각인을_순서대로_계산하고_표에_없는_각인은_UNSUPPORTED다() throws Exception {
+  void 무기_품질과_각인을_순서대로_계산한다() throws Exception {
     // #275: 계산 검증 표본 c02(공식 전투력 11,157.79)와 같은 세팅. 무기 100→90 = 10,831.64, 이어서 원한 4→3.
+    // #344: 예리한 둔기 4→3(표 17.36 → 16.62%)도 계산한다: 10,764.50 × 1.1662/1.1736 = 10,696.63.
     when(detailsPort.fetch(anyString()))
         .thenAnswer(invocation -> fetchedEquipment(invocation.getArgument(0)));
     assertThat(get("/api/v1/characters/search?characterName=" + encode("시뮬장비")).statusCode())
@@ -145,7 +146,7 @@ class CombatPowerSimulationIntegrationTest {
             """);
     assertThat(response.statusCode()).isEqualTo(200);
     var data = mapper.readTree(response.body()).path("data");
-    assertThat(response.body()).contains("\"before\":11157.79", "\"after\":10764.50");
+    assertThat(response.body()).contains("\"before\":11157.79", "\"after\":10696.63");
     var contributions = data.path("contributions");
     assertThat(contributions.at("/0/status").asText()).isEqualTo("OK");
     assertThat(contributions.at("/0/delta").decimalValue()).isEqualByComparingTo("-326.15");
@@ -154,8 +155,9 @@ class CombatPowerSimulationIntegrationTest {
     // 방어구 품질은 배수 1이라 OK·0.
     assertThat(contributions.at("/2/status").asText()).isEqualTo("OK");
     assertThat(contributions.at("/2/delta").decimalValue()).isEqualByComparingTo("0");
-    assertThat(contributions.at("/3/status").asText()).isEqualTo("UNSUPPORTED");
-    assertThat(data.path("unsupportedCount").asInt()).isEqualTo(1);
+    assertThat(contributions.at("/3/status").asText()).isEqualTo("OK");
+    assertThat(contributions.at("/3/delta").decimalValue()).isEqualByComparingTo("-67.87");
+    assertThat(data.path("unsupportedCount").asInt()).isZero();
     assertThat(response.body()).doesNotContain(SiteNames.FORBIDDEN);
   }
 

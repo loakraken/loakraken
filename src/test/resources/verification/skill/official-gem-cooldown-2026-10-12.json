@@ -1,0 +1,382 @@
+{
+ "checkedAt": "2026-10-12",
+ "source": "공식 armory combat-skills(스킬 Tooltip CommonSkillTitle \"재사용 대기시간 N초\") + armory gems(Effects.Skills Description \"재사용 대기시간 x% 감소\"). 표본 5명, 2026-10-12 00:31 KST 조회",
+ "status": "CONFIRMED",
+ "definition": "보석 반영 쿨타임 = 공식 원문 재사용 대기시간 × (1 − 보석 쿨감 %/100). 같은 스킬에 쿨감 보석이 둘이면 % 를 더한다(공식 효과 문구 합). 보석이 없으면 원문 그대로",
+ "scope": "PM 총괄 2026-10-11 21:57 판정 ④(b). 각인·트라이포드 외 노드·신속·직업 아이덴티티 감소는 넣지 않는다(두 출처 대조 뒤 단계적으로 추가). 1타 피해는 보류",
+ "notes": [
+  "원문 쿨타임에는 보석 감소가 들어 있지 않다: 언새늘 터닝 슬래쉬(쿨감 보석 16%) 원문 15초 그대로, 다른 사이트의 \"기본 15초\"와 같다",
+  "원문 쿨타임은 선택한 트라이포드가 반영된 값이다(공식 Tooltip)",
+  "다른 사이트의 실제 쿨타임·주기는 아이덴티티·노드까지 넣은 값이라 이 정의와 비교하지 않는다(예: c01 라스트 그래피티 원문 22초 → 보석 16.72초, 다른 사이트 주기 9.2초)",
+  "표시는 소수 둘째 자리 반올림 권장(예: 6.72초)"
+ ],
+ "samples": {
+  "언새늘": [
+   {
+    "skill": "서프라이즈 어택",
+    "level": 1,
+    "officialCd": 5,
+    "gemCdr": 16,
+    "gemCd": 4.2
+   },
+   {
+    "skill": "어퍼 슬래쉬",
+    "level": 1,
+    "officialCd": 8,
+    "gemCdr": 16,
+    "gemCd": 6.72
+   },
+   {
+    "skill": "윈드 컷",
+    "level": 1,
+    "officialCd": 10,
+    "gemCdr": 16,
+    "gemCd": 8.4
+   },
+   {
+    "skill": "스핀 커터",
+    "level": 10,
+    "officialCd": 12,
+    "gemCdr": 0,
+    "gemCd": 12
+   },
+   {
+    "skill": "블레이드 댄스",
+    "level": 1,
+    "officialCd": 20,
+    "gemCdr": 16,
+    "gemCd": 16.8
+   },
+   {
+    "skill": "다크 악셀",
+    "level": 1,
+    "officialCd": 12,
+    "gemCdr": 16,
+    "gemCd": 10.08
+   },
+   {
+    "skill": "소울 앱소버",
+    "level": 14,
+    "officialCd": 24,
+    "gemCdr": 0,
+    "gemCd": 24
+   },
+   {
+    "skill": "데스 센텐스",
+    "level": 14,
+    "officialCd": 18,
+    "gemCdr": 0,
+    "gemCd": 18
+   },
+   {
+    "skill": "트윈 쉐도우",
+    "level": 14,
+    "officialCd": 15,
+    "gemCdr": 0,
+    "gemCd": 15
+   },
+   {
+    "skill": "헤드 헌트",
+    "level": 4,
+    "officialCd": 18,
+    "gemCdr": 0,
+    "gemCd": 18
+   },
+   {
+    "skill": "터닝 슬래쉬",
+    "level": 13,
+    "officialCd": 15,
+    "gemCdr": 16,
+    "gemCd": 12.6
+   },
+   {
+    "skill": "마엘스톰",
+    "level": 1,
+    "officialCd": 30,
+    "gemCdr": 16,
+    "gemCd": 25.2
+   },
+   {
+    "skill": "페이탈 웨이브",
+    "level": 14,
+    "officialCd": 18,
+    "gemCdr": 0,
+    "gemCd": 18
+   },
+   {
+    "skill": "블리츠 러시",
+    "level": 14,
+    "officialCd": 24,
+    "gemCdr": 0,
+    "gemCd": 24
+   }
+  ],
+  "c01": [
+   {
+    "skill": "쉐도우 닷",
+    "level": 13,
+    "officialCd": 7,
+    "gemCdr": 24,
+    "gemCd": 5.32
+   },
+   {
+    "skill": "디스토션",
+    "level": 5,
+    "officialCd": 12,
+    "gemCdr": 0,
+    "gemCd": 12
+   },
+   {
+    "skill": "쉐도우 스톰",
+    "level": 14,
+    "officialCd": 20,
+    "gemCdr": 24,
+    "gemCd": 15.2
+   },
+   {
+    "skill": "쉐도우 트랩",
+    "level": 10,
+    "officialCd": 14,
+    "gemCdr": 0,
+    "gemCd": 14
+   },
+   {
+    "skill": "라스트 그래피티",
+    "level": 14,
+    "officialCd": 22,
+    "gemCdr": 24,
+    "gemCd": 16.72
+   },
+   {
+    "skill": "레이지 스피어",
+    "level": 14,
+    "officialCd": 25,
+    "gemCdr": 24,
+    "gemCd": 19
+   },
+   {
+    "skill": "댄싱 오브 퓨리",
+    "level": 14,
+    "officialCd": 28,
+    "gemCdr": 24,
+    "gemCd": 21.28
+   },
+   {
+    "skill": "사일런트 스매셔",
+    "level": 14,
+    "officialCd": 28,
+    "gemCdr": 24,
+    "gemCd": 21.28
+   }
+  ],
+  "c02": [
+   {
+    "skill": "페이탈 소드",
+    "level": 14,
+    "officialCd": 22,
+    "gemCdr": 24,
+    "gemCd": 16.72
+   },
+   {
+    "skill": "와일드 러시",
+    "level": 7,
+    "officialCd": 14,
+    "gemCdr": 0,
+    "gemCd": 14
+   },
+   {
+    "skill": "파이널 블로",
+    "level": 11,
+    "officialCd": 24,
+    "gemCdr": 0,
+    "gemCd": 24
+   },
+   {
+    "skill": "와일드 스톰프",
+    "level": 10,
+    "officialCd": 12,
+    "gemCdr": 0,
+    "gemCd": 12
+   },
+   {
+    "skill": "허리케인 소드",
+    "level": 14,
+    "officialCd": 24,
+    "gemCdr": 24,
+    "gemCd": 18.24
+   },
+   {
+    "skill": "볼케이노 이럽션",
+    "level": 14,
+    "officialCd": 36,
+    "gemCdr": 24,
+    "gemCd": 27.36
+   },
+   {
+    "skill": "길로틴",
+    "level": 14,
+    "officialCd": 30,
+    "gemCdr": 24,
+    "gemCd": 22.8
+   },
+   {
+    "skill": "브루탈 임팩트",
+    "level": 14,
+    "officialCd": 40,
+    "gemCdr": 24,
+    "gemCd": 30.4
+   }
+  ],
+  "c03": [
+   {
+    "skill": "쏜살 바람새",
+    "level": 14,
+    "officialCd": 18,
+    "gemCdr": 18,
+    "gemCd": 14.76
+   },
+   {
+    "skill": "마력의 질주",
+    "level": 14,
+    "officialCd": 8,
+    "gemCdr": 18,
+    "gemCd": 6.56
+   },
+   {
+    "skill": "방출된 의지",
+    "level": 10,
+    "officialCd": 14,
+    "gemCdr": 18,
+    "gemCd": 11.48
+   },
+   {
+    "skill": "끈적이는 이끼늪",
+    "level": 7,
+    "officialCd": 20,
+    "gemCdr": 0,
+    "gemCd": 20
+   },
+   {
+    "skill": "대지 붕괴",
+    "level": 14,
+    "officialCd": 24,
+    "gemCdr": 18,
+    "gemCd": 19.68
+   },
+   {
+    "skill": "전기 폭풍",
+    "level": 14,
+    "officialCd": 24,
+    "gemCdr": 18,
+    "gemCd": 19.68
+   },
+   {
+    "skill": "고대의 창",
+    "level": 14,
+    "officialCd": 30,
+    "gemCdr": 18,
+    "gemCd": 24.6
+   },
+   {
+    "skill": "슈르디",
+    "level": 11,
+    "officialCd": 30,
+    "gemCdr": 0,
+    "gemCd": 30
+   }
+  ],
+  "c04": [
+   {
+    "skill": "연환섬",
+    "level": 4,
+    "officialCd": 10,
+    "gemCdr": 0,
+    "gemCd": 10
+   },
+   {
+    "skill": "일섬각",
+    "level": 4,
+    "officialCd": 12,
+    "gemCdr": 0,
+    "gemCd": 12
+   },
+   {
+    "skill": "반월섬",
+    "level": 10,
+    "officialCd": 18,
+    "gemCdr": 18,
+    "gemCd": 14.76
+   },
+   {
+    "skill": "맹룡열파",
+    "level": 14,
+    "officialCd": 24,
+    "gemCdr": 18,
+    "gemCd": 19.68
+   },
+   {
+    "skill": "회선창",
+    "level": 4,
+    "officialCd": 14,
+    "gemCdr": 0,
+    "gemCd": 14
+   },
+   {
+    "skill": "풍진격",
+    "level": 4,
+    "officialCd": 12,
+    "gemCdr": 0,
+    "gemCd": 12
+   },
+   {
+    "skill": "청룡진",
+    "level": 10,
+    "officialCd": 30,
+    "gemCdr": 0,
+    "gemCd": 30
+   },
+   {
+    "skill": "나선창",
+    "level": 4,
+    "officialCd": 5,
+    "gemCdr": 0,
+    "gemCd": 5
+   },
+   {
+    "skill": "사두룡격",
+    "level": 14,
+    "officialCd": 16,
+    "gemCdr": 0,
+    "gemCd": 16
+   },
+   {
+    "skill": "굉열파",
+    "level": 14,
+    "officialCd": 24,
+    "gemCdr": 18,
+    "gemCd": 19.68
+   },
+   {
+    "skill": "유성강천",
+    "level": 14,
+    "officialCd": 24,
+    "gemCdr": 18,
+    "gemCd": 19.68
+   },
+   {
+    "skill": "절룡세",
+    "level": 4,
+    "officialCd": 20,
+    "gemCdr": 0,
+    "gemCd": 20
+   },
+   {
+    "skill": "적룡포",
+    "level": 14,
+    "officialCd": 24,
+    "gemCdr": 18,
+    "gemCd": 19.68
+   }
+  ]
+ }
+}

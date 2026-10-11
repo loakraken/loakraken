@@ -124,4 +124,56 @@ public interface StatsPort {
   /** 원정대별 수집품 종류(공식 순서). */
   java.util.Map<java.util.UUID, List<CollectibleType>> collectibleTypes(
       java.util.Collection<java.util.UUID> rosterKeys);
+
+  /** 원정대 랭킹 기준(#297). 요청 값만 이 enum이고 응답에는 문자열로 나간다. */
+  enum RosterBasis {
+    ITEM_LEVEL,
+    COMBAT_POWER,
+    ROSTER_LEVEL
+  }
+
+  /** 원정대 랭킹 합산 방식(#297). ROSTER_LEVEL에서는 쓰지 않는다. */
+  enum RosterAggregate {
+    TOP6_AVG,
+    TOP6_SUM,
+    ALL_AVG
+  }
+
+  /** 원정대 랭킹 행(#297). 대표 = 아이템 레벨이 가장 높은 공개 캐릭터. score는 반올림 전 값. */
+  record RosterRow(
+      long rank,
+      java.util.UUID rosterKey,
+      String characterName,
+      String serverName,
+      String className,
+      BigDecimal itemLevel,
+      BigDecimal combatPower,
+      long characterCount,
+      long usedCharacters,
+      BigDecimal score) {}
+
+  /** excluded: COMBAT_POWER에서 전투력 관측 누락으로 뺀 원정대 수(다른 기준은 0). */
+  record RosterPage(long total, long excluded, List<RosterRow> rows) {}
+
+  /** 원정대 구성 한 명. value는 기준 값(ROSTER_LEVEL이면 아이템 레벨). */
+  record RosterMember(String characterName, String className, BigDecimal value) {}
+
+  /**
+   * 원정대 랭킹(#297). since 뒤에 관측한 공개 캐릭터를 roster_key로 묶어 기준·합산 값 내림차순으로 같은 순위(RANK)를 매긴다(소수 둘째 자리 기준).
+   * COMBAT_POWER는 since 뒤 전투력을 관측한 캐릭터만 값이 있고, 아이템 레벨 1640 이상인데 전투력 관측이 없는 캐릭터가 있는 원정대는 뺀다.
+   */
+  RosterPage rosterRanking(
+      String server,
+      Instant since,
+      RosterBasis basis,
+      RosterAggregate aggregate,
+      int offset,
+      int limit);
+
+  /** 원정대별 구성(기준 상위 6명, 값이 있는 캐릭터만, 순서대로). */
+  java.util.Map<java.util.UUID, List<RosterMember>> rosterComposition(
+      java.util.Collection<java.util.UUID> rosterKeys,
+      String server,
+      Instant since,
+      RosterBasis basis);
 }

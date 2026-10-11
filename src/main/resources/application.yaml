@@ -91,6 +91,9 @@ stats:
 ranking:
   collectibles:
     enabled: ${RANKING_COLLECTIBLES_ENABLED:false}
+  rosters:
+    # 원정대 랭킹(#297): 웹 화면이 준비될 때까지 꺼짐.
+    enabled: ${RANKING_ROSTERS_ENABLED:false}
 
 # 원정대 영수증(#174)은 계산 일치 원칙(사용자 지시 10-09) 검증 전까지 공개하지 않는다. 검증 서버에서만 켠다.
 receipt:

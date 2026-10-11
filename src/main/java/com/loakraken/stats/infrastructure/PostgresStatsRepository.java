@@ -1,6 +1,8 @@
 package com.loakraken.stats.infrastructure;
 
 import com.loakraken.stats.application.StatsPort;
+import com.loakraken.stats.application.StatsPort.RosterAggregate;
+import com.loakraken.stats.application.StatsPort.RosterBasis;
 import com.loakraken.stats.domain.StatsConditions;
 import com.loakraken.stats.domain.StatsRules.Metric;
 import java.math.BigDecimal;
@@ -231,6 +233,159 @@ class PostgresStatsRepository implements StatsPort {
               .query(Long.class)
               .single();
     return new CollectiblePage(total, rows);
+  }
+
+  /**
+   * 원정대 랭킹 공통 CTE(#297). %VALUE%는 RosterBasis에서만 오는 고정 식이고 %KEYS%는 빈 문자열 또는 roster_key 바인딩 조건이다. 관측
+   * = 검색·프로필 갱신·원정대 확인 중 가장 늦은 시각이 since 뒤.
+   */
+  private static final String ROSTER_VALUED =
+      """
+      WITH members AS (
+        SELECT c.roster_key, c.character_name, c.server_name, c.class_name, c.item_level, c.combat_power,
+          c.expedition_level, (c.combat_power IS NOT NULL AND c.profile_refreshed_at >= :since) AS cp_observed
+        FROM characters c
+        WHERE c.roster_key IS NOT NULL
+          AND GREATEST(c.last_synced_at, c.profile_refreshed_at, c.roster_scanned_at) >= :since
+          AND (CAST(:server AS VARCHAR) IS NULL OR c.server_name = CAST(:server AS VARCHAR))
+          AND NOT EXISTS (
+            SELECT 1 FROM public_exclusion e
+            WHERE e.character_name = c.character_name AND (e.server_name IS NULL OR e.server_name = c.server_name))
+          %KEYS%),
+      valued AS (
+        SELECT m.*, %VALUE% AS value,
+          ROW_NUMBER() OVER (PARTITION BY m.roster_key
+            ORDER BY %VALUE% DESC NULLS LAST, m.item_level DESC NULLS LAST, m.character_name) AS vrn,
+          ROW_NUMBER() OVER (PARTITION BY m.roster_key
+            ORDER BY m.item_level DESC NULLS LAST, m.character_name) AS irn
+        FROM members m)
+      """;
+
+  private static final String ROSTER_RANKED =
+      """
+      , rosters AS (
+        SELECT roster_key, COUNT(*) AS member_count,
+          COUNT(value) FILTER (WHERE vrn <= 6) AS used_top6, COUNT(value) AS used_all,
+          AVG(value) FILTER (WHERE vrn <= 6) AS top6_avg, SUM(value) FILTER (WHERE vrn <= 6) AS top6_sum,
+          AVG(value) AS all_avg, MAX(expedition_level) AS roster_level, COUNT(expedition_level) AS used_level,
+          BOOL_OR(item_level >= 1640 AND NOT cp_observed) AS cp_missing
+        FROM valued GROUP BY roster_key),
+      scored AS (
+        SELECT r.*, %SCORE% AS score, %USED% AS used FROM rosters r WHERE NOT (:cpBasis AND r.cp_missing)),
+      ranked AS (
+        SELECT s.roster_key, s.member_count, s.used, s.score, v.character_name, v.server_name, v.class_name,
+          v.item_level, v.combat_power, RANK() OVER (ORDER BY ROUND(s.score, 2) DESC) AS rank
+        FROM scored s JOIN valued v ON v.roster_key = s.roster_key AND v.irn = 1
+        WHERE s.score IS NOT NULL)
+      """;
+
+  private static String rosterValue(RosterBasis basis) {
+    return switch (basis) {
+      case ITEM_LEVEL, ROSTER_LEVEL -> "m.item_level";
+      case COMBAT_POWER -> "CASE WHEN m.cp_observed THEN m.combat_power END";
+    };
+  }
+
+  private static String rosterSql(RosterBasis basis, RosterAggregate aggregate) {
+    String score;
+    String used;
+    if (basis == RosterBasis.ROSTER_LEVEL) {
+      score = "r.roster_level";
+      used = "r.used_level";
+    } else {
+      score =
+          switch (aggregate) {
+            case TOP6_AVG -> "r.top6_avg";
+            case TOP6_SUM -> "r.top6_sum";
+            case ALL_AVG -> "r.all_avg";
+          };
+      used = aggregate == RosterAggregate.ALL_AVG ? "r.used_all" : "r.used_top6";
+    }
+    return ROSTER_VALUED.replace("%KEYS%", "").replace("%VALUE%", rosterValue(basis))
+        + ROSTER_RANKED.replace("%SCORE%", score).replace("%USED%", used);
+  }
+
+  @Override
+  public RosterPage rosterRanking(
+      String server,
+      Instant since,
+      RosterBasis basis,
+      RosterAggregate aggregate,
+      int offset,
+      int limit) {
+    String base = rosterSql(basis, aggregate);
+    boolean cpBasis = basis == RosterBasis.COMBAT_POWER;
+    // 전체 수·제외 수는 행과 같은 조회에서 받는다. 행이 없을 때만 따로 센다.
+    var counts = new long[] {0, 0};
+    var rows =
+        jdbc.sql(
+                base
+                    + """
+                SELECT ranked.*, COUNT(*) OVER () AS total,
+                  (SELECT COUNT(*) FROM rosters WHERE :cpBasis AND cp_missing) AS excluded
+                FROM ranked ORDER BY rank, character_name LIMIT :limit OFFSET :offset
+                """)
+            .param("since", since.atOffset(ZoneOffset.UTC))
+            .param("server", server)
+            .param("cpBasis", cpBasis)
+            .param("limit", limit)
+            .param("offset", offset)
+            .query(
+                (row, index) -> {
+                  counts[0] = row.getLong("total");
+                  counts[1] = row.getLong("excluded");
+                  return new RosterRow(
+                      row.getLong("rank"),
+                      row.getObject("roster_key", java.util.UUID.class),
+                      row.getString("character_name"),
+                      row.getString("server_name"),
+                      row.getString("class_name"),
+                      row.getBigDecimal("item_level"),
+                      row.getBigDecimal("combat_power"),
+                      row.getLong("member_count"),
+                      row.getLong("used"),
+                      row.getBigDecimal("score"));
+                })
+            .list();
+    if (rows.isEmpty())
+      jdbc.sql(
+              base
+                  + "SELECT (SELECT COUNT(*) FROM ranked), (SELECT COUNT(*) FROM rosters WHERE :cpBasis AND cp_missing)")
+          .param("since", since.atOffset(ZoneOffset.UTC))
+          .param("server", server)
+          .param("cpBasis", cpBasis)
+          .query(
+              (ResultSet row) -> {
+                counts[0] = row.getLong(1);
+                counts[1] = row.getLong(2);
+              });
+    return new RosterPage(counts[0], counts[1], rows);
+  }
+
+  @Override
+  public java.util.Map<java.util.UUID, List<RosterMember>> rosterComposition(
+      java.util.Collection<java.util.UUID> rosterKeys,
+      String server,
+      Instant since,
+      RosterBasis basis) {
+    var result = new java.util.LinkedHashMap<java.util.UUID, List<RosterMember>>();
+    if (rosterKeys.isEmpty()) return result;
+    jdbc.sql(
+            ROSTER_VALUED
+                    .replace("%KEYS%", "AND c.roster_key IN (:keys)")
+                    .replace("%VALUE%", rosterValue(basis))
+                + "SELECT roster_key, character_name, class_name, value FROM valued"
+                + " WHERE vrn <= 6 AND value IS NOT NULL ORDER BY roster_key, vrn")
+        .param("since", since.atOffset(ZoneOffset.UTC))
+        .param("server", server)
+        .param("keys", rosterKeys)
+        .query(
+            (ResultSet row) -> {
+              result
+                  .computeIfAbsent(row.getObject(1, java.util.UUID.class), key -> new ArrayList<>())
+                  .add(new RosterMember(row.getString(2), row.getString(3), row.getBigDecimal(4)));
+            });
+    return result;
   }
 
   @Override

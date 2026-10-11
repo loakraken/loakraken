@@ -128,6 +128,8 @@ services:
       COMBAT_POWER_SIM_ENABLED: ${COMBAT_POWER_SIM_ENABLED:-false}
       # 수집품(내실) 랭킹(#295): 웹 화면이 준비될 때까지 꺼짐.
       RANKING_COLLECTIBLES_ENABLED: ${RANKING_COLLECTIBLES_ENABLED:-false}
+      # 원정대 랭킹(#297): 웹 화면이 준비될 때까지 꺼짐.
+      RANKING_ROSTERS_ENABLED: ${RANKING_ROSTERS_ENABLED:-false}
       API_DOCS_ENABLED: "false"
       # 관리(actuator) 포트를 앱 포트와 나눈다. internal·data망 안에서만 닿고 edge는 이 망에 없다.
       MANAGEMENT_SERVER_PORT: "9090"

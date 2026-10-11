@@ -41,6 +41,7 @@ class FeatureFlagIntegrationTest {
     assertThat(paths.has("/api/v1/characters/receipt")).isFalse();
     assertThat(paths.has("/api/v1/characters/combat-power/simulate")).isFalse();
     assertThat(paths.has("/api/v1/rankings/collectibles")).isFalse();
+    assertThat(paths.has("/api/v1/rankings/rosters")).isFalse();
     // 다른 캐릭터 경로는 그대로다.
     assertThat(paths.has("/api/v1/characters/search")).isTrue();
   }

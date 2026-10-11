@@ -1,0 +1,730 @@
+{
+ "checkedAt": "2026-10-12",
+ "checklist": [
+  "E19"
+ ],
+ "status": "RULES_CONFIRMED_BY_OFFICIAL_TABLE · DEFINITION_B_PM_2026-10-12",
+ "rules": {
+  "official": "공식 가이드 「각인」: 증가 각인 성공 6·7·9·10회 = Lv1~4, 감소 각인 균열 5·7·10회 = Lv1~3, 증가 Lv 합 5 이상이면 기본 공격력 1.5%",
+  "probability": "세공 확률 75%에서 시작, 성공 −10%p·실패 +10%p, 25~75%. 공식 자동 세공 표 재현으로 확인(autoCompare)",
+  "strategy": "목표 확률이 가장 큰 줄을 고르는 최적 전략(동률이면 첫째 → 둘째 → 셋째 줄). 기대 구매 개수 = 1 / 확률"
+ },
+ "definition": {
+  "fixed": "PM 총괄 판정 (b): 줄 고정. 첫째 각인 Lv ≥ first, 둘째 각인 Lv ≥ second, 감소 각인 Lv ≤ penaltyMax",
+  "sum": "선택 보기: 두 증가 각인 Lv 합 ≥ sumLevel, 감소 각인 Lv ≤ penaltyMax(목표 사이트가 주로 쓰는 기준)"
+ },
+ "autoCompare": {
+  "rule": "공식 확률 공개 「어빌리티 스톤 자동 세공」 10회 표(1,331칸, 최근 수정 2025-12-10). 자동 세공 = 합산 Lv5 이상 확률 극대화",
+  "sumLv5Official": 0.0013793011803107979,
+  "sumLv5Ours": 0.0013792548638897372,
+  "byActivationLevel": [
+   {
+    "level": 0,
+    "official": 0.06066381045053508,
+    "ours": 0.11657657782323062
+   },
+   {
+    "level": 1,
+    "official": 0.20784741824333,
+    "ours": 0.2746658948556263
+   },
+   {
+    "level": 2,
+    "official": 0.49643691834475523,
+    "ours": 0.4320852675428766
+   },
+   {
+    "level": 3,
+    "official": 0.18816117751410805,
+    "ours": 0.14063213430736354
+   },
+   {
+    "level": 4,
+    "official": 0.045501481728277976,
+    "ours": 0.03466087060585464
+   },
+   {
+    "level": 5,
+    "official": 0.0013410497373899993,
+    "ours": 0.0013415328273253862
+   },
+   {
+    "level": 6,
+    "official": 0.00003811786848342001,
+    "ours": 0.000037588471454056336
+   },
+   {
+    "level": 7,
+    "official": 1.3207610730400003e-7,
+    "ours": 1.3206681413848e-7
+   },
+   {
+    "level": 8,
+    "official": 1.4983300745099999e-9,
+    "ours": 1.4982961645960555e-9
+   }
+  ],
+  "cellsOver1e6": 652,
+  "maxRelativeDiffCells": 15.156439955885418,
+  "worstCell": {
+   "a": 4,
+   "b": 4,
+   "c": 9,
+   "official": 0.000006041,
+   "ours": 0.00009760105377350381
+  }
+ },
+ "fixed": [
+  {
+   "first": 0,
+   "second": 1,
+   "penaltyMax": 0,
+   "probability": 0.5125461753044616,
+   "expectedStones": 1.95
+  },
+  {
+   "first": 0,
+   "second": 2,
+   "penaltyMax": 0,
+   "probability": 0.3403614027942514,
+   "expectedStones": 2.94
+  },
+  {
+   "first": 0,
+   "second": 3,
+   "penaltyMax": 0,
+   "probability": 0.029534459529283578,
+   "expectedStones": 33.86
+  },
+  {
+   "first": 0,
+   "second": 4,
+   "penaltyMax": 0,
+   "probability": 0.0022646618169037216,
+   "expectedStones": 441.57
+  },
+  {
+   "first": 1,
+   "second": 0,
+   "penaltyMax": 0,
+   "probability": 0.5125461753044616,
+   "expectedStones": 1.95
+  },
+  {
+   "first": 1,
+   "second": 1,
+   "penaltyMax": 0,
+   "probability": 0.3205714361744807,
+   "expectedStones": 3.12
+  },
+  {
+   "first": 1,
+   "second": 2,
+   "penaltyMax": 0,
+   "probability": 0.15242452490778147,
+   "expectedStones": 6.56
+  },
+  {
+   "first": 1,
+   "second": 3,
+   "penaltyMax": 0,
+   "probability": 0.00403013467372876,
+   "expectedStones": 248.13
+  },
+  {
+   "first": 1,
+   "second": 4,
+   "penaltyMax": 0,
+   "probability": 0.00014597880338665262,
+   "expectedStones": 6850.31
+  },
+  {
+   "first": 2,
+   "second": 0,
+   "penaltyMax": 0,
+   "probability": 0.3403614027942514,
+   "expectedStones": 2.94
+  },
+  {
+   "first": 2,
+   "second": 1,
+   "penaltyMax": 0,
+   "probability": 0.15242452490778147,
+   "expectedStones": 6.56
+  },
+  {
+   "first": 2,
+   "second": 2,
+   "penaltyMax": 0,
+   "probability": 0.048144827325313,
+   "expectedStones": 20.77
+  },
+  {
+   "first": 2,
+   "second": 3,
+   "penaltyMax": 0,
+   "probability": 0.0007075077184865459,
+   "expectedStones": 1413.41
+  },
+  {
+   "first": 2,
+   "second": 4,
+   "penaltyMax": 0,
+   "probability": 0.000020501055961541664,
+   "expectedStones": 48777.98
+  },
+  {
+   "first": 3,
+   "second": 0,
+   "penaltyMax": 0,
+   "probability": 0.029534459529283578,
+   "expectedStones": 33.86
+  },
+  {
+   "first": 3,
+   "second": 1,
+   "penaltyMax": 0,
+   "probability": 0.00403013467372876,
+   "expectedStones": 248.13
+  },
+  {
+   "first": 3,
+   "second": 2,
+   "penaltyMax": 0,
+   "probability": 0.0007075077184865459,
+   "expectedStones": 1413.41
+  },
+  {
+   "first": 3,
+   "second": 3,
+   "penaltyMax": 0,
+   "probability": 0.00000324460078571624,
+   "expectedStones": 308204.33
+  },
+  {
+   "first": 3,
+   "second": 4,
+   "penaltyMax": 0,
+   "probability": 7.602014636610015e-8,
+   "expectedStones": 13154407.72
+  },
+  {
+   "first": 4,
+   "second": 0,
+   "penaltyMax": 0,
+   "probability": 0.0022646618169037216,
+   "expectedStones": 441.57
+  },
+  {
+   "first": 4,
+   "second": 1,
+   "penaltyMax": 0,
+   "probability": 0.00014597880338665262,
+   "expectedStones": 6850.31
+  },
+  {
+   "first": 4,
+   "second": 2,
+   "penaltyMax": 0,
+   "probability": 0.000020501055961541664,
+   "expectedStones": 48777.98
+  },
+  {
+   "first": 4,
+   "second": 3,
+   "penaltyMax": 0,
+   "probability": 7.602014636610015e-8,
+   "expectedStones": 13154407.72
+  },
+  {
+   "first": 4,
+   "second": 4,
+   "penaltyMax": 0,
+   "probability": 1.5924497154596505e-9,
+   "expectedStones": 627963313.56
+  },
+  {
+   "first": 0,
+   "second": 1,
+   "penaltyMax": 1,
+   "probability": 0.7919736031101151,
+   "expectedStones": 1.26
+  },
+  {
+   "first": 0,
+   "second": 2,
+   "penaltyMax": 1,
+   "probability": 0.4996088621940253,
+   "expectedStones": 2
+  },
+  {
+   "first": 0,
+   "second": 3,
+   "penaltyMax": 1,
+   "probability": 0.037405818885909575,
+   "expectedStones": 26.73
+  },
+  {
+   "first": 0,
+   "second": 4,
+   "penaltyMax": 1,
+   "probability": 0.0026626240429789127,
+   "expectedStones": 375.57
+  },
+  {
+   "first": 1,
+   "second": 0,
+   "penaltyMax": 1,
+   "probability": 0.7919736031101151,
+   "expectedStones": 1.26
+  },
+  {
+   "first": 1,
+   "second": 1,
+   "penaltyMax": 1,
+   "probability": 0.3953729923036339,
+   "expectedStones": 2.53
+  },
+  {
+   "first": 1,
+   "second": 2,
+   "penaltyMax": 1,
+   "probability": 0.16874890986594754,
+   "expectedStones": 5.93
+  },
+  {
+   "first": 1,
+   "second": 3,
+   "penaltyMax": 1,
+   "probability": 0.004130532126185037,
+   "expectedStones": 242.1
+  },
+  {
+   "first": 1,
+   "second": 4,
+   "penaltyMax": 1,
+   "probability": 0.00014845076509383538,
+   "expectedStones": 6736.24
+  },
+  {
+   "first": 2,
+   "second": 0,
+   "penaltyMax": 1,
+   "probability": 0.4996088621940253,
+   "expectedStones": 2
+  },
+  {
+   "first": 2,
+   "second": 1,
+   "penaltyMax": 1,
+   "probability": 0.16874890986594754,
+   "expectedStones": 5.93
+  },
+  {
+   "first": 2,
+   "second": 2,
+   "penaltyMax": 1,
+   "probability": 0.050347934147351184,
+   "expectedStones": 19.86
+  },
+  {
+   "first": 2,
+   "second": 3,
+   "penaltyMax": 1,
+   "probability": 0.0007193458115336728,
+   "expectedStones": 1390.15
+  },
+  {
+   "first": 2,
+   "second": 4,
+   "penaltyMax": 1,
+   "probability": 0.00002079005666746523,
+   "expectedStones": 48099.92
+  },
+  {
+   "first": 3,
+   "second": 0,
+   "penaltyMax": 1,
+   "probability": 0.037405818885909575,
+   "expectedStones": 26.73
+  },
+  {
+   "first": 3,
+   "second": 1,
+   "penaltyMax": 1,
+   "probability": 0.004130532126185037,
+   "expectedStones": 242.1
+  },
+  {
+   "first": 3,
+   "second": 2,
+   "penaltyMax": 1,
+   "probability": 0.0007193458115336728,
+   "expectedStones": 1390.15
+  },
+  {
+   "first": 3,
+   "second": 3,
+   "penaltyMax": 1,
+   "probability": 0.0000032895988866377305,
+   "expectedStones": 303988.43
+  },
+  {
+   "first": 3,
+   "second": 4,
+   "penaltyMax": 1,
+   "probability": 7.70877124581429e-8,
+   "expectedStones": 12972236.02
+  },
+  {
+   "first": 4,
+   "second": 0,
+   "penaltyMax": 1,
+   "probability": 0.0026626240429789127,
+   "expectedStones": 375.57
+  },
+  {
+   "first": 4,
+   "second": 1,
+   "penaltyMax": 1,
+   "probability": 0.00014845076509383538,
+   "expectedStones": 6736.24
+  },
+  {
+   "first": 4,
+   "second": 2,
+   "penaltyMax": 1,
+   "probability": 0.00002079005666746523,
+   "expectedStones": 48099.92
+  },
+  {
+   "first": 4,
+   "second": 3,
+   "penaltyMax": 1,
+   "probability": 7.70877124581429e-8,
+   "expectedStones": 12972236.02
+  },
+  {
+   "first": 4,
+   "second": 4,
+   "penaltyMax": 1,
+   "probability": 1.6152056390509778e-9,
+   "expectedStones": 619116213.95
+  },
+  {
+   "first": 0,
+   "second": 1,
+   "penaltyMax": 2,
+   "probability": 0.8063567236149836,
+   "expectedStones": 1.24
+  },
+  {
+   "first": 0,
+   "second": 2,
+   "penaltyMax": 2,
+   "probability": 0.5070890681412766,
+   "expectedStones": 1.97
+  },
+  {
+   "first": 0,
+   "second": 3,
+   "penaltyMax": 2,
+   "probability": 0.037669467138090044,
+   "expectedStones": 26.55
+  },
+  {
+   "first": 0,
+   "second": 4,
+   "penaltyMax": 2,
+   "probability": 0.0026728608095450547,
+   "expectedStones": 374.13
+  },
+  {
+   "first": 1,
+   "second": 0,
+   "penaltyMax": 2,
+   "probability": 0.8063567236149836,
+   "expectedStones": 1.24
+  },
+  {
+   "first": 1,
+   "second": 1,
+   "penaltyMax": 2,
+   "probability": 0.3971490527291864,
+   "expectedStones": 2.52
+  },
+  {
+   "first": 1,
+   "second": 2,
+   "penaltyMax": 2,
+   "probability": 0.169050569097335,
+   "expectedStones": 5.92
+  },
+  {
+   "first": 1,
+   "second": 3,
+   "penaltyMax": 2,
+   "probability": 0.0041322151644050936,
+   "expectedStones": 242
+  },
+  {
+   "first": 1,
+   "second": 4,
+   "penaltyMax": 2,
+   "probability": 0.00014849131277850763,
+   "expectedStones": 6734.4
+  },
+  {
+   "first": 2,
+   "second": 0,
+   "penaltyMax": 2,
+   "probability": 0.5070890681412766,
+   "expectedStones": 1.97
+  },
+  {
+   "first": 2,
+   "second": 1,
+   "penaltyMax": 2,
+   "probability": 0.169050569097335,
+   "expectedStones": 5.92
+  },
+  {
+   "first": 2,
+   "second": 2,
+   "penaltyMax": 2,
+   "probability": 0.05038612639296031,
+   "expectedStones": 19.85
+  },
+  {
+   "first": 2,
+   "second": 3,
+   "penaltyMax": 2,
+   "probability": 0.0007195464818468308,
+   "expectedStones": 1389.76
+  },
+  {
+   "first": 2,
+   "second": 4,
+   "penaltyMax": 2,
+   "probability": 0.000020794946982207336,
+   "expectedStones": 48088.61
+  },
+  {
+   "first": 3,
+   "second": 0,
+   "penaltyMax": 2,
+   "probability": 0.037669467138090044,
+   "expectedStones": 26.55
+  },
+  {
+   "first": 3,
+   "second": 1,
+   "penaltyMax": 2,
+   "probability": 0.0041322151644050936,
+   "expectedStones": 242
+  },
+  {
+   "first": 3,
+   "second": 2,
+   "penaltyMax": 2,
+   "probability": 0.0007195464818468308,
+   "expectedStones": 1389.76
+  },
+  {
+   "first": 3,
+   "second": 3,
+   "penaltyMax": 2,
+   "probability": 0.0000032903939052375695,
+   "expectedStones": 303914.98
+  },
+  {
+   "first": 3,
+   "second": 4,
+   "penaltyMax": 2,
+   "probability": 7.710703855142784e-8,
+   "expectedStones": 12968984.66
+  },
+  {
+   "first": 4,
+   "second": 0,
+   "penaltyMax": 2,
+   "probability": 0.0026728608095450547,
+   "expectedStones": 374.13
+  },
+  {
+   "first": 4,
+   "second": 1,
+   "penaltyMax": 2,
+   "probability": 0.00014849131277850763,
+   "expectedStones": 6734.4
+  },
+  {
+   "first": 4,
+   "second": 2,
+   "penaltyMax": 2,
+   "probability": 0.000020794946982207336,
+   "expectedStones": 48088.61
+  },
+  {
+   "first": 4,
+   "second": 3,
+   "penaltyMax": 2,
+   "probability": 7.710703855142784e-8,
+   "expectedStones": 12968984.66
+  },
+  {
+   "first": 4,
+   "second": 4,
+   "penaltyMax": 2,
+   "probability": 1.6156327680115627e-9,
+   "expectedStones": 618952536.62
+  }
+ ],
+ "sum": [
+  {
+   "sumLevel": 1,
+   "penaltyMax": 0,
+   "probability": 0.598624672586249,
+   "expectedStones": 1.67
+  },
+  {
+   "sumLevel": 2,
+   "penaltyMax": 0,
+   "probability": 0.5253986751872739,
+   "expectedStones": 1.9
+  },
+  {
+   "sumLevel": 3,
+   "penaltyMax": 0,
+   "probability": 0.23555256658012017,
+   "expectedStones": 4.25
+  },
+  {
+   "sumLevel": 4,
+   "penaltyMax": 0,
+   "probability": 0.05240624490846912,
+   "expectedStones": 19.08
+  },
+  {
+   "sumLevel": 5,
+   "penaltyMax": 0,
+   "probability": 0.0013562623527156427,
+   "expectedStones": 737.32
+  },
+  {
+   "sumLevel": 6,
+   "penaltyMax": 0,
+   "probability": 0.00003814202494097031,
+   "expectedStones": 26217.8
+  },
+  {
+   "sumLevel": 7,
+   "penaltyMax": 0,
+   "probability": 1.371994171554426e-7,
+   "expectedStones": 7288660.7
+  },
+  {
+   "sumLevel": 8,
+   "penaltyMax": 0,
+   "probability": 1.5924497154596505e-9,
+   "expectedStones": 627963313.56
+  },
+  {
+   "sumLevel": 1,
+   "penaltyMax": 1,
+   "probability": 0.9338310912836532,
+   "expectedStones": 1.07
+  },
+  {
+   "sumLevel": 2,
+   "penaltyMax": 1,
+   "probability": 0.7556142058828119,
+   "expectedStones": 1.32
+  },
+  {
+   "sumLevel": 3,
+   "penaltyMax": 1,
+   "probability": 0.2644612486347484,
+   "expectedStones": 3.78
+  },
+  {
+   "sumLevel": 4,
+   "penaltyMax": 1,
+   "probability": 0.054856874111821996,
+   "expectedStones": 18.23
+  },
+  {
+   "sumLevel": 5,
+   "penaltyMax": 1,
+   "probability": 0.0013788636767979937,
+   "expectedStones": 725.23
+  },
+  {
+   "sumLevel": 6,
+   "penaltyMax": 1,
+   "probability": 0.00003867865540099516,
+   "expectedStones": 25854.05
+  },
+  {
+   "sumLevel": 7,
+   "penaltyMax": 1,
+   "probability": 1.3916007571287822e-7,
+   "expectedStones": 7185969.07
+  },
+  {
+   "sumLevel": 8,
+   "penaltyMax": 1,
+   "probability": 1.6152056390509778e-9,
+   "expectedStones": 619116213.95
+  },
+  {
+   "sumLevel": 1,
+   "penaltyMax": 2,
+   "probability": 0.9510226163573727,
+   "expectedStones": 1.05
+  },
+  {
+   "sumLevel": 2,
+   "penaltyMax": 2,
+   "probability": 0.7657236945931645,
+   "expectedStones": 1.31
+  },
+  {
+   "sumLevel": 3,
+   "penaltyMax": 2,
+   "probability": 0.2651674538747536,
+   "expectedStones": 3.77
+  },
+  {
+   "sumLevel": 4,
+   "penaltyMax": 2,
+   "probability": 0.05490100035311944,
+   "expectedStones": 18.21
+  },
+  {
+   "sumLevel": 5,
+   "penaltyMax": 2,
+   "probability": 0.0013792548337807175,
+   "expectedStones": 725.03
+  },
+  {
+   "sumLevel": 6,
+   "penaltyMax": 2,
+   "probability": 0.00003868790195376969,
+   "expectedStones": 25847.87
+  },
+  {
+   "sumLevel": 7,
+   "penaltyMax": 2,
+   "probability": 1.3919587870862327e-7,
+   "expectedStones": 7184120.75
+  },
+  {
+   "sumLevel": 8,
+   "penaltyMax": 2,
+   "probability": 1.6156327680115627e-9,
+   "expectedStones": 618952536.62
+  }
+ ],
+ "targetSiteNote": "목표 사이트 스펙업 가이드(기준 캐릭터, 2026-10-12): 97·106돌 735.29 ≈ 합 ≥5(737.32, −0.28%), 107돌 2.62만 ≈ 합 ≥6, 99돌 30.86만 ≈ 두 줄 ≥9(308,204, +0.13%), 109돌 729.93만 ≈ 합 ≥7(+0.15%), 1010돌 6.29억 ≈ 합 ≥8(+0.16%). 남은 0.13~0.3%는 목표 사이트 근사로 보고 기록만 한다(PM 판정)"
+}

@@ -1,0 +1,243 @@
+{
+ "checkedAt": "2026-10-12",
+ "checklist": [
+  "L29",
+  "L39",
+  "사용자 피드백 10-11 §4"
+ ],
+ "status": "CONFIRMED",
+ "definition": {
+  "coreEfficiency": "코어 효율 % = 지금 ÷ 그 코어를 뺀 전투력 − 1 = C(P) (#323 표, %). 무기 코어는 재련 W 항이라 따로(#323)",
+  "coresTotal": "코어 합 % = Π(1 + C/100) − 1(코어 전부 뺀 로아랩 값과 같음)",
+  "arkGridTotal": "아크 그리드 효율 % = Π 코어 배수 × Π 젬 옵션 배수 − 1(젬은 #358)",
+  "lowerGrades": "전설 14P·영웅 10P 상한(#335). 로아랩은 전설·영웅 코어를 0으로 계산 — 증명된 차이(#335)"
+ },
+ "loalabCheck": "30개 코어(5명 × 6) 하나씩 뺀 비율이 모두 #323 계수와 같다. 최대 차이 전투력 0.0018. 표본은 유물·고대 코어만(전설·영웅은 증명된 차이 구간)",
+ "samples": {
+  "언새늘": {
+   "combatPower": 3345.24,
+   "cores": [
+    {
+     "core": "질서의 해(직업)",
+     "grade": "Ancient",
+     "point": 17,
+     "efficiencyPct": 8.5
+    },
+    {
+     "core": "질서의 별(직업)",
+     "grade": "Artifact",
+     "point": 18,
+     "efficiencyPct": 4.67
+    },
+    {
+     "core": "질서의 달(직업)",
+     "grade": "Artifact",
+     "point": 18,
+     "efficiencyPct": 7.67
+    },
+    {
+     "core": "혼돈의 달 : 불타는 일격",
+     "grade": "Ancient",
+     "point": 17,
+     "efficiencyPct": 3.5
+    },
+    {
+     "core": "혼돈의 해 : 현란한 공격",
+     "grade": "Artifact",
+     "point": 17,
+     "efficiencyPct": 2.5
+    },
+    {
+     "core": "혼돈의 별 : 공격",
+     "grade": "Artifact",
+     "point": 17,
+     "efficiencyPct": 2.5
+    }
+   ],
+   "coresTotalPct": 32.964,
+   "loalabAllCoresRemovedPct": 32.964,
+   "gemsTotalPct": 4.27,
+   "arkGridTotalPct": 38.64
+  },
+  "c01": {
+   "combatPower": 11028.4,
+   "cores": [
+    {
+     "core": "질서의 별(직업)",
+     "grade": "Ancient",
+     "point": 20,
+     "efficiencyPct": 6
+    },
+    {
+     "core": "질서의 달(직업)",
+     "grade": "Ancient",
+     "point": 20,
+     "efficiencyPct": 9
+    },
+    {
+     "core": "질서의 해(직업)",
+     "grade": "Ancient",
+     "point": 20,
+     "efficiencyPct": 9
+    },
+    {
+     "core": "혼돈의 달 : 불타는 일격",
+     "grade": "Ancient",
+     "point": 20,
+     "efficiencyPct": 4
+    },
+    {
+     "core": "혼돈의 해 : 현란한 공격",
+     "grade": "Ancient",
+     "point": 20,
+     "efficiencyPct": 4
+    },
+    {
+     "core": "혼돈의 별 : 공격",
+     "grade": "Ancient",
+     "point": 20,
+     "efficiencyPct": 4
+    }
+   ],
+   "coresTotalPct": 41.664,
+   "loalabAllCoresRemovedPct": 41.664,
+   "gemsTotalPct": 13.04,
+   "arkGridTotalPct": 60.14
+  },
+  "c02": {
+   "combatPower": 4783.32,
+   "cores": [
+    {
+     "core": "질서의 해(직업)",
+     "grade": "Ancient",
+     "point": 20,
+     "efficiencyPct": 9
+    },
+    {
+     "core": "질서의 달(직업)",
+     "grade": "Ancient",
+     "point": 20,
+     "efficiencyPct": 9
+    },
+    {
+     "core": "질서의 별(직업)",
+     "grade": "Ancient",
+     "point": 20,
+     "efficiencyPct": 6
+    },
+    {
+     "core": "혼돈의 해 : 현란한 공격",
+     "grade": "Ancient",
+     "point": 20,
+     "efficiencyPct": 4
+    },
+    {
+     "core": "혼돈의 달 : 불타는 일격",
+     "grade": "Ancient",
+     "point": 20,
+     "efficiencyPct": 4
+    },
+    {
+     "core": "혼돈의 별 : 공격",
+     "grade": "Ancient",
+     "point": 20,
+     "efficiencyPct": 4
+    }
+   ],
+   "coresTotalPct": 41.664,
+   "loalabAllCoresRemovedPct": 41.664,
+   "gemsTotalPct": 14.29,
+   "arkGridTotalPct": 61.91
+  },
+  "c03": {
+   "combatPower": 3634.71,
+   "cores": [
+    {
+     "core": "질서의 해(직업)",
+     "grade": "Artifact",
+     "point": 18,
+     "efficiencyPct": 7.67
+    },
+    {
+     "core": "질서의 달(직업)",
+     "grade": "Artifact",
+     "point": 18,
+     "efficiencyPct": 7.67
+    },
+    {
+     "core": "질서의 별(직업)",
+     "grade": "Artifact",
+     "point": 18,
+     "efficiencyPct": 4.67
+    },
+    {
+     "core": "혼돈의 해 : 현란한 공격",
+     "grade": "Artifact",
+     "point": 18,
+     "efficiencyPct": 2.67
+    },
+    {
+     "core": "혼돈의 달 : 불타는 일격",
+     "grade": "Artifact",
+     "point": 17,
+     "efficiencyPct": 2.5
+    },
+    {
+     "core": "혼돈의 별 : 공격",
+     "grade": "Artifact",
+     "point": 18,
+     "efficiencyPct": 2.67
+    }
+   ],
+   "coresTotalPct": 31.106,
+   "loalabAllCoresRemovedPct": 31.106,
+   "gemsTotalPct": 4.69,
+   "arkGridTotalPct": 37.25
+  },
+  "c04": {
+   "combatPower": 3045.57,
+   "cores": [
+    {
+     "core": "질서의 해(직업)",
+     "grade": "Artifact",
+     "point": 14,
+     "efficiencyPct": 4
+    },
+    {
+     "core": "질서의 달(직업)",
+     "grade": "Artifact",
+     "point": 18,
+     "efficiencyPct": 7.67
+    },
+    {
+     "core": "질서의 별(직업)",
+     "grade": "Artifact",
+     "point": 17,
+     "efficiencyPct": 4.5
+    },
+    {
+     "core": "혼돈의 해 : 현란한 공격",
+     "grade": "Artifact",
+     "point": 14,
+     "efficiencyPct": 1
+    },
+    {
+     "core": "혼돈의 달 : 불타는 일격",
+     "grade": "Artifact",
+     "point": 10,
+     "efficiencyPct": 0.5
+    },
+    {
+     "core": "혼돈의 별 : 공격",
+     "grade": "Artifact",
+     "point": 0,
+     "efficiencyPct": 0
+    }
+   ],
+   "coresTotalPct": 18.777,
+   "loalabAllCoresRemovedPct": 18.777,
+   "gemsTotalPct": 3.11,
+   "arkGridTotalPct": 22.47
+  }
+ }
+}

@@ -130,8 +130,9 @@ class CombatPowerEquipmentModelTest {
 
   @Test
   void 확인하지_않은_조합은_배수를_주지_않는다() {
-    // 돌격대장 스톤 1·슈퍼 차지(두 출처 값이 다름)는 계산하지 않는다.
-    assertThat(CombatPowerEquipmentModel.engravingFactor(COEFFICIENTS, "돌격대장", 4, 1)).isNull();
+    // 슈퍼 차지(출처마다 값이 다름)는 계산하지 않는다. 돌격대장 스톤 1은 인벤 값(가산 7.5)으로 계산한다(E26).
+    assertThat(CombatPowerEquipmentModel.engravingFactor(COEFFICIENTS, "돌격대장", 4, 1))
+        .isEqualByComparingTo("1.222");
     assertThat(CombatPowerEquipmentModel.engravingFactor(COEFFICIENTS, "슈퍼 차지", 4, 3)).isNull();
     assertThat(CombatPowerEquipmentModel.supportsEngraving(COEFFICIENTS, "슈퍼 차지")).isFalse();
     // 무기 추가 피해 = 10 + 20 × (품질/100)², 반올림 없음(계산 검증 10-11 17:25). 툴팁은 올림 값(95 → 28.06)이라 쓰지 않는다.
@@ -154,69 +155,55 @@ class CombatPowerEquipmentModelTest {
   }
 
   @Test
-  void 각인_기여_표는_검증_표본과_같다() throws Exception {
-    // #344 표본: c(각인서 b, 스톤 s) = books[b] + stoneDelta[s]. 표본 표 20종이 칸마다 같아야 한다.
-    // 공식 설명 관계가 없는 각인은 로펙으로 확인한 칸만 두고 나머지는 null이다(회귀 점검표 B4).
+  void 각인_기여_표는_인벤_표와_같다() throws Exception {
+    // E26: 인벤 4821/106546 각인 계수표(각인서 0~4 × 스톤 0~4)와 칸마다 같다(목표 사이트 표 #344와도 500칸 차이 0).
+    // 아드레날린·돌격대장(스톤 1 포함)은 식으로, 나머지는 표로 계산한다. 출처끼리 다른 3종은 계산하지 않는다.
     try (var in =
-        new ClassPathResource("verification/combat-power/loalab-engraving-cp-2026-10-11.json")
+        new ClassPathResource("verification/combat-power/inven-engraving-cp-2026-10-12.json")
             .getInputStream()) {
-      var sample = new JsonMapper().readTree(in);
-      var table = sample.path("loalabTable");
+      var table = new JsonMapper().readTree(in).path("invenTable");
       int cells = 0;
-      int unconfirmed = 0;
       for (var name : table.propertyNames()) {
+        if (CONFLICTS.contains(name)) {
+          assertThat(CombatPowerEquipmentModel.supportsEngraving(COEFFICIENTS, name))
+              .as(name)
+              .isFalse();
+          continue;
+        }
         assertThat(CombatPowerEquipmentModel.supportsEngraving(COEFFICIENTS, name))
             .as(name)
             .isTrue();
         for (int b = 0; b <= 4; b++)
           for (int s = 0; s <= 4; s++) {
-            var expected =
-                table
-                    .path(name)
-                    .path("books")
-                    .get(b)
-                    .decimalValue()
-                    .add(table.path(name).path("stoneDelta").get(s).decimalValue());
+            var expected = table.path(name).get(b).get(s).decimalValue();
             var factor = CombatPowerEquipmentModel.engravingFactor(COEFFICIENTS, name, b, s);
-            if (SINGLE_SOURCE.contains(name) && !lopecConfirmed(name, b, s)) {
-              assertThat(factor).as(name + " " + b + "/" + s).isNull();
-              unconfirmed++;
-              continue;
-            }
             assertThat(factor.subtract(BigDecimal.ONE).multiply(BigDecimal.valueOf(100)))
                 .as(name + " " + b + "/" + s)
-                .isEqualByComparingTo(expected);
+                .isCloseTo(expected, org.assertj.core.data.Offset.offset(new BigDecimal("0.005")));
             cells++;
           }
       }
-      assertThat(cells + unconfirmed).isEqualTo(20 * 25);
-      // 7종 × 24칸 + 약자 무시 스톤 4 하나는 확인됨.
-      assertThat(unconfirmed).isEqualTo(7 * 24 - 1);
-      // 기여 0(두 출처)은 배수 1, 한 출처뿐인 각인은 계산하지 않는다.
-      for (var name : sample.path("zeroContribution").path("twoSources"))
-        assertThat(CombatPowerEquipmentModel.engravingFactor(COEFFICIENTS, name.asText(), 4, 4))
-            .isEqualByComparingTo("1");
+      // 26종 − 충돌 3종 = 23종 × 25칸
+      assertThat(cells).isEqualTo(23 * 25);
+    }
+    // #344 표본의 기여 0(두 출처) 가운데 실드 관통은 인벤과 달라 빠지고, 나머지 8종은 배수 1이다.
+    try (var in =
+        new ClassPathResource("verification/combat-power/loalab-engraving-cp-2026-10-11.json")
+            .getInputStream()) {
+      var sample = new JsonMapper().readTree(in);
+      for (var name : sample.path("zeroContribution").path("twoSources")) {
+        var factor = CombatPowerEquipmentModel.engravingFactor(COEFFICIENTS, name.asText(), 4, 4);
+        if ("실드 관통".equals(name.asText())) assertThat(factor).isNull();
+        else assertThat(factor).as(name.asText()).isEqualByComparingTo("1");
+      }
       for (var name : sample.path("zeroContribution").path("loalabOnly"))
         assertThat(CombatPowerEquipmentModel.supportsEngraving(COEFFICIENTS, name.asText()))
             .isFalse();
-      for (var name : List.of("슈퍼 차지", "속전속결"))
-        assertThat(CombatPowerEquipmentModel.supportsEngraving(COEFFICIENTS, name)).isFalse();
     }
-    // 승부사는 각인서 4레벨·스톤 0만(로펙 2.1). 스톤 1~4와 L0~3은 로아랩 한 곳뿐이라 null.
-    assertThat(CombatPowerEquipmentModel.engravingFactor(COEFFICIENTS, "승부사", 4, 0))
-        .isEqualByComparingTo("1.021");
-    assertThat(CombatPowerEquipmentModel.engravingFactor(COEFFICIENTS, "승부사", 4, 2)).isNull();
-    assertThat(CombatPowerEquipmentModel.engravingFactor(COEFFICIENTS, "승부사", 3, 0)).isNull();
   }
 
-  /** 공식 설명과의 관계가 표본에 없는 7종(승부사는 표본 표 밖이라 따로 확인). */
-  private static final List<String> SINGLE_SOURCE =
-      List.of("에테르 포식자", "정밀 단도", "약자 무시", "시선 집중", "추진력", "부러진 뼈", "분쇄의 주먹");
-
-  /** 표본 lopecL4(각인서 4·스톤 0)와 lopecStones(약자 무시 L4 + 스톤 4). */
-  private static boolean lopecConfirmed(String name, int book, int stone) {
-    return book == 4 && (stone == 0 || (stone == 4 && "약자 무시".equals(name)));
-  }
+  /** 출처끼리 값이 달라 계산하지 않는 각인(인벤 표의 이름). */
+  private static final List<String> CONFLICTS = List.of("속전속결", "슈퍼 차지", "실드관통");
 
   @Test
   void 공식_설명값_관계가_있는_각인은_지금_값을_확인한다() {

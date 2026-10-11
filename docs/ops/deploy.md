@@ -46,6 +46,7 @@
 - web의 `SITE_URL`은 필수다. 운영 `https://loakraken.gg`이면 robots가 허용하고 sitemap·canonical이 이 주소를 쓴다. 스테이징(`http://127.0.0.1:8081`)은 `Disallow: /`다. 같은 이미지를 쓰고 값은 실행할 때만 넣는다.
 - web 기능 플래그 `RECEIPT_TOOL`(원정대 영수증): 운영 `stack.env`는 `off`(PM 총괄 10-11, 계산 재대조 전까지). api `RECEIPT_ENABLED=false`와 함께 숨긴다. 스테이징도 api와 맞춰 off(계산 검증 때 둘 다 켬).
 - web 기능 플래그 `SETTING_CHECK_TAB`(캐릭터 세팅 점검 탭, web #489): 운영 `stack.env`는 `off`(비워도 운영 주소면 숨지만 다른 도구처럼 명시). 스테이징은 비워 둬 보이게 한다.
+- web 기능 플래그 `ROSTER_RANKING`(원정대 랭킹, web #515)·`ARMORY_PAGE`(캐릭터 화면의 전투정보실 페이지 정보 요청, web #519): 운영 `stack.env`는 `off`. 켤 때는 백엔드 짝(`RANKING_ROSTERS_ENABLED=true`, 전투정보실 페이지 API)과 **같이** 켠다(프론트 10-11 21:10).
 - 백엔드 기능 플래그(#214): `CRIT_SPEED_ENABLED`(치명 계산)·`GEM_ENABLED`(젬 가공)·`RECEIPT_ENABLED`(영수증)는 비우면 꺼짐이다. compose.prod.yaml이 api로 넘긴다. 스테이징은 `CRIT_SPEED_ENABLED=true`(web 치적 도구가 보이므로), 운영은 셋 다 `false`를 명시한다. 로컬 compose(8080 collector)는 치명 계산을 기본으로 켜고(`CRIT_SPEED_ENABLED:-true`), 영수증·젬 가공이나 계산 검증 8090 같은 따로 띄운 서버는 `.env`·실행 인자에 같은 변수를 `true`로 둔다.
 - web 기능 플래그 `CRIT_SPEED_TOOL`(web #233): 운영 `stack.env`는 `off`를 명시해 치명 계산 도구를 첫 운영 배포에서 뺀다(PM 총괄 결정 10-09). 비우면 web 기본값(`SITE_URL`이 운영 주소일 때만 숨김)을 따르므로, `SITE_URL`이 빠지거나 달라도 숨겨지도록 명시한다. 스테이징은 비워 두어 보인다. 공개할 때 `on`으로 바꾸고 `up -d`.
 - web 기능 플래그 `COMBAT_POWER_SIM`(전투력 시뮬레이터, web #365): 운영 `stack.env`는 `off`(PM 총괄·PM-프론트 10-10, 로아랩 대조 통과 전까지). 백엔드 `COMBAT_POWER_SIM_ENABLED=false`와 함께 이중으로 숨긴다. 스테이징은 비워 두어 보인다.

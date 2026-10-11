@@ -114,6 +114,27 @@ public class MarketAuctionService {
     return result;
   }
 
+  /**
+   * 보석 시세 표를 캐시에서만 읽는다(#315 스펙업 가이드). 빈 칸을 채우려고 공식 API를 부르지 않으므로, 아직 관측하지 못한 칸은 PENDING이다. 전일 대비는
+   * 주지 않는다(null).
+   */
+  public List<GemCell> cachedGems() {
+    var result = new ArrayList<GemCell>();
+    for (var kind : AuctionCatalog.GEM_KINDS)
+      for (int level = AuctionCatalog.MAX_GEM_LEVEL; level >= 1; level--) {
+        var cell = auctions.findCell(gemQuery(kind, level, 1).key()).orElse(null);
+        result.add(
+            new GemCell(
+                kind,
+                level,
+                AuctionCatalog.gemName(kind, level),
+                cell,
+                null,
+                cell == null ? Status.PENDING : Status.READY));
+      }
+    return result;
+  }
+
   public List<AccessorySlot> accessories(Grade grade, Role role, Integer minQuality) {
     var specs = new ArrayList<AccessorySpec>();
     for (var slot : Slot.values()) {

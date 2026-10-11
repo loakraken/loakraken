@@ -88,28 +88,35 @@ class CombatPowerSimulationIntegrationTest {
     // 다른 사이트 이름·간접 표현 금지(#261).
     assertThat(response.body()).doesNotContain(SiteNames.FORBIDDEN);
     var data = mapper.readTree(response.body()).path("data");
-    assertThat(data.path("ruleVersion").asText()).isEqualTo("combat-power-sim-v2");
+    assertThat(data.path("ruleVersion").asText()).isEqualTo("combat-power-sim-v3");
     // 시뮬레이션이 읽은 캐시가 검색 응답과 같은지 웹이 비교한다(PM-프론트 18:31).
     assertThat(data.path("fetchedAt").asText())
         .isEqualTo(mapper.readTree(search.body()).at("/data/fetchedAt").asText());
     // 보석 8 → 10(뒤의 변경이 이김): 3000 × (1.0704/1.0576) × (1 + 3.70%)/(1 + 3.30%) = 3048.07.
+    // 이어서 무기 품질 90 → 100(추가 피해 10 + 20 × (q/100)²): × 1.30/1.262 = 3139.85.
     // 기본 공격력 % = 보석 0.80 → 1.20 + 스톤 레벨 보너스 1.50 + 완갑 추가 효과 1.00.
     assertThat(response.body())
         .contains(
-            "\"before\":3000.00", "\"after\":3048.07", "\"delta\":48.07", "\"deltaPercent\":1.602");
+            "\"before\":3000.00",
+            "\"after\":3139.85",
+            "\"delta\":139.85",
+            "\"deltaPercent\":4.662");
     assertThat(data.path("modelBefore").isNull()).isTrue();
     assertThat(data.path("partial").asBoolean()).isTrue();
     // 같은 보석 slot은 뒤의 변경(10)이 이기고 자리는 처음 나온 곳을 지킨다.
     var contributions = data.path("contributions");
     assertThat(contributions.size()).isEqualTo(9);
-    assertThat(data.path("unsupportedCount").asInt()).isEqualTo(8);
+    assertThat(data.path("unsupportedCount").asInt()).isEqualTo(7);
     assertThat(contributions.at("/0/kind").asText()).isEqualTo("GEM_LEVEL");
     assertThat(contributions.at("/0/from").asText()).isEqualTo("8");
     assertThat(contributions.at("/0/to").asText()).isEqualTo("10");
     assertThat(contributions.at("/0/status").asText()).isEqualTo("OK");
     assertThat(contributions.at("/0/delta").decimalValue()).isEqualByComparingTo("48.07");
     assertThat(contributions.at("/1/from").asText()).isEqualTo("20");
+    assertThat(contributions.at("/2/status").asText()).isEqualTo("OK");
+    assertThat(contributions.at("/2/delta").decimalValue()).isEqualByComparingTo("91.78");
     for (int i = 1; i < contributions.size(); i++) {
+      if (i == 2) continue;
       assertThat(contributions.get(i).path("status").asText()).isEqualTo("UNSUPPORTED");
       assertThat(contributions.get(i).path("delta").isNull()).isTrue();
     }

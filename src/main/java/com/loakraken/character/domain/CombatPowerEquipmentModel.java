@@ -26,7 +26,6 @@ import java.util.regex.Pattern;
 public final class CombatPowerEquipmentModel {
   private static final MathContext MATH = MathContext.DECIMAL64;
   private static final BigDecimal HUNDRED = BigDecimal.valueOf(100);
-  private static final Pattern ADD_DAMAGE = Pattern.compile("^추가 피해 \\+([\\d.]+)%$");
   private static final Pattern PERCENT = Pattern.compile("([\\d.]+)%");
   public static final String ADRENALINE = "아드레날린";
   public static final String ASSAULT_CAPTAIN = "돌격대장";
@@ -39,14 +38,12 @@ public final class CombatPowerEquipmentModel {
       String weaponQualityAddDamageSource,
       String descriptionPercentIndexSource,
       Map<String, Integer> descriptionPercentIndex,
-      Map<Integer, BigDecimal> weaponQualityAddDamage,
       DamageEngravings damageEngravings,
       Adrenaline adrenaline,
       AssaultCaptain assaultCaptain,
       List<Integer> stoneLevelBonusStableSums) {
     public Coefficients {
       source = source == null ? Map.of() : Map.copyOf(source);
-      weaponQualityAddDamage = Map.copyOf(weaponQualityAddDamage);
       descriptionPercentIndex =
           descriptionPercentIndex == null ? Map.of() : Map.copyOf(descriptionPercentIndex);
       stoneLevelBonusStableSums = List.copyOf(stoneLevelBonusStableSums);
@@ -148,22 +145,20 @@ public final class CombatPowerEquipmentModel {
     return false;
   }
 
-  /** 품질의 무기 추가 피해 %. 확인된 품질이 아니면 null. */
-  public static BigDecimal weaponAddDamage(Coefficients c, int quality) {
-    return c.weaponQualityAddDamage().get(quality);
+  /**
+   * 품질의 무기 추가 피해 % = 10 + 20 × (품질/100)², 반올림 없음(계산 검증 10-11 17:25: 대조 사이트 60~99 실측 40개가 소수 셋째 자리까지
+   * 같음). 공식 툴팁은 이 값을 올림해 보여 주므로(95 → 28.06) 툴팁 숫자를 쓰지 않는다. 0~100 밖이면 null.
+   */
+  public static BigDecimal weaponAddDamage(int quality) {
+    if (quality < 0 || quality > 100) return null;
+    return BigDecimal.TEN.add(
+        BigDecimal.valueOf((long) quality * quality).divide(BigDecimal.valueOf(500)));
   }
 
-  /** 공식 무기 Tooltip "추가 효과"의 추가 피해 %. 없으면 null. */
+  /** 지금 무기의 추가 피해 %: 품질로 식을 계산한다(툴팁 올림 값이 아님). 품질을 모르면 null. */
   public static BigDecimal currentWeaponAddDamage(CharacterLoadout.EquipmentDetail detail) {
-    if (detail == null) return null;
-    for (var group : detail.effects()) {
-      if (group == null) continue;
-      for (var line : group.lines()) {
-        var matcher = ADD_DAMAGE.matcher(line.strip());
-        if (matcher.matches()) return new BigDecimal(matcher.group(1));
-      }
-    }
-    return null;
+    if (detail == null || detail.quality() == null) return null;
+    return weaponAddDamage(detail.quality());
   }
 
   /** 무기 추가 피해 배수 비. */

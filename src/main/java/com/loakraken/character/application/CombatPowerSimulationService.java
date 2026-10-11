@@ -33,12 +33,13 @@ import org.springframework.stereotype.Service;
  */
 @Service
 public class CombatPowerSimulationService {
-  public static final String RULE_VERSION = "combat-power-sim-v2";
+  public static final String RULE_VERSION = "combat-power-sim-v3";
   private static final MathContext MATH = MathContext.DECIMAL64;
   private static final String GEM_BASIS =
       "보석 레벨별 배수와 기본 공격력 %(보석·스톤 레벨 보너스·완갑 추가 효과, 공식 툴팁)로 바뀐 비율을 공식 전투력에 곱했습니다.";
   private static final String NO_OFFICIAL_BASIS = "공식 전투력이 없어 계산하지 않습니다.";
-  private static final String WEAPON_QUALITY_BASIS = "무기 품질의 추가 피해(공식 툴팁) 배수 비율을 공식 전투력에 곱했습니다.";
+  private static final String WEAPON_QUALITY_BASIS =
+      "무기 품질의 추가 피해(10 + 20 × (품질/100)²) 배수 비율을 공식 전투력에 곱했습니다.";
   private static final String ARMOR_QUALITY_BASIS = "방어구 품질은 체력에만 붙어 전투력이 바뀌지 않습니다.";
   private static final String ENGRAVING_BASIS = "각인 효과(공식 각인 설명값)의 배수 비율을 공식 전투력에 곱했습니다.";
   private static final String LEVEL_UNCONFIRMED_BASIS = "이 레벨 조합의 각인 수치를 아직 확인하지 않아 계산하지 않았습니다.";
@@ -125,6 +126,14 @@ public class CombatPowerSimulationService {
       List<String> assumptions) {}
 
   public Result simulate(String characterName, List<Change> changes) {
+    return simulate(snapshot(characterName), changes);
+  }
+
+  /**
+   * 시뮬레이션 기준 캐릭터(캐시)를 한 번 읽는다. 스펙업 가이드(#315)가 후보마다 {@link #simulate(CharacterResult, List)}를 부를 때
+   * 같은 세팅을 쓰게 한다. 없거나 공개 제외면 CHARACTER_NOT_CACHED다.
+   */
+  public CharacterResult snapshot(String characterName) {
     var name = new SearchCharacterCommand(characterName).characterName();
     CharacterResult result;
     try {
@@ -142,6 +151,11 @@ public class CombatPowerSimulationService {
       throw new CharacterException(CharacterErrorCode.CHARACTER_STORAGE_UNAVAILABLE);
     }
     if (result == null) throw new CharacterException(CharacterErrorCode.CHARACTER_NOT_CACHED);
+    return result;
+  }
+
+  /** 이미 읽은 캐릭터로 시뮬레이션한다(공식 호출 없음). */
+  public Result simulate(CharacterResult result, List<Change> changes) {
     var loadout = result.details().loadout();
     var gemModel = CombatPowerGemModel.of(gemCoefficients, loadout);
     // 같은 대상은 뒤의 변경이 이긴다. 순서는 처음 나온 자리를 지킨다.
@@ -568,12 +582,12 @@ public class CombatPowerSimulationService {
       return new Planned(
           change, item.name(), from, to, new NeutralEffect(), ARMOR_QUALITY_BASIS, null);
     if (!"무기".equals(item.type())) return unsupported(change, item.name(), from, to);
-    String reason = null;
-    if (CombatPowerEquipmentModel.currentWeaponAddDamage(detail) == null)
-      reason = "무기 추가 피해(공식 툴팁)를 읽지 못해 계산하지 않았습니다.";
-    var next = CombatPowerEquipmentModel.weaponAddDamage(equipmentCoefficients, change.quality());
-    if (reason == null && next == null)
-      reason = "품질 " + change.quality() + "의 무기 추가 피해 수치를 아직 확인하지 않아 계산하지 않았습니다.";
+    // 추가 피해 = 10 + 20 × (품질/100)²(0~100 전부). 품질이 있는 무기만 여기까지 온다.
+    var next = CombatPowerEquipmentModel.weaponAddDamage(change.quality());
+    String reason =
+        CombatPowerEquipmentModel.currentWeaponAddDamage(detail) == null || next == null
+            ? "무기 품질을 읽지 못해 계산하지 않았습니다."
+            : null;
     return new Planned(
         change, item.name(), from, to, new WeaponQualityEffect(next), WEAPON_QUALITY_BASIS, reason);
   }

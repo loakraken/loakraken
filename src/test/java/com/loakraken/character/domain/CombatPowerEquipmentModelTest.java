@@ -47,8 +47,8 @@ class CombatPowerEquipmentModelTest {
               case "EQUIPMENT_QUALITY" ->
                   "무기".equals(target)
                       ? CombatPowerEquipmentModel.weaponQualityRatio(
-                          CombatPowerEquipmentModel.weaponAddDamage(COEFFICIENTS, from),
-                          CombatPowerEquipmentModel.weaponAddDamage(COEFFICIENTS, to))
+                          CombatPowerEquipmentModel.weaponAddDamage(from),
+                          CombatPowerEquipmentModel.weaponAddDamage(to))
                       : BigDecimal.ONE; // 방어구 품질은 배수 1
               case "ENGRAVING_LEVEL" -> {
                 int stone = stones.getOrDefault(target, 0);
@@ -129,16 +129,22 @@ class CombatPowerEquipmentModelTest {
 
   @Test
   void 확인하지_않은_조합은_배수를_주지_않는다() {
-    // 돌격대장 스톤 1·예리한 둔기·표에 없는 품질은 계산하지 않는다.
+    // 돌격대장 스톤 1·예리한 둔기는 계산하지 않는다.
     assertThat(CombatPowerEquipmentModel.engravingFactor(COEFFICIENTS, "돌격대장", 4, 1)).isNull();
     assertThat(CombatPowerEquipmentModel.engravingFactor(COEFFICIENTS, "예리한 둔기", 4, 3)).isNull();
     assertThat(CombatPowerEquipmentModel.supportsEngraving(COEFFICIENTS, "예리한 둔기")).isFalse();
-    assertThat(CombatPowerEquipmentModel.weaponAddDamage(COEFFICIENTS, 73)).isNull();
-    // 공식 무기 툴팁 실측 표(#290): 95 = 28.06, 70 = 19.81.
-    assertThat(CombatPowerEquipmentModel.weaponAddDamage(COEFFICIENTS, 95))
-        .isEqualByComparingTo("28.06");
-    assertThat(CombatPowerEquipmentModel.weaponAddDamage(COEFFICIENTS, 70))
-        .isEqualByComparingTo("19.81");
+    // 무기 추가 피해 = 10 + 20 × (품질/100)², 반올림 없음(계산 검증 10-11 17:25). 툴팁은 올림 값(95 → 28.06)이라 쓰지 않는다.
+    assertThat(CombatPowerEquipmentModel.weaponAddDamage(99)).isEqualByComparingTo("29.602");
+    assertThat(CombatPowerEquipmentModel.weaponAddDamage(95)).isEqualByComparingTo("28.05");
+    assertThat(CombatPowerEquipmentModel.weaponAddDamage(71)).isEqualByComparingTo("20.082");
+    assertThat(CombatPowerEquipmentModel.weaponAddDamage(70)).isEqualByComparingTo("19.80");
+    // 이전 표와 같은 값: 100·90·85·75.
+    assertThat(CombatPowerEquipmentModel.weaponAddDamage(100)).isEqualByComparingTo("30");
+    assertThat(CombatPowerEquipmentModel.weaponAddDamage(90)).isEqualByComparingTo("26.2");
+    assertThat(CombatPowerEquipmentModel.weaponAddDamage(85)).isEqualByComparingTo("24.45");
+    assertThat(CombatPowerEquipmentModel.weaponAddDamage(75)).isEqualByComparingTo("21.25");
+    assertThat(CombatPowerEquipmentModel.weaponAddDamage(0)).isEqualByComparingTo("10");
+    assertThat(CombatPowerEquipmentModel.weaponAddDamage(101)).isNull();
     // 스톤 합 5~7 안에서만 [레벨 보너스]가 그대로다.
     assertThat(CombatPowerEquipmentModel.stoneBonusStable(COEFFICIENTS, 5, 7)).isTrue();
     assertThat(CombatPowerEquipmentModel.stoneBonusStable(COEFFICIENTS, 5, 4)).isFalse();
@@ -146,7 +152,7 @@ class CombatPowerEquipmentModelTest {
   }
 
   @Test
-  void 무기_추가_피해는_공식_추가_효과_줄에서_읽는다() {
+  void 지금_무기_추가_피해는_품질로_계산한다() {
     var detail =
         new CharacterLoadout.EquipmentDetail(
             19,

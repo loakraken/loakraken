@@ -26,6 +26,8 @@ class PostgresCharacterCardRepository implements CharacterCardPort {
   private final JdbcClient jdbc;
   // 학습한 구성원·효과는 거의 바뀌지 않으므로 이미 쓴 것은 다시 쓰지 않는다.
   private final Set<Object> known = ConcurrentHashMap.newKeySet();
+  // 수집품 항목 사전: (종류, 이름) → {item_id, 공식 순서, 만점}(#305).
+  private final Map<String, int[]> items = new ConcurrentHashMap<>();
 
   PostgresCharacterCardRepository(JdbcClient jdbc) {
     this.jdbc = jdbc;
@@ -77,6 +79,7 @@ class PostgresCharacterCardRepository implements CharacterCardPort {
           .param("source", owner.get()[0])
           .update();
     }
+    recordItems(owner.get()[1], collectibles, at);
     // 공식 종류가 바뀌거나 사라지면 옛 종류가 합계에 섞이지 않게 이번 관측에 없는 종류를 지운다(더 새 관측은 건드리지 않음).
     if (observedTypes.isEmpty()) return;
     jdbc.sql(
@@ -277,5 +280,81 @@ class PostgresCharacterCardRepository implements CharacterCardPort {
 
   private static OffsetDateTime utc(Instant value) {
     return value.atOffset(ZoneOffset.UTC);
+  }
+
+  /**
+   * 수집품 항목(#305): 사전에 없는 항목을 더하고, 원정대가 가진 항목(Point > 0)을 (item_id, point) 배열 한 행으로 덮어쓴다. 사전은 거의 바뀌지
+   * 않으므로 메모리에 두고 모르는 이름이나 순서·만점이 바뀐 항목만 DB에 쓴다.
+   */
+  private void recordItems(
+      UUID rosterKey,
+      List<com.loakraken.character.domain.CharacterLoadout.Collectible> collectibles,
+      OffsetDateTime at) {
+    var ids = new StringBuilder();
+    var points = new StringBuilder();
+    boolean any = false;
+    for (var collectible : collectibles) {
+      if (collectible == null || collectible.type() == null || collectible.type().isBlank())
+        continue;
+      String type = collectible.type().strip();
+      int order = 0;
+      for (var item : collectible.items()) {
+        order++;
+        if (item == null || item.name() == null || item.name().isBlank() || item.maxPoint() == null)
+          continue;
+        String name = item.name().strip();
+        if (type.length() > 32 || name.length() > 64) continue;
+        any = true;
+        short id = itemId(type, name, order, item.maxPoint(), at);
+        int point = item.point() == null ? 0 : item.point();
+        if (point <= 0) continue;
+        if (!ids.isEmpty()) {
+          ids.append(',');
+          points.append(',');
+        }
+        ids.append(id);
+        points.append(Math.min(point, Short.MAX_VALUE));
+      }
+    }
+    // 항목 목록이 없는 응답(이전 형식·해석 실패)은 원정대 행을 비우지 않는다.
+    if (!any) return;
+    jdbc.sql(
+            """
+        INSERT INTO roster_collectible_item (roster_key, item_ids, points, observed_at)
+        VALUES (:roster, CAST(:ids AS SMALLINT[]), CAST(:points AS SMALLINT[]), :at)
+        ON CONFLICT (roster_key) DO UPDATE SET item_ids = EXCLUDED.item_ids, points = EXCLUDED.points,
+          observed_at = EXCLUDED.observed_at
+        WHERE roster_collectible_item.observed_at <= EXCLUDED.observed_at
+        """)
+        .param("roster", rosterKey)
+        .param("ids", "{" + ids + "}")
+        .param("points", "{" + points + "}")
+        .param("at", at)
+        .update();
+  }
+
+  private short itemId(String type, String name, int order, int maxPoint, OffsetDateTime at) {
+    String key = type + '\u0000' + name;
+    var cached = items.get(key);
+    if (cached != null && cached[1] == order && cached[2] == maxPoint) return (short) cached[0];
+    short id =
+        jdbc.sql(
+                """
+            INSERT INTO collectible_item (type, name, sort_order, max_point, last_seen_at)
+            VALUES (:type, :name, :order, :max, :at)
+            ON CONFLICT (type, name) DO UPDATE SET sort_order = EXCLUDED.sort_order,
+              max_point = EXCLUDED.max_point, last_seen_at = EXCLUDED.last_seen_at
+            RETURNING item_id
+            """)
+            .param("type", type)
+            .param("name", name)
+            .param("order", order)
+            .param("max", Math.min(maxPoint, Short.MAX_VALUE))
+            .param("at", at)
+            .query(Short.class)
+            .single();
+    if (items.size() > KNOWN_LIMIT) items.clear();
+    items.put(key, new int[] {id, order, maxPoint});
+    return id;
   }
 }

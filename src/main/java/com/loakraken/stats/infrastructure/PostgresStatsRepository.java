@@ -463,6 +463,72 @@ class PostgresStatsRepository implements StatsPort {
     return new GuildPage(counts[0], counts[1], rows);
   }
 
+  /** 보유율 분모 원정대(#305): since 뒤 항목 관측 + 공개 캐릭터가 있음(server가 있으면 그 서버). */
+  private static final String OWNERSHIP_ROSTERS =
+      """
+      WITH rosters AS (
+        SELECT r.roster_key, r.item_ids, r.points FROM roster_collectible_item r
+        WHERE r.observed_at >= :since
+          AND EXISTS (
+            SELECT 1 FROM characters c
+            WHERE c.roster_key = r.roster_key
+              AND (CAST(:server AS VARCHAR) IS NULL OR c.server_name = CAST(:server AS VARCHAR))
+              AND NOT EXISTS (
+                SELECT 1 FROM public_exclusion e
+                WHERE e.character_name = c.character_name
+                  AND (e.server_name IS NULL OR e.server_name = c.server_name))))
+      """;
+
+  @Override
+  public List<String> collectibleServers() {
+    return jdbc.sql(
+            """
+        SELECT DISTINCT c.server_name FROM roster_collectible_item r
+        JOIN characters c ON c.roster_key = r.roster_key ORDER BY c.server_name
+        """)
+        .query(String.class)
+        .list();
+  }
+
+  @Override
+  public CollectibleOwnership collectibleOwnership(String server, Instant since, String type) {
+    long population =
+        jdbc.sql(OWNERSHIP_ROSTERS + "SELECT COUNT(*) FROM rosters")
+            .param("since", since.atOffset(ZoneOffset.UTC))
+            .param("server", server)
+            .query(Long.class)
+            .single();
+    var items =
+        jdbc.sql(
+                OWNERSHIP_ROSTERS
+                    + """
+                , held AS (
+                  SELECT u.item_id, u.point FROM rosters r
+                  CROSS JOIN LATERAL unnest(r.item_ids, r.points) AS u(item_id, point))
+                SELECT i.type, i.name, i.sort_order, i.max_point,
+                  COUNT(h.item_id) FILTER (WHERE h.point > 0) AS owned,
+                  COUNT(h.item_id) FILTER (WHERE h.point >= i.max_point) AS completed
+                FROM collectible_item i LEFT JOIN held h ON h.item_id = i.item_id
+                WHERE CAST(:type AS VARCHAR) IS NULL OR i.type = CAST(:type AS VARCHAR)
+                GROUP BY i.item_id, i.type, i.name, i.sort_order, i.max_point
+                ORDER BY MIN(i.item_id) OVER (PARTITION BY i.type), i.sort_order, i.name
+                """)
+            .param("since", since.atOffset(ZoneOffset.UTC))
+            .param("server", server)
+            .param("type", type)
+            .query(
+                (row, index) ->
+                    new CollectibleOwnershipRow(
+                        row.getString("type"),
+                        row.getString("name"),
+                        row.getInt("sort_order"),
+                        row.getInt("max_point"),
+                        row.getLong("owned"),
+                        row.getLong("completed")))
+            .list();
+    return new CollectibleOwnership(population, items);
+  }
+
   @Override
   public CollectibleStanding collectibleStanding(
       String characterName, String server, Instant since, boolean characterUnit) {

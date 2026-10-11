@@ -59,7 +59,7 @@ class RosterRankingIntegrationTest {
         .param("t", TIE_SERVER)
         .update();
     jdbc.sql("DELETE FROM public_exclusion WHERE character_name LIKE '원정%'").update();
-    var keys = redis.keys("stats:*rosters*");
+    var keys = redis.keys("stats:v1:*");
     if (keys != null && !keys.isEmpty()) redis.delete(keys);
   }
 

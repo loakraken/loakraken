@@ -91,10 +91,10 @@ public class ReceiptService {
   }
 
   public Receipt receipt(String characterName) {
-    return receipt(characterName, false);
+    return receipt(characterName, true);
   }
 
-  /** assumeBook: 책(재봉술·야금술) 효과 항상 적용 가정. 기본 false(책 제외). */
+  /** assumeBook: 책(재봉술·야금술) 효과 적용 가정. API 기본 true(책 포함, 2026-10-11 결정), false면 책 제외. */
   public Receipt receipt(String characterName, boolean assumeBook) {
     var command = new SearchCharacterCommand(characterName);
     var siblings = characters.siblings(command).siblings();

@@ -1,0 +1,315 @@
+{
+ "checkedAt": "2026-10-11",
+ "source": "로아랩 캐릭터 시뮬레이터 서버 계산(언새늘, 팔찌 빈 옵션 칸에 옵션 하나씩 넣음, 99개) + 인벤 딜러 전투력 로직 분석(2025-06-30) 표 + 로펙 시뮬레이터(추가 피해 3.5%)",
+ "status": "CONFIRMED",
+ "model": {
+  "combine": "팔찌 옵션마다 독립 배수, 전투력 = 기존 × Π(1 + c/100)",
+  "combatStats": "치명·특화·신속 합 T: 전투력 ∝ (1 + 0.0003 × T). 팔찌 특성 +N은 T에 더한다",
+  "leapPoints": "도약 포인트 P: 전투력 ∝ (1 + 0.002 × P). 팔찌 \"도약 +N\"은 P에 들어 있다",
+  "weaponAttackFlat": "\"무기 공격력 +N\"(160~162)과 무공 옵션의 고정 부분: 재련 모델의 W 항(W' = W + N × (1 + 무공%))",
+  "weaponBuffParts": {
+   "88~90 무공 7200/8100/9000 + 생명력 50% 이상 버프": "버프 부분 0.54/0.59/0.65%",
+   "94~96 무공 6900/7800/8700 + 30중첩 버프": "버프 부분 1.05/1.13/1.21%"
+  },
+  "zero": "공이속·방어력·생명력·방깎·치저·치피저·보호·파티원·아군·시드·회복·전투자원·이동기·면역 = 0",
+  "parsing": "공식 Tooltip 문구의 숫자로 옵션과 등급을 정한다. 로아랩은 공식 문구 \"3%\"·\"5%\"(소수점 없는 표기)를 목록 \"3.0%\"·\"5.0%\"와 맞추지 못해 계수 0으로 계산한다(inzai: 로아랩 옵션 기여 5.95%, 바른 값 12.59%) → 크라켄은 숫자로 읽는다(증명된 차이)"
+ },
+ "coefficients": [
+  {
+   "loalabOptionIndex": 28,
+   "grade": "하",
+   "text": "치명타 적중률이 3.4% 증가한다. 공격이 치명타로 적중 시 적에게 주는 피해가 1.5% 증가한다.",
+   "combatPowerPct": 3.5
+  },
+  {
+   "loalabOptionIndex": 29,
+   "grade": "중",
+   "text": "치명타 적중률이 4.2% 증가한다. 공격이 치명타로 적중 시 적에게 주는 피해가 1.5% 증가한다.",
+   "combatPowerPct": 4
+  },
+  {
+   "loalabOptionIndex": 30,
+   "grade": "상",
+   "text": "치명타 적중률이 5.0% 증가한다. 공격이 치명타로 적중 시 적에게 주는 피해가 1.5% 증가한다.",
+   "combatPowerPct": 4.5
+  },
+  {
+   "loalabOptionIndex": 34,
+   "grade": "하",
+   "text": "치명타 피해가 6.8% 증가한다. 공격이 치명타로 적중 시 적에게 주는 피해가 1.5% 증가한다.",
+   "combatPowerPct": 3.5
+  },
+  {
+   "loalabOptionIndex": 35,
+   "grade": "중",
+   "text": "치명타 피해가 8.4% 증가한다. 공격이 치명타로 적중 시 적에게 주는 피해가 1.5% 증가한다.",
+   "combatPowerPct": 4
+  },
+  {
+   "loalabOptionIndex": 36,
+   "grade": "상",
+   "text": "치명타 피해가 10.0% 증가한다. 공격이 치명타로 적중 시 적에게 주는 피해가 1.5% 증가한다.",
+   "combatPowerPct": 4.5
+  },
+  {
+   "loalabOptionIndex": 40,
+   "grade": "하",
+   "text": "적에게 주는 피해가 2.0% 증가하며, 무력화 상태의 적에게 주는 피해가 4.0% 증가한다.",
+   "combatPowerPct": 2.8
+  },
+  {
+   "loalabOptionIndex": 41,
+   "grade": "중",
+   "text": "적에게 주는 피해가 2.5% 증가하며, 무력화 상태의 적에게 주는 피해가 4.5% 증가한다.",
+   "combatPowerPct": 3.4
+  },
+  {
+   "loalabOptionIndex": 42,
+   "grade": "상",
+   "text": "적에게 주는 피해가 3.0% 증가하며, 무력화 상태의 적에게 주는 피해가 5.0% 증가한다.",
+   "combatPowerPct": 4
+  },
+  {
+   "loalabOptionIndex": 46,
+   "grade": "하",
+   "text": "추가 피해가 2.5% 증가한다. 악마 및 대악마 계열 피해량이 2.5% 증가한다.",
+   "combatPowerPct": 3.5
+  },
+  {
+   "loalabOptionIndex": 47,
+   "grade": "중",
+   "text": "추가 피해가 3.0% 증가한다. 악마 및 대악마 계열 피해량이 2.5% 증가한다.",
+   "combatPowerPct": 4
+  },
+  {
+   "loalabOptionIndex": 48,
+   "grade": "상",
+   "text": "추가 피해가 3.5% 증가한다. 악마 및 대악마 계열 피해량이 2.5% 증가한다.",
+   "combatPowerPct": 4.5
+  },
+  {
+   "loalabOptionIndex": 52,
+   "grade": "하",
+   "text": "스킬의 재사용 대기 시간이 2% 증가하지만, 적에게 주는 피해가 4.5% 증가한다.",
+   "combatPowerPct": 3.5
+  },
+  {
+   "loalabOptionIndex": 53,
+   "grade": "중",
+   "text": "스킬의 재사용 대기 시간이 2% 증가하지만, 적에게 주는 피해가 5.0% 증가한다.",
+   "combatPowerPct": 4
+  },
+  {
+   "loalabOptionIndex": 54,
+   "grade": "상",
+   "text": "스킬의 재사용 대기 시간이 2% 증가하지만, 적에게 주는 피해가 5.5% 증가한다.",
+   "combatPowerPct": 4.5
+  },
+  {
+   "loalabOptionIndex": 82,
+   "grade": "하",
+   "text": "공격 적중 시 매 초 마다 10초 동안 무기 공격력이 1160, 공격 및 이동 속도가 1% 증가한다.(최대 6중첩)",
+   "combatPowerPct": 1.88
+  },
+  {
+   "loalabOptionIndex": 83,
+   "grade": "중",
+   "text": "… 무기 공격력이 1320 …",
+   "combatPowerPct": 2.14
+  },
+  {
+   "loalabOptionIndex": 84,
+   "grade": "상",
+   "text": "… 무기 공격력이 1480 …",
+   "combatPowerPct": 2.4
+  },
+  {
+   "loalabOptionIndex": 100,
+   "grade": "하",
+   "text": "적에게 주는 피해가 2.0% 증가한다.",
+   "combatPowerPct": 2
+  },
+  {
+   "loalabOptionIndex": 101,
+   "grade": "중",
+   "text": "적에게 주는 피해가 2.5% 증가한다.",
+   "combatPowerPct": 2.5
+  },
+  {
+   "loalabOptionIndex": 102,
+   "grade": "상",
+   "text": "적에게 주는 피해가 3.0% 증가한다.",
+   "combatPowerPct": 3
+  },
+  {
+   "loalabOptionIndex": 106,
+   "grade": "하",
+   "text": "추가 피해 +3.00%",
+   "combatPowerPct": 2.30758
+  },
+  {
+   "loalabOptionIndex": 107,
+   "grade": "중",
+   "text": "추가 피해 +3.50%",
+   "combatPowerPct": 2.6922
+  },
+  {
+   "loalabOptionIndex": 108,
+   "grade": "상",
+   "text": "추가 피해 +4.00%",
+   "combatPowerPct": 3.0768
+  },
+  {
+   "loalabOptionIndex": 112,
+   "grade": "하",
+   "text": "백어택 스킬이 적에게 주는 피해가 2.5% 증가한다.",
+   "combatPowerPct": 1.75
+  },
+  {
+   "loalabOptionIndex": 113,
+   "grade": "중",
+   "text": "… 3% …",
+   "combatPowerPct": 2.1
+  },
+  {
+   "loalabOptionIndex": 114,
+   "grade": "상",
+   "text": "… 3.5% …",
+   "combatPowerPct": 2.45
+  },
+  {
+   "loalabOptionIndex": 118,
+   "grade": "하",
+   "text": "헤드어택 스킬이 적에게 주는 피해가 2.5% 증가한다.",
+   "combatPowerPct": 1.75
+  },
+  {
+   "loalabOptionIndex": 119,
+   "grade": "중",
+   "text": "… 3% …",
+   "combatPowerPct": 2.1
+  },
+  {
+   "loalabOptionIndex": 120,
+   "grade": "상",
+   "text": "… 3.5% …",
+   "combatPowerPct": 2.45
+  },
+  {
+   "loalabOptionIndex": 124,
+   "grade": "하",
+   "text": "방향성 공격이 아닌 스킬이 적에게 주는 피해가 2.5% 증가한다. 각성기는 적용되지 않는다.",
+   "combatPowerPct": 2.5
+  },
+  {
+   "loalabOptionIndex": 125,
+   "grade": "중",
+   "text": "… 3.0% …",
+   "combatPowerPct": 3
+  },
+  {
+   "loalabOptionIndex": 126,
+   "grade": "상",
+   "text": "… 3.5% …",
+   "combatPowerPct": 3.5
+  },
+  {
+   "loalabOptionIndex": 148,
+   "grade": "하",
+   "text": "치명타 적중률 +3.40%",
+   "combatPowerPct": 2.38
+  },
+  {
+   "loalabOptionIndex": 149,
+   "grade": "중",
+   "text": "치명타 적중률 +4.20%",
+   "combatPowerPct": 2.94
+  },
+  {
+   "loalabOptionIndex": 150,
+   "grade": "상",
+   "text": "치명타 적중률 +5.00%",
+   "combatPowerPct": 3.5
+  },
+  {
+   "loalabOptionIndex": 154,
+   "grade": "하",
+   "text": "치명타 피해 +6.80%",
+   "combatPowerPct": 2.26643
+  },
+  {
+   "loalabOptionIndex": 155,
+   "grade": "중",
+   "text": "치명타 피해 +8.40%",
+   "combatPowerPct": 2.79972
+  },
+  {
+   "loalabOptionIndex": 156,
+   "grade": "상",
+   "text": "치명타 피해 +10.00%",
+   "combatPowerPct": 3.333
+  }
+ ],
+ "resolved": "추가 피해 +3.50%(107, 중) = 2.6922: 인벤 표 2.6922 + 로펙 시뮬레이터(언새늘에서 이 줄을 없음으로 바꾸면 예상 전투력 3,345.24 → 3,257.54, 1.026922배) 두 출처 일치. 상 3.0768·하 2.3076과 같은 1%당 0.7692 선형. 로아랩만 2.68219(오기로 판단) → 크라켄은 2.6922, 로아랩과의 차이는 증명된 차이",
+ "contributionSamples": [
+  {
+   "name": "언새늘",
+   "combatPower": 3345.24,
+   "options": [
+    "특화 +81",
+    "전투자원 자연 회복량 +8.00%",
+    "치명타 피해 +8.40%",
+    "추가 피해 +3.50%",
+    "추가 피해 2.5% + 악마 2.5%"
+   ],
+   "perOptionRatio": [
+    0.986040105,
+    1,
+    0.972765183,
+    0.973878526,
+    0.966183652
+   ],
+   "loalabOptionsRatio": 0.902541223,
+   "leap18Ratio": 0.968421,
+   "contributionPct": 12.6
+  },
+  {
+   "name": "만배",
+   "combatPower": 10724.16,
+   "options": [
+    "치명 +95",
+    "신속 +118",
+    "치피 8.4% + 1.5%",
+    "치명타 피해 +10.00%",
+    "추가 피해 3.5% + 악마 2.5%"
+   ],
+   "perOptionRatio": [
+    0.983991567,
+    0.980115645,
+    0.961538433,
+    0.967745073,
+    0.956937793
+   ],
+   "loalabOptionsRatio": 0.858492786,
+   "leap18Ratio": 0.968421,
+   "contributionPct": 16.83
+  },
+  {
+   "name": "inzai",
+   "combatPower": 11028.4,
+   "options": [
+    "신속 +120",
+    "특화 +117",
+    "적에게 주는 피해가 3% 증가한다.",
+    "치적 5% + 1.5%",
+    "백어택 3%"
+   ],
+   "loalabOptionsRatio": 0.940473777,
+   "modelOptionsRatio": 0.874122205,
+   "leap18Ratio": 0.968421,
+   "contributionPct": 15.35,
+   "note": "로아랩은 3%·5% 표기 옵션 2개를 0으로 계산"
+  }
+ ],
+ "contributionDefinition": "전투력 기여 % = 1 − (팔찌를 뺐을 때 전투력 / 지금 전투력). 옵션 배수 곱과 팔찌 도약 포인트 배수를 함께 뺀다(PM 총괄 2026-10-11 16:36)"
+}

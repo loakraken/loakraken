@@ -112,6 +112,17 @@ class OpenApiIntegrationTest {
         .contains("skills", "avatars", "collectibles");
     assertThat(document.at("/components/schemas/CharacterResponse/required").toString())
         .contains("tendencies", "decorations", "honorPoint", "townName", "avatars", "collectibles");
+    // 자동완성(#372): 필수 필드와 nullable 초상(프론트 10-12 05:32 계약 검증).
+    assertThat(document.at("/components/schemas/CharacterSuggestResponse/required").toString())
+        .contains("items");
+    assertThat(document.at("/components/schemas/CharacterSuggestItemResponse/required").toString())
+        .contains("characterName", "serverName", "className", "itemLevel", "characterImage");
+    assertThat(
+            document
+                .at(
+                    "/components/schemas/CharacterSuggestItemResponse/properties/characterImage/anyOf/1/type")
+                .asText())
+        .isEqualTo("null");
     var search = document.at("/paths/~1api~1v1~1characters~1search/get/parameters");
     assertThat(search.toString()).contains("includeSiblings");
     assertThat(document.at("/paths/~1api~1v1~1characters~1history/get/responses").has("503"))

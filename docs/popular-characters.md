@@ -68,12 +68,7 @@
 | created_at | 등록 시각 |
 | reason_code | 사유 코드(예: REQUEST 본인 요청, ABUSE 조작 의심, POLICY 운영 정책) |
 
-등록·해제는 운영자가 수동으로 한다. 공개 API는 없다.
-
-```sql
-INSERT INTO public_exclusion (character_name, server_name, reason_code) VALUES ('캐릭터명', '서버명', 'REQUEST');
-DELETE FROM public_exclusion WHERE character_name = '캐릭터명' AND server_name = '서버명';
-```
+등록·해제는 운영자가 수동으로 한다. 공개 API는 없다. 명령은 [ops/privacy-stop-list.md](ops/privacy-stop-list.md)만 쓴다(넣을 때 기존 기록도 같은 트랜잭션에서 지운다. 표에 INSERT만 하면 기존 기록이 남는다).
 
 결과 캐시(인기 10분, 랭킹 10분)가 지나야 반영된다.
 

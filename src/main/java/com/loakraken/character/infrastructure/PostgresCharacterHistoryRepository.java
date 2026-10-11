@@ -32,13 +32,14 @@ class PostgresCharacterHistoryRepository implements CharacterHistoryPort {
     var characterId =
         jdbc.sql(
                 """
-      INSERT INTO characters (character_id, character_name, server_name, class_name, item_level, combat_power, expedition_level, guild_name, last_synced_at, profile_refreshed_at, profile_checked_at)
-      VALUES (:id, :name, :server, :className, :itemLevel, :combatPower, :expeditionLevel, :guildName, :fetchedAt, :fetchedAt, :fetchedAt)
+      INSERT INTO characters (character_id, character_name, server_name, class_name, item_level, combat_power, expedition_level, guild_name, image_url, last_synced_at, profile_refreshed_at, profile_checked_at)
+      VALUES (:id, :name, :server, :className, :itemLevel, :combatPower, :expeditionLevel, :guildName, :imageUrl, :fetchedAt, :fetchedAt, :fetchedAt)
       ON CONFLICT (server_name, character_name) DO UPDATE SET
         class_name = EXCLUDED.class_name, item_level = EXCLUDED.item_level,
         combat_power = EXCLUDED.combat_power,
         expedition_level = COALESCE(EXCLUDED.expedition_level, characters.expedition_level),
         guild_name = EXCLUDED.guild_name,
+        image_url = COALESCE(EXCLUDED.image_url, characters.image_url),
         last_synced_at = EXCLUDED.last_synced_at,
         profile_refreshed_at = EXCLUDED.profile_refreshed_at, profile_checked_at = EXCLUDED.profile_checked_at
       WHERE characters.last_synced_at <= EXCLUDED.last_synced_at
@@ -52,6 +53,7 @@ class PostgresCharacterHistoryRepository implements CharacterHistoryPort {
             .param("combatPower", profile.combatPower())
             .param("expeditionLevel", profile.expeditionLevel())
             .param("guildName", guildName(profile.guildName()))
+            .param("imageUrl", imageUrl(profile.imageUrl()))
             .param("fetchedAt", at)
             .query(UUID.class)
             .optional();
@@ -247,5 +249,12 @@ class PostgresCharacterHistoryRepository implements CharacterHistoryPort {
     if (value == null || value.isBlank()) return null;
     var name = value.strip();
     return name.length() > 64 ? null : name;
+  }
+
+  /** 자동완성 초상(#369). https 주소만 512자까지 저장한다. */
+  private static String imageUrl(String value) {
+    if (value == null || value.isBlank()) return null;
+    var url = value.strip();
+    return url.startsWith("https://") && url.length() <= 512 ? url : null;
   }
 }

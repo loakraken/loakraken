@@ -88,7 +88,7 @@ class CombatPowerSimulationIntegrationTest {
     // 다른 사이트 이름·간접 표현 금지(#261).
     assertThat(response.body()).doesNotContain(SiteNames.FORBIDDEN);
     var data = mapper.readTree(response.body()).path("data");
-    assertThat(data.path("ruleVersion").asText()).isEqualTo("combat-power-sim-v6");
+    assertThat(data.path("ruleVersion").asText()).isEqualTo("combat-power-sim-v7");
     // 시뮬레이션이 읽은 캐시가 검색 응답과 같은지 웹이 비교한다(PM-프론트 18:31).
     assertThat(data.path("fetchedAt").asText())
         .isEqualTo(mapper.readTree(search.body()).at("/data/fetchedAt").asText());

@@ -241,6 +241,40 @@ public final class EquipmentReceipt {
     return new Result(List.copyOf(parts), List.copyOf(excluded), gold);
   }
 
+  /**
+   * 회차별 최적 계산 결과를 요청 사이에 나눠 쓴다(PM-백엔드 #287 P1). 키는 트랙·단계·성장 지원·책 허용과 그 단계 재료 시세 값이라, 시세가 바뀌면 새로
+   * 계산한다. 크기는 512개로 제한한다(오래 안 쓴 것부터 버림).
+   */
+  private static final Map<String, java.util.Optional<RefiningOptimal.Result>> OPTIMAL_CACHE =
+      java.util.Collections.synchronizedMap(
+          new java.util.LinkedHashMap<>(64, 0.75f, true) {
+            @Override
+            protected boolean removeEldestEntry(
+                Map.Entry<String, java.util.Optional<RefiningOptimal.Result>> eldest) {
+              return size() > 512;
+            }
+          });
+
+  private static String optimalKey(
+      RefiningRules.Track track,
+      RefiningRules.Stage rule,
+      boolean growth,
+      boolean bookAllowed,
+      Map<String, BigDecimal> unitPrices) {
+    var key = new StringBuilder();
+    key.append(track.grade()).append(':').append(track.equipmentType()).append(':');
+    key.append(rule.targetStage()).append(':').append(growth).append(':').append(bookAllowed);
+    for (var material : rule.materials())
+      key.append('|').append(material.name()).append('=').append(unitPrices.get(material.name()));
+    key.append('|')
+        .append(RefiningPlan.SHARD)
+        .append('=')
+        .append(unitPrices.get(RefiningPlan.SHARD));
+    if (rule.breath() != null) key.append('|').append(unitPrices.get(rule.breath().name()));
+    if (bookAllowed) key.append('|').append(unitPrices.get(rule.book().name()));
+    return key.toString();
+  }
+
   /** 한 단계의 회차별 최적 기대 비용(#284). 기본 재료 시세가 없으면 null. 성장 비용(단계당 1회 파편)은 시도 수와 무관해 더한다. */
   private static StageCost cheapest(
       RefiningRules.Track track,
@@ -251,13 +285,20 @@ public final class EquipmentReceipt {
       GrowthCosts growthCosts) {
     var rule = track.stage(stage);
     boolean growth = grade == RefiningRules.Grade.UPHWA && stage <= GROWTH_SUPPORT_MAX_STAGE;
+    boolean bookAllowed = assumeBook && rule.book() != null;
     var optimal =
-        RefiningOptimal.calculate(
-            rule,
-            growth ? 0.8 : 1,
-            unitPrices,
-            rule.breath() != null,
-            assumeBook && rule.book() != null);
+        OPTIMAL_CACHE
+            .computeIfAbsent(
+                optimalKey(track, rule, growth, bookAllowed, unitPrices),
+                key ->
+                    java.util.Optional.ofNullable(
+                        RefiningOptimal.calculate(
+                            rule,
+                            growth ? 0.8 : 1,
+                            unitPrices,
+                            rule.breath() != null,
+                            bookAllowed)))
+            .orElse(null);
     if (optimal == null) return null;
     var gold = BigDecimal.valueOf(optimal.expectedGold());
     if (growthCosts != null) {

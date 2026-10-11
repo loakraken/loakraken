@@ -55,6 +55,37 @@ class RefiningOptimalTest {
   }
 
   @Test
+  void 계산_검증_기준_전율_무기_18에서_19는_숨결_개수를_회차마다_고른다() {
+    // 계산 검증 #287 댓글(2026-10-11 10:08 단가): 숨결 0~20 × 책, 장인의 기운 0.001%p, 성장 파편 105,000 포함.
+    var rule =
+        RULES.track(RefiningRules.Grade.JEONYUL, RefiningRules.EquipmentType.WEAPON).stage(19);
+    var prices =
+        Map.of(
+            "운명의 파괴석 결정",
+            new BigDecimal("8.37"),
+            "위대한 운명의 돌파석",
+            new BigDecimal("34"),
+            "상급 아비도스 융화 재료",
+            new BigDecimal("270"),
+            RefiningPlan.SHARD,
+            new BigDecimal("0.083"),
+            "용암의 숨결",
+            new BigDecimal("479"),
+            "야금술 : 전율 [16-19]",
+            new BigDecimal("14870"));
+    double growth = 105_000 * 0.083;
+    var withBook = RefiningOptimal.calculate(rule, 1, prices, true, true);
+    assertThat(withBook.expectedGold() + growth)
+        .isCloseTo(616_461.9, org.assertj.core.data.Offset.offset(1.0));
+    // 20회째(실패 19번 뒤)는 숨결 4개만 쓴다.
+    assertThat(withBook.path().get(19)).isEqualTo("숨결 4");
+    var withoutBook = RefiningOptimal.calculate(rule, 1, prices, true, false);
+    assertThat(withoutBook.expectedGold() + growth)
+        .isCloseTo(652_179.8, org.assertj.core.data.Offset.offset(1.0));
+    assertThat(withoutBook.usesBook()).isFalse();
+  }
+
+  @Test
   void 기본_재료_시세가_없으면_계산하지_않는다() {
     var track = RULES.track(RefiningRules.Grade.UPHWA, RefiningRules.EquipmentType.ARMOR);
     assertThat(RefiningOptimal.calculate(track.stage(15), 1, Map.of(), true, true)).isNull();

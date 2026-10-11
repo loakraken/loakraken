@@ -147,6 +147,40 @@ class OpenApiIntegrationTest {
                     "/components/schemas/RosterCombatPowerResponse/properties/refreshAvailableAt/anyOf/1/type")
                 .asText())
         .isEqualTo("null");
+    // 아크 그리드 효율(L29·L39): 캐릭터 응답의 nullable 필드, 필수와 nullable.
+    assertThat(
+            document
+                .at(
+                    "/components/schemas/CharacterResponse/properties/arkGridEfficiency/anyOf/1/type")
+                .asText())
+        .isEqualTo("null");
+    assertThat(document.at("/components/schemas/CharacterResponse/required").toString())
+        .contains("braceletEfficiency", "arkGridEfficiency");
+    assertThat(document.at("/components/schemas/ArkGridEfficiencyResponse/required").toString())
+        .contains(
+            "percent", "coresPercent", "status", "reasonCode", "reason", "lines", "ruleVersion");
+    for (var field : List.of("percent", "coresPercent", "reasonCode"))
+      assertThat(
+              document
+                  .at(
+                      "/components/schemas/ArkGridEfficiencyResponse/properties/"
+                          + field
+                          + "/anyOf/1/type")
+                  .asText())
+          .as(field)
+          .isEqualTo("null");
+    assertThat(document.at("/components/schemas/ArkGridLineEfficiencyResponse/required").toString())
+        .contains("slotIndex", "text", "percent", "status", "reasonCode", "reason");
+    for (var field : List.of("slotIndex", "percent", "reasonCode", "reason"))
+      assertThat(
+              document
+                  .at(
+                      "/components/schemas/ArkGridLineEfficiencyResponse/properties/"
+                          + field
+                          + "/anyOf/1/type")
+                  .asText())
+          .as(field)
+          .isEqualTo("null");
     var search = document.at("/paths/~1api~1v1~1characters~1search/get/parameters");
     assertThat(search.toString()).contains("includeSiblings");
     assertThat(document.at("/paths/~1api~1v1~1characters~1history/get/responses").has("503"))

@@ -157,17 +157,22 @@ public final class CombatPowerBraceletModel {
       for (int i = 0; i < lines.size(); i++) all.put(i, Line.REMOVED);
       var factor = factor(all);
       if (factor == null) return null;
-      if (braceletLeap == 0) return factor;
+      var leap = leapRatio();
+      if (leap == null) return null;
+      return new Factor(
+          factor.ratio().multiply(leap, MATH), factor.weaponFlatDelta(), factor.mainStatDelta());
+    }
+
+    /** 팔찌 도약 포인트만 뺐을 때의 비율. 도약 합을 읽지 못하면 null. */
+    public BigDecimal leapRatio() {
+      if (braceletLeap == 0) return BigDecimal.ONE;
       if (leapTotal == null) return null;
       var leap = coefficients.leapPerPoint();
       var now = BigDecimal.ONE.add(leap.multiply(leapTotal, MATH), MATH);
       var next =
           BigDecimal.ONE.add(
               leap.multiply(leapTotal.subtract(BigDecimal.valueOf(braceletLeap)), MATH), MATH);
-      return new Factor(
-          factor.ratio().multiply(next, MATH).divide(now, MATH),
-          factor.weaponFlatDelta(),
-          factor.mainStatDelta());
+      return next.divide(now, MATH);
     }
 
     /** 계산할 수 없는 첫 줄의 이유(빼기 계산용). */

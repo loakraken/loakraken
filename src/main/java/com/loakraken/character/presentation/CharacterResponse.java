@@ -38,6 +38,11 @@ public record CharacterResponse(
         List<SiblingResponse> siblings,
     CharacterObservationCoverageResponse coverage,
     CharacterAnalysisResponse analysis,
+    @Schema(
+            description =
+                "팔찌 효율(전투력 기준): 지금 전투력이 팔찌(효과 줄 전부와 팔찌 도약 포인트)를 뺀 전투력보다 몇 % 높은지(지금 ÷ 뺀 전투력 − 1)와 줄별 값(그 줄만 뺐을 때, 팔찌 도약은 따로 한 줄). 곱 구조라 줄별 합과 전체는 다를 수 있습니다. 팔찌가 없으면 null")
+        @NullableResponse
+        BraceletEfficiencyResponse braceletEfficiency,
     @Schema(description = "외부 API에서 실제 수집한 UTC 시각. 캐시 조회에서도 유지됩니다.") Instant fetchedAt,
     @Schema(
             description =
@@ -45,6 +50,13 @@ public record CharacterResponse(
         @NullableResponse
         Instant refreshAvailableAt) {
   public static CharacterResponse from(CharacterResult result) {
+    return from(result, null);
+  }
+
+  public static CharacterResponse from(
+      CharacterResult result,
+      com.loakraken.character.application.CombatPowerSimulationService.BraceletEfficiency
+          efficiency) {
     var profile = result.details().profile();
     var inner = profile.inner();
     return new CharacterResponse(
@@ -107,6 +119,7 @@ public record CharacterResponse(
             : SiblingResponse.from(result.details().siblings()),
         CharacterObservationCoverageResponse.from(result.details().coverage()),
         CharacterAnalysisResponse.from(result.analysis(), result.details().coverage()),
+        BraceletEfficiencyResponse.from(efficiency),
         result.fetchedAt(),
         result.refreshAvailableAt());
   }
@@ -167,4 +180,46 @@ public record CharacterResponse(
           .toList();
     }
   }
+
+  public record BraceletEfficiencyResponse(
+      @Schema(description = "팔찌 전체 효율 %(소수 둘째 자리). UNSUPPORTED면 null", example = "14.42")
+          @NullableResponse
+          BigDecimal percent,
+      @Schema(description = "OK 또는 UNSUPPORTED(문자열)", example = "OK") String status,
+      @Schema(description = "UNSUPPORTED 이유 코드(시뮬레이터·스펙업과 같은 코드). OK면 null") @NullableResponse
+          String reasonCode,
+      @Schema(description = "근거 문장 또는 계산하지 않은 이유") String reason,
+      @Schema(description = "팔찌 효과 줄마다 그 줄만 뺐을 때의 효율(공식 순서), 팔찌 도약 포인트가 있으면 마지막에 '팔찌 도약 +N' 한 줄")
+          List<BraceletLineEfficiencyResponse> lines,
+      @Schema(description = "계산 규칙 버전(전투력 시뮬레이터와 같음)") String ruleVersion) {
+    static BraceletEfficiencyResponse from(
+        com.loakraken.character.application.CombatPowerSimulationService.BraceletEfficiency value) {
+      if (value == null) return null;
+      return new BraceletEfficiencyResponse(
+          value.percent(),
+          value.status().name(),
+          value.reasonCode(),
+          value.reason(),
+          value.lines().stream()
+              .map(
+                  line ->
+                      new BraceletLineEfficiencyResponse(
+                          line.text(),
+                          line.percent(),
+                          line.status().name(),
+                          line.reasonCode(),
+                          line.reason()))
+              .toList(),
+          value.ruleVersion());
+    }
+  }
+
+  public record BraceletLineEfficiencyResponse(
+      @Schema(description = "공식 팔찌 효과 문구(팔찌 도약 줄은 '팔찌 도약 +N')") String text,
+      @Schema(description = "지금 전투력이 그 줄만 뺀 전투력보다 몇 % 높은지(소수 둘째 자리). UNSUPPORTED면 null")
+          @NullableResponse
+          BigDecimal percent,
+      @Schema(description = "OK 또는 UNSUPPORTED(문자열)") String status,
+      @NullableResponse String reasonCode,
+      @Schema(description = "계산하지 않은 이유(OK면 null)") @NullableResponse String reason) {}
 }

@@ -390,6 +390,84 @@ class PostgresStatsRepository implements StatsPort {
   }
 
   @Override
+  public CollectibleStanding collectibleStanding(
+      String characterName, String server, Instant since, boolean characterUnit) {
+    var owner =
+        jdbc.sql(
+                """
+            SELECT c.character_name, c.server_name, c.roster_key,
+              (SELECT MAX(r.observed_at) FROM roster_collectible r WHERE r.roster_key = c.roster_key) AS observed_at,
+              (SELECT SUM(r.point) FROM roster_collectible r WHERE r.roster_key = c.roster_key) AS point
+            FROM characters c
+            WHERE c.character_name = :name
+              AND (CAST(:server AS VARCHAR) IS NULL OR c.server_name = CAST(:server AS VARCHAR))
+            ORDER BY c.server_name LIMIT 1
+            """)
+            .param("name", characterName)
+            .param("server", server)
+            .query(
+                (row, index) ->
+                    new Object[] {
+                      row.getString(1),
+                      row.getString(2),
+                      row.getObject(3, java.util.UUID.class),
+                      row.getObject(4, OffsetDateTime.class),
+                      row.getObject(5, Long.class)
+                    })
+            .optional();
+    long total =
+        jdbc.sql(COLLECTIBLE_RANKED + "SELECT COUNT(*) FROM ranked")
+            .param("since", since.atOffset(ZoneOffset.UTC))
+            .param("server", server)
+            .param("characterUnit", characterUnit)
+            .query(Long.class)
+            .single();
+    // 공개 제외 캐릭터는 관측 여부도 드러내지 않는다(공개 요약과 같음).
+    boolean excluded =
+        jdbc.sql(
+                """
+            SELECT EXISTS (SELECT 1 FROM public_exclusion e WHERE e.character_name = :name
+              AND (e.server_name IS NULL OR CAST(:server AS VARCHAR) IS NULL
+                   OR e.server_name = CAST(:server AS VARCHAR)))
+            """)
+            .param("name", characterName)
+            .param("server", server)
+            .query(Boolean.class)
+            .single();
+    if (excluded)
+      return new CollectibleStanding("EXCLUDED", characterName, null, null, total, null, null);
+    if (owner.isEmpty())
+      return new CollectibleStanding("NOT_OBSERVED", characterName, null, null, total, null, null);
+    var found = owner.get();
+    String name = (String) found[0];
+    String serverName = (String) found[1];
+    var rosterKey = (java.util.UUID) found[2];
+    var observedAt = (OffsetDateTime) found[3];
+    if (rosterKey == null || observedAt == null)
+      return new CollectibleStanding("NOT_OBSERVED", name, serverName, null, total, null, null);
+    if (observedAt.toInstant().isBefore(since))
+      return new CollectibleStanding("INACTIVE", name, serverName, null, total, null, null);
+    if (found[4] == null || (Long) found[4] <= 0)
+      return new CollectibleStanding("NO_COLLECTIBLES", name, serverName, null, total, null, null);
+    return jdbc.sql(
+            COLLECTIBLE_RANKED
+                + "SELECT rank, point, max_point FROM ranked WHERE roster_key = :roster"
+                + " AND (NOT :characterUnit OR character_name = :name) LIMIT 1")
+        .param("since", since.atOffset(ZoneOffset.UTC))
+        .param("server", server)
+        .param("characterUnit", characterUnit)
+        .param("roster", rosterKey)
+        .param("name", name)
+        .query(
+            (row, index) ->
+                new CollectibleStanding(
+                    null, name, serverName, row.getLong(1), total, row.getLong(2), row.getLong(3)))
+        .optional()
+        // 원정대의 공개 캐릭터가 모두 서버 필터 밖이면 순위에 없다.
+        .orElse(new CollectibleStanding("NOT_OBSERVED", name, serverName, null, total, null, null));
+  }
+
+  @Override
   public java.util.Map<java.util.UUID, List<CollectibleType>> collectibleTypes(
       java.util.Collection<java.util.UUID> rosterKeys) {
     var result = new java.util.LinkedHashMap<java.util.UUID, List<CollectibleType>>();

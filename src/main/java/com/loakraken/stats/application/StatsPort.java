@@ -176,4 +176,21 @@ public interface StatsPort {
       String server,
       Instant since,
       RosterBasis basis);
+
+  /**
+   * 캐릭터 기준 수집품 순위(#303). reason이 null이면 rank·point·maxPoint가 있다. reason: EXCLUDED(공개 제외),
+   * NOT_OBSERVED(캐릭터·원정대·수집품 관측 없음), INACTIVE(activeDays 안 관측 없음), NO_COLLECTIBLES(Σ Point = 0).
+   * total은 같은 조건의 순위 모집단 수.
+   */
+  record CollectibleStanding(
+      String reason,
+      String characterName,
+      String serverName,
+      Long rank,
+      long total,
+      Long point,
+      Long maxPoint) {}
+
+  CollectibleStanding collectibleStanding(
+      String characterName, String server, Instant since, boolean characterUnit);
 }

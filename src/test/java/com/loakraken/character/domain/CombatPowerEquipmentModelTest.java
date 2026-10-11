@@ -6,6 +6,7 @@ import java.math.BigDecimal;
 import java.math.MathContext;
 import java.math.RoundingMode;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.regex.Pattern;
 import org.junit.jupiter.api.Test;
@@ -129,10 +130,10 @@ class CombatPowerEquipmentModelTest {
 
   @Test
   void 확인하지_않은_조합은_배수를_주지_않는다() {
-    // 돌격대장 스톤 1·예리한 둔기는 계산하지 않는다.
+    // 돌격대장 스톤 1·슈퍼 차지(두 출처 값이 다름)는 계산하지 않는다.
     assertThat(CombatPowerEquipmentModel.engravingFactor(COEFFICIENTS, "돌격대장", 4, 1)).isNull();
-    assertThat(CombatPowerEquipmentModel.engravingFactor(COEFFICIENTS, "예리한 둔기", 4, 3)).isNull();
-    assertThat(CombatPowerEquipmentModel.supportsEngraving(COEFFICIENTS, "예리한 둔기")).isFalse();
+    assertThat(CombatPowerEquipmentModel.engravingFactor(COEFFICIENTS, "슈퍼 차지", 4, 3)).isNull();
+    assertThat(CombatPowerEquipmentModel.supportsEngraving(COEFFICIENTS, "슈퍼 차지")).isFalse();
     // 무기 추가 피해 = 10 + 20 × (품질/100)², 반올림 없음(계산 검증 10-11 17:25). 툴팁은 올림 값(95 → 28.06)이라 쓰지 않는다.
     assertThat(CombatPowerEquipmentModel.weaponAddDamage(99)).isEqualByComparingTo("29.602");
     assertThat(CombatPowerEquipmentModel.weaponAddDamage(95)).isEqualByComparingTo("28.05");
@@ -145,10 +146,79 @@ class CombatPowerEquipmentModelTest {
     assertThat(CombatPowerEquipmentModel.weaponAddDamage(75)).isEqualByComparingTo("21.25");
     assertThat(CombatPowerEquipmentModel.weaponAddDamage(0)).isEqualByComparingTo("10");
     assertThat(CombatPowerEquipmentModel.weaponAddDamage(101)).isNull();
-    // 스톤 합 5~7 안에서만 [레벨 보너스]가 그대로다.
-    assertThat(CombatPowerEquipmentModel.stoneBonusStable(COEFFICIENTS, 5, 7)).isTrue();
-    assertThat(CombatPowerEquipmentModel.stoneBonusStable(COEFFICIENTS, 5, 4)).isFalse();
-    assertThat(CombatPowerEquipmentModel.stoneBonusStable(COEFFICIENTS, 7, 8)).isFalse();
+    // 스톤 [레벨 보너스]: 공식 가이드 — 합 5 이상이면 1.5%, 그 밖 0(검증 표본 spec-up/cost-rules).
+    assertThat(CombatPowerEquipmentModel.stoneBonusPct(COEFFICIENTS, 4)).isZero();
+    for (int sum : new int[] {5, 7, 8, 10})
+      assertThat(CombatPowerEquipmentModel.stoneBonusPct(COEFFICIENTS, sum))
+          .isEqualByComparingTo("1.5");
+  }
+
+  @Test
+  void 각인_기여_표는_검증_표본과_같다() throws Exception {
+    // #344 표본: c(각인서 b, 스톤 s) = books[b] + stoneDelta[s]. 표본 표 20종 전부 칸마다 같아야 한다.
+    try (var in =
+        new ClassPathResource("verification/combat-power/loalab-engraving-cp-2026-10-11.json")
+            .getInputStream()) {
+      var sample = new JsonMapper().readTree(in);
+      var table = sample.path("loalabTable");
+      int cells = 0;
+      for (var name : table.propertyNames()) {
+        assertThat(CombatPowerEquipmentModel.supportsEngraving(COEFFICIENTS, name))
+            .as(name)
+            .isTrue();
+        for (int b = 0; b <= 4; b++)
+          for (int s = 0; s <= 4; s++) {
+            var expected =
+                table
+                    .path(name)
+                    .path("books")
+                    .get(b)
+                    .decimalValue()
+                    .add(table.path(name).path("stoneDelta").get(s).decimalValue());
+            var factor = CombatPowerEquipmentModel.engravingFactor(COEFFICIENTS, name, b, s);
+            assertThat(factor.subtract(BigDecimal.ONE).multiply(BigDecimal.valueOf(100)))
+                .as(name + " " + b + "/" + s)
+                .isEqualByComparingTo(expected);
+            cells++;
+          }
+      }
+      assertThat(cells).isEqualTo(20 * 25);
+      // 기여 0(두 출처)은 배수 1, 한 출처뿐인 각인은 계산하지 않는다.
+      for (var name : sample.path("zeroContribution").path("twoSources"))
+        assertThat(CombatPowerEquipmentModel.engravingFactor(COEFFICIENTS, name.asText(), 4, 4))
+            .isEqualByComparingTo("1");
+      for (var name : sample.path("zeroContribution").path("loalabOnly"))
+        assertThat(CombatPowerEquipmentModel.supportsEngraving(COEFFICIENTS, name.asText()))
+            .isFalse();
+      for (var name : List.of("슈퍼 차지", "속전속결"))
+        assertThat(CombatPowerEquipmentModel.supportsEngraving(COEFFICIENTS, name)).isFalse();
+    }
+    // 승부사는 각인서 4레벨만(스톤 0~4 = 2.1·2.4·2.48·2.63·2.7), L0~3은 null.
+    assertThat(CombatPowerEquipmentModel.engravingFactor(COEFFICIENTS, "승부사", 4, 2))
+        .isEqualByComparingTo("1.0248");
+    assertThat(CombatPowerEquipmentModel.engravingFactor(COEFFICIENTS, "승부사", 3, 0)).isNull();
+  }
+
+  @Test
+  void 공식_설명값_관계가_있는_각인은_지금_값을_확인한다() {
+    // 기습의 대가 공식 설명: 피해 v = 4.8 + 0.7 × 각인서 레벨 + 스톤(L4 S1 = 10.3).
+    var ok = engraving("기습의 대가", 4, 1, "백 어택 피해 15.00% 증가, 적에게 주는 피해가 10.30% 증가한다.");
+    assertThat(CombatPowerEquipmentModel.matchesOfficial(COEFFICIENTS, ok)).isTrue();
+    var wrong = engraving("기습의 대가", 4, 1, "적에게 주는 피해가 9.00% 증가한다.");
+    assertThat(CombatPowerEquipmentModel.matchesOfficial(COEFFICIENTS, wrong)).isFalse();
+    // 관계가 표본에 없는 각인(추진력)은 공식 레벨 필드만 쓴다.
+    assertThat(
+            CombatPowerEquipmentModel.matchesOfficial(COEFFICIENTS, engraving("추진력", 2, 0, "설명")))
+        .isTrue();
+    // 기여 0 각인은 배수 1이라 늘 통과한다.
+    assertThat(
+            CombatPowerEquipmentModel.matchesOfficial(COEFFICIENTS, engraving("급소 타격", 3, 0, "설명")))
+        .isTrue();
+  }
+
+  private static CharacterLoadout.PassiveEngraving engraving(
+      String name, int book, int stone, String description) {
+    return new CharacterLoadout.PassiveEngraving(stone, "유물", book, name, description);
   }
 
   @Test

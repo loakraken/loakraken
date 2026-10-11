@@ -409,7 +409,7 @@ public final class CritEffectTable {
 
   private static final List<SpeedRule> SPEED_RULES =
       List.of(
-          // 두 사이트 일치(츄델 기민함 48 = 신속 29.25 + 질풍노도 12)
+          // 두 사이트 일치(c09 기민함 48 = 신속 29.25 + 질풍노도 12)
           new SpeedRule("질풍노도", SpeedDecision.INCLUDE, null, "기본 포함"),
           // "진화형 피해가 12.0% 증가하고, 공격 속도가 4.0% 증가합니다."
           new SpeedRule("파괴 전차", SpeedDecision.INCLUDE, null, "조건 없는 문구"),
@@ -462,7 +462,7 @@ public final class CritEffectTable {
 
   public static final List<TripodSpeed> TRIPOD_SPEEDS =
       List.of(
-          // 건슬링어 기동 타격 "구르기 이후 8.0초 동안 공격 속도와 이동 속도가 19.2% 증가한다." — 두 사이트 포함(한국남자)
+          // 건슬링어 기동 타격 "구르기 이후 8.0초 동안 공격 속도와 이동 속도가 19.2% 증가한다." — 두 사이트 포함(c10)
           new TripodSpeed("날렵함", SpeedDecision.SITUATIONAL, "날렵함 8초 유지 가정", "트라이포드 버프 가정, 기본 끔"),
           // 배틀마스터 붕천퇴 "적에게 콤보 공격 적중 시 4.0초간 공격속도가 19.2% 증가하고 이동속도가 19.2% 증가한다." — 일로아만(리쿠)
           new TripodSpeed(
@@ -481,7 +481,7 @@ public final class CritEffectTable {
 
   public static final List<ClassSpeedBuff> CLASS_SPEED_BUFFS =
       List.of(
-          // 슬레이어 폭주: 두 사이트 공이속 +20(만배 21.86/31.86 → 41.86/51.86, 계산 검증 10-10 02:10)
+          // 슬레이어 폭주: 두 사이트 공이속 +20(c02 21.86/31.86 → 41.86/51.86, 계산 검증 10-10 02:10)
           new ClassSpeedBuff("폭주 상태 가정", "슬레이어", new BigDecimal("20"), new BigDecimal("20")));
 
   static SpeedRule speed(String nodeName) {

@@ -15,7 +15,7 @@ import org.springframework.core.io.ClassPathResource;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * 팔찌 모델(#327): 계산 검증 표본(loalab-bracelet-2026-10-11.json)의 전투력 기여 %(언새늘 12.60·만배 16.86·inzai 15.38,
+ * 팔찌 모델(#327): 계산 검증 표본(loalab-bracelet-2026-10-11.json)의 전투력 기여 %(언새늘 12.60·c02 16.86·c01 15.38,
  * 계산 검증 정정)와 추가 피해 +3.50% 한 줄 빼기(3,345.24 → 3,257.54)를 공식 문구 형식 입력으로 맞춘다. 전투 특성 합 T와 도약 P는 표본 줄별
  * 배수에서 나온 값이다.
  */
@@ -61,7 +61,7 @@ class CombatPowerBraceletModelTest {
   }
 
   @Test
-  void 만배_팔찌_기여와_소수점_없는_숫자_표기() {
+  void c02_팔찌_기여와_소수점_없는_숫자_표기() {
     var manbae =
         model(
             2601,
@@ -75,8 +75,8 @@ class CombatPowerBraceletModelTest {
     // 전투 특성 두 줄(치명 +95·신속 +118)은 모델 식 (1 + 0.0003·T)대로 함께 뺀다 → 16.86(계산 검증 회신: 표본 16.83은 줄별 배수 곱
     // 오류).
     assertThat(contribution(manbae)).isEqualByComparingTo("16.86");
-    // inzai: 공식 문구 "3%"·"5%"(소수점 없음)도 3.0·5.0 옵션으로 읽는다.
-    var inzai =
+    // c01: 공식 문구 "3%"·"5%"(소수점 없음)도 3.0·5.0 옵션으로 읽는다.
+    var c01 =
         model(
             2625,
             70,
@@ -86,8 +86,8 @@ class CombatPowerBraceletModelTest {
                 "적에게 주는 피해가 3% 증가한다.",
                 "치명타 적중률이 5% 증가한다.\n공격이 치명타로 적중 시 적에게 주는 피해가 1.5% 증가한다.",
                 "백어택 스킬이 적에게 주는 피해가 3% 증가한다."));
-    // inzai 공식 치특신 합 T = 576 + 1,852 + 197 = 2,625, 도약 70 → 15.38(계산 검증 정정).
-    assertThat(contribution(inzai)).isEqualByComparingTo("15.38");
+    // c01 공식 치특신 합 T = 576 + 1,852 + 197 = 2,625, 도약 70 → 15.38(계산 검증 정정).
+    assertThat(contribution(c01)).isEqualByComparingTo("15.38");
   }
 
   @Test

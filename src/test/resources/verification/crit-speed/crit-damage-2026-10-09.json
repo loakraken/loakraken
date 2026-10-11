@@ -4,7 +4,7 @@
   "field": "crit.damage.total",
   "unit": "%",
   "observed": {
-    "targetSites": "2026-10-09 16시대 KST 로펙 효율표 '치명타 피해량 상세'·일로아 스펙 계산 (inzai는 21시대 일로아)",
+    "targetSites": "2026-10-09 16시대 KST 로펙 효율표 '치명타 피해량 상세'·일로아 스펙 계산 (c01는 21시대 일로아)",
     "kraken": "2026-10-09 21시대 KST, 8090 로컬 검증 서버(develop + #161·#169·#174), 공식 armory 실조회. 원문은 저장하지 않음"
   },
   "rule": "기본 200% + 장비·팔찌·각인·아크 패시브·카드의 일반 '치명타 피해' 문구. 스킬 한정('…의 치명타 피해'), 받는 치명타 피해, 같은 문장 앞에 '상태에서'·'상태일 때'가 있는 효과는 제외(conditional). 각성 상시 효과('폭주 중', '마력 해방 중')는 포함",
@@ -24,7 +24,7 @@
       "status": "MATCH"
     },
     {
-      "character": "만배",
+      "character": "c02",
       "className": "슬레이어(포식자)",
       "expected": 277.4,
       "source": "TARGET_SITE",
@@ -38,7 +38,7 @@
       "status": "MATCH"
     },
     {
-      "character": "blasum",
+      "character": "c06",
       "className": "소서리스(점화)",
       "expected": 259.8,
       "source": "TARGET_SITE",
@@ -52,7 +52,7 @@
       "status": "MATCH"
     },
     {
-      "character": "라스장인유한상",
+      "character": "c07",
       "className": "소울이터",
       "expected": 257.2,
       "source": "TARGET_SITE",
@@ -68,7 +68,7 @@
       "status": "MATCH"
     },
     {
-      "character": "리승건",
+      "character": "c08",
       "className": "리퍼",
       "expected": 256.8,
       "expectedRange": [
@@ -89,7 +89,7 @@
       "status": "MATCH"
     },
     {
-      "character": "inzai",
+      "character": "c01",
       "className": "리퍼(갈증)",
       "expected": 208,
       "source": "TARGET_SITE",
@@ -104,7 +104,7 @@
   ],
   "openMismatch": [
     {
-      "character": "inzai",
+      "character": "c01",
       "field": "crit.observedRate",
       "status": "RULE_GAP",
       "note": "처음 본 차이(크라켄 66.76 대 사이트 40.82)는 사이트가 옛 세팅(전투력 6,673.94)을 보고 있던 탓이라 기대값으로 쓰지 않는다. 캐릭터가 같은 날 세팅을 여러 번 바꿨다.",

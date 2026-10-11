@@ -53,9 +53,9 @@ class CombatPowerRefineModelTest {
 
   @Test
   void 에스더_무기는_계산하지_않고_전율_방어구는_계산한다() {
-    // inzai: B 267,396, q 17.7%, F 9,050, W 고정 283,652(에스더 259,554 + 22,940 + 장신구 960 + 195 + 3),
+    // c01: B 267,396, q 17.7%, F 9,050, W 고정 283,652(에스더 259,554 + 22,940 + 장신구 960 + 195 + 3),
     // 무공% 3 + 3 + 3.0.
-    var inzai =
+    var c01 =
         loadout(
             10,
             25,
@@ -66,11 +66,11 @@ class CombatPowerRefineModelTest {
             List.of("+960", "+195", "+3", "+3.00%", "+3.00%"),
             30);
     var model =
-        CombatPowerRefineModel.of(coefficients, inzai, stats("267396"), new BigDecimal("17.7"));
+        CombatPowerRefineModel.of(coefficients, c01, stats("267396"), new BigDecimal("17.7"));
     assertThat(after("11028.4", model, Map.of(1, 24))).isEqualByComparingTo("11007.13");
     assertThat(after("11028.4", model, Map.of(1, 19))).isEqualByComparingTo("10907.74");
     assertThat(model.cannotSet(0, 11)).contains("전율·업화 장비만");
-    // 만배: W 고정 285,374(장신구 960 × 3).
+    // c02: W 고정 285,374(장신구 960 × 3).
     var manbae =
         loadout(
             10,

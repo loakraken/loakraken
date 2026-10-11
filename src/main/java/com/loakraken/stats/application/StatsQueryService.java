@@ -287,6 +287,56 @@ public class StatsQueryService {
         });
   }
 
+  /** 길드 랭킹 최소 관측 길드원 수(PM-백엔드 10-11 10:46 질문 1 답). */
+  public static final int GUILD_MIN_MEMBERS = 5;
+
+  /**
+   * 길드 랭킹(#301, 볼트 「랭킹 확장 설계 초안」 v1 3절). 조건 중 server·activeDays만 쓴다. 모집단은 순위에 든 길드 수이고, 30 미만이면
+   * sampleStatus=COLLECTING이지만 값·순위는 그대로 준다(참고값 원칙). 값은 소수 둘째 자리(HALF_UP)다.
+   */
+  public GuildRankingResult guildRanking(
+      StatsConditions conditions, StatsPort.GuildSort sort, int page, int size) {
+    int offset = (page - 1) * size;
+    if (offset > MAX_RANKING_OFFSET)
+      throw new BusinessException(StatsErrorCode.STATS_INVALID_RANGE);
+    return cached(
+        "guilds:" + sort + ":" + page + ":" + size + ":" + key(conditions),
+        GuildRankingResult.class,
+        () -> {
+          var now = clock.instant();
+          var result =
+              stats.guildRanking(
+                  conditions.server(),
+                  conditions.since(now),
+                  sort,
+                  GUILD_MIN_MEMBERS,
+                  offset,
+                  size);
+          return new GuildRankingResult(
+              meta(conditions, result.total(), now),
+              sort.name(),
+              page,
+              size,
+              GUILD_MIN_MEMBERS,
+              result.excluded(),
+              result.rows().stream()
+                  .map(
+                      row ->
+                          new RankedGuild(
+                              row.rank(),
+                              row.serverName(),
+                              row.guildName(),
+                              row.memberCount(),
+                              row.itemLevelAvg().setScale(2, RoundingMode.HALF_UP),
+                              row.itemLevelSum().setScale(2, RoundingMode.HALF_UP),
+                              row.combatPowerAvg() == null
+                                  ? null
+                                  : row.combatPowerAvg().setScale(2, RoundingMode.HALF_UP),
+                              row.combatPowerCount()))
+                  .toList());
+        });
+  }
+
   public RankingResult ranking(StatsConditions conditions, Metric metric, int page, int size) {
     int offset = (page - 1) * size;
     if (offset > MAX_RANKING_OFFSET)
@@ -613,6 +663,26 @@ public class StatsQueryService {
       long usedCharacters,
       BigDecimal value,
       List<StatsPort.RosterMember> composition) {}
+
+  /** 길드 랭킹 결과(#301). sort는 응답에서 문자열. */
+  public record GuildRankingResult(
+      Meta meta,
+      String sort,
+      int page,
+      int size,
+      int minMembers,
+      long excludedGuilds,
+      List<RankedGuild> rows) {}
+
+  public record RankedGuild(
+      long rank,
+      String serverName,
+      String guildName,
+      long memberCount,
+      BigDecimal itemLevelAvg,
+      BigDecimal itemLevelSum,
+      BigDecimal combatPowerAvg,
+      long combatPowerCount) {}
 
   public record RankingResult(
       Meta meta, Metric metric, int page, int size, List<RankedCharacter> rows) {}

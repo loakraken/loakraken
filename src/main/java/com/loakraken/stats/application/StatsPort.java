@@ -176,4 +176,31 @@ public interface StatsPort {
       String server,
       Instant since,
       RosterBasis basis);
+
+  /** 길드 랭킹 정렬(#301). 요청 값만 이 enum이고 응답에는 문자열로 나간다. */
+  enum GuildSort {
+    AVG,
+    SUM
+  }
+
+  /** 길드 랭킹 행(#301). 평균·합은 관측한 공개 길드원의 아이템 레벨(반올림 전). */
+  record GuildRow(
+      long rank,
+      String serverName,
+      String guildName,
+      long memberCount,
+      BigDecimal itemLevelAvg,
+      BigDecimal itemLevelSum,
+      BigDecimal combatPowerAvg,
+      long combatPowerCount) {}
+
+  /** excluded: 관측 길드원이 최소 인원 미만이라 뺀 길드 수. */
+  record GuildPage(long total, long excluded, List<GuildRow> rows) {}
+
+  /**
+   * 길드 랭킹(#301). since 뒤에 프로필을 관측한 공개 캐릭터를 (서버, 길드 이름)으로 묶고, 관측 길드원이 minMembers 미만인 길드는 뺀다. sort 값
+   * 내림차순으로 같은 순위(RANK, 소수 둘째 자리 기준)를 매긴다.
+   */
+  GuildPage guildRanking(
+      String server, Instant since, GuildSort sort, int minMembers, int offset, int limit);
 }

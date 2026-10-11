@@ -225,11 +225,17 @@ public class CombatPowerController {
           new PolishValuesResponse(
               value.polishValues().version(),
               value.polishValues().accessoryGrade(),
+              value.polishValues().itemLevel(),
               value.polishValues().options().stream()
                   .map(
                       item ->
                           new PolishValueResponse(
-                              item.option(), item.percent(), item.low(), item.mid(), item.high()))
+                              item.option(),
+                              item.percent(),
+                              item.parts(),
+                              item.low(),
+                              item.mid(),
+                              item.high()))
                   .toList()),
           value.notes());
     }
@@ -238,11 +244,13 @@ public class CombatPowerController {
   public record PolishValuesResponse(
       @Schema(description = "수치 표 버전") String version,
       @Schema(description = "장신구 등급(지금은 고대만)") String accessoryGrade,
+      @Schema(description = "수치가 맞는 장신구 아이템 레벨(지금은 1680만)", example = "1680") Integer itemLevel,
       List<PolishValueResponse> options) {}
 
   public record PolishValueResponse(
       @Schema(description = "연마 옵션 이름(공식 툴팁 그대로)") String option,
       @Schema(description = "true: % 옵션, false: 고정값 옵션(같은 이름의 공격력·무기 공격력을 가른다)") boolean percent,
+      @Schema(description = "이 옵션이 붙는 부위(공식 연마 확률 정보: 목걸이·귀걸이·반지)") List<String> parts,
       @Schema(description = "하", example = "+0.70%") @NullableResponse String low,
       @Schema(description = "중", example = "+1.60%") @NullableResponse String mid,
       @Schema(description = "상", example = "+2.60%") @NullableResponse String high) {}

@@ -204,7 +204,7 @@ class CombatPowerSimulationIntegrationTest {
     assertThat(data.path("verified").asBoolean()).isFalse();
     assertThat(data.path("gemLevels").size()).isEqualTo(11);
     assertThat(data.path("refineMax").asInt()).isEqualTo(25);
-    // 연마 수치(#251): 공식 툴팁 표기 그대로, 확인하지 못한 칸은 null.
+    // 연마 수치(#251): 공식 툴팁 표기 그대로, 부위는 공식 연마 확률 정보.
     var polish = data.at("/polishValues/options");
     assertThat(data.at("/polishValues/accessoryGrade").asText()).isEqualTo("고대");
     assertThat(polish.at("/0/option").asText()).isEqualTo("추가 피해");
@@ -215,7 +215,10 @@ class CombatPowerSimulationIntegrationTest {
             .filter(item -> item.path("option").asText().equals("아군 피해량 강화 효과"))
             .findFirst()
             .orElseThrow();
-    assertThat(allyDamage.path("mid").isNull()).isTrue();
+    // 빈 칸 3개는 추가 표본에서 등급 색으로 확인했다(polish-values-v2).
+    assertThat(allyDamage.path("mid").asText()).isEqualTo("+4.50%");
+    assertThat(data.at("/polishValues/itemLevel").asInt()).isEqualTo(1680);
+    assertThat(polish.at("/0/parts/0").asText()).isEqualTo("목걸이");
     assertThat(
             polish
                 .valueStream()

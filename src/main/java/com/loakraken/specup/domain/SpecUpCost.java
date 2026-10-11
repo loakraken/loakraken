@@ -29,6 +29,15 @@ public record SpecUpCost(String unit, Long amount, String status, String code, S
           "BOOK_COUNT_UNCONFIRMED",
           "각인 레벨당 필요한 각인서 수를 아직 확인하지 않아 비용을 계산하지 않았습니다.");
 
+  /** 재련·상급 재련 후보(시뮬레이터가 계산하는 경우): 재련 비용은 아직 연결하지 않았다(L30 후속). */
+  public static final SpecUpCost REFINE_COST_UNCONFIRMED =
+      new SpecUpCost(
+          "GOLD",
+          null,
+          "UNKNOWN",
+          "REFINE_COST_UNCONFIRMED",
+          "재련 비용(재련 계획의 기대 소모 × 재료 시세)을 아직 연결하지 않아 비용을 계산하지 않았습니다.");
+
   /**
    * 거래소(경매장) 판매 수수료: 판매 금액 전체의 5%, 1골드 미만 올림(계산 검증 10-11 20:35, 두 출처 이상). 레이드 경매 분배금 규칙(10만 골드
    * 초과분)과 다르다.

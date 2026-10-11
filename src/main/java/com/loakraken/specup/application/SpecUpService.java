@@ -8,6 +8,7 @@ import com.loakraken.character.domain.CharacterLoadout;
 import com.loakraken.character.domain.CombatPowerReasons;
 import com.loakraken.common.api.BusinessException;
 import com.loakraken.market.application.MarketAuctionService;
+import com.loakraken.market.application.RelicBookPriceService;
 import com.loakraken.specup.domain.SpecUpCost;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -37,14 +38,17 @@ public class SpecUpService {
 
   private final CombatPowerSimulationService simulator;
   private final MarketAuctionService auctions;
+  private final RelicBookPriceService books;
   private final boolean enabled;
 
   public SpecUpService(
       CombatPowerSimulationService simulator,
       MarketAuctionService auctions,
+      RelicBookPriceService books,
       @Value("${spec-up.enabled:false}") boolean enabled) {
     this.simulator = simulator;
     this.auctions = auctions;
+    this.books = books;
     this.enabled = enabled;
   }
 
@@ -99,7 +103,7 @@ public class SpecUpService {
     var planned = new ArrayList<Planned>();
     gems(loadout, prices, pricesAt, planned);
     quality(loadout, planned);
-    engravings(loadout, planned);
+    engravings(loadout, books::price, pricesAt, planned);
     refines(loadout, planned);
     others(loadout, planned);
 
@@ -279,8 +283,16 @@ public class SpecUpService {
     }
   }
 
-  /** 유물 각인서 +1: 장착 각인마다 레벨 + 1(4 미만). 비용은 권수 근거 전까지 UNKNOWN(결정 ②). */
-  private static void engravings(CharacterLoadout loadout, List<Planned> planned) {
+  /**
+   * 유물 각인서 +1: 장착 각인마다 레벨 + 1(4 미만). 비용(L30) = 5권 × 유물 각인서 즉시 구매 최저가(예열 캐시만, 없으면 PRICE_PENDING).
+   * 유물이 아닌 각인은 권수·시세 근거가 없어 UNKNOWN이다.
+   */
+  private static void engravings(
+      CharacterLoadout loadout,
+      java.util.function.Function<String, java.util.Optional<RelicBookPriceService.Price>>
+          bookPrice,
+      Instant[] pricesAt,
+      List<Planned> planned) {
     if (loadout.engravings() == null) return;
     for (var engraving : loadout.engravings().arkPassiveEffects()) {
       if (engraving == null || engraving.name() == null || engraving.level() == null) continue;
@@ -311,8 +323,22 @@ public class SpecUpService {
                   null,
                   null,
                   null),
-              SpecUpCost.BOOK_COUNT_UNCONFIRMED));
+              bookCost(engraving, bookPrice, pricesAt)));
     }
+  }
+
+  private static SpecUpCost bookCost(
+      CharacterLoadout.PassiveEngraving engraving,
+      java.util.function.Function<String, java.util.Optional<RelicBookPriceService.Price>>
+          bookPrice,
+      Instant[] pricesAt) {
+    if (!RelicBookPriceService.GRADE.equals(engraving.grade()))
+      return SpecUpCost.BOOK_COUNT_UNCONFIRMED;
+    var price = bookPrice.apply(engraving.name()).orElse(null);
+    if (price == null) return SpecUpCost.BOOK_PRICE_PENDING;
+    if (pricesAt[0] == null || price.observedAt().isBefore(pricesAt[0]))
+      pricesAt[0] = price.observedAt();
+    return SpecUpCost.engravingBooks(price.unitPrice());
   }
 
   /** 재련 +1·상급 재련 +1: 무기·방어구마다. 지금은 전투력 계산식이 미확정이라 UNSUPPORTED로 남는다. */

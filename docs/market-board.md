@@ -87,10 +87,20 @@
 | `market.warmup.item-ids` | T4 재련 재료 11, 숨결 2, 업화 책 6(공식 ID) | — |
 | `market.warmup.board-interval` | 30초(가격 캐시 TTL과 같음) | `MARKET_WARMUP_BOARD_INTERVAL` |
 | `market.warmup.board-tabs` | REFINING | — |
-| `market.warmup.max-calls-per-minute` | 15(이력·보드 합산) | `MARKET_WARMUP_MAX_CALLS_PER_MINUTE` |
+| `market.warmup.max-calls-per-minute` | 15(이력·보드·각인서 합산) | `MARKET_WARMUP_MAX_CALLS_PER_MINUTE` |
+| `market.warmup.relic-books.enabled` | false(L30 기능 플래그) | `MARKET_WARMUP_RELIC_BOOKS_ENABLED` |
+| `market.warmup.relic-books.interval` | 30분(캐시 TTL = 주기 × 3 = 90분) | `MARKET_WARMUP_RELIC_BOOKS_INTERVAL` |
+| `market.warmup.relic-books.max-pages` | 10 | `MARKET_WARMUP_RELIC_BOOKS_MAX_PAGES` |
 
 - 예산: 이력 19회 / 9분(분당 약 2회) + 기본 보드 2회/분. 예열 전체는 분당 15회를 넘지 않고, 넘으면 그 분의 나머지를 건너뛴다(`outcome=capped`). 이력·보드 예열은 같은 리더 임대(`market-warmup`)를 써서 한 인스턴스에서만 돈다. 그래서 인스턴스 안 분당 카운터가 합산 상한을 지킨다(#158 P2).
 - API 키가 없으면 아무것도 하지 않는다. 테스트 태스크(`build.gradle`)는 예열을 끈다.
 - 품목별 실패는 격리하고 예외 유형만 기록한다. 호출 한도 초과(429)를 만나면 이번 주기를 멈춘다.
-- 지표 `loakraken.market.warmup{target=history|board, outcome=refreshed|not_found|failed|capped}`
+- 지표 `loakraken.market.warmup{target=history|board|relic_books, outcome=refreshed|not_found|failed|capped}`, 마지막 성공 게이지 `loakraken.background.last_success{job=warmup_relic_books}`
+
+## 유물 각인서 시세 예열 (L30, 스펙업 각인서 비용)
+
+- 1분마다 확인해 주기(기본 30분)가 되면 공식 거래소 각인서(40000)·유물 등급 전체를 1페이지부터 받는다. 2026-10-12 기준 43종, 5페이지다.
+- 다 받으면 `market:v1:relic-books`(TTL 90분)에 저장한다. 분당 상한에 걸리면 받은 페이지를 기억해 두고 다음 틱(1분 뒤)에 이어 받는다. 공식 오류(429·게이트)는 같은 페이지부터 다음 틱에 다시, 그 밖 오류는 처음부터 5분 뒤에 다시 받는다.
+- 호출은 게이트 `withReserve(40)`(사용자 몫을 남김)로 감싼다. 몫: 각인서 5회 / 30분(분당 평균 0.17회). 이력(19회/9분) + 보드(2회/분)와 합쳐도 분당 15 상한 안이다.
+- 읽기(`RelicBookPriceService.price`)는 캐시만 쓴다. 품목 이름은 "유물 {각인} 각인서"이고 띄어쓰기가 각인 이름과 다를 수 있어(예: "실드관통") 공백을 빼고 맞춘다. 묶음이면 1권 값을 올림한다.
 - 2026-10-08 실서버: 시작 20초 후 이력 키 19개가 적재됐고, 재련 재료 보드 첫 페이지 10행 모두 `historyAvailable=true`였다.

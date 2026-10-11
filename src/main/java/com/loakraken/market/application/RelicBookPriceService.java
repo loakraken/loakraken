@@ -48,7 +48,8 @@ public class RelicBookPriceService {
                     item ->
                         new Price(
                             item.currentMinPrice()
-                                .divide(BigDecimal.valueOf(item.bundleCount()), 0, RoundingMode.CEILING)
+                                .divide(
+                                    BigDecimal.valueOf(item.bundleCount()), 0, RoundingMode.CEILING)
                                 .longValue(),
                             value.observedAt())));
   }
@@ -63,7 +64,7 @@ public class RelicBookPriceService {
     cache.saveRelicBooks(scan, ttl);
   }
 
-  static MarketSearch search(int page) {
+  public static MarketSearch search(int page) {
     return new MarketSearch(
         MarketTab.ENGRAVING_BOOK.categoryCode(),
         "",

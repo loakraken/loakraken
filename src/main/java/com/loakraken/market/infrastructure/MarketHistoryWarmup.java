@@ -7,8 +7,11 @@ import com.loakraken.common.lostark.LostArkProperties;
 import com.loakraken.common.lostark.LostArkRequestGate;
 import com.loakraken.market.application.MarketBoardService;
 import com.loakraken.market.application.MarketQueryService;
+import com.loakraken.market.application.RelicBookPriceService;
+import com.loakraken.market.application.RelicBookScan;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Clock;
+import java.time.Instant;
 import java.util.Locale;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -174,8 +177,8 @@ class MarketHistoryWarmup {
   }
 
   /**
-   * 유물 각인서 시세(L30): 주기(기본 30분)마다 유물 각인서 전체(2026-10-12 43종, 5페이지)를 받아 캐시(TTL = 주기 × 3)에 둔다. 1분마다 확인하고, 예열
-   * 분당 상한(이력·보드와 함께)에 걸리면 다음 틱에 남은 페이지를 이어 받는다.
+   * 유물 각인서 시세(L30): 주기(기본 30분)마다 유물 각인서 전체(2026-10-12 43종, 5페이지)를 받아 캐시(TTL = 주기 × 3)에 둔다. 1분마다
+   * 확인하고, 예열 분당 상한(이력·보드와 함께)에 걸리면 다음 틱에 남은 페이지를 이어 받는다.
    */
   @Scheduled(fixedDelayString = "60s", initialDelayString = "${market.warmup.initial-delay:20s}")
   void warmRelicBooks() {
@@ -194,7 +197,8 @@ class MarketHistoryWarmup {
     if (!lease.hold(LEASE, properties.interval().plusMinutes(1))) return;
     while (true) {
       int page = relicPage + 1;
-      if (relicPage > 0 && (page > relicBookProperties.maxPages() || (page - 1) * 10 >= relicTotal)) {
+      if (relicPage > 0
+          && (page > relicBookProperties.maxPages() || (page - 1) * 10 >= relicTotal)) {
         relicBooks.save(
             new RelicBookScan(relicObservedAt, relicTotal, java.util.List.copyOf(relicItems)),
             relicBookProperties.cacheTtl());
@@ -223,7 +227,8 @@ class MarketHistoryWarmup {
         return;
       } catch (RuntimeException exception) {
         recordRelic(Outcome.FAILED);
-        log.warn("각인서 시세 예열에 실패했습니다. page={}, exceptionType={}", page, exception.getClass().getName());
+        log.warn(
+            "각인서 시세 예열에 실패했습니다. page={}, exceptionType={}", page, exception.getClass().getName());
         resetRelic();
         relicDueAt = now.plus(java.time.Duration.ofMinutes(5));
         return;

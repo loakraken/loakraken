@@ -16,7 +16,12 @@ import com.loakraken.common.lostark.LostArkRequestGate;
 import com.loakraken.market.application.MarketBoardService;
 import com.loakraken.market.application.MarketItemHistoryResult;
 import com.loakraken.market.application.MarketQueryService;
+import com.loakraken.market.application.MarketResult;
+import com.loakraken.market.application.MarketSource;
+import com.loakraken.market.application.RelicBookPriceService;
+import com.loakraken.market.application.RelicBookScan;
 import com.loakraken.market.domain.MarketItemHistory;
+import com.loakraken.market.domain.MarketPrice;
 import com.loakraken.market.domain.MarketTab;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.net.URI;
@@ -32,6 +37,9 @@ class MarketHistoryWarmupTest {
   private final MutableClock clock = new MutableClock();
   private final LostArkRequestGate gate = mock(LostArkRequestGate.class);
   private final LeaderLease lease = mock(LeaderLease.class);
+  private final RelicBookPriceService relicBooks = mock(RelicBookPriceService.class);
+  private RelicBookWarmupProperties relicProperties =
+      new RelicBookWarmupProperties(false, Duration.ofMinutes(30), 10);
 
   {
     when(lease.hold(any(), any())).thenReturn(true);
@@ -196,7 +204,74 @@ class MarketHistoryWarmupTest {
         lostArk,
         registry,
         gate,
-        lease);
+        lease,
+        relicBooks,
+        relicProperties);
+  }
+
+  @Test
+  void 각인서_예열은_플래그가_꺼져_있으면_부르지_않는다() {
+    warmup("key", List.of()).warmRelicBookPages();
+    verifyNoInteractions(relicBooks);
+  }
+
+  @Test
+  void 각인서_예열은_전체_페이지를_모아_주기의_3배_TTL로_저장하고_주기_전에는_다시_부르지_않는다() {
+    relicProperties = new RelicBookWarmupProperties(true, Duration.ofMinutes(30), 10);
+    for (int page = 1; page <= 3; page++)
+      when(relicBooks.fetchPage(page)).thenReturn(page(page, 23));
+    var warmup = warmup("key", List.of());
+    warmup.warmRelicBookPages();
+    verify(relicBooks, times(3)).fetchPage(anyInt());
+    var scan = org.mockito.ArgumentCaptor.forClass(RelicBookScan.class);
+    verify(relicBooks).save(scan.capture(), eq(Duration.ofMinutes(90)));
+    assertThat(scan.getValue().items()).hasSize(23);
+    assertThat(scan.getValue().totalItems()).isEqualTo(23);
+    assertThat(count("refreshed")).isEqualTo(1);
+    // 주기(30분) 전에는 부르지 않는다.
+    clock.now = clock.now.plus(Duration.ofMinutes(10));
+    warmup.warmRelicBookPages();
+    verify(relicBooks, times(3)).fetchPage(anyInt());
+    clock.now = clock.now.plus(Duration.ofMinutes(21));
+    warmup.warmRelicBookPages();
+    verify(relicBooks, times(6)).fetchPage(anyInt());
+  }
+
+  @Test
+  void 각인서_예열은_분당_상한에_걸리면_다음_틱에_남은_페이지를_이어_받는다() {
+    relicProperties = new RelicBookWarmupProperties(true, Duration.ofMinutes(30), 10);
+    for (int page = 1; page <= 3; page++)
+      when(relicBooks.fetchPage(page)).thenReturn(page(page, 23));
+    var warmup = warmup("key", List.of(), 2);
+    warmup.warmRelicBookPages();
+    verify(relicBooks, times(2)).fetchPage(anyInt());
+    verify(relicBooks, never()).save(any(), any());
+    assertThat(count("capped")).isEqualTo(1);
+    clock.now = clock.now.plus(Duration.ofMinutes(1));
+    warmup.warmRelicBookPages();
+    verify(relicBooks).fetchPage(3);
+    verify(relicBooks).save(any(), eq(Duration.ofMinutes(90)));
+  }
+
+  private MarketResult page(int page, int total) {
+    var items = new java.util.ArrayList<MarketPrice>();
+    for (int i = (page - 1) * 10; i < Math.min(page * 10, total); i++)
+      items.add(
+          new MarketPrice(
+              1000 + i,
+              "유물 각인" + i + " 각인서",
+              "유물",
+              null,
+              1,
+              null,
+              null,
+              null,
+              java.math.BigDecimal.valueOf(100 + i)));
+    return new MarketResult(
+        MarketSource.ACTIVE_LISTING,
+        clock.now,
+        RelicBookPriceService.search(page),
+        new com.loakraken.market.application.MarketPage(page, 10, total, items));
   }
 
   private double count(String outcome) {

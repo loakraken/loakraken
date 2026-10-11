@@ -27,6 +27,7 @@ public final class CombatPowerEquipmentModel {
   private static final MathContext MATH = MathContext.DECIMAL64;
   private static final BigDecimal HUNDRED = BigDecimal.valueOf(100);
   private static final Pattern ADD_DAMAGE = Pattern.compile("^추가 피해 \\+([\\d.]+)%$");
+  private static final Pattern PERCENT = Pattern.compile("([\\d.]+)%");
   public static final String ADRENALINE = "아드레날린";
   public static final String ASSAULT_CAPTAIN = "돌격대장";
   public static final Set<String> ARMOR = Set.of("투구", "상의", "하의", "장갑", "어깨");
@@ -35,6 +36,7 @@ public final class CombatPowerEquipmentModel {
   public record Coefficients(
       String ruleVersion,
       Map<String, String> source,
+      String weaponQualityAddDamageSource,
       Map<Integer, BigDecimal> weaponQualityAddDamage,
       DamageEngravings damageEngravings,
       Adrenaline adrenaline,
@@ -101,8 +103,8 @@ public final class CombatPowerEquipmentModel {
   }
 
   /**
-   * 공식 각인 설명에 계수표 값이 그대로 있는지. 원한 등은 v%, 아드레날린은 중첩당 공격력·최대 중첩 치명, 돌격대장은 v%. 등급이 유물이 아니거나 설명이 없으면
-   * false.
+   * 공식 각인 설명의 효과 수치가 계수표 값과 같은지. 설명에 나오는 순서대로 % 값을 읽어, 원한 등·돌격대장은 첫째 값이 v, 아드레날린은 첫째가 중첩당 공격력·둘째가
+   * 최대 중첩 치명이어야 한다(#290: 페널티 문구 등 다른 수치가 우연히 같아도 통과하지 않게). 등급이 유물이 아니거나 설명이 없으면 false.
    */
   public static boolean matchesOfficial(
       Coefficients c, CharacterLoadout.PassiveEngraving engraving) {
@@ -124,17 +126,17 @@ public final class CombatPowerEquipmentModel {
               .get(name)
               .add(damage.perBook().multiply(BigDecimal.valueOf(book)))
               .add(add);
-      return text.contains(percent(v));
+      return percentAt(text, 0, v);
     }
     if (ADRENALINE.equals(name)) {
       var attack = c.adrenaline().stackAttackByStone().get(stone);
       return attack != null
-          && text.contains(percent(attack))
-          && text.contains(percent(adrenalineCrit(c.adrenaline(), book)));
+          && percentAt(text, 0, attack)
+          && percentAt(text, 1, adrenalineCrit(c.adrenaline(), book));
     }
     if (ASSAULT_CAPTAIN.equals(name)) {
       var v = assaultCaptainValue(c.assaultCaptain(), book, stone);
-      return v != null && text.contains(percent(v));
+      return v != null && percentAt(text, 0, v);
     }
     return false;
   }
@@ -185,7 +187,14 @@ public final class CombatPowerEquipmentModel {
         : a.base().add(a.perBook().multiply(BigDecimal.valueOf(book))).add(add);
   }
 
-  private static String percent(BigDecimal value) {
-    return value.setScale(2, RoundingMode.HALF_UP).toPlainString() + "%";
+  /** 설명에서 index번째(0부터) % 값이 expected와 같은지(소수 둘째 자리). */
+  private static boolean percentAt(String text, int index, BigDecimal expected) {
+    var matcher = PERCENT.matcher(text);
+    for (int i = 0; matcher.find(); i++)
+      if (i == index)
+        return new BigDecimal(matcher.group(1))
+                .compareTo(expected.setScale(2, RoundingMode.HALF_UP))
+            == 0;
+    return false;
   }
 }

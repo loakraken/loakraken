@@ -91,6 +91,9 @@ class CombatPowerEquipmentModelTest {
     assertThat(matches(0, null, "돌격대장", "이동속도 증가량의 40.00% 만큼 적에게 주는 피해량이 증가한다.")).isTrue();
     // 설명값이 표와 다르면(예: 패치로 값이 바뀜) 계산하지 않는다.
     assertThat(matches(0, 2, "원한", "보스 및 레이드 몬스터에게 주는 피해가 22.00% 증가")).isFalse();
+    // 효과 수치(첫째 % 값)가 표와 다르면, 뒤의 다른 수치가 우연히 같아도 통과하지 않는다(#290). 저주받은 인형 L0 S4 = 20.00.
+    assertThat(matches(0, 4, "저주받은 인형", "공격력이 25.00% 증가하지만, 받는 피해가 20.00% 증가한다.")).isFalse();
+    assertThat(matches(0, 4, "저주받은 인형", "공격력이 20.00% 증가하지만, 받는 피해가 20.00% 증가한다.")).isTrue();
     // 유물이 아니면 표가 없다.
     assertThat(
             CombatPowerEquipmentModel.matchesOfficial(
@@ -105,7 +108,12 @@ class CombatPowerEquipmentModelTest {
     assertThat(CombatPowerEquipmentModel.engravingFactor(COEFFICIENTS, "돌격대장", 4, 1)).isNull();
     assertThat(CombatPowerEquipmentModel.engravingFactor(COEFFICIENTS, "예리한 둔기", 4, 3)).isNull();
     assertThat(CombatPowerEquipmentModel.supportsEngraving(COEFFICIENTS, "예리한 둔기")).isFalse();
-    assertThat(CombatPowerEquipmentModel.weaponAddDamage(COEFFICIENTS, 95)).isNull();
+    assertThat(CombatPowerEquipmentModel.weaponAddDamage(COEFFICIENTS, 73)).isNull();
+    // 공식 무기 툴팁 실측 표(#290): 95 = 28.06, 70 = 19.81.
+    assertThat(CombatPowerEquipmentModel.weaponAddDamage(COEFFICIENTS, 95))
+        .isEqualByComparingTo("28.06");
+    assertThat(CombatPowerEquipmentModel.weaponAddDamage(COEFFICIENTS, 70))
+        .isEqualByComparingTo("19.81");
     // 스톤 합 5~7 안에서만 [레벨 보너스]가 그대로다.
     assertThat(CombatPowerEquipmentModel.stoneBonusStable(COEFFICIENTS, 5, 7)).isTrue();
     assertThat(CombatPowerEquipmentModel.stoneBonusStable(COEFFICIENTS, 5, 4)).isFalse();

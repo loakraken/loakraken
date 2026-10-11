@@ -37,7 +37,7 @@ import org.springframework.stereotype.Service;
  */
 @Service
 public class CombatPowerSimulationService {
-  public static final String RULE_VERSION = "combat-power-sim-v5";
+  public static final String RULE_VERSION = "combat-power-sim-v6";
   private static final MathContext MATH = MathContext.DECIMAL64;
   private static final String GEM_BASIS =
       "보석 레벨별 배수와 기본 공격력 %(보석·스톤 레벨 보너스·완갑 추가 효과, 공식 툴팁)로 바뀐 비율을 공식 전투력에 곱했습니다.";
@@ -54,7 +54,6 @@ public class CombatPowerSimulationService {
       "재련 단계의 주스탯·무기 공격력 변화로 기본 공격력을 다시 계산한 비율을 공식 전투력에 곱했습니다(펫 효과(힘민지 +1%)는 있다고 가정).";
   private static final String BRACELET_BASIS =
       "팔찌 옵션의 전투력 배수(특수 옵션 계수·전투 특성 0.03%/점·고정 무기 공격력)를 바꾼 비율을 공식 전투력에 곱했습니다.";
-  private static final String ADVANCED_REFINE_BASIS = "상급 재련 단계의 전투력 계산식을 아직 확인하지 않아 계산하지 않았습니다.";
 
   /** 서포터 전투력은 케어 + 버프로 식이 다르다(계산 검증 #331). 서포터 모델 구현 전에는 딜러 식을 쓰지 않는다(PM-백엔드 P0 10-11 20:23). */
   public static final String SUPPORTER_BASIS = CombatPowerReasons.SUPPORTER_MODEL_PENDING.text();
@@ -350,8 +349,10 @@ public class CombatPowerSimulationService {
 
   private record EngravingEffect(String name, Integer book, Integer stone) implements Effect {}
 
-  /** 재련 단계(#319): 장비 순번 → 새 단계. */
-  private record RefineEffect(int index, int level) implements Effect {}
+  /** 재련 단계(#319·#333): 장비 순번 → 새 일반·상급 단계(null이면 그대로). current는 지금 단계. */
+  private record RefineEffect(
+      int index, Integer level, Integer advanced, CombatPowerRefineModel.Target current)
+      implements Effect {}
 
   /** 팔찌 효과 줄(#327): 줄 번호 → 새 줄(빼기 포함). */
   private record BraceletEffect(int line, CombatPowerBraceletModel.Line next) implements Effect {}
@@ -364,7 +365,7 @@ public class CombatPowerSimulationService {
       Map<Integer, Integer> gems,
       BigDecimal weaponAddDamage,
       Map<String, EngravingLevels> engravings,
-      Map<Integer, Integer> refines,
+      Map<Integer, CombatPowerRefineModel.Target> refines,
       Map<Integer, CombatPowerBraceletModel.Line> bracelet) {
     State apply(Effect effect, Map<String, CharacterLoadout.PassiveEngraving> currents) {
       return switch (effect) {
@@ -377,7 +378,12 @@ public class CombatPowerSimulationService {
             new State(gems, quality.addDamage(), engravings, refines, bracelet);
         case RefineEffect refine -> {
           var next = new HashMap<>(refines);
-          next.put(refine.index(), refine.level());
+          var base = refines.getOrDefault(refine.index(), refine.current());
+          next.put(
+              refine.index(),
+              new CombatPowerRefineModel.Target(
+                  refine.level() != null ? refine.level() : base.level(),
+                  refine.advanced() != null ? refine.advanced() : base.advanced()));
           yield new State(gems, weaponAddDamage, engravings, Map.copyOf(next), bracelet);
         }
         case BraceletEffect line -> {
@@ -465,7 +471,7 @@ public class CombatPowerSimulationService {
     if (!state.refines().isEmpty()
         || weaponFlatDelta.signum() != 0
         || mainStatDelta.signum() != 0) {
-      var refine = refineModel.ratio(state.refines(), weaponFlatDelta, mainStatDelta);
+      var refine = refineModel.ratioTargets(state.refines(), weaponFlatDelta, mainStatDelta);
       if (refine == null) return null;
       ratio = ratio.multiply(refine, MATH);
     }
@@ -615,7 +621,11 @@ public class CombatPowerSimulationService {
               item.name(),
               str(detail.refineLevel()),
               str(change.refine()),
-              new RefineEffect(change.index(), change.refine()),
+              new RefineEffect(
+                  change.index(),
+                  change.refine(),
+                  null,
+                  currentTarget(refineModel, change.index())),
               REFINE_BASIS,
               refineModel.cannotSet(change.index(), change.refine()));
         }
@@ -625,9 +635,10 @@ public class CombatPowerSimulationService {
             item.name(),
             str(detail.advancedRefineLevel()),
             str(change.level()),
-            null,
-            null,
-            ADVANCED_REFINE_BASIS);
+            new RefineEffect(
+                change.index(), null, change.level(), currentTarget(refineModel, change.index())),
+            REFINE_BASIS,
+            refineModel.cannotSetAdvanced(change.index(), change.level()));
       }
       case POLISH -> {
         var item = equipment(loadout, change.index());
@@ -759,6 +770,15 @@ public class CombatPowerSimulationService {
             change.grade() + " " + change.point() + "P");
       }
     };
+  }
+
+  /** 재련 모델이 아는 부위의 지금 단계. 모르는 부위면 (0, 0)(그 변경은 cannotSet 이유로 계산하지 않는다). */
+  private static CombatPowerRefineModel.Target currentTarget(
+      CombatPowerRefineModel.Model refineModel, Integer index) {
+    var part = index == null ? null : refineModel.part(index);
+    return part == null
+        ? new CombatPowerRefineModel.Target(0, 0)
+        : new CombatPowerRefineModel.Target(part.level(), part.advanced());
   }
 
   private static CharacterLoadout.Equipment equipment(CharacterLoadout loadout, Integer index) {

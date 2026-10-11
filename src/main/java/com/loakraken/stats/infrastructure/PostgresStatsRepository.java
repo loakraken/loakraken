@@ -1,6 +1,7 @@
 package com.loakraken.stats.infrastructure;
 
 import com.loakraken.stats.application.StatsPort;
+import com.loakraken.stats.application.StatsPort.GuildSort;
 import com.loakraken.stats.application.StatsPort.RosterAggregate;
 import com.loakraken.stats.application.StatsPort.RosterBasis;
 import com.loakraken.stats.domain.StatsConditions;
@@ -387,6 +388,79 @@ class PostgresStatsRepository implements StatsPort {
                   .add(new RosterMember(row.getString(2), row.getString(3), row.getBigDecimal(4)));
             });
     return result;
+  }
+
+  /**
+   * 길드 랭킹 공통 CTE(#301). 길드 이름은 관측 이력 기록(profile_refreshed_at도 함께 갱신)에서만 쓰므로, 관측 =
+   * profile_refreshed_at이 since 뒤(검색 스냅숏만 갱신된 행은 길드 이름이 오래됐을 수 있어 뺀다). %ORDER%는 GuildSort에서만 오는 고정
+   * 식이다.
+   */
+  private static final String GUILD_RANKED =
+      """
+      WITH guilds AS (
+        SELECT c.server_name, c.guild_name, COUNT(*) AS member_count, AVG(c.item_level) AS il_avg,
+          SUM(c.item_level) AS il_sum,
+          AVG(c.combat_power) FILTER (WHERE c.combat_power IS NOT NULL) AS cp_avg,
+          COUNT(c.combat_power) AS cp_count
+        FROM characters c
+        WHERE c.guild_name IS NOT NULL AND c.item_level IS NOT NULL
+          AND c.profile_refreshed_at >= :since
+          AND (CAST(:server AS VARCHAR) IS NULL OR c.server_name = CAST(:server AS VARCHAR))
+          AND NOT EXISTS (
+            SELECT 1 FROM public_exclusion e
+            WHERE e.character_name = c.character_name AND (e.server_name IS NULL OR e.server_name = c.server_name))
+        GROUP BY c.server_name, c.guild_name),
+      ranked AS (
+        SELECT g.*, RANK() OVER (ORDER BY ROUND(%ORDER%, 2) DESC) AS rank
+        FROM guilds g WHERE g.member_count >= :minMembers)
+      """;
+
+  @Override
+  public GuildPage guildRanking(
+      String server, Instant since, GuildSort sort, int minMembers, int offset, int limit) {
+    String base = GUILD_RANKED.replace("%ORDER%", sort == GuildSort.SUM ? "g.il_sum" : "g.il_avg");
+    var counts = new long[] {0, 0};
+    var rows =
+        jdbc.sql(
+                base
+                    + """
+                SELECT ranked.*, COUNT(*) OVER () AS total,
+                  (SELECT COUNT(*) FROM guilds WHERE member_count < :minMembers) AS excluded
+                FROM ranked ORDER BY rank, server_name, guild_name LIMIT :limit OFFSET :offset
+                """)
+            .param("since", since.atOffset(ZoneOffset.UTC))
+            .param("server", server)
+            .param("minMembers", minMembers)
+            .param("limit", limit)
+            .param("offset", offset)
+            .query(
+                (row, index) -> {
+                  counts[0] = row.getLong("total");
+                  counts[1] = row.getLong("excluded");
+                  return new GuildRow(
+                      row.getLong("rank"),
+                      row.getString("server_name"),
+                      row.getString("guild_name"),
+                      row.getLong("member_count"),
+                      row.getBigDecimal("il_avg"),
+                      row.getBigDecimal("il_sum"),
+                      row.getBigDecimal("cp_avg"),
+                      row.getLong("cp_count"));
+                })
+            .list();
+    if (rows.isEmpty())
+      jdbc.sql(
+              base
+                  + "SELECT (SELECT COUNT(*) FROM ranked), (SELECT COUNT(*) FROM guilds WHERE member_count < :minMembers)")
+          .param("since", since.atOffset(ZoneOffset.UTC))
+          .param("server", server)
+          .param("minMembers", minMembers)
+          .query(
+              (ResultSet row) -> {
+                counts[0] = row.getLong(1);
+                counts[1] = row.getLong(2);
+              });
+    return new GuildPage(counts[0], counts[1], rows);
   }
 
   @Override

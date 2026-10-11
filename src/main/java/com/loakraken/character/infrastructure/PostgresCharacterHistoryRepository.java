@@ -32,12 +32,13 @@ class PostgresCharacterHistoryRepository implements CharacterHistoryPort {
     var characterId =
         jdbc.sql(
                 """
-      INSERT INTO characters (character_id, character_name, server_name, class_name, item_level, combat_power, expedition_level, last_synced_at, profile_refreshed_at, profile_checked_at)
-      VALUES (:id, :name, :server, :className, :itemLevel, :combatPower, :expeditionLevel, :fetchedAt, :fetchedAt, :fetchedAt)
+      INSERT INTO characters (character_id, character_name, server_name, class_name, item_level, combat_power, expedition_level, guild_name, last_synced_at, profile_refreshed_at, profile_checked_at)
+      VALUES (:id, :name, :server, :className, :itemLevel, :combatPower, :expeditionLevel, :guildName, :fetchedAt, :fetchedAt, :fetchedAt)
       ON CONFLICT (server_name, character_name) DO UPDATE SET
         class_name = EXCLUDED.class_name, item_level = EXCLUDED.item_level,
         combat_power = EXCLUDED.combat_power,
         expedition_level = COALESCE(EXCLUDED.expedition_level, characters.expedition_level),
+        guild_name = EXCLUDED.guild_name,
         last_synced_at = EXCLUDED.last_synced_at,
         profile_refreshed_at = EXCLUDED.profile_refreshed_at, profile_checked_at = EXCLUDED.profile_checked_at
       WHERE characters.last_synced_at <= EXCLUDED.last_synced_at
@@ -50,6 +51,7 @@ class PostgresCharacterHistoryRepository implements CharacterHistoryPort {
             .param("itemLevel", profile.itemLevel())
             .param("combatPower", profile.combatPower())
             .param("expeditionLevel", profile.expeditionLevel())
+            .param("guildName", guildName(profile.guildName()))
             .param("fetchedAt", at)
             .query(UUID.class)
             .optional();
@@ -238,5 +240,12 @@ class PostgresCharacterHistoryRepository implements CharacterHistoryPort {
     private static boolean same(BigDecimal left, BigDecimal right) {
       return left == null ? right == null : right != null && left.compareTo(right) == 0;
     }
+  }
+
+  /** 길드 이름(#301): 공백·빈 값은 길드 없음(NULL), 64자를 넘으면 저장하지 않는다. */
+  private static String guildName(String value) {
+    if (value == null || value.isBlank()) return null;
+    var name = value.strip();
+    return name.length() > 64 ? null : name;
   }
 }

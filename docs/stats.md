@@ -103,6 +103,20 @@
 - 저장: 프로필을 받을 때(사용자 검색·수집기 갱신) `expedition_level`을 갱신하고 값이 없으면 이전 값을 둔다. 공식 호출은 늘지 않는다.
 - 계약 표본: `build/generated/rankings-rosters.json`(정상, READY), `rankings-rosters-empty.json`, `rankings-rosters-collecting.json`(30 미만), `rankings-rosters-tie.json`(동률).
 
+## 길드 랭킹 (#301)
+
+`GET /api/v1/rankings/guilds?server=&activeDays=&sort=&page=&size=` — 기본 꺼짐(`ranking.guilds.enabled`, `RANKING_GUILDS_ENABLED`). 설계는 볼트 「랭킹 확장 설계 초안」 v1 3절이다.
+
+- 길드: 같은 서버·같은 길드 이름(공식 프로필 GuildName, `characters.guild_name`, V15)이다.
+- 길드원: `activeDays` 안에 프로필을 관측한(검색·수집기 갱신) 공개 캐릭터다. 값은 실제 길드 전체가 아니라 **확인한 길드원 기준**이다.
+- 확인한 길드원이 5명 미만인 길드는 빼고 `excludedGuilds`에 수를 준다(PM-백엔드 10-11 결정). `minMembers`로 기준을 알린다.
+- 공개 제외는 캐릭터만 뺀다. 길드 자체는 빼지 않는다.
+- 정렬: `sort=AVG`(아이템 레벨 평균, 기본) 또는 `SUM`(합). 값(소수 둘째 자리)이 같으면 같은 순위다.
+- 행: rank, serverName, guildName, memberCount, itemLevelAvg, itemLevelSum, combatPowerAvg(관측한 길드원만, 없으면 null), combatPowerCount
+- 표본: `meta.populationUnit=GUILD`. 30 미만이면 `sampleStatus=COLLECTING`이지만 값·순위는 그대로 준다.
+- 저장: 프로필을 받을 때 `guild_name`을 덮어쓴다. 길드를 나가 공식 값이 비면 NULL이 된다. 공식 호출은 늘지 않는다.
+- 계약 표본: `build/generated/rankings-guilds.json`(정상, READY), `rankings-guilds-empty.json`, `rankings-guilds-collecting.json`(30 미만), `rankings-guilds-tie.json`(동률).
+
 ## 검증 (2026-10-08, 로컬 8081)
 
 - 관측 33명, 원정대 4개, 모집단 30명(activeDays=90): READY

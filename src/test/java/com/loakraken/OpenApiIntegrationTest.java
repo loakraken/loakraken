@@ -23,7 +23,8 @@ import tools.jackson.databind.json.JsonMapper;
       "crit-speed.enabled=true",
       "combat-power-sim.enabled=true",
       "ranking.collectibles.enabled=true",
-      "ranking.rosters.enabled=true"
+      "ranking.rosters.enabled=true",
+      "ranking.guilds.enabled=true"
     })
 class OpenApiIntegrationTest {
   @LocalServerPort private int port;

@@ -243,7 +243,8 @@ class PostgresStatsRepository implements StatsPort {
       """
       WITH members AS (
         SELECT c.roster_key, c.character_name, c.server_name, c.class_name, c.item_level, c.combat_power,
-          c.expedition_level, (c.combat_power IS NOT NULL AND c.profile_refreshed_at >= :since) AS cp_observed
+          c.expedition_level, (c.combat_power IS NOT NULL
+            AND GREATEST(c.profile_refreshed_at, c.last_synced_at) >= :since) AS cp_observed
         FROM characters c
         WHERE c.roster_key IS NOT NULL
           AND GREATEST(c.last_synced_at, c.profile_refreshed_at, c.roster_scanned_at) >= :since

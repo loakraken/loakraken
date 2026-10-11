@@ -129,11 +129,17 @@ class RosterRankingIntegrationTest {
     var missing = UUID.randomUUID();
     member(SERVER, missing, "원정누락가", 1720, "4000.00", null, Instant.now());
     member(SERVER, missing, "원정누락나", 1650, null, null, Instant.now());
+    // 검색 스냅숏 경로(전투력·last_synced_at만 갱신)로 들어온 전투력도 관측으로 친다.
+    var snapshot = UUID.randomUUID();
+    member(SERVER, snapshot, "원정스냅숏", 1640, "1000.00", null, Instant.now());
+    jdbc.sql("UPDATE characters SET profile_refreshed_at = NULL WHERE character_name = '원정스냅숏'")
+        .update();
 
     var data = data(get("/api/v1/rankings/rosters?basis=COMBAT_POWER&server=" + encode(SERVER)));
     assertThat(data.path("basis").asText()).isEqualTo("COMBAT_POWER");
     assertThat(data.path("excludedRosters").asLong()).isEqualTo(1);
-    assertThat(data.at("/meta/population").asLong()).isEqualTo(1);
+    assertThat(data.at("/meta/population").asLong()).isEqualTo(2);
+    assertThat(data.at("/rows/1/characterName").asText()).isEqualTo("원정스냅숏");
     assertThat(data.at("/rows/0/characterName").asText()).isEqualTo("원정전투가");
     assertThat(data.at("/rows/0/combatPower").decimalValue()).isEqualByComparingTo("3000.50");
     assertThat(data.at("/rows/0/value").decimalValue()).isEqualByComparingTo("2750.25");

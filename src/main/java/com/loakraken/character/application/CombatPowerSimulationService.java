@@ -274,7 +274,7 @@ public class CombatPowerSimulationService {
   /**
    * 캐릭터 응답의 팔찌 효율(#345, PM 총괄 10-11 21:21·21:46). 지금 전투력 ÷ 팔찌(효과 줄 전부 + 팔찌 도약)를 뺀 전투력 − 1이다. 전투력 기여
    * API는 1 − 뺀 ÷ 지금이라 값이 다르다(같은 모델, 표현만 다름). 줄별은 그 줄만 뺐을 때(전투 특성 줄은 T에서 그 줄만)이고 팔찌 도약은 따로 한 줄이다. 곱
-   * 구조라 줄별 합과 전체는 다를 수 있다. 시뮬레이터 플래그와 무관하고 공식 호출이 없다. 팔찌가 없으면 null.
+   * 구조라 줄별 합은 전체 값과 같지 않다(줄별 값은 그 줄만 뺀 값). 시뮬레이터 플래그와 무관하고 공식 호출이 없다. 팔찌가 없으면 null.
    */
   public BraceletEfficiency braceletEfficiency(CharacterResult result) {
     var loadout = result.details().loadout();

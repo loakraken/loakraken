@@ -7,7 +7,7 @@ import java.util.List;
 
 @Schema(
     description =
-        "원정대 보유 칭호(title-record-v1). LOAKraken에서 처음 확인한 순서입니다. 장착한 칭호만 기록되며 실제 획득일·획득 순서와 다를 수 있습니다. 기록이 없어도 200입니다.")
+        "원정대 보유 칭호(title-record-v1). LOAKraken에서 처음 확인한 순서입니다. 장착한 칭호만 기록되며 순서는 실제 획득일이 아니라 LOAKraken이 처음 확인한 순서입니다. 기록이 없어도 200입니다.")
 public record RosterTitlesResponse(
     String characterName,
     String serverName,

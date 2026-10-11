@@ -173,7 +173,7 @@ public class SpecUpController {
           @NullableResponse
           String reasonCode,
       @Schema(description = "화면용 이유 문장(같은 코드는 같은 문장)") @NullableResponse String reason,
-      @Schema(description = "시뮬레이터의 원래 문장(슬롯 번호·툴팁 원문이 들어가 코드가 같아도 다를 수 있음). 고정 문장과 같으면 null")
+      @Schema(description = "시뮬레이터의 원래 문장(슬롯 번호·툴팁 원문이 들어가므로 같은 코드라도 문장이 후보마다 다름). 고정 문장과 같으면 null")
           @NullableResponse
           String reasonDetail) {
     static CandidateResponse from(SpecUpService.Candidate candidate) {

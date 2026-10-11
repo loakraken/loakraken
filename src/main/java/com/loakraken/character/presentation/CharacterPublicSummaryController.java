@@ -34,7 +34,7 @@ public class CharacterPublicSummaryController {
       description =
           "캐릭터 페이지 첫 HTML(제목·설명·요약 줄·구조화 데이터)용 가벼운 요약입니다. 봇·사람 구분 없이 같은 값을 줍니다. "
               + "공식 API를 부르지 않고 캐릭터 캐시 → 저장된 마지막 관측 순서로 찾습니다. 둘 다 없으면 404 CHARACTER_NOT_CACHED입니다. "
-              + "처리정지 목록 캐릭터는 indexable=false이고 이름 외 값이 null입니다(웹은 noindex).")
+              + "")
   @ApiResponses({
     @io.swagger.v3.oas.annotations.responses.ApiResponse(
         responseCode = "200",
@@ -59,7 +59,7 @@ public class CharacterPublicSummaryController {
         CharacterPublicSummaryResponse.from(summaries.summary(request.characterName())));
   }
 
-  @Schema(description = "캐릭터 공개 요약(#145). 처리정지 목록면 이름 외 값이 null")
+  @Schema(description = "캐릭터 공개 요약(#145)")
   public record CharacterPublicSummaryResponse(
       String characterName,
       @NullableResponse String serverName,
@@ -71,12 +71,10 @@ public class CharacterPublicSummaryController {
       @Schema(description = "이 값을 확인한 시각. STORED_OBSERVATION이면 화면에 '마지막 확인 시각'으로 보인다")
           @NullableResponse
           Instant observedAt,
-      @Schema(
-              description =
-                  "LIVE_CACHE: 최근 5분 안 공식 조회 캐시, STORED_OBSERVATION: 저장된 마지막 관측. 처리정지 목록면 null(관측 여부를 드러내지 않음)")
+      @Schema(description = "LIVE_CACHE: 최근 5분 안 공식 조회 캐시, STORED_OBSERVATION: 저장된 마지막 관측.")
           @NullableResponse
           CharacterPublicSummaryService.DataSource dataSource,
-      @Schema(description = "false면 웹은 noindex·sitemap 제외(처리정지 목록 캐릭터)") boolean indexable) {
+      @Schema(description = "false면 웹은 noindex·sitemap 제외") boolean indexable) {
     static CharacterPublicSummaryResponse from(CharacterPublicSummaryService.Summary summary) {
       return new CharacterPublicSummaryResponse(
           summary.characterName(),

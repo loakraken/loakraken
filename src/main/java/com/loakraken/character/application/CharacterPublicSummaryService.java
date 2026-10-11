@@ -8,7 +8,7 @@ import org.springframework.stereotype.Service;
 /**
  * 캐릭터 공개 요약(#145). 캐릭터 페이지의 첫 HTML(제목·설명·요약 줄·구조화 데이터)을 봇·사람 구분 없이 같은 값으로 만들기 위한 가벼운 조회다. <b>공식
  * API를 부르지 않는다</b>: 캐릭터 캐시(5분) → DB의 마지막 관측 순서로 찾고, 둘 다 없으면 CHARACTER_NOT_CACHED(404)다. 처리정지 목록
- * 캐릭터는 indexable=false이고 이름 외 값을 주지 않는다.
+ * 캐릭터는 저장된 관측을 쓰지 않아 기록 없는 캐릭터와 같은 응답이다(#363).
  */
 @Service
 public class CharacterPublicSummaryService {
@@ -49,28 +49,30 @@ public class CharacterPublicSummaryService {
           dataSource,
           false);
     }
-
-    /** 처리정지 목록: 이름 외 값과 dataSource까지 null이다(관측 여부를 드러내지 않음, #194). */
-    static Summary hidden(String characterName) {
-      return new Summary(characterName, null, null, null, null, null, null, null, null, false);
-    }
   }
 
   public Summary summary(String characterName) {
     var name = new SearchCharacterCommand(characterName).characterName();
     var summary = live(name);
-    if (summary == null) summary = storedSummary(name);
-    boolean excluded;
-    try {
-      // 기록이 없어도 처리정지 목록 이름이면 404 대신 같은 숨김 응답을 준다. 관측 여부를 드러내지 않는다(#194).
-      excluded =
-          summary == null
-              ? stored.excludedAnyServer(name)
-              : stored.excluded(summary.characterName(), summary.serverName());
-    } catch (DataAccessException exception) {
-      throw new CharacterException(CharacterErrorCode.CHARACTER_STORAGE_UNAVAILABLE);
+    if (summary != null) {
+      // 캐시로 찾은 처리정지 목록 캐릭터는 값은 그대로 두고 색인만 막는다. 확인에 실패해도 색인하지 않는다(PM 총괄 10-12 01:33, #363).
+      boolean indexable;
+      try {
+        indexable = !stored.excluded(summary.characterName(), summary.serverName());
+      } catch (DataAccessException exception) {
+        indexable = false;
+      }
+      if (!indexable) return summary.notIndexable();
+    } else {
+      summary = storedSummary(name);
+      // 처리정지 목록 캐릭터는 저장된 관측을 쓰지 않는다. 응답은 기록이 없는 캐릭터와 같다(#363).
+      try {
+        if (summary != null && stored.excluded(summary.characterName(), summary.serverName()))
+          summary = null;
+      } catch (DataAccessException exception) {
+        throw new CharacterException(CharacterErrorCode.CHARACTER_STORAGE_UNAVAILABLE);
+      }
     }
-    if (excluded) return Summary.hidden(summary == null ? name : summary.characterName());
     if (summary == null) throw new CharacterException(CharacterErrorCode.CHARACTER_NOT_CACHED);
     // 원정대 목록에서만 발견해 전투력 관측이 없으면 내용이 빈약해 색인하지 않는다(#180, PM-백엔드 #177 P2).
     return summary.combatPower() == null ? summary.notIndexable() : summary;

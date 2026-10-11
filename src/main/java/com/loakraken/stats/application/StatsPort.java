@@ -178,7 +178,7 @@ public interface StatsPort {
       RosterBasis basis);
 
   /**
-   * 캐릭터 기준 수집품 순위(#303). reason이 null이면 rank·point·maxPoint가 있다. reason: EXCLUDED(처리정지 목록),
+   * 캐릭터 기준 수집품 순위(#303). reason이 null이면 rank·point·maxPoint가 있다. reason: NOT_OBSERVED(처리정지 목록 포함),
    * NOT_OBSERVED(캐릭터·원정대·수집품 관측 없음), INACTIVE(activeDays 안 관측 없음), NO_COLLECTIBLES(Σ Point = 0).
    * total은 같은 조건의 순위 모집단 수.
    */

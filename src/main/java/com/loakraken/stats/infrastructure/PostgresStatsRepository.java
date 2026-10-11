@@ -563,7 +563,7 @@ class PostgresStatsRepository implements StatsPort {
             .param("characterUnit", characterUnit)
             .query(Long.class)
             .single();
-    // 처리정지 목록 캐릭터는 관측 여부도 드러내지 않는다(공개 요약과 같음).
+    // 처리정지 목록 캐릭터는 관측이 없는 이름과 같은 응답이다(#363, EXCLUDED는 더 이상 쓰지 않음).
     boolean excluded =
         jdbc.sql(
                 """
@@ -576,7 +576,7 @@ class PostgresStatsRepository implements StatsPort {
             .query(Boolean.class)
             .single();
     if (excluded)
-      return new CollectibleStanding("EXCLUDED", characterName, null, null, total, null, null);
+      return new CollectibleStanding("NOT_OBSERVED", characterName, null, null, total, null, null);
     if (owner.isEmpty())
       return new CollectibleStanding("NOT_OBSERVED", characterName, null, null, total, null, null);
     var found = owner.get();

@@ -3,7 +3,6 @@ package com.loakraken.character.application;
 import com.loakraken.character.domain.CharacterLoadout;
 import java.util.ArrayList;
 import java.util.List;
-import org.springframework.dao.DataAccessException;
 import org.springframework.stereotype.Service;
 
 /**
@@ -14,11 +13,9 @@ import org.springframework.stereotype.Service;
 @Service
 public class CharacterItemTooltipService {
   private final CharacterCache cache;
-  private final CharacterPublicSummaryPort stored;
 
-  public CharacterItemTooltipService(CharacterCache cache, CharacterPublicSummaryPort stored) {
+  public CharacterItemTooltipService(CharacterCache cache) {
     this.cache = cache;
-    this.stored = stored;
   }
 
   /** index는 검색 응답 loadout.equipment 배열 순번(0부터), type은 그 항목의 type이다. */
@@ -47,7 +44,7 @@ public class CharacterItemTooltipService {
   public record GridGemLines(
       Integer index, String titleLine, List<String> tradeLines, List<String> extraLines) {}
 
-  /** fetchedAt: 이 줄을 읽은 캐릭터 캐시의 수집 시각(검색 응답 fetchedAt과 같으면 순번이 맞다). 숨김이면 null. */
+  /** fetchedAt: 이 줄을 읽은 캐릭터 캐시의 수집 시각(검색 응답 fetchedAt과 같으면 순번이 맞다). 캐시가 있을 때만 응답한다. */
   public record Tooltips(
       String characterName,
       boolean hidden,
@@ -56,12 +53,7 @@ public class CharacterItemTooltipService {
       List<SlotLines> gems,
       List<SlotLines> cards,
       List<SkillLines> skills,
-      List<GridLines> arkGrid) {
-    static Tooltips hidden(String characterName) {
-      return new Tooltips(
-          characterName, true, null, List.of(), List.of(), List.of(), List.of(), List.of());
-    }
-  }
+      List<GridLines> arkGrid) {}
 
   public Tooltips tooltips(String characterName) {
     var name = new SearchCharacterCommand(characterName).characterName();
@@ -72,18 +64,7 @@ public class CharacterItemTooltipService {
       // 캐시 장애여도 공식 호출로 넘기지 않는다.
       result = null;
     }
-    boolean excluded;
-    try {
-      var profile = result == null ? null : result.details().profile();
-      excluded =
-          profile == null
-              ? stored.excludedAnyServer(name)
-              : stored.excluded(profile.characterName(), profile.serverName());
-    } catch (DataAccessException exception) {
-      throw new CharacterException(CharacterErrorCode.CHARACTER_STORAGE_UNAVAILABLE);
-    }
-    if (excluded)
-      return Tooltips.hidden(result == null ? name : result.details().profile().characterName());
+    // 처리정지 목록이어도 캐시(공식 실시간 응답)는 일반 캐릭터와 같게 준다(#363, 처리정지 여부를 드러내지 않음).
     if (result == null) throw new CharacterException(CharacterErrorCode.CHARACTER_NOT_CACHED);
     return from(
         result.details().profile().characterName(), result.fetchedAt(), result.details().loadout());

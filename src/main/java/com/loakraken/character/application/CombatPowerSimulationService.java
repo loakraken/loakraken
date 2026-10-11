@@ -20,7 +20,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import org.springframework.dao.DataAccessException;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 
@@ -155,7 +154,7 @@ public class CombatPowerSimulationService {
 
   /**
    * 시뮬레이션 기준 캐릭터(캐시)를 한 번 읽는다. 스펙업 가이드(#315)가 후보마다 {@link #simulate(CharacterResult, List)}를 부를 때
-   * 같은 세팅을 쓰게 한다. 없거나 처리정지 목록면 CHARACTER_NOT_CACHED다.
+   * 같은 세팅을 쓰게 한다. 없으면 CHARACTER_NOT_CACHED다.
    */
   public CharacterResult snapshot(String characterName) {
     var name = new SearchCharacterCommand(characterName).characterName();
@@ -165,15 +164,7 @@ public class CombatPowerSimulationService {
     } catch (CharacterException exception) {
       result = null;
     }
-    // 처리정지 목록 캐릭터는 캐시가 남아 있어도 세팅을 내주지 않는다(없는 캐릭터와 같은 404).
-    try {
-      if (result != null
-          && stored.excluded(
-              result.details().profile().characterName(), result.details().profile().serverName()))
-        result = null;
-    } catch (DataAccessException exception) {
-      throw new CharacterException(CharacterErrorCode.CHARACTER_STORAGE_UNAVAILABLE);
-    }
+    // 처리정지 목록이어도 캐시(공식 실시간 응답)로 계산한다. 저장하지 않는 메모리 계산이고, 404로 처리정지 여부를 드러내지 않는다(#363).
     if (result == null) throw new CharacterException(CharacterErrorCode.CHARACTER_NOT_CACHED);
     return result;
   }

@@ -58,9 +58,7 @@
 | 모집단에서 뺌 | 인기 검색, `/rankings`, `/characters/rank`(standing·contains), `/stats/distribution`의 `percentileOf` |
 | 그대로 | summary·classes·servers·히스토그램(개인을 드러내지 않는 집계) |
 
-- 제외된 본인을 `/characters/rank`로 조회하면 `rankVisibility=HIDDEN`이다.
-  - entries는 빈 배열이고 순위·백분위·티어를 어디에도 주지 않는다.
-  - 기본 정보(이름·서버·직업·레벨·전투력)는 준다.
+- 목록의 본인을 `/characters/rank`로 조회하면 관측이 없는 캐릭터와 같은 404(`STATS_CHARACTER_NOT_OBSERVED`)다(#363). 목록에 있다는 사실을 응답으로 드러내지 않는다. `rankVisibility=HIDDEN`은 더 이상 쓰지 않는다.
 - 등록·해제는 다음 집계 주기(캐시 10분)부터 반영된다.
 
 | 열 | 뜻 |

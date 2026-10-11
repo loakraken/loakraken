@@ -200,6 +200,15 @@ class PostgresCharacterCollectionRepository implements CharacterCollectionPort {
   }
 
   @Override
+  public boolean rosterKnown(String characterName) {
+    return jdbc.sql(
+            "SELECT EXISTS (SELECT 1 FROM characters WHERE character_name = :name AND roster_scanned_at IS NOT NULL)")
+        .param("name", characterName)
+        .query(Boolean.class)
+        .single();
+  }
+
+  @Override
   public void markRosterScanned(Target target, Instant now) {
     // 원정대를 찾지 못했거나 목록에 자신이 없던 캐릭터도 자기 키를 받아, 키가 없다는 이유로 다시 고르지 않는다.
     jdbc.sql(

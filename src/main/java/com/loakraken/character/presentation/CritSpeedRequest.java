@@ -54,9 +54,7 @@ public record CritSpeedRequest(
           @DecimalMax("100")
           @Digits(integer = 3, fraction = 2)
           BigDecimal extraMoveSpeed,
-      @Schema(
-              description =
-                  "직업 상태 가정(예: 리퍼 갈증 '피냄새' 혼돈 상태 치명타 적중률). 생략하면 켬(목표 사이트와 같은 기준). false면 관측값만")
+      @Schema(description = "직업 상태 가정(예: 리퍼 갈증 '피냄새' 혼돈 상태 치명타 적중률). 생략하면 켬. false면 관측값만")
           Boolean classState,
       @Schema(
               description =

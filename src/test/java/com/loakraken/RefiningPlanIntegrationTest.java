@@ -30,9 +30,11 @@ class RefiningPlanIntegrationTest {
             """);
     assertThat(response.statusCode()).isEqualTo(200);
     ApiContractFixture.write("refining-plan.json", response.body());
+    // 응답 source에도 다른 사이트 이름이 없다(#261, MIT 고지는 저장소 NOTICE).
+    assertThat(response.body()).doesNotContain(SiteNames.FORBIDDEN);
     var json = mapper.readTree(response.body());
     assertThat(json.path("code").asText()).isEqualTo("REFINING_PLAN_SUCCESS");
-    assertThat(json.at("/data/ruleVersion").asText()).isEqualTo("t4-refining-v2");
+    assertThat(json.at("/data/ruleVersion").asText()).isEqualTo("t4-refining-v3");
     assertThat(json.at("/data/source/license").asText()).startsWith("MIT");
     // 성장 비용은 생략하면 끔(PM-백엔드 10-10 09:10), 영지 연구는 생략하면 켬.
     assertThat(json.at("/data/growthCost").asBoolean()).isFalse();

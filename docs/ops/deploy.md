@@ -44,6 +44,7 @@
 
 - 관리(actuator) 포트 9090은 앱 포트 8080과 나눴다. 8080에는 actuator가 없다(404). 9090은 health·prometheus만 노출한다(백엔드 #166). 지표 주소는 `http://api:9090/actuator/prometheus`(internal·data망 안에서만 닿고 edge는 닿지 않음). 수집기 동작 확인 예: `loakraken_background_last_success_seconds{job="collector"}`.
 - web의 `SITE_URL`은 필수다. 운영 `https://loakraken.gg`이면 robots가 허용하고 sitemap·canonical이 이 주소를 쓴다. 스테이징(`http://127.0.0.1:8081`)은 `Disallow: /`다. 같은 이미지를 쓰고 값은 실행할 때만 넣는다.
+- web 기능 플래그 `RECEIPT_TOOL`(원정대 영수증): 운영 `stack.env`는 `off`(PM 총괄 10-11, 계산 재대조 전까지). api `RECEIPT_ENABLED=false`와 함께 숨긴다. 스테이징도 api와 맞춰 off(계산 검증 때 둘 다 켬).
 - 백엔드 기능 플래그(#214): `CRIT_SPEED_ENABLED`(치명 계산)·`GEM_ENABLED`(젬 가공)·`RECEIPT_ENABLED`(영수증)는 비우면 꺼짐이다. compose.prod.yaml이 api로 넘긴다. 스테이징은 `CRIT_SPEED_ENABLED=true`(web 치적 도구가 보이므로), 운영은 셋 다 `false`를 명시한다. 로컬 compose(8080 collector)는 치명 계산을 기본으로 켜고(`CRIT_SPEED_ENABLED:-true`), 영수증·젬 가공이나 계산 검증 8090 같은 따로 띄운 서버는 `.env`·실행 인자에 같은 변수를 `true`로 둔다.
 - web 기능 플래그 `CRIT_SPEED_TOOL`(web #233): 운영 `stack.env`는 `off`를 명시해 치명 계산 도구를 첫 운영 배포에서 뺀다(PM 총괄 결정 10-09). 비우면 web 기본값(`SITE_URL`이 운영 주소일 때만 숨김)을 따르므로, `SITE_URL`이 빠지거나 달라도 숨겨지도록 명시한다. 스테이징은 비워 두어 보인다. 공개할 때 `on`으로 바꾸고 `up -d`.
 - web 기능 플래그 `COMBAT_POWER_SIM`(전투력 시뮬레이터, web #365): 운영 `stack.env`는 `off`(PM 총괄·PM-프론트 10-10, 로아랩 대조 통과 전까지). 백엔드 `COMBAT_POWER_SIM_ENABLED=false`와 함께 이중으로 숨긴다. 스테이징은 비워 두어 보인다.
@@ -332,6 +333,7 @@ $C up -d --wait
 - 운영 키 1개 = 90회/분(공식 100, 여유 10). 운영 스택의 모든 백엔드가 나눠 쓴다.
 - 현재 `up -d`는 api 컨테이너를 교체하므로 구·신이 겹치지 않는다(수십 초 중단). 겹쳐 띄우는 무중단 배포는 공유 호출 게이트(#107)가 들어온 뒤에만 한다.
 - 수집기·예열은 운영 stack.env에서만 true다.
+- 수집기 속도 `STATS_COLLECTOR_INTERVAL`(기본 3s)·`STATS_COLLECTOR_RESERVE`(기본 40, 사용자 요청에 남겨 두는 분당 몫). 공개 전 사용자 트래픽이 없을 때만 한시로 1s·25를 허용한다(수집기 약 60/분 + 예열 15 = 75 < 게이트 90, PM-백엔드 10-10). **도메인 공개 전에 3s·40으로 되돌린다.**
 
 ## 로컬 점검
 

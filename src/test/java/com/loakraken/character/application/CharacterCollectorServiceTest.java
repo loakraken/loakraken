@@ -33,6 +33,9 @@ class CharacterCollectorServiceTest {
   private final CharacterCardService cards = mock(CharacterCardService.class);
   private final LostArkRequestGate gate = mock(LostArkRequestGate.class);
   private final LeaderLease lease = mock(LeaderLease.class);
+  private final CharacterPublicSummaryPort stored = mock(CharacterPublicSummaryPort.class);
+  private CharacterSeedList seeds =
+      new CharacterSeedList(new CharacterSeedPolicy(false, List.of(), ""));
   private final SimpleMeterRegistry registry = new SimpleMeterRegistry();
   private final Target target = new Target("모험가", "루페온");
 
@@ -137,6 +140,96 @@ class CharacterCollectorServiceTest {
   }
 
   @Test
+  void 시드가_남아_있으면_먼저_원정대를_훑고_제외_이름과_이미_훑은_이름은_공식_호출_없이_건너뛴다() {
+    seeds =
+        new CharacterSeedList(
+            new CharacterSeedPolicy(true, List.of("제외이름", "이미훑음", "시드하나", "시드하나"), ""));
+    when(stored.excludedAnyServer("제외이름")).thenReturn(true);
+    when(collection.rosterKnown("이미훑음")).thenReturn(true);
+    var siblings = List.of(new CharacterSibling("시드하나", "루페온", "바드", 70, new BigDecimal("1700")));
+    when(details.fetchSiblings("시드하나")).thenReturn(siblings);
+    when(collection.saveRoster(siblings, clock.instant())).thenReturn(3);
+    when(collection.nextProfileDue(any(), any())).thenReturn(Optional.empty());
+    when(collection.nextRosterDue(any())).thenReturn(Optional.empty());
+
+    var service = service("key", true);
+    assertThat(service.tick()).isEqualTo(Task.SEED);
+    verify(details, times(1)).fetchSiblings("시드하나");
+    verify(details, never()).fetchSiblings("제외이름");
+    verify(details, never()).fetchSiblings("이미훑음");
+    assertThat(seeds.pendingCount()).isZero();
+    // 같은 이름은 한 번만(멱등). 시드가 끝나면 기존 수집으로 돌아간다.
+    assertThat(service.tick()).isEqualTo(Task.NONE);
+    verify(details, times(1)).fetchSiblings(any());
+    assertThat(registry.get("loakraken.stats.seed").tag("outcome", "skipped").counter().count())
+        .isEqualTo(2);
+    assertThat(registry.get("loakraken.stats.seed").tag("outcome", "success").counter().count())
+        .isEqualTo(1);
+    assertThat(registry.get("loakraken.stats.collector.discovered").counter().count()).isEqualTo(3);
+    assertThat(registry.get("loakraken.stats.seed.pending").gauge().value()).isZero();
+  }
+
+  @Test
+  void 시드가_없는_캐릭터면_다시_부르지_않고_한도_초과면_다음_회차에_다시_부른다() {
+    seeds = new CharacterSeedList(new CharacterSeedPolicy(true, List.of("한도", "없음"), ""));
+    when(details.fetchSiblings("한도"))
+        .thenThrow(new CharacterException(CharacterErrorCode.LOST_ARK_RATE_LIMITED))
+        .thenReturn(List.of());
+    when(details.fetchSiblings("없음"))
+        .thenThrow(new CharacterException(CharacterErrorCode.CHARACTER_NOT_FOUND));
+    var service = service("key", true);
+    assertThat(service.tick()).isEqualTo(Task.SEED);
+    assertThat(seeds.pendingCount()).isEqualTo(2);
+    assertThat(service.tick()).isEqualTo(Task.SEED);
+    assertThat(seeds.pendingCount()).isEqualTo(1);
+    assertThat(service.tick()).isEqualTo(Task.SEED);
+    assertThat(seeds.pendingCount()).isZero();
+    verify(details, times(1)).fetchSiblings("없음");
+    assertThat(registry.get("loakraken.stats.seed").tag("outcome", "failed").counter().count())
+        .isEqualTo(1);
+  }
+
+  @Test
+  void 시드_목록은_공백과_중복을_정리하고_형식이_틀린_줄은_뺀다(@org.junit.jupiter.api.io.TempDir java.nio.file.Path dir)
+      throws Exception {
+    var file = dir.resolve("seeds.txt");
+    java.nio.file.Files.writeString(file, "# 주석\n\n파일이름\n 가나다 \n이름 띄움\n");
+    var list =
+        new CharacterSeedList(
+            new CharacterSeedPolicy(true, List.of("가나다", " ", "설정이름"), file.toString()));
+    assertThat(list.pendingCount()).isEqualTo(3);
+    assertThat(list.invalidCount()).isEqualTo(1);
+    assertThat(list.peek()).isEqualTo("가나다");
+    // 꺼져 있으면 아무 이름도 읽지 않는다. 파일이 없어도 앱은 뜬다.
+    assertThat(
+            new CharacterSeedList(new CharacterSeedPolicy(false, List.of("가나다"), ""))
+                .pendingCount())
+        .isZero();
+    assertThat(
+            new CharacterSeedList(
+                    new CharacterSeedPolicy(true, List.of(), dir.resolve("없음.txt").toString()))
+                .pendingCount())
+        .isZero();
+  }
+
+  @Test
+  void 시드와_프로필_갱신을_번갈아_한다() {
+    // #271: 시드가 수천 줄이어도 그동안 전투력 표본(프로필 갱신)이 계속 쌓여야 한다.
+    seeds = new CharacterSeedList(new CharacterSeedPolicy(true, List.of("시드하나", "시드둘"), ""));
+    when(details.fetchSiblings(anyString())).thenReturn(List.of());
+    when(collection.nextProfileDue(any(), any())).thenReturn(Optional.of(target));
+    when(details.fetchArmory("모험가"))
+        .thenThrow(new CharacterException(CharacterErrorCode.CHARACTER_NOT_FOUND));
+    var service = service("key", true);
+    assertThat(service.tick()).isEqualTo(Task.SEED);
+    assertThat(service.tick()).isEqualTo(Task.PROFILE);
+    assertThat(service.tick()).isEqualTo(Task.SEED);
+    assertThat(seeds.pendingCount()).isZero();
+    // 시드가 끝나면 기존 수집만 한다.
+    assertThat(service.tick()).isNotEqualTo(Task.SEED);
+  }
+
+  @Test
   void 할_일이_없으면_호출하지_않는다() {
     when(collection.nextProfileDue(any(), any())).thenReturn(Optional.empty());
     when(collection.nextRosterDue(any())).thenReturn(Optional.empty());
@@ -163,6 +256,17 @@ class CharacterCollectorServiceTest {
             Duration.ofDays(7),
             Duration.ofDays(7));
     return new CharacterCollectorService(
-        details, collection, history, cards, policy, gate, lease, lostArk, registry, clock);
+        details,
+        collection,
+        history,
+        cards,
+        policy,
+        seeds,
+        stored,
+        gate,
+        lease,
+        lostArk,
+        registry,
+        clock);
   }
 }

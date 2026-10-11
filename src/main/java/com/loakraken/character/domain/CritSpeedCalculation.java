@@ -1318,7 +1318,7 @@ public final class CritSpeedCalculation {
       boolean on = input.on(buff.label(), true);
       for (var axis : List.of(Axis.ATTACK_SPEED, Axis.MOVE_SPEED)) {
         var value = axis == Axis.ATTACK_SPEED ? buff.attack() : buff.move();
-        String text = "두 사이트 기본 포함(계산 검증 10-10)";
+        String text = "기본 포함(계산 검증 10-10)";
         toggles.add(
             new ToggleState(buff.label(), buff.label(), axis, true, on, scale(value), text));
         if (on)

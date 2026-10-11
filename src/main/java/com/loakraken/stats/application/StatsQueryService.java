@@ -22,7 +22,8 @@ import org.springframework.transaction.TransactionException;
 /**
  * 통계·랭킹 조회(stats-v1). 요청마다 SQL로 집계하고 조건별로 10분 캐시한다. 공식 API를 부르지 않는다.
  *
- * <p>표본이 MIN_SAMPLE(30) 미만이면 sampleStatus=COLLECTING이고 분위수·평균·백분위·티어는 null이다. 인원 수와 순위는 그대로 준다.
+ * <p>표본이 MIN_SAMPLE(30) 미만이면 sampleStatus=COLLECTING이고 분위수(p90·백분위 5개)·백분위·티어는 null이다. 평균 아이템
+ * 레벨·중앙값·서포터 비율·보석 평균은 표본 1명 이상이면 참고값으로 준다(#273, 사용자 지적 PM 총괄 10-10 23:50). 인원 수와 순위는 그대로 준다.
  */
 @Service
 public class StatsQueryService {
@@ -50,17 +51,18 @@ public class StatsQueryService {
           var meta = meta(conditions, summary.population(), now);
           boolean ready = meta.sampleStatus() == SampleStatus.READY;
           long known = summary.dealers() + summary.supports();
+          // 평균·중앙값·비율은 표본 1명 이상이면 참고값(#273). 분위수(p90)만 30명 기준.
           return new SummaryResult(
               meta,
-              ready ? summary.itemLevelMean() : null,
-              ready ? summary.itemLevelMedian() : null,
-              ready ? summary.combatPowerMedian() : null,
+              summary.itemLevelMean(),
+              summary.itemLevelMedian(),
+              summary.combatPowerMedian(),
               ready ? summary.combatPowerP90() : null,
               summary.dealers(),
               summary.supports(),
               summary.population() - known,
-              ready && known > 0 ? share(summary.supports(), known) : null,
-              ready && summary.gemSample() >= StatsRules.MIN_SAMPLE ? summary.gemMeanLevel() : null,
+              known > 0 ? share(summary.supports(), known) : null,
+              summary.gemSample() > 0 ? summary.gemMeanLevel() : null,
               summary.gemSample());
         });
   }
@@ -87,11 +89,11 @@ public class StatsQueryService {
                     row.dealers(),
                     row.supports(),
                     row.count() - known,
-                    ready && known > 0 && StatsRules.SUPPORT_CLASSES.contains(row.className())
+                    known > 0 && StatsRules.SUPPORT_CLASSES.contains(row.className())
                         ? share(row.supports(), known)
                         : null,
-                    ready ? row.itemLevelMean() : null,
-                    ready ? row.gemMeanLevel() : null,
+                    row.itemLevelMean(),
+                    row.gemMeanLevel(),
                     ready && p.size() == 5
                         ? new Percentiles(p.get(0), p.get(1), p.get(2), p.get(3), p.get(4))
                         : null,
@@ -120,8 +122,8 @@ public class StatsQueryService {
                             row.serverName(),
                             row.count(),
                             population == 0 ? null : share(row.count(), population),
-                            ready ? row.itemLevelMedian() : null,
-                            ready ? row.combatPowerMedian() : null,
+                            row.itemLevelMedian(),
+                            row.combatPowerMedian(),
                             row.knownCharacters(),
                             row.rosters(),
                             status);

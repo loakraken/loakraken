@@ -73,7 +73,7 @@ class ReceiptController {
           String characterName,
       @Parameter(
               description =
-                  "책(재봉술·야금술) 효과 항상 적용 가정. 생략하면 false(책 제외). 게임 문구 '특수 재료 별 효과는 확률에 따라 적용되지 않을 수 있습니다'의 확률이 공개되지 않아 기본은 숨결만 쓴 확인된 값이다. true면 일로아·로아와와 같은 가정")
+                  "책(재봉술·야금술) 효과 항상 적용 가정. 생략하면 false(책 제외). 게임 문구 '특수 재료 별 효과는 확률에 따라 적용되지 않을 수 있습니다'의 확률이 공개되지 않아 기본은 숨결만 쓴 확인된 값이다. true면 책 효과가 매번 적용된다고 가정한다")
           @RequestParam(required = false)
           Boolean assumeBook) {
     return ApiResponse.of(

@@ -81,12 +81,17 @@ stats:
     enabled: ${STATS_COLLECTOR_ENABLED:false}
     interval: ${STATS_COLLECTOR_INTERVAL:3s}
     reserve: ${STATS_COLLECTOR_RESERVE:40}
+  # 시드 목록(#255): 이름마다 원정대를 한 번 훑는다. 이름 목록은 쉼표 구분 환경 변수 또는 운영 서버의 파일(저장소에 커밋하지 않음).
+  seed:
+    enabled: ${STATS_SEED_ENABLED:false}
+    names: ${STATS_SEED_NAMES:}
+    file: ${STATS_SEED_FILE:}
 
 # 원정대 영수증(#174)은 계산 일치 원칙(사용자 지시 10-09) 검증 전까지 공개하지 않는다. 검증 서버에서만 켠다.
 receipt:
   enabled: ${RECEIPT_ENABLED:false}
 
-# 젬 가공 계획 API: 첫 운영 릴리스에서 기본 꺼짐(웹 미사용, 로아또 대조 전)
+# 젬 가공 계획 API: 첫 운영 릴리스에서 기본 꺼짐(웹 미사용, 교차 검증 전)
 gem:
   enabled: ${GEM_ENABLED:false}
 
@@ -94,7 +99,7 @@ gem:
 crit-speed:
   enabled: ${CRIT_SPEED_ENABLED:false}
 
-# 전투력 시뮬레이터 API: 계산식(목표 사이트 실측 대조) 확정 전까지 기본 꺼짐
+# 전투력 시뮬레이터 API: 계산식(실측 대조) 확정 전까지 기본 꺼짐
 combat-power-sim:
   enabled: ${COMBAT_POWER_SIM_ENABLED:false}
 

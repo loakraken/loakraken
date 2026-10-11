@@ -95,7 +95,7 @@ class StatsIntegrationTest {
   }
 
   @Test
-  void 요약_직업_서버_분포는_최근_확인한_관측_캐릭터로_집계하고_표본이_작으면_값을_비운다() throws Exception {
+  void 요약_직업_서버_분포는_최근_확인한_관측_캐릭터로_집계하고_표본이_작으면_분위수만_비운다() throws Exception {
     표본();
     var summary = data("/api/v1/stats/summary?server=" + encode(SERVER));
     assertThat(summary.at("/meta/population").asLong()).isEqualTo(40);
@@ -127,7 +127,8 @@ class StatsIntegrationTest {
     assertThat(classes.at("/rows/1/className").asText()).isEqualTo(SMALL_CLASS);
     assertThat(classes.at("/rows/1/sampleStatus").asText()).isEqualTo("COLLECTING");
     assertThat(classes.at("/rows/1/combatPower").isNull()).isTrue();
-    assertThat(classes.at("/rows/1/itemLevelMean").isNull()).isTrue();
+    // 30명 미만이어도 평균은 참고값으로 준다(#273). 분위수는 30명 기준 그대로 null.
+    assertThat(classes.at("/rows/1/itemLevelMean").decimalValue()).isEqualByComparingTo("1650");
     ApiContractFixture.write(
         "stats-classes.json", get("/api/v1/stats/classes?server=" + encode(SERVER)).body());
 
@@ -176,7 +177,10 @@ class StatsIntegrationTest {
         data("/api/v1/stats/summary?role=SUPPORT&itemLevelMin=1710&server=" + encode(SERVER));
     assertThat(supportsOnly.at("/meta/population").asLong()).isEqualTo(13);
     assertThat(supportsOnly.at("/meta/sampleStatus").asText()).isEqualTo("COLLECTING");
-    assertThat(supportsOnly.path("itemLevelMedian").isNull()).isTrue();
+    // 13명이라 분위수(p90)는 비우고 중앙값·평균은 참고값으로 준다(#273).
+    assertThat(supportsOnly.path("itemLevelMedian").isNull()).isFalse();
+    assertThat(supportsOnly.path("itemLevelMean").isNull()).isFalse();
+    assertThat(supportsOnly.path("combatPowerP90").isNull()).isTrue();
   }
 
   @Test

@@ -37,7 +37,7 @@ public record RefiningPlanRequest(
         Integer currentFailedAttempts,
     @Schema(
             description =
-                "장비 성장(경험치) 비용(단계당 1회 운명의 파편, #200)을 더함. 두 사이트(로아와·일로아)는 기본으로 넣지만, 웹이 토글·표시를 넣고 true를 보낼 때까지 공개 합계가 바뀌지 않게 생략하면 끔(PM-백엔드 10-10 09:10)",
+                "장비 성장(경험치) 비용(단계당 1회 운명의 파편, #200)을 더함. 웹이 토글·표시를 넣고 true를 보낼 때까지 공개 합계가 바뀌지 않게 생략하면 끔(PM-백엔드 10-10 09:10)",
             defaultValue = "false")
         Boolean growthCost,
     @Schema(

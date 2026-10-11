@@ -2,9 +2,10 @@
 
 `POST /api/v1/refining/plans`는 운명의 업화(`UPHWA`)·운명의 전율(`JEONYUL`) 무기/방어구를 현재 단계에서 목표 단계(11~25)까지 재련할 때의 시도 수 분포와 재료·골드를 계산한다. 외부 API·DB를 호출하지 않는다. 성공은 `200 REFINING_PLAN_SUCCESS`.
 
-## 규칙 출처 — `t4-refining-v2`
+## 규칙 출처 — `t4-refining-v3`
 
 - v2(2026-10-10, #218 B): 전율 12~19단계 책(재봉술·야금술 : 전율 [12-15]·[16-19])을 더했다. 증가값은 **그 단계 기본 성공률**(12~13 +5%, 14~16 +4%, 17~19 +3%)로, 업화 책과 같은 규칙이다(업화 19단계 재봉술 +3%는 게임 캡처로 확인). 로아와 회차별 전략표·일로아 회차별 재료가 같다(계산 검증, 볼트 「전율 책·숨결 모델」). 나머지 단계 데이터는 v1과 같다.
+- v3(2026-10-11, #277): 전율 목표 17·18·19단계 숨결을 25개 × 0.12%에서 **20개 × 0.15%**로 바꿨다(최대 3%는 같고 필요한 숨결 수가 준다). 공식 수치는 비공개이고, 재련 계산 도구 다수와 같은 값으로 PM 총괄이 정했다(10-11 00:20). 나머지 단계와 업화는 v2와 같다.
 
 - 공식 [재련 가이드](https://lostark.game.onstove.com/GameGuide/Pages/재련)(수정일 2026-07-14)는 실패 시 성공률 증가·장인의 기운·숨결/책·성장 지원을 설명하지만 단계별 수치표가 없다. [확률 정보 공개](https://lostark.game.onstove.com/Probability)에도 재련 항목이 없다.
 - 단계별 수치는 [icepeng/loa-calc](https://github.com/icepeng/loa-calc) `src/app/refining/data.ts`(커밋 `5b870d2`, MIT)를 `src/main/resources/refining/t4-refining-rules.json`으로 고정했다. 라이선스 고지는 같은 폴더의 `THIRD-PARTY-LICENSE-icepeng-loa-calc.txt`.

@@ -69,6 +69,8 @@ services:
       CRIT_SPEED_TOOL: "${CRIT_SPEED_TOOL:-}"
       # 전투력 시뮬레이터 화면(web #365). on|off, 비우면 web 기본값. 운영은 공개 기준(로아랩 대조) 전까지 off(백엔드 COMBAT_POWER_SIM_ENABLED=false와 이중 숨김).
       COMBAT_POWER_SIM: "${COMBAT_POWER_SIM:-}"
+      # 원정대 영수증 화면(web). on|off, 비우면 web 기본값. 운영은 계산 재대조 전까지 off(PM 총괄 10-11, api RECEIPT_ENABLED=false와 함께).
+      RECEIPT_TOOL: "${RECEIPT_TOOL:-}"
       # Node 힙 상한. 컨테이너 한도(WEB_MEM_LIMIT)보다 작게 둬 한도에 닿기 전에 GC가 돈다(2GB 서버 기준, docs/ops/deploy.md "메모리 예산").
       NODE_OPTIONS: "${WEB_NODE_OPTIONS:---max-old-space-size=256}"
     depends_on:
@@ -109,6 +111,14 @@ services:
       VALKEY_PORT: "6379"
       # 공식 API 호출 한도를 쓰는 백그라운드 작업은 스택마다 명시한다(운영 1곳만 true).
       STATS_COLLECTOR_ENABLED: ${STATS_COLLECTOR_ENABLED:-false}
+      # 수집기 속도. 기본 3s·예약분 40(사용자 요청 몫). 공개 전 한시로 1s·25까지 허용(PM-백엔드 10-10 23:26), 도메인 공개 전 기본으로 되돌린다.
+      STATS_COLLECTOR_INTERVAL: ${STATS_COLLECTOR_INTERVAL:-3s}
+      STATS_COLLECTOR_RESERVE: ${STATS_COLLECTOR_RESERVE:-40}
+      # 시드 목록(#255): 쉼표 구분 이름. 값은 운영 서버 stack.env에만 둔다(저장소 커밋 금지).
+      STATS_SEED_ENABLED: ${STATS_SEED_ENABLED:-false}
+      STATS_SEED_NAMES: ${STATS_SEED_NAMES:-}
+      # 시드 파일(#271): 한 줄에 한 이름, # 주석. 스택 디렉터리 seed/에 두면 /seed로 읽기 전용 마운트된다(예: /seed/names.txt). 기동 때 한 번 읽는다.
+      STATS_SEED_FILE: ${STATS_SEED_FILE:-}
       MARKET_WARMUP_ENABLED: ${MARKET_WARMUP_ENABLED:-false}
       # 기능 플래그(#214): 비우면 꺼짐. 스테이징은 치명 계산을 켜고(web 치적 도구가 보임), 영수증·젬 가공은 검증 때만 켠다.
       CRIT_SPEED_ENABLED: ${CRIT_SPEED_ENABLED:-false}
@@ -135,6 +145,9 @@ services:
         target: spring.data.redis.password
       - source: lostark_api_key
         target: LOSTARK_API_KEY
+    volumes:
+      # 통계 시드 파일(#271). 저장소에 커밋하지 않는다. 디렉터리가 없어도 기동한다(파일이 없으면 시드 없이 수집).
+      - ./seed:/seed:ro
     depends_on:
       postgres:
         condition: service_healthy

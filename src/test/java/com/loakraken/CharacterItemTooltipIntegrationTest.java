@@ -88,6 +88,10 @@ class CharacterItemTooltipIntegrationTest {
     assertThat(data.at("/skills/0/runeExtraLines/0").asText()).isEqualTo("룬 설명");
     assertThat(data.at("/skills/0/titleLines/1").asText()).isEqualTo("재사용 대기시간 5초");
     assertThat(data.at("/skills/0/infoLines/2").asText()).isEqualTo("마나 211 소모");
+    assertThat(data.at("/skills/0/tripodOptions").size()).isEqualTo(2);
+    assertThat(data.at("/skills/0/tripodOptions/1/name").asText()).isEqualTo("급소 타격");
+    assertThat(data.at("/skills/0/tripodOptions/1/selected").asBoolean()).isFalse();
+    assertThat(data.at("/skills/0/tripodOptions/0/selected").asBoolean()).isTrue();
     // 아크 그리드 코어·젬 툴팁 줄(#288): 검색 응답 slots[].index·gems[].index로 잇는다.
     assertThat(data.at("/arkGrid/0/index").asInt()).isEqualTo(0);
     assertThat(data.at("/arkGrid/0/titleLine").asText()).isEqualTo("유물 아크 그리드 코어");
@@ -168,7 +172,10 @@ class CharacterItemTooltipIntegrationTest {
             null,
             null,
             List.of("일반", "재사용 대기시간 5초", "[일반 스킬]"),
-            List.of("PvE", "스킬 레벨 12", "마나 211 소모"));
+            List.of("PvE", "스킬 레벨 12", "마나 211 소모"),
+            List.of(
+                new CharacterLoadout.TripodOption(0, 1, "약점 노출", null, true),
+                new CharacterLoadout.TripodOption(0, 2, "급소 타격", null, false)));
     var arkGrid =
         new CharacterLoadout.ArkGrid(
             List.of(

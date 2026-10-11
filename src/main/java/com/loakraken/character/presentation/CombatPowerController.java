@@ -147,7 +147,8 @@ public class CombatPowerController {
                           item.status().name(),
                           item.contributionPct(),
                           item.withoutCombatPower(),
-                          item.basis()))
+                          item.basis(),
+                          item.reasonCode()))
               .toList());
     }
   }
@@ -161,7 +162,9 @@ public class CombatPowerController {
           BigDecimal contributionPct,
       @Schema(description = "그 항목을 뺐을 때 전투력(소수 둘째 자리)") @NullableResponse
           BigDecimal withoutCombatPower,
-      @Schema(description = "계산 근거 또는 계산하지 않은 이유") String basis) {}
+      @Schema(description = "계산 근거 또는 계산하지 않은 이유") String basis,
+      @Schema(description = "UNSUPPORTED 이유 코드(시뮬레이터·스펙업과 같은 코드). OK면 null") @NullableResponse
+          String reasonCode) {}
 
   public record CombatPowerSimulationRequest(
       @Schema(description = "캐릭터명", example = "모험가", requiredMode = Schema.RequiredMode.REQUIRED)
@@ -237,7 +240,8 @@ public class CombatPowerController {
                           item.to(),
                           item.delta(),
                           item.status().name(),
-                          item.basis()))
+                          item.basis(),
+                          item.reasonCode()))
               .toList(),
           result.unsupportedCount(),
           result.assumptions());
@@ -253,7 +257,12 @@ public class CombatPowerController {
       @Schema(description = "순서대로 적용했을 때의 증가분. UNSUPPORTED면 null") @NullableResponse
           BigDecimal delta,
       @Schema(allowableValues = {"OK", "UNSUPPORTED"}) String status,
-      @Schema(description = "근거 문장(사이트 이름 없음)") String basis) {}
+      @Schema(description = "근거 문장(사이트 이름 없음)") String basis,
+      @Schema(
+              description = "UNSUPPORTED 이유 코드(문자열, 값이 늘 수 있음, 스펙업·전투력 기여와 같은 코드). OK면 null",
+              example = "SUPPORTER_MODEL_PENDING")
+          @NullableResponse
+          String reasonCode) {}
 
   public record CombatPowerOptionsResponse(
       String ruleVersion,

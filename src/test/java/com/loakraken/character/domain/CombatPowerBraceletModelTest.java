@@ -100,6 +100,13 @@ class CombatPowerBraceletModelTest {
     assertThat(weapon.weaponFlatDelta()).isEqualByComparingTo("-7200");
     assertThat(model.factor(Map.of(2, CombatPowerBraceletModel.option(coefficients, "없음", null))))
         .isNull();
+    // 힘·민첩·지능 +N은 0이 아니라 재련 모델 S 항으로 넘긴다(계산 검증 #332 회신).
+    var main = model(2469, 70, List.of("민첩 +15360"));
+    assertThat(main.lines().get(0).kind()).isEqualTo(CombatPowerBraceletModel.Kind.MAIN_STAT);
+    assertThat(
+            main.factor(Map.of(0, CombatPowerBraceletModel.option(coefficients, "없음", null)))
+                .mainStatDelta())
+        .isEqualByComparingTo("-15360");
   }
 
   private static BigDecimal contribution(CombatPowerBraceletModel.Model model) {

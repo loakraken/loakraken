@@ -93,8 +93,14 @@ public final class CombatPowerRefineModel {
 
     /** 재련 단계 변화와 함께 고정 무기 공격력이 weaponFlatDelta만큼 바뀐 상태(팔찌 #327)의 전투력 비. */
     public BigDecimal ratio(Map<Integer, Integer> levels, BigDecimal weaponFlatDelta) {
+      return ratio(levels, weaponFlatDelta, BigDecimal.ZERO);
+    }
+
+    /** 위에 더해 주스탯(힘·민첩·지능)이 mainStatDelta만큼 바뀐 상태(팔찌 #332): S' = S + Δ × mS. */
+    public BigDecimal ratio(
+        Map<Integer, Integer> levels, BigDecimal weaponFlatDelta, BigDecimal mainStatDelta) {
       if (unsupportedReason != null) return null;
-      var nextS = s;
+      var nextS = s.add(mainStatDelta.multiply(statMultiplier, MATH), MATH);
       var nextW = w.add(weaponFlatDelta.multiply(BigDecimal.ONE.add(weaponPct), MATH), MATH);
       for (var entry : levels.entrySet()) {
         var part = parts.get(entry.getKey());

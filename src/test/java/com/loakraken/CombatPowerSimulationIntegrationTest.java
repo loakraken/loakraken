@@ -449,6 +449,80 @@ class CombatPowerSimulationIntegrationTest {
     assertThat(options.toString()).contains("추가 피해 +3.50%");
   }
 
+  @Test
+  void 서포터와_판정_불가_캐릭터는_딜러_식을_쓰지_않는다() throws Exception {
+    // PM-백엔드 P0(10-11 20:23): 서포터 전투력은 케어 + 버프라 식이 다르다. 깨달음 노드로 딜러일 때만 계산한다.
+    when(detailsPort.fetch(anyString()))
+        .thenAnswer(
+            invocation -> {
+              String name = invocation.getArgument(0);
+              return fetchedRole(name, name.endsWith("서폿") ? "깨달음 1티어 절실한 구원 Lv.1" : null);
+            });
+    for (var name : List.of("시뮬바드서폿", "시뮬바드모름"))
+      assertThat(get("/api/v1/characters/search?characterName=" + encode(name)).statusCode())
+          .isEqualTo(200);
+    var support =
+        mapper
+            .readTree(
+                simulate(
+                        "시뮬바드서폿",
+                        "[{\"kind\": \"BRACELET_EFFECT\", \"line\": 3, \"name\": \"없음\"}]")
+                    .body())
+            .path("data");
+    assertThat(support.at("/contributions/0/status").asText()).isEqualTo("UNSUPPORTED");
+    assertThat(support.at("/contributions/0/basis").asText())
+        .isEqualTo("서포터 전투력 계산식은 아직 적용하지 않았습니다.");
+    assertThat(support.path("after").decimalValue()).isEqualByComparingTo("3345.24");
+    var unknown =
+        mapper
+            .readTree(
+                simulate(
+                        "시뮬바드모름",
+                        "[{\"kind\": \"BRACELET_EFFECT\", \"line\": 3, \"name\": \"없음\"}]")
+                    .body())
+            .path("data");
+    assertThat(unknown.at("/contributions/0/basis").asText())
+        .isEqualTo("딜러·서포터를 판정하지 못해 계산하지 않았습니다.");
+    var contributions =
+        mapper
+            .readTree(
+                get("/api/v1/characters/combat-power/contributions?characterName="
+                        + encode("시뮬바드서폿"))
+                    .body())
+            .at("/data/items/0");
+    assertThat(contributions.path("status").asText()).isEqualTo("UNSUPPORTED");
+    assertThat(contributions.path("contributionPct").isNull()).isTrue();
+  }
+
+  private FetchedCharacter fetchedRole(String name, String node) {
+    var base = fetchedBracelet(name);
+    var profile = base.details().profile();
+    var supportProfile =
+        new CharacterProfile(
+            name,
+            SERVER,
+            "바드",
+            70,
+            profile.itemLevel(),
+            profile.combatPower(),
+            null,
+            null,
+            null,
+            null,
+            profile.stats());
+    var loadout = base.details().loadout();
+    var effects =
+        node == null
+            ? List.<CharacterLoadout.PassiveEffect>of()
+            : List.of(new CharacterLoadout.PassiveEffect("깨달음", node, null));
+    var arkPassive =
+        new CharacterLoadout.ArkPassive("깨달음", true, loadout.arkPassive().points(), effects);
+    var next =
+        new CharacterLoadout(loadout.equipment(), null, null, null, arkPassive, null, List.of());
+    return new FetchedCharacter(
+        CharacterTestFixture.details(supportProfile, next, List.of()), "{}", "[]");
+  }
+
   private FetchedCharacter fetchedBracelet(String name) {
     var profile =
         new CharacterProfile(

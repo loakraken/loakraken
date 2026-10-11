@@ -22,6 +22,7 @@ public final class CombatPowerBraceletModel {
   private static final MathContext MATH = MathContext.DECIMAL64;
   private static final BigDecimal HUNDRED = BigDecimal.valueOf(100);
   private static final Pattern STAT = Pattern.compile("^(치명|특화|신속|제압|인내|숙련) \\+(\\d+)$");
+  private static final Pattern MAIN_STAT = Pattern.compile("^(힘|민첩|지능) \\+(\\d+)$");
   private static final Pattern WEAPON_FLAT = Pattern.compile("^무기 공격력 \\+(\\d+)$");
   private static final Pattern WEAPON_BUFF = Pattern.compile("^무기 공격력이 (\\d+) 증가한다");
   private static final Pattern NUMBER = Pattern.compile("[\\d.]+");
@@ -82,6 +83,7 @@ public final class CombatPowerBraceletModel {
   public enum Kind {
     SPECIAL,
     STAT,
+    MAIN_STAT,
     WEAPON_FLAT,
     ZERO,
     UNKNOWN
@@ -103,8 +105,8 @@ public final class CombatPowerBraceletModel {
     }
   }
 
-  /** 비율과 W 항 고정 무기 공격력 변화(재련 모델에 넘김). */
-  public record Factor(BigDecimal ratio, BigDecimal weaponFlatDelta) {}
+  /** 비율과 재련 모델에 넘기는 W 항 고정 무기 공격력·S 항 주스탯(힘·민첩·지능) 변화. */
+  public record Factor(BigDecimal ratio, BigDecimal weaponFlatDelta, BigDecimal mainStatDelta) {}
 
   public record Model(
       List<Line> lines,
@@ -131,6 +133,7 @@ public final class CombatPowerBraceletModel {
       var ratio = BigDecimal.ONE;
       var statDelta = 0;
       var weaponDelta = BigDecimal.ZERO;
+      var mainStatDelta = BigDecimal.ZERO;
       for (var entry : replacements.entrySet()) {
         var current = lines.get(entry.getKey());
         var next = entry.getValue();
@@ -139,9 +142,13 @@ public final class CombatPowerBraceletModel {
         if (current.combatStat(coefficients)) statDelta -= current.statPoints();
         if (next.combatStat(coefficients)) statDelta += next.statPoints();
         weaponDelta = weaponDelta.add(next.weaponFlat()).subtract(current.weaponFlat());
+        if (next.kind() == Kind.MAIN_STAT)
+          mainStatDelta = mainStatDelta.add(BigDecimal.valueOf(next.statPoints()));
+        if (current.kind() == Kind.MAIN_STAT)
+          mainStatDelta = mainStatDelta.subtract(BigDecimal.valueOf(current.statPoints()));
       }
       if (statDelta != 0) ratio = ratio.multiply(statRatio(statDelta), MATH);
-      return new Factor(ratio, weaponDelta);
+      return new Factor(ratio, weaponDelta, mainStatDelta);
     }
 
     /** 팔찌를 뺐을 때(모든 줄 + 팔찌 도약 포인트)의 비율. 계산할 수 없으면 null. */
@@ -158,7 +165,9 @@ public final class CombatPowerBraceletModel {
           BigDecimal.ONE.add(
               leap.multiply(leapTotal.subtract(BigDecimal.valueOf(braceletLeap)), MATH), MATH);
       return new Factor(
-          factor.ratio().multiply(next, MATH).divide(now, MATH), factor.weaponFlatDelta());
+          factor.ratio().multiply(next, MATH).divide(now, MATH),
+          factor.weaponFlatDelta(),
+          factor.mainStatDelta());
     }
 
     /** 계산할 수 없는 첫 줄의 이유(빼기 계산용). */
@@ -232,6 +241,17 @@ public final class CombatPowerBraceletModel {
           null,
           stat.group(1),
           Integer.parseInt(stat.group(2)),
+          BigDecimal.ZERO,
+          null);
+    // 힘·민첩·지능 +N은 재련 모델 S 항(S' = S + N × mS, 계산 검증 #332 회신: 목걸이 같은 수치와 같은 배수).
+    var main = MAIN_STAT.matcher(text);
+    if (main.matches())
+      return new Line(
+          text,
+          Kind.MAIN_STAT,
+          null,
+          main.group(1),
+          Integer.parseInt(main.group(2)),
           BigDecimal.ZERO,
           null);
     var flat = WEAPON_FLAT.matcher(text);

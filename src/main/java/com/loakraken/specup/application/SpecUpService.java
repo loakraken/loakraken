@@ -5,10 +5,10 @@ import com.loakraken.character.application.CombatPowerSimulationService;
 import com.loakraken.character.application.CombatPowerSimulationService.Change;
 import com.loakraken.character.application.CombatPowerSimulationService.Kind;
 import com.loakraken.character.domain.CharacterLoadout;
+import com.loakraken.character.domain.CombatPowerReasons;
 import com.loakraken.common.api.BusinessException;
 import com.loakraken.market.application.MarketAuctionService;
 import com.loakraken.specup.domain.SpecUpCost;
-import com.loakraken.specup.domain.SpecUpReasons;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Instant;
@@ -105,8 +105,20 @@ public class SpecUpService {
 
     var ok = new ArrayList<Candidate>();
     var unsupported = new ArrayList<Candidate>();
+    // 딜러가 아니면 모든 후보를 역할 이유로 UNSUPPORTED(PM-백엔드 P0 10-11 20:23).
+    var roleReason = CombatPowerSimulationService.roleReason(snapshot);
     for (var plan : planned) {
-      var candidate = evaluate(snapshot, plan);
+      var candidate =
+          roleReason != null
+              ? plan.candidate(
+                  "UNSUPPORTED",
+                  null,
+                  null,
+                  null,
+                  null,
+                  CombatPowerReasons.classify(roleReason),
+                  null)
+              : evaluate(snapshot, plan);
       ("OK".equals(candidate.status()) ? ok : unsupported).add(candidate);
     }
     ok.sort(order(sort));
@@ -148,11 +160,11 @@ public class SpecUpService {
   private Candidate evaluate(CharacterResult snapshot, Planned plan) {
     if (plan.change() == null)
       return plan.candidate(
-          "UNSUPPORTED", null, null, null, null, SpecUpReasons.MODEL_UNCONFIRMED, null);
+          "UNSUPPORTED", null, null, null, null, CombatPowerReasons.MODEL_UNCONFIRMED, null);
     var result = simulator.simulate(snapshot, List.of(plan.change()));
     var contribution = result.contributions().getFirst();
     if (contribution.status() != CombatPowerSimulationService.Status.OK) {
-      var reason = SpecUpReasons.classify(contribution.basis());
+      var reason = CombatPowerReasons.classify(contribution.basis());
       return plan.candidate(
           "UNSUPPORTED",
           null,
@@ -412,7 +424,7 @@ public class SpecUpService {
         BigDecimal percent,
         SpecUpCost cost,
         BigDecimal efficiency,
-        SpecUpReasons.Reason reason,
+        CombatPowerReasons.Reason reason,
         String detail) {
       return new Candidate(
           id,

@@ -182,6 +182,61 @@ class SpecUpIntegrationTest {
   }
 
   @Test
+  void 서포터는_모든_후보가_역할_이유로_UNSUPPORTED다() throws Exception {
+    when(auctions.cachedGems()).thenReturn(gemCells(true));
+    when(detailsPort.fetch(anyString()))
+        .thenAnswer(
+            invocation -> {
+              var base = fetched(invocation.getArgument(0));
+              var profile = base.details().profile();
+              var loadout = base.details().loadout();
+              return new FetchedCharacter(
+                  CharacterTestFixture.details(
+                      new CharacterProfile(
+                          profile.characterName(),
+                          SERVER,
+                          "바드",
+                          70,
+                          profile.itemLevel(),
+                          profile.combatPower(),
+                          null,
+                          null,
+                          null,
+                          null,
+                          List.of()),
+                      new CharacterLoadout(
+                          loadout.equipment(),
+                          loadout.engravings(),
+                          loadout.gems(),
+                          null,
+                          new CharacterLoadout.ArkPassive(
+                              "깨달음",
+                              true,
+                              List.of(),
+                              List.of(
+                                  new CharacterLoadout.PassiveEffect(
+                                      "깨달음", "깨달음 1티어 절실한 구원 Lv.1", null))),
+                          loadout.arkGrid(),
+                          List.of()),
+                      List.of()),
+                  "{}",
+                  "[]");
+            });
+    assertThat(get("/api/v1/characters/search?characterName=" + encode("스펙서폿")).statusCode())
+        .isEqualTo(200);
+    var data =
+        mapper
+            .readTree(get("/api/v1/characters/spec-up?characterName=" + encode("스펙서폿")).body())
+            .path("data");
+    assertThat(data.path("total").asInt()).isZero();
+    for (var candidate : data.path("candidates")) {
+      assertThat(candidate.path("status").asText()).isEqualTo("UNSUPPORTED");
+      assertThat(candidate.path("reasonCode").asText()).isEqualTo("SUPPORTER_MODEL_PENDING");
+    }
+    assertThat(data.path("candidates").size()).isPositive();
+  }
+
+  @Test
   void 캐시가_없으면_CHARACTER_NOT_CACHED이고_공식_호출이_없다() throws Exception {
     var response = get("/api/v1/characters/spec-up?characterName=" + encode("스펙없음"));
     assertThat(response.statusCode()).isEqualTo(404);

@@ -1,10 +1,12 @@
 package com.loakraken.character.application;
 
 import com.loakraken.character.domain.CharacterLoadout;
+import com.loakraken.character.domain.CharacterPosition;
 import com.loakraken.character.domain.CombatPowerBraceletModel;
 import com.loakraken.character.domain.CombatPowerEquipmentModel;
 import com.loakraken.character.domain.CombatPowerGemModel;
 import com.loakraken.character.domain.CombatPowerPolishValues;
+import com.loakraken.character.domain.CombatPowerReasons;
 import com.loakraken.character.domain.CombatPowerRefineModel;
 import com.loakraken.common.api.BusinessException;
 import com.loakraken.common.api.ErrorCode;
@@ -53,6 +55,11 @@ public class CombatPowerSimulationService {
   private static final String BRACELET_BASIS =
       "팔찌 옵션의 전투력 배수(특수 옵션 계수·전투 특성 0.03%/점·고정 무기 공격력)를 바꾼 비율을 공식 전투력에 곱했습니다.";
   private static final String ADVANCED_REFINE_BASIS = "상급 재련 단계의 전투력 계산식을 아직 확인하지 않아 계산하지 않았습니다.";
+
+  /** 서포터 전투력은 케어 + 버프로 식이 다르다(계산 검증 #331). 서포터 모델 구현 전에는 딜러 식을 쓰지 않는다(PM-백엔드 P0 10-11 20:23). */
+  public static final String SUPPORTER_BASIS = CombatPowerReasons.SUPPORTER_MODEL_PENDING.text();
+
+  public static final String ROLE_UNKNOWN_BASIS = CombatPowerReasons.ROLE_UNKNOWN.text();
   private static final String UNSUPPORTED_BASIS = "이 항목의 전투력 계산식을 아직 확인하고 있어 계산하지 않았습니다.";
 
   private final CharacterCache cache;
@@ -123,7 +130,8 @@ public class CombatPowerSimulationService {
       String to,
       BigDecimal delta,
       Status status,
-      String basis) {}
+      String basis,
+      String reasonCode) {}
 
   public record Result(
       String characterName,
@@ -174,7 +182,12 @@ public class CombatPowerSimulationService {
       Status status,
       BigDecimal contributionPct,
       BigDecimal withoutCombatPower,
-      String basis) {}
+      String basis) {
+    /** UNSUPPORTED 이유 코드(시뮬레이터·스펙업과 같은 코드). OK면 null. */
+    public String reasonCode() {
+      return status == Status.OK ? null : CombatPowerReasons.classify(basis).code();
+    }
+  }
 
   public record Contributions(
       String characterName,
@@ -199,7 +212,12 @@ public class CombatPowerSimulationService {
         CombatPowerBraceletModel.of(
             braceletCoefficients, loadout, result.details().profile().stats());
     var items = new ArrayList<ContributionItem>();
-    if (braceletModel != null) items.add(braceletContribution(before, braceletModel, refineModel));
+    var roleReason = roleReason(result);
+    if (braceletModel != null)
+      items.add(
+          roleReason != null
+              ? new ContributionItem("BRACELET", "팔찌", Status.UNSUPPORTED, null, null, roleReason)
+              : braceletContribution(before, braceletModel, refineModel));
     return new Contributions(
         result.details().profile().characterName(), result.fetchedAt(), before, List.copyOf(items));
   }
@@ -223,8 +241,8 @@ public class CombatPowerSimulationService {
           reason == null ? "전투 특성 합이나 도약 포인트를 읽지 못해 계산하지 않았습니다." : reason);
     }
     var ratio = without.ratio();
-    if (without.weaponFlatDelta().signum() != 0) {
-      var weapon = refine.ratio(Map.of(), without.weaponFlatDelta());
+    if (without.weaponFlatDelta().signum() != 0 || without.mainStatDelta().signum() != 0) {
+      var weapon = refine.ratio(Map.of(), without.weaponFlatDelta(), without.mainStatDelta());
       if (weapon == null)
         return new ContributionItem(
             "BRACELET", "팔찌", Status.UNSUPPORTED, null, null, refine.unsupportedReason());
@@ -238,6 +256,16 @@ public class CombatPowerSimulationService {
             .setScale(2, RoundingMode.HALF_UP);
     return new ContributionItem(
         "BRACELET", "팔찌", Status.OK, pct, after, "팔찌 효과를 모두 빼고 팔찌 도약 포인트도 뺀 전투력과 지금 전투력의 차이입니다.");
+  }
+
+  /** 딜러가 아니면(서포터·판정 불가) 계산하지 않는 이유. 딜러면 null. 판정은 깨달음 노드(CharacterPosition). */
+  public static String roleReason(CharacterResult result) {
+    var profile = result.details().profile();
+    var role =
+        CharacterPosition.judge(profile.className(), result.details().loadout().arkPassive())
+            .role();
+    if (role == CharacterPosition.Role.DEALER) return null;
+    return role == CharacterPosition.Role.SUPPORT ? SUPPORTER_BASIS : ROLE_UNKNOWN_BASIS;
   }
 
   /** 이미 읽은 캐릭터로 시뮬레이션한다(공식 호출 없음). */
@@ -266,8 +294,9 @@ public class CombatPowerSimulationService {
     var running = before;
     var contributions = new ArrayList<Contribution>();
     int unsupported = 0;
+    var roleReason = roleReason(result);
     for (var planned : merged.values()) {
-      String reason = planned.reason();
+      String reason = roleReason != null ? roleReason : planned.reason();
       if (planned.effect() != null && reason == null) {
         if (before == null) reason = NO_OFFICIAL_BASIS;
         else {
@@ -388,12 +417,20 @@ public class CombatPowerSimulationService {
       String basis,
       String reason) {
     Contribution ok(BigDecimal delta, String okBasis) {
-      return new Contribution(change.kind().name(), target, from, to, delta, Status.OK, okBasis);
+      return new Contribution(
+          change.kind().name(), target, from, to, delta, Status.OK, okBasis, null);
     }
 
     Contribution unsupported(String why) {
       return new Contribution(
-          change.kind().name(), target, from, to, null, Status.UNSUPPORTED, why);
+          change.kind().name(),
+          target,
+          from,
+          to,
+          null,
+          Status.UNSUPPORTED,
+          why,
+          CombatPowerReasons.classify(why).code());
     }
   }
 
@@ -415,16 +452,20 @@ public class CombatPowerSimulationService {
       ratio = ratio.multiply(next.divide(base, MATH), MATH);
     }
     var weaponFlatDelta = BigDecimal.ZERO;
+    var mainStatDelta = BigDecimal.ZERO;
     if (!state.bracelet().isEmpty()) {
       if (braceletModel == null) return null;
       var factor = braceletModel.factor(state.bracelet());
       if (factor == null) return null;
       ratio = ratio.multiply(factor.ratio(), MATH);
       weaponFlatDelta = factor.weaponFlatDelta();
+      mainStatDelta = factor.mainStatDelta();
     }
     // 재련 단계와 팔찌의 고정 무기 공격력은 같은 W 항을 쓴다.
-    if (!state.refines().isEmpty() || weaponFlatDelta.signum() != 0) {
-      var refine = refineModel.ratio(state.refines(), weaponFlatDelta);
+    if (!state.refines().isEmpty()
+        || weaponFlatDelta.signum() != 0
+        || mainStatDelta.signum() != 0) {
+      var refine = refineModel.ratio(state.refines(), weaponFlatDelta, mainStatDelta);
       if (refine == null) return null;
       ratio = ratio.multiply(refine, MATH);
     }

@@ -1,0 +1,102 @@
+package com.loakraken.refining.domain;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+import java.io.IOException;
+import java.math.BigDecimal;
+import java.util.HashMap;
+import java.util.Map;
+import org.junit.jupiter.api.Test;
+import tools.jackson.databind.json.JsonMapper;
+
+/** 회차별 최적 전략(#284): 단계 전체에 한 조합을 고정하는 어떤 전략보다 같거나 싸다. */
+class RefiningOptimalTest {
+  private static final RefiningRules RULES = rules();
+
+  @Test
+  void 숨결_책을_못_쓰면_기본_전략의_기대_비용과_같다() {
+    var track = RULES.track(RefiningRules.Grade.JEONYUL, RefiningRules.EquipmentType.WEAPON);
+    var prices = prices(track.stage(19), 1);
+    var optimal = RefiningOptimal.calculate(track.stage(19), 1, prices, false, false);
+    assertThat(optimal.expectedGold())
+        .isCloseTo(
+            single(track, RefiningRules.Grade.JEONYUL, 19, false, false, prices),
+            org.assertj.core.data.Offset.offset(1.0));
+    assertThat(optimal.usesBreath()).isFalse();
+    assertThat(optimal.usesBook()).isFalse();
+  }
+
+  @Test
+  void 어떤_고정_전략보다_같거나_싸다() {
+    for (var grade : RefiningRules.Grade.values())
+      for (var type : RefiningRules.EquipmentType.values()) {
+        var track = RULES.track(grade, type);
+        for (int stage : new int[] {12, 15, 18, 19, 21, 24}) {
+          if (stage < track.minTargetStage() || stage > track.maxTargetStage()) continue;
+          var rule = track.stage(stage);
+          // 숨결이 비쌀 때와 쌀 때 둘 다 본다.
+          for (double breathScale : new double[] {0.2, 1, 5}) {
+            var prices = prices(rule, breathScale);
+            var optimal = RefiningOptimal.calculate(rule, 1, prices, true, true);
+            double bestSingle = Double.MAX_VALUE;
+            for (boolean breath : new boolean[] {false, true})
+              for (boolean book : new boolean[] {false, true}) {
+                if (breath && rule.breath() == null || book && rule.book() == null) continue;
+                bestSingle =
+                    Math.min(bestSingle, single(track, grade, stage, breath, book, prices));
+              }
+            assertThat(optimal.expectedGold())
+                .as(grade + " " + type + " " + stage + " ×" + breathScale)
+                .isLessThanOrEqualTo(bestSingle * (1 + 1e-5));
+            assertThat(optimal.path()).isNotEmpty();
+          }
+        }
+      }
+  }
+
+  @Test
+  void 기본_재료_시세가_없으면_계산하지_않는다() {
+    var track = RULES.track(RefiningRules.Grade.UPHWA, RefiningRules.EquipmentType.ARMOR);
+    assertThat(RefiningOptimal.calculate(track.stage(15), 1, Map.of(), true, true)).isNull();
+  }
+
+  /**
+   * 단계 전체에 한 조합을 고정했을 때의 기대 골드(RefiningPlan 기대 재료 × 시세 + 골드). RefiningPlan은 기대 수량을 반올림해 내므로 비교는 상대
+   * 오차 1e-5 안에서 한다.
+   */
+  private static double single(
+      RefiningRules.Track track,
+      RefiningRules.Grade grade,
+      int stage,
+      boolean breath,
+      boolean book,
+      Map<String, BigDecimal> prices) {
+    var plan =
+        RefiningPlan.calculate(
+            track, grade, new RefiningPlan.Options(stage - 1, stage, breath, book, false, 0, 0));
+    var stagePlan = plan.stages().getFirst();
+    double gold = stagePlan.expectedGold().doubleValue();
+    for (var quantity : stagePlan.expectedMaterials())
+      gold += quantity.amount().doubleValue() * prices.get(quantity.name()).doubleValue();
+    return gold;
+  }
+
+  private static Map<String, BigDecimal> prices(RefiningRules.Stage rule, double breathScale) {
+    var prices = new HashMap<String, BigDecimal>();
+    for (var material : rule.materials()) prices.put(material.name(), BigDecimal.valueOf(3));
+    prices.put(RefiningPlan.SHARD, new BigDecimal("0.2"));
+    if (rule.breath() != null)
+      prices.put(rule.breath().name(), BigDecimal.valueOf(400 * breathScale));
+    if (rule.book() != null) prices.put(rule.book().name(), BigDecimal.valueOf(20_000));
+    return prices;
+  }
+
+  private static RefiningRules rules() {
+    try (var input =
+        RefiningOptimalTest.class.getResourceAsStream("/refining/t4-refining-rules.json")) {
+      return JsonMapper.builder().build().readValue(input, RefiningRules.class);
+    } catch (IOException exception) {
+      throw new IllegalStateException(exception);
+    }
+  }
+}

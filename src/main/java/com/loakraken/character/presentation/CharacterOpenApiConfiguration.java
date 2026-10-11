@@ -34,6 +34,13 @@ class CharacterOpenApiConfiguration {
       ResponseContracts.apply(
           CharacterSuggestController.CharacterSuggestResponse.class,
           document.getComponents().getSchemas());
+      // 원정대 캐릭터별 전투력(L19)
+      ResponseContracts.apply(
+          RosterCombatPowerController.RosterCombatPowerResponse.class,
+          document.getComponents().getSchemas());
+      ResponseContracts.apply(
+          RosterCombatPowerController.RosterCombatPowerRefreshResponse.class,
+          document.getComponents().getSchemas());
     };
   }
 }

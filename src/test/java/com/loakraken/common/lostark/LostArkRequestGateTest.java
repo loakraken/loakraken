@@ -90,6 +90,70 @@ class LostArkRequestGateTest {
     assertThat(gate.backgroundAvailable(0)).isFalse();
   }
 
+  @Test
+  void 사용자_몫_호출은_클라이언트_공식_한도에도_매기고_백그라운드는_매기지_않는다() {
+    // 보안 감사 10-12: reserve 안 호출이 클라이언트 OFFICIAL 한도를 벗어나 원정대 불러오기가 분당 24회까지 가능했다.
+    var clock = new MutableClock();
+    var limiter =
+        new ClientLimiter(
+            new ClientLimitProperties(true, 2, 10, 10, 10, true, 2),
+            new ClientLimitStore.Memory(),
+            clock,
+            registry,
+            "key");
+    var gate =
+        new LostArkRequestGate(
+            clock,
+            new LostArkProperties(
+                URI.create("https://example.com"),
+                "test",
+                Duration.ofSeconds(3),
+                Duration.ofSeconds(5),
+                90,
+                4,
+                Duration.ofMinutes(5)),
+            metrics,
+            new MemoryGateStore(clock),
+            limiter);
+    limiter.enter("client-a");
+    try {
+      Runnable call =
+          () -> {
+            gate.acquire();
+            gate.release();
+          };
+      // 백그라운드형(withReserve)은 클라이언트 한도에 매기지 않는다.
+      for (int i = 0; i < 3; i++)
+        gate.withReserve(
+            30,
+            () -> {
+              call.run();
+              return null;
+            });
+      // 사용자 몫형(withUserReserve)은 분당 2회까지, 세 번째는 CLIENT_RATE_LIMITED.
+      for (int i = 0; i < 2; i++)
+        gate.withUserReserve(
+            30,
+            () -> {
+              call.run();
+              return null;
+            });
+      assertThatThrownBy(
+              () ->
+                  gate.withUserReserve(
+                      30,
+                      () -> {
+                        call.run();
+                        return null;
+                      }))
+          .isInstanceOf(BusinessException.class)
+          .extracting(exception -> ((BusinessException) exception).errorCode())
+          .isEqualTo(LostArkErrorCode.CLIENT_RATE_LIMITED);
+    } finally {
+      limiter.exit();
+    }
+  }
+
   private LostArkRequestGate gate(Clock clock, int budget, int concurrency) {
     return new LostArkRequestGate(
         clock,

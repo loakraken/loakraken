@@ -1,0 +1,159 @@
+{
+ "checkedAt": "2026-10-12",
+ "checklist": [
+  "L29",
+  "L39"
+ ],
+ "source": "로아랩 시뮬레이터 서버 계산(젬 옵션을 뺀 전투력 비, 표본 5명, 언새늘 외 익명) + #323 젬 계수",
+ "status": "CONFIRMED",
+ "definition": {
+  "gemEfficiency": "젬 효율 % = (지금 전투력 ÷ 젬 옵션(공격력·추가 피해·보스 피해)을 모두 뺀 전투력 − 1) × 100 = (Π(1 + bp/10000) − 1) × 100. 팔찌 효율과 같은 정의(PM 총괄 21:46 판정)",
+  "optionEfficiency": "옵션 효율 % = bp / 100, bp = ⌊레벨 / 120 × 계수⌋(공격력 400 · 추가 피해 700 · 보스 피해 1000). 레벨은 공식 ArkGrid.Effects의 Level(질서·혼돈 젬 합)",
+  "supporterOptions": "낙인력·아군 피해 강화·아군 공격 강화는 딜러 0(서포터는 #339 서포터 계수)"
+ },
+ "worstDiffCp": 0.0025,
+ "samples": {
+  "언새늘": {
+   "combatPower": 3345.24,
+   "options": {
+    "공격력": {
+     "level": 28,
+     "bp": 93,
+     "efficiencyPct": 0.93,
+     "loalabRemovalRatio": 0.990785803,
+     "diffCp": 0.0004
+    },
+    "추가 피해": {
+     "level": 51,
+     "bp": 297,
+     "efficiencyPct": 2.97,
+     "loalabRemovalRatio": 0.971156688,
+     "diffCp": 0.0001
+    },
+    "보스 피해": {
+     "level": 4,
+     "bp": 33,
+     "efficiencyPct": 0.33,
+     "loalabRemovalRatio": 0.996710939,
+     "diffCp": 0.0003
+    }
+   },
+   "totalEfficiencyPct": 4.27,
+   "loalabAllRemovalRatio": 0.959043297,
+   "diffCp": 0.0001
+  },
+  "c01": {
+   "combatPower": 11028.4,
+   "options": {
+    "공격력": {
+     "level": 73,
+     "bp": 243,
+     "efficiencyPct": 2.43,
+     "loalabRemovalRatio": 0.976276704,
+     "diffCp": 0.0025
+    },
+    "추가 피해": {
+     "level": 58,
+     "bp": 338,
+     "efficiencyPct": 3.38,
+     "loalabRemovalRatio": 0.96730523,
+     "diffCp": 0.0016
+    },
+    "보스 피해": {
+     "level": 81,
+     "bp": 675,
+     "efficiencyPct": 6.75,
+     "loalabRemovalRatio": 0.936768162,
+     "diffCp": 0.0001
+    }
+   },
+   "totalEfficiencyPct": 13.04,
+   "loalabAllRemovalRatio": 0.884643829,
+   "diffCp": 0.0008
+  },
+  "c02": {
+   "combatPower": 4783.32,
+   "options": {
+    "공격력": {
+     "level": 70,
+     "bp": 233,
+     "efficiencyPct": 2.33,
+     "loalabRemovalRatio": 0.977230606,
+     "diffCp": 0.0004
+    },
+    "추가 피해": {
+     "level": 56,
+     "bp": 326,
+     "efficiencyPct": 3.26,
+     "loalabRemovalRatio": 0.968429166,
+     "diffCp": -0.0002
+    },
+    "보스 피해": {
+     "level": 98,
+     "bp": 816,
+     "efficiencyPct": 8.16,
+     "loalabRemovalRatio": 0.924556166,
+     "diffCp": -0.0002
+    }
+   },
+   "totalEfficiencyPct": 14.29,
+   "loalabAllRemovalRatio": 0.874980139,
+   "diffCp": -0.0003
+  },
+  "c03": {
+   "combatPower": 3634.71,
+   "options": {
+    "공격력": {
+     "level": 52,
+     "bp": 173,
+     "efficiencyPct": 1.73,
+     "loalabRemovalRatio": 0.982994297,
+     "diffCp": 0.0004
+    },
+    "추가 피해": {
+     "level": 50,
+     "bp": 291,
+     "efficiencyPct": 2.91,
+     "loalabRemovalRatio": 0.971722971,
+     "diffCp": 0.0004
+    }
+   },
+   "totalEfficiencyPct": 4.69,
+   "loalabAllRemovalRatio": 0.955198076,
+   "diffCp": 0.0005
+  },
+  "c04": {
+   "combatPower": 3045.57,
+   "options": {
+    "공격력": {
+     "level": 24,
+     "bp": 80,
+     "efficiencyPct": 0.8,
+     "loalabRemovalRatio": 0.992063555,
+     "diffCp": 0.0002
+    },
+    "추가 피해": {
+     "level": 35,
+     "bp": 204,
+     "efficiencyPct": 2.04,
+     "loalabRemovalRatio": 0.980007716,
+     "diffCp": -0.0004
+    },
+    "보스 피해": {
+     "level": 3,
+     "bp": 25,
+     "efficiencyPct": 0.25,
+     "loalabRemovalRatio": 0.997506083,
+     "diffCp": -0.0005
+    }
+   },
+   "totalEfficiencyPct": 3.11,
+   "loalabAllRemovalRatio": 0.969805324,
+   "diffCp": -0.0005
+  }
+ },
+ "notes": [
+  "공식 효과 문구(예: 공격력 Lv.28 +1.02%)는 전투력 계수와 다르다. 전투력 기준 값은 위 식",
+  "참고: 다른 사이트의 젬 효율(언새늘 4.33%)은 공격력 옵션 값만 다르다(0.99 대 0.93) — 맞추지 않음"
+ ]
+}

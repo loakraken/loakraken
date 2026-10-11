@@ -86,6 +86,8 @@ class CharacterItemTooltipIntegrationTest {
     assertThat(data.at("/cards/0/extraLines/0").asText()).isEqualTo("카드 설명");
     assertThat(data.at("/skills/0/name").asText()).isEqualTo("테스트 스킬");
     assertThat(data.at("/skills/0/runeExtraLines/0").asText()).isEqualTo("룬 설명");
+    assertThat(data.at("/skills/0/titleLines/1").asText()).isEqualTo("재사용 대기시간 5초");
+    assertThat(data.at("/skills/0/infoLines/2").asText()).isEqualTo("마나 211 소모");
     // 아크 그리드 코어·젬 툴팁 줄(#288): 검색 응답 slots[].index·gems[].index로 잇는다.
     assertThat(data.at("/arkGrid/0/index").asInt()).isEqualTo(0);
     assertThat(data.at("/arkGrid/0/titleLine").asText()).isEqualTo("유물 아크 그리드 코어");
@@ -163,7 +165,10 @@ class CharacterItemTooltipIntegrationTest {
             List.of(),
             new CharacterLoadout.Rune("속행", null, "전설", "효과", List.of("룬 설명")),
             List.of(),
-            null);
+            null,
+            null,
+            List.of("일반", "재사용 대기시간 5초", "[일반 스킬]"),
+            List.of("PvE", "스킬 레벨 12", "마나 211 소모"));
     var arkGrid =
         new CharacterLoadout.ArkGrid(
             List.of(

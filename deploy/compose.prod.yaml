@@ -136,6 +136,8 @@ services:
       RANKING_ROSTERS_ENABLED: ${RANKING_ROSTERS_ENABLED:-false}
       # 길드 랭킹(#301): 웹 화면이 준비될 때까지 꺼짐.
       RANKING_GUILDS_ENABLED: ${RANKING_GUILDS_ENABLED:-false}
+      # 칭호 장착 확인 비율(#311): 웹 화면이 준비될 때까지 꺼짐.
+      RANKING_TITLES_ENABLED: ${RANKING_TITLES_ENABLED:-false}
       API_DOCS_ENABLED: "false"
       # 관리(actuator) 포트를 앱 포트와 나눈다. internal·data망 안에서만 닿고 edge는 이 망에 없다.
       MANAGEMENT_SERVER_PORT: "9090"

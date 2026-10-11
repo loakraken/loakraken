@@ -440,6 +440,36 @@ public class StatsQueryService {
             .divide(BigDecimal.valueOf(whole), 2, RoundingMode.HALF_UP);
   }
 
+  /**
+   * 칭호 장착 확인 비율(#311, PM 총괄 15:02 판정). 조건 중 server·activeDays만 쓴다. "보유율"이 아니다: 공식 프로필에는 장착 칭호만 있어,
+   * 관측 원정대 N개 중 그 칭호 장착이 확인된 원정대 n개를 준다. 30 미만이면 COLLECTING이지만 비율은 그대로(참고값), N이 0이면 비율은 null.
+   */
+  public TitleEquipResult titleEquip(StatsConditions conditions, String title) {
+    var full =
+        cached(
+            "titles:" + key(conditions),
+            TitleEquipResult.class,
+            () -> {
+              var now = clock.instant();
+              var result = stats.titleEquip(conditions.server(), conditions.since(now), null);
+              long population = result.population();
+              return new TitleEquipResult(
+                  meta(conditions, population, now),
+                  null,
+                  result.titles().stream()
+                      .map(
+                          row ->
+                              new EquippedTitle(
+                                  row.title(), row.rosters(), percent(row.rosters(), population)))
+                      .toList());
+            });
+    if (title == null) return full;
+    return new TitleEquipResult(
+        full.meta(),
+        title,
+        full.titles().stream().filter(row -> title.equals(row.title())).toList());
+  }
+
   public RankingResult ranking(StatsConditions conditions, Metric metric, int page, int size) {
     int offset = (page - 1) * size;
     if (offset > MAX_RANKING_OFFSET)
@@ -813,6 +843,11 @@ public class StatsQueryService {
       long completedRosters,
       BigDecimal ownedPercent,
       BigDecimal completedPercent) {}
+
+  /** 칭호 장착 확인 비율 결과(#311). title이 null이면 전체 칭호. */
+  public record TitleEquipResult(Meta meta, String title, List<EquippedTitle> titles) {}
+
+  public record EquippedTitle(String title, long equippedRosters, BigDecimal equippedPercent) {}
 
   public record RankingResult(
       Meta meta, Metric metric, int page, int size, List<RankedCharacter> rows) {}

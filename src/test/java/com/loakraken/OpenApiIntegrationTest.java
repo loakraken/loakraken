@@ -24,7 +24,8 @@ import tools.jackson.databind.json.JsonMapper;
       "combat-power-sim.enabled=true",
       "ranking.collectibles.enabled=true",
       "ranking.rosters.enabled=true",
-      "ranking.guilds.enabled=true"
+      "ranking.guilds.enabled=true",
+      "ranking.titles.enabled=true"
     })
 class OpenApiIntegrationTest {
   @LocalServerPort private int port;

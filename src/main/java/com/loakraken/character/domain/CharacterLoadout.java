@@ -75,7 +75,8 @@ public record CharacterLoadout(
       AttackType attackType,
       String category,
       List<String> titleLines,
-      List<String> infoLines) {
+      List<String> infoLines,
+      List<TripodOption> tripodOptions) {
     /**
      * titleLines: 공식 Tooltip 제목 줄(스킬 종류·재사용 대기시간·분류, #299). infoLines: 현재 레벨 정보 줄(PvE·스킬 레벨·마나·부위
      * 파괴·무력화·공격 타입·슈퍼아머 등 원문 순서). 이전 캐시면 빈 목록.
@@ -85,6 +86,38 @@ public record CharacterLoadout(
       gemEffects = gemEffects == null ? List.of() : List.copyOf(gemEffects);
       titleLines = titleLines == null ? List.of() : List.copyOf(titleLines);
       infoLines = infoLines == null ? List.of() : List.copyOf(infoLines);
+      tripodOptions = tripodOptions == null ? List.of() : List.copyOf(tripodOptions);
+    }
+
+    public Skill(
+        String name,
+        String icon,
+        Integer level,
+        String type,
+        Integer partBreakLevel,
+        Boolean counter,
+        List<Tripod> tripods,
+        Rune rune,
+        List<SkillGemEffect> gemEffects,
+        AttackType attackType,
+        String category,
+        List<String> titleLines,
+        List<String> infoLines) {
+      this(
+          name,
+          icon,
+          level,
+          type,
+          partBreakLevel,
+          counter,
+          tripods,
+          rune,
+          gemEffects,
+          attackType,
+          category,
+          titleLines,
+          infoLines,
+          List.of());
     }
 
     public Skill(
@@ -160,6 +193,10 @@ public record CharacterLoadout(
     HEAD_ATTACK,
     NONE
   }
+
+  /** 트라이포드 선택지 하나(#307): 공식 Tripods 전체(선택 여부 포함, 공식 순서). 효과 문장은 tripods[]의 선택된 것만 둔다. */
+  public record TripodOption(
+      Integer tier, Integer slot, String name, String icon, boolean selected) {}
 
   /** effect: 공식 트라이포드 Tooltip 효과 문구(태그 제거). 갱신 전 캐시나 해석할 수 없으면 null(#168). */
   public record Tripod(Integer tier, Integer slot, String name, String icon, String effect) {

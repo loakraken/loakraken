@@ -381,7 +381,21 @@ record LostArkArmoryResponse(
           parsed.attackType(),
           parsed.category(),
           parsed.titleLines(),
-          parsed.infoLines());
+          parsed.infoLines(),
+          tripods == null
+              ? List.of()
+              : tripods.stream()
+                  .filter(
+                      tripod -> tripod != null && tripod.name() != null && !tripod.name().isBlank())
+                  .map(
+                      tripod ->
+                          new CharacterLoadout.TripodOption(
+                              tripod.tier(),
+                              tripod.slot(),
+                              LostArkText.plain(tripod.name()),
+                              tripod.icon(),
+                              Boolean.TRUE.equals(tripod.selected())))
+                  .toList());
     }
   }
 

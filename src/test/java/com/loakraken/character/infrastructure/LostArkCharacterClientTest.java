@@ -161,6 +161,9 @@ class LostArkCharacterClientTest {
     assertThat(skill.partBreakLevel()).isEqualTo(1);
     assertThat(skill.counter()).isTrue();
     assertThat(skill.tripods()).extracting("name").containsExactly("약점 노출");
+    // 트라이포드 전체 선택지(#307): 선택하지 않은 것도 공식 순서로, 선택 여부와 함께.
+    assertThat(skill.tripodOptions()).hasSize(2);
+    assertThat(skill.tripodOptions()).extracting("selected").containsExactly(true, false);
     assertThat(skill.rune().grade()).isEqualTo("전설");
     assertThat(skill.gemEffects().getFirst().kind())
         .isEqualTo(com.loakraken.character.domain.CharacterLoadout.GemEffectKind.DAMAGE);

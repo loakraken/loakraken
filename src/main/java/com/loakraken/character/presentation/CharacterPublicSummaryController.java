@@ -74,7 +74,7 @@ public class CharacterPublicSummaryController {
       @Schema(description = "LIVE_CACHE: 최근 5분 안 공식 조회 캐시, STORED_OBSERVATION: 저장된 마지막 관측.")
           @NullableResponse
           CharacterPublicSummaryService.DataSource dataSource,
-      @Schema(description = "false면 웹은 noindex·sitemap 제외(전투력 관측이 없어 내용이 빈약함)") boolean indexable) {
+      @Schema(description = "false면 웹은 noindex·sitemap 제외") boolean indexable) {
     static CharacterPublicSummaryResponse from(CharacterPublicSummaryService.Summary summary) {
       return new CharacterPublicSummaryResponse(
           summary.characterName(),

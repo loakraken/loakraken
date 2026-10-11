@@ -104,6 +104,15 @@ class CharacterPublicSummaryIntegrationTest {
     var data = mapper.readTree(get("공개요약캐시").body()).path("data");
     assertThat(data.path("dataSource").asText()).isEqualTo("LIVE_CACHE");
     assertThat(data.path("combatPower").decimalValue()).isEqualByComparingTo("3000");
+    assertThat(data.path("indexable").asBoolean()).isTrue();
+    // 처리정지 목록에 넣으면 값은 그대로이고 색인만 막는다(PM 총괄 10-12 01:33, #363).
+    jdbc.sql(
+            "INSERT INTO public_exclusion (character_name, server_name, reason_code) VALUES ('공개요약캐시', NULL, 'PRIVACY_STOP')")
+        .update();
+    var stopped = mapper.readTree(get("공개요약캐시").body()).path("data");
+    assertThat(stopped.path("indexable").asBoolean()).isFalse();
+    assertThat(stopped.path("dataSource").asText()).isEqualTo("LIVE_CACHE");
+    assertThat(stopped.path("combatPower").decimalValue()).isEqualByComparingTo("3000");
     verify(detailsPort, times(1)).fetch(anyString());
   }
 

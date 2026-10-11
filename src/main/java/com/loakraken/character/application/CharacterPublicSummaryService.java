@@ -54,7 +54,16 @@ public class CharacterPublicSummaryService {
   public Summary summary(String characterName) {
     var name = new SearchCharacterCommand(characterName).characterName();
     var summary = live(name);
-    if (summary == null) {
+    if (summary != null) {
+      // 캐시로 찾은 처리정지 목록 캐릭터는 값은 그대로 두고 색인만 막는다. 확인에 실패해도 색인하지 않는다(PM 총괄 10-12 01:33, #363).
+      boolean indexable;
+      try {
+        indexable = !stored.excluded(summary.characterName(), summary.serverName());
+      } catch (DataAccessException exception) {
+        indexable = false;
+      }
+      if (!indexable) return summary.notIndexable();
+    } else {
       summary = storedSummary(name);
       // 처리정지 목록 캐릭터는 저장된 관측을 쓰지 않는다. 응답은 기록이 없는 캐릭터와 같다(#363).
       try {

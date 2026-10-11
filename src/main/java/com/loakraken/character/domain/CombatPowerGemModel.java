@@ -177,6 +177,19 @@ public final class CombatPowerGemModel {
     return new Model(slots, other, null);
   }
 
+  /** 어빌리티 스톤 "[레벨 보너스] 기본 공격력 +n%"(공식 문구) 합. 없으면 0(#344). */
+  public static BigDecimal stoneBonusPct(CharacterLoadout loadout) {
+    var total = BigDecimal.ZERO;
+    for (var item : loadout.equipment()) {
+      if (item == null || item.detail() == null || !STONE.equals(item.type())) continue;
+      for (var line : lines(item.detail())) {
+        var value = decimal(STONE_BONUS, line);
+        if (value != null) total = total.add(value);
+      }
+    }
+    return total;
+  }
+
   private static List<String> lines(CharacterLoadout.EquipmentDetail detail) {
     var lines = new ArrayList<String>();
     for (var group : detail.effects()) if (group != null) lines.addAll(group.lines());

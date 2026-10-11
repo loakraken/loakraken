@@ -16,12 +16,14 @@ import java.util.regex.Pattern;
  * <ul>
  *   <li>무기 품질: (1 + 추가 피해(새)) / (1 + 추가 피해(현재)). 현재 값은 공식 무기 "추가 효과", 새 값은 확인된 품질만.
  *   <li>방어구 품질: 1(전투력 영향 없음).
- *   <li>원한·저주받은 인형·질량 증가·타격의 대가: 1 + v, v = 기본 + 0.75 × 각인서 레벨 + 스톤 가산.
+ *   <li>유물 각인 21종(#344): 1 + c/100, c = 표 books[각인서 레벨] + stoneDelta[스톤 레벨]. 기여 0인 9종은 1.
  *   <li>아드레날린: 1 + 6 × 중첩당 공격력(스톤) + 0.7 × 최대 중첩 치명(각인서).
  *   <li>돌격대장: 1 + 0.40 × v, v = 40 + 2 × 각인서 레벨 + 스톤 가산(스톤 1은 미확인).
+ *   <li>어빌리티 스톤 [레벨 보너스]: 증가 각인 2개의 세공 레벨 합이 5 이상이면 기본 공격력 1.5%(공식 가이드).
  * </ul>
  *
- * <p>현재 값은 공식 각인 설명값과 계수표가 같은지 확인하고, 다르면 계산하지 않는다(추정 금지).
+ * <p>현재 값은 공식 각인 설명값과 계수표가 같은지 확인하고, 다르면 계산하지 않는다(추정 금지). 표의 official(공식 설명 수치와 레벨의 관계)이 없는 각인은 공식
+ * 각인서·스톤 레벨 필드만 쓴다.
  */
 public final class CombatPowerEquipmentModel {
   private static final MathContext MATH = MathContext.DECIMAL64;
@@ -38,20 +40,47 @@ public final class CombatPowerEquipmentModel {
       String weaponQualityAddDamageSource,
       String descriptionPercentIndexSource,
       Map<String, Integer> descriptionPercentIndex,
-      DamageEngravings damageEngravings,
+      Map<String, TableEngraving> engravingTable,
+      String engravingTableSource,
+      List<String> zeroContribution,
       Adrenaline adrenaline,
       AssaultCaptain assaultCaptain,
-      List<Integer> stoneLevelBonusStableSums) {
+      StoneLevelBonus stoneLevelBonus,
+      String stoneLevelBonusSource) {
     public Coefficients {
       source = source == null ? Map.of() : Map.copyOf(source);
       descriptionPercentIndex =
           descriptionPercentIndex == null ? Map.of() : Map.copyOf(descriptionPercentIndex);
-      stoneLevelBonusStableSums = List.copyOf(stoneLevelBonusStableSums);
+      engravingTable = Map.copyOf(engravingTable);
+      zeroContribution = List.copyOf(zeroContribution);
     }
   }
 
-  public record DamageEngravings(
-      Map<String, BigDecimal> baseByName, BigDecimal perBook, Map<Integer, BigDecimal> stoneAdd) {}
+  /** 각인 기여 표(#344). books·stoneDelta는 5칸(0~4), null이면 그 레벨은 확인하지 않음(승부사 L0~3). */
+  public record TableEngraving(
+      List<BigDecimal> books, List<BigDecimal> stoneDelta, Official official) {
+    public TableEngraving {
+      books = java.util.Collections.unmodifiableList(new java.util.ArrayList<>(books));
+      stoneDelta = java.util.Collections.unmodifiableList(new java.util.ArrayList<>(stoneDelta));
+    }
+
+    /** 기여 %(c). 확인하지 않은 레벨이면 null. */
+    BigDecimal contribution(int book, int stone) {
+      var b = books.get(book);
+      var s = stoneDelta.get(stone);
+      return b == null || s == null ? null : b.add(s);
+    }
+  }
+
+  /** 공식 각인 설명에 나오는 효과 수치 = base + perBook × 각인서 레벨 + stoneAdd[스톤 레벨](지금 값 확인용). */
+  public record Official(BigDecimal base, BigDecimal perBook, List<BigDecimal> stoneAdd) {
+    BigDecimal value(int book, int stone) {
+      return base.add(perBook.multiply(BigDecimal.valueOf(book))).add(stoneAdd.get(stone));
+    }
+  }
+
+  /** 어빌리티 스톤 [레벨 보너스]: 세공 레벨 합이 minSum 이상이면 기본 공격력 baseAttackPct%. */
+  public record StoneLevelBonus(int minSum, BigDecimal baseAttackPct) {}
 
   public record Adrenaline(
       Map<Integer, BigDecimal> stackAttackByStone,
@@ -67,7 +96,8 @@ public final class CombatPowerEquipmentModel {
 
   /** 계산하는 각인인지. */
   public static boolean supportsEngraving(Coefficients c, String name) {
-    return c.damageEngravings().baseByName().containsKey(name)
+    return c.engravingTable().containsKey(name)
+        || c.zeroContribution().contains(name)
         || ADRENALINE.equals(name)
         || ASSAULT_CAPTAIN.equals(name);
   }
@@ -75,17 +105,11 @@ public final class CombatPowerEquipmentModel {
   /** 각인 하나의 전투력 배수. 계수가 없는 조합(돌격대장 스톤 1 등)이면 null. */
   public static BigDecimal engravingFactor(Coefficients c, String name, int book, int stone) {
     if (book < 0 || book > 4 || stone < 0 || stone > 4) return null;
-    var damage = c.damageEngravings();
-    if (damage.baseByName().containsKey(name)) {
-      var add = damage.stoneAdd().get(stone);
-      if (add == null) return null;
-      var v =
-          damage
-              .baseByName()
-              .get(name)
-              .add(damage.perBook().multiply(BigDecimal.valueOf(book)))
-              .add(add);
-      return BigDecimal.ONE.add(v.divide(HUNDRED, MATH));
+    if (c.zeroContribution().contains(name)) return BigDecimal.ONE;
+    var table = c.engravingTable().get(name);
+    if (table != null) {
+      var v = table.contribution(book, stone);
+      return v == null ? null : BigDecimal.ONE.add(v.divide(HUNDRED, MATH));
     }
     if (ADRENALINE.equals(name)) {
       var a = c.adrenaline();
@@ -118,18 +142,16 @@ public final class CombatPowerEquipmentModel {
     int stone = engraving.abilityStoneLevel() == null ? 0 : engraving.abilityStoneLevel();
     var text = engraving.description();
     var name = engraving.name();
-    var damage = c.damageEngravings();
-    if (damage.baseByName().containsKey(name)) {
-      var add = damage.stoneAdd().get(stone);
-      if (add == null) return false;
-      var v =
-          damage
-              .baseByName()
-              .get(name)
-              .add(damage.perBook().multiply(BigDecimal.valueOf(book)))
-              .add(add);
+    if (book < 0 || book > 4 || stone < 0 || stone > 4) return false;
+    // 기여 0인 각인은 수치가 계산에 쓰이지 않는다.
+    if (c.zeroContribution().contains(name)) return true;
+    var table = c.engravingTable().get(name);
+    if (table != null) {
+      if (table.contribution(book, stone) == null) return false;
+      if (table.official() == null) return true;
+      var v = table.official().value(book, stone);
       var index = c.descriptionPercentIndex().get(name);
-      return index != null && percentAt(text, index, v);
+      return index != null ? percentAt(text, index, v) : anyPercent(text, v);
     }
     if (ADRENALINE.equals(name)) {
       var attack = c.adrenaline().stackAttackByStone().get(stone);
@@ -168,14 +190,10 @@ public final class CombatPowerEquipmentModel {
         .divide(BigDecimal.ONE.add(current.divide(HUNDRED, MATH)), MATH);
   }
 
-  /** 스톤 레벨 합이 바뀌어도 [레벨 보너스]가 그대로인 구간(확인된 범위) 안에서만 계산한다. */
-  public static boolean stoneBonusStable(Coefficients c, int currentSum, int nextSum) {
-    var range = c.stoneLevelBonusStableSums();
-    return inRange(range, currentSum) && inRange(range, nextSum);
-  }
-
-  private static boolean inRange(List<Integer> range, int value) {
-    return range.size() == 2 && value >= range.get(0) && value <= range.get(1);
+  /** 스톤 세공 레벨 합의 [레벨 보너스] 기본 공격력 %(공식 가이드: 합이 5 이상이면 1.5, 아니면 0). */
+  public static BigDecimal stoneBonusPct(Coefficients c, int sum) {
+    var bonus = c.stoneLevelBonus();
+    return sum >= bonus.minSum() ? bonus.baseAttackPct() : BigDecimal.ZERO;
   }
 
   private static BigDecimal adrenalineCrit(Adrenaline a, int book) {
@@ -187,6 +205,14 @@ public final class CombatPowerEquipmentModel {
     return add == null
         ? null
         : a.base().add(a.perBook().multiply(BigDecimal.valueOf(book))).add(add);
+  }
+
+  /** 설명의 % 값 가운데 expected(소수 둘째 자리)가 있는지. 수치 위치를 확인하지 않은 각인용. */
+  private static boolean anyPercent(String text, BigDecimal expected) {
+    var target = expected.setScale(2, RoundingMode.HALF_UP);
+    var matcher = PERCENT.matcher(text);
+    while (matcher.find()) if (new BigDecimal(matcher.group(1)).compareTo(target) == 0) return true;
+    return false;
   }
 
   /** 설명에서 index번째(0부터) % 값이 expected와 같은지(소수 둘째 자리). */

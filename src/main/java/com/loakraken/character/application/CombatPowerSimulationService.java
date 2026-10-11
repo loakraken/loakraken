@@ -36,7 +36,7 @@ import org.springframework.stereotype.Service;
  */
 @Service
 public class CombatPowerSimulationService {
-  public static final String RULE_VERSION = "combat-power-sim-v7";
+  public static final String RULE_VERSION = "combat-power-sim-v8";
   private static final MathContext MATH = MathContext.DECIMAL64;
   private static final String GEM_BASIS =
       "보석 레벨별 배수와 기본 공격력 %(보석·스톤 레벨 보너스·완갑 추가 효과, 공식 툴팁)로 바뀐 비율을 공식 전투력에 곱했습니다.";
@@ -403,7 +403,7 @@ public class CombatPowerSimulationService {
         if (before == null) reason = NO_OFFICIAL_BASIS;
         else {
           var next = state.apply(planned.effect(), engravings);
-          reason = stoneBonusReason(engravings, next);
+          reason = stoneBonusReason(loadout, engravings, next);
           var ratio =
               reason == null
                   ? ratio(gemModel, refineModel, braceletModel, engravings, weaponAddDamage, next)
@@ -587,15 +587,15 @@ public class CombatPowerSimulationService {
       if (refine == null) return null;
       ratio = ratio.multiply(refine, MATH);
     }
-    // 팔 보호구 등급의 기본 공격력 %는 보석 변화까지 반영한 q에 더한다: (1 + q + Δ)/(1 + q).
-    if (state.armGuard() != null) {
-      var delta = refineModel.armGuardPctDelta(state.armGuard());
-      if (delta.signum() != 0) {
-        var pct = gemModel.baseAttackPct(state.gems());
-        if (pct == null) return null;
-        var q = BigDecimal.ONE.add(pct.divide(BigDecimal.valueOf(100), MATH), MATH);
-        ratio = ratio.multiply(q.add(delta, MATH).divide(q, MATH), MATH);
-      }
+    // 팔 보호구 등급과 스톤 [레벨 보너스]의 기본 공격력 %는 보석 변화까지 반영한 q에 더한다: (1 + q + Δ)/(1 + q).
+    var delta =
+        state.armGuard() == null ? BigDecimal.ZERO : refineModel.armGuardPctDelta(state.armGuard());
+    delta = delta.add(stoneBonusDelta(currents, state), MATH);
+    if (delta.signum() != 0) {
+      var pct = gemModel.baseAttackPct(state.gems());
+      if (pct == null) return null;
+      var q = BigDecimal.ONE.add(pct.divide(BigDecimal.valueOf(100), MATH), MATH);
+      ratio = ratio.multiply(q.add(delta, MATH).divide(q, MATH), MATH);
     }
     if (state.weaponAddDamage() != null) {
       if (weaponCurrent == null) return null;
@@ -623,27 +623,45 @@ public class CombatPowerSimulationService {
     return ratio;
   }
 
-  /** 스톤 레벨 합이 [레벨 보너스]가 그대로인 확인된 구간(5~7)을 벗어나면 이유 문장. 스톤을 바꾸지 않았으면 null. */
-  private String stoneBonusReason(
+  /** 지금·바꾼 뒤 스톤 세공 레벨 합. */
+  private static int[] stoneSums(
       Map<String, CharacterLoadout.PassiveEngraving> currents, State state) {
     int before = 0;
     int after = 0;
-    boolean changed = false;
     for (var engraving : currents.values()) {
       int stone = engraving.abilityStoneLevel() == null ? 0 : engraving.abilityStoneLevel();
       before += stone;
       var next = state.engravings().get(engraving.name());
       after += next == null ? stone : next.stone();
-      if (next != null && next.stone() != stone) changed = true;
     }
-    if (!changed
-        || CombatPowerEquipmentModel.stoneBonusStable(equipmentCoefficients, before, after))
-      return null;
-    return "스톤 레벨 합이 "
-        + before
-        + "에서 "
-        + after
-        + "(으)로 바뀌어 [레벨 보너스] 변화를 아직 확인하지 않은 구간이라 계산하지 않았습니다.";
+    return new int[] {before, after};
+  }
+
+  /** 스톤 [레벨 보너스]의 기본 공격력 변화(비율, 1.5% = 0.015). 합이 5를 넘나들 때만 0이 아니다. */
+  private BigDecimal stoneBonusDelta(
+      Map<String, CharacterLoadout.PassiveEngraving> currents, State state) {
+    var sums = stoneSums(currents, state);
+    return CombatPowerEquipmentModel.stoneBonusPct(equipmentCoefficients, sums[1])
+        .subtract(CombatPowerEquipmentModel.stoneBonusPct(equipmentCoefficients, sums[0]))
+        .divide(BigDecimal.valueOf(100), MATH);
+  }
+
+  /**
+   * 스톤 합이 5를 넘나드는데 지금 공식 [레벨 보너스]가 규칙(합 5 이상 1.5%)과 다르면 이유 문장. 공식 가이드 규칙이라 어느 합이든 계산하지만, 지금 값이 규칙과
+   * 맞는지 공식 스톤 문구로 확인한다(추정 금지).
+   */
+  private String stoneBonusReason(
+      CharacterLoadout loadout,
+      Map<String, CharacterLoadout.PassiveEngraving> currents,
+      State state) {
+    if (stoneBonusDelta(currents, state).signum() == 0) return null;
+    var official = CombatPowerGemModel.stoneBonusPct(loadout);
+    var expected =
+        CombatPowerEquipmentModel.stoneBonusPct(
+            equipmentCoefficients, stoneSums(currents, state)[0]);
+    return official.compareTo(expected) == 0
+        ? null
+        : "지금 어빌리티 스톤 [레벨 보너스]가 공식 규칙(세공 레벨 합 5 이상이면 기본 공격력 1.5%)과 달라 계산하지 않았습니다.";
   }
 
   private static Map<String, CharacterLoadout.PassiveEngraving> currentEngravings(

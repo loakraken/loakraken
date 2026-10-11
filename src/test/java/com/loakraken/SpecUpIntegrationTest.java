@@ -71,7 +71,7 @@ class SpecUpIntegrationTest {
     assertThat(response.body()).doesNotContain(SiteNames.FORBIDDEN);
     var data = mapper.readTree(response.body()).path("data");
     assertThat(data.path("ruleVersion").asText()).isEqualTo("spec-up-v1");
-    assertThat(data.path("simulatorRuleVersion").asText()).isEqualTo("combat-power-sim-v7");
+    assertThat(data.path("simulatorRuleVersion").asText()).isEqualTo("combat-power-sim-v8");
     assertThat(data.path("combatPower").decimalValue()).isEqualByComparingTo("3000.00");
     assertThat(data.path("sort").asText()).isEqualTo("EFFICIENCY");
     // 보석은 단계별 후보(8→9, 8→10)가 각각 나오고, 무기 품질(90 → 100)도 계산한다.

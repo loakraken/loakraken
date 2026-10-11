@@ -88,20 +88,21 @@ class SpecUpIntegrationTest {
     assertThat(gem.path("status").asText()).isEqualTo("OK");
     assertThat(gem.path("deltaCombatPower").decimalValue()).isEqualByComparingTo("24.00");
     assertThat(gem.path("deltaPercent").decimalValue()).isEqualByComparingTo("0.800");
-    // 비용: 9레벨 1,000,000 − (8레벨 400,000 − 수수료 15,000(10만 초과분 300,000의 5%)) = 615,000. 효율 = 24.00 ×
+    // 비용: 9레벨 1,000,000 − (8레벨 400,000 − 거래소 수수료 20,000) = 620,000. 효율 = 24.00 × 10000 / 620000 =
+    // 0.39.
     // 10000 / 615000 = 0.39.
     assertThat(gem.at("/cost/status").asText()).isEqualTo("OK");
     assertThat(gem.at("/cost/code").asText()).isEqualTo("GEM_UPGRADE");
-    assertThat(gem.at("/cost/gold").asLong()).isEqualTo(615_000);
+    assertThat(gem.at("/cost/amount").asLong()).isEqualTo(620_000);
     assertThat(gem.path("combatPowerPer10kGold").decimalValue()).isEqualByComparingTo("0.39");
     assertThat(gem.at("/change/kind").asText()).isEqualTo("GEM_LEVEL");
     assertThat(gem.at("/change/slot").asInt()).isZero();
     assertThat(gem.at("/change/level").asInt()).isEqualTo(9);
-    // 8 → 10: 시뮬레이터 표본과 같은 48.07, 비용 3,000,000 − 385,000 = 2,615,000, 효율 0.18(효율 순이라 8 → 9 뒤).
+    // 8 → 10: 시뮬레이터 표본과 같은 48.07, 비용 3,000,000 − 380,000 = 2,620,000, 효율 0.18(효율 순이라 8 → 9 뒤).
     var gem10 = candidates.get(1);
     assertThat(gem10.path("id").asText()).isEqualTo("GEM_LEVEL:0:10");
     assertThat(gem10.path("deltaCombatPower").decimalValue()).isEqualByComparingTo("48.07");
-    assertThat(gem10.at("/cost/gold").asLong()).isEqualTo(2_615_000);
+    assertThat(gem10.at("/cost/amount").asLong()).isEqualTo(2_620_000);
     assertThat(gem10.at("/cost/unit").asText()).isEqualTo("GOLD");
     assertThat(gem10.path("combatPowerPer10kGold").decimalValue()).isEqualByComparingTo("0.18");
     assertThat(gem10.path("suggestedTo").isNull()).isTrue();
@@ -152,7 +153,7 @@ class SpecUpIntegrationTest {
     assertThat(gem.path("deltaCombatPower").decimalValue()).isEqualByComparingTo("24.00");
     assertThat(gem.at("/cost/status").asText()).isEqualTo("PENDING");
     assertThat(gem.at("/cost/code").asText()).isEqualTo("PRICE_PENDING");
-    assertThat(gem.at("/cost/gold").isNull()).isTrue();
+    assertThat(gem.at("/cost/amount").isNull()).isTrue();
     assertThat(gem.path("combatPowerPer10kGold").isNull()).isTrue();
     assertThat(mapper.readTree(response.body()).at("/data/pricesAt").isNull()).isTrue();
   }

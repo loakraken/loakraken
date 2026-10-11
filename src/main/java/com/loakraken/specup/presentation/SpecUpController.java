@@ -51,7 +51,7 @@ public class SpecUpController {
           "캐릭터 캐시의 현재 세팅에서 후보 업그레이드마다 전투력 시뮬레이터를 변화 하나로 돌린 Δ전투력, 시세 캐시로 구한 비용, 1만 골드당 전투력을 줍니다. 후보끼리 Δ를 더하지 않습니다. "
               + "계산식이 확정되지 않은 후보도 status=UNSUPPORTED와 reasonCode·reason(같은 코드는 같은 문장)으로 남깁니다. "
               + "limit은 OK 후보에만 적용하고(total = 자르기 전 OK 후보 수), UNSUPPORTED는 모두 뒤에 붙습니다. "
-              + "cost.status: OK(금액 있음)·PENDING(시세 칸을 아직 받지 못함)·UNKNOWN(비용 근거 없음). 보석 비용은 잠정 기준(다음 레벨 구매가 − 지금 보석 판매 기대가)입니다. "
+              + "cost.status: OK(금액 있음)·PENDING(시세 칸을 아직 받지 못함)·UNKNOWN(비용 근거 없음). 보석 비용은 목표 레벨 즉시 구매 최저가 − 지금 보석 판매 기대가(거래소 수수료 5% 올림, 귀속이면 빼지 않음)입니다. "
               + "kind·status·cost.status·reasonCode는 문자열이며 값이 늘 수 있습니다.")
   @ApiResponses({
     @io.swagger.v3.oas.annotations.responses.ApiResponse(
@@ -117,7 +117,7 @@ public class SpecUpController {
       @Schema(description = "공식 전투력(소수 둘째 자리). 없으면 null이고 모든 후보가 UNSUPPORTED") @NullableResponse
           BigDecimal combatPower,
       @Schema(example = "spec-up-v1") String ruleVersion,
-      @Schema(description = "Δ전투력을 낸 시뮬레이터 규칙", example = "combat-power-sim-v2")
+      @Schema(description = "Δ전투력을 낸 시뮬레이터 규칙", example = "combat-power-sim-v3")
           String simulatorRuleVersion,
       @Schema(description = "캐릭터 캐시 수집 시각") Instant fetchedAt,
       @Schema(description = "비용에 쓴 시세 칸 가운데 가장 오래된 관측 시각(쓴 칸이 없으면 null)") @NullableResponse
@@ -201,7 +201,7 @@ public class SpecUpController {
 
   public record CostResponse(
       @Schema(description = "금액 단위(문자열, 지금은 GOLD, 개수 단위가 들어올 수 있음)", example = "GOLD") String unit,
-      @Schema(description = "금액(정수, unit 단위). OK일 때만") @NullableResponse Long gold,
+      @Schema(description = "금액(정수, unit 단위). OK일 때만") @NullableResponse Long amount,
       @Schema(description = "OK·PENDING·UNKNOWN(문자열, 모르는 값은 UNKNOWN으로)", example = "OK")
           String status,
       @Schema(description = "비용 근거 코드(문자열, 값이 늘 수 있음)", example = "GEM_UPGRADE") String code,
@@ -209,7 +209,7 @@ public class SpecUpController {
     static CostResponse from(SpecUpCost cost) {
       return cost == null
           ? null
-          : new CostResponse(cost.unit(), cost.gold(), cost.status(), cost.code(), cost.basis());
+          : new CostResponse(cost.unit(), cost.amount(), cost.status(), cost.code(), cost.basis());
     }
   }
 

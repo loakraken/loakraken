@@ -169,7 +169,7 @@ public class SpecUpService {
             : delta.multiply(HUNDRED).divide(result.before(), 3, RoundingMode.HALF_UP);
     var cost = plan.cost();
     return plan.candidate(
-        "OK", delta, percent, cost, SpecUpCost.efficiency(delta, cost.gold()), null, null);
+        "OK", delta, percent, cost, SpecUpCost.efficiency(delta, cost.amount()), null, null);
   }
 
   /** 보석 +1: 슬롯마다 현재 레벨 + 1(10 미만). 대상 이름은 보석이 붙은 스킬(PM-프론트 16:27 ③). */

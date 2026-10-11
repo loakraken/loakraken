@@ -150,7 +150,10 @@ public class RosterRankingController {
           long characterCount,
       @Schema(description = "값 계산에 쓴 캐릭터 수(TOP6는 최대 6, 화면의 n/6). ROSTER_LEVEL이면 원정대 레벨을 확인한 캐릭터 수")
           long usedCharacters,
-      @Schema(description = "basis·aggregate로 계산한 값, 소수 둘째 자리", example = "1712.50")
+      @Schema(
+              description =
+                  "basis·aggregate로 계산한 값, 소수 둘째 자리. 단위는 basis를 따름(ITEM_LEVEL 아이템 레벨, COMBAT_POWER 전투력, ROSTER_LEVEL 원정대 레벨)",
+              example = "1712.50")
           BigDecimal value,
       @Schema(description = "기준 상위 최대 6명(값이 있는 공개 캐릭터만, 순서대로). ROSTER_LEVEL이면 아이템 레벨 상위")
           List<RosterMemberResponse> composition) {}

@@ -117,7 +117,7 @@ public class SpecUpController {
       @Schema(description = "공식 전투력(소수 둘째 자리). 없으면 null이고 모든 후보가 UNSUPPORTED") @NullableResponse
           BigDecimal combatPower,
       @Schema(example = "spec-up-v1") String ruleVersion,
-      @Schema(description = "Δ전투력을 낸 시뮬레이터 규칙", example = "combat-power-sim-v3")
+      @Schema(description = "Δ전투력을 낸 시뮬레이터 규칙", example = "combat-power-sim-v4")
           String simulatorRuleVersion,
       @Schema(description = "캐릭터 캐시 수집 시각") Instant fetchedAt,
       @Schema(description = "비용에 쓴 시세 칸 가운데 가장 오래된 관측 시각(쓴 칸이 없으면 null)") @NullableResponse

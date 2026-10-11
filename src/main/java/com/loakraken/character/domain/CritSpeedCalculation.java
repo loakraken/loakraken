@@ -1073,7 +1073,7 @@ public final class CritSpeedCalculation {
     return baseValue == null ? null : value.subtract(baseValue);
   }
 
-  /** 기민함: 기본 공격·이동 속도 증가량(상한 40 적용)에 비율을 곱한다. 일로아 "질풍노도 기민함"과 같은 기준(정답표 츄델 12/48). */
+  /** 기민함: 기본 공격·이동 속도 증가량(상한 40 적용)에 비율을 곱한다. 일로아 "질풍노도 기민함"과 같은 기준(정답표 c09 12/48). */
   private static void agilitySources(BigDecimal[] agility, List<Source> sources) {
     if (agility[0] == null && agility[1] == null) return;
     // "기본 … 속도 증가량"은 증가분만 합한다. 질량 증가(공격 속도 -10%) 같은 감소는 빼지 않는다(일로아·로펙 일치, 정답표 6-2).

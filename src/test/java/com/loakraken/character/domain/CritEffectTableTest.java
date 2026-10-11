@@ -100,7 +100,7 @@ class CritEffectTableTest {
         .anyMatch(line -> line.contains("분류 중") && line.contains("질서의 달 코어 : 표에 없는 코어"));
   }
 
-  /** #198 재대조(계산 검증 10-10 02:10) 만배·츄델·한국남자·스카우터 공식 문구. */
+  /** #198 재대조(계산 검증 10-10 02:10) c02·c09·c10·스카우터 공식 문구. */
   @Test
   void 공이속_직업_버프_공용_코어_트라이포드와_자신의_이동속도를_읽는다() {
     var slayer = calculate("슬레이어", List.of(), List.of(), null, Assumptions.NONE);
@@ -571,7 +571,7 @@ class CritEffectTableTest {
         .containsExactly("기민함(공격 속도 40%)=48");
   }
 
-  /** 츄델(질풍노도·질량 증가, 2026-10-09): 신속 29.25 + 질풍노도 12 - 질량 증가 10. 두 사이트는 감소를 빼지 않고 48로 본다. */
+  /** c09(질풍노도·질량 증가, 2026-10-09): 신속 29.25 + 질풍노도 12 - 질량 증가 10. 두 사이트는 감소를 빼지 않고 48로 본다. */
   @Test
   void 기민함의_속도_증가량은_감소_효과를_빼지_않는다() {
     var engravings =

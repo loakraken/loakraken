@@ -64,11 +64,13 @@ public class CharacterCardService {
     var observation = observe(details, observedAt);
     // 해석은 이미 한 도메인에서 뽑으므로 요청 스레드에서 해도 가볍다. 쓰기만 작업자에 넘긴다.
     var summary = EquipmentSummary.from(details.profile(), details.loadout());
+    var collectibles = details.loadout().collectibles();
     try {
       writer.execute(
           () -> {
             write(observation);
             writeSummary(observation, summary);
+            writeCollectibles(observation, collectibles);
           });
     } catch (RejectedExecutionException exception) {
       metrics.cards(false);
@@ -114,6 +116,20 @@ public class CharacterCardService {
     } catch (DataAccessException | TransactionException exception) {
       metrics.cards(false);
       log.warn("카드 기록 저장에 실패했습니다. 예외 유형={}", exception.getClass().getSimpleName());
+    }
+  }
+
+  private void writeCollectibles(
+      CharacterCardPort.Observation observation, List<CharacterLoadout.Collectible> collectibles) {
+    if (collectibles.isEmpty()) return;
+    try {
+      cards.recordCollectibles(
+          observation.serverName(),
+          observation.characterName(),
+          collectibles,
+          observation.observedAt());
+    } catch (DataAccessException | TransactionException exception) {
+      log.warn("수집품 기록 저장에 실패했습니다. 예외 유형={}", exception.getClass().getSimpleName());
     }
   }
 

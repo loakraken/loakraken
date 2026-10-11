@@ -7,8 +7,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.TransactionException;
 
 /**
- * 캐릭터 이름 자동완성(#369). 공식 API를 부르지 않고 우리 DB에 기록된 캐릭터에서 이름 앞부분이 같은 캐릭터를 찾는다. 검색한 사람·입력은 기록하지 않는다.
- * 처리정지 목록은 뺀다.
+ * 캐릭터 이름 자동완성(#369). 공식 API를 부르지 않고 우리 DB에 기록된 캐릭터에서 이름 앞부분이 같은 캐릭터를 찾는다. 검색한 사람·입력은 기록하지 않는다. 처리정지
+ * 목록은 뺀다.
  */
 @Service
 public class CharacterSuggestService {

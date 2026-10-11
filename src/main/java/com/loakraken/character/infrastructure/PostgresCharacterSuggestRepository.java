@@ -15,7 +15,8 @@ class PostgresCharacterSuggestRepository implements CharacterSuggestPort {
 
   @Override
   public List<Suggestion> suggest(String prefix, int limit) {
-    // idx_characters_name_prefix(text_pattern_ops)로 앞부분 일치를 찾는다(V18). 처리정지 목록은 서버를 비운 항목이면 모든 서버를 뺀다.
+    // idx_characters_name_prefix(text_pattern_ops)로 앞부분 일치를 찾는다(V18). 처리정지 목록은 서버를 비운 항목이면 모든 서버를
+    // 뺀다.
     return jdbc.sql(
             """
             SELECT c.character_name, c.server_name, c.class_name, c.item_level, c.image_url

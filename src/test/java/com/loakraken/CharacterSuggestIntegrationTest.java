@@ -71,13 +71,11 @@ class CharacterSuggestIntegrationTest {
 
     var response = get("자동완성");
     assertThat(response.statusCode()).isEqualTo(200);
-    assertThat(response.headers().firstValue("Cache-Control").orElse(""))
-        .contains("max-age=60");
+    assertThat(response.headers().firstValue("Cache-Control").orElse("")).contains("max-age=60");
     var data = mapper.readTree(response.body()).path("data");
     ApiContractFixture.write("character-suggest.json", response.body());
     assertThat(names(data))
-        .containsExactly(
-            "자동완성9", "자동완성8", "자동완성7", "자동완성6", "자동완성5", "자동완성4", "자동완성3", "자동완성2");
+        .containsExactly("자동완성9", "자동완성8", "자동완성7", "자동완성6", "자동완성5", "자동완성4", "자동완성3", "자동완성2");
     assertThat(data.at("/items/0/serverName").asText()).isEqualTo(SERVER);
     assertThat(data.at("/items/0/className").asText()).isEqualTo("바드");
     assertThat(data.at("/items/0/itemLevel").decimalValue()).isEqualByComparingTo("1709");

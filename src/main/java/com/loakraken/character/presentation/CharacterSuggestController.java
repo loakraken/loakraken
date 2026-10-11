@@ -50,10 +50,8 @@ public class CharacterSuggestController {
         content = @Content(schema = @Schema(ref = "#/components/schemas/ErrorResponse")))
   })
   public ResponseEntity<ApiResponse<CharacterSuggestResponse>> suggest(
-      @Parameter(description = "이름 앞부분", example = "언새") @RequestParam(required = false)
-          String q) {
-    var items =
-        suggestions.suggest(q).stream().map(CharacterSuggestItemResponse::from).toList();
+      @Parameter(description = "이름 앞부분", example = "언새") @RequestParam(required = false) String q) {
+    var items = suggestions.suggest(q).stream().map(CharacterSuggestItemResponse::from).toList();
     return ResponseEntity.ok()
         .cacheControl(CacheControl.maxAge(Duration.ofSeconds(60)).cachePublic())
         .body(
@@ -64,7 +62,8 @@ public class CharacterSuggestController {
 
   @Schema(description = "캐릭터 이름 자동완성(#369)")
   public record CharacterSuggestResponse(
-      @Schema(description = "아이템 레벨 높은 순, 최대 8개. 없으면 빈 배열") List<CharacterSuggestItemResponse> items) {}
+      @Schema(description = "아이템 레벨 높은 순, 최대 8개. 없으면 빈 배열")
+          List<CharacterSuggestItemResponse> items) {}
 
   public record CharacterSuggestItemResponse(
       String characterName,

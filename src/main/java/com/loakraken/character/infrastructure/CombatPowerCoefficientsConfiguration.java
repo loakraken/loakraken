@@ -2,6 +2,7 @@ package com.loakraken.character.infrastructure;
 
 import com.loakraken.character.domain.CombatPowerEquipmentModel;
 import com.loakraken.character.domain.CombatPowerGemModel;
+import com.loakraken.character.domain.CombatPowerPolishValues;
 import java.io.IOException;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -12,6 +13,7 @@ import tools.jackson.databind.json.JsonMapper;
 class CombatPowerCoefficientsConfiguration {
   static final String GEM_RESOURCE = "combat-power/gem-coefficients.json";
   static final String EQUIPMENT_RESOURCE = "combat-power/equipment-engraving-coefficients.json";
+  static final String POLISH_RESOURCE = "combat-power/polish-values.json";
 
   /** 전투력 시뮬레이터 보석 계수(#243). 근거·확인 날짜는 리소스 source에 있다. 읽을 수 없으면 애플리케이션이 시작하지 않는다. */
   @Bean
@@ -28,6 +30,14 @@ class CombatPowerCoefficientsConfiguration {
       throws IOException {
     try (var input = new ClassPathResource(EQUIPMENT_RESOURCE).getInputStream()) {
       return mapper.readValue(input, CombatPowerEquipmentModel.Coefficients.class);
+    }
+  }
+
+  /** 연마 옵션별 하·중·상 수치(#251). 근거는 리소스 source에 있다. */
+  @Bean
+  CombatPowerPolishValues combatPowerPolishValues(JsonMapper mapper) throws IOException {
+    try (var input = new ClassPathResource(POLISH_RESOURCE).getInputStream()) {
+      return mapper.readValue(input, CombatPowerPolishValues.class);
     }
   }
 }

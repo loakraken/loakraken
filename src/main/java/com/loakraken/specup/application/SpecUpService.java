@@ -179,9 +179,16 @@ public class SpecUpService {
         result.before() == null || result.before().signum() == 0
             ? null
             : delta.multiply(HUNDRED).divide(result.before(), 3, RoundingMode.HALF_UP);
+    // 비용 근거가 없는 후보도 500이 아니라 비용·효율 없이 낸다(P0 10-12: 재련이 OK가 된 뒤 비용 null로 NPE).
     var cost = plan.cost();
     return plan.candidate(
-        "OK", delta, percent, cost, SpecUpCost.efficiency(delta, cost.amount()), null, null);
+        "OK",
+        delta,
+        percent,
+        cost,
+        SpecUpCost.efficiency(delta, cost == null ? null : cost.amount()),
+        null,
+        null);
   }
 
   /** 보석 +1: 슬롯마다 현재 레벨 + 1(10 미만). 대상 이름은 보석이 붙은 스킬(PM-프론트 16:27 ③). */
@@ -315,7 +322,7 @@ public class SpecUpService {
     }
   }
 
-  /** 재련 +1·상급 재련 +1: 무기·방어구마다. 지금은 전투력 계산식이 미확정이라 UNSUPPORTED로 남는다. */
+  /** 재련 +1·상급 재련 +1: 무기·방어구마다. Δ전투력은 시뮬레이터(재련 모델)가, 비용은 아직 연결하지 않아 UNKNOWN이다. */
   private static void refines(CharacterLoadout loadout, List<Planned> planned) {
     for (int index = 0; index < loadout.equipment().size(); index++) {
       var item = loadout.equipment().get(index);
@@ -347,7 +354,7 @@ public class SpecUpService {
                     null,
                     null,
                     null),
-                null));
+                SpecUpCost.REFINE_COST_UNCONFIRMED));
       var advanced = item.detail().advancedRefineLevel();
       if (advanced != null && advanced < 40)
         planned.add(
@@ -361,7 +368,7 @@ public class SpecUpService {
                 item.grade(),
                 null,
                 change(Kind.EQUIPMENT_ADVANCED_REFINE, null, index, advanced + 1, null, null),
-                null));
+                SpecUpCost.REFINE_COST_UNCONFIRMED));
     }
   }
 

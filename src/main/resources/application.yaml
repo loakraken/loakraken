@@ -119,6 +119,10 @@ crit-speed:
 combat-power-sim:
   enabled: ${COMBAT_POWER_SIM_ENABLED:false}
 
+# 스펙업 가이드(#315): 꺼져 있으면 SPEC_UP_DISABLED(404). 시뮬레이터 계산식 검증 뒤 켠다.
+spec-up:
+  enabled: ${SPEC_UP_ENABLED:false}
+
 home:
   cache:
     calendar-ttl: ${HOME_CALENDAR_CACHE_TTL:30m}

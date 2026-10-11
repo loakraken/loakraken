@@ -249,6 +249,7 @@ sudo /opt/loakraken/production/pull/approve.sh
 첫 배포 승인으로 채널 태그가 생긴 뒤 서버에서 사용자가 실행한다. 이후 `pull/` 파일은 배포 번들로 자동 갱신된다.
 
 - systemd 유닛 파일(`pull`·`monitor`·`backup`의 `.service`·`.timer`)이 번들에서 바뀌면, **운영 배포가 성공한 뒤 `pull-deploy.sh`가 서버에 이미 설치된 유닛만 바꿔 넣고 `daemon-reload`** 한다(Slack "systemd 유닛 갱신"). 새 유닛을 설치하거나 타이머를 켜지는 않는다(그건 아래처럼 사람이 한 번). 유닛 이름을 운영·스테이징이 같이 쓰므로 스테이징(develop 번들)은 유닛을 바꾸지 않는다(#280).
+- 그래서 **설치된 유닛 파일을 서버에서 직접 고치지 않는다**(다음 운영 배포가 번들 판으로 되돌린다). 서버별 값은 `sudo systemctl edit <유닛>`의 drop-in(`/etc/systemd/system/<유닛>.d/override.conf`)으로 넣는다. drop-in은 갱신 대상이 아니다.
 - `approve.sh`도 시작 전에 pull 서비스·타이머가 `daemon-reload`를 기다리는 상태면 스스로 다시 읽는다. v0.2.0 배포(10-11) 때 사용자가 경고를 보고 따로 `daemon-reload`를 했던 것을 없앤다.
 
 ```bash

@@ -237,6 +237,50 @@ public final class CombatPowerRefineModel {
     }
   }
 
+  /** 아바타 주스탯 % 합(비율)과 계산하지 못한 이유. */
+  public record AvatarStat(BigDecimal sum, String reason) {}
+
+  private static final Pattern AVATAR_STAT = Pattern.compile("^(힘|민첩|지능) \\+([\\d.]+)%$");
+  private static final String TOP = "상의 아바타";
+  private static final String BOTTOM = "하의 아바타";
+
+  /**
+   * 아바타 주스탯 %(E29, 검증 표본 official-avatar-stat-2026-10-12.json). 공식 툴팁의 "힘·민첩·지능 +n%"를 그대로 읽고, 줄이 없을
+   * 때만 등급 표를 쓴다. 부위(무기·머리·상의·하의)마다 안쪽·겉 중 큰 값을 더한다. 한벌 아바타는 상의 칸 하나에 상의·하의 두 부위 값(예: 영웅 2% = 1% +
+   * 1%)이 붙어 있어, 상의 칸의 공식 %가 그 등급 부위 값보다 크면 반씩 상의·하의 부위로 나눈다(한벌만 입어도 하의 1%를 놓치지 않고, 안쪽 아바타와 겹치면 부위마다
+   * 큰 값).
+   */
+  static AvatarStat avatarStat(Coefficients c, List<CharacterLoadout.Avatar> avatars) {
+    var best = new java.util.HashMap<String, BigDecimal>();
+    String reason = null;
+    for (var avatar : avatars) {
+      if (avatar == null || !c.avatarStatTypes().contains(avatar.type())) continue;
+      var table = avatar.grade() == null ? null : c.avatarStatPctByGrade().get(avatar.grade());
+      var pct = officialAvatarPct(avatar);
+      if (pct == null) pct = table;
+      if (pct == null) {
+        if (reason == null)
+          reason = "아바타 등급(" + avatar.grade() + ")의 능력치 효과를 아직 확인하지 않아 계산하지 않았습니다.";
+        continue;
+      }
+      if (TOP.equals(avatar.type()) && table != null && pct.compareTo(table) > 0) {
+        var half = pct.divide(BigDecimal.TWO, MATH);
+        best.merge(TOP, half, BigDecimal::max);
+        best.merge(BOTTOM, half, BigDecimal::max);
+      } else best.merge(avatar.type(), pct, BigDecimal::max);
+    }
+    return new AvatarStat(best.values().stream().reduce(BigDecimal.ZERO, BigDecimal::add), reason);
+  }
+
+  /** 공식 아바타 툴팁의 "힘·민첩·지능 +n%"(비율). 줄이 없으면 null. */
+  private static BigDecimal officialAvatarPct(CharacterLoadout.Avatar avatar) {
+    for (var line : avatar.effects()) {
+      var matcher = AVATAR_STAT.matcher(line.strip());
+      if (matcher.matches()) return new BigDecimal(matcher.group(2)).divide(HUNDRED, MATH);
+    }
+    return null;
+  }
+
   /**
    * 부위 수치. 전율은 단계표(상급 0만). 업화는 round(T(5·일반 + 상급) × (1 + 30단계 2% + 40단계 3%))이고, 방어구 T = round(투구 T
    * × 부위 배수), 5의 배수 사이 칸은 ⌈T(a) + (T(a + 5) − T(a)) × f(j)⌉, 무기는 확인된 칸만(#333, 표본
@@ -348,21 +392,9 @@ public final class CombatPowerRefineModel {
       reason = "무기 공격력(무기 Tooltip 기본 효과)을 읽지 못해 계산하지 않았습니다.";
     var karma = karmaLevel(loadout);
     if (karma == null && reason == null) reason = "깨달음 아크 패시브 레벨을 읽지 못해 계산하지 않았습니다.";
-    var statMultiplier = BigDecimal.ONE.add(c.petStatPct());
-    for (var type : c.avatarStatTypes()) {
-      BigDecimal best = BigDecimal.ZERO;
-      for (var avatar : loadout.avatars()) {
-        if (avatar == null || !type.equals(avatar.type()) || avatar.grade() == null) continue;
-        var pct = c.avatarStatPctByGrade().get(avatar.grade());
-        if (pct == null) {
-          if (reason == null)
-            reason = "아바타 등급(" + avatar.grade() + ")의 능력치 효과를 아직 확인하지 않아 계산하지 않았습니다.";
-          continue;
-        }
-        if (pct.compareTo(best) > 0) best = pct;
-      }
-      statMultiplier = statMultiplier.add(best);
-    }
+    var avatarStat = avatarStat(c, loadout.avatars());
+    if (avatarStat.reason() != null && reason == null) reason = avatarStat.reason();
+    var statMultiplier = BigDecimal.ONE.add(c.petStatPct()).add(avatarStat.sum());
     ArmGuard armGuard = null;
     String armGuardReason = "팔 보호구가 없어 계산하지 않았습니다.";
     for (var item : loadout.equipment()) {

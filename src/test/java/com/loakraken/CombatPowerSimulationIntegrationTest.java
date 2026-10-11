@@ -602,6 +602,62 @@ class CombatPowerSimulationIntegrationTest {
         CharacterTestFixture.details(profile, loadout, List.of()), "{}", "[]");
   }
 
+  @Test
+  void 검색_응답에_아크_그리드_효율을_준다() throws Exception {
+    // 계산 검증 #368 표본 언새늘과 같은 코어 6개·젬 옵션: 아크 그리드 38.64%, 코어 합 32.96%, 젬 4.27%.
+    when(detailsPort.fetch(anyString()))
+        .thenAnswer(
+            invocation -> {
+              var base = fetchedBracelet(invocation.getArgument(0));
+              var details = base.details();
+              var old = details.loadout();
+              var grid =
+                  new CharacterLoadout.ArkGrid(
+                      List.of(
+                          gridSlot(0, "질서의 해 코어 : 직업 스킬", 17, "고대"),
+                          gridSlot(1, "질서의 별 코어 : 직업 스킬", 18, "유물"),
+                          gridSlot(2, "질서의 달 코어 : 직업 스킬", 18, "유물"),
+                          gridSlot(3, "혼돈의 달 코어 : 불타는 일격", 17, "고대"),
+                          gridSlot(4, "혼돈의 해 코어 : 현란한 공격", 17, "유물"),
+                          gridSlot(5, "혼돈의 별 코어 : 공격", 17, "유물")),
+                      List.of(
+                          new CharacterLoadout.GridEffect("공격력", 28),
+                          new CharacterLoadout.GridEffect("추가 피해", 51),
+                          new CharacterLoadout.GridEffect("보스 피해", 4)));
+              var loadout =
+                  new CharacterLoadout(
+                      old.equipment(),
+                      old.engravings(),
+                      old.gems(),
+                      old.cards(),
+                      old.arkPassive(),
+                      grid,
+                      old.skills());
+              return new FetchedCharacter(
+                  CharacterTestFixture.details(details.profile(), loadout, List.of()), "{}", "[]");
+            });
+    var search = get("/api/v1/characters/search?characterName=" + encode("시뮬아크"));
+    assertThat(search.statusCode()).isEqualTo(200);
+    ApiContractFixture.write("character-search-ark-grid-efficiency.json", search.body());
+    var efficiency = mapper.readTree(search.body()).at("/data/arkGridEfficiency");
+    assertThat(efficiency.path("status").asText()).isEqualTo("OK");
+    assertThat(efficiency.path("percent").decimalValue()).isEqualByComparingTo("38.64");
+    assertThat(efficiency.path("coresPercent").decimalValue()).isEqualByComparingTo("32.96");
+    assertThat(efficiency.path("reasonCode").isNull()).isTrue();
+    assertThat(efficiency.path("lines").size()).isEqualTo(7);
+    assertThat(efficiency.at("/lines/0/slotIndex").asInt()).isZero();
+    assertThat(efficiency.at("/lines/0/text").asText()).isEqualTo("질서의 해 코어 : 직업 스킬 고대 17P");
+    assertThat(efficiency.at("/lines/0/percent").decimalValue()).isEqualByComparingTo("8.50");
+    assertThat(efficiency.at("/lines/6/slotIndex").isNull()).isTrue();
+    assertThat(efficiency.at("/lines/6/percent").decimalValue()).isEqualByComparingTo("4.27");
+    assertThat(efficiency.path("ruleVersion").asText()).isEqualTo("ark-grid-efficiency-v1");
+  }
+
+  private static CharacterLoadout.GridSlot gridSlot(
+      int index, String name, int point, String grade) {
+    return new CharacterLoadout.GridSlot(index, null, name, point, grade, List.of());
+  }
+
   private HttpResponse<String> simulate(String name, String changes) throws Exception {
     var body = "{\"characterName\": \"" + name + "\", \"changes\": " + changes + "}";
     return HttpClient.newHttpClient()

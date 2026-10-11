@@ -15,6 +15,7 @@
 | 로아샵 효율 | [loa-shop.md](loa-shop.md) | `verification/loa-shop/` | 구성품 골드 환산·공식 크리스탈 경로 이득 식 확정(목표 사이트 화면 값 원 단위 재현, 2026-10-12). 시세 없는 상자는 공식 확률 × 시세 |
 | 장신구 기본 스탯 범위 % | [accessory-stat-range.md](accessory-stat-range.md) | `verification/accessory/` | 공식 아이템 사전 연마 단계별 범위로 식 확정, 언새늘 5개 목표 사이트와 소수 둘째 자리까지 일치(L11, 2026-10-12) |
 | 지옥 보상 효율 | [hell-reward.md](hell-reward.md) | `verification/hell-reward/` | 낙원 시즌 4 공식 규칙·강하 횟수·보상표 88칸 확정(인벤 + 사이트 20칸 일치, L42, 2026-10-12). 층→단계·특수 효과 미확정 |
+| 기여도 계산기 기준 피해량 | [raid-contribution.md](raid-contribution.md) | `verification/raid-contribution/` | 43관문 하한·상한(1인분 × 0.9 ~ 1.2) 확정. 관문별 최신 출처(공식 공지 체력·보호막 변경 대조), 내 위치 기대값(L41, 2026-10-12) |
 
 ## 규칙
 

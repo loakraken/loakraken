@@ -195,6 +195,46 @@ class CollectibleOwnershipIntegrationTest {
   }
 
   @Test
+  void 같은_종류_안_같은_이름은_한_항목이고_원정대를_한_번만_센다() throws Exception {
+    roster("보유겹침", null);
+    record(
+        "보유겹침",
+        new Collectible(
+            "보유 겹침",
+            null,
+            3,
+            2,
+            List.of(new CollectibleItem("겹친 이름", 1, 1), new CollectibleItem("겹친 이름", 2, 1))));
+    var data =
+        data(
+            get(
+                "/api/v1/collectibles/ownership?server="
+                    + encode(SERVER)
+                    + "&type="
+                    + encode("보유 겹침")));
+    assertThat(data.path("items").size()).isEqualTo(1);
+    assertThat(data.at("/items/0/ownedRosters").asLong()).isEqualTo(1);
+  }
+
+  @Test
+  void 오래_관측되지_않은_항목은_빠지고_종류는_공식_순서다() throws Exception {
+    roster("보유순서", null);
+    // 공식 응답이 심장 → 씨앗 순서면 그 순서를 따른다(사전에 먼저 들어온 순서가 아님).
+    record("보유순서", items(HEART, 1, 1, 0, 1), items(SEED, 1, 5, 0, 3));
+    jdbc.sql(
+            """
+            INSERT INTO collectible_item (type, name, type_order, sort_order, max_point, last_seen_at)
+            VALUES (:type, '사라진 항목', 1, 99, 1, :old) ON CONFLICT (type, name) DO UPDATE SET last_seen_at = :old
+            """)
+        .param("type", HEART)
+        .param("old", OffsetDateTime.now(ZoneOffset.UTC).minusDays(40))
+        .update();
+    var data = data(get("/api/v1/collectibles/ownership?server=" + encode(SERVER)));
+    assertThat(indexOf(data, HEART, HEART + " 1")).isLessThan(indexOf(data, SEED, SEED + " 1"));
+    assertThat(indexOf(data, HEART, "사라진 항목")).isEqualTo(-1);
+  }
+
+  @Test
   void 종류_값이_틀리면_400이다() throws Exception {
     assertThat(get("/api/v1/collectibles/ownership?type=" + encode("<script>")).statusCode())
         .isEqualTo(400);

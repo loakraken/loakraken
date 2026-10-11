@@ -26,7 +26,7 @@ class PostgresCharacterCardRepository implements CharacterCardPort {
   private final JdbcClient jdbc;
   // 학습한 구성원·효과는 거의 바뀌지 않으므로 이미 쓴 것은 다시 쓰지 않는다.
   private final Set<Object> known = ConcurrentHashMap.newKeySet();
-  // 수집품 항목 사전: (종류, 이름) → {item_id, 공식 순서, 만점}(#305).
+  // 수집품 항목 사전: (종류, 이름) → {item_id, 공식 순서, 만점, 종류 순서, 마지막 갱신 날}(#305).
   private final Map<String, int[]> items = new ConcurrentHashMap<>();
 
   PostgresCharacterCardRepository(JdbcClient jdbc) {
@@ -290,10 +290,12 @@ class PostgresCharacterCardRepository implements CharacterCardPort {
       UUID rosterKey,
       List<com.loakraken.character.domain.CharacterLoadout.Collectible> collectibles,
       OffsetDateTime at) {
-    var ids = new StringBuilder();
-    var points = new StringBuilder();
+    // 같은 종류 안에 같은 이름이 두 번 와도 원정대를 두 번 세지 않게 (type, name) 하나로 합친다(큰 point).
+    var held = new java.util.LinkedHashMap<Short, Integer>();
     boolean any = false;
+    int typeOrder = 0;
     for (var collectible : collectibles) {
+      typeOrder++;
       if (collectible == null || collectible.type() == null || collectible.type().isBlank())
         continue;
       String type = collectible.type().strip();
@@ -305,19 +307,23 @@ class PostgresCharacterCardRepository implements CharacterCardPort {
         String name = item.name().strip();
         if (type.length() > 32 || name.length() > 64) continue;
         any = true;
-        short id = itemId(type, name, order, item.maxPoint(), at);
+        short id = itemId(type, name, typeOrder, order, item.maxPoint(), at);
         int point = item.point() == null ? 0 : item.point();
-        if (point <= 0) continue;
-        if (!ids.isEmpty()) {
-          ids.append(',');
-          points.append(',');
-        }
-        ids.append(id);
-        points.append(Math.min(point, Short.MAX_VALUE));
+        if (point > 0) held.merge(id, Math.min(point, Short.MAX_VALUE), Math::max);
       }
     }
     // 항목 목록이 없는 응답(이전 형식·해석 실패)은 원정대 행을 비우지 않는다.
     if (!any) return;
+    var ids = new StringBuilder();
+    var points = new StringBuilder();
+    for (var entry : held.entrySet()) {
+      if (!ids.isEmpty()) {
+        ids.append(',');
+        points.append(',');
+      }
+      ids.append(entry.getKey());
+      points.append(entry.getValue());
+    }
     jdbc.sql(
             """
         INSERT INTO roster_collectible_item (roster_key, item_ids, points, observed_at)
@@ -333,28 +339,37 @@ class PostgresCharacterCardRepository implements CharacterCardPort {
         .update();
   }
 
-  private short itemId(String type, String name, int order, int maxPoint, OffsetDateTime at) {
+  private short itemId(
+      String type, String name, int typeOrder, int order, int maxPoint, OffsetDateTime at) {
     String key = type + '\u0000' + name;
     var cached = items.get(key);
-    if (cached != null && cached[1] == order && cached[2] == maxPoint) return (short) cached[0];
+    // 순서·만점이 같고 오늘 이미 last_seen_at을 갱신했으면 DB에 가지 않는다(사라진 항목 판단은 하루 단위면 충분).
+    int day = (int) at.toLocalDate().toEpochDay();
+    if (cached != null
+        && cached[1] == order
+        && cached[2] == maxPoint
+        && cached[3] == typeOrder
+        && cached[4] == day) return (short) cached[0];
     short id =
         jdbc.sql(
                 """
-            INSERT INTO collectible_item (type, name, sort_order, max_point, last_seen_at)
-            VALUES (:type, :name, :order, :max, :at)
-            ON CONFLICT (type, name) DO UPDATE SET sort_order = EXCLUDED.sort_order,
-              max_point = EXCLUDED.max_point, last_seen_at = EXCLUDED.last_seen_at
+            INSERT INTO collectible_item (type, name, type_order, sort_order, max_point, last_seen_at)
+            VALUES (:type, :name, :typeOrder, :order, :max, :at)
+            ON CONFLICT (type, name) DO UPDATE SET type_order = EXCLUDED.type_order,
+              sort_order = EXCLUDED.sort_order, max_point = EXCLUDED.max_point,
+              last_seen_at = GREATEST(collectible_item.last_seen_at, EXCLUDED.last_seen_at)
             RETURNING item_id
             """)
             .param("type", type)
             .param("name", name)
+            .param("typeOrder", typeOrder)
             .param("order", order)
             .param("max", Math.min(maxPoint, Short.MAX_VALUE))
             .param("at", at)
             .query(Short.class)
             .single();
     if (items.size() > KNOWN_LIMIT) items.clear();
-    items.put(key, new int[] {id, order, maxPoint});
+    items.put(key, new int[] {id, order, maxPoint, typeOrder, day});
     return id;
   }
 }

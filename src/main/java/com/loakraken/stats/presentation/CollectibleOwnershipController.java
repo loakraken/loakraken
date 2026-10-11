@@ -44,7 +44,7 @@ public class CollectibleOwnershipController {
       description =
           "공식 수집품 항목(CollectiblePoints)마다, activeDays 안에 관측한 원정대(공개 캐릭터가 있는 원정대) 가운데 그 항목을 가진 원정대 수·비율입니다. "
               + "분모는 meta.population(원정대 N개)이고, ownedRosters = Point가 0보다 큰 원정대, completedRosters = Point가 만점 이상인 원정대입니다(0/1 항목은 둘이 같음). "
-              + "항목 키는 (type, name)입니다(공식 문자열 그대로). type을 주면 그 종류만, 없으면 전체 종류(공식 순서)입니다. "
+              + "항목 키는 (type, name)입니다(공식 문자열 그대로, 같은 종류 안 같은 이름은 한 항목으로 합칩니다). activeDays 안에 관측되지 않은 항목(게임에서 사라진 항목)은 빠집니다. type을 주면 그 종류만, 없으면 전체 종류(공식 순서)입니다. "
               + "모집단이 30 미만이면 sampleStatus=COLLECTING이지만 비율은 그대로 줍니다(참고값). 400 INVALID_REQUEST·STATS_INVALID_RANGE, 503 STATS_UNAVAILABLE")
   @StatsController.StandardErrors
   public ApiResponse<CollectibleOwnershipResponse> ownership(

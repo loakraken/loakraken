@@ -230,7 +230,7 @@ public interface StatsPort {
 
   /**
    * 수집품 항목별 보유 원정대 수(#305). since 뒤에 항목을 관측했고 공개 캐릭터(server가 있으면 그 서버)가 있는 원정대가 분모다. type이 있으면 그
-   * 종류만, 가진 원정대가 없는 항목도 0으로 준다.
+   * 종류만, 가진 원정대가 없는 항목도 0으로 준다. since 뒤에 관측되지 않은 항목(게임에서 사라진 항목)은 빼고, 순서는 공식 종류 순서 → 종류 안 순서다.
    */
   CollectibleOwnership collectibleOwnership(String server, Instant since, String type);
 

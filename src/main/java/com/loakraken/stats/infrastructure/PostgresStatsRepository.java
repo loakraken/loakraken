@@ -505,13 +505,14 @@ class PostgresStatsRepository implements StatsPort {
                 , held AS (
                   SELECT u.item_id, u.point FROM rosters r
                   CROSS JOIN LATERAL unnest(r.item_ids, r.points) AS u(item_id, point))
-                SELECT i.type, i.name, i.sort_order, i.max_point,
+                SELECT i.type, i.name, i.type_order, i.sort_order, i.max_point,
                   COUNT(h.item_id) FILTER (WHERE h.point > 0) AS owned,
                   COUNT(h.item_id) FILTER (WHERE h.point >= i.max_point) AS completed
                 FROM collectible_item i LEFT JOIN held h ON h.item_id = i.item_id
-                WHERE CAST(:type AS VARCHAR) IS NULL OR i.type = CAST(:type AS VARCHAR)
-                GROUP BY i.item_id, i.type, i.name, i.sort_order, i.max_point
-                ORDER BY MIN(i.item_id) OVER (PARTITION BY i.type), i.sort_order, i.name
+                WHERE (CAST(:type AS VARCHAR) IS NULL OR i.type = CAST(:type AS VARCHAR))
+                  AND i.last_seen_at >= :since
+                GROUP BY i.item_id, i.type, i.name, i.type_order, i.sort_order, i.max_point
+                ORDER BY i.type_order, i.type, i.sort_order, i.name
                 """)
             .param("since", since.atOffset(ZoneOffset.UTC))
             .param("server", server)

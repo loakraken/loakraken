@@ -6,5 +6,9 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 
 @Configuration(proxyBeanMethods = false)
 @EnableScheduling
-@EnableConfigurationProperties({MarketCacheProperties.class, MarketWarmupProperties.class})
+@EnableConfigurationProperties({
+  MarketCacheProperties.class,
+  MarketWarmupProperties.class,
+  RelicBookWarmupProperties.class
+})
 class MarketConfiguration {}

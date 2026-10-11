@@ -30,4 +30,11 @@ public interface MarketCache {
   Optional<MarketBoardScan> findBoardScan(MarketTab tab, Integer tier);
 
   void saveBoardScan(MarketBoardScan scan);
+
+  /** 유물 각인서 시세 스캔(L30). 키 TTL이 지났으면 없다. */
+  default Optional<RelicBookScan> findRelicBooks() {
+    return Optional.empty();
+  }
+
+  default void saveRelicBooks(RelicBookScan scan, java.time.Duration ttl) {}
 }

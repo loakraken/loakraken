@@ -27,6 +27,7 @@ import tools.jackson.databind.json.JsonMapper;
 @Component
 class ValkeyMarketCache implements MarketCache {
   private static final String OPTIONS_KEY = "market:v1:options";
+  private static final String RELIC_BOOKS_KEY = "market:v1:relic-books";
   private final StringRedisTemplate redis;
   private final JsonMapper mapper;
   private final MarketCacheProperties properties;
@@ -139,6 +140,17 @@ class ValkeyMarketCache implements MarketCache {
 
   public void saveBoardScan(MarketBoardScan scan) {
     write(boardKey(scan.tab(), scan.tier()), scan, properties.boardScanTtl(), Kind.BOARD_SCAN);
+  }
+
+  @Override
+  public Optional<RelicBookScan> findRelicBooks() {
+    // 만료는 키 TTL(예열 주기 × 3)로 정한다.
+    return read(RELIC_BOOKS_KEY, RelicBookScan.class, Kind.RELIC_BOOKS, scan -> true);
+  }
+
+  @Override
+  public void saveRelicBooks(RelicBookScan scan, Duration ttl) {
+    write(RELIC_BOOKS_KEY, scan, ttl, Kind.RELIC_BOOKS);
   }
 
   private static String boardKey(MarketTab tab, Integer tier) {

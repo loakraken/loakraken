@@ -73,6 +73,86 @@ class SkillCritTest {
   }
 
   @Test
+  void 피격이상_면역인_적과_차지_완료는_기본으로_더하고_화면_값은_상한이다() {
+    // crit-speed-v7(PM-백엔드 10-11 21:57). 공식 트라이포드 문구(10-12 조회), 계산 검증 표본 c04: 유성강천·굉열파 115.94 →
+    // 100.
+    var observed = new BigDecimal("15.94");
+    var toggles = new ArrayList<CritSpeedCalculation.ToggleState>();
+    var skills =
+        CritSpeedCalculation.skillCrits(
+            loadout(
+                skill(
+                    "유성강천",
+                    AttackType.NONE,
+                    tripod(
+                        "강력한 마무리",
+                        "더욱 빠르게 뛰고 강하게 내려찍어 피격이상 면역인 적에게 공격 적중 시 치명타 적중률이 100.0% 증가하며 치명타 피해가 60.0% 증가한다.")),
+                skill(
+                    "굉열파",
+                    AttackType.NONE,
+                    tripod(
+                        "공파섬",
+                        "차지 조작으로 변경되며, 차지 완료 시 적에게 주는 피해가 83.0% 증가하고 치명타 적중률이 40.0% 증가한다."))),
+            observed,
+            new BigDecimal("100"),
+            BigDecimal.valueOf(200),
+            new ArrayList<>(),
+            List.of(),
+            CritSpeedCalculation.Assumptions.NONE,
+            toggles);
+    var finish = skills.get(1);
+    assertThat(finish.name()).isEqualTo("유성강천");
+    assertThat(finish.total()).isEqualByComparingTo("115.94");
+    assertThat(finish.effective()).isEqualByComparingTo("100");
+    assertThat(finish.conditional()).isEmpty();
+    var charge = skills.get(0);
+    // 표본의 115.94는 다른 트라이포드(+60)까지 더한 값이다. 여기서는 공파섬 +40만 확인한다.
+    assertThat(charge.total()).isEqualByComparingTo("55.94");
+    assertThat(charge.tripods())
+        .extracting(CritSpeedCalculation.SkillTripod::name)
+        .containsExactly("공파섬");
+    assertThat(toggles)
+        .extracting(CritSpeedCalculation.ToggleState::key)
+        .containsExactly("피격이상 면역인 적", "차지 완료");
+    assertThat(toggles).allMatch(CritSpeedCalculation.ToggleState::on);
+    assertThat(toggles).allMatch(CritSpeedCalculation.ToggleState::coreState);
+
+    // 끄면 예전처럼 조건부로 따로 둔다.
+    var off =
+        new CritSpeedCalculation.Assumptions(
+            false,
+            false,
+            0,
+            null,
+            null,
+            null,
+            null,
+            null,
+            true,
+            java.util.Map.of("피격이상 면역인 적", false));
+    var offSkills =
+        CritSpeedCalculation.skillCrits(
+            loadout(
+                skill(
+                    "유성강천",
+                    AttackType.NONE,
+                    tripod(
+                        "강력한 마무리",
+                        "더욱 빠르게 뛰고 강하게 내려찍어 피격이상 면역인 적에게 공격 적중 시 치명타 적중률이 100.0% 증가하며 치명타 피해가 60.0% 증가한다."))),
+            observed,
+            new BigDecimal("100"),
+            BigDecimal.valueOf(200),
+            new ArrayList<>(),
+            List.of(),
+            off,
+            new ArrayList<>());
+    assertThat(offSkills.getFirst().total()).isEqualByComparingTo("15.94");
+    assertThat(offSkills.getFirst().conditional())
+        .extracting(CritSpeedCalculation.SkillTripod::name)
+        .containsExactly("강력한 마무리");
+  }
+
+  @Test
   void 상한을_적용하고_공격_타입이나_트라이포드_문구를_모르면_null이다() {
     var limitations = new ArrayList<String>();
     var skills =

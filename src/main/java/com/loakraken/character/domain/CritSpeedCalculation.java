@@ -15,7 +15,7 @@ import java.util.regex.Pattern;
  * 스탯 계산에만 쓴다. 뭉툭한 가시·음속 돌파는 장착 노드의 공식 문구에서 수치를 읽고, 미장착이면 2026-10-05 공식 Lv.2 문구를 기준값으로 쓴다.
  */
 public final class CritSpeedCalculation {
-  public static final String RULE_VERSION = "crit-speed-v6";
+  public static final String RULE_VERSION = "crit-speed-v7";
 
   /**
    * 치명타 피해 앞(같은 문장)에 오면 조건부로 보고 합산하지 않는 말. 로펙·일로아는 "폭주 중"·"마력 해방 중"(각성 상태)은 넣고 "사신화 상태에서"· "페르소나
@@ -544,7 +544,9 @@ public final class CritSpeedCalculation {
             equippedThorn == null ? CRIT_CAP : thornRule.critCap(),
             BASE_CRIT_DAMAGE.add(sum(sources, Kind.OBSERVED, Axis.CRIT_DAMAGE)),
             limitations,
-            skillBonuses);
+            skillBonuses,
+            input,
+            toggles);
     if (!conditionalRate.isEmpty())
       limitations.add(
           "기본 치명타 적중률에 넣지 않은 효과(공식 문구의 조건·대상 스킬, 스킬 한정은 스킬별 치명타 적중률에 반영): "
@@ -750,10 +752,30 @@ public final class CritSpeedCalculation {
   /** 같은 문장에서 앞에 오면 조건부로 보는 말: "…시"(오버차지 시, 퍼펙트 존 성공 시), "…상태에서", "…일 때". */
   private static final Pattern TRIPOD_CONDITION = Pattern.compile("(?:(?:^|\\s)시|상태에서|일 때)[ ,]");
 
+  /**
+   * 기본 켬 조건(crit-speed-v7, PM-백엔드 10-11 21:57): 트라이포드 문장의 조건이 이것이면 조건부로 빼지 않고 핵심 상태처럼 더한다. 보스 대상이면
+   * '피격이상 면역인 적'은 늘 참이고, '차지 완료'는 그 트라이포드를 쓰는 정상 운용이다. 토글(key = 조건 이름)로 끌 수 있다.
+   */
+  record CoreCondition(String key, String label, Pattern pattern) {}
+
+  static final List<CoreCondition> CORE_CONDITIONS =
+      List.of(
+          new CoreCondition(
+              "피격이상 면역인 적", "피격이상 면역인 적(보스) 적중 가정", Pattern.compile("피격\\s*이상\\s*면역")),
+          new CoreCondition("차지 완료", "차지 완료 가정", Pattern.compile("차지\\s*완료")));
+
   /** 레벨을 올린(2 이상) 스킬만 이름순으로 계산한다. */
   static List<SkillCrit> skillCrits(
       CharacterLoadout loadout, BigDecimal observedCrit, BigDecimal cap, List<String> limitations) {
-    return skillCrits(loadout, observedCrit, cap, BASE_CRIT_DAMAGE, limitations, List.of());
+    return skillCrits(
+        loadout,
+        observedCrit,
+        cap,
+        BASE_CRIT_DAMAGE,
+        limitations,
+        List.of(),
+        Assumptions.NONE,
+        new ArrayList<>());
   }
 
   static List<SkillCrit> skillCrits(
@@ -762,10 +784,14 @@ public final class CritSpeedCalculation {
       BigDecimal cap,
       BigDecimal critDamage,
       List<String> limitations,
-      List<NodeBonus> bonuses) {
+      List<NodeBonus> bonuses,
+      Assumptions input,
+      List<ToggleState> toggles) {
     if (loadout.skills() == null) return List.of();
     var result = new ArrayList<SkillCrit>();
     boolean missingTooltip = false;
+    // 기본 켬 조건별로 걸린 트라이포드(토글 하나로 묶는다).
+    var coreHits = new java.util.LinkedHashMap<CoreCondition, List<SkillTripod>>();
     for (var skill : loadout.skills()) {
       if (skill == null || skill.name() == null || skill.level() == null || skill.level() < 2)
         continue;
@@ -782,9 +808,18 @@ public final class CritSpeedCalculation {
         while (matcher.find()) {
           var value = signed(matcher.group(2), matcher.group(3));
           var entry = new SkillTripod(tripod.name(), scale(value), tripod.effect());
-          if (matcher.group(1) != null || conditionalClause(tripod.effect(), matcher.start()))
-            conditional.add(entry);
-          else counted.add(entry);
+          if (matcher.group(1) != null) conditional.add(entry);
+          else if (conditionalClause(tripod.effect(), matcher.start())) {
+            var core = coreCondition(tripod.effect(), matcher.start());
+            if (core != null)
+              coreHits
+                  .computeIfAbsent(core, key -> new ArrayList<>())
+                  .add(
+                      new SkillTripod(
+                          skill.name() + " · " + tripod.name(), entry.value(), entry.text()));
+            if (core != null && input.on(core.key(), true)) counted.add(entry);
+            else conditional.add(entry);
+          } else counted.add(entry);
         }
       }
       if (!known) missingTooltip = true;
@@ -830,19 +865,43 @@ public final class CritSpeedCalculation {
               List.copyOf(damageNodes)));
     }
     result.sort(java.util.Comparator.comparing(SkillCrit::name));
+    for (var hit : coreHits.entrySet()) {
+      var core = hit.getKey();
+      var max =
+          hit.getValue().stream().map(SkillTripod::value).reduce(BigDecimal.ZERO, BigDecimal::max);
+      var text =
+          "기본 포함(스킬별 치명타 적중률만): "
+              + String.join(
+                  "; ", hit.getValue().stream().map(t -> t.name() + " — " + t.text()).toList());
+      toggles.add(
+          new ToggleState(
+              core.key(), core.label(), Axis.CRIT, true, input.on(core.key(), true), max, text));
+    }
     if (missingTooltip) limitations.add("갱신 전 캐시(최대 5분)라 트라이포드 효과를 읽지 못한 스킬은 스킬별 치명타 적중률을 비워 둡니다.");
     return List.copyOf(result);
   }
 
   /** 일치 위치가 속한 문장 앞쪽에 "…시"·"…상태에서"·"…일 때" 조건이 있는지. */
   static boolean conditionalClause(String text, int matchStart) {
+    return TRIPOD_CONDITION.matcher(sentencePrefix(text, matchStart)).find();
+  }
+
+  /** 일치 위치가 속한 문장 앞쪽 조건이 기본 켬 조건이면 그 조건, 아니면 null. */
+  static CoreCondition coreCondition(String text, int matchStart) {
+    var prefix = sentencePrefix(text, matchStart);
+    for (var core : CORE_CONDITIONS) if (core.pattern().matcher(prefix).find()) return core;
+    return null;
+  }
+
+  /** 일치 위치가 속한 문장의 앞부분("40.0%" 같은 소수점은 문장 끝으로 보지 않는다). */
+  private static String sentencePrefix(String text, int matchStart) {
     int sentence = text.lastIndexOf('.', matchStart - 1);
     while (sentence > 0
         && sentence + 1 < text.length()
         && Character.isDigit(text.charAt(sentence - 1))
         && Character.isDigit(text.charAt(sentence + 1)))
       sentence = text.lastIndexOf('.', sentence - 1);
-    return TRIPOD_CONDITION.matcher(text.substring(sentence + 1, matchStart)).find();
+    return text.substring(sentence + 1, matchStart);
   }
 
   /** 아크 패시브 노드 하나를 직업별 치명 효과 정답표로 판정한다(#189). 속도 효과는 기존 문구 해석을 그대로 쓰고, 치적·치피는 표의 판정으로만 더한다. */

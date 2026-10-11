@@ -30,7 +30,7 @@ public class CharacterTitleController {
   @Operation(
       summary = "원정대 보유 칭호(관측 기준)",
       description =
-          "같은 서버 원정대 캐릭터가 LOAKraken에서 검색·수집될 때 장착한 칭호를 처음 확인한 순서로 줍니다. 장착한 칭호만 기록되며 실제 획득일·획득 순서와 다를 수 있습니다. "
+          "같은 서버 원정대 캐릭터가 LOAKraken에서 검색·수집될 때 장착한 칭호를 처음 확인한 순서로 줍니다. 장착한 칭호만 기록되며 순서는 실제 획득일이 아니라 LOAKraken이 처음 확인한 순서입니다. "
               + "공식 API는 현재 장착 칭호 하나만 제공합니다. 원정대 목록은 /siblings 캐시를 공유합니다(공식 호출 최대 1회).")
   @ApiResponses({
     @io.swagger.v3.oas.annotations.responses.ApiResponse(

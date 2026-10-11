@@ -244,6 +244,34 @@ class SpecUpIntegrationTest {
   }
 
   @Test
+  void 지금_레벨_매물이_없으면_판매_기대가를_몰라_PENDING이다() throws Exception {
+    // PM-백엔드 10-12 05:01 P2: 지금 레벨(8) 칸은 있지만 최저가가 없으면 GEM_BUY(판매가 빼지 않음)가 아니라 PRICE_PENDING.
+    var cells = new ArrayList<GemCell>();
+    for (var cell : gemCells(true))
+      cells.add(
+          cell.level() == 8
+              ? new GemCell(
+                  cell.kind(),
+                  cell.level(),
+                  cell.itemName(),
+                  new AuctionCell(null, 0, Instant.parse("2026-10-11T07:00:00Z")),
+                  null,
+                  MarketAuctionService.Status.READY)
+              : cell);
+    when(auctions.cachedGems()).thenReturn(cells);
+    search("스펙매물없음");
+    var gem =
+        find(
+            mapper
+                .readTree(
+                    get("/api/v1/characters/spec-up?characterName=" + encode("스펙매물없음")).body())
+                .at("/data/candidates"),
+            "GEM_LEVEL:0:9");
+    assertThat(gem.at("/cost/status").asText()).isEqualTo("PENDING");
+    assertThat(gem.at("/cost/code").asText()).isEqualTo("PRICE_PENDING");
+  }
+
+  @Test
   void 시세_칸이_비면_비용만_PENDING이고_효율은_없다() throws Exception {
     when(auctions.cachedGems()).thenReturn(gemCells(false));
     search("스펙대기");

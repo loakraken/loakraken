@@ -10,7 +10,7 @@ import org.springframework.stereotype.Service;
 
 /**
  * 유물 각인서 시세(L30, 스펙업 각인서 비용). 읽기는 예열이 저장한 캐시만 쓰고 공식 API를 부르지 않는다. 공식 거래소 품목 이름은 "유물 {각인} 각인서"이고
- * 띄어쓰기가 각인 이름과 다를 수 있어(예: "실드관통") 공백을 빼고 맞춘다.
+ * 띄어쓰기가 각인 이름과 다른 품목이 있어(예: "실드관통") 공백을 빼고 맞춘다.
  */
 @Service
 public class RelicBookPriceService {

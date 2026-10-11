@@ -55,6 +55,10 @@ class SpecUpIntegrationTest {
   @Autowired com.loakraken.market.application.MarketCache marketCache;
   @MockitoBean CharacterDetailsPort detailsPort;
   @MockitoBean MarketAuctionService auctions;
+
+  @org.springframework.test.context.bean.override.mockito.MockitoSpyBean
+  com.loakraken.character.application.CombatPowerSimulationService simulator;
+
   private final JsonMapper mapper = new JsonMapper();
 
   @BeforeEach
@@ -181,6 +185,62 @@ class SpecUpIntegrationTest {
     assertThat(engraving.path("combatPowerPer10kGold").decimalValue()).isEqualByComparingTo("3.04");
     assertThat(mapper.readTree(response.body()).at("/data/pricesAt").isNull()).isFalse();
     redis.delete("market:v1:relic-books");
+  }
+
+  @Test
+  void 재련_후보가_계산되면_시세_칸이_차도_비어도_500이_아니다() throws Exception {
+    // P0 10-12(B8): 재련 모델이 OK를 내는 캐릭터에서 재련 후보 비용이 null이라 cost.amount()에서 NPE(500)가 났다.
+    // 재련 후보만 시뮬레이터가 OK(Δ+12.34)를 내게 하고, 보석 시세 칸이 찬 상태·빈 상태를 모두 본다.
+    org.mockito.Mockito.doAnswer(
+            invocation -> {
+              List<com.loakraken.character.application.CombatPowerSimulationService.Change>
+                  changes = invocation.getArgument(1);
+              var change = changes.getFirst();
+              if (change.kind()
+                  != com.loakraken.character.application.CombatPowerSimulationService.Kind
+                      .EQUIPMENT_REFINE) return invocation.callRealMethod();
+              var ok =
+                  new com.loakraken.character.application.CombatPowerSimulationService.Contribution(
+                      change.kind().name(),
+                      "무기",
+                      "+20",
+                      "+21",
+                      new BigDecimal("12.34"),
+                      com.loakraken.character.application.CombatPowerSimulationService.Status.OK,
+                      "재련",
+                      null);
+              return new com.loakraken.character.application.CombatPowerSimulationService.Result(
+                  "스펙재련",
+                  Instant.now(),
+                  new BigDecimal("3000.00"),
+                  null,
+                  new BigDecimal("3012.34"),
+                  new BigDecimal("12.34"),
+                  new BigDecimal("0.411"),
+                  false,
+                  List.of(ok),
+                  0,
+                  List.of());
+            })
+        .when(simulator)
+        .simulate(
+            org.mockito.ArgumentMatchers.any(
+                com.loakraken.character.application.CharacterResult.class),
+            org.mockito.ArgumentMatchers.anyList());
+    search("스펙재련");
+    for (boolean ready : new boolean[] {true, false}) {
+      when(auctions.cachedGems()).thenReturn(gemCells(ready));
+      var response = get("/api/v1/characters/spec-up?characterName=" + encode("스펙재련"));
+      assertThat(response.statusCode()).as("시세 칸 " + ready).isEqualTo(200);
+      var refine =
+          find(mapper.readTree(response.body()).at("/data/candidates"), "EQUIPMENT_REFINE:0:21");
+      assertThat(refine.path("status").asText()).isEqualTo("OK");
+      assertThat(refine.path("deltaCombatPower").decimalValue()).isEqualByComparingTo("12.34");
+      assertThat(refine.at("/cost/status").asText()).isEqualTo("UNKNOWN");
+      assertThat(refine.at("/cost/code").asText()).isEqualTo("REFINE_COST_UNCONFIRMED");
+      assertThat(refine.path("combatPowerPer10kGold").isNull()).isTrue();
+    }
+    org.mockito.Mockito.reset(simulator);
   }
 
   @Test

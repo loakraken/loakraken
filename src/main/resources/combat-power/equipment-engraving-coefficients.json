@@ -161,15 +161,14 @@
       }
     },
     "승부사": {
-      "books": [null, null, null, null, 2.1],
+      "books": [1.68, 1.68, 1.89, 1.89, 2.1],
       "stoneDelta": [0, 0.3, 0.38, 0.53, 0.6]
     }
   },
-  "engravingTableSource": "로아랩 시뮬레이터 표(언새늘, 각인 하나씩 바꿔 넣은 전투력 비) + 로펙 예상 전투력 대조(검증 표본 loalab-engraving-cp-2026-10-11.json, #344). c(각인서 b, 스톤 s) = books[b] + stoneDelta[s](%). official은 공식 각인 설명에 나오는 효과 수치 = base + perBook × b + stoneAdd[s](지금 값 확인용). 승부사는 L4만",
+  "engravingTableSource": "로아랩 시뮬레이터 표(언새늘, 각인 하나씩 바꿔 넣은 전투력 비) + 로펙 예상 전투력 대조(검증 표본 loalab-engraving-cp-2026-10-11.json, #344). c(각인서 b, 스톤 s) = books[b] + stoneDelta[s](%). official은 공식 각인 설명에 나오는 효과 수치 = base + perBook × b + stoneAdd[s](지금 값 확인용). 승부사는 L4만. 인벤 4821/106546 「딜러 전투력 로직 분석」 각인 계수표(검증 표본 inven-engraving-cp-2026-10-12.json, E26)와 500칸 차이 0이고, 승부사 각인서 0~3레벨·돌격대장 스톤 1도 인벤 표 값이다. 실드 관통은 인벤(4.6~7.0%)과 목표 사이트(0)가 달라 UNSUPPORTED, 속전속결·슈퍼 차지도 출처마다 달라 UNSUPPORTED",
   "zeroContribution": [
     "급소 타격",
     "중갑 착용",
-    "실드 관통",
     "폭발물 전문가",
     "번개의 분노",
     "강화 방패",
@@ -195,6 +194,7 @@
     "perBook": 2,
     "stoneAdd": {
       "0": 0,
+      "1": 7.5,
       "2": 9.4,
       "3": 13.2,
       "4": 15

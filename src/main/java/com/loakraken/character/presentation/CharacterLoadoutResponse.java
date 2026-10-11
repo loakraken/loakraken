@@ -1,8 +1,10 @@
 package com.loakraken.character.presentation;
 
 import com.loakraken.character.domain.CharacterLoadout;
+import com.loakraken.character.domain.SkillCooldown;
 import com.loakraken.common.api.NullableResponse;
 import io.swagger.v3.oas.annotations.media.Schema;
+import java.math.BigDecimal;
 import java.util.List;
 
 @Schema(description = "공식 API의 구조화된 전투정보. null 섹션은 제공된 데이터가 없음을 뜻하며 Tooltip은 포함하지 않습니다.")
@@ -352,7 +354,12 @@ public record CharacterLoadoutResponse(
                   "Tooltip의 \"공격 타입\". BACK_ATTACK(백 어택)·HEAD_ATTACK(헤드 어택)·NONE(없음). Tooltip을 해석할 수 없거나 갱신 전 캐시(최대 5분)면 null. 스킬별 치명타 적중률은 crit.observedRate + BACK_ATTACK이면 10%p다",
               allowableValues = {"BACK_ATTACK", "HEAD_ATTACK", "NONE"})
           @NullableResponse
-          String attackType) {
+          String attackType,
+      @Schema(
+              description =
+                  "보석 반영 쿨타임(공식 재사용 대기시간과 장착 보석의 재사용 대기시간 감소만 반영). 제목 줄에 재사용 대기시간이 없으면(갱신 전 캐시 등) null")
+          @NullableResponse
+          SkillCooldownResponse cooldown) {
     static SkillResponse from(CharacterLoadout.Skill value) {
       return new SkillResponse(
           value.name(),
@@ -381,7 +388,28 @@ public record CharacterLoadoutResponse(
           value.gemEffects().stream()
               .map(effect -> new SkillGemEffectResponse(effect.text(), effect.kind()))
               .toList(),
-          value.attackType() == null ? null : value.attackType().name());
+          value.attackType() == null ? null : value.attackType().name(),
+          SkillCooldownResponse.from(SkillCooldown.of(value)));
+    }
+  }
+
+  public record SkillCooldownResponse(
+      @Schema(description = "공식 Tooltip 재사용 대기시간(초, 선택한 트라이포드 반영)", example = "8.00")
+          BigDecimal cooldownSec,
+      @Schema(description = "이 스킬 보석 효과의 재사용 대기시간 감소 % 합(없으면 0)", example = "16.00")
+          BigDecimal gemCooldownReductionPct,
+      @Schema(
+              description = "cooldownSec × (1 − gemCooldownReductionPct/100), 소수 둘째 자리",
+              example = "6.72")
+          BigDecimal cooldownWithGemsSec,
+      @Schema(description = "계산 근거 문장") String basis) {
+    static SkillCooldownResponse from(SkillCooldown value) {
+      if (value == null) return null;
+      return new SkillCooldownResponse(
+          value.cooldownSec(),
+          value.gemCooldownReductionPct(),
+          value.cooldownWithGemsSec(),
+          SkillCooldown.BASIS);
     }
   }
 

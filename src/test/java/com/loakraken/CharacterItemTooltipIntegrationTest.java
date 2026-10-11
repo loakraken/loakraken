@@ -67,6 +67,15 @@ class CharacterItemTooltipIntegrationTest {
     assertThat(loadout.at("/equipment/1/detail/titleLine").asText()).isEqualTo("고대 귀걸이");
     assertThat(loadout.at("/equipment/1/detail/tradeLines/0").asText()).isEqualTo("캐릭터 귀속됨");
     assertThat(search.body()).doesNotContain("extraLines", "내구도");
+    // 보석 반영 쿨타임(#377): 5초 × (1 − 24%) = 3.80초.
+    assertThat(loadout.at("/skills/0/cooldown/cooldownSec").decimalValue())
+        .isEqualByComparingTo("5");
+    assertThat(loadout.at("/skills/0/cooldown/gemCooldownReductionPct").decimalValue())
+        .isEqualByComparingTo("24");
+    assertThat(loadout.at("/skills/0/cooldown/cooldownWithGemsSec").decimalValue())
+        .isEqualByComparingTo("3.80");
+    assertThat(loadout.at("/skills/0/cooldown/basis").asText()).contains("공식 재사용 대기시간");
+    ApiContractFixture.write("character-search-skill-cooldown.json", search.body());
 
     var response = get("/api/v1/characters/item-tooltips", "툴팁캐시");
     assertThat(response.statusCode()).isEqualTo(200);
@@ -168,7 +177,9 @@ class CharacterItemTooltipIntegrationTest {
             null,
             List.of(),
             new CharacterLoadout.Rune("속행", null, "전설", "효과", List.of("룬 설명")),
-            List.of(),
+            List.of(
+                new CharacterLoadout.SkillGemEffect(
+                    "[테스트] 테스트 스킬 재사용 대기시간 24.00% 감소", CharacterLoadout.GemEffectKind.COOLDOWN)),
             null,
             null,
             List.of("일반", "재사용 대기시간 5초", "[일반 스킬]"),

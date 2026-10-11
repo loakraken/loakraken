@@ -8,7 +8,7 @@ import org.springframework.stereotype.Service;
 /**
  * 캐릭터 공개 요약(#145). 캐릭터 페이지의 첫 HTML(제목·설명·요약 줄·구조화 데이터)을 봇·사람 구분 없이 같은 값으로 만들기 위한 가벼운 조회다. <b>공식
  * API를 부르지 않는다</b>: 캐릭터 캐시(5분) → DB의 마지막 관측 순서로 찾고, 둘 다 없으면 CHARACTER_NOT_CACHED(404)다. 처리정지 목록
- * 캐릭터는 indexable=false이고 이름 외 값을 주지 않는다.
+ * 캐릭터는 저장된 관측을 쓰지 않아 기록 없는 캐릭터와 같은 응답이다(#363).
  */
 @Service
 public class CharacterPublicSummaryService {

@@ -1,6 +1,7 @@
 package com.loakraken.character.application;
 
 import com.loakraken.character.domain.CharacterLoadout;
+import com.loakraken.character.domain.CombatPowerEquipmentModel;
 import com.loakraken.character.domain.CombatPowerGemModel;
 import com.loakraken.common.api.BusinessException;
 import com.loakraken.common.api.ErrorCode;
@@ -31,11 +32,15 @@ import org.springframework.stereotype.Service;
  */
 @Service
 public class CombatPowerSimulationService {
-  public static final String RULE_VERSION = "combat-power-sim-v1";
+  public static final String RULE_VERSION = "combat-power-sim-v2";
   private static final MathContext MATH = MathContext.DECIMAL64;
   private static final String GEM_BASIS =
       "보석 레벨별 배수와 기본 공격력 %(보석·스톤 레벨 보너스·완갑 추가 효과, 공식 툴팁)로 바뀐 비율을 공식 전투력에 곱했습니다.";
   private static final String NO_OFFICIAL_BASIS = "공식 전투력이 없어 계산하지 않습니다.";
+  private static final String WEAPON_QUALITY_BASIS = "무기 품질의 추가 피해(공식 툴팁) 배수 비율을 공식 전투력에 곱했습니다.";
+  private static final String ARMOR_QUALITY_BASIS = "방어구 품질은 체력에만 붙어 전투력이 바뀌지 않습니다.";
+  private static final String ENGRAVING_BASIS = "각인 효과(공식 각인 설명값)의 배수 비율을 공식 전투력에 곱했습니다.";
+  private static final String LEVEL_UNCONFIRMED_BASIS = "이 레벨 조합의 각인 수치를 아직 확인하지 않아 계산하지 않았습니다.";
   private static final Set<String> GRADES = Set.of("LOW", "MID", "HIGH");
   private static final List<String> CORE_GRADES = List.of("영웅", "전설", "유물", "고대");
   private static final Set<String> WEAPON_ARMOR = Set.of("무기", "투구", "상의", "하의", "장갑", "어깨");
@@ -44,14 +49,17 @@ public class CombatPowerSimulationService {
   private final CharacterCache cache;
   private final CharacterPublicSummaryPort stored;
   private final CombatPowerGemModel.Coefficients gemCoefficients;
+  private final CombatPowerEquipmentModel.Coefficients equipmentCoefficients;
 
   public CombatPowerSimulationService(
       CharacterCache cache,
       CharacterPublicSummaryPort stored,
-      CombatPowerGemModel.Coefficients gemCoefficients) {
+      CombatPowerGemModel.Coefficients gemCoefficients,
+      CombatPowerEquipmentModel.Coefficients equipmentCoefficients) {
     this.cache = cache;
     this.stored = stored;
     this.gemCoefficients = gemCoefficients;
+    this.equipmentCoefficients = equipmentCoefficients;
   }
 
   public enum Kind {
@@ -138,31 +146,32 @@ public class CombatPowerSimulationService {
     var official = result.details().profile().combatPower();
     // 반올림은 서버에서 끝낸다(PM-프론트 18:31 (g)): 전투력 소수 둘째 자리, deltaPercent 소수 셋째 자리.
     var before = official == null ? null : official.setScale(2, RoundingMode.HALF_UP);
-    var current = before == null ? null : gemModel.ratio(Map.of());
-    var levels = new HashMap<Integer, Integer>();
+    var engravings = currentEngravings(loadout);
+    var weaponAddDamage = CombatPowerEquipmentModel.currentWeaponAddDamage(weaponDetail(loadout));
+    var state = new State(Map.of(), null, Map.of());
     var running = before;
     var contributions = new ArrayList<Contribution>();
     int unsupported = 0;
     for (var planned : merged.values()) {
-      if (planned.gemLevels() != null && planned.reason() == null && current != null) {
-        var next = new HashMap<>(levels);
-        next.putAll(planned.gemLevels());
-        var ratio = gemModel.ratio(next);
-        if (ratio != null) {
-          levels = next;
-          var value =
-              before.multiply(ratio).divide(current, MATH).setScale(2, RoundingMode.HALF_UP);
-          contributions.add(planned.ok(value.subtract(running), GEM_BASIS));
-          running = value;
-          continue;
+      String reason = planned.reason();
+      if (planned.effect() != null && reason == null) {
+        if (before == null) reason = NO_OFFICIAL_BASIS;
+        else {
+          var next = state.apply(planned.effect(), engravings);
+          reason = stoneBonusReason(engravings, next);
+          var ratio = reason == null ? ratio(gemModel, engravings, weaponAddDamage, next) : null;
+          if (reason == null && ratio == null) reason = LEVEL_UNCONFIRMED_BASIS;
+          if (reason == null) {
+            state = next;
+            var value = before.multiply(ratio, MATH).setScale(2, RoundingMode.HALF_UP);
+            contributions.add(planned.ok(value.subtract(running), planned.basis()));
+            running = value;
+            continue;
+          }
         }
       }
       unsupported++;
-      String basis = planned.reason();
-      if (basis == null)
-        basis =
-            planned.gemLevels() != null && before == null ? NO_OFFICIAL_BASIS : UNSUPPORTED_BASIS;
-      contributions.add(planned.unsupported(basis));
+      contributions.add(planned.unsupported(reason == null ? UNSUPPORTED_BASIS : reason));
     }
     var delta = before == null ? null : running.subtract(before);
     return new Result(
@@ -184,22 +193,152 @@ public class CombatPowerSimulationService {
             "계산한 항목은 순서대로 적용합니다. contributions[].delta의 합은 delta와 같습니다."));
   }
 
-  /** 검증을 마친 변경 하나. gemLevels가 있으면 보석 변경(칸 → 레벨)이고, reason이 있으면 계산하지 않는 이유다. */
+  /** 계산할 수 있는 변경의 효과. 보석(칸 → 레벨), 무기 품질(새 추가 피해 %), 방어구 품질(배수 1), 각인(각인서·스톤 레벨, null은 그대로). */
+  private sealed interface Effect {}
+
+  private record GemEffect(Map<Integer, Integer> levels) implements Effect {}
+
+  private record WeaponQualityEffect(BigDecimal addDamage) implements Effect {}
+
+  private record NeutralEffect() implements Effect {}
+
+  private record EngravingEffect(String name, Integer book, Integer stone) implements Effect {}
+
+  /** 각인 하나의 각인서·스톤 레벨. */
+  private record EngravingLevels(int book, int stone) {}
+
+  /** 지금까지 적용한 변경. 보석 칸 레벨, 무기 추가 피해 %(null이면 그대로), 각인별 레벨. */
+  private record State(
+      Map<Integer, Integer> gems,
+      BigDecimal weaponAddDamage,
+      Map<String, EngravingLevels> engravings) {
+    State apply(Effect effect, Map<String, CharacterLoadout.PassiveEngraving> currents) {
+      return switch (effect) {
+        case GemEffect gem -> {
+          var next = new HashMap<>(gems);
+          next.putAll(gem.levels());
+          yield new State(Map.copyOf(next), weaponAddDamage, engravings);
+        }
+        case WeaponQualityEffect quality -> new State(gems, quality.addDamage(), engravings);
+        case NeutralEffect neutral -> this;
+        case EngravingEffect engraving -> {
+          var next = new HashMap<>(engravings);
+          var base = engravings.get(engraving.name());
+          if (base == null) {
+            var current = currents.get(engraving.name());
+            base =
+                new EngravingLevels(
+                    current.level(),
+                    current.abilityStoneLevel() == null ? 0 : current.abilityStoneLevel());
+          }
+          next.put(
+              engraving.name(),
+              new EngravingLevels(
+                  engraving.book() != null ? engraving.book() : base.book(),
+                  engraving.stone() != null ? engraving.stone() : base.stone()));
+          yield new State(gems, weaponAddDamage, Map.copyOf(next));
+        }
+      };
+    }
+  }
+
+  /** 검증을 마친 변경 하나. effect가 있으면 계산할 수 있는 종류이고(basis는 OK일 때의 근거), reason이 있으면 계산하지 않는 이유다. */
   private record Planned(
       Change change,
       String target,
       String from,
       String to,
-      Map<Integer, Integer> gemLevels,
+      Effect effect,
+      String basis,
       String reason) {
-    Contribution ok(BigDecimal delta, String basis) {
-      return new Contribution(change.kind().name(), target, from, to, delta, Status.OK, basis);
+    Contribution ok(BigDecimal delta, String okBasis) {
+      return new Contribution(change.kind().name(), target, from, to, delta, Status.OK, okBasis);
     }
 
-    Contribution unsupported(String basis) {
+    Contribution unsupported(String why) {
       return new Contribution(
-          change.kind().name(), target, from, to, null, Status.UNSUPPORTED, basis);
+          change.kind().name(), target, from, to, null, Status.UNSUPPORTED, why);
     }
+  }
+
+  /**
+   * 현재 세팅 대비 전투력 비. 모든 항목이 독립 배수라 항목 배수를 곱한다. 계산할 수 없는 조합이면 null. 각인 상태는 처음 레벨을 currents에서 가져온다.
+   */
+  private BigDecimal ratio(
+      CombatPowerGemModel.Model gemModel,
+      Map<String, CharacterLoadout.PassiveEngraving> currents,
+      BigDecimal weaponCurrent,
+      State state) {
+    var ratio = BigDecimal.ONE;
+    if (!state.gems().isEmpty()) {
+      var base = gemModel.ratio(Map.of());
+      var next = gemModel.ratio(state.gems());
+      if (base == null || next == null) return null;
+      ratio = ratio.multiply(next.divide(base, MATH), MATH);
+    }
+    if (state.weaponAddDamage() != null) {
+      if (weaponCurrent == null) return null;
+      ratio =
+          ratio.multiply(
+              CombatPowerEquipmentModel.weaponQualityRatio(weaponCurrent, state.weaponAddDamage()),
+              MATH);
+    }
+    for (var entry : state.engravings().entrySet()) {
+      var current = currents.get(entry.getKey());
+      int book = current.level();
+      int stone = current.abilityStoneLevel() == null ? 0 : current.abilityStoneLevel();
+      var before =
+          CombatPowerEquipmentModel.engravingFactor(
+              equipmentCoefficients, entry.getKey(), book, stone);
+      var after =
+          CombatPowerEquipmentModel.engravingFactor(
+              equipmentCoefficients,
+              entry.getKey(),
+              entry.getValue().book(),
+              entry.getValue().stone());
+      if (before == null || after == null) return null;
+      ratio = ratio.multiply(after.divide(before, MATH), MATH);
+    }
+    return ratio;
+  }
+
+  /** 스톤 레벨 합이 [레벨 보너스]가 그대로인 확인된 구간(5~7)을 벗어나면 이유 문장. 스톤을 바꾸지 않았으면 null. */
+  private String stoneBonusReason(
+      Map<String, CharacterLoadout.PassiveEngraving> currents, State state) {
+    int before = 0;
+    int after = 0;
+    boolean changed = false;
+    for (var engraving : currents.values()) {
+      int stone = engraving.abilityStoneLevel() == null ? 0 : engraving.abilityStoneLevel();
+      before += stone;
+      var next = state.engravings().get(engraving.name());
+      after += next == null ? stone : next.stone();
+      if (next != null && next.stone() != stone) changed = true;
+    }
+    if (!changed
+        || CombatPowerEquipmentModel.stoneBonusStable(equipmentCoefficients, before, after))
+      return null;
+    return "스톤 레벨 합이 "
+        + before
+        + "에서 "
+        + after
+        + "(으)로 바뀌어 [레벨 보너스] 변화를 아직 확인하지 않은 구간이라 계산하지 않았습니다.";
+  }
+
+  private static Map<String, CharacterLoadout.PassiveEngraving> currentEngravings(
+      CharacterLoadout loadout) {
+    var result = new LinkedHashMap<String, CharacterLoadout.PassiveEngraving>();
+    if (loadout.engravings() != null)
+      for (var engraving : loadout.engravings().arkPassiveEffects())
+        if (engraving != null && engraving.name() != null)
+          result.putIfAbsent(engraving.name(), engraving);
+    return result;
+  }
+
+  private static CharacterLoadout.EquipmentDetail weaponDetail(CharacterLoadout loadout) {
+    for (var item : loadout.equipment())
+      if (item != null && "무기".equals(item.type())) return item.detail();
+    return null;
   }
 
   private static String key(Change change) {
@@ -217,7 +356,7 @@ public class CombatPowerSimulationService {
     };
   }
 
-  private static Planned describe(
+  private Planned describe(
       CharacterLoadout loadout, CombatPowerGemModel.Model gemModel, Change change) {
     if (change.kind() == null) throw invalid("kind가 필요합니다.");
     return switch (change.kind()) {
@@ -229,7 +368,14 @@ public class CombatPowerSimulationService {
           targets.put(slot, change.level());
           if (reason == null) reason = gemModel.cannotSet(slot, change.level());
         }
-        yield new Planned(change, "보석 전체", null, String.valueOf(change.level()), targets, reason);
+        yield new Planned(
+            change,
+            "보석 전체",
+            null,
+            String.valueOf(change.level()),
+            new GemEffect(targets),
+            GEM_BASIS,
+            reason);
       }
       case GEM_LEVEL -> {
         range("level", change.level(), 0, 10);
@@ -250,7 +396,8 @@ public class CombatPowerSimulationService {
             "보석 " + gem.slot() + "번(" + gem.name() + ")",
             str(gem.level()),
             str(change.level()),
-            Map.of(gem.slot(), change.level()),
+            new GemEffect(Map.of(gem.slot(), change.level())),
+            GEM_BASIS,
             gemModel.cannotSet(gem.slot(), change.level()));
       }
       case EQUIPMENT_REFINE, EQUIPMENT_ADVANCED_REFINE, EQUIPMENT_QUALITY -> {
@@ -260,7 +407,7 @@ public class CombatPowerSimulationService {
           range("quality", change.quality(), 0, 100);
           if (detail == null || detail.quality() == null)
             throw notFound("품질이 있는 장비 index " + change.index());
-          yield unsupported(change, item.name(), str(detail.quality()), str(change.quality()));
+          yield quality(item, detail, change);
         }
         if (!WEAPON_ARMOR.contains(item.type()) || detail == null || detail.refineLevel() == null)
           throw notFound("재련 장비 index " + change.index());
@@ -321,7 +468,12 @@ public class CombatPowerSimulationService {
                     .findFirst()
                     .orElse(null);
         if (engraving == null) throw notFound("각인 " + change.name());
-        yield unsupported(change, engraving.name(), str(engraving.level()), str(change.level()));
+        yield engraving(
+            change,
+            engraving.name(),
+            str(engraving.level()),
+            new EngravingEffect(engraving.name(), change.level(), null),
+            engraving);
       }
       case STONE_ENGRAVING -> {
         range("level", change.level(), 0, 4);
@@ -335,7 +487,19 @@ public class CombatPowerSimulationService {
                 .findFirst()
                 .orElse(null);
         if (stone == null) throw notFound("스톤 각인 " + change.name());
-        yield unsupported(change, "스톤 " + stone.name(), str(stone.level()), str(change.level()));
+        var engraving =
+            loadout.engravings() == null
+                ? null
+                : loadout.engravings().arkPassiveEffects().stream()
+                    .filter(item -> item != null && stone.name().equals(item.name()))
+                    .findFirst()
+                    .orElse(null);
+        yield engraving(
+            change,
+            "스톤 " + stone.name(),
+            str(stone.level()),
+            new EngravingEffect(stone.name(), null, change.level()),
+            engraving);
       }
       case ARK_PASSIVE_POINT -> {
         range("points", change.points(), 0, 999);
@@ -388,7 +552,43 @@ public class CombatPowerSimulationService {
   }
 
   private static Planned unsupported(Change change, String target, String from, String to) {
-    return new Planned(change, target, from, to, null, UNSUPPORTED_BASIS);
+    return new Planned(change, target, from, to, null, null, UNSUPPORTED_BASIS);
+  }
+
+  /** 품질(#275): 무기는 추가 피해 배수, 방어구는 배수 1, 그 밖(장신구 등)은 아직 계산하지 않는다. */
+  private Planned quality(
+      CharacterLoadout.Equipment item, CharacterLoadout.EquipmentDetail detail, Change change) {
+    var from = str(detail.quality());
+    var to = str(change.quality());
+    if (CombatPowerEquipmentModel.ARMOR.contains(item.type()))
+      return new Planned(
+          change, item.name(), from, to, new NeutralEffect(), ARMOR_QUALITY_BASIS, null);
+    if (!"무기".equals(item.type())) return unsupported(change, item.name(), from, to);
+    String reason = null;
+    if (CombatPowerEquipmentModel.currentWeaponAddDamage(detail) == null)
+      reason = "무기 추가 피해(공식 툴팁)를 읽지 못해 계산하지 않았습니다.";
+    var next = CombatPowerEquipmentModel.weaponAddDamage(equipmentCoefficients, change.quality());
+    if (reason == null && next == null)
+      reason = "품질 " + change.quality() + "의 무기 추가 피해 수치를 아직 확인하지 않아 계산하지 않았습니다.";
+    return new Planned(
+        change, item.name(), from, to, new WeaponQualityEffect(next), WEAPON_QUALITY_BASIS, reason);
+  }
+
+  /** 각인·스톤(#275): 계수표가 있는 유물 각인만, 현재 공식 설명값이 계수표와 같을 때만 계산한다. */
+  private Planned engraving(
+      Change change,
+      String target,
+      String from,
+      EngravingEffect effect,
+      CharacterLoadout.PassiveEngraving current) {
+    var to = str(change.level());
+    String reason = null;
+    if (!CombatPowerEquipmentModel.supportsEngraving(equipmentCoefficients, effect.name()))
+      reason = UNSUPPORTED_BASIS;
+    else if (current == null) reason = "각인 정보가 없어 계산하지 않았습니다.";
+    else if (!CombatPowerEquipmentModel.matchesOfficial(equipmentCoefficients, current))
+      reason = "공식 각인 설명값이 계수표와 달라 계산하지 않았습니다.";
+    return new Planned(change, target, from, to, effect, ENGRAVING_BASIS, reason);
   }
 
   private static String str(Object value) {

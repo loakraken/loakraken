@@ -92,7 +92,8 @@ class LostArkCharacterClient implements CharacterDetailsPort {
     // 공식 /armories/characters/{name}/profiles(약 7KB)에 CombatPower가 있다(2026-10-12 확인). 전체 armory보다
     // 가볍다.
     var payload =
-        gate.withReserve(
+        // 사용자가 누른 불러오기라 사용자 몫을 남기면서 그 클라이언트의 공식 호출 한도에도 매긴다.
+        gate.withUserReserve(
             reserve,
             () ->
                 request(

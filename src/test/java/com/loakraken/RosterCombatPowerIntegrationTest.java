@@ -125,10 +125,12 @@ class RosterCombatPowerIntegrationTest {
     assertThat(response.statusCode()).isEqualTo(200);
     ApiContractFixture.write("roster-combat-power-refresh.json", response.body());
     var data = data(response);
-    // 기록 없는 나·정지, 30시간 지난 다 = 3명. 2시간 전 기록인 가는 부르지 않는다. 사용자 몫 30을 남긴다(B7).
+    // 기록 없는 나, 30시간 지난 다 = 2명. 2시간 전 기록인 가는 부르지 않는다. 처리정지는 공식 호출 전에 빠진다(PM-프론트 P1).
+    // 사용자 몫 30을 남긴다(B7).
     verify(detailsPort, never()).fetchProfile(eq("원정전투가"), anyInt());
-    verify(detailsPort, times(3)).fetchProfile(anyString(), eq(30));
-    assertThat(data.path("fetched").asInt()).isEqualTo(3);
+    verify(detailsPort, never()).fetchProfile(eq("원정전투정지"), anyInt());
+    verify(detailsPort, times(2)).fetchProfile(anyString(), eq(30));
+    assertThat(data.path("fetched").asInt()).isEqualTo(2);
     assertThat(data.path("remaining").asInt()).isZero();
     assertThat(data.path("refreshAvailableAt").isNull()).isFalse();
     var items = data.path("items");
@@ -143,7 +145,7 @@ class RosterCombatPowerIntegrationTest {
         .isZero();
 
     var again = post("원정전투가", "203.0.113.21");
-    assertThat(again.statusCode()).isEqualTo(409);
+    assertThat(again.statusCode()).isEqualTo(429);
     assertThat(again.body()).contains("ROSTER_REFRESH_COOLDOWN");
     assertThat(again.headers().firstValue("Retry-After")).isPresent();
     var view = data(get("/api/v1/characters/roster-combat-power?characterName=" + encode("원정전투가")));
@@ -217,8 +219,13 @@ class RosterCombatPowerIntegrationTest {
     when(detailsPort.fetchProfile(anyString(), anyInt()))
         .thenAnswer(invocation -> profile(invocation.getArgument(0), "3000.00"));
     assertThat(post("원정전투한가", "198.51.100.50").statusCode()).isEqualTo(200);
-    assertThat(post("원정전투한가", "198.51.100.50").statusCode()).isEqualTo(409);
-    assertThat(post("원정전투한가", "198.51.100.50").statusCode()).isEqualTo(429);
+    // 두 번째는 원정대 쿨다운(429 ROSTER_REFRESH_COOLDOWN), 세 번째는 클라이언트 분당 2회 한도(429).
+    var cooldown = post("원정전투한가", "198.51.100.50");
+    assertThat(cooldown.statusCode()).isEqualTo(429);
+    assertThat(cooldown.body()).contains("ROSTER_REFRESH_COOLDOWN");
+    var limited = post("원정전투한가", "198.51.100.50");
+    assertThat(limited.statusCode()).isEqualTo(429);
+    assertThat(limited.body()).doesNotContain("ROSTER_REFRESH_COOLDOWN");
   }
 
   private void roster(String... names) {

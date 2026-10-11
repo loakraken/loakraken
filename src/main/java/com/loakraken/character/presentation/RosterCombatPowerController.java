@@ -66,7 +66,7 @@ public class RosterCombatPowerController {
   @Operation(
       summary = "원정대 전투력 불러오기",
       description =
-          "전투력 기록이 없거나 24시간 넘은 원정대 캐릭터를 아이템 레벨 높은 순으로 최대 12명 공식 프로필에서 불러와 기록합니다. 같은 원정대는 10분에 한 번이고(409 ROSTER_REFRESH_COOLDOWN, Retry-After), "
+          "전투력 기록이 없거나 24시간 넘은 원정대 캐릭터를 아이템 레벨 높은 순으로 최대 12명 공식 프로필에서 불러와 기록합니다. 같은 원정대는 10분에 한 번이고(429 ROSTER_REFRESH_COOLDOWN, Retry-After), "
               + "같은 원정대 동시 요청은 한 번으로 묶습니다. 공식 호출 여유가 모자라면 받은 만큼만 기록하고 200에 remaining을 줍니다. 클라이언트당 분당 2회입니다.")
   @ApiResponses({
     @io.swagger.v3.oas.annotations.responses.ApiResponse(
@@ -81,12 +81,8 @@ public class RosterCombatPowerController {
         description = "CHARACTER_NOT_FOUND",
         content = @Content(schema = @Schema(ref = "#/components/schemas/ErrorResponse"))),
     @io.swagger.v3.oas.annotations.responses.ApiResponse(
-        responseCode = "409",
-        description = "ROSTER_REFRESH_COOLDOWN(Retry-After 헤더)",
-        content = @Content(schema = @Schema(ref = "#/components/schemas/ErrorResponse"))),
-    @io.swagger.v3.oas.annotations.responses.ApiResponse(
         responseCode = "429",
-        description = "클라이언트 요청이 너무 많음",
+        description = "ROSTER_REFRESH_COOLDOWN(Retry-After 헤더) 또는 클라이언트 요청이 너무 많음",
         content = @Content(schema = @Schema(ref = "#/components/schemas/ErrorResponse"))),
     @io.swagger.v3.oas.annotations.responses.ApiResponse(
         responseCode = "503",

@@ -24,12 +24,12 @@
 - **공식 호출**: 캐릭터마다 공식 프로필 API `/armories/characters/{name}/profiles`를 1회 부른다.
   - 응답(약 7KB)에 `CombatPower`가 있다(2026-10-12 언새늘로 확인). 전체 armory보다 가볍다.
   - 받은 프로필은 검색과 같은 이력 기록 경로(`CharacterHistoryService.record`)로 저장한다.
-  - 처리정지 목록이면 저장하지 않는다(B5).
+  - 처리정지 목록 캐릭터는 공식 호출 전에 대상에서 뺀다. fetched·remaining에도 넣지 않는다(B5, #410 P1). missingCount는 null 줄 수 그대로다(빼면 처리정지가 드러남).
 - **원정대당 한 번**
   - 같은 원정대(서버 + 정렬한 이름 해시) 동시 요청은 single-flight로 한 번에 묶는다.
-  - 끝나면 10분 쿨다운이다. 쿨다운 중이면 `409 ROSTER_REFRESH_COOLDOWN` + `Retry-After`다.
+  - 끝나면 10분 쿨다운이다. 쿨다운 중이면 `429 ROSTER_REFRESH_COOLDOWN` + `Retry-After`다(카드 불러오기와 같은 상태 코드).
 - **호출 몫**(B7)
-  - 각 호출은 게이트 `withReserve(30)`이다. 창에 30회 넘게 남아 있을 때만 부르므로 사용자 검색 몫이 늘 남는다(N13과 같은 등급).
+  - 각 호출은 게이트 `withUserReserve(30)`이다. 사용자 몫 30을 남기고, 그 클라이언트의 분당 공식 호출 한도(OFFICIAL 20)에도 매긴다(보안 감사 10-12). 창에 30회 넘게 남아 있을 때만 부르므로 사용자 검색 몫이 늘 남는다(N13과 같은 등급).
   - 몫이 모자라거나 공식 장애면 받은 만큼만 저장하고 `200` + `remaining`을 준다.
   - 한 명도 못 불렀으면 쿨다운을 풀고 `refreshAvailableAt`이 null이다(바로 다시 가능).
   - 없는 캐릭터는 건너뛴다.

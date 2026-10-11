@@ -80,6 +80,7 @@ public class RosterCombatPowerService {
     var roster = roster(characterName);
     var items = items(roster);
     var left = cooldown.remaining(roster.key()).orElse(null);
+    // missingCount는 null 줄 수 그대로다. 처리정지를 빼면 그 자체로 처리정지가 드러난다(PM-백엔드 #410 정정).
     return new View(
         items,
         (int) items.stream().filter(item -> item.combatPower() == null).count(),
@@ -99,9 +100,12 @@ public class RosterCombatPowerService {
     }
     var now = clock.instant();
     var known = known(roster);
+    var stoppedNames = stopped(roster);
     var staleBefore = now.minus(policy.staleAfter());
     var targets =
         roster.members().values().stream()
+            // 처리정지 목록은 공식 호출 전에 뺀다(PM-프론트·PM-백엔드 #410 P1). fetched·remaining에도 넣지 않는다.
+            .filter(member -> !stoppedNames.contains(member.characterName()))
             .filter(
                 member -> {
                   var record = known.get(member.characterName());
@@ -168,6 +172,14 @@ public class RosterCombatPowerService {
   private Map<String, RosterCombatPowerPort.Observed> known(Roster roster) {
     try {
       return records.find(roster.serverName(), roster.members().keySet());
+    } catch (DataAccessException | TransactionException exception) {
+      throw new CharacterException(CharacterErrorCode.CHARACTER_STORAGE_UNAVAILABLE);
+    }
+  }
+
+  private java.util.Set<String> stopped(Roster roster) {
+    try {
+      return records.stopped(roster.serverName(), roster.members().keySet());
     } catch (DataAccessException | TransactionException exception) {
       throw new CharacterException(CharacterErrorCode.CHARACTER_STORAGE_UNAVAILABLE);
     }

@@ -20,6 +20,7 @@ import org.springframework.stereotype.Component;
 @Component
 public class LostArkRequestGate {
   private static final ThreadLocal<Integer> RESERVE = new ThreadLocal<>();
+  private static final ThreadLocal<Boolean> CHARGE_CLIENT = new ThreadLocal<>();
   private final Clock clock;
   private final int budget;
   private final Semaphore permits;
@@ -57,7 +58,7 @@ public class LostArkRequestGate {
    * 않는다. {@link #withReserve} 안의 호출(경매 칸 채우기 등)은 사용자 몫을 남기는 쪽으로 이미 제한되므로 클라이언트 한도에 매기지 않는다.
    */
   public void acquire() {
-    if (currentReserve() == 0) clients.chargeOfficial();
+    if (currentReserve() == 0 || Boolean.TRUE.equals(CHARGE_CLIENT.get())) clients.chargeOfficial();
     if (!permits.tryAcquire()) reject(GateEvent.CONCURRENCY_REJECT);
     GateStore.Admission admission;
     try {
@@ -102,6 +103,22 @@ public class LostArkRequestGate {
     } finally {
       if (previous == null) RESERVE.remove();
       else RESERVE.set(previous);
+    }
+  }
+
+  /**
+   * 사용자 요청 하나가 공식 호출을 여러 번 일으키는 경로(원정대 전투력 불러오기 L19 등). {@link #withReserve}처럼 공유 예산에 사용자 몫
+   * reserve를 남기면서, 그 요청 클라이언트의 분당 공식 호출 한도(OFFICIAL)에도 호출마다 매긴다(보안 감사 10-12: reserve 안 호출이 클라이언트
+   * 한도를 벗어나던 문제). 같은 스레드 전용이다.
+   */
+  public <T> T withUserReserve(int reserve, Supplier<T> work) {
+    Boolean previous = CHARGE_CLIENT.get();
+    CHARGE_CLIENT.set(Boolean.TRUE);
+    try {
+      return withReserve(reserve, work);
+    } finally {
+      if (previous == null) CHARGE_CLIENT.remove();
+      else CHARGE_CLIENT.set(previous);
     }
   }
 

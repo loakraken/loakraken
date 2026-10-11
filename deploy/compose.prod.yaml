@@ -73,6 +73,10 @@ services:
       RECEIPT_TOOL: "${RECEIPT_TOOL:-}"
       # 캐릭터 '세팅 점검' 탭(web #489). on|off, 비우면 web 기본값(운영 SITE_URL이면 숨김). 운영은 명시로 off(PM 총괄 10-11, 표본이 적은 동안).
       SETTING_CHECK_TAB: "${SETTING_CHECK_TAB:-}"
+      # 원정대 랭킹 화면(web #515). on|off, 비우면 web 기본값(운영 SITE_URL이면 숨김). api RANKING_ROSTERS_ENABLED와 함께 켠다.
+      ROSTER_RANKING: "${ROSTER_RANKING:-}"
+      # 캐릭터 화면의 전투정보실 페이지 정보 요청(web #519). on|off, 비우면 운영 호스트에서 꺼짐(요청 안 보냄). 백엔드 플래그와 함께 켠다.
+      ARMORY_PAGE: "${ARMORY_PAGE:-}"
       # Node 힙 상한. 컨테이너 한도(WEB_MEM_LIMIT)보다 작게 둬 한도에 닿기 전에 GC가 돈다(2GB 서버 기준, docs/ops/deploy.md "메모리 예산").
       NODE_OPTIONS: "${WEB_NODE_OPTIONS:---max-old-space-size=256}"
     depends_on:

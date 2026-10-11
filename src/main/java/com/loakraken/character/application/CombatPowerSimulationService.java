@@ -1,9 +1,12 @@
 package com.loakraken.character.application;
 
 import com.loakraken.character.domain.CharacterLoadout;
+import com.loakraken.character.domain.CharacterPosition;
+import com.loakraken.character.domain.CombatPowerBraceletModel;
 import com.loakraken.character.domain.CombatPowerEquipmentModel;
 import com.loakraken.character.domain.CombatPowerGemModel;
 import com.loakraken.character.domain.CombatPowerPolishValues;
+import com.loakraken.character.domain.CombatPowerReasons;
 import com.loakraken.character.domain.CombatPowerRefineModel;
 import com.loakraken.common.api.BusinessException;
 import com.loakraken.common.api.ErrorCode;
@@ -34,7 +37,7 @@ import org.springframework.stereotype.Service;
  */
 @Service
 public class CombatPowerSimulationService {
-  public static final String RULE_VERSION = "combat-power-sim-v4";
+  public static final String RULE_VERSION = "combat-power-sim-v5";
   private static final MathContext MATH = MathContext.DECIMAL64;
   private static final String GEM_BASIS =
       "보석 레벨별 배수와 기본 공격력 %(보석·스톤 레벨 보너스·완갑 추가 효과, 공식 툴팁)로 바뀐 비율을 공식 전투력에 곱했습니다.";
@@ -49,7 +52,14 @@ public class CombatPowerSimulationService {
   private static final Set<String> WEAPON_ARMOR = Set.of("무기", "투구", "상의", "하의", "장갑", "어깨");
   private static final String REFINE_BASIS =
       "재련 단계의 주스탯·무기 공격력 변화로 기본 공격력을 다시 계산한 비율을 공식 전투력에 곱했습니다(펫 효과(힘민지 +1%)는 있다고 가정).";
+  private static final String BRACELET_BASIS =
+      "팔찌 옵션의 전투력 배수(특수 옵션 계수·전투 특성 0.03%/점·고정 무기 공격력)를 바꾼 비율을 공식 전투력에 곱했습니다.";
   private static final String ADVANCED_REFINE_BASIS = "상급 재련 단계의 전투력 계산식을 아직 확인하지 않아 계산하지 않았습니다.";
+
+  /** 서포터 전투력은 케어 + 버프로 식이 다르다(계산 검증 #331). 서포터 모델 구현 전에는 딜러 식을 쓰지 않는다(PM-백엔드 P0 10-11 20:23). */
+  public static final String SUPPORTER_BASIS = CombatPowerReasons.SUPPORTER_MODEL_PENDING.text();
+
+  public static final String ROLE_UNKNOWN_BASIS = CombatPowerReasons.ROLE_UNKNOWN.text();
   private static final String UNSUPPORTED_BASIS = "이 항목의 전투력 계산식을 아직 확인하고 있어 계산하지 않았습니다.";
 
   private final CharacterCache cache;
@@ -58,6 +68,7 @@ public class CombatPowerSimulationService {
   private final CombatPowerEquipmentModel.Coefficients equipmentCoefficients;
   private final CombatPowerPolishValues polishValues;
   private final CombatPowerRefineModel.Coefficients refineCoefficients;
+  private final CombatPowerBraceletModel.Coefficients braceletCoefficients;
 
   public CombatPowerSimulationService(
       CharacterCache cache,
@@ -65,13 +76,15 @@ public class CombatPowerSimulationService {
       CombatPowerGemModel.Coefficients gemCoefficients,
       CombatPowerEquipmentModel.Coefficients equipmentCoefficients,
       CombatPowerPolishValues polishValues,
-      CombatPowerRefineModel.Coefficients refineCoefficients) {
+      CombatPowerRefineModel.Coefficients refineCoefficients,
+      CombatPowerBraceletModel.Coefficients braceletCoefficients) {
     this.cache = cache;
     this.stored = stored;
     this.gemCoefficients = gemCoefficients;
     this.equipmentCoefficients = equipmentCoefficients;
     this.polishValues = polishValues;
     this.refineCoefficients = refineCoefficients;
+    this.braceletCoefficients = braceletCoefficients;
   }
 
   public enum Kind {
@@ -117,7 +130,8 @@ public class CombatPowerSimulationService {
       String to,
       BigDecimal delta,
       Status status,
-      String basis) {}
+      String basis,
+      String reasonCode) {}
 
   public record Result(
       String characterName,
@@ -161,6 +175,99 @@ public class CombatPowerSimulationService {
     return result;
   }
 
+  /** 장착 항목의 전투력 기여(#327): 그 항목을 뺐을 때 공식 전투력이 몇 % 줄어드는지. 지금은 팔찌만. */
+  public record ContributionItem(
+      String kind,
+      String target,
+      Status status,
+      BigDecimal contributionPct,
+      BigDecimal withoutCombatPower,
+      String basis) {
+    /** UNSUPPORTED 이유 코드(시뮬레이터·스펙업과 같은 코드). OK면 null. */
+    public String reasonCode() {
+      return status == Status.OK ? null : CombatPowerReasons.classify(basis).code();
+    }
+  }
+
+  public record Contributions(
+      String characterName,
+      Instant fetchedAt,
+      BigDecimal combatPower,
+      List<ContributionItem> items) {}
+
+  /** 전투력 기여 % = 1 − (빼고 난 전투력 / 지금 전투력)(PM 총괄 10-11 16:36). 공식 호출 없음. */
+  public Contributions contributions(String characterName) {
+    var result = snapshot(characterName);
+    var loadout = result.details().loadout();
+    var official = result.details().profile().combatPower();
+    var before = official == null ? null : official.setScale(2, RoundingMode.HALF_UP);
+    var gemModel = CombatPowerGemModel.of(gemCoefficients, loadout);
+    var refineModel =
+        CombatPowerRefineModel.of(
+            refineCoefficients,
+            loadout,
+            result.details().profile().stats(),
+            gemModel.currentBaseAttackPct());
+    var braceletModel =
+        CombatPowerBraceletModel.of(
+            braceletCoefficients, loadout, result.details().profile().stats());
+    var items = new ArrayList<ContributionItem>();
+    var roleReason = roleReason(result);
+    if (braceletModel != null)
+      items.add(
+          roleReason != null
+              ? new ContributionItem("BRACELET", "팔찌", Status.UNSUPPORTED, null, null, roleReason)
+              : braceletContribution(before, braceletModel, refineModel));
+    return new Contributions(
+        result.details().profile().characterName(), result.fetchedAt(), before, List.copyOf(items));
+  }
+
+  private static ContributionItem braceletContribution(
+      BigDecimal before,
+      CombatPowerBraceletModel.Model bracelet,
+      CombatPowerRefineModel.Model refine) {
+    if (before == null)
+      return new ContributionItem(
+          "BRACELET", "팔찌", Status.UNSUPPORTED, null, null, NO_OFFICIAL_BASIS);
+    var without = bracelet.without();
+    if (without == null) {
+      var reason = bracelet.firstUnknown();
+      return new ContributionItem(
+          "BRACELET",
+          "팔찌",
+          Status.UNSUPPORTED,
+          null,
+          null,
+          reason == null ? "전투 특성 합이나 도약 포인트를 읽지 못해 계산하지 않았습니다." : reason);
+    }
+    var ratio = without.ratio();
+    if (without.weaponFlatDelta().signum() != 0 || without.mainStatDelta().signum() != 0) {
+      var weapon = refine.ratio(Map.of(), without.weaponFlatDelta(), without.mainStatDelta());
+      if (weapon == null)
+        return new ContributionItem(
+            "BRACELET", "팔찌", Status.UNSUPPORTED, null, null, refine.unsupportedReason());
+      ratio = ratio.multiply(weapon, MATH);
+    }
+    var after = before.multiply(ratio, MATH).setScale(2, RoundingMode.HALF_UP);
+    var pct =
+        BigDecimal.ONE
+            .subtract(ratio, MATH)
+            .multiply(BigDecimal.valueOf(100))
+            .setScale(2, RoundingMode.HALF_UP);
+    return new ContributionItem(
+        "BRACELET", "팔찌", Status.OK, pct, after, "팔찌 효과를 모두 빼고 팔찌 도약 포인트도 뺀 전투력과 지금 전투력의 차이입니다.");
+  }
+
+  /** 딜러가 아니면(서포터·판정 불가) 계산하지 않는 이유. 딜러면 null. 판정은 깨달음 노드(CharacterPosition). */
+  public static String roleReason(CharacterResult result) {
+    var profile = result.details().profile();
+    var role =
+        CharacterPosition.judge(profile.className(), result.details().loadout().arkPassive())
+            .role();
+    if (role == CharacterPosition.Role.DEALER) return null;
+    return role == CharacterPosition.Role.SUPPORT ? SUPPORTER_BASIS : ROLE_UNKNOWN_BASIS;
+  }
+
   /** 이미 읽은 캐릭터로 시뮬레이션한다(공식 호출 없음). */
   public Result simulate(CharacterResult result, List<Change> changes) {
     var loadout = result.details().loadout();
@@ -171,21 +278,25 @@ public class CombatPowerSimulationService {
             loadout,
             result.details().profile().stats(),
             gemModel.currentBaseAttackPct());
+    var braceletModel =
+        CombatPowerBraceletModel.of(
+            braceletCoefficients, loadout, result.details().profile().stats());
     // 같은 대상은 뒤의 변경이 이긴다. 순서는 처음 나온 자리를 지킨다.
     var merged = new LinkedHashMap<String, Planned>();
     for (var change : changes)
-      merged.put(key(change), describe(loadout, gemModel, refineModel, change));
+      merged.put(key(change), describe(loadout, gemModel, refineModel, braceletModel, change));
     var official = result.details().profile().combatPower();
     // 반올림은 서버에서 끝낸다(PM-프론트 18:31 (g)): 전투력 소수 둘째 자리, deltaPercent 소수 셋째 자리.
     var before = official == null ? null : official.setScale(2, RoundingMode.HALF_UP);
     var engravings = currentEngravings(loadout);
     var weaponAddDamage = CombatPowerEquipmentModel.currentWeaponAddDamage(weaponDetail(loadout));
-    var state = new State(Map.of(), null, Map.of(), Map.of());
+    var state = new State(Map.of(), null, Map.of(), Map.of(), Map.of());
     var running = before;
     var contributions = new ArrayList<Contribution>();
     int unsupported = 0;
+    var roleReason = roleReason(result);
     for (var planned : merged.values()) {
-      String reason = planned.reason();
+      String reason = roleReason != null ? roleReason : planned.reason();
       if (planned.effect() != null && reason == null) {
         if (before == null) reason = NO_OFFICIAL_BASIS;
         else {
@@ -193,7 +304,7 @@ public class CombatPowerSimulationService {
           reason = stoneBonusReason(engravings, next);
           var ratio =
               reason == null
-                  ? ratio(gemModel, refineModel, engravings, weaponAddDamage, next)
+                  ? ratio(gemModel, refineModel, braceletModel, engravings, weaponAddDamage, next)
                   : null;
           if (reason == null && ratio == null) reason = LEVEL_UNCONFIRMED_BASIS;
           if (reason == null) {
@@ -242,6 +353,9 @@ public class CombatPowerSimulationService {
   /** 재련 단계(#319): 장비 순번 → 새 단계. */
   private record RefineEffect(int index, int level) implements Effect {}
 
+  /** 팔찌 효과 줄(#327): 줄 번호 → 새 줄(빼기 포함). */
+  private record BraceletEffect(int line, CombatPowerBraceletModel.Line next) implements Effect {}
+
   /** 각인 하나의 각인서·스톤 레벨. */
   private record EngravingLevels(int book, int stone) {}
 
@@ -250,20 +364,26 @@ public class CombatPowerSimulationService {
       Map<Integer, Integer> gems,
       BigDecimal weaponAddDamage,
       Map<String, EngravingLevels> engravings,
-      Map<Integer, Integer> refines) {
+      Map<Integer, Integer> refines,
+      Map<Integer, CombatPowerBraceletModel.Line> bracelet) {
     State apply(Effect effect, Map<String, CharacterLoadout.PassiveEngraving> currents) {
       return switch (effect) {
         case GemEffect gem -> {
           var next = new HashMap<>(gems);
           next.putAll(gem.levels());
-          yield new State(Map.copyOf(next), weaponAddDamage, engravings, refines);
+          yield new State(Map.copyOf(next), weaponAddDamage, engravings, refines, bracelet);
         }
         case WeaponQualityEffect quality ->
-            new State(gems, quality.addDamage(), engravings, refines);
+            new State(gems, quality.addDamage(), engravings, refines, bracelet);
         case RefineEffect refine -> {
           var next = new HashMap<>(refines);
           next.put(refine.index(), refine.level());
-          yield new State(gems, weaponAddDamage, engravings, Map.copyOf(next));
+          yield new State(gems, weaponAddDamage, engravings, Map.copyOf(next), bracelet);
+        }
+        case BraceletEffect line -> {
+          var next = new HashMap<>(bracelet);
+          next.put(line.line(), line.next());
+          yield new State(gems, weaponAddDamage, engravings, refines, Map.copyOf(next));
         }
         case NeutralEffect neutral -> this;
         case EngravingEffect engraving -> {
@@ -281,7 +401,7 @@ public class CombatPowerSimulationService {
               new EngravingLevels(
                   engraving.book() != null ? engraving.book() : base.book(),
                   engraving.stone() != null ? engraving.stone() : base.stone()));
-          yield new State(gems, weaponAddDamage, Map.copyOf(next), refines);
+          yield new State(gems, weaponAddDamage, Map.copyOf(next), refines, bracelet);
         }
       };
     }
@@ -297,12 +417,20 @@ public class CombatPowerSimulationService {
       String basis,
       String reason) {
     Contribution ok(BigDecimal delta, String okBasis) {
-      return new Contribution(change.kind().name(), target, from, to, delta, Status.OK, okBasis);
+      return new Contribution(
+          change.kind().name(), target, from, to, delta, Status.OK, okBasis, null);
     }
 
     Contribution unsupported(String why) {
       return new Contribution(
-          change.kind().name(), target, from, to, null, Status.UNSUPPORTED, why);
+          change.kind().name(),
+          target,
+          from,
+          to,
+          null,
+          Status.UNSUPPORTED,
+          why,
+          CombatPowerReasons.classify(why).code());
     }
   }
 
@@ -312,6 +440,7 @@ public class CombatPowerSimulationService {
   private BigDecimal ratio(
       CombatPowerGemModel.Model gemModel,
       CombatPowerRefineModel.Model refineModel,
+      CombatPowerBraceletModel.Model braceletModel,
       Map<String, CharacterLoadout.PassiveEngraving> currents,
       BigDecimal weaponCurrent,
       State state) {
@@ -322,8 +451,21 @@ public class CombatPowerSimulationService {
       if (base == null || next == null) return null;
       ratio = ratio.multiply(next.divide(base, MATH), MATH);
     }
-    if (!state.refines().isEmpty()) {
-      var refine = refineModel.ratio(state.refines());
+    var weaponFlatDelta = BigDecimal.ZERO;
+    var mainStatDelta = BigDecimal.ZERO;
+    if (!state.bracelet().isEmpty()) {
+      if (braceletModel == null) return null;
+      var factor = braceletModel.factor(state.bracelet());
+      if (factor == null) return null;
+      ratio = ratio.multiply(factor.ratio(), MATH);
+      weaponFlatDelta = factor.weaponFlatDelta();
+      mainStatDelta = factor.mainStatDelta();
+    }
+    // 재련 단계와 팔찌의 고정 무기 공격력은 같은 W 항을 쓴다.
+    if (!state.refines().isEmpty()
+        || weaponFlatDelta.signum() != 0
+        || mainStatDelta.signum() != 0) {
+      var refine = refineModel.ratio(state.refines(), weaponFlatDelta, mainStatDelta);
       if (refine == null) return null;
       ratio = ratio.multiply(refine, MATH);
     }
@@ -411,6 +553,7 @@ public class CombatPowerSimulationService {
       CharacterLoadout loadout,
       CombatPowerGemModel.Model gemModel,
       CombatPowerRefineModel.Model refineModel,
+      CombatPowerBraceletModel.Model braceletModel,
       Change change) {
     if (change.kind() == null) throw invalid("kind가 필요합니다.");
     return switch (change.kind()) {
@@ -514,12 +657,20 @@ public class CombatPowerSimulationService {
             || change.line() >= bracelet.detail().braceletEffects().size())
           throw notFound("팔찌 효과 line " + change.line());
         text("name", change.name());
-        grade(change.grade());
-        yield unsupported(
+        // "없음"은 그 줄을 빼는 변경이다(전투력 기여 계산과 같은 규칙).
+        if (!CombatPowerBraceletModel.REMOVE.equals(change.name())) grade(change.grade());
+        var next =
+            CombatPowerBraceletModel.option(braceletCoefficients, change.name(), change.grade());
+        yield new Planned(
             change,
             "팔찌 효과 " + (change.line() + 1),
             bracelet.detail().braceletEffects().get(change.line()).text(),
-            change.name() + " " + change.grade());
+            CombatPowerBraceletModel.REMOVE.equals(change.name())
+                ? CombatPowerBraceletModel.REMOVE
+                : change.name() + " " + change.grade(),
+            new BraceletEffect(change.line(), next),
+            BRACELET_BASIS,
+            braceletModel.cannotReplace(change.line(), next));
       }
       case ENGRAVING_LEVEL -> {
         range("level", change.level(), 0, 4);
@@ -707,7 +858,11 @@ public class CombatPowerSimulationService {
       int corePointMax,
       List<String> polishGrades,
       CombatPowerPolishValues polishValues,
+      List<BraceletOption> braceletOptions,
       List<String> notes) {}
+
+  /** 팔찌 옵션 하나(#327): BRACELET_EFFECT의 name으로 쓰는 계열 이름과 등급별 공식 문구. 빼기는 name "없음". */
+  public record BraceletOption(String name, Map<String, String> grades) {}
 
   public Options options() {
     return new Options(
@@ -725,9 +880,19 @@ public class CombatPowerSimulationService {
         20,
         List.of("LOW", "MID", "HIGH"),
         polishValues,
+        braceletCoefficients.families().stream()
+            .map(
+                family ->
+                    new BraceletOption(
+                        family.name(),
+                        Map.of(
+                            "LOW", family.text("LOW"),
+                            "MID", family.text("MID"),
+                            "HIGH", family.text("HIGH"))))
+            .toList(),
         List.of(
             "숫자 범위는 B단계에서 공식 근거로 확정합니다(verified=false).",
             "연마 수치(polishValues)는 공식 장비 툴팁 표본으로 확인한 고대 장신구 값이고, 확인하지 못한 칸은 null입니다.",
-            "팔찌 등급 수치는 표본을 늘려 추가합니다."));
+            "팔찌 효과(BRACELET_EFFECT)의 name은 braceletOptions의 계열 이름이고, 그 줄을 빼려면 \"없음\"입니다. 전투 특성(치명·특화·신속) 줄 교체는 아직 계산하지 않습니다."));
   }
 }

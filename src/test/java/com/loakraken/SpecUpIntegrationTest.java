@@ -71,7 +71,7 @@ class SpecUpIntegrationTest {
     assertThat(response.body()).doesNotContain(SiteNames.FORBIDDEN);
     var data = mapper.readTree(response.body()).path("data");
     assertThat(data.path("ruleVersion").asText()).isEqualTo("spec-up-v1");
-    assertThat(data.path("simulatorRuleVersion").asText()).isEqualTo("combat-power-sim-v4");
+    assertThat(data.path("simulatorRuleVersion").asText()).isEqualTo("combat-power-sim-v5");
     assertThat(data.path("combatPower").decimalValue()).isEqualByComparingTo("3000.00");
     assertThat(data.path("sort").asText()).isEqualTo("EFFICIENCY");
     // 보석은 단계별 후보(8→9, 8→10)가 각각 나오고, 무기 품질(90 → 100)도 계산한다.
@@ -179,6 +179,61 @@ class SpecUpIntegrationTest {
     assertThat(data.path("candidates").size()).isEqualTo(all - 2);
     // Δ 순이라 무기 품질(90.33)이 먼저 남는다.
     assertThat(data.at("/candidates/0/id").asText()).isEqualTo("EQUIPMENT_QUALITY:0:100");
+  }
+
+  @Test
+  void 서포터는_모든_후보가_역할_이유로_UNSUPPORTED다() throws Exception {
+    when(auctions.cachedGems()).thenReturn(gemCells(true));
+    when(detailsPort.fetch(anyString()))
+        .thenAnswer(
+            invocation -> {
+              var base = fetched(invocation.getArgument(0));
+              var profile = base.details().profile();
+              var loadout = base.details().loadout();
+              return new FetchedCharacter(
+                  CharacterTestFixture.details(
+                      new CharacterProfile(
+                          profile.characterName(),
+                          SERVER,
+                          "바드",
+                          70,
+                          profile.itemLevel(),
+                          profile.combatPower(),
+                          null,
+                          null,
+                          null,
+                          null,
+                          List.of()),
+                      new CharacterLoadout(
+                          loadout.equipment(),
+                          loadout.engravings(),
+                          loadout.gems(),
+                          null,
+                          new CharacterLoadout.ArkPassive(
+                              "깨달음",
+                              true,
+                              List.of(),
+                              List.of(
+                                  new CharacterLoadout.PassiveEffect(
+                                      "깨달음", "깨달음 1티어 절실한 구원 Lv.1", null))),
+                          loadout.arkGrid(),
+                          List.of()),
+                      List.of()),
+                  "{}",
+                  "[]");
+            });
+    assertThat(get("/api/v1/characters/search?characterName=" + encode("스펙서폿")).statusCode())
+        .isEqualTo(200);
+    var data =
+        mapper
+            .readTree(get("/api/v1/characters/spec-up?characterName=" + encode("스펙서폿")).body())
+            .path("data");
+    assertThat(data.path("total").asInt()).isZero();
+    for (var candidate : data.path("candidates")) {
+      assertThat(candidate.path("status").asText()).isEqualTo("UNSUPPORTED");
+      assertThat(candidate.path("reasonCode").asText()).isEqualTo("SUPPORTER_MODEL_PENDING");
+    }
+    assertThat(data.path("candidates").size()).isPositive();
   }
 
   @Test

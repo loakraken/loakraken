@@ -98,6 +98,74 @@ public class CombatPowerController {
             simulator.simulate(request.characterName(), request.toChanges())));
   }
 
+  @GetMapping(
+      value = "/api/v1/characters/combat-power/contributions",
+      produces = MediaType.APPLICATION_JSON_VALUE)
+  @Operation(
+      summary = "장착 항목의 전투력 기여(공식 호출 없음)",
+      description =
+          "그 항목을 뺐을 때 공식 전투력이 몇 % 줄어드는지입니다(전투력 기여 % = 1 − 뺀 전투력 / 지금 전투력). 지금은 팔찌(효과 줄 전부 + 팔찌 도약 포인트)만 주고, kind는 문자열이라 늘어날 수 있습니다. "
+              + "계산할 수 없으면 status=UNSUPPORTED이고 contributionPct=null입니다.")
+  @ApiResponses({
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(
+        responseCode = "200",
+        description = "CHARACTER_COMBAT_POWER_CONTRIBUTIONS_SUCCESS"),
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(
+        responseCode = "404",
+        description = "CHARACTER_NOT_CACHED: 캐릭터 캐시 없음(공식 호출 없음)",
+        content = @Content(schema = @Schema(ref = "#/components/schemas/ErrorResponse")))
+  })
+  public ApiResponse<CombatPowerContributionsResponse> contributions(
+      @org.springframework.web.bind.annotation.RequestParam
+          @NotBlank
+          @Size(max = 16)
+          @Pattern(regexp = "\\s*[\\p{L}\\p{N}]+\\s*")
+          String characterName) {
+    return ApiResponse.of(
+        CharacterSuccessCode.CHARACTER_COMBAT_POWER_CONTRIBUTIONS_SUCCESS,
+        CombatPowerContributionsResponse.from(simulator.contributions(characterName)));
+  }
+
+  public record CombatPowerContributionsResponse(
+      String characterName,
+      Instant fetchedAt,
+      @Schema(description = "공식 전투력(소수 둘째 자리)") @NullableResponse BigDecimal combatPower,
+      String ruleVersion,
+      List<ContributionItemResponse> items) {
+    static CombatPowerContributionsResponse from(CombatPowerSimulationService.Contributions value) {
+      return new CombatPowerContributionsResponse(
+          value.characterName(),
+          value.fetchedAt(),
+          value.combatPower(),
+          CombatPowerSimulationService.RULE_VERSION,
+          value.items().stream()
+              .map(
+                  item ->
+                      new ContributionItemResponse(
+                          item.kind(),
+                          item.target(),
+                          item.status().name(),
+                          item.contributionPct(),
+                          item.withoutCombatPower(),
+                          item.basis(),
+                          item.reasonCode()))
+              .toList());
+    }
+  }
+
+  public record ContributionItemResponse(
+      @Schema(description = "BRACELET 등(문자열, 값이 늘 수 있음)", example = "BRACELET") String kind,
+      String target,
+      @Schema(description = "OK 또는 UNSUPPORTED(문자열)", example = "OK") String status,
+      @Schema(description = "전투력 기여 %(소수 둘째 자리). UNSUPPORTED면 null", example = "12.60")
+          @NullableResponse
+          BigDecimal contributionPct,
+      @Schema(description = "그 항목을 뺐을 때 전투력(소수 둘째 자리)") @NullableResponse
+          BigDecimal withoutCombatPower,
+      @Schema(description = "계산 근거 또는 계산하지 않은 이유") String basis,
+      @Schema(description = "UNSUPPORTED 이유 코드(시뮬레이터·스펙업과 같은 코드). OK면 null") @NullableResponse
+          String reasonCode) {}
+
   public record CombatPowerSimulationRequest(
       @Schema(description = "캐릭터명", example = "모험가", requiredMode = Schema.RequiredMode.REQUIRED)
           @NotBlank
@@ -172,7 +240,8 @@ public class CombatPowerController {
                           item.to(),
                           item.delta(),
                           item.status().name(),
-                          item.basis()))
+                          item.basis(),
+                          item.reasonCode()))
               .toList(),
           result.unsupportedCount(),
           result.assumptions());
@@ -188,7 +257,12 @@ public class CombatPowerController {
       @Schema(description = "순서대로 적용했을 때의 증가분. UNSUPPORTED면 null") @NullableResponse
           BigDecimal delta,
       @Schema(allowableValues = {"OK", "UNSUPPORTED"}) String status,
-      @Schema(description = "근거 문장(사이트 이름 없음)") String basis) {}
+      @Schema(description = "근거 문장(사이트 이름 없음)") String basis,
+      @Schema(
+              description = "UNSUPPORTED 이유 코드(문자열, 값이 늘 수 있음, 스펙업·전투력 기여와 같은 코드). OK면 null",
+              example = "SUPPORTER_MODEL_PENDING")
+          @NullableResponse
+          String reasonCode) {}
 
   public record CombatPowerOptionsResponse(
       String ruleVersion,
@@ -206,6 +280,10 @@ public class CombatPowerController {
       List<String> polishGrades,
       @Schema(description = "연마 옵션별 하·중·상 수치(공식 툴팁 표기 그대로, 고대 장신구). 표본에서 확인하지 못한 칸은 null")
           PolishValuesResponse polishValues,
+      @Schema(
+              description =
+                  "팔찌 효과 교체에 쓰는 옵션 계열(#327). name을 BRACELET_EFFECT의 name으로, grades는 LOW·MID·HIGH별 공식 문구. 줄을 빼려면 name \"없음\"")
+          List<BraceletOptionResponse> braceletOptions,
       List<String> notes) {
     static CombatPowerOptionsResponse from(CombatPowerSimulationService.Options value) {
       return new CombatPowerOptionsResponse(
@@ -237,9 +315,16 @@ public class CombatPowerController {
                               item.mid(),
                               item.high()))
                   .toList()),
+          value.braceletOptions().stream()
+              .map(option -> new BraceletOptionResponse(option.name(), option.grades()))
+              .toList(),
           value.notes());
     }
   }
+
+  public record BraceletOptionResponse(
+      @Schema(description = "옵션 계열 이름(BRACELET_EFFECT의 name)", example = "추가 피해") String name,
+      @Schema(description = "LOW·MID·HIGH → 공식 문구") java.util.Map<String, String> grades) {}
 
   public record PolishValuesResponse(
       @Schema(description = "수치 표 버전") String version,

@@ -1,16 +1,20 @@
-package com.loakraken.specup.domain;
+package com.loakraken.character.domain;
 
 /**
- * 시뮬레이터가 준 미지원 이유를 화면용 코드와 고정 문장으로 바꾼다(#315, PM-프론트 16:27 ④). 같은 코드는 늘 같은 문장이라 웹이 종류별로 한 줄로 접을 수
- * 있다. 원래 문장(슬롯 번호·툴팁 원문이 들어감)은 detail로 따로 준다.
+ * 전투력 시뮬레이터의 미지원 이유를 화면용 코드와 고정 문장으로 맞춘다(#315 P2, #332). 시뮬레이터·전투력 기여·스펙업 가이드가 같은 reasonCode·문장을
+ * 쓴다(PM-프론트 요청). 같은 코드는 늘 같은 문장이고, 원래 문장(슬롯 번호·툴팁 원문)은 따로 준다.
  */
-public final class SpecUpReasons {
-  private SpecUpReasons() {}
+public final class CombatPowerReasons {
+  private CombatPowerReasons() {}
 
   public record Reason(String code, String text) {}
 
   public static final Reason MODEL_UNCONFIRMED =
       new Reason("MODEL_UNCONFIRMED", "이 항목의 전투력 계산식을 아직 확인하고 있어 계산하지 않았습니다.");
+  public static final Reason SUPPORTER_MODEL_PENDING =
+      new Reason("SUPPORTER_MODEL_PENDING", "서포터 전투력 계산식은 아직 적용하지 않았습니다.");
+  public static final Reason ROLE_UNKNOWN =
+      new Reason("ROLE_UNKNOWN", "딜러·서포터를 판정하지 못해 계산하지 않았습니다.");
   public static final Reason NO_OFFICIAL_COMBAT_POWER =
       new Reason("NO_OFFICIAL_COMBAT_POWER", "공식 전투력이 없어 계산하지 않았습니다.");
   public static final Reason GEM_TIER_UNCONFIRMED =
@@ -37,6 +41,8 @@ public final class SpecUpReasons {
   /** 시뮬레이터 이유 문장 → 코드. 모르는 문장은 MODEL_UNCONFIRMED로 둔다(계산하지 않았다는 뜻은 같음). */
   public static Reason classify(String simulatorReason) {
     if (simulatorReason == null) return MODEL_UNCONFIRMED;
+    if (simulatorReason.contains("서포터 전투력 계산식")) return SUPPORTER_MODEL_PENDING;
+    if (simulatorReason.contains("딜러·서포터를 판정하지 못해")) return ROLE_UNKNOWN;
     if (simulatorReason.contains("공식 전투력이 없어")) return NO_OFFICIAL_COMBAT_POWER;
     if (simulatorReason.contains("티어 보석 계수")) return GEM_TIER_UNCONFIRMED;
     if (simulatorReason.contains("보석의 기본 공격력 수치")) return GEM_LEVEL_UNCONFIRMED;

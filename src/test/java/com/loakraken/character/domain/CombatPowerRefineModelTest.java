@@ -43,6 +43,12 @@ class CombatPowerRefineModelTest {
     assertThat(after("3345.24", model, Map.of(0, 25)).subtract(new BigDecimal("3583.14")).abs())
         .isLessThanOrEqualTo(new BigDecimal("0.01"));
     assertThat(after("3345.24", model, Map.of(0, 16))).isEqualByComparingTo("3233.15");
+    // 팔찌 "민첩 +15360"(S 항, 계산 검증 #332 회신): 목걸이 같은 수치와 같은 ×1.010768.
+    assertThat(
+            model
+                .ratio(Map.of(), BigDecimal.ZERO, new BigDecimal("15360"))
+                .setScale(6, RoundingMode.HALF_UP))
+        .isEqualByComparingTo("1.010768");
   }
 
   @Test

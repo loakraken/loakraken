@@ -49,6 +49,7 @@ class PostgresCharacterCardRepository implements CharacterCardPort {
             .optional();
     if (owner.isEmpty() || owner.get()[1] == null) return;
     var at = utc(observedAt);
+    var observedTypes = new ArrayList<String>();
     int order = 0;
     for (var collectible : collectibles) {
       order++;
@@ -57,6 +58,7 @@ class PostgresCharacterCardRepository implements CharacterCardPort {
           || collectible.type().isBlank()
           || collectible.point() == null
           || collectible.maxPoint() == null) continue;
+      observedTypes.add(collectible.type().strip());
       jdbc.sql(
               """
           INSERT INTO roster_collectible (roster_key, type, sort_order, point, max_point, observed_at, source_character_id)
@@ -75,6 +77,17 @@ class PostgresCharacterCardRepository implements CharacterCardPort {
           .param("source", owner.get()[0])
           .update();
     }
+    // 공식 종류가 바뀌거나 사라지면 옛 종류가 합계에 섞이지 않게 이번 관측에 없는 종류를 지운다(더 새 관측은 건드리지 않음).
+    if (observedTypes.isEmpty()) return;
+    jdbc.sql(
+            """
+        DELETE FROM roster_collectible
+        WHERE roster_key = :roster AND type NOT IN (:types) AND observed_at <= :at
+        """)
+        .param("roster", owner.get()[1])
+        .param("types", observedTypes)
+        .param("at", at)
+        .update();
   }
 
   @Override

@@ -194,36 +194,42 @@ class PostgresStatsRepository implements StatsPort {
   @Override
   public CollectiblePage collectibleRanking(
       String server, Instant since, boolean characterUnit, int offset, int limit) {
-    long total =
-        jdbc.sql(COLLECTIBLE_RANKED + "SELECT COUNT(*) FROM ranked")
-            .param("since", since.atOffset(ZoneOffset.UTC))
-            .param("server", server)
-            .param("characterUnit", characterUnit)
-            .query(Long.class)
-            .single();
+    // 전체 수는 행과 같은 조회에서 COUNT(*) OVER()로 받는다. 페이지가 범위를 넘어 행이 없을 때만 따로 센다.
+    var totals = new long[] {0};
     var rows =
         jdbc.sql(
                 COLLECTIBLE_RANKED
-                    + "SELECT * FROM ranked ORDER BY rank, character_name LIMIT :limit OFFSET :offset")
+                    + "SELECT *, COUNT(*) OVER () AS total FROM ranked ORDER BY rank, character_name LIMIT :limit OFFSET :offset")
             .param("since", since.atOffset(ZoneOffset.UTC))
             .param("server", server)
             .param("characterUnit", characterUnit)
             .param("limit", limit)
             .param("offset", offset)
             .query(
-                (row, index) ->
-                    new CollectibleRow(
-                        row.getLong("rank"),
-                        row.getObject("roster_key", java.util.UUID.class),
-                        row.getString("character_name"),
-                        row.getString("server_name"),
-                        row.getString("class_name"),
-                        row.getBigDecimal("item_level"),
-                        row.getLong("member_count"),
-                        row.getLong("point"),
-                        row.getLong("max_point"),
-                        row.getTimestamp("observed_at").toInstant()))
+                (row, index) -> {
+                  totals[0] = row.getLong("total");
+                  return new CollectibleRow(
+                      row.getLong("rank"),
+                      row.getObject("roster_key", java.util.UUID.class),
+                      row.getString("character_name"),
+                      row.getString("server_name"),
+                      row.getString("class_name"),
+                      row.getBigDecimal("item_level"),
+                      row.getLong("member_count"),
+                      row.getLong("point"),
+                      row.getLong("max_point"),
+                      row.getTimestamp("observed_at").toInstant());
+                })
             .list();
+    long total = totals[0];
+    if (rows.isEmpty() && offset > 0)
+      total =
+          jdbc.sql(COLLECTIBLE_RANKED + "SELECT COUNT(*) FROM ranked")
+              .param("since", since.atOffset(ZoneOffset.UTC))
+              .param("server", server)
+              .param("characterUnit", characterUnit)
+              .query(Long.class)
+              .single();
     return new CollectiblePage(total, rows);
   }
 

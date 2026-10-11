@@ -76,4 +76,4 @@ SELECT json_build_object(
 FROM latest;
 ```
 
-- `public_exclusion`(공개 제외 요청, 서버 생략 시 모든 서버) 캐릭터는 내보내지 않는다.
+- `public_exclusion`(처리정지 요청, 서버 생략 시 모든 서버) 캐릭터는 내보내지 않는다.

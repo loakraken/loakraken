@@ -50,7 +50,7 @@
 | `GET /api/v1/stats/servers` | 서버별 인원·비율, 아이템 레벨·전투력 중앙값 |
 | `GET /api/v1/stats/distribution?metric=&width=&percentileOf=` | 히스토그램. 기본 폭은 아이템 레벨 10, 전투력 100이고 최대 300구간이다. 값이 있는 구간만 준다. percentileOf는 순위·상위 %·티어 |
 | `GET /api/v1/stats/snapshots` | 현재는 latest만. 일별 06:00 KST 스냅샷은 3단계 |
-| `GET /api/v1/rankings?metric=&page=&size=` | 전투력(기본)·아이템 레벨 순위. 동률은 같은 순위(RANK). 페이지 크기 기본 50·최대 100, 최대 10,000위. 공개 제외 목록([public_exclusion](popular-characters.md))을 모집단에서 빼고 순위를 매긴다. `/characters/rank`·`percentileOf`도 같은 모집단이고, 제외된 본인은 `rankVisibility=HIDDEN`이다 |
+| `GET /api/v1/rankings?metric=&page=&size=` | 전투력(기본)·아이템 레벨 순위. 동률은 같은 순위(RANK). 페이지 크기 기본 50·최대 100, 최대 10,000위. 처리정지 목록([public_exclusion](popular-characters.md))을 모집단에서 빼고 순위를 매긴다. `/characters/rank`·`percentileOf`도 같은 모집단이고, 제외된 본인은 `rankVisibility=HIDDEN`이다 |
 | `GET /api/v1/characters/rank?characterName=` | 전투력·아이템 레벨 × 전체·서버·직업·서버 내 직업(SERVER_CLASS, scopeValue "서버/직업", #170) 순위. 같은 필터를 받는다. 모집단 밖이면 `included=false`, entries 빈 배열 |
 
 - 상위 %: `rank / total × 100`이고 소수 둘째 자리에서 올림한다. 1위/30명은 3.34다.
@@ -76,13 +76,13 @@
 - 빠지는 것
   - 하나도 모으지 않은 원정대(Σ Point = 0)
   - `activeDays` 안에 수집품을 관측하지 않은 원정대
-  - 공개 제외 캐릭터. 대표·행·캐릭터 수에서 빠지고, 공개 캐릭터가 없는 원정대는 빠진다. 수집품 값은 원정대 공유라 다른 공개 캐릭터가 대표가 된다.
+  - 처리정지 목록 캐릭터. 대표·행·캐릭터 수에서 빠지고, 공개 캐릭터가 없는 원정대는 빠진다. 수집품 값은 원정대 공유라 다른 공개 캐릭터가 대표가 된다.
 - 표본: `meta`는 다른 통계와 같은 모양이고 `populationUnit`(ROSTER·CHARACTER)이 더해진다(모든 통계 응답에 추가, 기존 엔드포인트는 CHARACTER). 모집단이 30 미만이면 `sampleStatus=COLLECTING`이지만 값·순위는 그대로 준다(참고값, null로 비우는 필드 없음).
 - 응답의 `unit`은 문자열이다(값이 늘 수 있음). `types`는 공식 Type 문자열과 공식 순서의 배열이다.
 - 저장: 새 표 `roster_collectible`(V13). armory를 받을 때(사용자 검색·수집기 프로필 갱신, 카드 기록과 같은 비동기 작업자) 그 원정대 값을 덮어쓴다.
   - 원정대 키가 아직 없는 캐릭터(원정대를 훑기 전)는 다음 관측에 기록된다.
   - 공식 호출은 늘지 않는다(armory가 이미 collectibles를 받는다).
-- 캐릭터 기준 순위(#303): `GET /api/v1/rankings/collectibles/standing?characterName=&server=&activeDays=&unit=`. 같은 조건의 모집단에서 그 원정대(또는 캐릭터 행) 순위·전체·상위 %(30 미만이면 null)·진행도를 준다. 순위에 없으면 값은 null이고 `reason`(문자열): `EXCLUDED`(공개 제외, 서버·관측 여부도 숨김)·`NOT_OBSERVED`·`INACTIVE`·`NO_COLLECTIBLES`. 표본: `rankings-collectibles-standing.json`, `rankings-collectibles-standing-hidden.json`.
+- 캐릭터 기준 순위(#303): `GET /api/v1/rankings/collectibles/standing?characterName=&server=&activeDays=&unit=`. 같은 조건의 모집단에서 그 원정대(또는 캐릭터 행) 순위·전체·상위 %(30 미만이면 null)·진행도를 준다. 순위에 없으면 값은 null이고 `reason`(문자열): `EXCLUDED`(처리정지 목록, 서버·관측 여부도 숨김)·`NOT_OBSERVED`·`INACTIVE`·`NO_COLLECTIBLES`. 표본: `rankings-collectibles-standing.json`, `rankings-collectibles-standing-hidden.json`.
 - 계약 표본: `build/generated/rankings-collectibles.json`(정상, READY), `rankings-collectibles-empty.json`(빈 결과), `rankings-collectibles-collecting.json`(30 미만), `rankings-collectibles-tie.json`(동률).
 
 ## 수집품 항목별 보유율 (#305)
@@ -117,7 +117,7 @@
 `GET /api/v1/rankings/rosters?server=&activeDays=&basis=&aggregate=&page=&size=` — 기본 꺼짐(`ranking.rosters.enabled`, `RANKING_ROSTERS_ENABLED`). 설계는 볼트 「랭킹 확장 설계 초안」 v1 2절이다.
 
 - 원정대: 같은 `roster_key`(수집기가 공식 원정대 목록을 훑을 때 준 키, 서버별)다. 키가 없는 캐릭터는 넣지 않는다.
-- 모집단 캐릭터: 검색·프로필 갱신·원정대 확인 중 가장 늦은 관측이 `activeDays` 안인 공개 캐릭터. 공개 제외 캐릭터는 대표·구성·인원·값에서 모두 빠진다.
+- 모집단 캐릭터: 검색·프로필 갱신·원정대 확인 중 가장 늦은 관측이 `activeDays` 안인 공개 캐릭터. 처리정지 목록 캐릭터는 대표·구성·인원·값에서 모두 빠진다.
 - 기준(`basis`)
   - `ITEM_LEVEL`(기본): 아이템 레벨(원정대 확인 때 전원 값을 받음)
   - `COMBAT_POWER`: `activeDays` 안에 관측한 전투력만. 아이템 레벨 1640 이상인데 전투력을 관측하지 못한 캐릭터가 있는 원정대는 빼고 `excludedRosters`에 수를 준다(일부만 관측해 평균이 부풀거나 합이 깎이지 않게).
@@ -137,7 +137,7 @@
 - 길드: 같은 서버·같은 길드 이름(공식 프로필 GuildName, `characters.guild_name`, V15)이다.
 - 길드원: `activeDays` 안에 프로필을 관측한(검색·수집기 갱신) 공개 캐릭터다. 값은 실제 길드 전체가 아니라 **확인한 길드원 기준**이다.
 - 확인한 길드원이 5명 미만인 길드는 빼고 `excludedGuilds`에 수를 준다(PM-백엔드 10-11 결정). `minMembers`로 기준을 알린다.
-- 공개 제외는 캐릭터만 뺀다. 길드 자체는 빼지 않는다.
+- 처리정지 목록는 캐릭터만 뺀다. 길드 자체는 빼지 않는다.
 - 정렬: `sort=AVG`(아이템 레벨 평균, 기본) 또는 `SUM`(합). 값(소수 둘째 자리)이 같으면 같은 순위다.
 - 행: rank, serverName, guildName, memberCount, itemLevelAvg, itemLevelSum, combatPowerAvg(관측한 길드원만, 없으면 null), combatPowerCount
 - 표본: `meta.populationUnit=GUILD`. 30 미만이면 `sampleStatus=COLLECTING`이지만 값·순위는 그대로 준다.

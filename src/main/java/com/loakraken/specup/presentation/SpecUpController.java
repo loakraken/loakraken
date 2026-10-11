@@ -64,7 +64,7 @@ public class SpecUpController {
     @io.swagger.v3.oas.annotations.responses.ApiResponse(
         responseCode = "404",
         description =
-            "SPEC_UP_DISABLED: 기능이 꺼져 있음(메뉴 숨김) · CHARACTER_NOT_CACHED: 캐릭터를 먼저 검색해야 함(공개 제외 포함)",
+            "SPEC_UP_DISABLED: 기능이 꺼져 있음(메뉴 숨김) · CHARACTER_NOT_CACHED: 캐릭터를 먼저 검색해야 함(처리정지 목록 포함)",
         content = @Content(schema = @Schema(ref = "#/components/schemas/ErrorResponse"))),
     @io.swagger.v3.oas.annotations.responses.ApiResponse(
         responseCode = "503",

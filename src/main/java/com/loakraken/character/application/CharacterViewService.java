@@ -27,6 +27,7 @@ public class CharacterViewService {
   public static final ZoneId KST = ZoneId.of("Asia/Seoul");
   private static final Logger log = LoggerFactory.getLogger(CharacterViewService.class);
   private final CharacterViewPort views;
+  private final CharacterStopList stopList;
   private final CharacterViewPolicy policy;
   private final CharacterMetrics metrics;
   private final Clock clock;
@@ -42,18 +43,27 @@ public class CharacterViewService {
           new ThreadPoolExecutor.AbortPolicy());
 
   public CharacterViewService(
-      CharacterViewPort views, CharacterViewPolicy policy, CharacterMetrics metrics, Clock clock) {
+      CharacterViewPort views,
+      CharacterViewPolicy policy,
+      CharacterMetrics metrics,
+      Clock clock,
+      CharacterStopList stopList) {
     this.views = views;
+    this.stopList = stopList;
     this.policy = policy;
     this.metrics = metrics;
     this.clock = clock;
   }
 
-  public void record(String characterName) {
+  /** 검색 성공 뒤 호출한다. 처리정지 목록의 캐릭터는 세지 않는다(#351, 확인은 비동기 쓰기 안에서). */
+  public void record(String characterName, String serverName) {
     if (!policy.enabled() || characterName == null || characterName.isBlank()) return;
     var date = LocalDate.now(clock.withZone(KST));
     try {
-      writer.execute(() -> write(characterName, date));
+      writer.execute(
+          () -> {
+            if (stopList.recordable(characterName, serverName)) write(characterName, date);
+          });
     } catch (RejectedExecutionException exception) {
       metrics.views(false);
     }

@@ -507,7 +507,7 @@ public class StatsQueryService {
   }
 
   /**
-   * 캐릭터의 전체·서버·직업·서버 내 직업 순위. 캐릭터는 이 모집단 조건(필터)에 들어 있어야 순위가 나온다. 순위 모집단은 공개 제외 목록을 뺀 것이라 랭킹 목록의 순위와
+   * 캐릭터의 전체·서버·직업·서버 내 직업 순위. 캐릭터는 이 모집단 조건(필터)에 들어 있어야 순위가 나온다. 순위 모집단은 처리정지 목록을 뺀 것이라 랭킹 목록의 순위와
    * 같다. 제외 목록에 있는 본인은 rankVisibility=HIDDEN이고 순위·백분위·티어를 주지 않는다(PM 총괄 결정 2026-10-09).
    */
   public CharacterRankResult characterRank(String characterName, StatsConditions conditions) {

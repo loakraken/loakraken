@@ -19,7 +19,7 @@ public interface StatsPort {
 
   List<Bin> histogram(StatsConditions conditions, Instant since, Metric metric, BigDecimal width);
 
-  /** value보다 큰 캐릭터 수와 모집단 수. 공개 제외 목록은 모집단에서 뺀다. */
+  /** value보다 큰 캐릭터 수와 모집단 수. 처리정지 목록은 모집단에서 뺀다. */
   Standing standing(StatsConditions conditions, Instant since, Metric metric, BigDecimal value);
 
   RankingPage ranking(
@@ -30,10 +30,10 @@ public interface StatsPort {
   /** 이름이 같은 캐릭터가 여러 서버에 있으면 가장 최근에 갱신한 캐릭터. */
   Optional<Target> target(String characterName);
 
-  /** 공개 제외 목록(public_exclusion)에 있는가. */
+  /** 처리정지 목록(public_exclusion)에 있는가. */
   boolean excluded(Target target);
 
-  /** target이 조건의 모집단(공개 제외 목록 제외)에 들어가는가. */
+  /** target이 조건의 모집단(처리정지 목록 제외)에 들어가는가. */
   boolean contains(StatsConditions conditions, Instant since, Target target);
 
   record Summary(
@@ -116,7 +116,7 @@ public interface StatsPort {
 
   /**
    * 수집품 랭킹(#295). since 뒤에 관측한 원정대 가운데 Σ Point > 0인 것을 진행도(Σ Point / Σ MaxPoint) → Σ Point 순으로 같은
-   * 순위(RANK)를 매긴다. 공개 제외 캐릭터는 대표·캐릭터 행·캐릭터 수에서 빼고, 공개 캐릭터가 없는 원정대는 뺀다. server가 있으면 그 서버 원정대만.
+   * 순위(RANK)를 매긴다. 처리정지 목록 캐릭터는 대표·캐릭터 행·캐릭터 수에서 빼고, 공개 캐릭터가 없는 원정대는 뺀다. server가 있으면 그 서버 원정대만.
    */
   CollectiblePage collectibleRanking(
       String server, Instant since, boolean characterUnit, int offset, int limit);
@@ -178,7 +178,7 @@ public interface StatsPort {
       RosterBasis basis);
 
   /**
-   * 캐릭터 기준 수집품 순위(#303). reason이 null이면 rank·point·maxPoint가 있다. reason: EXCLUDED(공개 제외),
+   * 캐릭터 기준 수집품 순위(#303). reason이 null이면 rank·point·maxPoint가 있다. reason: EXCLUDED(처리정지 목록),
    * NOT_OBSERVED(캐릭터·원정대·수집품 관측 없음), INACTIVE(activeDays 안 관측 없음), NO_COLLECTIBLES(Σ Point = 0).
    * total은 같은 조건의 순위 모집단 수.
    */

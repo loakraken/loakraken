@@ -28,7 +28,7 @@ import org.springframework.stereotype.Service;
  * 전투력 시뮬레이터(계약 v0, A단계). 볼트 「전투력 시뮬레이터 API 계약 초안」·PM-백엔드 18:27·PM-프론트 18:31 교차 확인.
  *
  * <p><b>공식 API를 부르지 않는다</b>: 캐릭터 캐시만 읽고, 없으면 CHARACTER_NOT_CACHED(404)다. 바꾼 항목(changes)을 검증하고 순서대로
- * 합친다. 공개 제외 캐릭터는 캐시가 없을 때와 같은 404다. 전투력 계산식은 계산 검증의 목표 사이트 실측 대조(Q1·Q2)로 항목별로 확정되기 전까지 그 항목을
+ * 합친다. 처리정지 목록 캐릭터는 캐시가 없을 때와 같은 404다. 전투력 계산식은 계산 검증의 목표 사이트 실측 대조(Q1·Q2)로 항목별로 확정되기 전까지 그 항목을
  * UNSUPPORTED로 값 없이 낸다(추정 금지).
  *
  * <p>B단계(#243): 보석(GEM_LEVEL·GEM_LEVEL_ALL)을 계산한다({@link CombatPowerGemModel}). after = before ×
@@ -155,7 +155,7 @@ public class CombatPowerSimulationService {
 
   /**
    * 시뮬레이션 기준 캐릭터(캐시)를 한 번 읽는다. 스펙업 가이드(#315)가 후보마다 {@link #simulate(CharacterResult, List)}를 부를 때
-   * 같은 세팅을 쓰게 한다. 없거나 공개 제외면 CHARACTER_NOT_CACHED다.
+   * 같은 세팅을 쓰게 한다. 없거나 처리정지 목록면 CHARACTER_NOT_CACHED다.
    */
   public CharacterResult snapshot(String characterName) {
     var name = new SearchCharacterCommand(characterName).characterName();
@@ -165,7 +165,7 @@ public class CombatPowerSimulationService {
     } catch (CharacterException exception) {
       result = null;
     }
-    // 공개 제외 캐릭터는 캐시가 남아 있어도 세팅을 내주지 않는다(없는 캐릭터와 같은 404).
+    // 처리정지 목록 캐릭터는 캐시가 남아 있어도 세팅을 내주지 않는다(없는 캐릭터와 같은 404).
     try {
       if (result != null
           && stored.excluded(

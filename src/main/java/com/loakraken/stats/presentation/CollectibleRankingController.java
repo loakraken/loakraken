@@ -47,7 +47,7 @@ public class CollectibleRankingController {
       description =
           "공식 수집품(collectibles)의 Point·MaxPoint로 만든 진행도(Σ Point / Σ MaxPoint × 100) 순위입니다. 수집품은 원정대가 함께 모으므로 기본은 원정대 단위(대표 = 아이템 레벨이 가장 높은 공개 캐릭터)이고, unit=CHARACTER면 같은 원정대 캐릭터마다 같은 값으로 한 행씩 나옵니다. "
               + "동률은 진행도 → Σ Point 순이고, 같으면 같은 순위입니다. 하나도 모으지 않은 원정대와 activeDays 안에 관측하지 않은 원정대는 빠집니다. "
-              + "공개 제외 캐릭터는 대표·행·캐릭터 수에서 빠지고, 공개 캐릭터가 없는 원정대는 빠집니다. 모집단이 30 미만이면 sampleStatus=COLLECTING이지만 값·순위는 그대로 줍니다(참고값). "
+              + "처리정지 목록 캐릭터는 대표·행·캐릭터 수에서 빠지고, 공개 캐릭터가 없는 원정대는 빠집니다. 모집단이 30 미만이면 sampleStatus=COLLECTING이지만 값·순위는 그대로 줍니다(참고값). "
               + "400 INVALID_REQUEST·STATS_INVALID_RANGE, 503 STATS_UNAVAILABLE")
   @StatsController.StandardErrors
   public ApiResponse<CollectibleRankingResponse> collectibles(
@@ -95,7 +95,7 @@ public class CollectibleRankingController {
       summary = "캐릭터 기준 수집품 순위",
       description =
           "그 캐릭터 원정대의 수집품 랭킹 순위·전체·상위 %·진행도입니다. 모집단·정렬·동률은 수집품 랭킹과 같습니다. "
-              + "순위에 없으면 rank 등은 null이고 reason에 이유 코드(문자열, 값이 늘 수 있음)를 줍니다: EXCLUDED(공개 제외, 관측 여부도 숨김), NOT_OBSERVED(캐릭터·원정대·수집품 관측 없음), "
+              + "순위에 없으면 rank 등은 null이고 reason에 이유 코드(문자열, 값이 늘 수 있음)를 줍니다: EXCLUDED(처리정지 목록, 관측 여부도 숨김), NOT_OBSERVED(캐릭터·원정대·수집품 관측 없음), "
               + "INACTIVE(activeDays 안 관측 없음), NO_COLLECTIBLES(모은 수집품 없음). 모집단이 30 미만이면 topPercent는 null이고 rank는 그대로 줍니다(참고값). "
               + "400 INVALID_REQUEST·STATS_INVALID_RANGE, 503 STATS_UNAVAILABLE")
   @StatsController.StandardErrors
@@ -149,7 +149,7 @@ public class CollectibleRankingController {
       StatsResponses.StatsMetaResponse meta,
       @Schema(description = "ROSTER 또는 CHARACTER(문자열, 값이 늘 수 있음)", example = "ROSTER") String unit,
       String characterName,
-      @Schema(description = "서버 이름(공개 제외·관측 없음이면 null)") @NullableResponse String serverName,
+      @Schema(description = "서버 이름(처리정지 목록·관측 없음이면 null)") @NullableResponse String serverName,
       @Schema(description = "같은 값은 같은 순위. 순위에 없으면 null") @NullableResponse Long rank,
       @Schema(description = "같은 조건의 순위 모집단 수") long total,
       @Schema(description = "상위 몇 %(소수 둘째 자리 올림, 다른 통계와 같음). 모집단 30 미만이거나 순위가 없으면 null")
@@ -209,7 +209,7 @@ public class CollectibleRankingController {
           String characterName,
       @NullableResponse String className,
       @NullableResponse BigDecimal itemLevel,
-      @Schema(description = "이 원정대에서 확인한 공개 캐릭터 수(실제 원정대 인원이 아니라 관측된 캐릭터 가운데 공개 제외를 뺀 수)")
+      @Schema(description = "이 원정대에서 확인한 공개 캐릭터 수(실제 원정대 인원이 아니라 관측된 캐릭터 가운데 처리정지 목록를 뺀 수)")
           long characterCount,
       @Schema(description = "Σ Point / Σ MaxPoint × 100, 소수 둘째 자리", example = "99.84")
           BigDecimal progressPercent,

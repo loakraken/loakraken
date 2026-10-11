@@ -146,7 +146,7 @@ public class RosterRankingController {
       @NullableResponse String className,
       @NullableResponse BigDecimal itemLevel,
       @Schema(description = "대표 캐릭터 전투력(관측하지 못했으면 null)") @NullableResponse BigDecimal combatPower,
-      @Schema(description = "이 원정대에서 확인한 공개 캐릭터 수(실제 원정대 인원이 아니라 관측된 캐릭터 가운데 공개 제외를 뺀 수)")
+      @Schema(description = "이 원정대에서 확인한 공개 캐릭터 수(실제 원정대 인원이 아니라 관측된 캐릭터 가운데 처리정지 목록를 뺀 수)")
           long characterCount,
       @Schema(description = "값 계산에 쓴 캐릭터 수(TOP6는 최대 6, 화면의 n/6). ROSTER_LEVEL이면 원정대 레벨을 확인한 캐릭터 수")
           long usedCharacters,

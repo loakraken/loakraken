@@ -44,6 +44,7 @@ public class CharacterPopularService {
   static final int QUEUE_CAPACITY = 1000;
   private static final Logger log = LoggerFactory.getLogger(CharacterPopularService.class);
   private final CharacterPopularPort popular;
+  private final CharacterStopList stopList;
   private final CharacterPopularPolicy policy;
   private final CharacterMetrics metrics;
   private final Clock clock;
@@ -64,8 +65,10 @@ public class CharacterPopularService {
       CharacterPopularPort popular,
       CharacterPopularPolicy policy,
       CharacterMetrics metrics,
-      Clock clock) {
+      Clock clock,
+      CharacterStopList stopList) {
     this.popular = popular;
+    this.stopList = stopList;
     this.policy = policy;
     this.metrics = metrics;
     this.clock = clock;
@@ -114,6 +117,8 @@ public class CharacterPopularService {
   private void write(
       LocalDate day, String key, String characterName, String serverName, Instant now) {
     try {
+      // 처리정지 목록의 캐릭터는 세지 않는다(#351).
+      if (!stopList.recordable(characterName, serverName)) return;
       if (popular.markSeen(day, key))
         popular.increment(characterName, serverName, now.truncatedTo(ChronoUnit.HOURS));
       metrics.popular(true);

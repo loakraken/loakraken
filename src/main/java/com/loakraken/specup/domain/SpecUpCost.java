@@ -74,6 +74,24 @@ public record SpecUpCost(String unit, Long amount, String status, String code, S
         "목표 레벨 보석 즉시 구매 최저가에서 지금 보석의 판매 기대가(최저가에서 거래소 수수료 5%를 뺀 값)를 뺐습니다.");
   }
 
+  /** 유물 각인 레벨 1당 각인서 권수(공식 가이드 '각인', 검증 표본 spec-up/cost-rules-2026-10-12.json, L30). */
+  public static final int BOOKS_PER_LEVEL = 5;
+
+  /** 각인서 시세 예열 전이거나 시세가 없을 때. code·status는 보석과 같은 PRICE_PENDING(새 값 없음, PM-백엔드 10-12 04:08). */
+  public static final SpecUpCost BOOK_PRICE_PENDING =
+      new SpecUpCost(
+          "GOLD", null, "PENDING", "PRICE_PENDING", "각인서 시세를 아직 받지 못했습니다. 잠시 뒤 다시 확인해 주세요.");
+
+  /** 유물 각인 +1 비용 = 5권 × 유물 각인서 1권 즉시 구매 최저가. */
+  public static SpecUpCost engravingBooks(long unitPrice) {
+    return new SpecUpCost(
+        "GOLD",
+        unitPrice * BOOKS_PER_LEVEL,
+        "OK",
+        "ENGRAVING_BOOK_BUY",
+        "유물 각인서 5권(각인 레벨 1당 5권)의 즉시 구매 최저가 합입니다.");
+  }
+
   /** 1만 골드당 전투력(소수 둘째 자리). 비용이 없거나 0 이하면 null. */
   public static BigDecimal efficiency(BigDecimal delta, Long amount) {
     if (delta == null || amount == null || amount <= 0) return null;

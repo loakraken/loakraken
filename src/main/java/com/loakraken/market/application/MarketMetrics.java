@@ -27,7 +27,8 @@ public class MarketMetrics {
     PRICES,
     OPTIONS,
     ITEM_HISTORY,
-    BOARD_SCAN
+    BOARD_SCAN,
+    RELIC_BOOKS
   }
 
   public enum Outcome {

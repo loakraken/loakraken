@@ -7,8 +7,11 @@ import com.loakraken.common.lostark.LostArkProperties;
 import com.loakraken.common.lostark.LostArkRequestGate;
 import com.loakraken.market.application.MarketBoardService;
 import com.loakraken.market.application.MarketQueryService;
+import com.loakraken.market.application.RelicBookPriceService;
+import com.loakraken.market.application.RelicBookScan;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Clock;
+import java.time.Instant;
 import java.util.Locale;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -44,6 +47,17 @@ class MarketHistoryWarmup {
   private final MeterRegistry registry;
   private final LostArkRequestGate gate;
   private final LeaderLease lease;
+  private final RelicBookPriceService relicBooks;
+  private final RelicBookWarmupProperties relicBookProperties;
+  private final java.util.concurrent.atomic.AtomicLong lastRelicBookSuccess =
+      new java.util.concurrent.atomic.AtomicLong();
+  // 각인서 스캔 진행 상태(리더 한 곳에서만 돈다). 분당 상한에 걸리면 다음 틱에 이어서 받는다.
+  private int relicPage = 0;
+  private int relicTotal = 0;
+  private Instant relicObservedAt;
+  private final java.util.List<com.loakraken.market.domain.MarketPrice> relicItems =
+      new java.util.ArrayList<>();
+  private Instant relicDueAt = Instant.EPOCH;
 
   MarketHistoryWarmup(
       MarketQueryService markets,
@@ -53,7 +67,9 @@ class MarketHistoryWarmup {
       LostArkProperties lostArk,
       MeterRegistry registry,
       LostArkRequestGate gate,
-      LeaderLease lease) {
+      LeaderLease lease,
+      RelicBookPriceService relicBooks,
+      RelicBookWarmupProperties relicBookProperties) {
     this.markets = markets;
     this.boards = boards;
     this.clock = clock;
@@ -62,8 +78,11 @@ class MarketHistoryWarmup {
     this.registry = registry;
     this.gate = gate;
     this.lease = lease;
+    this.relicBooks = relicBooks;
+    this.relicBookProperties = relicBookProperties;
     gauge(registry, "warmup_history", lastHistorySuccess);
     gauge(registry, "warmup_board", lastBoardSuccess);
+    gauge(registry, "warmup_relic_books", lastRelicBookSuccess);
   }
 
   /** 마지막 성공 시각(epoch 초) 게이지(#143). 0이면 이 인스턴스에서 아직 성공하지 않았다. */
@@ -157,7 +176,85 @@ class MarketHistoryWarmup {
     }
   }
 
-  /** 예열 전체 분당 공식 호출 상한(#154). 이력·보드 두 주기가 함께 센다. */
+  /**
+   * 유물 각인서 시세(L30): 주기(기본 30분)마다 유물 각인서 전체(2026-10-12 43종, 5페이지)를 받아 캐시(TTL = 주기 × 3)에 둔다. 1분마다
+   * 확인하고, 예열 분당 상한(이력·보드와 함께)에 걸리면 다음 틱에 남은 페이지를 이어 받는다.
+   */
+  @Scheduled(fixedDelayString = "60s", initialDelayString = "${market.warmup.initial-delay:20s}")
+  void warmRelicBooks() {
+    org.slf4j.MDC.put("entryPoint", "warmup");
+    try {
+      warmRelicBookPages();
+    } finally {
+      org.slf4j.MDC.remove("entryPoint");
+    }
+  }
+
+  synchronized void warmRelicBookPages() {
+    if (!relicBookProperties.enabled() || lostArk.apiKey().isBlank()) return;
+    var now = clock.instant();
+    if (relicPage == 0 && now.isBefore(relicDueAt)) return;
+    if (!lease.hold(LEASE, properties.interval().plusMinutes(1))) return;
+    while (true) {
+      int page = relicPage + 1;
+      if (relicPage > 0
+          && (page > relicBookProperties.maxPages() || (page - 1) * 10 >= relicTotal)) {
+        relicBooks.save(
+            new RelicBookScan(relicObservedAt, relicTotal, java.util.List.copyOf(relicItems)),
+            relicBookProperties.cacheTtl());
+        recordRelic(Outcome.REFRESHED);
+        lastRelicBookSuccess.set(now.getEpochSecond());
+        relicDueAt = now.plus(relicBookProperties.interval());
+        resetRelic();
+        return;
+      }
+      if (!allowCall()) {
+        recordRelic(Outcome.CAPPED);
+        return;
+      }
+      try {
+        var result = gate.withReserve(RESERVE, () -> relicBooks.fetchPage(page));
+        relicTotal = result.page().totalCount();
+        relicItems.addAll(result.page().items());
+        if (relicObservedAt == null || result.observedAt().isBefore(relicObservedAt))
+          relicObservedAt = result.observedAt();
+        relicPage = page;
+        if (relicTotal == 0) relicObservedAt = result.observedAt();
+      } catch (BusinessException exception) {
+        recordRelic(Outcome.FAILED);
+        log.warn("각인서 시세 예열에 실패했습니다. page={}, code={}", page, exception.errorCode().code());
+        // 다음 틱에 같은 페이지부터 다시 받는다.
+        return;
+      } catch (RuntimeException exception) {
+        recordRelic(Outcome.FAILED);
+        log.warn(
+            "각인서 시세 예열에 실패했습니다. page={}, exceptionType={}", page, exception.getClass().getName());
+        resetRelic();
+        relicDueAt = now.plus(java.time.Duration.ofMinutes(5));
+        return;
+      }
+    }
+  }
+
+  private void resetRelic() {
+    relicPage = 0;
+    relicTotal = 0;
+    relicObservedAt = null;
+    relicItems.clear();
+  }
+
+  private void recordRelic(Outcome outcome) {
+    registry
+        .counter(
+            "loakraken.market.warmup",
+            "outcome",
+            outcome.name().toLowerCase(Locale.ROOT),
+            "target",
+            "relic_books")
+        .increment();
+  }
+
+  /** 예열 전체 분당 공식 호출 상한(#154). 이력·보드·각인서가 함께 센다. */
   synchronized boolean allowCall() {
     long window = clock.millis() / 60_000;
     if (window != callWindow) {

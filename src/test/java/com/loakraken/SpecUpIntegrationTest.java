@@ -12,6 +12,8 @@ import com.loakraken.character.domain.CharacterProfile;
 import com.loakraken.market.application.AuctionPort.AuctionCell;
 import com.loakraken.market.application.MarketAuctionService;
 import com.loakraken.market.application.MarketAuctionService.GemCell;
+import com.loakraken.market.application.RelicBookScan;
+import com.loakraken.market.domain.MarketPrice;
 import java.math.BigDecimal;
 import java.net.URI;
 import java.net.URLEncoder;
@@ -19,6 +21,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -49,6 +52,7 @@ class SpecUpIntegrationTest {
   @LocalServerPort int port;
   @Autowired JdbcClient jdbc;
   @Autowired StringRedisTemplate redis;
+  @Autowired com.loakraken.market.application.MarketCache marketCache;
   @MockitoBean CharacterDetailsPort detailsPort;
   @MockitoBean MarketAuctionService auctions;
 
@@ -143,6 +147,44 @@ class SpecUpIntegrationTest {
     assertThat(bracelet.path("change").isNull()).isTrue();
     // 공식 호출은 처음 검색 한 번뿐이다.
     verify(detailsPort, times(1)).fetch(anyString());
+  }
+
+  @Test
+  void 유물_각인_한_레벨_비용은_각인서_5권이고_시세가_없으면_PENDING이다() throws Exception {
+    // L30: 비용 = 5권 × 유물 각인서 즉시 구매 최저가(예열 캐시). 원한 3 → 4 = 3000 × 1.24/1.2325 = 3018.26.
+    when(auctions.cachedGems()).thenReturn(gemCells(true));
+    redis.delete("market:v1:relic-books");
+    search("스펙각인");
+    var pending =
+        find(
+            mapper
+                .readTree(get("/api/v1/characters/spec-up?characterName=" + encode("스펙각인")).body())
+                .at("/data/candidates"),
+            "ENGRAVING_LEVEL:원한:4");
+    assertThat(pending.path("status").asText()).isEqualTo("OK");
+    assertThat(pending.path("deltaCombatPower").decimalValue()).isEqualByComparingTo("18.26");
+    assertThat(pending.at("/cost/status").asText()).isEqualTo("PENDING");
+    assertThat(pending.at("/cost/code").asText()).isEqualTo("PRICE_PENDING");
+    assertThat(pending.at("/cost/basis").asText()).contains("각인서 시세");
+
+    marketCache.saveRelicBooks(
+        new RelicBookScan(
+            Instant.now(),
+            1,
+            List.of(
+                new MarketPrice(
+                    1, "유물 원한 각인서", "유물", null, 1, null, null, null, new BigDecimal("12000")))),
+        Duration.ofMinutes(5));
+    var response = get("/api/v1/characters/spec-up?characterName=" + encode("스펙각인"));
+    var engraving =
+        find(mapper.readTree(response.body()).at("/data/candidates"), "ENGRAVING_LEVEL:원한:4");
+    assertThat(engraving.at("/cost/status").asText()).isEqualTo("OK");
+    assertThat(engraving.at("/cost/code").asText()).isEqualTo("ENGRAVING_BOOK_BUY");
+    assertThat(engraving.at("/cost/amount").asLong()).isEqualTo(60_000);
+    // 18.26 × 10000 / 60000 = 3.04
+    assertThat(engraving.path("combatPowerPer10kGold").decimalValue()).isEqualByComparingTo("3.04");
+    assertThat(mapper.readTree(response.body()).at("/data/pricesAt").isNull()).isFalse();
+    redis.delete("market:v1:relic-books");
   }
 
   @Test
@@ -440,7 +482,14 @@ class SpecUpIntegrationTest {
         new CharacterLoadout.Engravings(
             List.of(),
             List.of(),
-            List.of(new CharacterLoadout.PassiveEngraving(1, "유물", 3, "원한", "설명")));
+            List.of(
+                new CharacterLoadout.PassiveEngraving(
+                    1,
+                    "유물",
+                    3,
+                    "원한",
+                    // 원한 L3 S1 = 18 + 0.75 × 3 + 3 = 23.25(공식 설명 형식). 그 밖 캐릭터는 설명이 달라 UNSUPPORTED.
+                    name.contains("각인") ? "적에게 주는 피해가 23.25% 증가한다." : "설명")));
     var gems =
         new CharacterLoadout.Gems(
             List.of(new CharacterLoadout.Gem(0, "8레벨 겁화의 보석", null, 8, "고대")),

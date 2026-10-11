@@ -440,9 +440,9 @@ node docs/verification/combat-power/reproduce.mjs src/test/resources/verificatio
   - 로펙에서는 진화 포인트를 바꿀 수 없어 세 번째 출처가 없다. 진화 포인트 변경은 UNSUPPORTED다.
   - 지금 값만 쓰는 계산에서는 비율에서 상쇄되므로 영향이 없다.
 
-## 2026-10-12 상급 재련 (방어구 출시, 무기 부분)
+## 2026-10-11 상급 재련 (방어구 출시, 무기 부분)
 
-`verification/combat-power/loalab-advanced-refine-2026-10-12.json`.
+`verification/combat-power/loalab-advanced-refine-2026-10-11.json`.
 
 - **구조**: 수치 = round(T(5 × 일반 재련 + 상급) × (1 + 30단계 0.02 + 40단계 0.03))
   - 일반 재련 1단계는 상급 5단계와 같고, 둘은 같은 표 위에 있다.

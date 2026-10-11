@@ -36,6 +36,19 @@ class RefiningPlanIntegrationTest {
     assertThat(json.path("code").asText()).isEqualTo("REFINING_PLAN_SUCCESS");
     assertThat(json.at("/data/ruleVersion").asText()).isEqualTo("t4-refining-v3");
     assertThat(json.at("/data/source/license").asText()).startsWith("MIT");
+    // 책은 생략하면 켬(#279, PM 총괄 10-11 결정), false를 명시하면 끔.
+    var omitted =
+        mapper.readTree(
+            request(
+                    "{\"grade\":\"UPHWA\",\"equipmentType\":\"ARMOR\",\"fromStage\":18,\"toStage\":20}")
+                .body());
+    assertThat(omitted.at("/data/useBook").asBoolean()).isTrue();
+    var off =
+        mapper.readTree(
+            request(
+                    "{\"grade\":\"UPHWA\",\"equipmentType\":\"ARMOR\",\"fromStage\":18,\"toStage\":20,\"useBook\":false}")
+                .body());
+    assertThat(off.at("/data/useBook").asBoolean()).isFalse();
     // 성장 비용은 생략하면 끔(PM-백엔드 10-10 09:10), 영지 연구는 생략하면 켬.
     assertThat(json.at("/data/growthCost").asBoolean()).isFalse();
     assertThat(json.at("/data/expResearch").asBoolean()).isTrue();

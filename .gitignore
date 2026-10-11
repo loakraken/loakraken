@@ -40,3 +40,6 @@ out/
 .env
 .env.local
 .env.*.local
+# 통계 시드 이름 목록은 커밋하지 않는다(#260·#282 사고 재발 방지)
+seed/
+*names.txt

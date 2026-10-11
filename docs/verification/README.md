@@ -14,6 +14,7 @@
 | 스펙업 비용 근거 | [spec-up-cost.md](spec-up-cost.md) | `verification/spec-up/` | 각인서 레벨당 5권 확정(공식 가이드 + 목표 사이트 비용 구조), 스톤 보너스(합 ≥ 5 → 1.5%) 공식 문구 확인. 무기 품질 업그레이드 비용은 공식 확률 미공개로 UNSUPPORTED |
 | 로아샵 효율 | [loa-shop.md](loa-shop.md) | `verification/loa-shop/` | 구성품 골드 환산·공식 크리스탈 경로 이득 식 확정(목표 사이트 화면 값 원 단위 재현, 2026-10-12). 시세 없는 상자는 공식 확률 × 시세 |
 | 장신구 기본 스탯 범위 % | [accessory-stat-range.md](accessory-stat-range.md) | `verification/accessory/` | 공식 아이템 사전 연마 단계별 범위로 식 확정, 언새늘 5개 목표 사이트와 소수 둘째 자리까지 일치(L11, 2026-10-12) |
+| 지옥 보상 효율 | [hell-reward.md](hell-reward.md) | `verification/hell-reward/` | 낙원 시즌 4 공식 규칙·강하 횟수·보상표 88칸 확정(인벤 + 사이트 20칸 일치, L42, 2026-10-12). 층→단계·특수 효과 미확정 |
 
 ## 규칙
 

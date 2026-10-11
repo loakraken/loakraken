@@ -337,6 +337,69 @@ public class StatsQueryService {
         });
   }
 
+  /**
+   * 수집품 항목별 보유율(#305, 볼트 「수집품 순위·보유율 설계 메모」 2절). 조건 중 server·activeDays만 쓴다. 분모 N은 관측 원정대 수이고, 30
+   * 미만이면 sampleStatus=COLLECTING이지만 비율은 그대로 준다(참고값). N이 0이면 비율은 null.
+   *
+   * <p>전체 종류 결과 하나를 조건별로 캐시하고, type은 그 결과에서 고른다(type마다 다시 집계하지 않음). 기본 조건은 예열 작업이 캐시가 끝나기 전에 다시
+   * 채운다(원정대 1만 개에서 전체 집계 약 0.4초, PM-백엔드 300ms 조건).
+   */
+  public CollectibleOwnershipResult collectibleOwnership(StatsConditions conditions, String type) {
+    var full =
+        cached(
+            ownershipKey(conditions),
+            CollectibleOwnershipResult.class,
+            () -> computeOwnership(conditions));
+    if (type == null) return full;
+    return new CollectibleOwnershipResult(
+        full.meta(), type, full.items().stream().filter(item -> type.equals(item.type())).toList());
+  }
+
+  /** 보유율 예열(#305): 조건의 전체 종류 결과를 다시 집계해 캐시를 덮어쓴다. */
+  public void refreshCollectibleOwnership(StatsConditions conditions) {
+    var key = ownershipKey(conditions);
+    cache.save(key, guard(() -> computeOwnership(conditions)));
+  }
+
+  /** 보유율을 예열할 서버 목록(수집품 항목을 관측한 원정대의 서버). */
+  public List<String> collectibleOwnershipServers() {
+    return guard(stats::collectibleServers);
+  }
+
+  private static String ownershipKey(StatsConditions conditions) {
+    return "ownership:" + key(conditions);
+  }
+
+  private CollectibleOwnershipResult computeOwnership(StatsConditions conditions) {
+    var now = clock.instant();
+    var result = stats.collectibleOwnership(conditions.server(), conditions.since(now), null);
+    long population = result.population();
+    return new CollectibleOwnershipResult(
+        meta(conditions, population, now),
+        null,
+        result.items().stream()
+            .map(
+                item ->
+                    new OwnedItem(
+                        item.type(),
+                        item.name(),
+                        item.sortOrder(),
+                        item.maxPoint(),
+                        item.owned(),
+                        item.completed(),
+                        percent(item.owned(), population),
+                        percent(item.completed(), population)))
+            .toList());
+  }
+
+  private static BigDecimal percent(long part, long whole) {
+    return whole <= 0
+        ? null
+        : BigDecimal.valueOf(part)
+            .multiply(HUNDRED)
+            .divide(BigDecimal.valueOf(whole), 2, RoundingMode.HALF_UP);
+  }
+
   public RankingResult ranking(StatsConditions conditions, Metric metric, int page, int size) {
     int offset = (page - 1) * size;
     if (offset > MAX_RANKING_OFFSET)
@@ -683,6 +746,19 @@ public class StatsQueryService {
       BigDecimal itemLevelSum,
       BigDecimal combatPowerAvg,
       long combatPowerCount) {}
+
+  /** 수집품 항목별 보유율 결과(#305). type이 null이면 전체 종류. */
+  public record CollectibleOwnershipResult(Meta meta, String type, List<OwnedItem> items) {}
+
+  public record OwnedItem(
+      String type,
+      String name,
+      int sortOrder,
+      int maxPoint,
+      long ownedRosters,
+      long completedRosters,
+      BigDecimal ownedPercent,
+      BigDecimal completedPercent) {}
 
   public record RankingResult(
       Meta meta, Metric metric, int page, int size, List<RankedCharacter> rows) {}

@@ -84,6 +84,20 @@
   - 공식 호출은 늘지 않는다(armory가 이미 collectibles를 받는다).
 - 계약 표본: `build/generated/rankings-collectibles.json`(정상, READY), `rankings-collectibles-empty.json`(빈 결과), `rankings-collectibles-collecting.json`(30 미만), `rankings-collectibles-tie.json`(동률).
 
+## 수집품 항목별 보유율 (#305)
+
+`GET /api/v1/collectibles/ownership?server=&activeDays=&type=` — 수집품 랭킹 플래그(`RANKING_COLLECTIBLES_ENABLED`)로 함께 켠다. 설계는 볼트 「수집품 순위·보유율 설계 메모」 2절이다.
+
+- 분모 N(`meta.population`): `activeDays` 안에 항목을 관측했고 공개 캐릭터(서버를 주면 그 서버)가 있는 원정대 수.
+- 항목마다 `ownedRosters`(Point > 0)·`completedRosters`(Point ≥ 만점)와 비율(소수 둘째 자리, N = 0이면 null). 0/1 항목은 둘이 같고, 모코코 씨앗(지역별 개수)은 다르다.
+- 항목 키는 (type, name)이다(공식 문자열). `type`을 주면 그 종류만, 없으면 전체 종류(공식 순서)다. 아무도 안 가진 항목도 0으로 나온다.
+- 30 미만이면 `sampleStatus=COLLECTING`이지만 비율은 그대로 준다.
+- 저장(V16): `collectible_item`(항목 사전, 모르는 항목만 추가, 순서·만점 갱신)과 `roster_collectible_item`(원정대 한 행에 가진 항목의 (item_id, point) 배열, 약 1KB). armory를 받을 때 수집품 기록과 같은 작업자가 쓴다. 공식 호출은 늘지 않는다.
+- 성능(로컬 측정, 원정대 1만 × 평균 272항목): 캐시 미스 전체 약 400ms, 서버 하나 약 80ms. 300ms 목표를 넘어서 다음 두 가지를 둔다.
+  - 전체 종류 결과 하나를 조건별로 캐시하고, `type`은 그 결과에서 고른다.
+  - 예열(`ranking.collectibles.warmup-enabled`, 운영 기본 켬): 9분마다 기본 기간 × (전체 + 서버별)을 다시 집계해 캐시(10분)를 덮어쓴다. 인스턴스 하나만 돈다(Valkey 임대). 지표: `loakraken.stats.warmup{job=collectible_ownership}`, `loakraken.background.last_success`.
+- 계약 표본: `build/generated/collectibles-ownership.json`(정상), `-empty`, `-collecting`, `-duplicate-name`(다른 종류의 같은 이름).
+
 ## 원정대 랭킹 (#297)
 
 `GET /api/v1/rankings/rosters?server=&activeDays=&basis=&aggregate=&page=&size=` — 기본 꺼짐(`ranking.rosters.enabled`, `RANKING_ROSTERS_ENABLED`). 설계는 볼트 「랭킹 확장 설계 초안」 v1 2절이다.

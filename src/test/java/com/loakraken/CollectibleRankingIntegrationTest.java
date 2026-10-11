@@ -55,7 +55,7 @@ class CollectibleRankingIntegrationTest {
         .param("t", TIE_SERVER)
         .update();
     jdbc.sql("DELETE FROM public_exclusion WHERE character_name LIKE '수집%'").update();
-    var keys = redis.keys("stats:*collectibles*");
+    var keys = redis.keys("stats:v1:*");
     if (keys != null && !keys.isEmpty()) redis.delete(keys);
   }
 

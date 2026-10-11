@@ -4,12 +4,12 @@
 
 | 모델 | 문서 | 표본·기대값 | 상태 |
 |---|---|---|---|
-| 전투력 | [combat-power.md](combat-power.md) | `verification/combat-power/` | 절대값 모델 미검증(표본 밖 RMS 딜러 4.67%·1740+ 3.89%, 기준 2%). **보석 변화량은 로아랩과 일치**(5명 30건 ±0.01, 2026-10-10). **재련 모델 확정**(B 역산, 로아랩 10건 ±0.0013, 2026-10-11) |
+| 전투력 | [combat-power.md](combat-power.md) | `verification/combat-power/` | 절대값 모델 미검증(표본 밖 RMS 딜러 4.67%·1740+ 3.89%, 기준 2%). **보석 변화량은 목표 사이트 A와 일치**(5명 30건 ±0.01, 2026-10-10). **재련 모델 확정**(B 역산, 목표 사이트 A 10건 ±0.0013, 2026-10-11) |
 | 치명타·공이속 | [crit-speed.md](crit-speed.md) | `verification/crit-speed/` | 치적 일치(언새늘 77.21%), 치명타 피해 6명 일치(v3). 갈증 리퍼 치적 규칙 차이(피냄새) 열림 |
 | 아크 그리드 젬 가공 | [arkgrid-gem.md](arkgrid-gem.md) | `verification/arkgrid-gem/` | 성공 확률 재현(로아또 7/7, 반올림 범위). 기대 비용은 근사(−9.8~+0.3%), 미검증 |
-| 재련 기대 시도 수 | [refining.md](refining.md) | `verification/refining/` | 로펙 최적 루트 3사례 일치(기대 시도 차 0.0043 이내, 최대 시도 같음). 골드 비용은 대상 아님 |
-| 돌파고(어빌리티 스톤 세공) | [ability-stone.md](ability-stone.md) | `verification/ability-stone/` | 확률 규칙 일치(공식 결과표 4개 최대 0.00093%p, 일로아 2사례) |
-| 경매 입찰가 | [auction.md](auction.md) | `verification/auction/` | 일로아·로아랩 교차 일치(선점 반올림 1G 차). 수수료 5%·10% 재입찰은 공식 문구 미확인(추정) |
+| 재련 기대 시도 수 | [refining.md](refining.md) | `verification/refining/` | 목표 사이트 B 최적 루트 3사례 일치(기대 시도 차 0.0043 이내, 최대 시도 같음). 골드 비용은 대상 아님 |
+| 돌파고(어빌리티 스톤 세공) | [ability-stone.md](ability-stone.md) | `verification/ability-stone/` | 확률 규칙 일치(공식 결과표 4개 최대 0.00093%p, 목표 사이트 C 2사례) |
+| 경매 입찰가 | [auction.md](auction.md) | `verification/auction/` | 목표 사이트 C·목표 사이트 A 교차 일치(선점 반올림 1G 차). 수수료 5%·10% 재입찰은 공식 문구 미확인(추정) |
 | 스킬 쿨타임(보석 반영) | [skill-cooldown.md](skill-cooldown.md) | `verification/skill/` | 공식 원문 쿨타임 × (1 − 보석 쿨감) 확정(5명 51개 스킬, 2026-10-12). 아이덴티티·노드·신속 감소와 1타 피해는 제외 |
 | 스펙업 비용 근거 | [spec-up-cost.md](spec-up-cost.md) | `verification/spec-up/` | 각인서 레벨당 5권 확정(공식 가이드 + 목표 사이트 비용 구조), 스톤 보너스(합 ≥ 5 → 1.5%) 공식 문구 확인. 무기 품질 업그레이드 비용은 공식 확률 미공개로 UNSUPPORTED |
 | 로아샵 효율 | [loa-shop.md](loa-shop.md) | `verification/loa-shop/` | 구성품 골드 환산·공식 크리스탈 경로 이득 식 확정(목표 사이트 화면 값 원 단위 재현, 2026-10-12). 시세 없는 상자는 공식 확률 × 시세 |

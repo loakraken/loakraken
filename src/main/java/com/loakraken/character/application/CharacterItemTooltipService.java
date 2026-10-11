@@ -28,8 +28,9 @@ public class CharacterItemTooltipService {
 
   public record SlotLines(Integer slot, List<String> extraLines) {}
 
-  /** name은 검색 응답 loadout.skills[].name이다. */
-  public record SkillLines(String name, List<String> runeExtraLines) {}
+  /** name은 검색 응답 loadout.skills[].name이다. titleLines·infoLines는 공식 스킬 Tooltip 원문 줄(#299). */
+  public record SkillLines(
+      String name, List<String> runeExtraLines, List<String> titleLines, List<String> infoLines) {}
 
   /** index는 검색 응답 loadout.arkGrid.slots[].index, gems[].index는 그 코어의 gems[].index(#288). */
   public record GridLines(
@@ -110,9 +111,13 @@ public class CharacterItemTooltipService {
           cards.add(new SlotLines(card.slot(), card.extraLines()));
     var skills = new ArrayList<SkillLines>();
     if (loadout.skills() != null)
-      for (var skill : loadout.skills())
-        if (skill != null && skill.rune() != null && !skill.rune().extraLines().isEmpty())
-          skills.add(new SkillLines(skill.name(), skill.rune().extraLines()));
+      for (var skill : loadout.skills()) {
+        if (skill == null) continue;
+        var runeLines = skill.rune() == null ? List.<String>of() : skill.rune().extraLines();
+        if (runeLines.isEmpty() && skill.titleLines().isEmpty() && skill.infoLines().isEmpty())
+          continue;
+        skills.add(new SkillLines(skill.name(), runeLines, skill.titleLines(), skill.infoLines()));
+      }
     var arkGrid = new ArrayList<GridLines>();
     if (loadout.arkGrid() != null)
       for (var slot : loadout.arkGrid().slots()) {

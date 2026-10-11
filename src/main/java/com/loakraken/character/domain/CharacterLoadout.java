@@ -73,10 +73,46 @@ public record CharacterLoadout(
       Rune rune,
       List<SkillGemEffect> gemEffects,
       AttackType attackType,
-      String category) {
+      String category,
+      List<String> titleLines,
+      List<String> infoLines) {
+    /**
+     * titleLines: 공식 Tooltip 제목 줄(스킬 종류·재사용 대기시간·분류, #299). infoLines: 현재 레벨 정보 줄(PvE·스킬 레벨·마나·부위
+     * 파괴·무력화·공격 타입·슈퍼아머 등 원문 순서). 이전 캐시면 빈 목록.
+     */
     public Skill {
       tripods = tripods == null ? List.of() : List.copyOf(tripods);
       gemEffects = gemEffects == null ? List.of() : List.copyOf(gemEffects);
+      titleLines = titleLines == null ? List.of() : List.copyOf(titleLines);
+      infoLines = infoLines == null ? List.of() : List.copyOf(infoLines);
+    }
+
+    public Skill(
+        String name,
+        String icon,
+        Integer level,
+        String type,
+        Integer partBreakLevel,
+        Boolean counter,
+        List<Tripod> tripods,
+        Rune rune,
+        List<SkillGemEffect> gemEffects,
+        AttackType attackType,
+        String category) {
+      this(
+          name,
+          icon,
+          level,
+          type,
+          partBreakLevel,
+          counter,
+          tripods,
+          rune,
+          gemEffects,
+          attackType,
+          category,
+          List.of(),
+          List.of());
     }
 
     public Skill(

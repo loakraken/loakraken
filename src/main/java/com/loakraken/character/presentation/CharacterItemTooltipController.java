@@ -93,7 +93,10 @@ public class CharacterItemTooltipController {
               .map(item -> new SlotLinesResponse(item.slot(), item.extraLines()))
               .toList(),
           value.skills().stream()
-              .map(item -> new SkillLinesResponse(item.name(), item.runeExtraLines()))
+              .map(
+                  item ->
+                      new SkillLinesResponse(
+                          item.name(), item.runeExtraLines(), item.titleLines(), item.infoLines()))
               .toList(),
           value.arkGrid().stream()
               .map(
@@ -166,5 +169,15 @@ public class CharacterItemTooltipController {
       @Schema(
               description = "룬 Tooltip 나머지 줄(설명·획득처)",
               example = "[\"스킬에 강력한 힘을 부여할 수 있는 특별한 룬이다.\"]")
-          List<String> runeExtraLines) {}
+          List<String> runeExtraLines,
+      @Schema(
+              description = "공식 Tooltip 제목 줄(아이콘 옆, 원문 순서: 스킬 종류·재사용 대기시간·분류). 이전 캐시면 빈 목록",
+              example = "[\"일반\", \"재사용 대기시간 5초\", \"[일반 스킬]\"]")
+          List<String> titleLines,
+      @Schema(
+              description =
+                  "공식 Tooltip 현재 레벨 정보 줄(원문 순서: PvE·스킬 레벨·마나 소모·부위 파괴·무력화·공격 타입·슈퍼아머 등). 다음 레벨 정보·트라이포드·룬·보석 효과는 빼고, 이전 캐시면 빈 목록",
+              example =
+                  "[\"PvE\", \"스킬 레벨 10\", \"마나 349 소모\", \"공격 타입 : 백 어택\", \"슈퍼아머 : 경직 면역\"]")
+          List<String> infoLines) {}
 }

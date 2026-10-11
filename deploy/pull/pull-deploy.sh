@@ -131,6 +131,25 @@ swap_in() {
 }
 swap_in .bundle.new
 
+# (운영) 번들의 systemd 유닛이 서버에 설치된 것과 다르면 바꿔 넣고 다시 읽는다. 이미 설치된 유닛만 바꾸고 새로 설치하지는 않는다.
+# 유닛 이름은 운영·스테이징이 같이 쓰므로, develop 번들(스테이징)이 운영 유닛을 덮어쓰지 않게 운영 채널에서만 한다.
+sync_units() {
+  [[ "$CHANNEL" == production ]] || return 0
+  local unit_dir="${SYSTEMD_UNIT_DIR:-/etc/systemd/system}" src name changed=()
+  for src in pull/*.service pull/*.timer monitor/*.service monitor/*.timer backup/*.service backup/*.timer; do
+    [[ -f "$src" ]] || continue
+    name="$(basename "$src")"
+    [[ -f "$unit_dir/$name" ]] || continue
+    cmp -s "$src" "$unit_dir/$name" && continue
+    install -m 0644 "$src" "$unit_dir/$name"
+    changed+=("$name")
+  done
+  if ((${#changed[@]})); then
+    systemctl daemon-reload
+    notify "systemd 유닛 갱신: ${changed[*]}"
+  fi
+}
+
 env_files=(--env-file stack.env)
 compose() { docker compose -f compose.prod.yaml "${env_files[@]}" --env-file images.env "$@"; }
 
@@ -153,6 +172,7 @@ if compose up -d --wait --wait-timeout 300 --remove-orphans; then
   rm -f .failed .pending
   printf '%s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$want" >> deploy-history.log
   notify "배포 완료: api=${api_digest##*@sha256:} web=${web_digest##*@sha256:}"
+  sync_units || log "systemd 유닛 갱신 실패(배포는 끝남). 수동: docs/ops/deploy.md pull 배포 설치"
   exit 0
 fi
 

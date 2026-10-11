@@ -91,6 +91,9 @@ class CombatPowerEquipmentModelTest {
     assertThat(matches(0, null, "돌격대장", "이동속도 증가량의 40.00% 만큼 적에게 주는 피해량이 증가한다.")).isTrue();
     // 설명값이 표와 다르면(예: 패치로 값이 바뀜) 계산하지 않는다.
     assertThat(matches(0, 2, "원한", "보스 및 레이드 몬스터에게 주는 피해가 22.00% 증가")).isFalse();
+    // 효과 수치(첫째 % 값)가 표와 다르면, 뒤의 다른 수치가 우연히 같아도 통과하지 않는다(#290). 저주받은 인형 L0 S4 = 20.00.
+    assertThat(matches(0, 4, "저주받은 인형", "공격력이 25.00% 증가하지만, 받는 피해가 20.00% 증가한다.")).isFalse();
+    assertThat(matches(0, 4, "저주받은 인형", "공격력이 20.00% 증가하지만, 받는 피해가 20.00% 증가한다.")).isTrue();
     // 유물이 아니면 표가 없다.
     assertThat(
             CombatPowerEquipmentModel.matchesOfficial(
@@ -100,12 +103,42 @@ class CombatPowerEquipmentModelTest {
   }
 
   @Test
+  void 각인_6종의_공식_설명_원문에서_효과_수치_위치를_맞게_읽는다() {
+    // 계산 검증 2026-10-11 10:38 실호출 원문(태그 제거). 질량 증가만 v가 둘째 % 값이다(#290).
+    var hit = "공격 타입이 백 어택 및 헤드 어택에 해당되지 않는 공격의 피해가 %s%% 증가한다. 각성기는 해당 효과가 적용되지 않는다.";
+    assertThat(matches(0, null, "타격의 대가", hit.formatted("14.00"))).isTrue();
+    assertThat(matches(4, null, "타격의 대가", hit.formatted("17.00"))).isTrue();
+    assertThat(matches(4, 2, "타격의 대가", hit.formatted("20.75"))).isTrue();
+    var mass = "공격속도가 10.00%% 감소하지만, 적에게 주는 피해가 %s%% 증가한다.";
+    assertThat(matches(4, null, "질량 증가", mass.formatted("19.00"))).isTrue();
+    assertThat(matches(4, 2, "질량 증가", mass.formatted("22.75"))).isTrue();
+    assertThat(matches(4, 2, "질량 증가", mass.formatted("22.00"))).isFalse();
+    assertThat(matches(0, 2, "원한", "보스 및 레이드 몬스터에게 주는 피해가 21.75% 증가하지만, 받는 피해가 20.00% 증가한다."))
+        .isTrue();
+    assertThat(matches(4, 3, "저주받은 인형", "적에게 주는 피해가 22.25% 증가하지만, 받는 모든 회복 효과가 25.00% 감소한다."))
+        .isTrue();
+    assertThat(matches(4, 3, "돌격대장", "이동속도 증가량의 61.20% 만큼 적에게 주는 피해량이 증가한다.")).isTrue();
+    assertThat(
+            matches(
+                4,
+                4,
+                "아드레날린",
+                "이동기 및 기본공격을 제외한 스킬 사용 후 6초 동안 공격력이 1.85% 증가하며 (최대 6중첩) 해당 효과가 최대 중첩 도달 시 치명타 적중률이 추가로 20.00% 증가한다. 해당 효과는 스킬 취소에 따른 재사용 대기시간 감소가 적용되는 경우, 스킬 종료 후 적용된다."))
+        .isTrue();
+  }
+
+  @Test
   void 확인하지_않은_조합은_배수를_주지_않는다() {
     // 돌격대장 스톤 1·예리한 둔기·표에 없는 품질은 계산하지 않는다.
     assertThat(CombatPowerEquipmentModel.engravingFactor(COEFFICIENTS, "돌격대장", 4, 1)).isNull();
     assertThat(CombatPowerEquipmentModel.engravingFactor(COEFFICIENTS, "예리한 둔기", 4, 3)).isNull();
     assertThat(CombatPowerEquipmentModel.supportsEngraving(COEFFICIENTS, "예리한 둔기")).isFalse();
-    assertThat(CombatPowerEquipmentModel.weaponAddDamage(COEFFICIENTS, 95)).isNull();
+    assertThat(CombatPowerEquipmentModel.weaponAddDamage(COEFFICIENTS, 73)).isNull();
+    // 공식 무기 툴팁 실측 표(#290): 95 = 28.06, 70 = 19.81.
+    assertThat(CombatPowerEquipmentModel.weaponAddDamage(COEFFICIENTS, 95))
+        .isEqualByComparingTo("28.06");
+    assertThat(CombatPowerEquipmentModel.weaponAddDamage(COEFFICIENTS, 70))
+        .isEqualByComparingTo("19.81");
     // 스톤 합 5~7 안에서만 [레벨 보너스]가 그대로다.
     assertThat(CombatPowerEquipmentModel.stoneBonusStable(COEFFICIENTS, 5, 7)).isTrue();
     assertThat(CombatPowerEquipmentModel.stoneBonusStable(COEFFICIENTS, 5, 4)).isFalse();

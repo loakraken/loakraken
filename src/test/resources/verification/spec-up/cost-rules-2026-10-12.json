@@ -1,0 +1,79 @@
+{
+ "checkedAt": "2026-10-12",
+ "status": "CONFIRMED_EXCEPT_NOTED",
+ "engravingBooks": {
+  "status": "CONFIRMED",
+  "booksPerLevel": 5,
+  "relicTotal": 20,
+  "expr": "비용 = 5 × (목표 레벨 − 현재 레벨) × 유물 각인서 즉시 구매 최저가",
+  "sources": [
+   {
+    "kind": "OFFICIAL_DISPLAY",
+    "url": "https://lostark.game.onstove.com/GameGuide/Pages/각인",
+    "quote": "단계별 각인서를 5개씩 습득할 때마다 각인 단계 효과가 1단계 상승"
+   },
+   {
+    "kind": "TARGET_SITE",
+    "note": "스펙업 표 X0→X1 23.94만 · X0→X4 95.77만 = 5권 : 20권(같은 단가)"
+   }
+  ],
+  "cases": [
+   {
+    "from": 0,
+    "to": 1,
+    "books": 5
+   },
+   {
+    "from": 0,
+    "to": 4,
+    "books": 20
+   },
+   {
+    "from": 2,
+    "to": 3,
+    "books": 5
+   },
+   {
+    "from": 1,
+    "to": 4,
+    "books": 15
+   }
+  ]
+ },
+ "weaponQualityUpgrade": {
+  "status": "UNSUPPORTED",
+  "reason": "공식 가이드는 혼돈의 돌 + 골드·확률 성공까지만, 공식 확률 공개 페이지에 품질 항목 없음(2026-10-12). 확률·골드는 커뮤니티 한 곳뿐",
+  "code": "QUALITY_COST_UNCONFIRMED"
+ },
+ "abilityStoneLevelBonus": {
+  "status": "CONFIRMED",
+  "rule": "증가 각인 2개의 세공 레벨 합 ≥ 5 → 기본 공격력 +1.5%, 그 밖 0",
+  "source": {
+   "kind": "OFFICIAL_DISPLAY",
+   "url": "https://lostark.game.onstove.com/GameGuide/Pages/각인",
+   "quote": "2개의 증가 효과 각인(전투 각인)의 세공 레벨 합이 5 이상이라면 기본 공격력 1.5% 증가 효과가 적용"
+  },
+  "cases": [
+   {
+    "sum": 4,
+    "bonus": 0
+   },
+   {
+    "sum": 5,
+    "bonus": 1.5
+   },
+   {
+    "sum": 7,
+    "bonus": 1.5
+   },
+   {
+    "sum": 8,
+    "bonus": 1.5
+   },
+   {
+    "sum": 10,
+    "bonus": 1.5
+   }
+  ]
+ }
+}

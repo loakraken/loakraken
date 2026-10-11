@@ -69,7 +69,7 @@ class CombatPowerRefineModelTest {
         CombatPowerRefineModel.of(coefficients, inzai, stats("267396"), new BigDecimal("17.7"));
     assertThat(after("11028.4", model, Map.of(1, 24))).isEqualByComparingTo("11007.13");
     assertThat(after("11028.4", model, Map.of(1, 19))).isEqualByComparingTo("10907.74");
-    assertThat(model.cannotSet(0, 11)).contains("전율 장비만");
+    assertThat(model.cannotSet(0, 11)).contains("전율·업화 장비만");
     // 만배: W 고정 285,374(장신구 960 × 3).
     var manbae =
         loadout(
@@ -100,6 +100,100 @@ class CombatPowerRefineModelTest {
     var model =
         CombatPowerRefineModel.of(coefficients, loadout, stats("188163"), new BigDecimal("7.45"));
     assertThat(model.cannotSet(1, 26)).contains("11~25단계");
+  }
+
+  @Test
+  void 업화_투구_단계표는_표본_칸과_맞고_무기는_확인된_칸만_있다() {
+    // #333 표본(loalab-advanced-refine-2026-10-11.json) 투구 8칸: 7칸 정확, 1칸 ±1 스탯(사이 칸 보간).
+    var helmet =
+        Map.of(
+            "11/2", 59632, "12/3", 61379, "15/3", 66175, "17/4", 70020, "20/1", 74560, "21/2",
+            76974, "22/32", 95094, "24/38", 104110);
+    int exact = 0;
+    for (var entry : helmet.entrySet()) {
+      var cell = entry.getKey().split("/");
+      var value =
+          CombatPowerRefineModel.stat(
+              coefficients,
+              "투구",
+              CombatPowerRefineModel.Family.UPGRADE,
+              Integer.parseInt(cell[0]),
+              Integer.parseInt(cell[1]));
+      var diff = value.subtract(BigDecimal.valueOf(entry.getValue())).abs();
+      assertThat(diff).as(entry.getKey()).isLessThanOrEqualTo(BigDecimal.ONE);
+      if (diff.signum() == 0) exact++;
+    }
+    assertThat(exact).isGreaterThanOrEqualTo(7);
+    // 무기 +17·상급 40 = T(125) 147,000 × 1.05 = 154,350, +11·상급 0 = 102,384(공식 관측).
+    assertThat(stat("무기", CombatPowerRefineModel.Family.UPGRADE, 17, 40))
+        .isEqualByComparingTo("154350");
+    assertThat(stat("무기", CombatPowerRefineModel.Family.UPGRADE, 11, 0))
+        .isEqualByComparingTo("102384");
+    // 확인하지 않은 무기 칸(+11·상급 1)은 계산하지 않는다(PM 총괄 판정 (b)).
+    assertThat(stat("무기", CombatPowerRefineModel.Family.UPGRADE, 11, 1)).isNull();
+    // 전율은 상급 재련 수치가 없다.
+    assertThat(stat("투구", CombatPowerRefineModel.Family.JEONYUL, 19, 1)).isNull();
+  }
+
+  @Test
+  void 업화_방어구는_일반과_상급_재련을_계산하고_전율_상급은_계산하지_않는다() {
+    var loadout =
+        loadout(19, 19, "운명의 전율 검", "208130", "2030", "14817", List.of("+1.80%", "+0.80%"), 29);
+    var equipment = new ArrayList<>(loadout.equipment());
+    // 투구를 업화 +22·상급 32로 바꾼다.
+    equipment.set(
+        1,
+        new CharacterLoadout.Equipment(
+            "투구",
+            "+22 운명의 업화 모자",
+            null,
+            "고대",
+            new CharacterLoadout.EquipmentDetail(
+                22,
+                null,
+                null,
+                4,
+                null,
+                List.of(new CharacterLoadout.EffectGroup("기본 효과", List.of("힘 +100"))),
+                List.of(),
+                List.of(),
+                List.of(),
+                null,
+                List.of(),
+                null,
+                List.of(),
+                32)));
+    var upgraded =
+        new CharacterLoadout(
+            equipment,
+            null,
+            null,
+            null,
+            loadout.arkPassive(),
+            null,
+            List.of(),
+            loadout.avatars(),
+            List.of());
+    var model =
+        CombatPowerRefineModel.of(coefficients, upgraded, stats("188163"), new BigDecimal("7.45"));
+    assertThat(model.cannotSetAdvanced(1, 38)).isNull();
+    assertThat(model.cannotSet(1, 24)).isNull();
+    var up =
+        model.ratioTargets(
+            Map.of(1, new CombatPowerRefineModel.Target(22, 38)), BigDecimal.ZERO, BigDecimal.ZERO);
+    assertThat(up).isGreaterThan(BigDecimal.ONE);
+    // 상급 32 → 38 수치 차이(95,094 → 상급 38)를 S 항에 그대로 쓴다.
+    var same =
+        model.ratioTargets(
+            Map.of(1, new CombatPowerRefineModel.Target(22, 32)), BigDecimal.ZERO, BigDecimal.ZERO);
+    assertThat(same).isEqualByComparingTo("1");
+    // 전율 상의(순번 2)의 상급 재련은 계산하지 않는다.
+    assertThat(model.cannotSetAdvanced(2, 10)).contains("전율 장비의 상급 재련");
+  }
+
+  private static BigDecimal stat(
+      String type, CombatPowerRefineModel.Family family, int level, int advanced) {
+    return CombatPowerRefineModel.stat(coefficients, type, family, level, advanced);
   }
 
   private static BigDecimal after(

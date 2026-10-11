@@ -83,6 +83,18 @@ public final class CombatPowerGemModel {
       return product.multiply(BigDecimal.ONE.add(baseAttack.divide(HUNDRED)), MATH);
     }
 
+    /** 지금 세팅의 기본 공격력 %(보석 + 스톤 레벨 보너스 + 팔 보호구, 백분율). 계산할 수 없으면 null(재련 모델 #319가 같은 값을 쓴다). */
+    public BigDecimal currentBaseAttackPct() {
+      if (unsupportedReason != null) return null;
+      var total = otherBaseAttackPct;
+      for (var slot : slots.values()) {
+        var level = slot.tier().level(slot.level());
+        if (level == null || level.baseAttackPct() == null) return null;
+        total = total.add(level.baseAttackPct());
+      }
+      return total;
+    }
+
     /** 칸 slot을 level로 바꿀 수 있는지. 안 되면 이유 문장, 되면 null. */
     public String cannotSet(int slot, int level) {
       if (unsupportedReason != null) return unsupportedReason;

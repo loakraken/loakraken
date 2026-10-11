@@ -4,6 +4,7 @@ import com.loakraken.character.domain.CharacterLoadout;
 import com.loakraken.character.domain.CombatPowerEquipmentModel;
 import com.loakraken.character.domain.CombatPowerGemModel;
 import com.loakraken.character.domain.CombatPowerPolishValues;
+import com.loakraken.character.domain.CombatPowerRefineModel;
 import com.loakraken.common.api.BusinessException;
 import com.loakraken.common.api.ErrorCode;
 import java.math.BigDecimal;
@@ -33,7 +34,7 @@ import org.springframework.stereotype.Service;
  */
 @Service
 public class CombatPowerSimulationService {
-  public static final String RULE_VERSION = "combat-power-sim-v3";
+  public static final String RULE_VERSION = "combat-power-sim-v4";
   private static final MathContext MATH = MathContext.DECIMAL64;
   private static final String GEM_BASIS =
       "보석 레벨별 배수와 기본 공격력 %(보석·스톤 레벨 보너스·완갑 추가 효과, 공식 툴팁)로 바뀐 비율을 공식 전투력에 곱했습니다.";
@@ -46,6 +47,9 @@ public class CombatPowerSimulationService {
   private static final Set<String> GRADES = Set.of("LOW", "MID", "HIGH");
   private static final List<String> CORE_GRADES = List.of("영웅", "전설", "유물", "고대");
   private static final Set<String> WEAPON_ARMOR = Set.of("무기", "투구", "상의", "하의", "장갑", "어깨");
+  private static final String REFINE_BASIS =
+      "재련 단계의 주스탯·무기 공격력 변화로 기본 공격력을 다시 계산한 비율을 공식 전투력에 곱했습니다(펫 효과(힘민지 +1%)는 있다고 가정).";
+  private static final String ADVANCED_REFINE_BASIS = "상급 재련 단계의 전투력 계산식을 아직 확인하지 않아 계산하지 않았습니다.";
   private static final String UNSUPPORTED_BASIS = "이 항목의 전투력 계산식을 아직 확인하고 있어 계산하지 않았습니다.";
 
   private final CharacterCache cache;
@@ -53,18 +57,21 @@ public class CombatPowerSimulationService {
   private final CombatPowerGemModel.Coefficients gemCoefficients;
   private final CombatPowerEquipmentModel.Coefficients equipmentCoefficients;
   private final CombatPowerPolishValues polishValues;
+  private final CombatPowerRefineModel.Coefficients refineCoefficients;
 
   public CombatPowerSimulationService(
       CharacterCache cache,
       CharacterPublicSummaryPort stored,
       CombatPowerGemModel.Coefficients gemCoefficients,
       CombatPowerEquipmentModel.Coefficients equipmentCoefficients,
-      CombatPowerPolishValues polishValues) {
+      CombatPowerPolishValues polishValues,
+      CombatPowerRefineModel.Coefficients refineCoefficients) {
     this.cache = cache;
     this.stored = stored;
     this.gemCoefficients = gemCoefficients;
     this.equipmentCoefficients = equipmentCoefficients;
     this.polishValues = polishValues;
+    this.refineCoefficients = refineCoefficients;
   }
 
   public enum Kind {
@@ -158,15 +165,22 @@ public class CombatPowerSimulationService {
   public Result simulate(CharacterResult result, List<Change> changes) {
     var loadout = result.details().loadout();
     var gemModel = CombatPowerGemModel.of(gemCoefficients, loadout);
+    var refineModel =
+        CombatPowerRefineModel.of(
+            refineCoefficients,
+            loadout,
+            result.details().profile().stats(),
+            gemModel.currentBaseAttackPct());
     // 같은 대상은 뒤의 변경이 이긴다. 순서는 처음 나온 자리를 지킨다.
     var merged = new LinkedHashMap<String, Planned>();
-    for (var change : changes) merged.put(key(change), describe(loadout, gemModel, change));
+    for (var change : changes)
+      merged.put(key(change), describe(loadout, gemModel, refineModel, change));
     var official = result.details().profile().combatPower();
     // 반올림은 서버에서 끝낸다(PM-프론트 18:31 (g)): 전투력 소수 둘째 자리, deltaPercent 소수 셋째 자리.
     var before = official == null ? null : official.setScale(2, RoundingMode.HALF_UP);
     var engravings = currentEngravings(loadout);
     var weaponAddDamage = CombatPowerEquipmentModel.currentWeaponAddDamage(weaponDetail(loadout));
-    var state = new State(Map.of(), null, Map.of());
+    var state = new State(Map.of(), null, Map.of(), Map.of());
     var running = before;
     var contributions = new ArrayList<Contribution>();
     int unsupported = 0;
@@ -177,7 +191,10 @@ public class CombatPowerSimulationService {
         else {
           var next = state.apply(planned.effect(), engravings);
           reason = stoneBonusReason(engravings, next);
-          var ratio = reason == null ? ratio(gemModel, engravings, weaponAddDamage, next) : null;
+          var ratio =
+              reason == null
+                  ? ratio(gemModel, refineModel, engravings, weaponAddDamage, next)
+                  : null;
           if (reason == null && ratio == null) reason = LEVEL_UNCONFIRMED_BASIS;
           if (reason == null) {
             state = next;
@@ -222,6 +239,9 @@ public class CombatPowerSimulationService {
 
   private record EngravingEffect(String name, Integer book, Integer stone) implements Effect {}
 
+  /** 재련 단계(#319): 장비 순번 → 새 단계. */
+  private record RefineEffect(int index, int level) implements Effect {}
+
   /** 각인 하나의 각인서·스톤 레벨. */
   private record EngravingLevels(int book, int stone) {}
 
@@ -229,15 +249,22 @@ public class CombatPowerSimulationService {
   private record State(
       Map<Integer, Integer> gems,
       BigDecimal weaponAddDamage,
-      Map<String, EngravingLevels> engravings) {
+      Map<String, EngravingLevels> engravings,
+      Map<Integer, Integer> refines) {
     State apply(Effect effect, Map<String, CharacterLoadout.PassiveEngraving> currents) {
       return switch (effect) {
         case GemEffect gem -> {
           var next = new HashMap<>(gems);
           next.putAll(gem.levels());
-          yield new State(Map.copyOf(next), weaponAddDamage, engravings);
+          yield new State(Map.copyOf(next), weaponAddDamage, engravings, refines);
         }
-        case WeaponQualityEffect quality -> new State(gems, quality.addDamage(), engravings);
+        case WeaponQualityEffect quality ->
+            new State(gems, quality.addDamage(), engravings, refines);
+        case RefineEffect refine -> {
+          var next = new HashMap<>(refines);
+          next.put(refine.index(), refine.level());
+          yield new State(gems, weaponAddDamage, engravings, Map.copyOf(next));
+        }
         case NeutralEffect neutral -> this;
         case EngravingEffect engraving -> {
           var next = new HashMap<>(engravings);
@@ -254,7 +281,7 @@ public class CombatPowerSimulationService {
               new EngravingLevels(
                   engraving.book() != null ? engraving.book() : base.book(),
                   engraving.stone() != null ? engraving.stone() : base.stone()));
-          yield new State(gems, weaponAddDamage, Map.copyOf(next));
+          yield new State(gems, weaponAddDamage, Map.copyOf(next), refines);
         }
       };
     }
@@ -284,6 +311,7 @@ public class CombatPowerSimulationService {
    */
   private BigDecimal ratio(
       CombatPowerGemModel.Model gemModel,
+      CombatPowerRefineModel.Model refineModel,
       Map<String, CharacterLoadout.PassiveEngraving> currents,
       BigDecimal weaponCurrent,
       State state) {
@@ -293,6 +321,11 @@ public class CombatPowerSimulationService {
       var next = gemModel.ratio(state.gems());
       if (base == null || next == null) return null;
       ratio = ratio.multiply(next.divide(base, MATH), MATH);
+    }
+    if (!state.refines().isEmpty()) {
+      var refine = refineModel.ratio(state.refines());
+      if (refine == null) return null;
+      ratio = ratio.multiply(refine, MATH);
     }
     if (state.weaponAddDamage() != null) {
       if (weaponCurrent == null) return null;
@@ -375,7 +408,10 @@ public class CombatPowerSimulationService {
   }
 
   private Planned describe(
-      CharacterLoadout loadout, CombatPowerGemModel.Model gemModel, Change change) {
+      CharacterLoadout loadout,
+      CombatPowerGemModel.Model gemModel,
+      CombatPowerRefineModel.Model refineModel,
+      Change change) {
     if (change.kind() == null) throw invalid("kind가 필요합니다.");
     return switch (change.kind()) {
       case GEM_LEVEL_ALL -> {
@@ -431,11 +467,24 @@ public class CombatPowerSimulationService {
           throw notFound("재련 장비 index " + change.index());
         if (change.kind() == Kind.EQUIPMENT_REFINE) {
           range("refine", change.refine(), 10, 25);
-          yield unsupported(change, item.name(), str(detail.refineLevel()), str(change.refine()));
+          yield new Planned(
+              change,
+              item.name(),
+              str(detail.refineLevel()),
+              str(change.refine()),
+              new RefineEffect(change.index(), change.refine()),
+              REFINE_BASIS,
+              refineModel.cannotSet(change.index(), change.refine()));
         }
         range("level", change.level(), 0, 40);
-        yield unsupported(
-            change, item.name(), str(detail.advancedRefineLevel()), str(change.level()));
+        yield new Planned(
+            change,
+            item.name(),
+            str(detail.advancedRefineLevel()),
+            str(change.level()),
+            null,
+            null,
+            ADVANCED_REFINE_BASIS);
       }
       case POLISH -> {
         var item = equipment(loadout, change.index());

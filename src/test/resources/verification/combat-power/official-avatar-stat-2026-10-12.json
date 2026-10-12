@@ -10,7 +10,7 @@
  },
  "rows": [
   {
-   "id": "언새늘",
+   "id": "기준 캐릭터",
    "type": "무기 아바타",
    "grade": "전설",
    "inner": true,
@@ -20,7 +20,7 @@
    "match": true
   },
   {
-   "id": "언새늘",
+   "id": "기준 캐릭터",
    "type": "머리 아바타",
    "grade": "전설",
    "inner": true,
@@ -30,7 +30,7 @@
    "match": true
   },
   {
-   "id": "언새늘",
+   "id": "기준 캐릭터",
    "type": "상의 아바타",
    "grade": "전설",
    "inner": true,
@@ -40,7 +40,7 @@
    "match": true
   },
   {
-   "id": "언새늘",
+   "id": "기준 캐릭터",
    "type": "하의 아바타",
    "grade": "전설",
    "inner": true,
@@ -50,7 +50,7 @@
    "match": true
   },
   {
-   "id": "언새늘",
+   "id": "기준 캐릭터",
    "type": "무기 아바타",
    "grade": "영웅",
    "inner": false,
@@ -60,7 +60,7 @@
    "match": true
   },
   {
-   "id": "언새늘",
+   "id": "기준 캐릭터",
    "type": "머리 아바타",
    "grade": "영웅",
    "inner": false,
@@ -70,7 +70,7 @@
    "match": true
   },
   {
-   "id": "언새늘",
+   "id": "기준 캐릭터",
    "type": "상의 아바타",
    "grade": "영웅",
    "inner": false,
@@ -80,7 +80,7 @@
    "match": true
   },
   {
-   "id": "언새늘",
+   "id": "기준 캐릭터",
    "type": "하의 아바타",
    "grade": "영웅",
    "inner": false,

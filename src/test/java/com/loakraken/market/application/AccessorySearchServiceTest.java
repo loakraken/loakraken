@@ -140,6 +140,15 @@ class AccessorySearchServiceTest {
   }
 
   @Test
+  void 입찰만_가능한_매물의_즉시_구매가는_0이_아니라_null이다() {
+    var bidOnly = listing(17000, 0L);
+    var item = AccessorySearchService.item(Slot.NECKLACE, bidOnly);
+    assertThat(item.buyPrice()).isNull();
+    assertThat(AccessorySearchService.item(Slot.NECKLACE, listing(17000, 1500L)).buyPrice())
+        .isEqualTo(1500L);
+  }
+
+  @Test
   void 캐시_적중이면_공식_호출이_0이다() {
     var service = service();
     var first = service.search(command(List.of(), null));

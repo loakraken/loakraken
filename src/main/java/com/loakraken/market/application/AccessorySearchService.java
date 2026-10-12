@@ -277,7 +277,8 @@ public class AccessorySearchService {
         mainStat,
         AccessoryStatRange.mainStatRangePct(slot, stage, mainStat),
         listing.tradeAllowCount(),
-        listing.buyPrice(),
+        // 입찰만 가능한 매물은 공식 BuyPrice가 0이거나 없다. 화면이 0G로 보이지 않게 null 하나로 준다.
+        listing.buyPrice() == null || listing.buyPrice() <= 0 ? null : listing.buyPrice(),
         listing.bidStartPrice(),
         listing.endDate());
   }

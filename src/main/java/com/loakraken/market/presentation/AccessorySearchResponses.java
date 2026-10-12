@@ -55,7 +55,7 @@ public final class AccessorySearchResponses {
                   "힘민지 범위 % = (힘민지 − 그 연마 단계 최솟값) ÷ (최댓값 − 최솟값) × 100, 소수 둘째 자리. 범위표는 공식 아이템 사전. 연마 단계가 0~3 밖이거나 힘민지가 없으면 null")
           BigDecimal mainStatRangePct,
       @NullableResponse @Schema(description = "구매 후 거래 가능 횟수(0이면 거래 불가)") Integer tradeAllowCount,
-      @NullableResponse @Schema(description = "즉시 구매가. 입찰만 가능한 매물이면 null 또는 0") Long buyPrice,
+      @NullableResponse @Schema(description = "즉시 구매가. 입찰만 가능한 매물이면 null(0은 주지 않음)") Long buyPrice,
       @NullableResponse Long bidStartPrice,
       @NullableResponse @Schema(description = "경매 종료 시각") Instant endDate) {
     static AccessorySearchItemResponse from(AccessorySearch.Item item) {

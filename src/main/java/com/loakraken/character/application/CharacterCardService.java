@@ -67,13 +67,15 @@ public class CharacterCardService {
   /** 관측 이력을 남긴 뒤 호출한다. 실패는 검색·수집을 막지 않는다. */
   public void record(CharacterDetails details, Instant observedAt) {
     if (!policy.enabled()) return;
-    var observation = observe(details, observedAt, efficiency(details, observedAt));
+    var base = observe(details, observedAt);
     // 해석은 이미 한 도메인에서 뽑으므로 요청 스레드에서 해도 가볍다. 쓰기만 작업자에 넘긴다.
     var summary = EquipmentSummary.from(details.profile(), details.loadout());
     var collectibles = details.loadout().collectibles();
     try {
       writer.execute(
           () -> {
+            // 팔찌·젬 효율 재계산은 검색 응답 시간을 늘리지 않도록 작업자에서 한다(#443 성능 조건).
+            var observation = base.withEfficiency(efficiency(details, observedAt));
             write(observation);
             writeSummary(observation, summary);
             writeCollectibles(observation, collectibles);

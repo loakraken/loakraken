@@ -48,6 +48,20 @@ public interface CharacterCardPort {
       boolean gemsObserved,
       Instant observedAt,
       Efficiency efficiency) {
+    /** 같은 관측에 효율만 바꾼 값. */
+    public Observation withEfficiency(Efficiency value) {
+      return new Observation(
+          serverName,
+          characterName,
+          cards,
+          learned,
+          position,
+          gemMeanLevel,
+          gemsObserved,
+          observedAt,
+          value);
+    }
+
     /** 효율 없이(L38·L39 이전 호출). 효율 열은 바꾸지 않는다. */
     public Observation(
         String serverName,

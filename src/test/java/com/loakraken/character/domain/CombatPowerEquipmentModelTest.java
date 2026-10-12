@@ -68,7 +68,7 @@ class CombatPowerEquipmentModelTest {
             .as(label)
             .isEqualByComparingTo(new BigDecimal(sample.path("formula").asText()));
         assertThat(
-                actual.subtract(new BigDecimal(sample.path("expectedTargetSite").asText())).abs())
+                actual.subtract(new BigDecimal(sample.path("expectedRef").asText())).abs())
             .as(label)
             .isLessThanOrEqualTo(new BigDecimal("0.01"));
         ok++;

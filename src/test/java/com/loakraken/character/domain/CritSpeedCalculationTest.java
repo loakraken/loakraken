@@ -203,7 +203,7 @@ class CritSpeedCalculationTest {
         .containsExactly("5");
   }
 
-  /** #198 승갈통(2026-10-10 공식 팔찌 문구): 두 사이트는 중첩형 공이속을 최대 중첩(×6)으로 본다. */
+  /** #198 승갈통(2026-10-10 공식 팔찌 문구): 비교 기준 두 곳은 중첩형 공이속을 최대 중첩(×6)으로 본다. */
   @Test
   void 팔찌_중첩형_공이속은_최대_중첩으로_더한다() {
     var bracelet =
@@ -237,7 +237,7 @@ class CritSpeedCalculationTest {
     assertThat(result.speed().attack().total()).isEqualByComparingTo("11.32");
   }
 
-  /** #198 Tii·분신싸개(리퍼 달의 소리): 두 사이트는 "페르소나 상태로 전환 시" 공격 속도 +10을 넣지 않는다. */
+  /** #198 Tii·분신싸개(리퍼 달의 소리): 비교 기준 두 곳은 "페르소나 상태로 전환 시" 공격 속도 +10을 넣지 않는다. */
   @Test
   void 공이속_노드는_표로_판정하고_상황_조건은_기본_끔_표에_없으면_넣지_않는다() {
     var nodes =

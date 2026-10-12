@@ -39,7 +39,7 @@ class ReceiptDomainTest {
         .containsExactly("무기", "투구", "상의");
     var weapon = result.parts().get(0);
     assertThat(weapon.grade()).isEqualTo(RefiningRules.Grade.JEONYUL);
-    // 전율은 +11부터 센다(두 사이트, #218 A).
+    // 전율은 +11부터 센다(비교 기준 두 곳, #218 A).
     assertThat(weapon.fromStage()).isEqualTo(11);
     assertThat(weapon.toStage()).isEqualTo(19);
     assertThat(weapon.stages()).hasSize(8);

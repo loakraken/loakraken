@@ -35,7 +35,7 @@ public class ClientLimiter {
   /** 제한을 끈 상태. 단위 테스트용 게이트가 쓴다. */
   public static final ClientLimiter DISABLED =
       new ClientLimiter(
-          new ClientLimitProperties(false, 0, 0, 0, 0, true, 0, 0, 0),
+          new ClientLimitProperties(false, 0, 0, 0, 0, true, 0, 0, 0, 0),
           new ClientLimitStore.Memory(),
           Clock.systemUTC(),
           null,
@@ -67,7 +67,8 @@ public class ClientLimiter {
     BOT,
     ROSTER_REFRESH,
     AUCTION_SEARCH,
-    BOT_OFFICIAL
+    BOT_OFFICIAL,
+    BOT_ADDRESS_OFFICIAL
   }
 
   /** 판정 결과. 거절이면 retryAfterSeconds는 지금 창이 끝날 때까지 남은 초(1 이상)다. */
@@ -126,14 +127,15 @@ public class ClientLimiter {
   }
 
   /**
-   * 지금 스레드의 요청이 공식 호출을 하나 더 해도 되는지 센다. 클라이언트가 없으면(백그라운드) 세지 않는다. 검색봇 표시 요청은 그 주소의 OFFICIAL에 더해 모든
-   * 봇이 함께 쓰는 BOT_OFFICIAL 상한도 센다.
+   * 지금 스레드의 요청이 공식 호출을 하나 더 해도 되는지 센다. 클라이언트가 없으면(백그라운드) 세지 않는다. 검색봇 표시 요청은 OFFICIAL 대신 더 작은 주소별
+   * BOT_ADDRESS_OFFICIAL과 모든 봇이 함께 쓰는 BOT_OFFICIAL 상한을 센다(한 주소가 전체 상한을 다 쓰지 못하게).
    */
   void chargeOfficial() {
     var client = CLIENT.get();
     if (client == null) return;
-    if (!check(Bucket.OFFICIAL, client).allowed()
-        || (bot(client) && !check(Bucket.BOT_OFFICIAL, BOT_ALL).allowed()))
+    boolean bot = bot(client);
+    if (!check(bot ? Bucket.BOT_ADDRESS_OFFICIAL : Bucket.OFFICIAL, client).allowed()
+        || (bot && !check(Bucket.BOT_OFFICIAL, BOT_ALL).allowed()))
       throw new BusinessException(LostArkErrorCode.CLIENT_RATE_LIMITED);
   }
 

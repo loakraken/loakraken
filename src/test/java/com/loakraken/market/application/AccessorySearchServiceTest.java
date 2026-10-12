@@ -5,9 +5,11 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 import com.loakraken.common.api.BusinessException;
+import com.loakraken.common.lostark.ClientLimiter;
 import com.loakraken.common.lostark.LostArkMetrics;
 import com.loakraken.common.lostark.LostArkProperties;
 import com.loakraken.common.lostark.LostArkRequestGate;
@@ -205,6 +207,7 @@ class AccessorySearchServiceTest {
   void 공식_호출은_사용자_몫_30을_남기고_클라이언트_한도에도_매긴다() {
     service().search(command(List.of(), null));
     verify(gate).withUserReserve(eq(30), any());
+    verify(gate).chargeClient(ClientLimiter.Bucket.AUCTION_SEARCH);
   }
 
   @Test
@@ -246,6 +249,8 @@ class AccessorySearchServiceTest {
     pages = query -> mixedPage(query.pageNo(), 100);
     var result = service().search(command(List.of(), 90));
     assertThat(calls).hasValue(3);
+    // 클라이언트 한도는 검색 한 번이 아니라 공식 호출(페이지)마다 센다.
+    verify(gate, times(3)).chargeClient(ClientLimiter.Bucket.AUCTION_SEARCH);
     assertThat(queries).extracting(AuctionQuery::pageNo).containsExactly(1, 2, 3);
     assertThat(result.scannedPages()).isEqualTo(3);
     assertThat(result.items()).hasSize(12);

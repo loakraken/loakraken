@@ -13,8 +13,10 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
  * @param botPerMinute 검색봇 표시 요청 수(봇 주소별). 봇 표시는 흉내 낼 수 있으므로 generalPerMinute보다 클 수 없다
  * @param rosterRefreshPerMinute 원정대 전투력 불러오기(POST /api/v1/characters/roster-combat-power/refresh)
  *     요청 수(L19)
- * @param auctionSearchPerMinute 악세 경매 검색기(N13) 캐시 미스 검색 수. 캐시에 맞는 검색은 세지 않는다
- * @param botOfficialPerMinute 모든 검색봇 표시 요청이 함께 일으킬 수 있는 공식 API 호출 수(주소별 OFFICIAL과 별도의 전체 상한)
+ * @param auctionSearchPerMinute 악세 경매 검색기(N13)가 일으키는 공식 호출(페이지) 수. 캐시에 맞는 검색은 세지 않는다
+ * @param botOfficialPerMinute 모든 검색봇 표시 요청이 함께 일으킬 수 있는 공식 API 호출 수(전체 상한)
+ * @param botAddressOfficialPerMinute 검색봇 표시 요청 한 주소가 일으킬 수 있는 공식 API 호출 수. 한 주소가 전체 상한을 혼자 다 쓰지
+ *     못하도록 botOfficialPerMinute보다 작아야 한다(사람 클라이언트의 officialPerMinute 대신 쓴다)
  * @param exemptInternal 원격 주소가 루프백·사설망이면 세지 않는다. 운영에서는 웹이 실제 IP를 X-Forwarded-For로 넘기므로, 사설 주소는 헤더가
  *     빠진 내부 요청이다
  */
@@ -27,11 +29,14 @@ public record ClientLimitProperties(
     @DefaultValue("120") int botPerMinute,
     @DefaultValue("true") boolean exemptInternal,
     @DefaultValue("2") int rosterRefreshPerMinute,
-    @DefaultValue("6") int auctionSearchPerMinute,
-    @DefaultValue("20") int botOfficialPerMinute) {
+    @DefaultValue("5") int auctionSearchPerMinute,
+    @DefaultValue("20") int botOfficialPerMinute,
+    @DefaultValue("5") int botAddressOfficialPerMinute) {
   public ClientLimitProperties {
     if (enabled && botPerMinute > generalPerMinute)
       throw new IllegalArgumentException("봇 한도는 일반 클라이언트 한도보다 클 수 없습니다.");
+    if (enabled && botAddressOfficialPerMinute >= botOfficialPerMinute)
+      throw new IllegalArgumentException("봇 주소별 공식 호출 한도는 모든 봇 합계 상한보다 작아야 합니다.");
   }
 
   public int limit(ClientLimiter.Bucket bucket) {
@@ -43,6 +48,7 @@ public record ClientLimitProperties(
       case ROSTER_REFRESH -> rosterRefreshPerMinute;
       case AUCTION_SEARCH -> auctionSearchPerMinute;
       case BOT_OFFICIAL -> botOfficialPerMinute;
+      case BOT_ADDRESS_OFFICIAL -> botAddressOfficialPerMinute;
     };
   }
 }

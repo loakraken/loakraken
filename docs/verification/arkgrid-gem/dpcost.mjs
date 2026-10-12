@@ -39,6 +39,6 @@ if ((process.argv[1] ?? '').endsWith('dpcost.mjs')) {
   for (const c of cases) for (const T of [16, 19]) {
     if (!c.loatto[T]) continue;
     const [p, cost] = M[T].shownVal({ o: c.o, n: c.n, r: c.r, c: 0, processed: c.processed }, c.shown);
-    console.log(`${c.name} 목표${T}: 확률 ${(p * 100).toFixed(2)}% 기대 가공비 ${cost.toFixed(0)}G, 성공 1회당 ${(cost / p).toFixed(0)}G | 로아또 ${c.loatto[T]}G`);
+    console.log(`${c.name} 목표${T}: 확률 ${(p * 100).toFixed(2)}% 기대 가공비 ${cost.toFixed(0)}G, 성공 1회당 ${(cost / p).toFixed(0)}G | 목표 사이트 ${c.loatto[T]}G`);
   }
 }

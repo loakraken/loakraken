@@ -99,7 +99,8 @@ class GuildRankingIntegrationTest {
     assertThat(rows.at("/1/itemLevelSum").decimalValue()).isEqualByComparingTo("10080.00");
     assertThat(rows.at("/1/combatPowerAvg").decimalValue()).isEqualByComparingTo("3000.00");
     assertThat(rows.at("/1/combatPowerCount").asLong()).isEqualTo(1);
-    assertThat(response.body()).doesNotContain("길드제외").doesNotContain(SiteNames.FORBIDDEN);
+    assertThat(response.body()).doesNotContain("길드제외");
+    SiteNames.assertAbsent(response.body());
 
     var sum = data(get("/api/v1/rankings/guilds?sort=SUM&server=" + encode(SERVER)));
     assertThat(sum.path("sort").asText()).isEqualTo("SUM");

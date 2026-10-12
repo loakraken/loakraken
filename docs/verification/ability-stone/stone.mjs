@@ -49,6 +49,6 @@ if ((process.argv[1] ?? '').endsWith('stone.mjs')) {
     const goal = new Function('a', 'b', 'c', `return ${c.goalExpr};`);
     const p = bestManual(c.slots, goal);
     const q = c.stoneQuantiles.map((x) => stonesForQuantile(p, x));
-    console.log(`${c.id}: 계산 ${(p * 100).toFixed(4)}% / 일로아 ${c.iloaPct}% | 필요 돌 ${q.join('/')} / 일로아 ${c.iloaStones.join('/')}`);
+    console.log(`${c.id}: 계산 ${(p * 100).toFixed(4)}% / 목표 사이트 ${c.iloaPct}% | 필요 돌 ${q.join('/')} / 목표 사이트 ${c.iloaStones.join('/')}`);
   }
 }

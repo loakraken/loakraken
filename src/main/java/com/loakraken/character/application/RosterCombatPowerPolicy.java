@@ -5,7 +5,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.bind.DefaultValue;
 
 /**
- * 원정대 캐릭터별 전투력(L19) 설정.
+ * 원정대 캐릭터별 전투력 설정.
  *
  * @param maxTargets 불러오기 1회에 부르는 최대 캐릭터 수
  * @param cooldown 같은 원정대를 다시 불러올 수 있기까지

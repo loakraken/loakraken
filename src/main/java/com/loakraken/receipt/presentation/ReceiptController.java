@@ -73,7 +73,7 @@ class ReceiptController {
           String characterName,
       @Parameter(
               description =
-                  "책(재봉술·야금술) 효과 적용 가정. 생략하면 true(책 포함, PM 총괄 2026-10-11 결정). false면 책을 빼고 숨결만 쓴 값이다(게임 문구 '특수 재료 별 효과는 확률에 따라 적용되지 않을 수 있습니다'의 확률은 공개되지 않음)")
+                  "책(재봉술·야금술) 효과 적용 가정. 생략하면 true(책 포함). false면 책을 빼고 숨결만 쓴 값이다(게임 문구 '특수 재료 별 효과는 확률에 따라 적용되지 않을 수 있습니다'의 확률은 공개되지 않음)")
           @RequestParam(required = false)
           Boolean assumeBook) {
     return ApiResponse.of(

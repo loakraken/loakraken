@@ -117,14 +117,14 @@ public class RosterCombatPowerController {
         .toList();
   }
 
-  @Schema(description = "원정대 캐릭터별 전투력(L19)")
+  @Schema(description = "원정대 캐릭터별 전투력")
   public record RosterCombatPowerResponse(
       @Schema(description = "같은 서버 원정대 캐릭터(공식 원정대 순서)") List<RosterCombatPowerItemResponse> items,
       @Schema(description = "전투력 기록이 없는 캐릭터 수") int missingCount,
       @Schema(description = "다시 불러올 수 있는 시각. 쿨다운 중이 아니면 null") @NullableResponse
           Instant refreshAvailableAt) {}
 
-  @Schema(description = "원정대 전투력 불러오기 결과(L19)")
+  @Schema(description = "원정대 전투력 불러오기 결과")
   public record RosterCombatPowerRefreshResponse(
       @Schema(description = "불러온 뒤의 원정대 캐릭터별 전투력") List<RosterCombatPowerItemResponse> items,
       @Schema(description = "이번에 공식 프로필을 부른 캐릭터 수") int fetched,

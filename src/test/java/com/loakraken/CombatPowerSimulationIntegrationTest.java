@@ -86,7 +86,7 @@ class CombatPowerSimulationIntegrationTest {
     assertThat(response.statusCode()).isEqualTo(200);
     ApiContractFixture.write("character-combat-power-simulate.json", response.body());
     // 다른 사이트 이름·간접 표현 금지(#261).
-    assertThat(response.body()).doesNotContain(SiteNames.FORBIDDEN);
+    SiteNames.assertAbsent(response.body());
     var data = mapper.readTree(response.body()).path("data");
     assertThat(data.path("ruleVersion").asText()).isEqualTo("combat-power-sim-v8");
     // 시뮬레이션이 읽은 캐시가 검색 응답과 같은지 웹이 비교한다(PM-프론트 18:31).
@@ -158,7 +158,7 @@ class CombatPowerSimulationIntegrationTest {
     assertThat(contributions.at("/3/status").asText()).isEqualTo("OK");
     assertThat(contributions.at("/3/delta").decimalValue()).isEqualByComparingTo("-67.87");
     assertThat(data.path("unsupportedCount").asInt()).isZero();
-    assertThat(response.body()).doesNotContain(SiteNames.FORBIDDEN);
+    SiteNames.assertAbsent(response.body());
   }
 
   @Test
@@ -463,7 +463,7 @@ class CombatPowerSimulationIntegrationTest {
     assertThat(items.at("/0/kind").asText()).isEqualTo("BRACELET");
     assertThat(items.at("/0/status").asText()).isEqualTo("OK");
     assertThat(items.at("/0/contributionPct").decimalValue()).isEqualByComparingTo("12.60");
-    assertThat(contributions.body()).doesNotContain(SiteNames.FORBIDDEN);
+    SiteNames.assertAbsent(contributions.body());
     var options =
         mapper.readTree(get("/api/v1/characters/combat-power/options").body()).path("data");
     assertThat(options.at("/braceletOptions").size()).isEqualTo(13);

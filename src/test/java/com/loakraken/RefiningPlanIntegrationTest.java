@@ -31,7 +31,7 @@ class RefiningPlanIntegrationTest {
     assertThat(response.statusCode()).isEqualTo(200);
     ApiContractFixture.write("refining-plan.json", response.body());
     // 응답 source에도 다른 사이트 이름이 없다(#261, MIT 고지는 저장소 NOTICE).
-    assertThat(response.body()).doesNotContain(SiteNames.FORBIDDEN);
+    SiteNames.assertAbsent(response.body());
     var json = mapper.readTree(response.body());
     assertThat(json.path("code").asText()).isEqualTo("REFINING_PLAN_SUCCESS");
     assertThat(json.at("/data/ruleVersion").asText()).isEqualTo("t4-refining-v3");

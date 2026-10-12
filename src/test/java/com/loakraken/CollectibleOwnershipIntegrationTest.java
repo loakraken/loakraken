@@ -115,7 +115,8 @@ class CollectibleOwnershipIntegrationTest {
     assertThat(heart2.path("ownedPercent").decimalValue()).isEqualByComparingTo("0.00");
     // 종류는 공식 순서(씨앗 → 심장).
     assertThat(indexOf(data, SEED, SEED + " 1")).isLessThan(indexOf(data, HEART, HEART + " 1"));
-    assertThat(response.body()).doesNotContain("보유제외").doesNotContain(SiteNames.FORBIDDEN);
+    assertThat(response.body()).doesNotContain("보유제외");
+    SiteNames.assertAbsent(response.body());
 
     var hearts =
         data(

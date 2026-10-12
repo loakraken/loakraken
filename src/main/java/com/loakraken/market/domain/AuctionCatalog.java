@@ -6,10 +6,11 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * 경매장 시세 표(auction-board-v1). 일로아 보석·장신구 탭 구성을 따른다.
+ * 경매장 시세 표(auction-board-v1). 목표 사이트의 보석·장신구 탭 구성을 따른다.
  *
  * <p>T4 연마 효과의 하·중·상 값은 공식 `/auctions/options`의 연마 효과(EtcOptions 7) 값 목록 중 T4 값이다. 2026-10-09 실검색으로
- * 고대 목걸이 적주피·추피 상상 4,877,777G, 하상 11,000G, 중중 6,000G가 일로아와 일치함을 확인했다. 공식 값은 100배 정수다(2.00% → 200).
+ * 고대 목걸이 적주피·추피 상상 4,877,777G, 하상 11,000G, 중중 6,000G가 목표 사이트와 일치함을 확인했다. 공식 값은 100배 정수다(2.00% →
+ * 200).
  */
 public final class AuctionCatalog {
   public static final String RULE_VERSION = "auction-board-v1";
@@ -142,7 +143,7 @@ public final class AuctionCatalog {
     }
   }
 
-  /** 부위별 핵심 연마 효과. 서포터 귀걸이는 무공% 하나다(일로아와 같음). */
+  /** 부위별 핵심 연마 효과. 서포터 귀걸이는 무공% 하나다(목표 사이트와 같음). */
   public static List<PolishOption> options(Role role, Slot slot) {
     return switch (role) {
       case DEALER ->

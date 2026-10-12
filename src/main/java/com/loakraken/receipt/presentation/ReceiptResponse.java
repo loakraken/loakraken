@@ -115,8 +115,8 @@ public record ReceiptResponse(
   public record ReceiptStageResponse(
       @Schema(description = "목표 단계") int stage,
       @Schema(description = "그 단계 기대 비용(골드)") BigDecimal gold,
-      @Schema(description = "회차별 최적 전략에서 숨결을 쓰는 회차가 있음(#284)") boolean breath,
-      @Schema(description = "회차별 최적 전략에서 책을 쓰는 회차가 있음(#284)") boolean book,
+      @Schema(description = "회차별 최적 전략에서 숨결을 쓰는 회차가 있음") boolean breath,
+      @Schema(description = "회차별 최적 전략에서 책을 쓰는 회차가 있음") boolean book,
       @Schema(description = "성장 지원 적용(업화 18단계 이하)") boolean growthSupport) {}
 
   public record ReceiptExcludedResponse(

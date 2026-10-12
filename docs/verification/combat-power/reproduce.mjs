@@ -15,7 +15,7 @@ const includeExcluded = args.includes('--include-excluded');
 export const dealers = samples.filter((s) => (includeExcluded || !s.excluded) && s.arkPassiveTitle && !SUPPORT_TITLES.has(s.arkPassiveTitle)
   && s.itemLevel >= 1680 && s.baseAttack > 0 && s.expected.combatPower > 0);
 
-// 인벤 딜러 전투력 로직(2025-07-09 패치 반영) 유물 4레벨 기준 각인 계수 범위 [스톤0, 스톤4] %
+// 공개 분석 글 딜러 전투력 로직(2025-07-09 패치 반영) 유물 4레벨 기준 각인 계수 범위 [스톤0, 스톤4] %
 const ENGRAVING_RANGE = {
   '원한': [21, 27], '아드레날린': [19.4, 25.1], '돌격대장': [19.2, 25.2], '질량 증가': [19, 25],
   '결투의 대가': [18.1, 23.5], '기습의 대가': [18.1, 23.5], '예리한 둔기': [17.36, 22.95],
@@ -123,7 +123,7 @@ const ORD = ['order10', 'order14', 'order17', 'order18to20'];
 const KAR = ['karmaEvolution', 'karmaEnlightenment', 'karmaLeap'];
 const BEST = { chaosCores: true, totalAttack: true, braceletV2: true };
 export const HYPOTHESES = [
-  { id: 'H0', label: '인벤 2025-07 계수 그대로(상수만 적합)', opt: {}, free: [] },
+  { id: 'H0', label: '공개 분석 글 2025-07 계수 그대로(상수만 적합)', opt: {}, free: [] },
   { id: 'H1', label: 'H0 + 혼돈 코어 효과(고정 환산) + 질서 코어 구간', opt: { chaosCores: true }, free: ORD },
   { id: 'H2', label: 'H1 + 보주 낙원력', opt: { chaosCores: true }, free: [...ORD, 'orb'] },
   { id: 'H3', label: 'H2 + 팔찌 옵션 분류 환산 + 공식 공격력 총합', opt: BEST, free: [...ORD, 'orb'] },

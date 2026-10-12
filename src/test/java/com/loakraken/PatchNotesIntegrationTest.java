@@ -96,7 +96,9 @@ class PatchNotesIntegrationTest {
     tools.jackson.databind.JsonNode json = null;
     for (int i = 0; i < 100; i++) {
       json = mapper.readTree(get(path).body());
-      if (json.at("/data/total").asLong() >= total) return json;
+      // 목록과 개수는 다른 쿼리라, 비동기 저장이 그 사이에 끝나면 total은 찼는데 items는 빈 응답이 올 수 있다. 둘 다 찰 때까지 기다린다.
+      if (json.at("/data/total").asLong() >= total && json.at("/data/items").size() >= total)
+        return json;
       Thread.sleep(50);
     }
     return json;

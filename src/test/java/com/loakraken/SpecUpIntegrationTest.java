@@ -314,6 +314,25 @@ class SpecUpIntegrationTest {
             org.mockito.ArgumentMatchers.anyList());
   }
 
+  @Test
+  void 전율_장비에는_상급_재련_후보를_만들지_않고_업화_장비에는_만든다() throws Exception {
+    // E21: 전율 장비에는 상급 재련이 없다. 툴팁에 상급 재련 0단계가 있어도 후보를 만들지 않는다.
+    when(auctions.cachedGems()).thenReturn(gemCells(true));
+    for (var name : List.of("스펙전율", "스펙업화")) {
+      search(name);
+      var response = get("/api/v1/characters/spec-up?characterName=" + encode(name));
+      assertThat(response.statusCode()).isEqualTo(200);
+      var ids = new ArrayList<String>();
+      for (var candidate : mapper.readTree(response.body()).at("/data/candidates"))
+        ids.add(candidate.path("id").asText());
+      if (name.contains("전율"))
+        assertThat(ids).noneMatch(id -> id.startsWith("EQUIPMENT_ADVANCED_REFINE:"));
+      else assertThat(ids).contains("EQUIPMENT_ADVANCED_REFINE:0:1");
+      // 일반 재련 후보는 둘 다 있다.
+      assertThat(ids).contains("EQUIPMENT_REFINE:0:21");
+    }
+  }
+
   private static com.loakraken.market.domain.MarketPrice material(
       long id, String name, int bundle, String currentMin) {
     return new com.loakraken.market.domain.MarketPrice(
@@ -512,11 +531,18 @@ class SpecUpIntegrationTest {
     var weapon =
         new CharacterLoadout.Equipment(
             "무기",
-            name.contains("업화") ? "+20 운명의 업화 검" : "+20 테스트 무기",
+            name.contains("업화")
+                ? "+20 운명의 업화 검"
+                : name.contains("전율") ? "+20 운명의 전율 검" : "+20 테스트 무기",
             null,
             "고대",
-            new CharacterLoadout.EquipmentDetail(
-                20, 90, 1700, 4, null, List.of(), List.of(), List.of(), List.of()));
+            // 업화·전율 무기는 공식 툴팁처럼 상급 재련 단계(0)를 갖는다.
+            name.contains("업화") || name.contains("전율")
+                ? new CharacterLoadout.EquipmentDetail(
+                    20, 90, 1700, 4, null, List.of(), List.of(), List.of(), List.of(), null,
+                    List.of(), null, List.of(), 0)
+                : new CharacterLoadout.EquipmentDetail(
+                    20, 90, 1700, 4, null, List.of(), List.of(), List.of(), List.of()));
     var necklace =
         new CharacterLoadout.Equipment(
             "목걸이",

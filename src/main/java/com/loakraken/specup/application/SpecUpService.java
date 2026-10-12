@@ -402,7 +402,10 @@ public class SpecUpService {
                     null),
                 refineCost(item, refine, prices, pricesAt)));
       var advanced = item.detail().advancedRefineLevel();
-      if (advanced != null && advanced < 40)
+      // 전율 장비에는 상급 재련이 없다(E21). 후보를 만들지 않는다.
+      if (advanced != null
+          && advanced < 40
+          && refineGrade(item.name()) != RefiningRules.Grade.JEONYUL)
         planned.add(
             new Planned(
                 "EQUIPMENT_ADVANCED_REFINE:" + index + ":" + (advanced + 1),

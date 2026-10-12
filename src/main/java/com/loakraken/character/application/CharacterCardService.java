@@ -37,6 +37,8 @@ public class CharacterCardService {
   private final EquipmentSummaryPort summaries;
   private final CharacterHistoryPolicy policy;
   private final CharacterMetrics metrics;
+  private final CombatPowerSimulationService simulator;
+  private final ArkGridEfficiencyService arkGrids;
   private final ThreadPoolExecutor writer =
       new ThreadPoolExecutor(
           1,
@@ -51,23 +53,29 @@ public class CharacterCardService {
       CharacterCardPort cards,
       EquipmentSummaryPort summaries,
       CharacterHistoryPolicy policy,
-      CharacterMetrics metrics) {
+      CharacterMetrics metrics,
+      CombatPowerSimulationService simulator,
+      ArkGridEfficiencyService arkGrids) {
     this.cards = cards;
     this.summaries = summaries;
     this.policy = policy;
     this.metrics = metrics;
+    this.simulator = simulator;
+    this.arkGrids = arkGrids;
   }
 
   /** 관측 이력을 남긴 뒤 호출한다. 실패는 검색·수집을 막지 않는다. */
   public void record(CharacterDetails details, Instant observedAt) {
     if (!policy.enabled()) return;
-    var observation = observe(details, observedAt);
+    var base = observe(details, observedAt);
     // 해석은 이미 한 도메인에서 뽑으므로 요청 스레드에서 해도 가볍다. 쓰기만 작업자에 넘긴다.
     var summary = EquipmentSummary.from(details.profile(), details.loadout());
     var collectibles = details.loadout().collectibles();
     try {
       writer.execute(
           () -> {
+            // 팔찌·젬 효율 재계산은 검색 응답 시간을 늘리지 않도록 작업자에서 한다(#443 성능 조건).
+            var observation = base.withEfficiency(efficiency(details, observedAt));
             write(observation);
             writeSummary(observation, summary);
             writeCollectibles(observation, collectibles);
@@ -77,7 +85,51 @@ public class CharacterCardService {
     }
   }
 
+  /**
+   * 팔찌 효율·젬 효율(L38·L39): 검색 응답과 같은 모델로 메모리에서 계산한다(공식 호출 없음). 장비를 관측하지 않았으면 null(저장값 유지), 계산이 실패하거나
+   * OK가 아니면 그 값만 null이다(B8: 관측 저장은 그대로).
+   */
+  CharacterCardPort.Efficiency efficiency(CharacterDetails details, Instant observedAt) {
+    if (details.loadout().equipment().isEmpty()) return null;
+    var result = new CharacterResult(details, observedAt);
+    java.math.BigDecimal bracelet = null;
+    String braceletVersion = null;
+    try {
+      var value = simulator.braceletEfficiency(result);
+      if (value != null
+          && value.status() == CombatPowerSimulationService.Status.OK
+          && value.percent() != null) {
+        bracelet = value.percent();
+        braceletVersion = value.ruleVersion();
+      }
+    } catch (RuntimeException exception) {
+      log.warn("팔찌 효율을 저장용으로 계산하지 못했습니다. 예외 유형={}", exception.getClass().getSimpleName());
+    }
+    java.math.BigDecimal gem = null;
+    String gemVersion = null;
+    try {
+      var value = arkGrids.efficiency(result);
+      // 젬 효율 = 젬 옵션 합계 줄(코어 제외, L39). 마지막 줄이고 slotIndex가 없다.
+      var line = value == null || value.lines().isEmpty() ? null : value.lines().getLast();
+      if (line != null
+          && line.slotIndex() == null
+          && line.status() == CombatPowerSimulationService.Status.OK
+          && line.percent() != null) {
+        gem = line.percent();
+        gemVersion = value.ruleVersion();
+      }
+    } catch (RuntimeException exception) {
+      log.warn("젬 효율을 저장용으로 계산하지 못했습니다. 예외 유형={}", exception.getClass().getSimpleName());
+    }
+    return new CharacterCardPort.Efficiency(bracelet, braceletVersion, gem, gemVersion);
+  }
+
   static CharacterCardPort.Observation observe(CharacterDetails details, Instant observedAt) {
+    return observe(details, observedAt, null);
+  }
+
+  static CharacterCardPort.Observation observe(
+      CharacterDetails details, Instant observedAt, CharacterCardPort.Efficiency efficiency) {
     var loadoutCards = details.loadout().cards();
     var profile = details.profile();
     // 속성 칸(딜러·서포터)과 통계 역할 필터를 위해 사용자 검색에서도 포지션을 남긴다. 판정하지 못하면 기존 값을 유지한다.
@@ -90,7 +142,8 @@ public class CharacterCardService {
         position.role() == null ? null : position.role().name(),
         tier4GemMeanLevel(details.loadout().gems()),
         details.loadout().gems() != null,
-        observedAt);
+        observedAt,
+        efficiency);
   }
 
   /** 4티어 보석(겁화·작열·광휘)의 평균 레벨. 없으면 null이고 통계에서 빠진다. */

@@ -264,6 +264,79 @@ public final class StatsResponses {
       @NullableResponse BigDecimal topPercent,
       @NullableResponse
           @Schema(allowableValues = {"TOP1", "TOP5", "TOP10", "TOP25", "TOP50", "REST"})
+          String tier,
+      @NullableResponse @Schema(description = "관측한 최고 전투력(LOAKraken이 기록한 값 중 최고)")
+          BigDecimal bestCombatPower,
+      @NullableResponse
+          @Schema(description = "아크 패시브 진화·깨달음·도약 포인트(마지막으로 관측한 장비 기준). 관측하지 않았으면 null")
+          StatsArkPassivePointsResponse arkPassivePoints,
+      @NullableResponse @Schema(description = "직업 각인(깨달음 직업 노드, 공식 아크 패시브 칭호). 관측하지 않았으면 null")
+          String classEngraving) {}
+
+  public record StatsArkPassivePointsResponse(
+      @NullableResponse Integer evolution,
+      @NullableResponse Integer enlightenment,
+      @NullableResponse Integer leap) {}
+
+  /** 팔찌·젬 효율 랭킹(L38·L39). 두 경로가 같은 모양이다. */
+  public record StatsEfficiencyRankingResponse(
+      StatsMetaResponse meta,
+      @Schema(
+              description = "BRACELET(팔찌 효율) 또는 ARK_GRID_GEM(젬 옵션 합계 효율)",
+              allowableValues = {"BRACELET", "ARK_GRID_GEM"})
+          String kind,
+      @Schema(description = "순위에 쓴 계산 규칙 버전. 이 버전으로 계산된 값만 셉니다") String ruleVersion,
+      @Schema(
+              description =
+                  "순위 대상: 캐릭터 검색으로 장비를 관측해 효율을 계산한 캐릭터(딜러, 계산이 된 값만)입니다. 수집기만 거친 캐릭터는 들어가지 않습니다. 계산 모델이 바뀌면 다음 관측 때 갱신된 캐릭터부터 다시 셉니다.")
+          String populationNote,
+      int page,
+      int size,
+      @Schema(description = "효율 높은 순. 전체 순위 대상 수는 meta.population")
+          List<StatsEfficiencyRankedCharacterResponse> rows) {
+    static final String POPULATION = "캐릭터 검색으로 장비를 관측해 효율을 계산한 캐릭터만 순위에 들어갑니다.";
+
+    static StatsEfficiencyRankingResponse from(StatsQueryService.EfficiencyRankingResult result) {
+      return new StatsEfficiencyRankingResponse(
+          StatsMetaResponse.from(result.meta()),
+          result.kind().name(),
+          result.ruleVersion(),
+          POPULATION,
+          result.page(),
+          result.size(),
+          result.rows().stream()
+              .map(
+                  row ->
+                      new StatsEfficiencyRankedCharacterResponse(
+                          row.rank(),
+                          row.characterName(),
+                          row.serverName(),
+                          row.className(),
+                          row.position(),
+                          row.itemLevel(),
+                          row.combatPower(),
+                          row.value(),
+                          row.observedAt(),
+                          row.topPercent(),
+                          row.tier() == null ? null : row.tier().name()))
+              .toList());
+    }
+  }
+
+  public record StatsEfficiencyRankedCharacterResponse(
+      @Schema(description = "동률은 같은 순위(1, 1, 3)") long rank,
+      String characterName,
+      String serverName,
+      String className,
+      @NullableResponse @Schema(allowableValues = {"DEALER", "SUPPORT"}) String position,
+      BigDecimal itemLevel,
+      BigDecimal combatPower,
+      @Schema(description = "효율 %(소수 둘째 자리): 지금 전투력이 그 항목을 뺀 전투력보다 몇 % 높은지")
+          BigDecimal valuePercent,
+      @Schema(description = "효율을 계산한 관측 시각") java.time.Instant observedAt,
+      @NullableResponse BigDecimal topPercent,
+      @NullableResponse
+          @Schema(allowableValues = {"TOP1", "TOP5", "TOP10", "TOP25", "TOP50", "REST"})
           String tier) {}
 
   public record StatsRankingResponse(
@@ -291,7 +364,18 @@ public final class StatsResponses {
                           row.itemLevel(),
                           row.combatPower(),
                           row.topPercent(),
-                          row.tier() == null ? null : row.tier().name()))
+                          row.tier() == null ? null : row.tier().name(),
+                          row.bestCombatPower(),
+                          row.arkPassive() == null
+                                  || (row.arkPassive().evolution() == null
+                                      && row.arkPassive().enlightenment() == null
+                                      && row.arkPassive().leap() == null)
+                              ? null
+                              : new StatsArkPassivePointsResponse(
+                                  row.arkPassive().evolution(),
+                                  row.arkPassive().enlightenment(),
+                                  row.arkPassive().leap()),
+                          row.arkPassive() == null ? null : row.arkPassive().classEngraving()))
               .toList());
     }
   }

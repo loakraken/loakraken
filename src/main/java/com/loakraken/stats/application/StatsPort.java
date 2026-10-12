@@ -25,6 +25,13 @@ public interface StatsPort {
   RankingPage ranking(
       StatsConditions conditions, Instant since, Metric metric, int offset, int limit);
 
+  /**
+   * 팔찌·젬 효율 랭킹(L38·L39). 저장된 효율 중 지금 규칙 버전({@link EfficiencyKind#ruleVersion()}) 값만 센다. 처리정지 목록은
+   * 모집단에서 뺀다.
+   */
+  EfficiencyPage efficiencyRanking(
+      StatsConditions conditions, Instant since, EfficiencyKind kind, int offset, int limit);
+
   Coverage coverage();
 
   /** 이름이 같은 캐릭터가 여러 서버에 있으면 가장 최근에 갱신한 캐릭터. */
@@ -71,6 +78,10 @@ public interface StatsPort {
 
   record Standing(long greater, long total) {}
 
+  /**
+   * @param bestCombatPower 관측한 최고 전투력(L37)
+   * @param arkPassive 마지막 장비 요약의 아크 패시브 포인트·직업 각인(K32). 요약이 없으면 null
+   */
   record RankingRow(
       long rank,
       String characterName,
@@ -78,9 +89,62 @@ public interface StatsPort {
       String className,
       String position,
       BigDecimal itemLevel,
-      BigDecimal combatPower) {}
+      BigDecimal combatPower,
+      BigDecimal bestCombatPower,
+      ArkPassiveSummary arkPassive) {}
+
+  /** 아크 패시브 진화·깨달음·도약 포인트와 직업 각인(공식 ArkPassive.Title). 못 읽은 값은 null. */
+  record ArkPassiveSummary(
+      Integer evolution, Integer enlightenment, Integer leap, String classEngraving) {}
 
   record RankingPage(long total, List<RankingRow> rows) {}
+
+  /** 효율 랭킹 종류(L38 팔찌, L39 젬 옵션 합계). 열 이름은 characters 테이블이고, 지금 규칙 버전은 캐릭터 모듈이 저장할 때 쓰는 공통 상수다. */
+  enum EfficiencyKind {
+    BRACELET(
+        "bracelet_efficiency_pct",
+        "bracelet_rule_version",
+        com.loakraken.common.api.EfficiencyRuleVersions.COMBAT_POWER_SIM),
+    ARK_GRID_GEM(
+        "ark_grid_gem_pct",
+        "ark_grid_rule_version",
+        com.loakraken.common.api.EfficiencyRuleVersions.ARK_GRID);
+
+    private final String column;
+    private final String versionColumn;
+    private final String ruleVersion;
+
+    EfficiencyKind(String column, String versionColumn, String ruleVersion) {
+      this.column = column;
+      this.versionColumn = versionColumn;
+      this.ruleVersion = ruleVersion;
+    }
+
+    public String ruleVersion() {
+      return ruleVersion;
+    }
+
+    public String column() {
+      return column;
+    }
+
+    public String versionColumn() {
+      return versionColumn;
+    }
+  }
+
+  record EfficiencyRow(
+      long rank,
+      String characterName,
+      String serverName,
+      String className,
+      String position,
+      BigDecimal itemLevel,
+      BigDecimal combatPower,
+      BigDecimal value,
+      Instant observedAt) {}
+
+  record EfficiencyPage(long total, String ruleVersion, List<EfficiencyRow> rows) {}
 
   /**
    * 수집품 랭킹 행(#295). 원정대 단위면 대표(아이템 레벨이 가장 높은 공개 캐릭터), 캐릭터 단위면 그 캐릭터다. point·maxPoint는 원정대 합(공식

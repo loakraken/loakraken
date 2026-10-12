@@ -9,6 +9,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
@@ -279,6 +280,166 @@ class StatsIntegrationTest {
     } finally {
       jdbc.sql("DELETE FROM public_exclusion WHERE character_name = '통계캐34'").update();
     }
+  }
+
+  @Test
+  void 팔찌_젬_효율_랭킹은_지금_규칙_버전_값만_높은_순으로_세고_처리정지는_뺀다() throws Exception {
+    // L38·L39: 저장된 효율 중 지금 규칙 버전(공통 상수) 값만 센다.
+    표본();
+    var t = Instant.now();
+    efficiency("통계캐1", "10.00", "sim-old", null, null, t.minus(Duration.ofHours(2)));
+    efficiency(
+        "통계캐2",
+        "14.42",
+        com.loakraken.common.api.EfficiencyRuleVersions.COMBAT_POWER_SIM,
+        "4.27",
+        com.loakraken.common.api.EfficiencyRuleVersions.ARK_GRID,
+        t.minus(Duration.ofHours(1)));
+    efficiency(
+        "통계캐3",
+        "12.00",
+        com.loakraken.common.api.EfficiencyRuleVersions.COMBAT_POWER_SIM,
+        "6.10",
+        com.loakraken.common.api.EfficiencyRuleVersions.ARK_GRID,
+        t.minus(Duration.ofMinutes(50)));
+    efficiency(
+        "통계캐5",
+        "12.00",
+        com.loakraken.common.api.EfficiencyRuleVersions.COMBAT_POWER_SIM,
+        null,
+        null,
+        t.minus(Duration.ofMinutes(40)));
+    efficiency(
+        "통계캐34",
+        "20.00",
+        com.loakraken.common.api.EfficiencyRuleVersions.COMBAT_POWER_SIM,
+        null,
+        null,
+        t.minus(Duration.ofMinutes(30)));
+    var bracelets = data("/api/v1/rankings/bracelets?size=10&server=" + encode(SERVER));
+    assertThat(bracelets.path("kind").asText()).isEqualTo("BRACELET");
+    assertThat(bracelets.path("ruleVersion").asText())
+        .isEqualTo(com.loakraken.common.api.EfficiencyRuleVersions.COMBAT_POWER_SIM);
+    assertThat(bracelets.path("populationNote").asText()).isNotBlank();
+    // 옛 버전(통계캐1)은 빠지고, 동률(12.00)은 같은 순위다.
+    assertThat(bracelets.at("/meta/population").asLong()).isEqualTo(4);
+    assertThat(bracelets.at("/rows/0/characterName").asText()).isEqualTo("통계캐34");
+    assertThat(bracelets.at("/rows/0/valuePercent").decimalValue()).isEqualByComparingTo("20.00");
+    assertThat(bracelets.at("/rows/1/characterName").asText()).isEqualTo("통계캐2");
+    assertThat(bracelets.at("/rows/2/rank").asLong()).isEqualTo(3);
+    assertThat(bracelets.at("/rows/3/rank").asLong()).isEqualTo(3);
+    assertThat(bracelets.at("/rows/0/observedAt").asText()).isNotBlank();
+    ApiContractFixture.write(
+        "rankings-bracelets.json",
+        get("/api/v1/rankings/bracelets?size=10&server=" + encode(SERVER)).body());
+
+    var gems = data("/api/v1/rankings/ark-grid-gems?size=10&server=" + encode(SERVER));
+    assertThat(gems.path("kind").asText()).isEqualTo("ARK_GRID_GEM");
+    assertThat(gems.path("ruleVersion").asText())
+        .isEqualTo(com.loakraken.common.api.EfficiencyRuleVersions.ARK_GRID);
+    assertThat(gems.at("/rows").size()).isEqualTo(2);
+    assertThat(gems.at("/rows/0/characterName").asText()).isEqualTo("통계캐3");
+    assertThat(gems.at("/rows/1/valuePercent").decimalValue()).isEqualByComparingTo("4.27");
+
+    // B5: 처리정지 목록 캐릭터는 빠진다.
+    jdbc.sql(
+            "INSERT INTO public_exclusion (character_name, server_name, reason_code) VALUES ('통계캐34', :s, 'REQUEST')")
+        .param("s", SERVER)
+        .update();
+    try {
+      var keys = redis.keys("stats:v1:*");
+      if (keys != null && !keys.isEmpty()) redis.delete(keys);
+      var excluded = data("/api/v1/rankings/bracelets?size=10&server=" + encode(SERVER));
+      assertThat(excluded.at("/meta/population").asLong()).isEqualTo(3);
+      assertThat(excluded.at("/rows/0/characterName").asText()).isEqualTo("통계캐2");
+      assertThat(excluded.toString()).doesNotContain("통계캐34");
+    } finally {
+      jdbc.sql("DELETE FROM public_exclusion WHERE character_name = '통계캐34'").update();
+    }
+  }
+
+  @Test
+  void 전투력_랭킹_행은_관측한_최고_전투력과_마지막_장비의_아크_패시브를_준다() throws Exception {
+    // L37·K32: 최고 전투력은 characters.best_combat_power, 아크 패시브는 마지막 장비 요약(포인트·직업 각인).
+    표본();
+    jdbc.sql(
+            "UPDATE characters SET best_combat_power = 3500 WHERE character_name = '통계캐34' AND server_name = :s")
+        .param("s", SERVER)
+        .update();
+    var id =
+        jdbc.sql(
+                "SELECT character_id FROM characters WHERE character_name = '통계캐34' AND server_name = :s")
+            .param("s", SERVER)
+            .query(UUID.class)
+            .single();
+    for (var row : new Object[][] {{"버스트", 120, 90, 60, 2}, {"버스트", 140, 101, 70, 1}})
+      jdbc.sql(
+              """
+          INSERT INTO character_equipment_summary (character_id, observed_at, last_confirmed_at,
+            schema_version, combat_power, item_level, class_name, ark_passive_title, features, features_hash)
+          VALUES (:id, :at, :at, 'equipment-summary-v1', 3330, 1734, '버서커', :title, CAST(:features AS JSONB), :hash)
+          """)
+          .param("id", id)
+          .param("at", now.minus((int) row[4], ChronoUnit.HOURS).atOffset(ZoneOffset.UTC))
+          .param("title", row[0])
+          .param(
+              "features",
+              "{\"arkPassive\":{\"points\":{\"evolution\":"
+                  + row[1]
+                  + ",\"enlightenment\":"
+                  + row[2]
+                  + ",\"leap\":"
+                  + row[3]
+                  + "}}}")
+          .param("hash", "h".repeat(63) + row[4])
+          .update();
+    var ranking = data("/api/v1/rankings?metric=COMBAT_POWER&size=2&server=" + encode(SERVER));
+    var top = ranking.at("/rows/0");
+    assertThat(top.path("characterName").asText()).isEqualTo("통계캐34");
+    assertThat(top.path("bestCombatPower").decimalValue()).isEqualByComparingTo("3500");
+    // 마지막(1시간 전) 장비 요약 값이다.
+    assertThat(top.at("/arkPassivePoints/evolution").asInt()).isEqualTo(140);
+    assertThat(top.at("/arkPassivePoints/enlightenment").asInt()).isEqualTo(101);
+    assertThat(top.at("/arkPassivePoints/leap").asInt()).isEqualTo(70);
+    assertThat(top.path("classEngraving").asText()).isEqualTo("버스트");
+    // 장비 요약·최고 전투력이 없는 캐릭터는 null이다.
+    var second = ranking.at("/rows/1");
+    assertThat(second.path("bestCombatPower").isNull()).isTrue();
+    assertThat(second.path("arkPassivePoints").isNull()).isTrue();
+    assertThat(second.path("classEngraving").isNull()).isTrue();
+  }
+
+  @Test
+  void 저장된_효율이_없으면_빈_랭킹이다() throws Exception {
+    표본();
+    var empty = data("/api/v1/rankings/ark-grid-gems?server=" + encode(SERVER));
+    assertThat(empty.path("ruleVersion").asText())
+        .isEqualTo(com.loakraken.common.api.EfficiencyRuleVersions.ARK_GRID);
+    assertThat(empty.at("/rows").size()).isZero();
+  }
+
+  private void efficiency(
+      String name,
+      String bracelet,
+      String braceletVersion,
+      String gem,
+      String gemVersion,
+      Instant observedAt) {
+    jdbc.sql(
+            """
+        UPDATE characters SET bracelet_efficiency_pct = CAST(:bracelet AS NUMERIC),
+          bracelet_rule_version = :bv, ark_grid_gem_pct = CAST(:gem AS NUMERIC),
+          ark_grid_rule_version = :gv, efficiency_observed_at = :at
+        WHERE character_name = :name AND server_name = :server
+        """)
+        .param("bracelet", bracelet == null ? null : new BigDecimal(bracelet))
+        .param("bv", braceletVersion)
+        .param("gem", gem == null ? null : new BigDecimal(gem))
+        .param("gv", gemVersion)
+        .param("at", observedAt.atOffset(ZoneOffset.UTC))
+        .param("name", name)
+        .param("server", SERVER)
+        .update();
   }
 
   private static JsonNode entry(JsonNode rank, String metric, String scope) {

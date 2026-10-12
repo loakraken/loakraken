@@ -6,7 +6,7 @@
  ],
  "status": "TIER3_CONFIRMED · TIER4_LV5_CONFIRMED · TIER4_LV1_4_HOLD",
  "source": {
-  "targetSite": "로아랩 딜러 전투력 시뮬레이터(계산 함수 직접 호출, 첫 보석 칸만 바꿈). 공식 전투력(Before)은 바꾸지 않은 계산과 같음",
+  "ref": "로아랩 딜러 전투력 시뮬레이터(계산 함수 직접 호출, 첫 보석 칸만 바꿈). 공식 전투력(Before)은 바꾸지 않은 계산과 같음",
   "inven": "인벤 4821/106546 「딜러 전투력 로직 분석」 보석 표: 3티어 1~10레벨 0.48·0.96·1.44·1.92·2.40·2.88·3.36·3.84·4.80·6.40%, 기본 공격력 %는 4티어 보석에만 있다고 명시",
   "official": "공식 API armories gems 툴팁 \"기본 공격력 n% 증가\": 광휘 5레벨 0.3%(1명 11개), 6레벨 0.45%(10명), 7레벨 0.6%(4명). 멸화·홍염 5~7레벨 167개는 기본 공격력 줄 없음. 4티어 1~4레벨 보석은 표본 원정대에 없었다",
   "officialApiCalls": 36
@@ -50,7 +50,7 @@
    },
    "source": "목표 사이트 5명 역산(편차 0.00004%p 이하)",
    "official": "표본 없음 — 공식 툴팁 확인 전",
-   "status": "TARGET_SITE_ONLY_HOLD",
+   "status": "REF_ONLY_HOLD",
    "rule": "출처 규칙(회귀 점검표 B4): 비교 기준 A는 단일 출처 허용 목록(공식·공개 분석 글·비교 기준 C·비교 기준 B·비교 기준 D) 밖이라 두 곳 일치가 필요. 반영 보류(UNSUPPORTED 유지)"
   },
   "level5": {
@@ -71,126 +71,126 @@
    "className": "블레이드",
    "combatPower": 3345.24,
    "currentGems": "4/6 x11",
-   "slot1RemovedTargetSite": 3188.39,
+   "slot1RemovedRef": 3188.39,
    "onePlusQExcludingSlot1": 1.07,
    "cases": [
     {
      "change": "칸1 → 3티어 1레벨",
-     "expectedTargetSite": 3203.6938,
+     "expectedRef": 3203.6938,
      "formula": 3203.6943,
      "diff": -0.0005
     },
     {
      "change": "칸1 → 3티어 2레벨",
-     "expectedTargetSite": 3218.9988,
+     "expectedRef": 3218.9988,
      "formula": 3218.9985,
      "diff": 0.0003
     },
     {
      "change": "칸1 → 3티어 3레벨",
-     "expectedTargetSite": 3234.303,
+     "expectedRef": 3234.303,
      "formula": 3234.3028,
      "diff": 0.0002
     },
     {
      "change": "칸1 → 3티어 4레벨",
-     "expectedTargetSite": 3249.6074,
+     "expectedRef": 3249.6074,
      "formula": 3249.6071,
      "diff": 0.0003
     },
     {
      "change": "칸1 → 3티어 5레벨",
-     "expectedTargetSite": 3264.9116,
+     "expectedRef": 3264.9116,
      "formula": 3264.9114,
      "diff": 0.0002
     },
     {
      "change": "칸1 → 3티어 6레벨",
-     "expectedTargetSite": 3280.216,
+     "expectedRef": 3280.216,
      "formula": 3280.2156,
      "diff": 0.0004
     },
     {
      "change": "칸1 → 3티어 7레벨",
-     "expectedTargetSite": 3295.5198,
+     "expectedRef": 3295.5198,
      "formula": 3295.5199,
      "diff": -0.0001
     },
     {
      "change": "칸1 → 3티어 8레벨",
-     "expectedTargetSite": 3310.8237,
+     "expectedRef": 3310.8237,
      "formula": 3310.8242,
      "diff": -0.0005
     },
     {
      "change": "칸1 → 3티어 9레벨",
-     "expectedTargetSite": 3341.4326,
+     "expectedRef": 3341.4326,
      "formula": 3341.4327,
      "diff": -0.0001
     },
     {
      "change": "칸1 → 3티어 10레벨",
-     "expectedTargetSite": 3392.447,
+     "expectedRef": 3392.447,
      "formula": 3392.447,
      "diff": 0
     },
     {
      "change": "칸1 → 4티어 1레벨",
-     "expectedTargetSite": 3229.2014,
+     "expectedRef": 3229.2014,
      "formula": 3229.2014,
      "diff": 0
     },
     {
      "change": "칸1 → 4티어 2레벨",
-     "expectedTargetSite": 3251.1257,
+     "expectedRef": 3251.1257,
      "formula": 3251.1256,
      "diff": 0.0001
     },
     {
      "change": "칸1 → 4티어 3레벨",
-     "expectedTargetSite": 3273.069,
+     "expectedRef": 3273.069,
      "formula": 3273.0689,
      "diff": 0.0001
     },
     {
      "change": "칸1 → 4티어 4레벨",
-     "expectedTargetSite": 3296.5686,
+     "expectedRef": 3296.5686,
      "formula": 3296.5689,
      "diff": -0.0003
     },
     {
      "change": "칸1 → 4티어 5레벨",
-     "expectedTargetSite": 3320.1067,
+     "expectedRef": 3320.1067,
      "formula": 3320.107,
      "diff": -0.0003
     },
     {
      "change": "칸1 → 4티어 6레벨",
-     "expectedTargetSite": 3345.24,
+     "expectedRef": 3345.24,
      "formula": 3345.2399,
      "diff": 0.0001
     },
     {
      "change": "칸1 → 4티어 7레벨",
-     "expectedTargetSite": 3370.4302,
+     "expectedRef": 3370.4302,
      "formula": 3370.4301,
      "diff": 0.0001
     },
     {
      "change": "칸1 → 4티어 8레벨",
-     "expectedTargetSite": 3397.2537,
+     "expectedRef": 3397.2537,
      "formula": 3397.2532,
      "diff": 0.0005
     },
     {
      "change": "칸1 → 4티어 9레벨",
-     "expectedTargetSite": 3424.152,
+     "expectedRef": 3424.152,
      "formula": 3424.1525,
      "diff": -0.0005
     },
     {
      "change": "칸1 → 4티어 10레벨",
-     "expectedTargetSite": 3451.1282,
+     "expectedRef": 3451.1282,
      "formula": 3451.1282,
      "diff": 0
     }
@@ -201,72 +201,72 @@
    "className": "리퍼",
    "combatPower": 11028.4,
    "currentGems": "4/10,4/10,4/10,4/10,4/10,4/10,4/10,4/10,4/10,4/10,4/10",
-   "slot1RemovedTargetSite": 10198.021,
+   "slot1RemovedRef": 10198.021,
    "onePlusQExcludingSlot1": 1.165,
    "cases": [
     {
      "change": "칸1 → 3티어 1레벨",
-     "expectedTargetSite": 10246.974,
+     "expectedRef": 10246.974,
      "formula": 10246.9715,
      "diff": 0.0025
     },
     {
      "change": "칸1 → 3티어 5레벨",
-     "expectedTargetSite": 10442.775,
+     "expectedRef": 10442.775,
      "formula": 10442.7735,
      "diff": 0.0015
     },
     {
      "change": "칸1 → 3티어 8레벨",
-     "expectedTargetSite": 10589.626,
+     "expectedRef": 10589.626,
      "formula": 10589.625,
      "diff": 0.001
     },
     {
      "change": "칸1 → 3티어 9레벨",
-     "expectedTargetSite": 10687.53,
+     "expectedRef": 10687.53,
      "formula": 10687.526,
      "diff": 0.004
     },
     {
      "change": "칸1 → 3티어 10레벨",
-     "expectedTargetSite": 10850.696,
+     "expectedRef": 10850.696,
      "formula": 10850.6943,
      "diff": 0.0017
     },
     {
      "change": "칸1 → 4티어 1레벨",
-     "expectedTargetSite": 10328.557,
+     "expectedRef": 10328.557,
      "formula": 10328.5557,
      "diff": 0.0013
     },
     {
      "change": "칸1 → 4티어 2레벨",
-     "expectedTargetSite": 10398.286,
+     "expectedRef": 10398.286,
      "formula": 10398.2838,
      "diff": 0.0022
     },
     {
      "change": "칸1 → 4티어 3레벨",
-     "expectedTargetSite": 10468.068,
+     "expectedRef": 10468.068,
      "formula": 10468.068,
      "diff": 0
     },
     {
      "change": "칸1 → 4티어 4레벨",
-     "expectedTargetSite": 10542.426,
+     "expectedRef": 10542.426,
      "formula": 10542.4251,
      "diff": 0.0009
     },
     {
      "change": "칸1 → 4티어 5레벨",
-     "expectedTargetSite": 10616.8955,
+     "expectedRef": 10616.8955,
      "formula": 10616.8942,
      "diff": 0.0013
     },
     {
      "change": "칸1 → 4티어 10레벨",
-     "expectedTargetSite": 11028.4,
+     "expectedRef": 11028.4,
      "formula": 11028.4,
      "diff": 0
     }
@@ -277,72 +277,72 @@
    "className": "슬레이어",
    "combatPower": 4783.32,
    "currentGems": "4/10,4/10,4/10,4/10,4/10,4/10,4/10,4/10,4/10,4/10,4/10",
-   "slot1RemovedTargetSite": 4423.161,
+   "slot1RemovedRef": 4423.161,
    "onePlusQExcludingSlot1": 1.165,
    "cases": [
     {
      "change": "칸1 → 3티어 1레벨",
-     "expectedTargetSite": 4444.393,
+     "expectedRef": 4444.393,
      "formula": 4444.3922,
      "diff": 0.0008
     },
     {
      "change": "칸1 → 3티어 5레벨",
-     "expectedTargetSite": 4529.317,
+     "expectedRef": 4529.317,
      "formula": 4529.3169,
      "diff": 0.0001
     },
     {
      "change": "칸1 → 3티어 8레벨",
-     "expectedTargetSite": 4593.011,
+     "expectedRef": 4593.011,
      "formula": 4593.0104,
      "diff": 0.0006
     },
     {
      "change": "칸1 → 3티어 9레벨",
-     "expectedTargetSite": 4635.4736,
+     "expectedRef": 4635.4736,
      "formula": 4635.4727,
      "diff": 0.0009
     },
     {
      "change": "칸1 → 3티어 10레벨",
-     "expectedTargetSite": 4706.2446,
+     "expectedRef": 4706.2446,
      "formula": 4706.2433,
      "diff": 0.0013
     },
     {
      "change": "칸1 → 4티어 1레벨",
-     "expectedTargetSite": 4479.778,
+     "expectedRef": 4479.778,
      "formula": 4479.7775,
      "diff": 0.0005
     },
     {
      "change": "칸1 → 4티어 2레벨",
-     "expectedTargetSite": 4510.021,
+     "expectedRef": 4510.021,
      "formula": 4510.0205,
      "diff": 0.0005
     },
     {
      "change": "칸1 → 4티어 3레벨",
-     "expectedTargetSite": 4540.2886,
+     "expectedRef": 4540.2886,
      "formula": 4540.2879,
      "diff": 0.0007
     },
     {
      "change": "칸1 → 4티어 4레벨",
-     "expectedTargetSite": 4572.5386,
+     "expectedRef": 4572.5386,
      "formula": 4572.5386,
      "diff": 0
     },
     {
      "change": "칸1 → 4티어 5레벨",
-     "expectedTargetSite": 4604.839,
+     "expectedRef": 4604.839,
      "formula": 4604.838,
      "diff": 0.001
     },
     {
      "change": "칸1 → 4티어 10레벨",
-     "expectedTargetSite": 4783.32,
+     "expectedRef": 4783.32,
      "formula": 4783.32,
      "diff": 0
     }
@@ -353,72 +353,72 @@
    "className": "슬레이어",
    "combatPower": 3089.33,
    "currentGems": "4/6,4/6,4/6,4/6,4/6,4/6,4/6,4/6,4/6,4/6,4/6",
-   "slot1RemovedTargetSite": 2944.3628,
+   "slot1RemovedRef": 2944.3628,
    "onePlusQExcludingSlot1": 1.06,
    "cases": [
     {
      "change": "칸1 → 3티어 1레벨",
-     "expectedTargetSite": 2958.4958,
+     "expectedRef": 2958.4958,
      "formula": 2958.4957,
      "diff": 0.0001
     },
     {
      "change": "칸1 → 3티어 5레벨",
-     "expectedTargetSite": 3015.028,
+     "expectedRef": 3015.028,
      "formula": 3015.0275,
      "diff": 0.0005
     },
     {
      "change": "칸1 → 3티어 8레벨",
-     "expectedTargetSite": 3057.4265,
+     "expectedRef": 3057.4265,
      "formula": 3057.4263,
      "diff": 0.0002
     },
     {
      "change": "칸1 → 3티어 9레벨",
-     "expectedTargetSite": 3085.6926,
+     "expectedRef": 3085.6926,
      "formula": 3085.6922,
      "diff": 0.0004
     },
     {
      "change": "칸1 → 3티어 10레벨",
-     "expectedTargetSite": 3132.8025,
+     "expectedRef": 3132.8025,
      "formula": 3132.802,
      "diff": 0.0005
     },
     {
      "change": "칸1 → 4티어 1레벨",
-     "expectedTargetSite": 2982.051,
+     "expectedRef": 2982.051,
      "formula": 2982.0506,
      "diff": 0.0004
     },
     {
      "change": "칸1 → 4티어 2레벨",
-     "expectedTargetSite": 3002.3103,
+     "expectedRef": 3002.3103,
      "formula": 3002.3101,
      "diff": 0.0002
     },
     {
      "change": "칸1 → 4티어 3레벨",
-     "expectedTargetSite": 3022.5876,
+     "expectedRef": 3022.5876,
      "formula": 3022.5873,
      "diff": 0.0003
     },
     {
      "change": "칸1 → 4티어 4레벨",
-     "expectedTargetSite": 3044.3157,
+     "expectedRef": 3044.3157,
      "formula": 3044.3156,
      "diff": 0.0001
     },
     {
      "change": "칸1 → 4티어 5레벨",
-     "expectedTargetSite": 3066.0798,
+     "expectedRef": 3066.0798,
      "formula": 3066.0795,
      "diff": 0.0003
     },
     {
      "change": "칸1 → 4티어 10레벨",
-     "expectedTargetSite": 3187.3252,
+     "expectedRef": 3187.3252,
      "formula": 3187.3252,
      "diff": 0
     }
@@ -429,72 +429,72 @@
    "className": "소서리스",
    "combatPower": 4665.68,
    "currentGems": "4/8,4/7,4/8,4/7,4/7,4/7,4/7,4/8,4/8,4/7,4/8",
-   "slot1RemovedTargetSite": 4379.5186,
+   "slot1RemovedRef": 4379.5186,
    "onePlusQExcludingSlot1": 1.093,
    "cases": [
     {
      "change": "칸1 → 3티어 1레벨",
-     "expectedTargetSite": 4400.54,
+     "expectedRef": 4400.54,
      "formula": 4400.5403,
      "diff": -0.0003
     },
     {
      "change": "칸1 → 3티어 5레벨",
-     "expectedTargetSite": 4484.627,
+     "expectedRef": 4484.627,
      "formula": 4484.627,
      "diff": 0
     },
     {
      "change": "칸1 → 3티어 8레벨",
-     "expectedTargetSite": 4547.6924,
+     "expectedRef": 4547.6924,
      "formula": 4547.6921,
      "diff": 0.0003
     },
     {
      "change": "칸1 → 3티어 9레벨",
-     "expectedTargetSite": 4589.736,
+     "expectedRef": 4589.736,
      "formula": 4589.7355,
      "diff": 0.0005
     },
     {
      "change": "칸1 → 3티어 10레벨",
-     "expectedTargetSite": 4659.8076,
+     "expectedRef": 4659.8076,
      "formula": 4659.8078,
      "diff": -0.0002
     },
     {
      "change": "칸1 → 4티어 1레벨",
-     "expectedTargetSite": 4435.575,
+     "expectedRef": 4435.575,
      "formula": 4435.5764,
      "diff": -0.0014
     },
     {
      "change": "칸1 → 4티어 2레벨",
-     "expectedTargetSite": 4465.647,
+     "expectedRef": 4465.647,
      "formula": 4465.6473,
      "diff": -0.0003
     },
     {
      "change": "칸1 → 4티어 3레벨",
-     "expectedTargetSite": 4495.7437,
+     "expectedRef": 4495.7437,
      "formula": 4495.7437,
      "diff": 0
     },
     {
      "change": "칸1 → 4티어 4레벨",
-     "expectedTargetSite": 4527.9326,
+     "expectedRef": 4527.9326,
      "formula": 4527.9334,
      "diff": -0.0008
     },
     {
      "change": "칸1 → 4티어 5레벨",
-     "expectedTargetSite": 4560.175,
+     "expectedRef": 4560.175,
      "formula": 4560.1743,
      "diff": 0.0007
     },
     {
      "change": "칸1 → 4티어 10레벨",
-     "expectedTargetSite": 4739.304,
+     "expectedRef": 4739.304,
      "formula": 4739.304,
      "diff": 0
     }

@@ -55,7 +55,7 @@ class AccessoryStatRangeTest {
                   row.path("polishStage").asInt(),
                   row.path("mainStat").asInt()))
           .as(row.toString())
-          .isEqualByComparingTo(row.path("targetSitePct").decimalValue());
+          .isEqualByComparingTo(row.path("refPct").decimalValue());
   }
 
   @Test

@@ -4,7 +4,7 @@
   "field": "crit.damage.total",
   "unit": "%",
   "observed": {
-    "targetSites": "2026-10-09 16시대 KST 비교 기준 B 효율표 '치명타 피해량 상세'·비교 기준 C 스펙 계산 (c01는 21시대 비교 기준 C)",
+    "refs": "2026-10-09 16시대 KST 비교 기준 B 효율표 '치명타 피해량 상세'·비교 기준 C 스펙 계산 (c01는 21시대 비교 기준 C)",
     "kraken": "2026-10-09 21시대 KST, 8090 로컬 검증 서버(develop + #161·#169·#174), 공식 armory 실조회. 원문은 저장하지 않음"
   },
   "rule": "기본 200% + 장비·팔찌·각인·아크 패시브·카드의 일반 '치명타 피해' 문구. 스킬 한정('…의 치명타 피해'), 받는 치명타 피해, 같은 문장 앞에 '상태에서'·'상태일 때'가 있는 효과는 제외(conditional). 각성 상시 효과('폭주 중', '마력 해방 중')는 포함",
@@ -13,7 +13,7 @@
       "character": "기준 캐릭터",
       "className": "블레이드",
       "expected": 208.4,
-      "source": "TARGET_SITE",
+      "source": "REF",
       "sites": {
         "refB": 208.4,
         "refC": 208.4
@@ -27,7 +27,7 @@
       "character": "c02",
       "className": "슬레이어(포식자)",
       "expected": 277.4,
-      "source": "TARGET_SITE",
+      "source": "REF",
       "sites": {
         "refB": 277.4,
         "refC": 277.4
@@ -41,7 +41,7 @@
       "character": "c06",
       "className": "소서리스(점화)",
       "expected": 259.8,
-      "source": "TARGET_SITE",
+      "source": "REF",
       "sites": {
         "refB": 259.8,
         "refC": 259.8
@@ -55,7 +55,7 @@
       "character": "c07",
       "className": "소울이터",
       "expected": 257.2,
-      "source": "TARGET_SITE",
+      "source": "REF",
       "sites": {
         "refB": 257.2,
         "refC": 257.2
@@ -75,7 +75,7 @@
         256.8,
         259.8
       ],
-      "source": "TARGET_SITE",
+      "source": "REF",
       "sites": {
         "refB": 259.8,
         "refC": 256.8
@@ -92,7 +92,7 @@
       "character": "c01",
       "className": "리퍼(갈증)",
       "expected": 208,
-      "source": "TARGET_SITE",
+      "source": "REF",
       "sites": {
         "refC": 208
       },

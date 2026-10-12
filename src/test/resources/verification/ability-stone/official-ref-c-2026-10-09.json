@@ -164,7 +164,7 @@
     15,
     47
    ],
-   "source": "TARGET_SITE: 일로아 /tools/stone(성장 도구팀 관찰, 2026-10-09)"
+   "source": "REF: 일로아 /tools/stone(성장 도구팀 관찰, 2026-10-09)"
   },
   {
    "id": "10칸 97·79·10/6·6/10·감소≤4",
@@ -187,7 +187,7 @@
     511,
     1697
    ],
-   "source": "TARGET_SITE: 일로아 /tools/stone(성장 도구팀 관찰, 2026-10-09)"
+   "source": "REF: 일로아 /tools/stone(성장 도구팀 관찰, 2026-10-09)"
   }
  ],
  "verdict": {

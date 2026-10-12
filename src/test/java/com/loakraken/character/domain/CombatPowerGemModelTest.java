@@ -52,8 +52,7 @@ class CombatPowerGemModelTest {
         assertThat(actual)
             .as(label)
             .isEqualByComparingTo(new BigDecimal(sample.path("formula").asText()));
-        assertThat(
-                actual.subtract(new BigDecimal(sample.path("expectedTargetSite").asText())).abs())
+        assertThat(actual.subtract(new BigDecimal(sample.path("expectedRef").asText())).abs())
             .as(label)
             .isLessThanOrEqualTo(new BigDecimal("0.01"));
         count++;

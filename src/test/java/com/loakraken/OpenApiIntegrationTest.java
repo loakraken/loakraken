@@ -25,7 +25,8 @@ import tools.jackson.databind.json.JsonMapper;
       "ranking.collectibles.enabled=true",
       "ranking.rosters.enabled=true",
       "ranking.guilds.enabled=true",
-      "ranking.titles.enabled=true"
+      "ranking.titles.enabled=true",
+      "loakraken.features.auction-search=true"
     })
 class OpenApiIntegrationTest {
   @LocalServerPort private int port;
@@ -181,6 +182,59 @@ class OpenApiIntegrationTest {
                   .asText())
           .as(field)
           .isEqualTo("null");
+    // 악세 경매 검색기(N13): 필수와 nullable.
+    assertThat(document.at("/components/schemas/AccessorySearchResponse/required").toString())
+        .contains(
+            "ruleVersion",
+            "totalCount",
+            "page",
+            "observedAt",
+            "cached",
+            "complete",
+            "scannedPages",
+            "nextPage",
+            "items");
+    assertThat(
+            document
+                .at("/components/schemas/AccessorySearchResponse/properties/nextPage/anyOf/1/type")
+                .asText())
+        .isEqualTo("null");
+    for (var field :
+        List.of(
+            "grade",
+            "quality",
+            "enlightenment",
+            "mainStat",
+            "mainStatRangePct",
+            "tradeAllowCount",
+            "buyPrice",
+            "bidStartPrice",
+            "endDate"))
+      assertThat(
+              document
+                  .at(
+                      "/components/schemas/AccessorySearchItemResponse/properties/"
+                          + field
+                          + "/anyOf/1/type")
+                  .asText())
+          .as(field)
+          .isEqualTo("null");
+    for (var field : List.of("option", "shortName", "value", "level"))
+      assertThat(
+              document
+                  .at(
+                      "/components/schemas/AccessorySearchPolishResponse/properties/"
+                          + field
+                          + "/anyOf/1/type")
+                  .asText())
+          .as(field)
+          .isEqualTo("null");
+    assertThat(
+            document
+                .at(
+                    "/paths/~1api~1v1~1markets~1auctions~1accessories~1search/post/responses/503/description")
+                .asText())
+        .contains("MARKET_SEARCH_BUSY");
     var search = document.at("/paths/~1api~1v1~1characters~1search/get/parameters");
     assertThat(search.toString()).contains("includeSiblings");
     assertThat(document.at("/paths/~1api~1v1~1characters~1history/get/responses").has("503"))

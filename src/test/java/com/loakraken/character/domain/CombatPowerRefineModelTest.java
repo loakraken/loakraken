@@ -49,6 +49,19 @@ class CombatPowerRefineModelTest {
                 .ratio(Map.of(), BigDecimal.ZERO, new BigDecimal("15360"))
                 .setScale(6, RoundingMode.HALF_UP))
         .isEqualByComparingTo("1.010768");
+    // 무공% 변화가 없으면 기존 식과 같다(연마 무공 줄 교체는 계산 검증 확인 전까지 시뮬레이터가 막는다).
+    assertThat(
+            model.ratioFull(
+                Map.of(1, new CombatPowerRefineModel.Target(20, 0)),
+                BigDecimal.ZERO,
+                BigDecimal.ZERO,
+                BigDecimal.ZERO,
+                null))
+        .isEqualByComparingTo(
+            model.ratioTargets(
+                Map.of(1, new CombatPowerRefineModel.Target(20, 0)),
+                BigDecimal.ZERO,
+                BigDecimal.ZERO));
   }
 
   @Test
@@ -237,7 +250,8 @@ class CombatPowerRefineModelTest {
       assertThat(model.cannotSetArmGuard(target.level(), target.grade()))
           .as(entry.getKey())
           .isNull();
-      var ratio = model.ratioFull(Map.of(), BigDecimal.ZERO, BigDecimal.ZERO, target);
+      var ratio =
+          model.ratioFull(Map.of(), BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, target);
       var q = new BigDecimal("1.0745");
       ratio =
           ratio

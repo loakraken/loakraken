@@ -5,6 +5,7 @@ import com.loakraken.character.domain.CharacterPosition;
 import com.loakraken.character.domain.CombatPowerBraceletModel;
 import com.loakraken.character.domain.CombatPowerEquipmentModel;
 import com.loakraken.character.domain.CombatPowerGemModel;
+import com.loakraken.character.domain.CombatPowerPolishModel;
 import com.loakraken.character.domain.CombatPowerPolishValues;
 import com.loakraken.character.domain.CombatPowerReasons;
 import com.loakraken.character.domain.CombatPowerRefineModel;
@@ -55,6 +56,10 @@ public class CombatPowerSimulationService {
       "팔 보호구 단계표(무기 공격력·주스탯·기본 공격력)와 등급 추가 효과(기본 공격력 %)로 기본 공격력을 다시 계산한 비율을 공식 전투력에 곱했습니다(펫 효과(힘민지 +1%)는 있다고 가정).";
   private static final String REFINE_BASIS =
       "재련 단계의 주스탯·무기 공격력 변화로 기본 공격력을 다시 계산한 비율을 공식 전투력에 곱했습니다(펫 효과(힘민지 +1%)는 있다고 가정).";
+  private static final String POLISH_WEAPON_PENDING =
+      "무기 공격력 연마 줄을 바꾼 전투력은 계수를 확인하는 중이라 계산하지 않았습니다.";
+  private static final String POLISH_BASIS =
+      "연마 줄마다 독립 배수(공격력·추가 피해·적에게 주는 피해·치명타)와 무기 공격력(재련과 같은 무기 공격력 항)을 바꾼 비율을 공식 전투력에 곱했습니다.";
   private static final String BRACELET_BASIS =
       "팔찌 옵션의 전투력 배수(특수 옵션 계수·전투 특성 0.03%/점·고정 무기 공격력)를 바꾼 비율을 공식 전투력에 곱했습니다.";
 
@@ -393,7 +398,7 @@ public class CombatPowerSimulationService {
     var before = official == null ? null : official.setScale(2, RoundingMode.HALF_UP);
     var engravings = currentEngravings(loadout);
     var weaponAddDamage = CombatPowerEquipmentModel.currentWeaponAddDamage(weaponDetail(loadout));
-    var state = new State(Map.of(), null, Map.of(), Map.of(), Map.of(), null);
+    var state = new State(Map.of(), null, Map.of(), Map.of(), Map.of(), null, Map.of());
     var running = before;
     var contributions = new ArrayList<Contribution>();
     int unsupported = 0;
@@ -461,6 +466,11 @@ public class CombatPowerSimulationService {
   /** 팔 보호구 단계·등급(#341). */
   private record ArmGuardEffect(CombatPowerRefineModel.ArmGuard target) implements Effect {}
 
+  /** 장신구 연마 줄 교체(#325 모델): 장비 순번:줄 → 지금 줄과 바꾼 줄의 몫. */
+  private record PolishEffect(
+      String key, CombatPowerPolishModel.Line from, CombatPowerPolishModel.Line to)
+      implements Effect {}
+
   /** 팔찌 효과 줄(#327): 줄 번호 → 새 줄(빼기 포함). */
   private record BraceletEffect(int line, CombatPowerBraceletModel.Line next) implements Effect {}
 
@@ -474,17 +484,18 @@ public class CombatPowerSimulationService {
       Map<String, EngravingLevels> engravings,
       Map<Integer, CombatPowerRefineModel.Target> refines,
       Map<Integer, CombatPowerBraceletModel.Line> bracelet,
-      CombatPowerRefineModel.ArmGuard armGuard) {
+      CombatPowerRefineModel.ArmGuard armGuard,
+      Map<String, PolishEffect> polish) {
     State apply(Effect effect, Map<String, CharacterLoadout.PassiveEngraving> currents) {
       return switch (effect) {
         case GemEffect gem -> {
           var next = new HashMap<>(gems);
           next.putAll(gem.levels());
           yield new State(
-              Map.copyOf(next), weaponAddDamage, engravings, refines, bracelet, armGuard);
+              Map.copyOf(next), weaponAddDamage, engravings, refines, bracelet, armGuard, polish);
         }
         case WeaponQualityEffect quality ->
-            new State(gems, quality.addDamage(), engravings, refines, bracelet, armGuard);
+            new State(gems, quality.addDamage(), engravings, refines, bracelet, armGuard, polish);
         case RefineEffect refine -> {
           var next = new HashMap<>(refines);
           var base = refines.getOrDefault(refine.index(), refine.current());
@@ -493,16 +504,24 @@ public class CombatPowerSimulationService {
               new CombatPowerRefineModel.Target(
                   refine.level() != null ? refine.level() : base.level(),
                   refine.advanced() != null ? refine.advanced() : base.advanced()));
-          yield new State(gems, weaponAddDamage, engravings, Map.copyOf(next), bracelet, armGuard);
+          yield new State(
+              gems, weaponAddDamage, engravings, Map.copyOf(next), bracelet, armGuard, polish);
         }
         case BraceletEffect line -> {
           var next = new HashMap<>(bracelet);
           next.put(line.line(), line.next());
-          yield new State(gems, weaponAddDamage, engravings, refines, Map.copyOf(next), armGuard);
+          yield new State(
+              gems, weaponAddDamage, engravings, refines, Map.copyOf(next), armGuard, polish);
         }
         case ArmGuardEffect guard ->
-            new State(gems, weaponAddDamage, engravings, refines, bracelet, guard.target());
+            new State(gems, weaponAddDamage, engravings, refines, bracelet, guard.target(), polish);
         case NeutralEffect neutral -> this;
+        case PolishEffect line -> {
+          var next = new HashMap<>(polish);
+          next.put(line.key(), line);
+          yield new State(
+              gems, weaponAddDamage, engravings, refines, bracelet, armGuard, Map.copyOf(next));
+        }
         case EngravingEffect engraving -> {
           var next = new HashMap<>(engravings);
           var base = engravings.get(engraving.name());
@@ -518,7 +537,8 @@ public class CombatPowerSimulationService {
               new EngravingLevels(
                   engraving.book() != null ? engraving.book() : base.book(),
                   engraving.stone() != null ? engraving.stone() : base.stone()));
-          yield new State(gems, weaponAddDamage, Map.copyOf(next), refines, bracelet, armGuard);
+          yield new State(
+              gems, weaponAddDamage, Map.copyOf(next), refines, bracelet, armGuard, polish);
         }
       };
     }
@@ -578,13 +598,24 @@ public class CombatPowerSimulationService {
       weaponFlatDelta = factor.weaponFlatDelta();
       mainStatDelta = factor.mainStatDelta();
     }
-    // 재련 단계와 팔찌의 고정 무기 공격력은 같은 W 항을 쓴다.
+    // 연마 줄 교체(#325): 줄마다 독립 배수를 바꾸고, 무기 공격력 줄은 W 항(고정 N·무공%)으로 넘긴다.
+    var weaponPctDelta = BigDecimal.ZERO;
+    for (var line : state.polish().values()) {
+      ratio = ratio.multiply(line.to().factor().divide(line.from().factor(), MATH), MATH);
+      weaponFlatDelta =
+          weaponFlatDelta.add(line.to().weaponFlat().subtract(line.from().weaponFlat()), MATH);
+      weaponPctDelta =
+          weaponPctDelta.add(line.to().weaponPct().subtract(line.from().weaponPct()), MATH);
+    }
+    // 재련 단계와 팔찌·연마의 무기 공격력은 같은 W 항을 쓴다.
     if (!state.refines().isEmpty()
         || weaponFlatDelta.signum() != 0
+        || weaponPctDelta.signum() != 0
         || mainStatDelta.signum() != 0
         || state.armGuard() != null) {
       var refine =
-          refineModel.ratioFull(state.refines(), weaponFlatDelta, mainStatDelta, state.armGuard());
+          refineModel.ratioFull(
+              state.refines(), weaponFlatDelta, weaponPctDelta, mainStatDelta, state.armGuard());
       if (refine == null) return null;
       ratio = ratio.multiply(refine, MATH);
     }
@@ -792,11 +823,32 @@ public class CombatPowerSimulationService {
         text("option", change.option());
         grade(change.grade());
         var current = item.detail().polishEffects().get(change.line());
-        yield unsupported(
+        var value = polishValue(item.type(), change.option(), change.grade());
+        var option = optionName(change.option());
+        var from = CombatPowerPolishModel.line(current.name(), current.value());
+        var to = value == null ? null : CombatPowerPolishModel.line(option, value);
+        String reason =
+            value == null
+                ? "이 부위·연마 옵션·등급의 수치를 확인하지 않아 계산하지 않았습니다."
+                : from == null
+                    ? "지금 연마 줄("
+                        + current.name()
+                        + " "
+                        + current.value()
+                        + ")의 전투력 계수를 확인하지 않아 계산하지 않았습니다."
+                    : to == null ? "이 연마 옵션의 전투력 계수를 확인하지 않아 계산하지 않았습니다." : null;
+        yield new Planned(
             change,
             item.name() + " 연마 " + (change.line() + 1),
             current.name() + " " + current.value(),
-            change.option() + " " + change.grade());
+            value == null ? change.option() + " " + change.grade() : option + " " + value,
+            reason == null ? new PolishEffect(key(change), from, to) : null,
+            POLISH_BASIS,
+            // 무기 공격력 줄(W 항)은 비교 기준 표본 기여와 아직 맞추지 못해(1.80% 줄 0.854% 대 0.840%) 계산 검증 확인 전까지 계산하지
+            // 않는다(확실한 값만).
+            reason != null
+                ? reason
+                : touchesWeapon(from) || touchesWeapon(to) ? POLISH_WEAPON_PENDING : null);
       }
       case BRACELET_EFFECT -> {
         var bracelet =
@@ -956,6 +1008,40 @@ public class CombatPowerSimulationService {
         || index >= loadout.equipment().size()
         || loadout.equipment().get(index) == null) throw notFound("장비 index " + index);
     return loadout.equipment().get(index);
+  }
+
+  /**
+   * 연마 수치 표(polish-values)에서 부위·옵션·등급의 공식 수치. 같은 부위에 같은 이름의 %·고정값 옵션이 둘 다 있으면(귀걸이 공격력·무기 공격력) % 쪽은
+   * 옵션 끝에 " %"를 붙여 고른다(예: "공격력 %"). 없으면 null.
+   */
+  private String polishValue(String part, String option, String grade) {
+    boolean percent = option.strip().endsWith("%");
+    var name = optionName(option);
+    var matches =
+        polishValues.options().stream()
+            .filter(value -> value.option().equals(name) && value.parts().contains(part))
+            .toList();
+    var value =
+        matches.size() == 1
+            ? matches.getFirst()
+            : matches.stream().filter(item -> item.percent() == percent).findFirst().orElse(null);
+    if (value == null) return null;
+    return switch (grade) {
+      case "LOW" -> value.low();
+      case "MID" -> value.mid();
+      case "HIGH" -> value.high();
+      default -> null;
+    };
+  }
+
+  private static boolean touchesWeapon(CombatPowerPolishModel.Line line) {
+    return line.weaponFlat().signum() != 0 || line.weaponPct().signum() != 0;
+  }
+
+  /** 옵션 이름에서 % 구분 표시(" %")를 뗀다. */
+  private static String optionName(String option) {
+    var name = option.strip();
+    return name.endsWith("%") ? name.substring(0, name.length() - 1).strip() : name;
   }
 
   private static Planned unsupported(Change change, String target, String from, String to) {

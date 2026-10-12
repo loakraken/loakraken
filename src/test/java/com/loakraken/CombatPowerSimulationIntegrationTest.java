@@ -656,7 +656,8 @@ class CombatPowerSimulationIntegrationTest {
     java.util.Map<String, Object> row = java.util.Map.of();
     for (int i = 0; i < 100; i++) {
       row =
-          jdbc.sql(
+          jdbc
+              .sql(
                   """
               SELECT bracelet_efficiency_pct, bracelet_rule_version, ark_grid_gem_pct,
                 ark_grid_rule_version, efficiency_observed_at

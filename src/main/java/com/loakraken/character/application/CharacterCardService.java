@@ -84,8 +84,8 @@ public class CharacterCardService {
   }
 
   /**
-   * 팔찌 효율·젬 효율(L38·L39): 검색 응답과 같은 모델로 메모리에서 계산한다(공식 호출 없음). 장비를 관측하지 않았으면 null(저장값 유지), 계산이
-   * 실패하거나 OK가 아니면 그 값만 null이다(B8: 관측 저장은 그대로).
+   * 팔찌 효율·젬 효율(L38·L39): 검색 응답과 같은 모델로 메모리에서 계산한다(공식 호출 없음). 장비를 관측하지 않았으면 null(저장값 유지), 계산이 실패하거나
+   * OK가 아니면 그 값만 null이다(B8: 관측 저장은 그대로).
    */
   CharacterCardPort.Efficiency efficiency(CharacterDetails details, Instant observedAt) {
     if (details.loadout().equipment().isEmpty()) return null;

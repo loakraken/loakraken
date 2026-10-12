@@ -31,7 +31,8 @@ public class ArkGridEfficiencyService {
 
   public ArkGridEfficiencyService(CombatPowerArkGridModel.Coefficients coefficients) {
     // 저장·순위가 같은 버전을 쓰도록 계수 파일 버전이 공통 상수와 같아야 한다(L38·L39).
-    if (!com.loakraken.common.api.EfficiencyRuleVersions.ARK_GRID.equals(coefficients.ruleVersion()))
+    if (!com.loakraken.common.api.EfficiencyRuleVersions.ARK_GRID.equals(
+        coefficients.ruleVersion()))
       throw new IllegalStateException(
           "아크 그리드 계수 버전이 EfficiencyRuleVersions.ARK_GRID와 다릅니다: " + coefficients.ruleVersion());
     this.coefficients = coefficients;

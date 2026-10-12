@@ -56,8 +56,6 @@ public class CombatPowerSimulationService {
       "팔 보호구 단계표(무기 공격력·주스탯·기본 공격력)와 등급 추가 효과(기본 공격력 %)로 기본 공격력을 다시 계산한 비율을 공식 전투력에 곱했습니다(펫 효과(힘민지 +1%)는 있다고 가정).";
   private static final String REFINE_BASIS =
       "재련 단계의 주스탯·무기 공격력 변화로 기본 공격력을 다시 계산한 비율을 공식 전투력에 곱했습니다(펫 효과(힘민지 +1%)는 있다고 가정).";
-  private static final String POLISH_WEAPON_PENDING =
-      "무기 공격력 연마 줄을 바꾼 전투력은 계수를 확인하는 중이라 계산하지 않았습니다.";
   private static final String POLISH_BASIS =
       "연마 줄마다 독립 배수(공격력·추가 피해·적에게 주는 피해·치명타)와 무기 공격력(재련과 같은 무기 공격력 항)을 바꾼 비율을 공식 전투력에 곱했습니다.";
   private static final String BRACELET_BASIS =
@@ -844,11 +842,13 @@ public class CombatPowerSimulationService {
             value == null ? change.option() + " " + change.grade() : option + " " + value,
             reason == null ? new PolishEffect(key(change), from, to) : null,
             POLISH_BASIS,
-            // 무기 공격력 줄(W 항)은 비교 기준 표본 기여와 아직 맞추지 못해(1.80% 줄 0.854% 대 0.840%) 계산 검증 확인 전까지 계산하지
-            // 않는다(확실한 값만).
+            // 무기 공격력 줄은 재련 모델의 W 항을 쓰므로 그 모델을 만들 수 있어야 한다. 무공 줄 비율은 비교 기준 B 시뮬레이터 교체 값과
+            // ±0.00002 안이다(계산 검증 10-13 04:49 권고).
             reason != null
                 ? reason
-                : touchesWeapon(from) || touchesWeapon(to) ? POLISH_WEAPON_PENDING : null);
+                : touchesWeapon(from) || touchesWeapon(to)
+                    ? refineModel.unsupportedReason()
+                    : null);
       }
       case BRACELET_EFFECT -> {
         var bracelet =

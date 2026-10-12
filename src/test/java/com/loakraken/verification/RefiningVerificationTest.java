@@ -16,12 +16,12 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * 계산 검증팀 표본 회귀(refining/lopec-2026-10-09.json). 표본의 expected·tolerance를 그대로 쓴다. 표본 파일은 계산 검증팀이
+ * 계산 검증팀 표본 회귀(refining/ref-b-2026-10-09.json). 표본의 expected·tolerance를 그대로 쓴다. 표본 파일은 계산 검증팀이
  * 관리하고, 백엔드는 읽기만 한다. 같은 사례의 equivalentRequest(숨결 대신 책)도 같은 값이어야 한다.
  */
 class RefiningVerificationTest {
   private static final JsonMapper MAPPER = JsonMapper.builder().build();
-  private static final String SAMPLE = "/verification/refining/lopec-2026-10-09.json";
+  private static final String SAMPLE = "/verification/refining/ref-b-2026-10-09.json";
   private static final String RULES = "/refining/t4-refining-rules.json";
 
   @Test
@@ -32,7 +32,7 @@ class RefiningVerificationTest {
 
   @ParameterizedTest(name = "{0}")
   @MethodSource("cases")
-  void 로펙_표본과_첫_시도_확률_최대_시도_기대_시도가_같다(String id, JsonNode request, JsonNode expected) {
+  void 비교_기준_B_표본과_첫_시도_확률_최대_시도_기대_시도가_같다(String id, JsonNode request, JsonNode expected) {
     var rules = MAPPER.readValue(stream(RULES), RefiningRules.class);
     var grade = RefiningRules.Grade.valueOf(request.path("grade").asText());
     var type = RefiningRules.EquipmentType.valueOf(request.path("equipmentType").asText());
@@ -54,7 +54,7 @@ class RefiningVerificationTest {
     assertThat(stage.expectedAttempts())
         .as(id)
         .isCloseTo(
-            expected.path("expectedAttemptsFromLopecTable").decimalValue(),
+            expected.path("expectedAttemptsFromRefBTable").decimalValue(),
             org.assertj.core.data.Offset.offset(tolerance.max(new BigDecimal("0.005"))));
   }
 

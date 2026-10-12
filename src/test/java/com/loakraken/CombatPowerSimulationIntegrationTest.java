@@ -416,7 +416,7 @@ class CombatPowerSimulationIntegrationTest {
 
   @Test
   void 팔찌_줄을_빼거나_바꾸고_팔찌_전투력_기여를_준다() throws Exception {
-    // #327: 언새늘과 같은 팔찌(전투 특성 합 2,469, 도약 70) → 기여 12.60%, 추가 피해 +3.50% 빼기 3,345.24 → 3,257.54.
+    // #327: 기준 캐릭터와 같은 팔찌(전투 특성 합 2,469, 도약 70) → 기여 12.60%, 추가 피해 +3.50% 빼기 3,345.24 → 3,257.54.
     when(detailsPort.fetch(anyString()))
         .thenAnswer(invocation -> fetchedBracelet(invocation.getArgument(0)));
     var search = get("/api/v1/characters/search?characterName=" + encode("시뮬팔찌"));
@@ -604,7 +604,7 @@ class CombatPowerSimulationIntegrationTest {
 
   @Test
   void 검색_응답에_아크_그리드_효율을_준다() throws Exception {
-    // 계산 검증 #368 표본 언새늘과 같은 코어 6개·젬 옵션: 아크 그리드 38.64%, 코어 합 32.96%, 젬 4.27%.
+    // 계산 검증 #368 표본 기준 캐릭터와 같은 코어 6개·젬 옵션: 아크 그리드 38.64%, 코어 합 32.96%, 젬 4.27%.
     when(detailsPort.fetch(anyString()))
         .thenAnswer(
             invocation -> {

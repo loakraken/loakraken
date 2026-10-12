@@ -199,7 +199,7 @@
   "match": 22,
   "rows": [
    {
-    "id": "언새늘",
+    "id": "기준 캐릭터",
     "part": "무기",
     "refine": 19,
     "advanced": 0,
@@ -207,7 +207,7 @@
     "dictionary": 208130
    },
    {
-    "id": "언새늘",
+    "id": "기준 캐릭터",
     "part": "투구",
     "refine": 19,
     "advanced": 0,
@@ -215,7 +215,7 @@
     "dictionary": 120150
    },
    {
-    "id": "언새늘",
+    "id": "기준 캐릭터",
     "part": "상의",
     "refine": 19,
     "advanced": 0,
@@ -223,7 +223,7 @@
     "dictionary": 96120
    },
    {
-    "id": "언새늘",
+    "id": "기준 캐릭터",
     "part": "하의",
     "refine": 19,
     "advanced": 0,
@@ -231,7 +231,7 @@
     "dictionary": 103844
    },
    {
-    "id": "언새늘",
+    "id": "기준 캐릭터",
     "part": "장갑",
     "refine": 19,
     "advanced": 0,
@@ -239,7 +239,7 @@
     "dictionary": 144180
    },
    {
-    "id": "언새늘",
+    "id": "기준 캐릭터",
     "part": "어깨",
     "refine": 19,
     "advanced": 0,

@@ -46,7 +46,7 @@ class CritEffectTableTest {
             "광기/MOVE_SPEED/true/true");
     assertThat(result.limitations())
         .anyMatch(line -> line.contains("관통 필살 Lv.3 100%(적룡필살에만)"))
-        .noneMatch(line -> line.contains("로펙"));
+        .allSatisfy(com.loakraken.SiteNames::assertAbsent);
   }
 
   /** 계산 검증 10-10 01:55 환업·데니멀즈·소녀양점순 공식 코어 문구. */
@@ -155,7 +155,7 @@ class CritEffectTableTest {
     assertThat(gunner.limitations()).anyMatch(line -> line.contains("기동 타격 - 표에 없는 트라이포드(분류 중)"));
   }
 
-  /** #203 재대조(10-10): 속공 준비 "공격 속도가 4.0초 간 30.0%"는 토글로 읽고, 고독한 기사 이속 −10은 두 사이트 제외라 기본 끔. */
+  /** #203 재대조(10-10): 속공 준비 "공격 속도가 4.0초 간 30.0%"는 토글로 읽고, 고독한 기사 이속 −10은 비교 기준 두 곳 모두 제외라 기본 끔. */
   @Test
   void 지속_시간이_낀_공이속_문구를_읽고_고독한_기사는_기본_끔이다() {
     var quick =
@@ -468,7 +468,7 @@ class CritEffectTableTest {
   @Test
   void 노드_문구에_없는_직업_버프는_직업_스킬_트라이포드로_더하고_끄면_뺀다() {
     var skills = List.of(skill("용맹의 포효", "급소 노출", "빠른 준비"), skill("뇌명각", "급소 노출", "섬뢰"));
-    // 스킬·트라이포드 버프 가정은 기본 끔(중복 기능은 로아랩 기준, PM 총괄 승인 10-10 18:26)
+    // 스킬·트라이포드 버프 가정은 기본 끔(중복 기능은 비교 기준 A 기준, PM 총괄 승인 10-10 18:26)
     var defaults = calculate("배틀마스터", List.of(), skills, null, Assumptions.NONE);
     assertThat(values(defaults, Axis.CRIT, Category.ASSUMPTION)).isEmpty();
     assertThat(defaults.toggles())
@@ -571,7 +571,7 @@ class CritEffectTableTest {
         .containsExactly("기민함(공격 속도 40%)=48");
   }
 
-  /** c09(질풍노도·질량 증가, 2026-10-09): 신속 29.25 + 질풍노도 12 - 질량 증가 10. 두 사이트는 감소를 빼지 않고 48로 본다. */
+  /** c09(질풍노도·질량 증가, 2026-10-09): 신속 29.25 + 질풍노도 12 - 질량 증가 10. 비교 기준 두 곳은 감소를 빼지 않고 48로 본다. */
   @Test
   void 기민함의_속도_증가량은_감소_효과를_빼지_않는다() {
     var engravings =

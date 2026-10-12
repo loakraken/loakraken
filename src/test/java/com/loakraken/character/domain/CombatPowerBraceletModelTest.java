@@ -15,7 +15,7 @@ import org.springframework.core.io.ClassPathResource;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * 팔찌 모델(#327): 계산 검증 표본(loalab-bracelet-2026-10-11.json)의 전투력 기여 %(언새늘 12.60·c02 16.86·c01 15.38,
+ * 팔찌 모델(#327): 계산 검증 표본(ref-a-bracelet-2026-10-11.json)의 전투력 기여 %(기준 캐릭터 12.60·c02 16.86·c01 15.38,
  * 계산 검증 정정)와 추가 피해 +3.50% 한 줄 빼기(3,345.24 → 3,257.54)를 공식 문구 형식 입력으로 맞춘다. 전투 특성 합 T와 도약 P는 표본 줄별
  * 배수에서 나온 값이다.
  */
@@ -31,7 +31,7 @@ class CombatPowerBraceletModelTest {
   }
 
   @Test
-  void 언새늘_팔찌_기여와_추가_피해_한_줄_빼기() {
+  void 기준_캐릭터_팔찌_기여와_추가_피해_한_줄_빼기() {
     var model =
         model(
             2469,

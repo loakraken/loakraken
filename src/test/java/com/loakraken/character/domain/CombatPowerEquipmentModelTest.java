@@ -29,7 +29,7 @@ class CombatPowerEquipmentModelTest {
     JsonNode root;
     try (var input =
         new ClassPathResource(
-                "verification/combat-power/loalab-equip-engraving-deltas-2026-10-10.json")
+                "verification/combat-power/ref-a-equip-engraving-deltas-2026-10-10.json")
             .getInputStream()) {
       root = new JsonMapper().readTree(input);
     }
@@ -79,7 +79,7 @@ class CombatPowerEquipmentModelTest {
 
   @Test
   void 공식_각인_설명값이_계수표와_같은지_본다() {
-    // 언새늘 공식 설명(2026-10-10): 원한 L0 S2 21.75%, 아드레날린 L3 S3 1.73%·18.50%, 돌격대장 L0 40.00%.
+    // 기준 캐릭터 공식 설명(2026-10-10): 원한 L0 S2 21.75%, 아드레날린 L3 S3 1.73%·18.50%, 돌격대장 L0 40.00%.
     assertThat(matches(0, 2, "원한", "보스 및 레이드 몬스터에게 주는 피해가 21.75% 증가하지만, 받는 피해가 20.00% 증가한다."))
         .isTrue();
     assertThat(
@@ -130,7 +130,7 @@ class CombatPowerEquipmentModelTest {
 
   @Test
   void 확인하지_않은_조합은_배수를_주지_않는다() {
-    // 슈퍼 차지(출처마다 값이 다름)는 계산하지 않는다. 돌격대장 스톤 1은 인벤 값(가산 7.5)으로 계산한다(E26).
+    // 슈퍼 차지(출처마다 값이 다름)는 계산하지 않는다. 돌격대장 스톤 1은 공략 표 값(가산 7.5)으로 계산한다(E26).
     assertThat(CombatPowerEquipmentModel.engravingFactor(COEFFICIENTS, "돌격대장", 4, 1))
         .isEqualByComparingTo("1.222");
     assertThat(CombatPowerEquipmentModel.engravingFactor(COEFFICIENTS, "슈퍼 차지", 4, 3)).isNull();
@@ -155,13 +155,13 @@ class CombatPowerEquipmentModelTest {
   }
 
   @Test
-  void 각인_기여_표는_인벤_표와_같다() throws Exception {
-    // E26: 인벤 4821/106546 각인 계수표(각인서 0~4 × 스톤 0~4)와 칸마다 같다(목표 사이트 표 #344와도 500칸 차이 0).
+  void 각인_기여_표는_공략_표와_같다() throws Exception {
+    // E26: 공개 공략 각인 계수표(각인서 0~4 × 스톤 0~4)와 칸마다 같다(비교 기준 표 #344와도 500칸 차이 0).
     // 아드레날린·돌격대장(스톤 1 포함)은 식으로, 나머지는 표로 계산한다. 출처끼리 다른 3종은 계산하지 않는다.
     try (var in =
-        new ClassPathResource("verification/combat-power/inven-engraving-cp-2026-10-12.json")
+        new ClassPathResource("verification/combat-power/engraving-cp-table-2026-10-12.json")
             .getInputStream()) {
-      var table = new JsonMapper().readTree(in).path("invenTable");
+      var table = new JsonMapper().readTree(in).path("guideTable");
       int cells = 0;
       for (var name : table.propertyNames()) {
         if (CONFLICTS.contains(name)) {
@@ -186,9 +186,9 @@ class CombatPowerEquipmentModelTest {
       // 26종 − 충돌 3종 = 23종 × 25칸
       assertThat(cells).isEqualTo(23 * 25);
     }
-    // #344 표본의 기여 0(두 출처) 가운데 실드 관통은 인벤과 달라 빠지고, 나머지 8종은 배수 1이다.
+    // #344 표본의 기여 0(두 출처) 가운데 실드 관통은 공략 표와 달라 빠지고, 나머지 8종은 배수 1이다.
     try (var in =
-        new ClassPathResource("verification/combat-power/loalab-engraving-cp-2026-10-11.json")
+        new ClassPathResource("verification/combat-power/ref-a-engraving-cp-2026-10-11.json")
             .getInputStream()) {
       var sample = new JsonMapper().readTree(in);
       for (var name : sample.path("zeroContribution").path("twoSources")) {
@@ -196,13 +196,13 @@ class CombatPowerEquipmentModelTest {
         if ("실드 관통".equals(name.asText())) assertThat(factor).isNull();
         else assertThat(factor).as(name.asText()).isEqualByComparingTo("1");
       }
-      for (var name : sample.path("zeroContribution").path("loalabOnly"))
+      for (var name : sample.path("zeroContribution").path("refAOnly"))
         assertThat(CombatPowerEquipmentModel.supportsEngraving(COEFFICIENTS, name.asText()))
             .isFalse();
     }
   }
 
-  /** 출처끼리 값이 달라 계산하지 않는 각인(인벤 표의 이름). */
+  /** 출처끼리 값이 달라 계산하지 않는 각인(공략 표의 이름). */
   private static final List<String> CONFLICTS = List.of("속전속결", "슈퍼 차지", "실드관통");
 
   @Test

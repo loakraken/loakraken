@@ -11,7 +11,7 @@
   "statMultiplier": "mS = 1 + 펫 1% + 아바타(전설 2%, 영웅 1%)",
   "step": "방어구: S' = S + Δ힘민지 × mS, 무기: W' = W + Δ무기 공격력 × (1 + 무기 공격력%). 전투력 비 = (R × sqrt(S'/S 또는 W'/W) + F) / (R + F)",
   "tolerance": "실제 재련 단계에서 비율 오차 ≤ 2e-7(전투력 ±0.003)",
-  "notSupported": "상급 재련(로아랩이 전율 장비에서 받지 않음), 업화 단계표, 팔 보호구 단계(F·q·W·S가 함께 바뀜)"
+  "notSupported": "상급 재련(비교 기준 A가 전율 장비에서 받지 않음), 업화 단계표, 팔 보호구 단계(F·q·W·S가 함께 바뀜)"
  },
  "jeonyulStatTable": {
   "투구": {
@@ -118,7 +118,7 @@
   }
  },
  "characters": {
-  "언새늘": {
+  "기준 캐릭터": {
    "combatPower": 3345.24,
    "baseAttack": 188163,
    "F": 2030,
@@ -145,8 +145,8 @@
      "from": 19,
      "to": 20,
      "delta": 3005,
-     "loalabRatio": 1.002115842,
-     "loalabAfter": 3352.32,
+     "refARatio": 1.002115842,
+     "refAAfter": 3352.32,
      "formulaRatio": 1.0021158627,
      "formulaAfter": 3352.32,
      "diff": 0.0001
@@ -156,8 +156,8 @@
      "from": 19,
      "to": 20,
      "delta": 5203,
-     "loalabRatio": 1.0114669202,
-     "loalabAfter": 3383.6,
+     "refARatio": 1.0114669202,
+     "refAAfter": 3383.6,
      "formulaRatio": 1.0114669099,
      "formulaAfter": 3383.6,
      "diff": 0
@@ -167,8 +167,8 @@
      "from": 19,
      "to": 25,
      "delta": 33237,
-     "loalabRatio": 1.0711174684,
-     "loalabAfter": 3583.14,
+     "refARatio": 1.0711174684,
+     "refAAfter": 3583.14,
      "formulaRatio": 1.0711175375,
      "formulaAfter": 3583.15,
      "diff": 0.0002
@@ -178,8 +178,8 @@
      "from": 19,
      "to": 16,
      "delta": -14860,
-     "loalabRatio": 0.9664920903,
-     "loalabAfter": 3233.15,
+     "refARatio": 0.9664920903,
+     "refAAfter": 3233.15,
      "formulaRatio": 0.9664920454,
      "formulaAfter": 3233.15,
      "diff": -0.0002
@@ -213,8 +213,8 @@
      "from": 25,
      "to": 24,
      "delta": -3400,
-     "loalabRatio": 0.9980713431,
-     "loalabAfter": 11007.13,
+     "refARatio": 0.9980713431,
+     "refAAfter": 11007.13,
      "formulaRatio": 0.9980712746,
      "formulaAfter": 11007.13,
      "diff": -0.0008
@@ -224,8 +224,8 @@
      "from": 25,
      "to": 22,
      "delta": -9953,
-     "loalabRatio": 0.9943430597,
-     "loalabAfter": 10966.01,
+     "refARatio": 0.9943430597,
+     "refAAfter": 10966.01,
      "formulaRatio": 0.9943429459,
      "formulaAfter": 10966.01,
      "diff": -0.0013
@@ -235,8 +235,8 @@
      "from": 25,
      "to": 19,
      "delta": -19196,
-     "loalabRatio": 0.9890593377,
-     "loalabAfter": 10907.74,
+     "refARatio": 0.9890593377,
+     "refAAfter": 10907.74,
      "formulaRatio": 0.9890592474,
      "formulaAfter": 10907.74,
      "diff": -0.001
@@ -270,8 +270,8 @@
      "from": 25,
      "to": 24,
      "delta": -3400,
-     "loalabRatio": 0.99806493,
-     "loalabAfter": 10703.41,
+     "refARatio": 0.99806493,
+     "refAAfter": 10703.41,
      "formulaRatio": 0.9980648964,
      "formulaAfter": 10703.41,
      "diff": -0.0004
@@ -281,8 +281,8 @@
      "from": 25,
      "to": 22,
      "delta": -9953,
-     "loalabRatio": 0.9943242175,
-     "loalabAfter": 10663.29,
+     "refARatio": 0.9943242175,
+     "refAAfter": 10663.29,
      "formulaRatio": 0.9943242022,
      "formulaAfter": 10663.29,
      "diff": -0.0002
@@ -292,8 +292,8 @@
      "from": 25,
      "to": 19,
      "delta": -19196,
-     "loalabRatio": 0.9890229165,
-     "loalabAfter": 10606.44,
+     "refARatio": 0.9890229165,
+     "refAAfter": 10606.44,
      "formulaRatio": 0.9890228971,
      "formulaAfter": 10606.44,
      "diff": -0.0002

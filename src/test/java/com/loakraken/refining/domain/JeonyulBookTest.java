@@ -6,7 +6,7 @@ import java.io.IOException;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.json.JsonMapper;
 
-/** #218 B: 전율 책 증가 = 그 단계 기본 성공률(계산 검증 2026-10-10, 로아와·일로아 일치). */
+/** #218 B: 전율 책 증가 = 그 단계 기본 성공률(계산 검증 2026-10-10, 비교 기준 C·E 일치). */
 class JeonyulBookTest {
   @Test
   void 전율_책은_12_19단계에서_그_단계_기본_성공률만큼_더하고_20단계부터는_없다() throws IOException {
@@ -27,7 +27,7 @@ class JeonyulBookTest {
     assertThat(weapon.stage(12).book().rateBp()).isEqualTo(500);
     assertThat(weapon.stage(17).book().rateBp()).isEqualTo(300);
     assertThat(weapon.stage(20).book()).isNull();
-    // 첫 시도: 기본 3% + 숨결 + 책 3%(로아와 표본 18→19 무기 숨결 + 책 9%)
+    // 첫 시도: 기본 3% + 숨결 + 책 3%(비교 기준 E 표본 18→19 무기 숨결 + 책 9%)
     var plan =
         RefiningPlan.calculate(
             weapon,

@@ -173,51 +173,51 @@
   "Ancient": 0.03
  },
  "samples": {
-  "character": "언새늘(완갑 +13 전설, 3,345.24)",
+  "character": "기준 캐릭터(완갑 +13 전설, 3,345.24)",
   "cases": [
    {
     "to": "+14 Legendary",
-    "loalabRatio": 1.004434958,
+    "refARatio": 1.004434958,
     "formulaRatio": 1.004434946,
     "diffCp": -0.00004
    },
    {
     "to": "+25 Legendary",
-    "loalabRatio": 1.081164192,
+    "refARatio": 1.081164192,
     "formulaRatio": 1.081164173,
     "diffCp": -0.00006
    },
    {
     "to": "+15 Artifact",
-    "loalabRatio": 1.023350492,
+    "refARatio": 1.023350492,
     "formulaRatio": 1.023350484,
     "diffCp": -0.00003
    },
    {
     "to": "+20 Ancient",
-    "loalabRatio": 1.064382077,
+    "refARatio": 1.064382077,
     "formulaRatio": 1.064382126,
     "diffCp": 0.00016
    },
    {
     "to": "+25 Ancient",
-    "loalabRatio": 1.101288248,
+    "refARatio": 1.101288248,
     "formulaRatio": 1.101288215,
     "diffCp": -0.00011
    },
    {
     "to": "+10 Epic",
-    "loalabRatio": 0.977893544,
+    "refARatio": 0.977893544,
     "formulaRatio": 0.977893496,
     "diffCp": -0.00016
    },
    {
     "to": "+15 Legendary",
-    "loalabRatio": 1.013914368,
+    "refARatio": 1.013914368,
     "formulaRatio": 1.013914333,
     "diffCp": -0.00012
    }
   ]
  },
- "upwhaRefine": "업화 일반 재련 단계값은 상급 재련 표본(loalab-advanced-refine-2026-10-11.json)의 T(5L)로 계산한다(방어구 = 투구 표 × 부위 배수, 무기 표, 상급 0이면 배수 1)"
+ "upwhaRefine": "업화 일반 재련 단계값은 상급 재련 표본(ref-a-advanced-refine-2026-10-11.json)의 T(5L)로 계산한다(방어구 = 투구 표 × 부위 배수, 무기 표, 상급 0이면 배수 1)"
 }

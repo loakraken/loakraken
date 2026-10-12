@@ -8,13 +8,13 @@
  "status": "CONFIRMED",
  "definition": {
   "coreEfficiency": "코어 효율 % = 지금 ÷ 그 코어를 뺀 전투력 − 1 = C(P) (#323 표, %). 무기 코어는 재련 W 항이라 따로(#323)",
-  "coresTotal": "코어 합 % = Π(1 + C/100) − 1(코어 전부 뺀 로아랩 값과 같음)",
+  "coresTotal": "코어 합 % = Π(1 + C/100) − 1(코어 전부 뺀 비교 기준 A 값과 같음)",
   "arkGridTotal": "아크 그리드 효율 % = Π 코어 배수 × Π 젬 옵션 배수 − 1(젬은 #358)",
-  "lowerGrades": "전설 14P·영웅 10P 상한(#335). 로아랩은 전설·영웅 코어를 0으로 계산 — 증명된 차이(#335)"
+  "lowerGrades": "전설 14P·영웅 10P 상한(#335). 비교 기준 A는 전설·영웅 코어를 0으로 계산 — 증명된 차이(#335)"
  },
- "loalabCheck": "30개 코어(5명 × 6) 하나씩 뺀 비율이 모두 #323 계수와 같다. 최대 차이 전투력 0.0018. 표본은 유물·고대 코어만(전설·영웅은 증명된 차이 구간)",
+ "refACheck": "30개 코어(5명 × 6) 하나씩 뺀 비율이 모두 #323 계수와 같다. 최대 차이 전투력 0.0018. 표본은 유물·고대 코어만(전설·영웅은 증명된 차이 구간)",
  "samples": {
-  "언새늘": {
+  "기준 캐릭터": {
    "combatPower": 3345.24,
    "cores": [
     {
@@ -55,7 +55,7 @@
     }
    ],
    "coresTotalPct": 32.964,
-   "loalabAllCoresRemovedPct": 32.964,
+   "refAAllCoresRemovedPct": 32.964,
    "gemsTotalPct": 4.27,
    "arkGridTotalPct": 38.64
   },
@@ -100,7 +100,7 @@
     }
    ],
    "coresTotalPct": 41.664,
-   "loalabAllCoresRemovedPct": 41.664,
+   "refAAllCoresRemovedPct": 41.664,
    "gemsTotalPct": 13.04,
    "arkGridTotalPct": 60.14
   },
@@ -145,7 +145,7 @@
     }
    ],
    "coresTotalPct": 41.664,
-   "loalabAllCoresRemovedPct": 41.664,
+   "refAAllCoresRemovedPct": 41.664,
    "gemsTotalPct": 14.29,
    "arkGridTotalPct": 61.91
   },
@@ -190,7 +190,7 @@
     }
    ],
    "coresTotalPct": 31.106,
-   "loalabAllCoresRemovedPct": 31.106,
+   "refAAllCoresRemovedPct": 31.106,
    "gemsTotalPct": 4.69,
    "arkGridTotalPct": 37.26
   },
@@ -235,7 +235,7 @@
     }
    ],
    "coresTotalPct": 18.777,
-   "loalabAllCoresRemovedPct": 18.777,
+   "refAAllCoresRemovedPct": 18.777,
    "gemsTotalPct": 3.11,
    "arkGridTotalPct": 22.47
   }

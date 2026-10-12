@@ -6,7 +6,7 @@
   "combine": "각인마다 독립 배수(1 + c/100)를 전투력에 곱한다(#263과 같음). 각인 하나의 전투력 기여 % = c",
   "linear": "LINEAR: c = base + perBook × 유물 각인서 레벨 + 스톤 가산. 스톤 가산 = stoneScale × {1: 3, 2: 3.75, 3: 5.25, 4: 6} 또는 stoneAdd 표",
   "scope": "유물 각인. 전설 각인은 UNSUPPORTED(표본 없음). 아드레날린·돌격대장은 기존 계수(#263) 그대로",
-  "table": "loalabTable: c(각인서 b, 스톤 s) = books[b] + stoneDelta[s](%, 소수 둘째 자리). 로아랩이 쓰는 값 그대로이고, 스톤 가산이 각인서 레벨과 무관하게 더해짐을 L0·L4 양쪽에서 확인. engravings의 식은 공식 설명과의 관계(근거)이며 계산은 표로 한다"
+  "table": "비교 기준 ATable: c(각인서 b, 스톤 s) = books[b] + stoneDelta[s](%, 소수 둘째 자리). 비교 기준 A가 쓰는 값 그대로이고, 스톤 가산이 각인서 레벨과 무관하게 더해짐을 L0·L4 양쪽에서 확인. engravings의 식은 공식 설명과의 관계(근거)이며 계산은 표로 한다"
  },
  "engravings": {
   "원한": {
@@ -178,7 +178,7 @@
      "4": 2.7
     }
    },
-   "note": "로아랩은 0.1 × 중첩당 공격력 × 중첩(8·8·9·9·10)이라 L0~3이 로펙과 대조되지 않음 → L4만 지원"
+   "note": "비교 기준 A는 0.1 × 중첩당 공격력 × 중첩(8·8·9·9·10)이라 L0~3이 비교 기준 B와 대조되지 않음 → L4만 지원"
   }
  },
  "zeroContribution": {
@@ -193,7 +193,7 @@
    "굳은 의지",
    "최대 마나 증가"
   ],
-  "loalabOnly": [
+  "refAOnly": [
    "선수필승",
    "정기 흡수",
    "위기 모면",
@@ -201,20 +201,20 @@
    "전문의",
    "각성"
   ],
-  "note": "전투력 기여 0. loalabOnly는 로펙과 대조하지 못해 UNSUPPORTED로 둔다"
+  "note": "전투력 기여 0. 비교 기준 AOnly는 비교 기준 B와 대조하지 못해 UNSUPPORTED로 둔다"
  },
  "unsupported": {
-  "슈퍼 차지": "공식 L4 피해 21%(차지 스킬 한정). 로아랩 17.0%(14 + 0.75 × 레벨 + 스톤), 로펙 16.8%(= 0.8 × 21)로 다르다",
-  "속전속결": "공식 L4 피해 21%(홀딩·캐스팅 스킬 한정). 로아랩 17.0%, 로펙 16.8%로 다르다",
-  "승부사 L0~3": "로아랩 중첩 8·8·9·9·10 가정, 로펙 대조는 L4만"
+  "슈퍼 차지": "공식 L4 피해 21%(차지 스킬 한정). 비교 기준 A 17.0%(14 + 0.75 × 레벨 + 스톤), 비교 기준 B 16.8%(= 0.8 × 21)로 다르다",
+  "속전속결": "공식 L4 피해 21%(홀딩·캐스팅 스킬 한정). 비교 기준 A 17.0%, 비교 기준 B 16.8%로 다르다",
+  "승부사 L0~3": "비교 기준 A 중첩 8·8·9·9·10 가정, 비교 기준 B 대조는 L4만"
  },
  "samples": {
-  "loalabChecks": [
+  "refAChecks": [
    {
     "name": "승부사",
     "book": 4,
     "stone": 0,
-    "loalab": 2.1,
+    "refA": 2.1,
     "formula": 2.1,
     "diff": 0
    },
@@ -222,7 +222,7 @@
     "name": "마나의 흐름",
     "book": 0,
     "stone": 0,
-    "loalab": 7.53,
+    "refA": 7.53,
     "formula": 7.527,
     "diff": -0.003
    },
@@ -230,7 +230,7 @@
     "name": "마나의 흐름",
     "book": 1,
     "stone": 0,
-    "loalab": 8.4,
+    "refA": 8.4,
     "formula": 8.401,
     "diff": 0.001
    },
@@ -238,7 +238,7 @@
     "name": "마나의 흐름",
     "book": 2,
     "stone": 0,
-    "loalab": 9.29,
+    "refA": 9.29,
     "formula": 9.29,
     "diff": 0
    },
@@ -246,7 +246,7 @@
     "name": "마나의 흐름",
     "book": 3,
     "stone": 0,
-    "loalab": 10.2,
+    "refA": 10.2,
     "formula": 10.193,
     "diff": -0.007
    },
@@ -254,7 +254,7 @@
     "name": "마나의 흐름",
     "book": 4,
     "stone": 0,
-    "loalab": 11.11,
+    "refA": 11.11,
     "formula": 11.111,
     "diff": 0.001
    },
@@ -262,7 +262,7 @@
     "name": "예리한 둔기",
     "book": 0,
     "stone": 0,
-    "loalab": 14.39,
+    "refA": 14.39,
     "formula": 14.386,
     "diff": -0.004
    },
@@ -270,7 +270,7 @@
     "name": "예리한 둔기",
     "book": 1,
     "stone": 0,
-    "loalab": 15.13,
+    "refA": 15.13,
     "formula": 15.13,
     "diff": 0
    },
@@ -278,7 +278,7 @@
     "name": "예리한 둔기",
     "book": 2,
     "stone": 0,
-    "loalab": 15.88,
+    "refA": 15.88,
     "formula": 15.875,
     "diff": -0.005
    },
@@ -286,7 +286,7 @@
     "name": "예리한 둔기",
     "book": 3,
     "stone": 0,
-    "loalab": 16.62,
+    "refA": 16.62,
     "formula": 16.62,
     "diff": 0
    },
@@ -294,7 +294,7 @@
     "name": "예리한 둔기",
     "book": 4,
     "stone": 0,
-    "loalab": 17.36,
+    "refA": 17.36,
     "formula": 17.365,
     "diff": 0.005
    },
@@ -302,7 +302,7 @@
     "name": "정밀 단도",
     "book": 0,
     "stone": 0,
-    "loalab": 10.6,
+    "refA": 10.6,
     "formula": 10.6,
     "diff": 0
    },
@@ -310,7 +310,7 @@
     "name": "정밀 단도",
     "book": 1,
     "stone": 0,
-    "loalab": 11.13,
+    "refA": 11.13,
     "formula": 11.125,
     "diff": -0.005
    },
@@ -318,7 +318,7 @@
     "name": "정밀 단도",
     "book": 2,
     "stone": 0,
-    "loalab": 11.65,
+    "refA": 11.65,
     "formula": 11.65,
     "diff": 0
    },
@@ -326,7 +326,7 @@
     "name": "정밀 단도",
     "book": 3,
     "stone": 0,
-    "loalab": 12.18,
+    "refA": 12.18,
     "formula": 12.175,
     "diff": -0.005
    },
@@ -334,7 +334,7 @@
     "name": "정밀 단도",
     "book": 4,
     "stone": 0,
-    "loalab": 12.7,
+    "refA": 12.7,
     "formula": 12.7,
     "diff": 0
    },
@@ -342,7 +342,7 @@
     "name": "구슬동자",
     "book": 0,
     "stone": 0,
-    "loalab": 4,
+    "refA": 4,
     "formula": 4,
     "diff": 0
    },
@@ -350,7 +350,7 @@
     "name": "구슬동자",
     "book": 1,
     "stone": 0,
-    "loalab": 4.16,
+    "refA": 4.16,
     "formula": 4.16,
     "diff": 0
    },
@@ -358,7 +358,7 @@
     "name": "구슬동자",
     "book": 2,
     "stone": 0,
-    "loalab": 4.32,
+    "refA": 4.32,
     "formula": 4.32,
     "diff": 0
    },
@@ -366,7 +366,7 @@
     "name": "구슬동자",
     "book": 3,
     "stone": 0,
-    "loalab": 4.48,
+    "refA": 4.48,
     "formula": 4.48,
     "diff": 0
    },
@@ -374,7 +374,7 @@
     "name": "구슬동자",
     "book": 4,
     "stone": 0,
-    "loalab": 4.64,
+    "refA": 4.64,
     "formula": 4.64,
     "diff": 0
    },
@@ -382,7 +382,7 @@
     "name": "에테르 포식자",
     "book": 0,
     "stone": 0,
-    "loalab": 12.6,
+    "refA": 12.6,
     "formula": 12.6,
     "diff": 0
    },
@@ -390,7 +390,7 @@
     "name": "에테르 포식자",
     "book": 1,
     "stone": 0,
-    "loalab": 13.5,
+    "refA": 13.5,
     "formula": 13.5,
     "diff": 0
    },
@@ -398,7 +398,7 @@
     "name": "에테르 포식자",
     "book": 2,
     "stone": 0,
-    "loalab": 14.4,
+    "refA": 14.4,
     "formula": 14.4,
     "diff": 0
    },
@@ -406,7 +406,7 @@
     "name": "에테르 포식자",
     "book": 3,
     "stone": 0,
-    "loalab": 15.3,
+    "refA": 15.3,
     "formula": 15.3,
     "diff": 0
    },
@@ -414,7 +414,7 @@
     "name": "에테르 포식자",
     "book": 4,
     "stone": 0,
-    "loalab": 16.2,
+    "refA": 16.2,
     "formula": 16.2,
     "diff": 0
    },
@@ -422,7 +422,7 @@
     "name": "약자 무시",
     "book": 0,
     "stone": 0,
-    "loalab": 9.9,
+    "refA": 9.9,
     "formula": 9.9,
     "diff": 0
    },
@@ -430,7 +430,7 @@
     "name": "약자 무시",
     "book": 1,
     "stone": 0,
-    "loalab": 10.73,
+    "refA": 10.73,
     "formula": 10.725,
     "diff": -0.005
    },
@@ -438,7 +438,7 @@
     "name": "약자 무시",
     "book": 2,
     "stone": 0,
-    "loalab": 11.55,
+    "refA": 11.55,
     "formula": 11.55,
     "diff": 0
    },
@@ -446,7 +446,7 @@
     "name": "약자 무시",
     "book": 3,
     "stone": 0,
-    "loalab": 12.38,
+    "refA": 12.38,
     "formula": 12.375,
     "diff": -0.005
    },
@@ -454,7 +454,7 @@
     "name": "약자 무시",
     "book": 4,
     "stone": 0,
-    "loalab": 13.2,
+    "refA": 13.2,
     "formula": 13.2,
     "diff": 0
    },
@@ -462,7 +462,7 @@
     "name": "시선 집중",
     "book": 0,
     "stone": 0,
-    "loalab": 7.5,
+    "refA": 7.5,
     "formula": 7.5,
     "diff": 0
    },
@@ -470,7 +470,7 @@
     "name": "시선 집중",
     "book": 1,
     "stone": 0,
-    "loalab": 7.88,
+    "refA": 7.88,
     "formula": 7.875,
     "diff": -0.005
    },
@@ -478,7 +478,7 @@
     "name": "시선 집중",
     "book": 2,
     "stone": 0,
-    "loalab": 8.25,
+    "refA": 8.25,
     "formula": 8.25,
     "diff": 0
    },
@@ -486,7 +486,7 @@
     "name": "시선 집중",
     "book": 3,
     "stone": 0,
-    "loalab": 8.63,
+    "refA": 8.63,
     "formula": 8.625,
     "diff": -0.005
    },
@@ -494,7 +494,7 @@
     "name": "시선 집중",
     "book": 4,
     "stone": 0,
-    "loalab": 9,
+    "refA": 9,
     "formula": 9,
     "diff": 0
    },
@@ -502,7 +502,7 @@
     "name": "추진력",
     "book": 0,
     "stone": 0,
-    "loalab": 9.8,
+    "refA": 9.8,
     "formula": 9.8,
     "diff": 0
    },
@@ -510,7 +510,7 @@
     "name": "추진력",
     "book": 1,
     "stone": 0,
-    "loalab": 10.33,
+    "refA": 10.33,
     "formula": 10.325,
     "diff": -0.005
    },
@@ -518,7 +518,7 @@
     "name": "추진력",
     "book": 2,
     "stone": 0,
-    "loalab": 10.85,
+    "refA": 10.85,
     "formula": 10.85,
     "diff": 0
    },
@@ -526,7 +526,7 @@
     "name": "추진력",
     "book": 3,
     "stone": 0,
-    "loalab": 11.38,
+    "refA": 11.38,
     "formula": 11.375,
     "diff": -0.005
    },
@@ -534,7 +534,7 @@
     "name": "추진력",
     "book": 4,
     "stone": 0,
-    "loalab": 11.9,
+    "refA": 11.9,
     "formula": 11.9,
     "diff": 0
    },
@@ -542,7 +542,7 @@
     "name": "부러진 뼈",
     "book": 0,
     "stone": 0,
-    "loalab": 7.4,
+    "refA": 7.4,
     "formula": 7.4,
     "diff": 0
    },
@@ -550,7 +550,7 @@
     "name": "부러진 뼈",
     "book": 1,
     "stone": 0,
-    "loalab": 7.65,
+    "refA": 7.65,
     "formula": 7.65,
     "diff": 0
    },
@@ -558,7 +558,7 @@
     "name": "부러진 뼈",
     "book": 2,
     "stone": 0,
-    "loalab": 7.9,
+    "refA": 7.9,
     "formula": 7.9,
     "diff": 0
    },
@@ -566,7 +566,7 @@
     "name": "부러진 뼈",
     "book": 3,
     "stone": 0,
-    "loalab": 8.15,
+    "refA": 8.15,
     "formula": 8.15,
     "diff": 0
    },
@@ -574,7 +574,7 @@
     "name": "부러진 뼈",
     "book": 4,
     "stone": 0,
-    "loalab": 8.4,
+    "refA": 8.4,
     "formula": 8.4,
     "diff": 0
    },
@@ -582,7 +582,7 @@
     "name": "분쇄의 주먹",
     "book": 0,
     "stone": 0,
-    "loalab": 1.3,
+    "refA": 1.3,
     "formula": 1.3,
     "diff": 0
    },
@@ -590,7 +590,7 @@
     "name": "분쇄의 주먹",
     "book": 1,
     "stone": 0,
-    "loalab": 1.38,
+    "refA": 1.38,
     "formula": 1.375,
     "diff": -0.005
    },
@@ -598,7 +598,7 @@
     "name": "분쇄의 주먹",
     "book": 2,
     "stone": 0,
-    "loalab": 1.45,
+    "refA": 1.45,
     "formula": 1.45,
     "diff": 0
    },
@@ -606,7 +606,7 @@
     "name": "분쇄의 주먹",
     "book": 3,
     "stone": 0,
-    "loalab": 1.53,
+    "refA": 1.53,
     "formula": 1.525,
     "diff": -0.005
    },
@@ -614,7 +614,7 @@
     "name": "분쇄의 주먹",
     "book": 4,
     "stone": 0,
-    "loalab": 1.6,
+    "refA": 1.6,
     "formula": 1.6,
     "diff": 0
    },
@@ -622,7 +622,7 @@
     "name": "결투의 대가",
     "book": 0,
     "stone": 0,
-    "loalab": 15.3,
+    "refA": 15.3,
     "formula": 15.3,
     "diff": 0
    },
@@ -630,7 +630,7 @@
     "name": "결투의 대가",
     "book": 1,
     "stone": 0,
-    "loalab": 16,
+    "refA": 16,
     "formula": 16,
     "diff": 0
    },
@@ -638,7 +638,7 @@
     "name": "결투의 대가",
     "book": 2,
     "stone": 0,
-    "loalab": 16.7,
+    "refA": 16.7,
     "formula": 16.7,
     "diff": 0
    },
@@ -646,7 +646,7 @@
     "name": "결투의 대가",
     "book": 3,
     "stone": 0,
-    "loalab": 17.4,
+    "refA": 17.4,
     "formula": 17.4,
     "diff": 0
    },
@@ -654,7 +654,7 @@
     "name": "결투의 대가",
     "book": 4,
     "stone": 0,
-    "loalab": 18.1,
+    "refA": 18.1,
     "formula": 18.1,
     "diff": 0
    },
@@ -662,7 +662,7 @@
     "name": "예리한 둔기",
     "book": 4,
     "stone": 0,
-    "loalab": 17.36,
+    "refA": 17.36,
     "formula": 17.365,
     "diff": 0.005
    },
@@ -670,7 +670,7 @@
     "name": "예리한 둔기",
     "book": 4,
     "stone": 1,
-    "loalab": 20.15,
+    "refA": 20.15,
     "formula": 20.158,
     "diff": 0.008
    },
@@ -678,7 +678,7 @@
     "name": "예리한 둔기",
     "book": 4,
     "stone": 2,
-    "loalab": 20.86,
+    "refA": 20.86,
     "formula": 20.865,
     "diff": 0.005
    },
@@ -686,7 +686,7 @@
     "name": "예리한 둔기",
     "book": 4,
     "stone": 3,
-    "loalab": 22.28,
+    "refA": 22.28,
     "formula": 22.28,
     "diff": 0
    },
@@ -694,7 +694,7 @@
     "name": "예리한 둔기",
     "book": 4,
     "stone": 4,
-    "loalab": 22.95,
+    "refA": 22.95,
     "formula": 22.951,
     "diff": 0.001
    },
@@ -702,7 +702,7 @@
     "name": "결투의 대가",
     "book": 4,
     "stone": 0,
-    "loalab": 18.1,
+    "refA": 18.1,
     "formula": 18.1,
     "diff": 0
    },
@@ -710,7 +710,7 @@
     "name": "결투의 대가",
     "book": 4,
     "stone": 1,
-    "loalab": 20.8,
+    "refA": 20.8,
     "formula": 20.8,
     "diff": 0
    },
@@ -718,7 +718,7 @@
     "name": "결투의 대가",
     "book": 4,
     "stone": 2,
-    "loalab": 21.5,
+    "refA": 21.5,
     "formula": 21.5,
     "diff": 0
    },
@@ -726,7 +726,7 @@
     "name": "결투의 대가",
     "book": 4,
     "stone": 3,
-    "loalab": 22.8,
+    "refA": 22.8,
     "formula": 22.8,
     "diff": 0
    },
@@ -734,7 +734,7 @@
     "name": "결투의 대가",
     "book": 4,
     "stone": 4,
-    "loalab": 23.5,
+    "refA": 23.5,
     "formula": 23.5,
     "diff": 0
    },
@@ -742,7 +742,7 @@
     "name": "정밀 단도",
     "book": 4,
     "stone": 0,
-    "loalab": 12.7,
+    "refA": 12.7,
     "formula": 12.7,
     "diff": 0
    },
@@ -750,7 +750,7 @@
     "name": "정밀 단도",
     "book": 4,
     "stone": 1,
-    "loalab": 14.8,
+    "refA": 14.8,
     "formula": 14.8,
     "diff": 0
    },
@@ -758,7 +758,7 @@
     "name": "정밀 단도",
     "book": 4,
     "stone": 2,
-    "loalab": 15.33,
+    "refA": 15.33,
     "formula": 15.325,
     "diff": -0.005
    },
@@ -766,7 +766,7 @@
     "name": "정밀 단도",
     "book": 4,
     "stone": 3,
-    "loalab": 16.38,
+    "refA": 16.38,
     "formula": 16.375,
     "diff": -0.005
    },
@@ -774,7 +774,7 @@
     "name": "정밀 단도",
     "book": 4,
     "stone": 4,
-    "loalab": 16.9,
+    "refA": 16.9,
     "formula": 16.9,
     "diff": 0
    },
@@ -782,7 +782,7 @@
     "name": "바리케이드",
     "book": 4,
     "stone": 0,
-    "loalab": 17,
+    "refA": 17,
     "formula": 17,
     "diff": 0
    },
@@ -790,7 +790,7 @@
     "name": "바리케이드",
     "book": 4,
     "stone": 1,
-    "loalab": 20,
+    "refA": 20,
     "formula": 20,
     "diff": 0
    },
@@ -798,7 +798,7 @@
     "name": "바리케이드",
     "book": 4,
     "stone": 2,
-    "loalab": 20.75,
+    "refA": 20.75,
     "formula": 20.75,
     "diff": 0
    },
@@ -806,7 +806,7 @@
     "name": "바리케이드",
     "book": 4,
     "stone": 3,
-    "loalab": 22.25,
+    "refA": 22.25,
     "formula": 22.25,
     "diff": 0
    },
@@ -814,7 +814,7 @@
     "name": "바리케이드",
     "book": 4,
     "stone": 4,
-    "loalab": 23,
+    "refA": 23,
     "formula": 23,
     "diff": 0
    },
@@ -822,7 +822,7 @@
     "name": "마나 효율 증가",
     "book": 4,
     "stone": 0,
-    "loalab": 16,
+    "refA": 16,
     "formula": 16,
     "diff": 0
    },
@@ -830,7 +830,7 @@
     "name": "마나 효율 증가",
     "book": 4,
     "stone": 1,
-    "loalab": 19,
+    "refA": 19,
     "formula": 19,
     "diff": 0
    },
@@ -838,7 +838,7 @@
     "name": "마나 효율 증가",
     "book": 4,
     "stone": 2,
-    "loalab": 19.75,
+    "refA": 19.75,
     "formula": 19.75,
     "diff": 0
    },
@@ -846,7 +846,7 @@
     "name": "마나 효율 증가",
     "book": 4,
     "stone": 3,
-    "loalab": 21.25,
+    "refA": 21.25,
     "formula": 21.25,
     "diff": 0
    },
@@ -854,7 +854,7 @@
     "name": "마나 효율 증가",
     "book": 4,
     "stone": 4,
-    "loalab": 22,
+    "refA": 22,
     "formula": 22,
     "diff": 0
    },
@@ -862,7 +862,7 @@
     "name": "에테르 포식자",
     "book": 4,
     "stone": 0,
-    "loalab": 16.2,
+    "refA": 16.2,
     "formula": 16.2,
     "diff": 0
    },
@@ -870,7 +870,7 @@
     "name": "에테르 포식자",
     "book": 4,
     "stone": 1,
-    "loalab": 19.2,
+    "refA": 19.2,
     "formula": 19.2,
     "diff": 0
    },
@@ -878,7 +878,7 @@
     "name": "에테르 포식자",
     "book": 4,
     "stone": 2,
-    "loalab": 20.1,
+    "refA": 20.1,
     "formula": 20.1,
     "diff": 0
    },
@@ -886,7 +886,7 @@
     "name": "에테르 포식자",
     "book": 4,
     "stone": 3,
-    "loalab": 21.6,
+    "refA": 21.6,
     "formula": 21.6,
     "diff": 0
    },
@@ -894,7 +894,7 @@
     "name": "에테르 포식자",
     "book": 4,
     "stone": 4,
-    "loalab": 22.2,
+    "refA": 22.2,
     "formula": 22.2,
     "diff": 0
    },
@@ -902,7 +902,7 @@
     "name": "구슬동자",
     "book": 4,
     "stone": 0,
-    "loalab": 4.64,
+    "refA": 4.64,
     "formula": 4.64,
     "diff": 0
    },
@@ -910,7 +910,7 @@
     "name": "구슬동자",
     "book": 4,
     "stone": 1,
-    "loalab": 5.12,
+    "refA": 5.12,
     "formula": 5.12,
     "diff": 0
    },
@@ -918,7 +918,7 @@
     "name": "구슬동자",
     "book": 4,
     "stone": 2,
-    "loalab": 5.24,
+    "refA": 5.24,
     "formula": 5.24,
     "diff": 0
    },
@@ -926,7 +926,7 @@
     "name": "구슬동자",
     "book": 4,
     "stone": 3,
-    "loalab": 5.48,
+    "refA": 5.48,
     "formula": 5.48,
     "diff": 0
    },
@@ -934,7 +934,7 @@
     "name": "구슬동자",
     "book": 4,
     "stone": 4,
-    "loalab": 5.6,
+    "refA": 5.6,
     "formula": 5.6,
     "diff": 0
    },
@@ -942,7 +942,7 @@
     "name": "마나의 흐름",
     "book": 4,
     "stone": 0,
-    "loalab": 11.11,
+    "refA": 11.11,
     "formula": 11.111,
     "diff": 0.001
    },
@@ -950,7 +950,7 @@
     "name": "마나의 흐름",
     "book": 4,
     "stone": 1,
-    "loalab": 11.11,
+    "refA": 11.11,
     "formula": 11.111,
     "diff": 0.001
    },
@@ -958,7 +958,7 @@
     "name": "마나의 흐름",
     "book": 4,
     "stone": 2,
-    "loalab": 11.11,
+    "refA": 11.11,
     "formula": 11.111,
     "diff": 0.001
    },
@@ -966,7 +966,7 @@
     "name": "마나의 흐름",
     "book": 4,
     "stone": 3,
-    "loalab": 11.11,
+    "refA": 11.11,
     "formula": 11.111,
     "diff": 0.001
    },
@@ -974,7 +974,7 @@
     "name": "마나의 흐름",
     "book": 4,
     "stone": 4,
-    "loalab": 11.11,
+    "refA": 11.11,
     "formula": 11.111,
     "diff": 0.001
    },
@@ -982,7 +982,7 @@
     "name": "승부사",
     "book": 4,
     "stone": 0,
-    "loalab": 2.1,
+    "refA": 2.1,
     "formula": 2.1,
     "diff": 0
    },
@@ -990,7 +990,7 @@
     "name": "승부사",
     "book": 4,
     "stone": 1,
-    "loalab": 2.4,
+    "refA": 2.4,
     "formula": 2.4,
     "diff": 0
    },
@@ -998,7 +998,7 @@
     "name": "승부사",
     "book": 4,
     "stone": 2,
-    "loalab": 2.48,
+    "refA": 2.48,
     "formula": 2.48,
     "diff": 0
    },
@@ -1006,7 +1006,7 @@
     "name": "승부사",
     "book": 4,
     "stone": 3,
-    "loalab": 2.63,
+    "refA": 2.63,
     "formula": 2.63,
     "diff": 0
    },
@@ -1014,7 +1014,7 @@
     "name": "승부사",
     "book": 4,
     "stone": 4,
-    "loalab": 2.7,
+    "refA": 2.7,
     "formula": 2.7,
     "diff": 0
    },
@@ -1022,7 +1022,7 @@
     "name": "저주받은 인형",
     "book": 4,
     "stone": 0,
-    "loalab": 17,
+    "refA": 17,
     "formula": 17,
     "diff": 0
    },
@@ -1030,7 +1030,7 @@
     "name": "저주받은 인형",
     "book": 4,
     "stone": 1,
-    "loalab": 20,
+    "refA": 20,
     "formula": 20,
     "diff": 0
    },
@@ -1038,7 +1038,7 @@
     "name": "저주받은 인형",
     "book": 4,
     "stone": 2,
-    "loalab": 20.75,
+    "refA": 20.75,
     "formula": 20.75,
     "diff": 0
    },
@@ -1046,7 +1046,7 @@
     "name": "저주받은 인형",
     "book": 4,
     "stone": 3,
-    "loalab": 22.25,
+    "refA": 22.25,
     "formula": 22.25,
     "diff": 0
    },
@@ -1054,7 +1054,7 @@
     "name": "저주받은 인형",
     "book": 4,
     "stone": 4,
-    "loalab": 23,
+    "refA": 23,
     "formula": 23,
     "diff": 0
    },
@@ -1062,7 +1062,7 @@
     "name": "달인의 저력",
     "book": 4,
     "stone": 0,
-    "loalab": 17,
+    "refA": 17,
     "formula": 17,
     "diff": 0
    },
@@ -1070,7 +1070,7 @@
     "name": "달인의 저력",
     "book": 4,
     "stone": 1,
-    "loalab": 20,
+    "refA": 20,
     "formula": 20,
     "diff": 0
    },
@@ -1078,7 +1078,7 @@
     "name": "달인의 저력",
     "book": 4,
     "stone": 2,
-    "loalab": 20.75,
+    "refA": 20.75,
     "formula": 20.75,
     "diff": 0
    },
@@ -1086,7 +1086,7 @@
     "name": "달인의 저력",
     "book": 4,
     "stone": 3,
-    "loalab": 22.25,
+    "refA": 22.25,
     "formula": 22.25,
     "diff": 0
    },
@@ -1094,7 +1094,7 @@
     "name": "달인의 저력",
     "book": 4,
     "stone": 4,
-    "loalab": 23,
+    "refA": 23,
     "formula": 23,
     "diff": 0
    },
@@ -1102,7 +1102,7 @@
     "name": "약자 무시",
     "book": 4,
     "stone": 0,
-    "loalab": 13.2,
+    "refA": 13.2,
     "formula": 13.2,
     "diff": 0
    },
@@ -1110,7 +1110,7 @@
     "name": "약자 무시",
     "book": 4,
     "stone": 1,
-    "loalab": 15.6,
+    "refA": 15.6,
     "formula": 15.6,
     "diff": 0
    },
@@ -1118,7 +1118,7 @@
     "name": "약자 무시",
     "book": 4,
     "stone": 2,
-    "loalab": 16.2,
+    "refA": 16.2,
     "formula": 16.2,
     "diff": 0
    },
@@ -1126,7 +1126,7 @@
     "name": "약자 무시",
     "book": 4,
     "stone": 3,
-    "loalab": 17.4,
+    "refA": 17.4,
     "formula": 17.4,
     "diff": 0
    },
@@ -1134,7 +1134,7 @@
     "name": "약자 무시",
     "book": 4,
     "stone": 4,
-    "loalab": 18,
+    "refA": 18,
     "formula": 18,
     "diff": 0
    },
@@ -1142,7 +1142,7 @@
     "name": "시선 집중",
     "book": 4,
     "stone": 0,
-    "loalab": 9,
+    "refA": 9,
     "formula": 9,
     "diff": 0
    },
@@ -1150,7 +1150,7 @@
     "name": "시선 집중",
     "book": 4,
     "stone": 1,
-    "loalab": 10.2,
+    "refA": 10.2,
     "formula": 10.2,
     "diff": 0
    },
@@ -1158,7 +1158,7 @@
     "name": "시선 집중",
     "book": 4,
     "stone": 2,
-    "loalab": 10.5,
+    "refA": 10.5,
     "formula": 10.5,
     "diff": 0
    },
@@ -1166,7 +1166,7 @@
     "name": "시선 집중",
     "book": 4,
     "stone": 3,
-    "loalab": 11.1,
+    "refA": 11.1,
     "formula": 11.1,
     "diff": 0
    },
@@ -1174,7 +1174,7 @@
     "name": "시선 집중",
     "book": 4,
     "stone": 4,
-    "loalab": 11.4,
+    "refA": 11.4,
     "formula": 11.4,
     "diff": 0
    },
@@ -1182,7 +1182,7 @@
     "name": "추진력",
     "book": 4,
     "stone": 0,
-    "loalab": 11.9,
+    "refA": 11.9,
     "formula": 11.9,
     "diff": 0
    },
@@ -1190,7 +1190,7 @@
     "name": "추진력",
     "book": 4,
     "stone": 1,
-    "loalab": 14,
+    "refA": 14,
     "formula": 14,
     "diff": 0
    },
@@ -1198,7 +1198,7 @@
     "name": "추진력",
     "book": 4,
     "stone": 2,
-    "loalab": 14.53,
+    "refA": 14.53,
     "formula": 14.525,
     "diff": -0.005
    },
@@ -1206,7 +1206,7 @@
     "name": "추진력",
     "book": 4,
     "stone": 3,
-    "loalab": 15.58,
+    "refA": 15.58,
     "formula": 15.575,
     "diff": -0.005
    },
@@ -1214,7 +1214,7 @@
     "name": "추진력",
     "book": 4,
     "stone": 4,
-    "loalab": 16.1,
+    "refA": 16.1,
     "formula": 16.1,
     "diff": 0
    },
@@ -1222,7 +1222,7 @@
     "name": "부러진 뼈",
     "book": 4,
     "stone": 0,
-    "loalab": 8.4,
+    "refA": 8.4,
     "formula": 8.4,
     "diff": 0
    },
@@ -1230,7 +1230,7 @@
     "name": "부러진 뼈",
     "book": 4,
     "stone": 1,
-    "loalab": 9.2,
+    "refA": 9.2,
     "formula": 9.2,
     "diff": 0
    },
@@ -1238,7 +1238,7 @@
     "name": "부러진 뼈",
     "book": 4,
     "stone": 2,
-    "loalab": 9.4,
+    "refA": 9.4,
     "formula": 9.4,
     "diff": 0
    },
@@ -1246,7 +1246,7 @@
     "name": "부러진 뼈",
     "book": 4,
     "stone": 3,
-    "loalab": 9.8,
+    "refA": 9.8,
     "formula": 9.8,
     "diff": 0
    },
@@ -1254,7 +1254,7 @@
     "name": "부러진 뼈",
     "book": 4,
     "stone": 4,
-    "loalab": 10,
+    "refA": 10,
     "formula": 10,
     "diff": 0
    },
@@ -1262,7 +1262,7 @@
     "name": "분쇄의 주먹",
     "book": 4,
     "stone": 0,
-    "loalab": 1.6,
+    "refA": 1.6,
     "formula": 1.6,
     "diff": 0
    },
@@ -1270,7 +1270,7 @@
     "name": "분쇄의 주먹",
     "book": 4,
     "stone": 1,
-    "loalab": 1.75,
+    "refA": 1.75,
     "formula": 1.75,
     "diff": 0
    },
@@ -1278,7 +1278,7 @@
     "name": "분쇄의 주먹",
     "book": 4,
     "stone": 2,
-    "loalab": 1.79,
+    "refA": 1.79,
     "formula": 1.788,
     "diff": -0.002
    },
@@ -1286,7 +1286,7 @@
     "name": "분쇄의 주먹",
     "book": 4,
     "stone": 3,
-    "loalab": 1.86,
+    "refA": 1.86,
     "formula": 1.863,
     "diff": 0.002
    },
@@ -1294,7 +1294,7 @@
     "name": "분쇄의 주먹",
     "book": 4,
     "stone": 4,
-    "loalab": 1.9,
+    "refA": 1.9,
     "formula": 1.9,
     "diff": 0
    },
@@ -1302,7 +1302,7 @@
     "name": "안정된 상태",
     "book": 4,
     "stone": 0,
-    "loalab": 17,
+    "refA": 17,
     "formula": 17,
     "diff": 0
    },
@@ -1310,7 +1310,7 @@
     "name": "안정된 상태",
     "book": 4,
     "stone": 1,
-    "loalab": 20,
+    "refA": 20,
     "formula": 20,
     "diff": 0
    },
@@ -1318,7 +1318,7 @@
     "name": "안정된 상태",
     "book": 4,
     "stone": 2,
-    "loalab": 20.75,
+    "refA": 20.75,
     "formula": 20.75,
     "diff": 0
    },
@@ -1326,7 +1326,7 @@
     "name": "안정된 상태",
     "book": 4,
     "stone": 3,
-    "loalab": 22.25,
+    "refA": 22.25,
     "formula": 22.25,
     "diff": 0
    },
@@ -1334,7 +1334,7 @@
     "name": "안정된 상태",
     "book": 4,
     "stone": 4,
-    "loalab": 23,
+    "refA": 23,
     "formula": 23,
     "diff": 0
    },
@@ -1342,7 +1342,7 @@
     "name": "원한",
     "book": 4,
     "stone": 0,
-    "loalab": 21,
+    "refA": 21,
     "formula": 21,
     "diff": 0
    },
@@ -1350,7 +1350,7 @@
     "name": "원한",
     "book": 4,
     "stone": 1,
-    "loalab": 24,
+    "refA": 24,
     "formula": 24,
     "diff": 0
    },
@@ -1358,7 +1358,7 @@
     "name": "원한",
     "book": 4,
     "stone": 2,
-    "loalab": 24.75,
+    "refA": 24.75,
     "formula": 24.75,
     "diff": 0
    },
@@ -1366,7 +1366,7 @@
     "name": "원한",
     "book": 4,
     "stone": 3,
-    "loalab": 26.25,
+    "refA": 26.25,
     "formula": 26.25,
     "diff": 0
    },
@@ -1374,7 +1374,7 @@
     "name": "원한",
     "book": 4,
     "stone": 4,
-    "loalab": 27,
+    "refA": 27,
     "formula": 27,
     "diff": 0
    },
@@ -1382,7 +1382,7 @@
     "name": "질량 증가",
     "book": 4,
     "stone": 0,
-    "loalab": 19,
+    "refA": 19,
     "formula": 19,
     "diff": 0
    },
@@ -1390,7 +1390,7 @@
     "name": "질량 증가",
     "book": 4,
     "stone": 1,
-    "loalab": 22,
+    "refA": 22,
     "formula": 22,
     "diff": 0
    },
@@ -1398,7 +1398,7 @@
     "name": "질량 증가",
     "book": 4,
     "stone": 2,
-    "loalab": 22.75,
+    "refA": 22.75,
     "formula": 22.75,
     "diff": 0
    },
@@ -1406,7 +1406,7 @@
     "name": "질량 증가",
     "book": 4,
     "stone": 3,
-    "loalab": 24.25,
+    "refA": 24.25,
     "formula": 24.25,
     "diff": 0
    },
@@ -1414,7 +1414,7 @@
     "name": "질량 증가",
     "book": 4,
     "stone": 4,
-    "loalab": 25,
+    "refA": 25,
     "formula": 25,
     "diff": 0
    },
@@ -1422,7 +1422,7 @@
     "name": "타격의 대가",
     "book": 4,
     "stone": 0,
-    "loalab": 17,
+    "refA": 17,
     "formula": 17,
     "diff": 0
    },
@@ -1430,7 +1430,7 @@
     "name": "타격의 대가",
     "book": 4,
     "stone": 1,
-    "loalab": 20,
+    "refA": 20,
     "formula": 20,
     "diff": 0
    },
@@ -1438,7 +1438,7 @@
     "name": "타격의 대가",
     "book": 4,
     "stone": 2,
-    "loalab": 20.75,
+    "refA": 20.75,
     "formula": 20.75,
     "diff": 0
    },
@@ -1446,7 +1446,7 @@
     "name": "타격의 대가",
     "book": 4,
     "stone": 3,
-    "loalab": 22.25,
+    "refA": 22.25,
     "formula": 22.25,
     "diff": 0
    },
@@ -1454,7 +1454,7 @@
     "name": "타격의 대가",
     "book": 4,
     "stone": 4,
-    "loalab": 23,
+    "refA": 23,
     "formula": 23,
     "diff": 0
    },
@@ -1462,7 +1462,7 @@
     "name": "기습의 대가",
     "book": 0,
     "stone": 0,
-    "loalab": 15.3,
+    "refA": 15.3,
     "formula": 15.3,
     "diff": 0
    },
@@ -1470,7 +1470,7 @@
     "name": "기습의 대가",
     "book": 0,
     "stone": 1,
-    "loalab": 18,
+    "refA": 18,
     "formula": 18,
     "diff": 0
    },
@@ -1478,7 +1478,7 @@
     "name": "기습의 대가",
     "book": 0,
     "stone": 2,
-    "loalab": 18.7,
+    "refA": 18.7,
     "formula": 18.7,
     "diff": 0
    },
@@ -1486,7 +1486,7 @@
     "name": "기습의 대가",
     "book": 0,
     "stone": 3,
-    "loalab": 20,
+    "refA": 20,
     "formula": 20,
     "diff": 0
    },
@@ -1494,7 +1494,7 @@
     "name": "기습의 대가",
     "book": 0,
     "stone": 4,
-    "loalab": 20.7,
+    "refA": 20.7,
     "formula": 20.7,
     "diff": 0
    },
@@ -1502,7 +1502,7 @@
     "name": "안정된 상태",
     "book": 0,
     "stone": 0,
-    "loalab": 14,
+    "refA": 14,
     "formula": 14,
     "diff": 0
    },
@@ -1510,7 +1510,7 @@
     "name": "안정된 상태",
     "book": 0,
     "stone": 1,
-    "loalab": 17,
+    "refA": 17,
     "formula": 17,
     "diff": 0
    },
@@ -1518,7 +1518,7 @@
     "name": "안정된 상태",
     "book": 0,
     "stone": 2,
-    "loalab": 17.75,
+    "refA": 17.75,
     "formula": 17.75,
     "diff": 0
    },
@@ -1526,7 +1526,7 @@
     "name": "안정된 상태",
     "book": 0,
     "stone": 3,
-    "loalab": 19.25,
+    "refA": 19.25,
     "formula": 19.25,
     "diff": 0
    },
@@ -1534,7 +1534,7 @@
     "name": "안정된 상태",
     "book": 0,
     "stone": 4,
-    "loalab": 20,
+    "refA": 20,
     "formula": 20,
     "diff": 0
    },
@@ -1542,7 +1542,7 @@
     "name": "예리한 둔기",
     "book": 0,
     "stone": 0,
-    "loalab": 14.39,
+    "refA": 14.39,
     "formula": 14.386,
     "diff": -0.004
    },
@@ -1550,7 +1550,7 @@
     "name": "예리한 둔기",
     "book": 0,
     "stone": 1,
-    "loalab": 17.18,
+    "refA": 17.18,
     "formula": 17.179,
     "diff": -0.001
    },
@@ -1558,7 +1558,7 @@
     "name": "예리한 둔기",
     "book": 0,
     "stone": 2,
-    "loalab": 17.89,
+    "refA": 17.89,
     "formula": 17.886,
     "diff": -0.004
    },
@@ -1566,7 +1566,7 @@
     "name": "예리한 둔기",
     "book": 0,
     "stone": 3,
-    "loalab": 19.31,
+    "refA": 19.31,
     "formula": 19.301,
     "diff": -0.009
    },
@@ -1574,7 +1574,7 @@
     "name": "예리한 둔기",
     "book": 0,
     "stone": 4,
-    "loalab": 19.98,
+    "refA": 19.98,
     "formula": 19.972,
     "diff": -0.008
    },
@@ -1582,7 +1582,7 @@
     "name": "에테르 포식자",
     "book": 0,
     "stone": 0,
-    "loalab": 12.6,
+    "refA": 12.6,
     "formula": 12.6,
     "diff": 0
    },
@@ -1590,7 +1590,7 @@
     "name": "에테르 포식자",
     "book": 0,
     "stone": 1,
-    "loalab": 15.6,
+    "refA": 15.6,
     "formula": 15.6,
     "diff": 0
    },
@@ -1598,7 +1598,7 @@
     "name": "에테르 포식자",
     "book": 0,
     "stone": 2,
-    "loalab": 16.5,
+    "refA": 16.5,
     "formula": 16.5,
     "diff": 0
    },
@@ -1606,7 +1606,7 @@
     "name": "에테르 포식자",
     "book": 0,
     "stone": 3,
-    "loalab": 18,
+    "refA": 18,
     "formula": 18,
     "diff": 0
    },
@@ -1614,141 +1614,141 @@
     "name": "에테르 포식자",
     "book": 0,
     "stone": 4,
-    "loalab": 18.6,
+    "refA": 18.6,
     "formula": 18.6,
     "diff": 0
    }
   ],
-  "loalabWorstDiffPct": 0.009,
-  "lopecL4": [
+  "refAWorstDiffPct": 0.009,
+  "refBL4": [
    {
     "name": "결투의 대가",
-    "lopecCp": 3376.69,
-    "lopecPct": 18.1,
+    "refBCp": 3376.69,
+    "refBPct": 18.1,
     "formula": 18.1,
     "diffPct": 0
    },
    {
     "name": "구슬동자",
-    "lopecCp": 2991.85,
-    "lopecPct": 4.64,
+    "refBCp": 2991.85,
+    "refBPct": 4.64,
     "formula": 4.64,
     "diffPct": 0
    },
    {
     "name": "마나 효율 증가",
-    "lopecCp": 3316.65,
-    "lopecPct": 16,
+    "refBCp": 3316.65,
+    "refBPct": 16,
     "formula": 16,
     "diffPct": 0
    },
    {
     "name": "바리케이드",
-    "lopecCp": 3345.24,
-    "lopecPct": 17,
+    "refBCp": 3345.24,
+    "refBPct": 17,
     "formula": 17,
     "diffPct": 0
    },
    {
     "name": "에테르 포식자",
-    "lopecCp": 3322.37,
-    "lopecPct": 16.2,
+    "refBCp": 3322.37,
+    "refBPct": 16.2,
     "formula": 16.2,
     "diffPct": 0
    },
    {
     "name": "정밀 단도",
-    "lopecCp": 3222.3,
-    "lopecPct": 12.7,
+    "refBCp": 3222.3,
+    "refBPct": 12.7,
     "formula": 12.7,
     "diffPct": 0
    },
    {
     "name": "저주받은 인형",
-    "lopecCp": 3345.24,
-    "lopecPct": 17,
+    "refBCp": 3345.24,
+    "refBPct": 17,
     "formula": 17,
     "diffPct": 0
    },
    {
     "name": "질량 증가",
-    "lopecCp": 3402.42,
-    "lopecPct": 19,
+    "refBCp": 3402.42,
+    "refBPct": 19,
     "formula": 19,
     "diffPct": 0
    },
    {
     "name": "타격의 대가",
-    "lopecCp": 3345.24,
-    "lopecPct": 17,
+    "refBCp": 3345.24,
+    "refBPct": 17,
     "formula": 17,
     "diffPct": 0
    },
    {
     "name": "마나의 흐름",
-    "lopecCp": 3176.83,
-    "lopecPct": 11.11,
+    "refBCp": 3176.83,
+    "refBPct": 11.11,
     "formula": 11.111,
     "diffPct": 0.001
    },
    {
     "name": "승부사",
-    "lopecCp": 2919.22,
-    "lopecPct": 2.1,
+    "refBCp": 2919.22,
+    "refBPct": 2.1,
     "formula": 2.1,
     "diffPct": 0
    },
    {
     "name": "달인의 저력",
-    "lopecCp": 3345.24,
-    "lopecPct": 17,
+    "refBCp": 3345.24,
+    "refBPct": 17,
     "formula": 17,
     "diffPct": 0
    },
    {
     "name": "약자 무시",
-    "lopecCp": 3236.59,
-    "lopecPct": 13.2,
+    "refBCp": 3236.59,
+    "refBPct": 13.2,
     "formula": 13.2,
     "diffPct": 0
    },
    {
     "name": "시선 집중",
-    "lopecCp": 3116.51,
-    "lopecPct": 9,
+    "refBCp": 3116.51,
+    "refBPct": 9,
     "formula": 9,
     "diffPct": 0
    },
    {
     "name": "추진력",
-    "lopecCp": 3199.42,
-    "lopecPct": 11.9,
+    "refBCp": 3199.42,
+    "refBPct": 11.9,
     "formula": 11.9,
     "diffPct": 0
    },
    {
     "name": "부러진 뼈",
-    "lopecCp": 3099.35,
-    "lopecPct": 8.4,
+    "refBCp": 3099.35,
+    "refBPct": 8.4,
     "formula": 8.4,
     "diffPct": 0
    },
    {
     "name": "분쇄의 주먹",
-    "lopecCp": 2904.93,
-    "lopecPct": 1.6,
+    "refBCp": 2904.93,
+    "refBPct": 1.6,
     "formula": 1.6,
     "diffPct": 0
    },
    {
     "name": "예리한 둔기",
-    "lopecCp": 3355.53,
-    "lopecPct": 17.36,
+    "refBCp": 3355.53,
+    "refBPct": 17.36,
     "formula": 17.365,
     "diffPct": 0.005
    }
   ],
-  "lopecStones": {
+  "refBStones": {
    "기습의 대가 스톤 1~4(원한 스톤 2 자리)": [
     3271.81,
     3337.81,
@@ -1757,11 +1757,11 @@
    ],
    "안정된 상태 스톤 4": 3408.47,
    "약자 무시 L4 + 스톤 4": 3269.91,
-   "note": "로아랩 같은 변경 값과 모두 ±0.01"
+   "note": "비교 기준 A 같은 변경 값과 모두 ±0.01"
   },
   "tableWorstDiffPct": 0
  },
- "loalabTable": {
+ "refATable": {
   "원한": {
    "books": [
     18,

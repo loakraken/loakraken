@@ -1,6 +1,6 @@
 {
   "ruleVersion": "combat-power-refine-v3",
-  "source": "계산 검증 2026-10-11 18:05 모델 확정(대조 사이트 서버 계산 대조 통과, 표본 src/test/resources/verification/combat-power/loalab-refine-model-2026-10-11.json). 단계표는 공식 장비 Tooltip 31칸과 같다.",
+  "source": "계산 검증 2026-10-11 18:05 모델 확정(대조 사이트 서버 계산 대조 통과, 표본 src/test/resources/verification/combat-power/ref-a-refine-model-2026-10-11.json). 단계표는 공식 장비 Tooltip 31칸과 같다.",
   "petStatPct": 0.01,
   "petAssumption": "펫 효과(힘민지 +1%)는 공식 응답에 없어 있다고 가정한다(두 출처가 같은 가정, PM-백엔드 16:57).",
   "avatarStatPctByGrade": {
@@ -185,7 +185,7 @@
     }
   },
   "jeonyulStatTableSource": "전율 장비 재련 0~25단계 기본 효과(방어구 주스탯, 무기 무기 공격력). 공식 아이템 사전 「재련 정보」(2026-10-12 확인, 검증 표본 official-jeonyul-refine-stats-2026-10-12.json, E20). 공식 장비 툴팁 22건과 같음",
-  "upgradeSource": "업화 장비 상급 재련(PM 총괄 판정 (b), 표본 src/test/resources/verification/combat-power/loalab-advanced-refine-2026-10-11.json). 수치 = round(T(5 × 일반 재련 + 상급) × (1 + 30단계 2% + 40단계 3%)), 방어구 T = round(투구 T × 부위 배수), 5의 배수 사이 칸은 ⌈T(a) + (T(a + 5) − T(a)) × f(j)⌉. 무기는 확인된 칸(weaponExactT)만.",
+  "upgradeSource": "업화 장비 상급 재련(PM 총괄 판정 (b), 표본 src/test/resources/verification/combat-power/ref-a-advanced-refine-2026-10-11.json). 수치 = round(T(5 × 일반 재련 + 상급) × (1 + 30단계 2% + 40단계 3%)), 방어구 T = round(투구 T × 부위 배수), 5의 배수 사이 칸은 ⌈T(a) + (T(a + 5) − T(a)) × f(j)⌉. 무기는 확인된 칸(weaponExactT)만.",
   "upgradeHelmetT": {
     "55": 59077,
     "60": 60478,
@@ -330,7 +330,7 @@
     "30": 0.02,
     "40": 0.03
   },
-  "armGuardSource": "팔 보호구(완갑) 단계·등급(표본 src/test/resources/verification/combat-power/loalab-bracer-armguard-2026-10-11.json, 공식 Tooltip 380명 + 대조 7건). confirmed=false는 5단계 주기로 채운 칸이라 계산하지 않는다.",
+  "armGuardSource": "팔 보호구(완갑) 단계·등급(표본 src/test/resources/verification/combat-power/ref-a-bracer-armguard-2026-10-11.json, 공식 Tooltip 380명 + 대조 7건). confirmed=false는 5단계 주기로 채운 칸이라 계산하지 않는다.",
   "armGuardTable": {
     "0": {
       "weaponAttack": 3500,

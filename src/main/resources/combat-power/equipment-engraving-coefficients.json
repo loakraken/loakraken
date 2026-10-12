@@ -2,7 +2,7 @@
   "ruleVersion": "combat-power-equip-engraving-v3",
   "source": {
     "name": "계산 검증 #253·#259·#263(볼트 검증 기록 「장비·각인·스톤 변화량」). 각인 값은 공식 각인 설명값(ArkPassiveEffects Description), 무기 품질 값은 공식 무기 Tooltip \"추가 효과\"",
-    "crossCheckedWith": "전투력 시뮬레이터 표본 5명 38건 중 27건 ±0.01 일치(src/test/resources/verification/combat-power/loalab-equip-engraving-deltas-2026-10-10.json)",
+    "crossCheckedWith": "전투력 시뮬레이터 표본 5명 38건 중 27건 ±0.01 일치(src/test/resources/verification/combat-power/ref-a-equip-engraving-deltas-2026-10-10.json)",
     "verifiedOn": "2026-10-10"
   },
   "weaponQualityAddDamageSource": "무기 추가 피해 = 10 + 20 × (품질/100)², 반올림 없음. 대조 사이트 60~99 실측 40개와 소수 셋째 자리까지 같고(70 = 19.800, 95 = 28.050, 99 = 29.602), 공식 툴팁은 이 값을 올림해 보여 준다(95 → 28.06). 계산 검증 2026-10-11 17:25. 이전 v1은 툴팁 실측 표(27개)였다.",
@@ -165,7 +165,7 @@
       "stoneDelta": [0, 0.3, 0.38, 0.53, 0.6]
     }
   },
-  "engravingTableSource": "로아랩 시뮬레이터 표(언새늘, 각인 하나씩 바꿔 넣은 전투력 비) + 로펙 예상 전투력 대조(검증 표본 loalab-engraving-cp-2026-10-11.json, #344). c(각인서 b, 스톤 s) = books[b] + stoneDelta[s](%). official은 공식 각인 설명에 나오는 효과 수치 = base + perBook × b + stoneAdd[s](지금 값 확인용). 승부사는 L4만. 인벤 4821/106546 「딜러 전투력 로직 분석」 각인 계수표(검증 표본 inven-engraving-cp-2026-10-12.json, E26)와 500칸 차이 0이고, 승부사 각인서 0~3레벨·돌격대장 스톤 1도 인벤 표 값이다. 실드 관통은 인벤(4.6~7.0%)과 목표 사이트(0)가 달라 UNSUPPORTED, 속전속결·슈퍼 차지도 출처마다 달라 UNSUPPORTED",
+  "engravingTableSource": "로아랩 시뮬레이터 표(언새늘, 각인 하나씩 바꿔 넣은 전투력 비) + 로펙 예상 전투력 대조(검증 표본 ref-a-engraving-cp-2026-10-11.json, #344). c(각인서 b, 스톤 s) = books[b] + stoneDelta[s](%). official은 공식 각인 설명에 나오는 효과 수치 = base + perBook × b + stoneAdd[s](지금 값 확인용). 승부사는 L4만. 인벤 4821/106546 「딜러 전투력 로직 분석」 각인 계수표(검증 표본 engraving-cp-table-2026-10-12.json, E26)와 500칸 차이 0이고, 승부사 각인서 0~3레벨·돌격대장 스톤 1도 인벤 표 값이다. 실드 관통은 인벤(4.6~7.0%)과 목표 사이트(0)가 달라 UNSUPPORTED, 속전속결·슈퍼 차지도 출처마다 달라 UNSUPPORTED",
   "zeroContribution": [
     "급소 타격",
     "중갑 착용",

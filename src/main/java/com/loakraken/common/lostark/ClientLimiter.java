@@ -29,11 +29,13 @@ public class ClientLimiter {
   static final String PREFIX = "lostark:client-limit:";
   private static final ThreadLocal<String> CLIENT = new ThreadLocal<>();
   private static final Duration WINDOW = Duration.ofMinutes(1);
+  private static final String BOT_PREFIX = "bot:";
+  private static final String BOT_ALL = "all";
 
   /** 제한을 끈 상태. 단위 테스트용 게이트가 쓴다. */
   public static final ClientLimiter DISABLED =
       new ClientLimiter(
-          new ClientLimitProperties(false, 0, 0, 0, 0, true, 0, 0),
+          new ClientLimitProperties(false, 0, 0, 0, 0, true, 0, 0, 0),
           new ClientLimitStore.Memory(),
           Clock.systemUTC(),
           null,
@@ -64,7 +66,8 @@ public class ClientLimiter {
     GENERAL,
     BOT,
     ROSTER_REFRESH,
-    AUCTION_SEARCH
+    AUCTION_SEARCH,
+    BOT_OFFICIAL
   }
 
   /** 판정 결과. 거절이면 retryAfterSeconds는 지금 창이 끝날 때까지 남은 초(1 이상)다. */
@@ -92,7 +95,7 @@ public class ClientLimiter {
     }
   }
 
-  /** 버킷 카운터를 올리고 판정한다. clientKey는 {@link #clientKey} 값이거나, 모든 봇이 함께 쓰는 고정 키다. */
+  /** 버킷 카운터를 올리고 판정한다. clientKey는 {@link #clientKey}·{@link #botKey} 값이거나, 전체 상한용 고정 키다. */
   Decision check(Bucket bucket, String clientKey) {
     if (!properties.enabled()) return Decision.ALLOW;
     long now = clock.millis();
@@ -122,12 +125,25 @@ public class ClientLimiter {
     CLIENT.remove();
   }
 
-  /** 지금 스레드의 요청이 공식 호출을 하나 더 해도 되는지 센다. 클라이언트가 없으면(백그라운드) 세지 않는다. */
+  /**
+   * 지금 스레드의 요청이 공식 호출을 하나 더 해도 되는지 센다. 클라이언트가 없으면(백그라운드) 세지 않는다. 검색봇 표시 요청은 그 주소의 OFFICIAL에
+   * 더해 모든 봇이 함께 쓰는 BOT_OFFICIAL 상한도 센다.
+   */
   void chargeOfficial() {
     var client = CLIENT.get();
     if (client == null) return;
-    if (!check(Bucket.OFFICIAL, client).allowed())
+    if (!check(Bucket.OFFICIAL, client).allowed()
+        || (bot(client) && !check(Bucket.BOT_OFFICIAL, BOT_ALL).allowed()))
       throw new BusinessException(LostArkErrorCode.CLIENT_RATE_LIMITED);
+  }
+
+  /** 검색봇 표시 요청의 클라이언트 키(주소별). */
+  String botKey(String normalizedAddress) {
+    return BOT_PREFIX + clientKey(normalizedAddress);
+  }
+
+  static boolean bot(String client) {
+    return client.startsWith(BOT_PREFIX);
   }
 
   /**

@@ -43,6 +43,11 @@ public record CharacterResponse(
                 "팔찌 효율(전투력 기준): 지금 전투력이 팔찌(효과 줄 전부와 팔찌 도약 포인트)를 뺀 전투력보다 몇 % 높은지(지금 ÷ 뺀 전투력 − 1)와 줄별 값(그 줄만 뺐을 때, 팔찌 도약은 따로 한 줄). 줄별 값은 그 줄만 뺐을 때의 값이라 곱 구조상 줄별 합은 전체 값과 같지 않습니다. 팔찌가 없으면 null")
         @NullableResponse
         BraceletEfficiencyResponse braceletEfficiency,
+    @Schema(
+            description =
+                "아크 그리드 효율(전투력 기준, L29·L39): 지금 전투력이 아크 그리드 코어와 젬 옵션을 모두 뺀 전투력보다 몇 % 높은지(지금 ÷ 뺀 전투력 − 1), 코어만의 합(coresPercent), 줄별 값(코어마다 그 코어만 뺐을 때, 마지막 줄은 젬 옵션 합계). 줄별 값은 그 줄만 뺐을 때의 값이라 곱 구조상 줄별 합은 전체 값과 같지 않습니다. 아크 그리드가 없으면 null")
+        @NullableResponse
+        ArkGridEfficiencyResponse arkGridEfficiency,
     @Schema(description = "외부 API에서 실제 수집한 UTC 시각. 캐시 조회에서도 유지됩니다.") Instant fetchedAt,
     @Schema(
             description =
@@ -50,13 +55,14 @@ public record CharacterResponse(
         @NullableResponse
         Instant refreshAvailableAt) {
   public static CharacterResponse from(CharacterResult result) {
-    return from(result, null);
+    return from(result, null, null);
   }
 
   public static CharacterResponse from(
       CharacterResult result,
       com.loakraken.character.application.CombatPowerSimulationService.BraceletEfficiency
-          efficiency) {
+          efficiency,
+      com.loakraken.character.application.ArkGridEfficiencyService.ArkGridEfficiency arkGrid) {
     var profile = result.details().profile();
     var inner = profile.inner();
     return new CharacterResponse(
@@ -120,6 +126,7 @@ public record CharacterResponse(
         CharacterObservationCoverageResponse.from(result.details().coverage()),
         CharacterAnalysisResponse.from(result.analysis(), result.details().coverage()),
         BraceletEfficiencyResponse.from(efficiency),
+        ArkGridEfficiencyResponse.from(arkGrid),
         result.fetchedAt(),
         result.refreshAvailableAt());
   }
@@ -213,6 +220,62 @@ public record CharacterResponse(
           value.ruleVersion());
     }
   }
+
+  public record ArkGridEfficiencyResponse(
+      @Schema(
+              description = "아크 그리드 전체 효율 %(코어 × 젬 옵션, 소수 둘째 자리). UNSUPPORTED면 null",
+              example = "38.64")
+          @NullableResponse
+          BigDecimal percent,
+      @Schema(
+              description = "코어만의 합 %(Π 코어 배수 − 1, 소수 둘째 자리). 계산하지 못한 코어가 있으면 null",
+              example = "32.96")
+          @NullableResponse
+          BigDecimal coresPercent,
+      @Schema(description = "OK 또는 UNSUPPORTED(문자열)", example = "OK") String status,
+      @Schema(description = "UNSUPPORTED 이유 코드(시뮬레이터·스펙업과 같은 코드). OK면 null") @NullableResponse
+          String reasonCode,
+      @Schema(description = "근거 문장 또는 계산하지 않은 이유") String reason,
+      @Schema(description = "코어마다 한 줄(공식 슬롯 순서), 마지막에 젬 옵션 합계 한 줄")
+          List<ArkGridLineEfficiencyResponse> lines,
+      @Schema(description = "계산 규칙 버전") String ruleVersion) {
+    static ArkGridEfficiencyResponse from(
+        com.loakraken.character.application.ArkGridEfficiencyService.ArkGridEfficiency value) {
+      if (value == null) return null;
+      return new ArkGridEfficiencyResponse(
+          value.percent(),
+          value.coresPercent(),
+          value.status().name(),
+          value.reasonCode(),
+          value.reason(),
+          value.lines().stream()
+              .map(
+                  line ->
+                      new ArkGridLineEfficiencyResponse(
+                          line.slotIndex(),
+                          line.text(),
+                          line.percent(),
+                          line.status().name(),
+                          line.reasonCode(),
+                          line.reason()))
+              .toList(),
+          value.ruleVersion());
+    }
+  }
+
+  public record ArkGridLineEfficiencyResponse(
+      @Schema(
+              description =
+                  "코어 줄이면 아크 그리드 슬롯 index(loadout.arkGrid.slots[].index), 젬 옵션 합계 줄이면 null")
+          @NullableResponse
+          Integer slotIndex,
+      @Schema(description = "코어 이름·등급·포인트 또는 '젬 옵션(공격력 Lv.N · …)'") String text,
+      @Schema(description = "지금 전투력이 그 줄만 뺀 전투력보다 몇 % 높은지(소수 둘째 자리). UNSUPPORTED면 null")
+          @NullableResponse
+          BigDecimal percent,
+      @Schema(description = "OK 또는 UNSUPPORTED(문자열)") String status,
+      @NullableResponse String reasonCode,
+      @Schema(description = "계산하지 않은 이유(OK면 null)") @NullableResponse String reason) {}
 
   public record BraceletLineEfficiencyResponse(
       @Schema(description = "공식 팔찌 효과 문구(팔찌 도약 줄은 '팔찌 도약 +N')") String text,

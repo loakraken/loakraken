@@ -1,5 +1,6 @@
 package com.loakraken.character.presentation;
 
+import com.loakraken.character.application.ArkGridEfficiencyService;
 import com.loakraken.character.application.CharacterCardRefreshService;
 import com.loakraken.character.application.CharacterCardService;
 import com.loakraken.character.application.CharacterPopularService;
@@ -33,6 +34,7 @@ public class CharacterController {
   private final CharacterPopularService popular;
   private final CharacterCardRefreshService cardRefresh;
   private final CombatPowerSimulationService simulator;
+  private final ArkGridEfficiencyService arkGrids;
   private static final org.slf4j.Logger log =
       org.slf4j.LoggerFactory.getLogger(CharacterController.class);
 
@@ -42,13 +44,15 @@ public class CharacterController {
       CharacterCardService cards,
       CharacterPopularService popular,
       CharacterCardRefreshService cardRefresh,
-      CombatPowerSimulationService simulator) {
+      CombatPowerSimulationService simulator,
+      ArkGridEfficiencyService arkGrids) {
     this.queryService = queryService;
     this.views = views;
     this.cards = cards;
     this.popular = popular;
     this.cardRefresh = cardRefresh;
     this.simulator = simulator;
+    this.arkGrids = arkGrids;
   }
 
   /** 팔찌 효율(#345). 메모리 계산이고 실패해도 검색 응답은 막지 않는다(null). */
@@ -58,6 +62,16 @@ public class CharacterController {
       return simulator.braceletEfficiency(result);
     } catch (RuntimeException exception) {
       log.warn("팔찌 효율을 계산하지 못했습니다. 예외 유형={}", exception.getClass().getSimpleName());
+      return null;
+    }
+  }
+
+  /** 아크 그리드 효율(L29·L39). 메모리 계산이고 실패해도 검색 응답은 막지 않는다(null). */
+  private ArkGridEfficiencyService.ArkGridEfficiency arkGridEfficiency(CharacterResult result) {
+    try {
+      return arkGrids.efficiency(result);
+    } catch (RuntimeException exception) {
+      log.warn("아크 그리드 효율을 계산하지 못했습니다. 예외 유형={}", exception.getClass().getSimpleName());
       return null;
     }
   }
@@ -116,7 +130,7 @@ public class CharacterController {
     popular.record(profile.characterName(), profile.serverName(), http.getRemoteAddr());
     return ApiResponse.of(
         CharacterSuccessCode.CHARACTER_SEARCH_SUCCESS,
-        CharacterResponse.from(result, braceletEfficiency(result)));
+        CharacterResponse.from(result, braceletEfficiency(result), arkGridEfficiency(result)));
   }
 
   @GetMapping("/popular")

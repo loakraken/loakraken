@@ -1,5 +1,6 @@
 package com.loakraken.character.infrastructure;
 
+import com.loakraken.character.domain.CombatPowerArkGridModel;
 import com.loakraken.character.domain.CombatPowerBraceletModel;
 import com.loakraken.character.domain.CombatPowerEquipmentModel;
 import com.loakraken.character.domain.CombatPowerGemModel;
@@ -18,6 +19,7 @@ class CombatPowerCoefficientsConfiguration {
   static final String POLISH_RESOURCE = "combat-power/polish-values.json";
   static final String REFINE_RESOURCE = "combat-power/refine-coefficients.json";
   static final String BRACELET_RESOURCE = "combat-power/bracelet-coefficients.json";
+  static final String ARK_GRID_RESOURCE = "combat-power/ark-grid-coefficients.json";
 
   /** 전투력 시뮬레이터 보석 계수(#243). 근거·확인 날짜는 리소스 source에 있다. 읽을 수 없으면 애플리케이션이 시작하지 않는다. */
   @Bean
@@ -52,6 +54,15 @@ class CombatPowerCoefficientsConfiguration {
       throws IOException {
     try (var input = new ClassPathResource(BRACELET_RESOURCE).getInputStream()) {
       return mapper.readValue(input, CombatPowerBraceletModel.Coefficients.class);
+    }
+  }
+
+  /** 아크 그리드 코어·젬 계수(L29·L39, #323·#335·#358·#368). 근거는 리소스 source에 있다. */
+  @Bean
+  CombatPowerArkGridModel.Coefficients combatPowerArkGridCoefficients(JsonMapper mapper)
+      throws IOException {
+    try (var input = new ClassPathResource(ARK_GRID_RESOURCE).getInputStream()) {
+      return mapper.readValue(input, CombatPowerArkGridModel.Coefficients.class);
     }
   }
 

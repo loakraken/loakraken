@@ -46,7 +46,8 @@ class ClientLimitFilter extends OncePerRequestFilter {
       // 봇 표시는 User-Agent로 붙어 흉내 낼 수 있다. 그래서 봇 칸은 일반 칸보다 느슨하면 안 된다(PM-백엔드 #151 P1): 주소별 BOT
       // 한도(≤ GENERAL)에 통계 경로는 그 주소의 STATS도 센다. 주소별로 세므로 한 주소가 다른 봇 주소를 막지 못한다.
       var botAddress = request.getRemoteAddr();
-      var botClient = limiter.botKey(ClientAddresses.normalize(botAddress == null ? "" : botAddress));
+      var botClient =
+          limiter.botKey(ClientAddresses.normalize(botAddress == null ? "" : botAddress));
       var decision = limiter.check(ClientLimiter.Bucket.BOT, botClient);
       if (decision.allowed() && stats(path(request)))
         decision = limiter.check(ClientLimiter.Bucket.STATS, botClient);

@@ -126,8 +126,8 @@ public class ClientLimiter {
   }
 
   /**
-   * 지금 스레드의 요청이 공식 호출을 하나 더 해도 되는지 센다. 클라이언트가 없으면(백그라운드) 세지 않는다. 검색봇 표시 요청은 그 주소의 OFFICIAL에
-   * 더해 모든 봇이 함께 쓰는 BOT_OFFICIAL 상한도 센다.
+   * 지금 스레드의 요청이 공식 호출을 하나 더 해도 되는지 센다. 클라이언트가 없으면(백그라운드) 세지 않는다. 검색봇 표시 요청은 그 주소의 OFFICIAL에 더해 모든
+   * 봇이 함께 쓰는 BOT_OFFICIAL 상한도 센다.
    */
   void chargeOfficial() {
     var client = CLIENT.get();

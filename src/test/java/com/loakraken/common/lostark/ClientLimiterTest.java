@@ -195,8 +195,7 @@ class ClientLimiterTest {
     // 통계가 아닌 경로는 BOT 한도(120) 안이면 계속 되고, 다른 봇 주소의 통계 경로도 된다.
     assertThat(run(filter, "/api/v1/characters/search", "66.249.70.1", "1").getStatus())
         .isEqualTo(200);
-    assertThat(run(filter, "/api/v1/stats/summary", "66.249.70.2", "1").getStatus())
-        .isEqualTo(200);
+    assertThat(run(filter, "/api/v1/stats/summary", "66.249.70.2", "1").getStatus()).isEqualTo(200);
   }
 
   @Test
@@ -215,7 +214,9 @@ class ClientLimiterTest {
     }
     limiter.enter(limiter.botKey("66.249.66.2"));
     try {
-      // 앞 주소의 두 번(성공)과 한 번(주소별 거절, 합계는 셈)으로 합계 3을 다 써서 다른 봇 주소도 막힌다.
+      // 주소별로 거절된 호출은 합계에 세지 않는다. 앞 주소 2회 + 이 주소 1회 = 합계 3까지 되고, 이 주소의 두 번째(주소별 2 이내)는
+      // 모든 봇 합계 상한 3에 걸린다.
+      charge.run();
       assertThatThrownBy(charge::run).isInstanceOf(BusinessException.class);
     } finally {
       limiter.exit();

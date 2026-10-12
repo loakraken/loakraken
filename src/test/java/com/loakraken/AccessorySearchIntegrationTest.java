@@ -103,20 +103,20 @@ class AccessorySearchIntegrationTest {
   }
 
   @Test
-  void 같은_클라이언트의_캐시_미스_검색은_분당_6회까지다() throws Exception {
+  void 같은_클라이언트의_캐시_미스_공식_호출은_분당_5회까지다() throws Exception {
     when(search.search(any())).thenAnswer(invocation -> page(17000));
-    for (int page = 1; page <= 6; page++)
+    for (int page = 1; page <= 5; page++)
       assertThat(post(pageBody(page), "203.0.113.20").statusCode())
           .as("page " + page)
           .isEqualTo(200);
-    var seventh = post(pageBody(7), "203.0.113.20");
-    assertThat(seventh.statusCode()).isEqualTo(429);
-    assertThat(mapper.readTree(seventh.body()).path("code").asText())
+    var sixth = post(pageBody(6), "203.0.113.20");
+    assertThat(sixth.statusCode()).isEqualTo(429);
+    assertThat(mapper.readTree(sixth.body()).path("code").asText())
         .isEqualTo("CLIENT_RATE_LIMITED");
-    assertThat(seventh.headers().firstValue("Retry-After")).isPresent();
+    assertThat(sixth.headers().firstValue("Retry-After")).isPresent();
     // 캐시에 맞는 검색은 세지 않는다.
     assertThat(post(pageBody(1), "203.0.113.20").statusCode()).isEqualTo(200);
-    verify(search, times(6)).search(any());
+    verify(search, times(5)).search(any());
   }
 
   @Test

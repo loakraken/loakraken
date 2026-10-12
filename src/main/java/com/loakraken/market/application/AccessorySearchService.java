@@ -84,7 +84,6 @@ public class AccessorySearchService {
       return cached.get().asCached();
     }
     metrics.cache(MarketMetrics.Kind.AUCTION_SEARCH, MarketMetrics.Outcome.MISS);
-    gate.chargeClient(ClientLimiter.Bucket.AUCTION_SEARCH);
     return flight(
         key,
         () -> {
@@ -211,6 +210,8 @@ public class AccessorySearchService {
 
   /** 공식 호출 하나. 기능 몫·게이트에 막히면 MARKET_SEARCH_BUSY + Retry-After(지금 분이 끝날 때까지). */
   private AuctionPage call(AuctionQuery query) {
+    // 클라이언트 한도는 페이지(공식 호출)마다 센다. 몫보다 먼저 세서, 한 클라이언트가 기능 몫을 혼자 다 쓰지 못하게 한다.
+    gate.chargeClient(ClientLimiter.Bucket.AUCTION_SEARCH);
     if (!store.tryAcquireQuota(policy.quotaPerMinute())) {
       metrics.auctionSearch("quota_reject");
       throw busy();

@@ -7,6 +7,8 @@
       "common::api",
       "character::application",
       "character::domain",
-      "market::application"
+      "market::application",
+      "refining::application",
+      "refining::domain"
     })
 package com.loakraken.specup;

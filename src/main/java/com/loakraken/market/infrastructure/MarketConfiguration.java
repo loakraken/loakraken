@@ -10,6 +10,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
   MarketCacheProperties.class,
   MarketWarmupProperties.class,
   RelicBookWarmupProperties.class,
+  RefiningMaterialWarmupProperties.class,
   com.loakraken.market.application.AccessorySearchPolicy.class
 })
 class MarketConfiguration {}

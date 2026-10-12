@@ -58,6 +58,11 @@ class MarketHistoryWarmup {
   private final java.util.List<com.loakraken.market.domain.MarketPrice> relicItems =
       new java.util.ArrayList<>();
   private Instant relicDueAt = Instant.EPOCH;
+  private final com.loakraken.market.application.RefiningMaterialPriceService refiningMaterials;
+  private final RefiningMaterialWarmupProperties refiningMaterialProperties;
+  private final java.util.concurrent.atomic.AtomicLong lastRefiningMaterialSuccess =
+      new java.util.concurrent.atomic.AtomicLong();
+  private Instant refiningMaterialDueAt = Instant.EPOCH;
 
   MarketHistoryWarmup(
       MarketQueryService markets,
@@ -69,7 +74,9 @@ class MarketHistoryWarmup {
       LostArkRequestGate gate,
       LeaderLease lease,
       RelicBookPriceService relicBooks,
-      RelicBookWarmupProperties relicBookProperties) {
+      RelicBookWarmupProperties relicBookProperties,
+      com.loakraken.market.application.RefiningMaterialPriceService refiningMaterials,
+      RefiningMaterialWarmupProperties refiningMaterialProperties) {
     this.markets = markets;
     this.boards = boards;
     this.clock = clock;
@@ -80,9 +87,12 @@ class MarketHistoryWarmup {
     this.lease = lease;
     this.relicBooks = relicBooks;
     this.relicBookProperties = relicBookProperties;
+    this.refiningMaterials = refiningMaterials;
+    this.refiningMaterialProperties = refiningMaterialProperties;
     gauge(registry, "warmup_history", lastHistorySuccess);
     gauge(registry, "warmup_board", lastBoardSuccess);
     gauge(registry, "warmup_relic_books", lastRelicBookSuccess);
+    gauge(registry, "warmup_refining_materials", lastRefiningMaterialSuccess);
   }
 
   /** 마지막 성공 시각(epoch 초) 게이지(#143). 0이면 이 인스턴스에서 아직 성공하지 않았다. */
@@ -234,6 +244,71 @@ class MarketHistoryWarmup {
         return;
       }
     }
+  }
+
+  /**
+   * T4 재련 재료 시세(L30 후속): 주기(기본 10분)마다 재련 재료·추가 재료 탭을 모두 받아 캐시(TTL = 주기 × 3)에 둔다. 1분마다 확인하고, 예열 분당
+   * 상한에 걸리거나 실패하면 이번 스캔을 버리고 다음 틱에 처음부터 다시 받는다(한 번에 5~6회라 이어 받기를 두지 않는다).
+   */
+  @Scheduled(fixedDelayString = "60s", initialDelayString = "${market.warmup.initial-delay:20s}")
+  void warmRefiningMaterials() {
+    org.slf4j.MDC.put("entryPoint", "warmup");
+    try {
+      warmRefiningMaterialPages();
+    } finally {
+      org.slf4j.MDC.remove("entryPoint");
+    }
+  }
+
+  synchronized void warmRefiningMaterialPages() {
+    if (!refiningMaterialProperties.enabled() || lostArk.apiKey().isBlank()) return;
+    var now = clock.instant();
+    if (now.isBefore(refiningMaterialDueAt)) return;
+    if (!lease.hold(LEASE, properties.interval().plusMinutes(1))) return;
+    var items = new java.util.ArrayList<com.loakraken.market.domain.MarketPrice>();
+    Instant observedAt = null;
+    for (var tab : com.loakraken.market.application.RefiningMaterialPriceService.TABS) {
+      for (int page = 1; page <= refiningMaterialProperties.maxPagesPerTab(); page++) {
+        if (!allowCall()) {
+          recordRefiningMaterials(Outcome.CAPPED);
+          return;
+        }
+        int pageNo = page;
+        try {
+          var result = gate.withReserve(RESERVE, () -> refiningMaterials.fetchPage(tab, pageNo));
+          items.addAll(result.page().items());
+          if (observedAt == null || result.observedAt().isBefore(observedAt))
+            observedAt = result.observedAt();
+          if ((long) pageNo * 10 >= result.page().totalCount()) break;
+        } catch (BusinessException exception) {
+          recordRefiningMaterials(Outcome.FAILED);
+          log.warn(
+              "재련 재료 시세 예열에 실패했습니다. tab={}, page={}, code={}",
+              tab,
+              pageNo,
+              exception.errorCode().code());
+          return;
+        }
+      }
+    }
+    refiningMaterials.save(
+        new com.loakraken.market.application.RefiningMaterialScan(
+            observedAt == null ? now : observedAt, items),
+        refiningMaterialProperties.cacheTtl());
+    recordRefiningMaterials(Outcome.REFRESHED);
+    lastRefiningMaterialSuccess.set(now.getEpochSecond());
+    refiningMaterialDueAt = now.plus(refiningMaterialProperties.interval());
+  }
+
+  private void recordRefiningMaterials(Outcome outcome) {
+    registry
+        .counter(
+            "loakraken.market.warmup",
+            "outcome",
+            outcome.name().toLowerCase(Locale.ROOT),
+            "target",
+            "refining_materials")
+        .increment();
   }
 
   private void resetRelic() {

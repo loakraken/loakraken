@@ -86,6 +86,11 @@ market:
       enabled: ${MARKET_WARMUP_RELIC_BOOKS_ENABLED:false}
       interval: ${MARKET_WARMUP_RELIC_BOOKS_INTERVAL:30m}
       max-pages: ${MARKET_WARMUP_RELIC_BOOKS_MAX_PAGES:10}
+    # T4 재련 재료·추가 재료 시세(L30 후속, 스펙업 재련 비용). 캐시 TTL은 주기 × 3입니다.
+    refining-materials:
+      enabled: ${MARKET_WARMUP_REFINING_MATERIALS_ENABLED:false}
+      interval: ${MARKET_WARMUP_REFINING_MATERIALS_INTERVAL:10m}
+      max-pages-per-tab: ${MARKET_WARMUP_REFINING_MATERIALS_MAX_PAGES:5}
   # 악세 경매 검색기(N13). 기능 몫은 모든 사용자 합 분당 공식 호출 수, reserve는 사용자 경로 몫(docs/accessory-auction-search.md).
   auction-search:
     quota-per-minute: ${MARKET_AUCTION_SEARCH_QUOTA:20}

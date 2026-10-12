@@ -734,7 +734,8 @@ class PostgresStatsRepository implements StatsPort {
         .query(
             (ResultSet row) -> {
               total[0] = row.getLong("total");
-              var observed = row.getObject("efficiency_observed_at", java.time.OffsetDateTime.class);
+              var observed =
+                  row.getObject("efficiency_observed_at", java.time.OffsetDateTime.class);
               rows.add(
                   new EfficiencyRow(
                       row.getLong("rnk"),

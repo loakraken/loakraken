@@ -269,7 +269,9 @@ public final class StatsResponses {
   /** 팔찌·젬 효율 랭킹(L38·L39). 두 경로가 같은 모양이다. */
   public record StatsEfficiencyRankingResponse(
       StatsMetaResponse meta,
-      @Schema(description = "BRACELET(팔찌 효율) 또는 ARK_GRID_GEM(젬 옵션 합계 효율)", allowableValues = {"BRACELET", "ARK_GRID_GEM"})
+      @Schema(
+              description = "BRACELET(팔찌 효율) 또는 ARK_GRID_GEM(젬 옵션 합계 효율)",
+              allowableValues = {"BRACELET", "ARK_GRID_GEM"})
           String kind,
       @Schema(description = "순위에 쓴 계산 규칙 버전. 이 버전으로 계산된 값만 셉니다") String ruleVersion,
       @Schema(
@@ -280,8 +282,7 @@ public final class StatsResponses {
       int size,
       @Schema(description = "효율 높은 순. 전체 순위 대상 수는 meta.population")
           List<StatsEfficiencyRankedCharacterResponse> rows) {
-    static final String POPULATION =
-        "캐릭터 검색으로 장비를 관측해 효율을 계산한 캐릭터만 순위에 들어갑니다.";
+    static final String POPULATION = "캐릭터 검색으로 장비를 관측해 효율을 계산한 캐릭터만 순위에 들어갑니다.";
 
     static StatsEfficiencyRankingResponse from(StatsQueryService.EfficiencyRankingResult result) {
       return new StatsEfficiencyRankingResponse(
@@ -318,7 +319,8 @@ public final class StatsResponses {
       @NullableResponse @Schema(allowableValues = {"DEALER", "SUPPORT"}) String position,
       BigDecimal itemLevel,
       BigDecimal combatPower,
-      @Schema(description = "효율 %(소수 둘째 자리): 지금 전투력이 그 항목을 뺀 전투력보다 몇 % 높은지") BigDecimal valuePercent,
+      @Schema(description = "효율 %(소수 둘째 자리): 지금 전투력이 그 항목을 뺀 전투력보다 몇 % 높은지")
+          BigDecimal valuePercent,
       @Schema(description = "효율을 계산한 관측 시각") java.time.Instant observedAt,
       @NullableResponse BigDecimal topPercent,
       @NullableResponse

@@ -288,13 +288,38 @@ class StatsIntegrationTest {
     표본();
     var t = Instant.now();
     efficiency("통계캐1", "10.00", "sim-old", null, null, t.minus(Duration.ofHours(2)));
-    efficiency("통계캐2", "14.42", com.loakraken.common.api.EfficiencyRuleVersions.COMBAT_POWER_SIM, "4.27", com.loakraken.common.api.EfficiencyRuleVersions.ARK_GRID, t.minus(Duration.ofHours(1)));
-    efficiency("통계캐3", "12.00", com.loakraken.common.api.EfficiencyRuleVersions.COMBAT_POWER_SIM, "6.10", com.loakraken.common.api.EfficiencyRuleVersions.ARK_GRID, t.minus(Duration.ofMinutes(50)));
-    efficiency("통계캐5", "12.00", com.loakraken.common.api.EfficiencyRuleVersions.COMBAT_POWER_SIM, null, null, t.minus(Duration.ofMinutes(40)));
-    efficiency("통계캐34", "20.00", com.loakraken.common.api.EfficiencyRuleVersions.COMBAT_POWER_SIM, null, null, t.minus(Duration.ofMinutes(30)));
+    efficiency(
+        "통계캐2",
+        "14.42",
+        com.loakraken.common.api.EfficiencyRuleVersions.COMBAT_POWER_SIM,
+        "4.27",
+        com.loakraken.common.api.EfficiencyRuleVersions.ARK_GRID,
+        t.minus(Duration.ofHours(1)));
+    efficiency(
+        "통계캐3",
+        "12.00",
+        com.loakraken.common.api.EfficiencyRuleVersions.COMBAT_POWER_SIM,
+        "6.10",
+        com.loakraken.common.api.EfficiencyRuleVersions.ARK_GRID,
+        t.minus(Duration.ofMinutes(50)));
+    efficiency(
+        "통계캐5",
+        "12.00",
+        com.loakraken.common.api.EfficiencyRuleVersions.COMBAT_POWER_SIM,
+        null,
+        null,
+        t.minus(Duration.ofMinutes(40)));
+    efficiency(
+        "통계캐34",
+        "20.00",
+        com.loakraken.common.api.EfficiencyRuleVersions.COMBAT_POWER_SIM,
+        null,
+        null,
+        t.minus(Duration.ofMinutes(30)));
     var bracelets = data("/api/v1/rankings/bracelets?size=10&server=" + encode(SERVER));
     assertThat(bracelets.path("kind").asText()).isEqualTo("BRACELET");
-    assertThat(bracelets.path("ruleVersion").asText()).isEqualTo(com.loakraken.common.api.EfficiencyRuleVersions.COMBAT_POWER_SIM);
+    assertThat(bracelets.path("ruleVersion").asText())
+        .isEqualTo(com.loakraken.common.api.EfficiencyRuleVersions.COMBAT_POWER_SIM);
     assertThat(bracelets.path("population").asText()).isNotBlank();
     // 옛 버전(통계캐1)은 빠지고, 동률(12.00)은 같은 순위다.
     assertThat(bracelets.at("/meta/population").asLong()).isEqualTo(4);
@@ -310,7 +335,8 @@ class StatsIntegrationTest {
 
     var gems = data("/api/v1/rankings/ark-grid-gems?size=10&server=" + encode(SERVER));
     assertThat(gems.path("kind").asText()).isEqualTo("ARK_GRID_GEM");
-    assertThat(gems.path("ruleVersion").asText()).isEqualTo(com.loakraken.common.api.EfficiencyRuleVersions.ARK_GRID);
+    assertThat(gems.path("ruleVersion").asText())
+        .isEqualTo(com.loakraken.common.api.EfficiencyRuleVersions.ARK_GRID);
     assertThat(gems.at("/rows").size()).isEqualTo(2);
     assertThat(gems.at("/rows/0/characterName").asText()).isEqualTo("통계캐3");
     assertThat(gems.at("/rows/1/valuePercent").decimalValue()).isEqualByComparingTo("4.27");
@@ -336,7 +362,8 @@ class StatsIntegrationTest {
   void 저장된_효율이_없으면_빈_랭킹이다() throws Exception {
     표본();
     var empty = data("/api/v1/rankings/ark-grid-gems?server=" + encode(SERVER));
-    assertThat(empty.path("ruleVersion").asText()).isEqualTo(com.loakraken.common.api.EfficiencyRuleVersions.ARK_GRID);
+    assertThat(empty.path("ruleVersion").asText())
+        .isEqualTo(com.loakraken.common.api.EfficiencyRuleVersions.ARK_GRID);
     assertThat(empty.at("/rows").size()).isZero();
   }
 

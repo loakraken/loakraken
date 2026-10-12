@@ -185,10 +185,7 @@ public class StatsController {
         StatsSuccessCode.RANKING_SUCCESS,
         StatsResponses.StatsEfficiencyRankingResponse.from(
             stats.efficiencyRanking(
-                filter.toConditions(),
-                kind,
-                page == null ? 1 : page,
-                size == null ? 50 : size)));
+                filter.toConditions(), kind, page == null ? 1 : page, size == null ? 50 : size)));
   }
 
   @GetMapping(value = "/api/v1/characters/rank", produces = MediaType.APPLICATION_JSON_VALUE)

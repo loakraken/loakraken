@@ -26,7 +26,8 @@ public interface StatsPort {
       StatsConditions conditions, Instant since, Metric metric, int offset, int limit);
 
   /**
-   * 팔찌·젬 효율 랭킹(L38·L39). 저장된 효율 중 지금 규칙 버전({@link EfficiencyKind#ruleVersion()}) 값만 센다. 처리정지 목록은 모집단에서 뺀다.
+   * 팔찌·젬 효율 랭킹(L38·L39). 저장된 효율 중 지금 규칙 버전({@link EfficiencyKind#ruleVersion()}) 값만 센다. 처리정지 목록은
+   * 모집단에서 뺀다.
    */
   EfficiencyPage efficiencyRanking(
       StatsConditions conditions, Instant since, EfficiencyKind kind, int offset, int limit);
@@ -88,9 +89,7 @@ public interface StatsPort {
 
   record RankingPage(long total, List<RankingRow> rows) {}
 
-  /**
-   * 효율 랭킹 종류(L38 팔찌, L39 젬 옵션 합계). 열 이름은 characters 테이블이고, 지금 규칙 버전은 캐릭터 모듈이 저장할 때 쓰는 공통 상수다.
-   */
+  /** 효율 랭킹 종류(L38 팔찌, L39 젬 옵션 합계). 열 이름은 characters 테이블이고, 지금 규칙 버전은 캐릭터 모듈이 저장할 때 쓰는 공통 상수다. */
   enum EfficiencyKind {
     BRACELET(
         "bracelet_efficiency_pct",

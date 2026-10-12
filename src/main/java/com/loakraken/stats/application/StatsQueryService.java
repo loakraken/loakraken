@@ -507,8 +507,8 @@ public class StatsQueryService {
   }
 
   /**
-   * 팔찌·젬 효율 랭킹(L38·L39). 모집단은 전투력 랭킹과 같은 조건(필터·기간·처리정지 제외)에, armory를 관측해 효율을 저장한(검색된) 캐릭터 중 지금
-   * 규칙 버전 값이 있는 캐릭터다. 공식 호출 없음.
+   * 팔찌·젬 효율 랭킹(L38·L39). 모집단은 전투력 랭킹과 같은 조건(필터·기간·처리정지 제외)에, armory를 관측해 효율을 저장한(검색된) 캐릭터 중 지금 규칙
+   * 버전 값이 있는 캐릭터다. 공식 호출 없음.
    */
   public EfficiencyRankingResult efficiencyRanking(
       StatsConditions conditions, StatsPort.EfficiencyKind kind, int page, int size) {
@@ -520,7 +520,8 @@ public class StatsQueryService {
         EfficiencyRankingResult.class,
         () -> {
           var now = clock.instant();
-          var result = stats.efficiencyRanking(conditions, conditions.since(now), kind, offset, size);
+          var result =
+              stats.efficiencyRanking(conditions, conditions.since(now), kind, offset, size);
           var meta = meta(conditions, result.total(), now);
           boolean ready = meta.sampleStatus() == SampleStatus.READY;
           return new EfficiencyRankingResult(

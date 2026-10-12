@@ -57,6 +57,8 @@ lostark:
     roster-refresh-per-minute: ${CLIENT_LIMIT_ROSTER_REFRESH:2}
     # 악세 경매 검색기(N13): 클라이언트당 분당 캐시 미스 검색 수
     auction-search-per-minute: ${CLIENT_LIMIT_AUCTION_SEARCH:6}
+    # 모든 검색봇 표시 요청이 함께 일으킬 수 있는 분당 공식 호출 수(봇 주소별 한도와 별도)
+    bot-official-per-minute: ${CLIENT_LIMIT_BOT_OFFICIAL:20}
 
 character:
   snapshots:

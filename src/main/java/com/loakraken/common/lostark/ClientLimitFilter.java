@@ -16,8 +16,9 @@ import org.springframework.web.filter.OncePerRequestFilter;
  * /api/v1/** 요청을 클라이언트별로 센다(#108). 원격 주소는 Tomcat RemoteIpValve가 신뢰 프록시의 X-Forwarded-For로 정한 값이다.
  *
  * <ul>
- *   <li>검색봇 표시({@value #BOT_HEADER}: 1)는 웹이 User-Agent로 판단해 붙인다. 봇 요청은 모든 봇이 같은 BOT 버킷 하나(한도 ≤
- *       GENERAL)를 쓰고, 통계 경로는 봇 공유 STATS도 센다. 웹은 밖에서 들어온 같은 헤더를 지워야 한다.
+ *   <li>검색봇 표시({@value #BOT_HEADER}: 1)는 웹이 User-Agent로 판단해 붙인다. 봇 요청은 봇 주소별 BOT 버킷(한도 ≤ GENERAL)을
+ *       쓰고, 통계 경로는 그 주소의 STATS도 센다. 공식 호출은 주소별 OFFICIAL과 모든 봇이 함께 쓰는 BOT_OFFICIAL 상한을 함께 센다. 웹은 밖에서
+ *       들어온 같은 헤더를 지워야 한다.
  *   <li>그 밖에는 클라이언트별 GENERAL을 세고, 통계·랭킹 경로는 STATS도 센다.
  *   <li>요청을 처리하는 동안 클라이언트 키를 스레드에 두어, 공유 게이트가 공식 호출을 OFFICIAL로 매기게 한다.
  * </ul>
@@ -26,7 +27,6 @@ import org.springframework.web.filter.OncePerRequestFilter;
  */
 class ClientLimitFilter extends OncePerRequestFilter {
   static final String BOT_HEADER = "X-Loakraken-Bot";
-  private static final String BOT_CLIENT = "bot";
   private final ClientLimiter limiter;
 
   ClientLimitFilter(ClientLimiter limiter) {
@@ -43,19 +43,22 @@ class ClientLimitFilter extends OncePerRequestFilter {
       HttpServletRequest request, HttpServletResponse response, FilterChain chain)
       throws ServletException, IOException {
     if ("1".equals(request.getHeader(BOT_HEADER))) {
-      // 봇 표시는 User-Agent로 붙어 흉내 낼 수 있다. 그래서 봇 칸은 일반 칸보다 느슨하면 안 된다: 봇 전체 공유 한도(≤ GENERAL)에
-      // 통계 경로는 봇 공유 STATS도 센다(PM-백엔드 #151 P1).
-      var decision = limiter.check(ClientLimiter.Bucket.BOT, BOT_CLIENT);
+      // 봇 표시는 User-Agent로 붙어 흉내 낼 수 있다. 그래서 봇 칸은 일반 칸보다 느슨하면 안 된다(PM-백엔드 #151 P1): 주소별 BOT
+      // 한도(≤ GENERAL)에 통계 경로는 그 주소의 STATS도 센다. 주소별로 세므로 한 주소가 다른 봇 주소를 막지 못한다.
+      var botAddress = request.getRemoteAddr();
+      var botClient =
+          limiter.botKey(ClientAddresses.normalize(botAddress == null ? "" : botAddress));
+      var decision = limiter.check(ClientLimiter.Bucket.BOT, botClient);
       if (decision.allowed() && stats(path(request)))
-        decision = limiter.check(ClientLimiter.Bucket.STATS, BOT_CLIENT);
+        decision = limiter.check(ClientLimiter.Bucket.STATS, botClient);
       if (decision.allowed() && rosterRefresh(request))
-        decision = limiter.check(ClientLimiter.Bucket.ROSTER_REFRESH, BOT_CLIENT);
+        decision = limiter.check(ClientLimiter.Bucket.ROSTER_REFRESH, botClient);
       if (!decision.allowed()) {
         reject(response, decision);
         return;
       }
-      // 봇의 공식 호출도 모든 봇이 OFFICIAL 하나를 같이 쓴다(#145 캐시 전용 조회 전까지).
-      run(BOT_CLIENT, request, response, chain);
+      // 봇의 공식 호출은 그 주소의 OFFICIAL과 모든 봇 합계 BOT_OFFICIAL 상한을 함께 센다(#145).
+      run(botClient, request, response, chain);
       return;
     }
     String address = request.getRemoteAddr();

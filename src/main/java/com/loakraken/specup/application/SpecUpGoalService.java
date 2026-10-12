@@ -480,8 +480,9 @@ public class SpecUpGoalService {
       Map<String, MarketAuctionService.GemCell> gems, Instant[] pricesAt, GemSlot gem, int next) {
     if (gem.level() == gem.original())
       return SpecUpService.gemCost(gems, pricesAt, gem.priceKind(), gem.level(), next, gem.bound());
-    if (gem.priceKind() == null || !gems.containsKey(gem.priceKind() + ":" + next))
-      return SpecUpCost.NO_PRICE_SOURCE;
+    if (gem.priceKind() == null) return SpecUpCost.NO_PRICE_SOURCE;
+    if (gems.isEmpty()) return SpecUpCost.PRICE_PENDING;
+    if (!gems.containsKey(gem.priceKind() + ":" + next)) return SpecUpCost.NO_PRICE_SOURCE;
     var nextCell = gems.get(gem.priceKind() + ":" + next);
     var previousCell = gems.get(gem.priceKind() + ":" + gem.level());
     if (nextCell.cell() == null

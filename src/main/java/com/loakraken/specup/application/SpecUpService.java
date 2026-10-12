@@ -279,7 +279,10 @@ public class SpecUpService {
       int level,
       int next,
       boolean bound) {
-    if (kind == null || !prices.containsKey(kind + ":" + next)) return SpecUpCost.NO_PRICE_SOURCE;
+    if (kind == null) return SpecUpCost.NO_PRICE_SOURCE;
+    // 시세 표가 비었으면 아직 받지 못한 것이다(PENDING). 표는 있는데 그 칸만 없으면 시세 출처가 없는 종류다.
+    if (prices.isEmpty()) return SpecUpCost.PRICE_PENDING;
+    if (!prices.containsKey(kind + ":" + next)) return SpecUpCost.NO_PRICE_SOURCE;
     var nextCell = prices.get(kind + ":" + next);
     if (nextCell.cell() == null || nextCell.cell().minBuyPrice() == null)
       return SpecUpCost.PRICE_PENDING;

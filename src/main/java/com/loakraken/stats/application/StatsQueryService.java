@@ -502,7 +502,8 @@ public class StatsQueryService {
                             top,
                             top == null ? null : Tier.of(top),
                             row.bestCombatPower(),
-                            row.arkPassive());
+                            row.arkPassive(),
+                            row.estherWeapon());
                       })
                   .toList());
         });
@@ -807,7 +808,8 @@ public class StatsQueryService {
       BigDecimal topPercent,
       Tier tier,
       BigDecimal bestCombatPower,
-      StatsPort.ArkPassiveSummary arkPassive) {}
+      StatsPort.ArkPassiveSummary arkPassive,
+      StatsPort.EstherWeapon estherWeapon) {}
 
   /** 수집품 랭킹 결과(#295). unit은 ROSTER·CHARACTER(응답에서는 문자열). */
   public record CollectibleRankingResult(

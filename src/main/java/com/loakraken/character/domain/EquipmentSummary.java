@@ -63,8 +63,16 @@ public record EquipmentSummary(
   /** mode: DAMAGE(피해 증가)·COOLDOWN(재사용 대기시간 감소). 보석 효과에서 못 찾으면 null. */
   public record Gem(String kind, Integer level, String mode) {}
 
+  /** esther: 에스더 등급 무기만 값이 있다. 그 밖의 무기는 null이고 저장 JSON에서 빠져 기존 해시가 그대로다. */
   public record Weapon(
-      Integer quality, BigDecimal addDamagePct, Integer weaponAttack, Integer refine) {}
+      Integer quality,
+      BigDecimal addDamagePct,
+      Integer weaponAttack,
+      Integer refine,
+      Esther esther) {}
+
+  /** refineLevel: 이름 앞 "+N" 강화 단계, ellaStage: 툴팁 "엘라 부여 N 단계". 못 읽으면 null. */
+  public record Esther(Integer refineLevel, Integer ellaStage) {}
 
   public record Armor(String slot, Integer refine, Integer quality, Integer itemLevel) {}
 
@@ -91,6 +99,7 @@ public record EquipmentSummary(
   private static final Pattern WEAPON_ATTACK = Pattern.compile("^무기 공격력 \\+(\\d+)$");
   private static final Pattern ADD_DAMAGE = Pattern.compile("^추가 피해 \\+([\\d.]+)%$");
   private static final Pattern STONE_BONUS = Pattern.compile("\\[레벨 보너스\\] 기본 공격력 \\+([\\d.]+)%");
+  private static final Pattern ELLA = Pattern.compile("엘라 부여\\s*(\\d+)\\s*단계");
   private static final Pattern ORB = Pattern.compile("최대 낙원력 : (\\d+)");
   private static final Pattern CORE = Pattern.compile("^(질서|혼돈)의 (해|달|별) 코어");
   private static final Pattern CARD_SET =
@@ -253,7 +262,22 @@ public record EquipmentSummary(
         if (value != null) weaponAttack = Integer.valueOf(value);
       }
     }
-    return new Weapon(detail.quality(), addDamage, weaponAttack, detail.refineLevel());
+    return new Weapon(
+        detail.quality(), addDamage, weaponAttack, detail.refineLevel(), esther(weapon));
+  }
+
+  /** 에스더 무기(공식 등급 "에스더"): 강화는 이름 앞 "+N"(재련 단계와 같은 자리), 엘라 부여는 효과 줄에서 읽는다. */
+  private static Esther esther(CharacterLoadout.Equipment weapon) {
+    if (!"에스더".equals(weapon.grade())) return null;
+    Integer ella = null;
+    for (var line : lines(weapon.detail())) {
+      var value = match(ELLA, line);
+      if (value != null) {
+        ella = Integer.valueOf(value);
+        break;
+      }
+    }
+    return new Esther(weapon.detail().refineLevel(), ella);
   }
 
   private static List<Armor> armor(List<CharacterLoadout.Equipment> equipment) {

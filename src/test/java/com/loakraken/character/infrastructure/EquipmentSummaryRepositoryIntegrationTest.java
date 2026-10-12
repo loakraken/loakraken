@@ -126,6 +126,16 @@ class EquipmentSummaryRepositoryIntegrationTest {
         .isEqualTo(PostgresEquipmentSummaryRepository.hash(featuresB, b))
         .hasSize(64);
     assertThat(EquipmentSummary.SCHEMA_VERSION).isEqualTo("equipment-summary-v1");
+    // 에스더 값이 없는 무기는 키를 빼서, 필드를 더하기 전에 저장한 요약과 해시가 같다.
+    assertThat(featuresA).contains("\"weapon\":{").doesNotContain("esther");
+  }
+
+  @Test
+  void 에스더_무기_값은_저장_JSON에_들어간다() {
+    var weapon =
+        new EquipmentSummary.Weapon(null, null, 200000, 10, new EquipmentSummary.Esther(10, 3));
+    assertThat(PostgresEquipmentSummaryRepository.CANONICAL.writeValueAsString(weapon))
+        .contains("\"esther\":{\"refineLevel\":10,\"ellaStage\":3}");
   }
 
   private long rows() {

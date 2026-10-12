@@ -82,6 +82,7 @@ class AccessorySearchIntegrationTest {
     var second = post(body, "203.0.113.11");
     assertThat(mapper.readTree(second.body()).at("/data/cached").asBoolean()).isTrue();
     verify(search, times(1)).search(any());
+    SiteNames.assertAbsent(first.body());
   }
 
   @Test

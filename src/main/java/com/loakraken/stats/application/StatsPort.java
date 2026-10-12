@@ -81,6 +81,7 @@ public interface StatsPort {
   /**
    * @param bestCombatPower 관측한 최고 전투력(L37)
    * @param arkPassive 마지막 장비 요약의 아크 패시브 포인트·직업 각인(K32). 요약이 없으면 null
+   * @param estherWeapon 마지막 장비 요약의 에스더 무기(K32). 에스더 무기가 아니거나 요약이 없으면 null
    */
   record RankingRow(
       long rank,
@@ -91,11 +92,15 @@ public interface StatsPort {
       BigDecimal itemLevel,
       BigDecimal combatPower,
       BigDecimal bestCombatPower,
-      ArkPassiveSummary arkPassive) {}
+      ArkPassiveSummary arkPassive,
+      EstherWeapon estherWeapon) {}
 
   /** 아크 패시브 진화·깨달음·도약 포인트와 직업 각인(공식 ArkPassive.Title). 못 읽은 값은 null. */
   record ArkPassiveSummary(
       Integer evolution, Integer enlightenment, Integer leap, String classEngraving) {}
+
+  /** 에스더 무기 강화 단계와 엘라 부여 단계. 못 읽은 값은 null. */
+  record EstherWeapon(Integer refineLevel, Integer ellaStage) {}
 
   record RankingPage(long total, List<RankingRow> rows) {}
 

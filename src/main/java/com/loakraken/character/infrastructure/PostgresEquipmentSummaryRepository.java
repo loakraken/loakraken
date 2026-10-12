@@ -1,5 +1,6 @@
 package com.loakraken.character.infrastructure;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.loakraken.character.application.EquipmentSummaryPort;
 import com.loakraken.character.domain.EquipmentSummary;
 import java.nio.charset.StandardCharsets;
@@ -26,6 +27,7 @@ class PostgresEquipmentSummaryRepository implements EquipmentSummaryPort {
       JsonMapper.builder()
           .enable(MapperFeature.SORT_PROPERTIES_ALPHABETICALLY)
           .enable(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS)
+          .addMixIn(EquipmentSummary.Weapon.class, WeaponMixIn.class)
           .build();
   private final JdbcClient jdbc;
 
@@ -117,4 +119,10 @@ class PostgresEquipmentSummaryRepository implements EquipmentSummaryPort {
   }
 
   private record Latest(long id, String hash) {}
+
+  /** 에스더 무기 값이 없으면 키를 빼서, 필드를 더하기 전에 저장한 요약과 해시가 같게 둔다. */
+  abstract static class WeaponMixIn {
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    abstract EquipmentSummary.Esther esther();
+  }
 }

@@ -271,7 +271,14 @@ public final class StatsResponses {
           @Schema(description = "아크 패시브 진화·깨달음·도약 포인트(마지막으로 관측한 장비 기준). 관측하지 않았으면 null")
           StatsArkPassivePointsResponse arkPassivePoints,
       @NullableResponse @Schema(description = "직업 각인(깨달음 직업 노드, 공식 아크 패시브 칭호). 관측하지 않았으면 null")
-          String classEngraving) {}
+          String classEngraving,
+      @NullableResponse
+          @Schema(description = "에스더 무기 강화·엘라 부여 단계(마지막으로 관측한 장비 기준). 에스더 무기가 아니거나 관측하지 않았으면 null")
+          StatsEstherWeaponResponse estherWeapon) {}
+
+  public record StatsEstherWeaponResponse(
+      @NullableResponse @Schema(description = "강화 단계(이름 앞 +N)") Integer refineLevel,
+      @NullableResponse @Schema(description = "엘라 부여 단계") Integer ellaStage) {}
 
   public record StatsArkPassivePointsResponse(
       @NullableResponse Integer evolution,
@@ -375,7 +382,12 @@ public final class StatsResponses {
                                   row.arkPassive().evolution(),
                                   row.arkPassive().enlightenment(),
                                   row.arkPassive().leap()),
-                          row.arkPassive() == null ? null : row.arkPassive().classEngraving()))
+                          row.arkPassive() == null ? null : row.arkPassive().classEngraving(),
+                          row.estherWeapon() == null
+                              ? null
+                              : new StatsEstherWeaponResponse(
+                                  row.estherWeapon().refineLevel(),
+                                  row.estherWeapon().ellaStage())))
               .toList());
     }
   }

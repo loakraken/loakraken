@@ -683,7 +683,10 @@ class PostgresStatsRepository implements StatsPort {
                 + " SELECT r.*, s.ark_passive_title,"
                 + " CAST(s.features -> 'arkPassive' -> 'points' ->> 'evolution' AS INTEGER) AS ap_evolution,"
                 + " CAST(s.features -> 'arkPassive' -> 'points' ->> 'enlightenment' AS INTEGER) AS ap_enlightenment,"
-                + " CAST(s.features -> 'arkPassive' -> 'points' ->> 'leap' AS INTEGER) AS ap_leap"
+                + " CAST(s.features -> 'arkPassive' -> 'points' ->> 'leap' AS INTEGER) AS ap_leap,"
+                + " s.features -> 'weapon' -> 'esther' IS NOT NULL AS esther,"
+                + " CAST(s.features -> 'weapon' -> 'esther' ->> 'refineLevel' AS INTEGER) AS esther_refine,"
+                + " CAST(s.features -> 'weapon' -> 'esther' ->> 'ellaStage' AS INTEGER) AS esther_ella"
                 + " FROM ranked r LEFT JOIN LATERAL (SELECT e.ark_passive_title, e.features"
                 + " FROM character_equipment_summary e WHERE e.character_id = r.character_id"
                 + " ORDER BY e.observed_at DESC LIMIT 1) s ON TRUE ORDER BY "
@@ -704,7 +707,8 @@ class PostgresStatsRepository implements StatsPort {
                       row.getBigDecimal("item_level"),
                       row.getBigDecimal("combat_power"),
                       row.getBigDecimal("best_combat_power"),
-                      arkPassive(row)));
+                      arkPassive(row),
+                      estherWeapon(row)));
             });
     // 요청 페이지가 범위를 넘으면 행이 없어 total을 따로 센다.
     if (rows.isEmpty())
@@ -718,12 +722,22 @@ class PostgresStatsRepository implements StatsPort {
 
   /** 마지막 장비 요약의 아크 패시브(K32). 요약이 없거나 모든 값이 없으면 null. */
   private static ArkPassiveSummary arkPassive(ResultSet row) throws java.sql.SQLException {
+    // 빈 칭호는 직업 각인이 없는 것과 같다(null).
     var title = row.getString("ark_passive_title");
+    if (title != null && title.isBlank()) title = null;
     var evolution = (Integer) row.getObject("ap_evolution", Integer.class);
     var enlightenment = (Integer) row.getObject("ap_enlightenment", Integer.class);
     var leap = (Integer) row.getObject("ap_leap", Integer.class);
     if (title == null && evolution == null && enlightenment == null && leap == null) return null;
     return new ArkPassiveSummary(evolution, enlightenment, leap, title);
+  }
+
+  /** 마지막 장비 요약의 에스더 무기(K32). 에스더 무기가 아니면 요약에 값이 없어 null. */
+  private static EstherWeapon estherWeapon(ResultSet row) throws java.sql.SQLException {
+    if (!row.getBoolean("esther")) return null;
+    return new EstherWeapon(
+        (Integer) row.getObject("esther_refine", Integer.class),
+        (Integer) row.getObject("esther_ella", Integer.class));
   }
 
   @Override

@@ -68,9 +68,9 @@ public record SpecUpCost(String unit, Long amount, String status, String code, S
   public static final BigDecimal EXCHANGE_FEE = new BigDecimal("0.05");
 
   /**
-   * 보석 비용(PM-백엔드 10-11 판정 (a)): 목표 레벨 즉시 구매 최저가 − 지금 보석 판매 기대가(최저가 − 수수료 5% 올림, 약 × 0.95). 지금 보석이 귀속이면 팔
-   * 수 없어 빼지 않는다. 광휘 보석은 공식 경매장 보석 검색에 종류가 없어 그 칸 효과와 같은 종류(피해 → 겁화, 재사용 대기시간 → 작열)의 시세를 넘겨받는다
-   * (SpecUpService.priceKind).
+   * 보석 비용(PM-백엔드 10-11 판정 (a)): 목표 레벨 즉시 구매 최저가 − 지금 보석 판매 기대가(최저가 − 수수료 5% 올림, 약 × 0.95). 지금 보석이
+   * 귀속이면 팔 수 없어 빼지 않는다. 광휘 보석은 공식 경매장 보석 검색에 종류가 없어 그 칸 효과와 같은 종류(피해 → 겁화, 재사용 대기시간 → 작열)의 시세를
+   * 넘겨받는다 (SpecUpService.priceKind).
    */
   public static SpecUpCost gem(long nextPrice, Long currentPrice, boolean currentBound) {
     if (currentBound)

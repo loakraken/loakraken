@@ -258,8 +258,8 @@ public class SpecUpService {
   }
 
   /**
-   * 비용에 쓸 시세 종류. 광휘 보석은 공식 경매장 보석 검색에 종류가 없어("광휘" 검색 0건, 계산 검증 2026-10-13 확인) 그 칸 효과와 같은 종류의
-   * 시세를 쓴다: "피해 N% 증가" → 겁화, "재사용 대기시간 N% 감소" → 작열. 효과를 읽지 못하면 null(비용 없음, NO_PRICE_SOURCE).
+   * 비용에 쓸 시세 종류. 광휘 보석은 공식 경매장 보석 검색에 종류가 없어("광휘" 검색 0건, 계산 검증 2026-10-13 확인) 그 칸 효과와 같은 종류의 시세를
+   * 쓴다: "피해 N% 증가" → 겁화, "재사용 대기시간 N% 감소" → 작열. 효과를 읽지 못하면 null(비용 없음, NO_PRICE_SOURCE).
    */
   static String priceKind(String kind, List<String> effects) {
     if (!"광휘".equals(kind)) return kind;

@@ -53,6 +53,7 @@ class SpecUpIntegrationTest {
   @Autowired JdbcClient jdbc;
   @Autowired StringRedisTemplate redis;
   @Autowired com.loakraken.market.application.MarketCache marketCache;
+  @Autowired com.loakraken.refining.application.RefiningPlanService plans;
   @MockitoBean CharacterDetailsPort detailsPort;
   @MockitoBean MarketAuctionService auctions;
 
@@ -67,6 +68,7 @@ class SpecUpIntegrationTest {
     jdbc.sql("DELETE FROM characters WHERE server_name = :s").param("s", SERVER).update();
     var keys = redis.keys("character:v*스펙*");
     if (keys != null && !keys.isEmpty()) redis.delete(keys);
+    redis.delete("market:v1:refining-materials");
   }
 
   @Test
@@ -191,6 +193,89 @@ class SpecUpIntegrationTest {
   void 재련_후보가_계산되면_시세_칸이_차도_비어도_500이_아니다() throws Exception {
     // P0 10-12(B8): 재련 모델이 OK를 내는 캐릭터에서 재련 후보 비용이 null이라 cost.amount()에서 NPE(500)가 났다.
     // 재련 후보만 시뮬레이터가 OK(Δ+12.34)를 내게 하고, 보석 시세 칸이 찬 상태·빈 상태를 모두 본다.
+    stubRefineOk();
+    search("스펙재련");
+    for (boolean ready : new boolean[] {true, false}) {
+      when(auctions.cachedGems()).thenReturn(gemCells(ready));
+      var response = get("/api/v1/characters/spec-up?characterName=" + encode("스펙재련"));
+      assertThat(response.statusCode()).as("시세 칸 " + ready).isEqualTo(200);
+      var refine =
+          find(mapper.readTree(response.body()).at("/data/candidates"), "EQUIPMENT_REFINE:0:21");
+      assertThat(refine.path("status").asText()).isEqualTo("OK");
+      assertThat(refine.path("deltaCombatPower").decimalValue()).isEqualByComparingTo("12.34");
+      assertThat(refine.at("/cost/status").asText()).isEqualTo("UNKNOWN");
+      assertThat(refine.at("/cost/code").asText()).isEqualTo("REFINE_COST_UNCONFIRMED");
+      assertThat(refine.path("combatPowerPer10kGold").isNull()).isTrue();
+    }
+    org.mockito.Mockito.reset(simulator);
+  }
+
+  @Test
+  void 업화_무기_재련_후보는_재련_계획_기대_소모와_재료_시세로_비용을_준다() throws Exception {
+    stubRefineOk();
+    // L30 후속: +20 업화 무기 → +21. 숨결 없음과 최대 사용 중 기대 비용이 작은 쪽(재료 1개 즉시 구매 최저가 × 기대 수량 + 기대 골드).
+    when(auctions.cachedGems()).thenReturn(gemCells(true));
+    search("스펙업화");
+    // 시세 예열 전이면 PENDING이다.
+    var pending =
+        find(
+            mapper
+                .readTree(get("/api/v1/characters/spec-up?characterName=" + encode("스펙업화")).body())
+                .at("/data/candidates"),
+            "EQUIPMENT_REFINE:0:21");
+    assertThat(pending.at("/cost/status").asText()).isEqualTo("PENDING");
+    assertThat(pending.at("/cost/code").asText()).isEqualTo("PRICE_PENDING");
+
+    var observedAt = Instant.parse("2026-10-12T02:00:00Z");
+    marketCache.saveRefiningMaterials(
+        new com.loakraken.market.application.RefiningMaterialScan(
+            observedAt,
+            List.of(
+                material(1, "운명의 파괴석", 100, "152"),
+                material(2, "운명의 돌파석", 1, "4"),
+                material(3, "아비도스 융화 재료", 1, "210"),
+                material(4, "운명의 파편 주머니(소)", 1, "87"),
+                material(5, "운명의 파편 주머니(대)", 1, "219"),
+                material(6, "용암의 숨결", 1, "459"))),
+        java.time.Duration.ofMinutes(5));
+    var units =
+        java.util.Map.of(
+            "운명의 파괴석", new BigDecimal("1.52"),
+            "운명의 돌파석", new BigDecimal("4"),
+            "아비도스 융화 재료", new BigDecimal("210"),
+            // 파편은 주머니 가운데 1개당 가장 싼 값: (대) 219 ÷ 3000 = 0.073 < (소) 87 ÷ 1000.
+            "운명의 파편", new BigDecimal("0.073"),
+            "용암의 숨결", new BigDecimal("459"));
+    long expected = Long.MAX_VALUE;
+    for (boolean breath : new boolean[] {false, true}) {
+      var plan =
+          plans.plan(
+              com.loakraken.refining.domain.RefiningRules.Grade.UPHWA,
+              com.loakraken.refining.domain.RefiningRules.EquipmentType.WEAPON,
+              new com.loakraken.refining.domain.RefiningPlan.Options(
+                  20, 21, breath, false, true, 0, 0));
+      var total = plan.expectedGold();
+      for (var quantity : plan.expectedMaterials())
+        total = total.add(quantity.amount().multiply(units.get(quantity.name())));
+      expected = Math.min(expected, total.setScale(0, java.math.RoundingMode.CEILING).longValue());
+    }
+    var response = get("/api/v1/characters/spec-up?characterName=" + encode("스펙업화"));
+    assertThat(response.statusCode()).isEqualTo(200);
+    ApiContractFixture.write("character-spec-up-refine-cost.json", response.body());
+    var data = mapper.readTree(response.body()).path("data");
+    var refine = find(data.path("candidates"), "EQUIPMENT_REFINE:0:21");
+    assertThat(refine.at("/cost/status").asText()).isEqualTo("OK");
+    assertThat(refine.at("/cost/code").asText()).isEqualTo("REFINE_EXPECTED");
+    assertThat(refine.at("/cost/amount").asLong()).isEqualTo(expected);
+    assertThat(expected).isPositive();
+    // 가장 이른 시세 관측 시각이 보석 표 시각보다 이르면 그 시각이다.
+    assertThat(Instant.parse(data.path("pricesAt").asText())).isBeforeOrEqualTo(observedAt);
+    SiteNames.assertAbsent(response.body());
+    org.mockito.Mockito.reset(simulator);
+  }
+
+  /** 재련 후보만 시뮬레이터가 OK(Δ+12.34)를 내게 한다. 나머지 후보는 실제 계산. 테스트 끝에 reset(simulator). */
+  private void stubRefineOk() {
     org.mockito.Mockito.doAnswer(
             invocation -> {
               List<com.loakraken.character.application.CombatPowerSimulationService.Change>
@@ -227,20 +312,12 @@ class SpecUpIntegrationTest {
             org.mockito.ArgumentMatchers.any(
                 com.loakraken.character.application.CharacterResult.class),
             org.mockito.ArgumentMatchers.anyList());
-    search("스펙재련");
-    for (boolean ready : new boolean[] {true, false}) {
-      when(auctions.cachedGems()).thenReturn(gemCells(ready));
-      var response = get("/api/v1/characters/spec-up?characterName=" + encode("스펙재련"));
-      assertThat(response.statusCode()).as("시세 칸 " + ready).isEqualTo(200);
-      var refine =
-          find(mapper.readTree(response.body()).at("/data/candidates"), "EQUIPMENT_REFINE:0:21");
-      assertThat(refine.path("status").asText()).isEqualTo("OK");
-      assertThat(refine.path("deltaCombatPower").decimalValue()).isEqualByComparingTo("12.34");
-      assertThat(refine.at("/cost/status").asText()).isEqualTo("UNKNOWN");
-      assertThat(refine.at("/cost/code").asText()).isEqualTo("REFINE_COST_UNCONFIRMED");
-      assertThat(refine.path("combatPowerPer10kGold").isNull()).isTrue();
-    }
-    org.mockito.Mockito.reset(simulator);
+  }
+
+  private static com.loakraken.market.domain.MarketPrice material(
+      long id, String name, int bundle, String currentMin) {
+    return new com.loakraken.market.domain.MarketPrice(
+        id, name, "영웅", null, bundle, null, null, null, new BigDecimal(currentMin));
   }
 
   @Test
@@ -435,7 +512,7 @@ class SpecUpIntegrationTest {
     var weapon =
         new CharacterLoadout.Equipment(
             "무기",
-            "+20 테스트 무기",
+            name.contains("업화") ? "+20 운명의 업화 검" : "+20 테스트 무기",
             null,
             "고대",
             new CharacterLoadout.EquipmentDetail(

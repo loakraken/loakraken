@@ -40,6 +40,10 @@ class MarketHistoryWarmupTest {
   private final RelicBookPriceService relicBooks = mock(RelicBookPriceService.class);
   private RelicBookWarmupProperties relicProperties =
       new RelicBookWarmupProperties(false, Duration.ofMinutes(30), 10);
+  private final com.loakraken.market.application.RefiningMaterialPriceService refiningMaterials =
+      mock(com.loakraken.market.application.RefiningMaterialPriceService.class);
+  private RefiningMaterialWarmupProperties refiningMaterialProperties =
+      new RefiningMaterialWarmupProperties(false, Duration.ofMinutes(10), 5);
 
   {
     when(lease.hold(any(), any())).thenReturn(true);
@@ -206,7 +210,9 @@ class MarketHistoryWarmupTest {
         gate,
         lease,
         relicBooks,
-        relicProperties);
+        relicProperties,
+        refiningMaterials,
+        refiningMaterialProperties);
   }
 
   @Test
@@ -251,6 +257,49 @@ class MarketHistoryWarmupTest {
     warmup.warmRelicBookPages();
     verify(relicBooks).fetchPage(3);
     verify(relicBooks).save(any(), eq(Duration.ofMinutes(90)));
+  }
+
+  @Test
+  void 재련_재료_예열은_플래그가_꺼져_있으면_부르지_않는다() {
+    warmup("key", List.of()).warmRefiningMaterialPages();
+    verifyNoInteractions(refiningMaterials);
+  }
+
+  @Test
+  void 재련_재료_예열은_두_탭을_끝까지_받아_주기의_3배_TTL로_저장하고_분당_상한에_걸리면_다음_틱에_처음부터_받는다() {
+    refiningMaterialProperties =
+        new RefiningMaterialWarmupProperties(true, Duration.ofMinutes(10), 5);
+    var refining = com.loakraken.market.domain.MarketTab.REFINING;
+    var extra = com.loakraken.market.domain.MarketTab.REFINING_EXTRA;
+    // 재련 재료 11종(2페이지), 추가 재료 22종(3페이지).
+    when(refiningMaterials.fetchPage(eq(refining), anyInt()))
+        .thenAnswer(invocation -> page(invocation.getArgument(1), 11));
+    when(refiningMaterials.fetchPage(eq(extra), anyInt()))
+        .thenAnswer(invocation -> page(invocation.getArgument(1), 22));
+    // 분당 상한 4: 다섯 번째 페이지에서 멈추고 저장하지 않는다.
+    var capped = warmup("key", List.of(), 4);
+    capped.warmRefiningMaterialPages();
+    verify(refiningMaterials, times(4)).fetchPage(any(), anyInt());
+    verify(refiningMaterials, never()).save(any(), any());
+    clock.now = clock.now.plus(Duration.ofMinutes(1));
+    capped.warmRefiningMaterialPages();
+    // 처음부터 다시: 재련 재료 2 + 추가 재료 3 = 5회 중 4회까지 → 아직 저장 없음.
+    verify(refiningMaterials, never()).save(any(), any());
+
+    var warmup = warmup("key", List.of());
+    warmup.warmRefiningMaterialPages();
+    var scan =
+        org.mockito.ArgumentCaptor.forClass(
+            com.loakraken.market.application.RefiningMaterialScan.class);
+    verify(refiningMaterials).save(scan.capture(), eq(Duration.ofMinutes(30)));
+    assertThat(scan.getValue().items()).hasSize(33);
+    verify(refiningMaterials, never()).fetchPage(refining, 3);
+    verify(refiningMaterials, never()).fetchPage(extra, 4);
+    // 주기(10분) 전에는 다시 부르지 않는다.
+    org.mockito.Mockito.clearInvocations(refiningMaterials);
+    clock.now = clock.now.plus(Duration.ofMinutes(5));
+    warmup.warmRefiningMaterialPages();
+    verifyNoInteractions(refiningMaterials);
   }
 
   private MarketResult page(int page, int total) {

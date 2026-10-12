@@ -28,6 +28,7 @@ import tools.jackson.databind.json.JsonMapper;
 class ValkeyMarketCache implements MarketCache {
   private static final String OPTIONS_KEY = "market:v1:options";
   private static final String RELIC_BOOKS_KEY = "market:v1:relic-books";
+  private static final String REFINING_MATERIALS_KEY = "market:v1:refining-materials";
   private final StringRedisTemplate redis;
   private final JsonMapper mapper;
   private final MarketCacheProperties properties;
@@ -151,6 +152,22 @@ class ValkeyMarketCache implements MarketCache {
   @Override
   public void saveRelicBooks(RelicBookScan scan, Duration ttl) {
     write(RELIC_BOOKS_KEY, scan, ttl, Kind.RELIC_BOOKS);
+  }
+
+  @Override
+  public Optional<com.loakraken.market.application.RefiningMaterialScan> findRefiningMaterials() {
+    // 만료는 키 TTL(예열 주기 × 3)로 정한다.
+    return read(
+        REFINING_MATERIALS_KEY,
+        com.loakraken.market.application.RefiningMaterialScan.class,
+        Kind.REFINING_MATERIALS,
+        scan -> true);
+  }
+
+  @Override
+  public void saveRefiningMaterials(
+      com.loakraken.market.application.RefiningMaterialScan scan, Duration ttl) {
+    write(REFINING_MATERIALS_KEY, scan, ttl, Kind.REFINING_MATERIALS);
   }
 
   private static String boardKey(MarketTab tab, Integer tier) {

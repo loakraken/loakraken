@@ -8,7 +8,11 @@ import com.loakraken.character.domain.CharacterLoadout;
 import com.loakraken.character.domain.CombatPowerReasons;
 import com.loakraken.common.api.BusinessException;
 import com.loakraken.market.application.MarketAuctionService;
+import com.loakraken.market.application.RefiningMaterialPriceService;
 import com.loakraken.market.application.RelicBookPriceService;
+import com.loakraken.refining.application.RefiningPlanService;
+import com.loakraken.refining.domain.RefiningPlan;
+import com.loakraken.refining.domain.RefiningRules;
 import com.loakraken.specup.domain.SpecUpCost;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -39,16 +43,22 @@ public class SpecUpService {
   private final CombatPowerSimulationService simulator;
   private final MarketAuctionService auctions;
   private final RelicBookPriceService books;
+  private final RefiningPlanService plans;
+  private final RefiningMaterialPriceService materials;
   private final boolean enabled;
 
   public SpecUpService(
       CombatPowerSimulationService simulator,
       MarketAuctionService auctions,
       RelicBookPriceService books,
+      RefiningPlanService plans,
+      RefiningMaterialPriceService materials,
       @Value("${spec-up.enabled:false}") boolean enabled) {
     this.simulator = simulator;
     this.auctions = auctions;
     this.books = books;
+    this.plans = plans;
+    this.materials = materials;
     this.enabled = enabled;
   }
 
@@ -104,7 +114,7 @@ public class SpecUpService {
     gems(loadout, prices, pricesAt, planned);
     quality(loadout, planned);
     engravings(loadout, books::price, pricesAt, planned);
-    refines(loadout, planned);
+    refines(loadout, materials.cached(), pricesAt, planned);
     others(loadout, planned);
 
     var ok = new ArrayList<Candidate>();
@@ -351,8 +361,15 @@ public class SpecUpService {
     return SpecUpCost.engravingBooks(price.unitPrice());
   }
 
-  /** 재련 +1·상급 재련 +1: 무기·방어구마다. Δ전투력은 시뮬레이터(재련 모델)가, 비용은 아직 연결하지 않아 UNKNOWN이다. */
-  private static void refines(CharacterLoadout loadout, List<Planned> planned) {
+  /**
+   * 재련 +1·상급 재련 +1: 무기·방어구마다. Δ전투력은 시뮬레이터(재련 모델)가 정한다. 일반 재련 비용은 재련 계획의 기대 소모 × 재료 시세 캐시(L30 후속),
+   * 상급 재련은 계획 범위 밖이라 UNKNOWN이다.
+   */
+  private void refines(
+      CharacterLoadout loadout,
+      java.util.Optional<RefiningMaterialPriceService.Prices> prices,
+      Instant[] pricesAt,
+      List<Planned> planned) {
     for (int index = 0; index < loadout.equipment().size(); index++) {
       var item = loadout.equipment().get(index);
       if (item == null || !WEAPON_ARMOR.contains(item.type()) || item.detail() == null) continue;
@@ -383,7 +400,7 @@ public class SpecUpService {
                     null,
                     null,
                     null),
-                SpecUpCost.REFINE_COST_UNCONFIRMED));
+                refineCost(item, refine, prices, pricesAt)));
       var advanced = item.detail().advancedRefineLevel();
       if (advanced != null && advanced < 40)
         planned.add(
@@ -399,6 +416,59 @@ public class SpecUpService {
                 change(Kind.EQUIPMENT_ADVANCED_REFINE, null, index, advanced + 1, null, null),
                 SpecUpCost.REFINE_COST_UNCONFIRMED));
     }
+  }
+
+  /**
+   * 일반 재련 +1 기대 비용. 계열(업화·전율)은 장비 이름으로 정한다. 숨결 없음과 최대 사용을 모두 계산해 작은 쪽을 고른다. 필요한 재료 시세가 하나라도 없으면
+   * PENDING이다.
+   */
+  private SpecUpCost refineCost(
+      CharacterLoadout.Equipment item,
+      int refine,
+      java.util.Optional<RefiningMaterialPriceService.Prices> prices,
+      Instant[] pricesAt) {
+    var grade = refineGrade(item.name());
+    if (grade == null) return SpecUpCost.REFINE_COST_UNCONFIRMED;
+    var type =
+        "무기".equals(item.type())
+            ? RefiningRules.EquipmentType.WEAPON
+            : RefiningRules.EquipmentType.ARMOR;
+    RefiningRules.Track track;
+    try {
+      track = plans.rules().track(grade, type);
+    } catch (IllegalArgumentException exception) {
+      return SpecUpCost.REFINE_COST_UNCONFIRMED;
+    }
+    int target = refine + 1;
+    if (target < track.minTargetStage() || target > track.maxTargetStage())
+      return SpecUpCost.REFINE_COST_UNCONFIRMED;
+    if (prices.isEmpty()) return SpecUpCost.REFINE_PRICE_PENDING;
+    var unitPrices = prices.get();
+    Long best = null;
+    for (boolean breath : new boolean[] {false, true}) {
+      var plan =
+          plans.plan(
+              grade, type, new RefiningPlan.Options(refine, target, breath, false, true, 0, 0));
+      var total = plan.expectedGold();
+      for (var quantity : plan.expectedMaterials()) {
+        if (quantity.amount().signum() == 0) continue;
+        var unit = unitPrices.unit(quantity.name()).orElse(null);
+        if (unit == null) return SpecUpCost.REFINE_PRICE_PENDING;
+        total = total.add(quantity.amount().multiply(unit));
+      }
+      long amount = total.setScale(0, RoundingMode.CEILING).longValue();
+      if (best == null || amount < best) best = amount;
+    }
+    if (pricesAt[0] == null || unitPrices.observedAt().isBefore(pricesAt[0]))
+      pricesAt[0] = unitPrices.observedAt();
+    return SpecUpCost.refineExpected(best);
+  }
+
+  private static RefiningRules.Grade refineGrade(String name) {
+    if (name == null) return null;
+    if (name.contains("전율")) return RefiningRules.Grade.JEONYUL;
+    if (name.contains("업화")) return RefiningRules.Grade.UPHWA;
+    return null;
   }
 
   /** 시뮬레이터 입력을 하나로 정할 수 없는 종류는 종류마다 한 줄로 알린다(지원 현황표: 계산식 미확정). */

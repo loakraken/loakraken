@@ -69,6 +69,8 @@ class SpecUpIntegrationTest {
     var keys = redis.keys("character:v*스펙*");
     if (keys != null && !keys.isEmpty()) redis.delete(keys);
     redis.delete("market:v1:refining-materials");
+    var goals = redis.keys("spec-up:v1:goal:*");
+    if (goals != null && !goals.isEmpty()) redis.delete(goals);
   }
 
   @Test
@@ -460,6 +462,20 @@ class SpecUpIntegrationTest {
       assertThat(candidate.path("reasonCode").asText()).isEqualTo("SUPPORTER_MODEL_PENDING");
     }
     assertThat(data.path("candidates").size()).isPositive();
+    // 목표 경로(L31)도 오류가 아니라 200, 빈 경로, 같은 역할 이유 코드다.
+    var goal =
+        mapper
+            .readTree(
+                get("/api/v1/characters/spec-up/goal?characterName="
+                        + encode("스펙서폿")
+                        + "&targetCombatPower=3100")
+                    .body())
+            .path("data");
+    assertThat(goal.path("stopReasonCode").asText()).isEqualTo("SUPPORTER_MODEL_PENDING");
+    assertThat(goal.path("stopReason").asText()).isNotBlank();
+    assertThat(goal.path("steps").size()).isZero();
+    assertThat(goal.path("reached").asBoolean()).isFalse();
+    assertThat(goal.path("totalCost").isNull()).isTrue();
   }
 
   @Test
@@ -477,6 +493,146 @@ class SpecUpIntegrationTest {
             get("/api/v1/characters/spec-up?sort=GOLD&characterName=" + encode("스펙캐시"))
                 .statusCode())
         .isEqualTo(400);
+  }
+
+  @Test
+  void 목표_경로는_같은_보석_칸을_이어서_올리고_시세_없는_단계부터_누적_비용이_null이다() throws Exception {
+    // L31: 효율 순으로 보석 8→9(620,000), 9→10(증분 2,000,000), 그다음 비용을 모르는 무기 품질 90→100.
+    when(auctions.cachedGems()).thenReturn(gemCells(true));
+    search("스펙목표");
+    var response =
+        get(
+            "/api/v1/characters/spec-up/goal?characterName="
+                + encode("스펙목표")
+                + "&targetCombatPower=3100");
+    assertThat(response.statusCode()).isEqualTo(200);
+    ApiContractFixture.write("character-spec-up-goal.json", response.body());
+    SiteNames.assertAbsent(response.body());
+    var data = mapper.readTree(response.body()).path("data");
+    assertThat(data.path("ruleVersion").asText()).isEqualTo("spec-up-goal-v1");
+    assertThat(data.path("combatPower").decimalValue()).isEqualByComparingTo("3000.00");
+    assertThat(data.path("targetCombatPower").decimalValue()).isEqualByComparingTo("3100.00");
+    assertThat(data.path("stopReasonCode").asText()).isEqualTo("REACHED");
+    assertThat(data.path("stopReason").asText()).isEqualTo("목표 전투력에 닿았어요.");
+    assertThat(data.path("reached").asBoolean()).isTrue();
+    var steps = data.path("steps");
+    assertThat(steps.size()).isEqualTo(3);
+    var first = steps.get(0);
+    assertThat(first.path("order").asInt()).isEqualTo(1);
+    assertThat(first.path("candidateId").asText()).isEqualTo("GEM_LEVEL:0:9");
+    assertThat(first.path("target").asText()).isEqualTo("테스트 스킬 · 8레벨 겁화");
+    assertThat(first.path("deltaCombatPower").decimalValue()).isEqualByComparingTo("24.00");
+    assertThat(first.path("combatPowerAfter").decimalValue()).isEqualByComparingTo("3024.00");
+    assertThat(first.at("/cost/code").asText()).isEqualTo("GEM_UPGRADE");
+    assertThat(first.at("/cost/amount").asLong()).isEqualTo(620_000);
+    assertThat(first.path("cumulativeCost").asLong()).isEqualTo(620_000);
+    assertThat(first.at("/change/kind").asText()).isEqualTo("GEM_LEVEL");
+    assertThat(first.at("/change/level").asInt()).isEqualTo(9);
+    // 같은 칸 둘째 단계: 10레벨 3,000,000 − 9레벨 1,000,000. 합 2,620,000 = 10레벨 매입가 − 8레벨 판매 기대가(380,000).
+    var second = steps.get(1);
+    assertThat(second.path("candidateId").asText()).isEqualTo("GEM_LEVEL:0:10");
+    assertThat(second.path("from").asText()).isEqualTo("9레벨");
+    assertThat(second.at("/cost/code").asText()).isEqualTo("GEM_STEP");
+    assertThat(second.at("/cost/amount").asLong()).isEqualTo(2_000_000);
+    assertThat(second.path("cumulativeCost").asLong()).isEqualTo(3_000_000 - 380_000);
+    // 보석 8→10 한 번에 넣은 시뮬레이터 값(48.07)과 같다.
+    assertThat(second.path("combatPowerAfter").decimalValue()).isEqualByComparingTo("3048.07");
+    var third = steps.get(2);
+    assertThat(third.path("candidateId").asText()).isEqualTo("EQUIPMENT_QUALITY:0:100");
+    assertThat(third.at("/cost/status").asText()).isEqualTo("UNKNOWN");
+    assertThat(third.path("cumulativeCost").isNull()).isTrue();
+    assertThat(third.path("combatPowerPer10kGold").isNull()).isTrue();
+    assertThat(data.path("totalCost").isNull()).isTrue();
+    assertThat(data.path("unpricedSteps").asInt()).isEqualTo(1);
+    assertThat(data.path("finalCombatPower").decimalValue())
+        .isEqualByComparingTo(third.path("combatPowerAfter").decimalValue())
+        .isGreaterThanOrEqualTo(new BigDecimal("3100"));
+
+    // 같은 캐릭터·목표는 캐시에서 준다(시뮬레이터 0회).
+    clearInvocations(simulator);
+    var again =
+        get(
+            "/api/v1/characters/spec-up/goal?characterName="
+                + encode("스펙목표")
+                + "&targetCombatPower=3100");
+    assertThat(mapper.readTree(again.body()).path("data")).isEqualTo(data);
+    verify(simulator, never())
+        .simulate(
+            org.mockito.ArgumentMatchers.any(
+                com.loakraken.character.application.CharacterResult.class),
+            org.mockito.ArgumentMatchers.anyList());
+  }
+
+  @Test
+  void 목표에_보석만으로_닿으면_비용이_모두_있고_후보가_떨어지면_NO_CANDIDATE다() throws Exception {
+    when(auctions.cachedGems()).thenReturn(gemCells(true));
+    search("스펙목표둘");
+    var data =
+        mapper
+            .readTree(
+                get("/api/v1/characters/spec-up/goal?characterName="
+                        + encode("스펙목표둘")
+                        + "&targetCombatPower=3030")
+                    .body())
+            .path("data");
+    assertThat(data.path("stopReasonCode").asText()).isEqualTo("REACHED");
+    assertThat(data.path("steps").size()).isEqualTo(2);
+    assertThat(data.path("totalCost").asLong()).isEqualTo(2_620_000);
+    assertThat(data.path("unpricedSteps").asInt()).isZero();
+
+    var far =
+        mapper
+            .readTree(
+                get("/api/v1/characters/spec-up/goal?characterName="
+                        + encode("스펙목표둘")
+                        + "&targetCombatPower=5000")
+                    .body())
+            .path("data");
+    assertThat(far.path("stopReasonCode").asText()).isEqualTo("NO_CANDIDATE");
+    assertThat(far.path("reached").asBoolean()).isFalse();
+    assertThat(far.path("steps").size()).isEqualTo(3);
+    assertThat(far.path("stopReason").asText()).isEqualTo("더 올릴 수 있는 항목이 없어 여기서 멈췄어요.");
+  }
+
+  @Test
+  void 목표가_지금_이하면_빈_경로이고_2배를_넘거나_형식이_틀리면_400이다() throws Exception {
+    when(auctions.cachedGems()).thenReturn(gemCells(true));
+    search("스펙목표셋");
+    var already =
+        mapper
+            .readTree(
+                get("/api/v1/characters/spec-up/goal?characterName="
+                        + encode("스펙목표셋")
+                        + "&targetCombatPower=2999.5")
+                    .body())
+            .path("data");
+    assertThat(already.path("stopReasonCode").asText()).isEqualTo("ALREADY_REACHED");
+    assertThat(already.path("reached").asBoolean()).isTrue();
+    assertThat(already.path("steps").size()).isZero();
+    assertThat(already.path("totalCost").asLong()).isZero();
+    var tooFar =
+        get(
+            "/api/v1/characters/spec-up/goal?characterName="
+                + encode("스펙목표셋")
+                + "&targetCombatPower=6000.01");
+    assertThat(tooFar.statusCode()).isEqualTo(400);
+    assertThat(tooFar.body()).contains("SPEC_UP_GOAL_OUT_OF_RANGE");
+    for (var target : List.of("0", "-1", "abc", "3100.123"))
+      assertThat(
+              get("/api/v1/characters/spec-up/goal?characterName="
+                      + encode("스펙목표셋")
+                      + "&targetCombatPower="
+                      + target)
+                  .statusCode())
+          .as(target)
+          .isEqualTo(400);
+    var missing =
+        get(
+            "/api/v1/characters/spec-up/goal?characterName="
+                + encode("스펙없음")
+                + "&targetCombatPower=3100");
+    assertThat(missing.statusCode()).isEqualTo(404);
+    assertThat(missing.body()).contains("CHARACTER_NOT_CACHED");
   }
 
   private void search(String name) throws Exception {

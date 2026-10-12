@@ -36,8 +36,8 @@ import org.springframework.stereotype.Service;
 @Service
 public class SpecUpService {
   public static final String RULE_VERSION = "spec-up-v1";
-  private static final Pattern GEM = Pattern.compile("(\\d+)레벨 (\\S+)의 보석");
-  private static final Set<String> WEAPON_ARMOR = Set.of("무기", "투구", "상의", "하의", "장갑", "어깨");
+  static final Pattern GEM = Pattern.compile("(\\d+)레벨 (\\S+)의 보석");
+  static final Set<String> WEAPON_ARMOR = Set.of("무기", "투구", "상의", "하의", "장갑", "어깨");
   private static final BigDecimal HUNDRED = BigDecimal.valueOf(100);
 
   private final CombatPowerSimulationService simulator;
@@ -101,6 +101,10 @@ public class SpecUpService {
       int limit,
       int total,
       List<Candidate> candidates) {}
+
+  boolean enabled() {
+    return enabled;
+  }
 
   public Guide guide(String characterName, Sort sort, int limit) {
     if (!enabled) throw new BusinessException(SpecUpErrorCode.SPEC_UP_DISABLED);
@@ -241,7 +245,7 @@ public class SpecUpService {
     }
   }
 
-  private static SpecUpCost gemCost(
+  static SpecUpCost gemCost(
       Map<String, MarketAuctionService.GemCell> prices,
       Instant[] pricesAt,
       String kind,
@@ -266,13 +270,13 @@ public class SpecUpService {
     return SpecUpCost.gem(nextCell.cell().minBuyPrice(), current, bound);
   }
 
-  private static void observed(Instant[] pricesAt, MarketAuctionService.GemCell cell) {
+  static void observed(Instant[] pricesAt, MarketAuctionService.GemCell cell) {
     var at = cell.cell().observedAt();
     if (at != null && (pricesAt[0] == null || at.isBefore(pricesAt[0]))) pricesAt[0] = at;
   }
 
   /** 귀속 보석은 팔 수 없다(영수증과 같은 판정: 이름의 "(귀속)"). */
-  private static boolean bound(CharacterLoadout.Gem gem) {
+  static boolean bound(CharacterLoadout.Gem gem) {
     return gem.name() != null && gem.name().contains("(귀속)");
   }
 
@@ -343,18 +347,18 @@ public class SpecUpService {
                   null,
                   null,
                   null),
-              bookCost(engraving, bookPrice, pricesAt)));
+              bookCost(engraving.name(), engraving.grade(), bookPrice, pricesAt)));
     }
   }
 
-  private static SpecUpCost bookCost(
-      CharacterLoadout.PassiveEngraving engraving,
+  static SpecUpCost bookCost(
+      String name,
+      String grade,
       java.util.function.Function<String, java.util.Optional<RelicBookPriceService.Price>>
           bookPrice,
       Instant[] pricesAt) {
-    if (!RelicBookPriceService.GRADE.equals(engraving.grade()))
-      return SpecUpCost.BOOK_COUNT_UNCONFIRMED;
-    var price = bookPrice.apply(engraving.name()).orElse(null);
+    if (!RelicBookPriceService.GRADE.equals(grade)) return SpecUpCost.BOOK_COUNT_UNCONFIRMED;
+    var price = bookPrice.apply(name).orElse(null);
     if (price == null) return SpecUpCost.BOOK_PRICE_PENDING;
     if (pricesAt[0] == null || price.observedAt().isBefore(pricesAt[0]))
       pricesAt[0] = price.observedAt();
@@ -425,7 +429,7 @@ public class SpecUpService {
    * 일반 재련 +1 기대 비용. 계열(업화·전율)은 장비 이름으로 정한다. 숨결 없음과 최대 사용을 모두 계산해 작은 쪽을 고른다. 필요한 재료 시세가 하나라도 없으면
    * PENDING이다.
    */
-  private SpecUpCost refineCost(
+  SpecUpCost refineCost(
       CharacterLoadout.Equipment item,
       int refine,
       java.util.Optional<RefiningMaterialPriceService.Prices> prices,
@@ -467,7 +471,7 @@ public class SpecUpService {
     return SpecUpCost.refineExpected(best);
   }
 
-  private static RefiningRules.Grade refineGrade(String name) {
+  static RefiningRules.Grade refineGrade(String name) {
     if (name == null) return null;
     if (name.contains("전율")) return RefiningRules.Grade.JEONYUL;
     if (name.contains("업화")) return RefiningRules.Grade.UPHWA;

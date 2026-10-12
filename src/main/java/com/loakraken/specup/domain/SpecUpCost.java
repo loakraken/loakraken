@@ -90,6 +90,19 @@ public record SpecUpCost(String unit, Long amount, String status, String code, S
         "목표 레벨 보석 즉시 구매 최저가에서 지금 보석의 판매 기대가(최저가에서 거래소 수수료 5%를 뺀 값)를 뺐습니다.");
   }
 
+  /**
+   * 같은 보석 칸을 이어서 올리는 둘째 단계부터의 비용(L31 목표 경로): 이번 레벨 즉시 구매 최저가 − 직전 레벨 즉시 구매 최저가. 중간 보석은 사고팔지 않으므로 단계
+   * 비용의 합은 마지막 레벨 매입가 − 처음 보석 판매 기대가와 같다.
+   */
+  public static SpecUpCost gemStep(long nextPrice, long previousPrice) {
+    return new SpecUpCost(
+        "GOLD",
+        nextPrice - previousPrice,
+        "OK",
+        "GEM_STEP",
+        "이번 레벨 보석 즉시 구매 최저가에서 바로 앞 단계 레벨 보석 즉시 구매 최저가를 뺐습니다(같은 칸을 이어서 올릴 때 중간 보석은 사고팔지 않음).");
+  }
+
   /** 유물 각인 레벨 1당 각인서 권수(공식 가이드 '각인', 검증 표본 spec-up/cost-rules-2026-10-12.json, L30). */
   public static final int BOOKS_PER_LEVEL = 5;
 

@@ -158,8 +158,9 @@ class OpenApiIntegrationTest {
         .isEqualTo("null");
     // 랭킹 행 최고 전투력·아크 패시브(L37·K32): 기존 응답에 nullable 필드 추가.
     assertThat(document.at("/components/schemas/StatsRankedCharacterResponse/required").toString())
-        .contains("bestCombatPower", "arkPassivePoints", "classEngraving");
-    for (var field : List.of("bestCombatPower", "arkPassivePoints", "classEngraving"))
+        .contains("bestCombatPower", "arkPassivePoints", "classEngraving", "estherWeapon");
+    for (var field :
+        List.of("bestCombatPower", "arkPassivePoints", "classEngraving", "estherWeapon"))
       assertThat(
               document
                   .at(

@@ -372,7 +372,7 @@ class StatsIntegrationTest {
             .param("s", SERVER)
             .query(UUID.class)
             .single();
-    for (var row : new Object[][] {{"버스트", 120, 90, 60, 2}, {"버스트", 140, 101, 70, 1}})
+    for (var row : new Object[][] {{"버스트", 120, 90, 60, 2, 8, 2}, {"버스트", 140, 101, 70, 1, 10, 3}})
       jdbc.sql(
               """
           INSERT INTO character_equipment_summary (character_id, observed_at, last_confirmed_at,
@@ -390,6 +390,10 @@ class StatsIntegrationTest {
                   + row[2]
                   + ",\"leap\":"
                   + row[3]
+                  + "}},\"weapon\":{\"esther\":{\"refineLevel\":"
+                  + row[5]
+                  + ",\"ellaStage\":"
+                  + row[6]
                   + "}}}")
           .param("hash", "h".repeat(63) + row[4])
           .update();
@@ -402,11 +406,38 @@ class StatsIntegrationTest {
     assertThat(top.at("/arkPassivePoints/enlightenment").asInt()).isEqualTo(101);
     assertThat(top.at("/arkPassivePoints/leap").asInt()).isEqualTo(70);
     assertThat(top.path("classEngraving").asText()).isEqualTo("버스트");
+    assertThat(top.at("/estherWeapon/refineLevel").asInt()).isEqualTo(10);
+    assertThat(top.at("/estherWeapon/ellaStage").asInt()).isEqualTo(3);
     // 장비 요약·최고 전투력이 없는 캐릭터는 null이다.
     var second = ranking.at("/rows/1");
     assertThat(second.path("bestCombatPower").isNull()).isTrue();
     assertThat(second.path("arkPassivePoints").isNull()).isTrue();
     assertThat(second.path("classEngraving").isNull()).isTrue();
+    assertThat(second.path("estherWeapon").isNull()).isTrue();
+    // 칭호가 빈 문자열인 요약은 직업 각인 null, 포인트는 그대로다.
+    var secondId =
+        jdbc.sql(
+                "SELECT character_id FROM characters WHERE character_name = :n AND server_name = :s")
+            .param("n", second.path("characterName").asText())
+            .param("s", SERVER)
+            .query(UUID.class)
+            .single();
+    jdbc.sql(
+            """
+        INSERT INTO character_equipment_summary (character_id, observed_at, last_confirmed_at,
+          schema_version, combat_power, item_level, class_name, ark_passive_title, features, features_hash)
+        VALUES (:id, :at, :at, 'equipment-summary-v1', 3000, 1720, '버서커', '',
+          CAST('{"arkPassive":{"points":{"evolution":120}}}' AS JSONB), :hash)
+        """)
+        .param("id", secondId)
+        .param("at", now.minus(1, ChronoUnit.HOURS).atOffset(ZoneOffset.UTC))
+        .param("hash", "e".repeat(64))
+        .update();
+    var again =
+        // 캐시 키가 다르도록 size를 바꿔 다시 읽는다.
+        data("/api/v1/rankings?metric=COMBAT_POWER&size=3&server=" + encode(SERVER)).at("/rows/1");
+    assertThat(again.at("/arkPassivePoints/evolution").asInt()).isEqualTo(120);
+    assertThat(again.path("classEngraving").isNull()).isTrue();
   }
 
   @Test

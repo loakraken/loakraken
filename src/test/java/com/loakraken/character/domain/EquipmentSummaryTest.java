@@ -37,7 +37,7 @@ class EquipmentSummaryTest {
             new EquipmentSummary.Gem("작열", 8, null));
     assertThat(f.gemBaseAttackPct()).isEqualByComparingTo("4.95");
     assertThat(f.weapon())
-        .isEqualTo(new EquipmentSummary.Weapon(100, new BigDecimal("30"), 208130, 19));
+        .isEqualTo(new EquipmentSummary.Weapon(100, new BigDecimal("30"), 208130, 19, null));
     assertThat(f.armor()).extracting(EquipmentSummary.Armor::slot).containsExactly("투구", "상의");
     assertThat(f.accessories())
         .containsExactly(
@@ -62,6 +62,47 @@ class EquipmentSummaryTest {
     assertThat(f.cards())
         .isEqualTo(new EquipmentSummary.Cards("세상을 구하는 빛", 6, 30, new BigDecimal("15")));
     assertThat(f.skills()).containsExactly(new EquipmentSummary.Skill("윈드 컷", "BACK_ATTACK"));
+  }
+
+  @Test
+  void 에스더_무기는_강화_단계와_엘라_부여_단계를_읽는다() {
+    // 강화는 이름 앞 "+N"(재련 단계 자리), 엘라 부여는 효과 줄 "엘라 부여 N 단계"다.
+    var weapon =
+        new Equipment(
+            "무기",
+            "+10 에스더 무기",
+            null,
+            "에스더",
+            detail(
+                10,
+                null,
+                List.of(group("기본 효과", "무기 공격력 +200000"), group("", " 엘라 부여 3 단계 (최종) "))));
+    var f = summaryOf(weapon).features();
+    assertThat(f.weapon().esther()).isEqualTo(new EquipmentSummary.Esther(10, 3));
+    assertThat(f.weapon().refine()).isEqualTo(10);
+  }
+
+  @Test
+  void 에스더_무기라도_엘라_부여_문구가_없으면_그_값만_null이다() {
+    var weapon =
+        new Equipment(
+            "무기", "+8 에스더 무기", null, "에스더", detail(8, null, List.of(group("기본 효과", "무기 공격력 +1"))));
+    assertThat(summaryOf(weapon).features().weapon().esther())
+        .isEqualTo(new EquipmentSummary.Esther(8, null));
+  }
+
+  @Test
+  void 에스더_등급이_아닌_무기는_에스더_값이_없다() {
+    var weapon =
+        new Equipment(
+            "무기", "+25 무기", null, "고대", detail(25, 100, List.of(group("", "엘라 부여 3 단계"))));
+    assertThat(summaryOf(weapon).features().weapon().esther()).isNull();
+  }
+
+  private static EquipmentSummary summaryOf(Equipment weapon) {
+    return EquipmentSummary.from(
+        profile("4035.27"),
+        new CharacterLoadout(List.of(weapon), null, null, null, null, null, List.of()));
   }
 
   @Test

@@ -359,6 +359,57 @@ class StatsIntegrationTest {
   }
 
   @Test
+  void 전투력_랭킹_행은_관측한_최고_전투력과_마지막_장비의_아크_패시브를_준다() throws Exception {
+    // L37·K32: 최고 전투력은 characters.best_combat_power, 아크 패시브는 마지막 장비 요약(포인트·직업 각인).
+    표본();
+    jdbc.sql(
+            "UPDATE characters SET best_combat_power = 3500 WHERE character_name = '통계캐34' AND server_name = :s")
+        .param("s", SERVER)
+        .update();
+    var id =
+        jdbc.sql(
+                "SELECT character_id FROM characters WHERE character_name = '통계캐34' AND server_name = :s")
+            .param("s", SERVER)
+            .query(UUID.class)
+            .single();
+    for (var row : new Object[][] {{"버스트", 120, 90, 60, 2}, {"버스트", 140, 101, 70, 1}})
+      jdbc.sql(
+              """
+          INSERT INTO character_equipment_summary (character_id, observed_at, last_confirmed_at,
+            schema_version, combat_power, item_level, class_name, ark_passive_title, features, features_hash)
+          VALUES (:id, :at, :at, 'equipment-summary-v1', 3330, 1734, '버서커', :title, CAST(:features AS JSONB), :hash)
+          """)
+          .param("id", id)
+          .param("at", now.minus((int) row[4], ChronoUnit.HOURS).atOffset(ZoneOffset.UTC))
+          .param("title", row[0])
+          .param(
+              "features",
+              "{\"arkPassive\":{\"points\":{\"evolution\":"
+                  + row[1]
+                  + ",\"enlightenment\":"
+                  + row[2]
+                  + ",\"leap\":"
+                  + row[3]
+                  + "}}}")
+          .param("hash", "h".repeat(63) + row[4])
+          .update();
+    var ranking = data("/api/v1/rankings?metric=COMBAT_POWER&size=2&server=" + encode(SERVER));
+    var top = ranking.at("/rows/0");
+    assertThat(top.path("characterName").asText()).isEqualTo("통계캐34");
+    assertThat(top.path("bestCombatPower").decimalValue()).isEqualByComparingTo("3500");
+    // 마지막(1시간 전) 장비 요약 값이다.
+    assertThat(top.at("/arkPassivePoints/evolution").asInt()).isEqualTo(140);
+    assertThat(top.at("/arkPassivePoints/enlightenment").asInt()).isEqualTo(101);
+    assertThat(top.at("/arkPassivePoints/leap").asInt()).isEqualTo(70);
+    assertThat(top.path("classEngraving").asText()).isEqualTo("버스트");
+    // 장비 요약·최고 전투력이 없는 캐릭터는 null이다.
+    var second = ranking.at("/rows/1");
+    assertThat(second.path("bestCombatPower").isNull()).isTrue();
+    assertThat(second.path("arkPassivePoints").isNull()).isTrue();
+    assertThat(second.path("classEngraving").isNull()).isTrue();
+  }
+
+  @Test
   void 저장된_효율이_없으면_빈_랭킹이다() throws Exception {
     표본();
     var empty = data("/api/v1/rankings/ark-grid-gems?server=" + encode(SERVER));

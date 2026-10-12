@@ -156,6 +156,19 @@ class OpenApiIntegrationTest {
                     "/components/schemas/RosterCombatPowerResponse/properties/refreshAvailableAt/anyOf/1/type")
                 .asText())
         .isEqualTo("null");
+    // 랭킹 행 최고 전투력·아크 패시브(L37·K32): 기존 응답에 nullable 필드 추가.
+    assertThat(document.at("/components/schemas/StatsRankedCharacterResponse/required").toString())
+        .contains("bestCombatPower", "arkPassivePoints", "classEngraving");
+    for (var field : List.of("bestCombatPower", "arkPassivePoints", "classEngraving"))
+      assertThat(
+              document
+                  .at(
+                      "/components/schemas/StatsRankedCharacterResponse/properties/"
+                          + field
+                          + "/anyOf/1/type")
+                  .asText())
+          .as(field)
+          .isEqualTo("null");
     // 팔찌·젬 효율 랭킹(L38·L39): 두 경로가 같은 스키마, 필수와 nullable.
     for (var path : List.of("bracelets", "ark-grid-gems"))
       assertThat(

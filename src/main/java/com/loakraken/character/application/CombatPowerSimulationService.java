@@ -821,7 +821,8 @@ public class CombatPowerSimulationService {
         text("option", change.option());
         grade(change.grade());
         var current = item.detail().polishEffects().get(change.line());
-        var value = polishValue(polishValues, item.type(), change.option(), change.grade(), current);
+        var value =
+            polishValue(polishValues, item.type(), change.option(), change.grade(), current);
         var option = optionName(change.option());
         var from = CombatPowerPolishModel.line(current.name(), current.value());
         var to = value == null ? null : CombatPowerPolishModel.line(option, value);

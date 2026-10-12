@@ -53,13 +53,15 @@ class CombatPowerRefineModelTest {
     // 0.995316·1.005590과 ±0.00002 안이다.
     assertThat(
             model
-                .ratioFull(Map.of(), BigDecimal.ZERO, new BigDecimal("-0.010"), BigDecimal.ZERO, null)
+                .ratioFull(
+                    Map.of(), BigDecimal.ZERO, new BigDecimal("-0.010"), BigDecimal.ZERO, null)
                 .subtract(new BigDecimal("0.995316"))
                 .abs())
         .isLessThanOrEqualTo(new BigDecimal("0.00002"));
     assertThat(
             model
-                .ratioFull(Map.of(), BigDecimal.ZERO, new BigDecimal("0.012"), BigDecimal.ZERO, null)
+                .ratioFull(
+                    Map.of(), BigDecimal.ZERO, new BigDecimal("0.012"), BigDecimal.ZERO, null)
                 .subtract(new BigDecimal("1.005590"))
                 .abs())
         .isLessThanOrEqualTo(new BigDecimal("0.00002"));

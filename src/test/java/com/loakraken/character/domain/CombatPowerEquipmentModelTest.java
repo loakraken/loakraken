@@ -161,7 +161,7 @@ class CombatPowerEquipmentModelTest {
     try (var in =
         new ClassPathResource("verification/combat-power/engraving-cp-table-2026-10-12.json")
             .getInputStream()) {
-      var table = new JsonMapper().readTree(in).path("invenTable");
+      var table = new JsonMapper().readTree(in).path("guideTable");
       int cells = 0;
       for (var name : table.propertyNames()) {
         if (CONFLICTS.contains(name)) {

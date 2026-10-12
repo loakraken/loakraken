@@ -9,6 +9,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 @EnableConfigurationProperties({
   MarketCacheProperties.class,
   MarketWarmupProperties.class,
-  RelicBookWarmupProperties.class
+  RelicBookWarmupProperties.class,
+  com.loakraken.market.application.AccessorySearchPolicy.class
 })
 class MarketConfiguration {}

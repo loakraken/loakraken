@@ -55,6 +55,8 @@ lostark:
     exempt-internal: ${CLIENT_LIMIT_EXEMPT_INTERNAL:true}
     # 원정대 전투력 불러오기(L19): 클라이언트당 분당 요청 수
     roster-refresh-per-minute: ${CLIENT_LIMIT_ROSTER_REFRESH:2}
+    # 악세 경매 검색기(N13): 클라이언트당 분당 캐시 미스 검색 수
+    auction-search-per-minute: ${CLIENT_LIMIT_AUCTION_SEARCH:6}
 
 character:
   snapshots:
@@ -82,6 +84,17 @@ market:
       enabled: ${MARKET_WARMUP_RELIC_BOOKS_ENABLED:false}
       interval: ${MARKET_WARMUP_RELIC_BOOKS_INTERVAL:30m}
       max-pages: ${MARKET_WARMUP_RELIC_BOOKS_MAX_PAGES:10}
+  # 악세 경매 검색기(N13). 기능 몫은 모든 사용자 합 분당 공식 호출 수, reserve는 사용자 경로 몫(docs/accessory-auction-search.md).
+  auction-search:
+    quota-per-minute: ${MARKET_AUCTION_SEARCH_QUOTA:20}
+    reserve: ${MARKET_AUCTION_SEARCH_RESERVE:30}
+    max-scan-pages: ${MARKET_AUCTION_SEARCH_MAX_SCAN_PAGES:3}
+    cache-ttl: ${MARKET_AUCTION_SEARCH_CACHE_TTL:120s}
+
+loakraken:
+  features:
+    # 악세 경매 검색기(N13) 경로. 끄면 404이고 OpenAPI에도 없습니다.
+    auction-search: ${FEATURE_AUCTION_SEARCH:false}
 
 stats:
   collector:

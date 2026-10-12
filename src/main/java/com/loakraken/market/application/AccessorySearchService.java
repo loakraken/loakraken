@@ -39,8 +39,8 @@ import org.springframework.stereotype.Service;
  *       공식 호출 하나로 묶는다.
  *   <li>캐시 미스 검색은 요청 클라이언트를 AUCTION_SEARCH 버킷에 센다(넘으면 429).
  *   <li>공식 호출마다 기능 몫(모든 사용자 합 분당 {@link AccessorySearchPolicy#quotaPerMinute()})을 가져오고, {@code
- *       gate.withUserReserve(reserve, …)}로 부른다. 사용자 경로 몫을 남기면서 요청 클라이언트의 공식 호출 한도에도 매긴다(보안 감사
- *       10-12). 첫 호출부터 몫·게이트에 막히면 503 MARKET_SEARCH_BUSY + Retry-After이고, 캐시에 있는 결과는 계속 준다.
+ *       gate.withUserReserve(reserve, …)}로 부른다. 사용자 경로 몫을 남기면서 요청 클라이언트의 공식 호출 한도에도 매긴다.
+ *       첫 호출부터 몫·게이트에 막히면 503 MARKET_SEARCH_BUSY + Retry-After이고, 캐시에 있는 결과는 계속 준다.
  *   <li>힘민지 범위 %는 서버 필터가 수치 최솟값만 받으므로 받은 페이지 안에서 거른다(최대 maxScanPages장, complete·scannedPages).
  * </ol>
  */

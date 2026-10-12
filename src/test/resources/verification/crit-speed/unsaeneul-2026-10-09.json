@@ -14,8 +14,8 @@
       "value": 77.21,
       "unit": "%",
       "source": "TARGET_SITE",
-      "sites": ["일로아 스펙 계산", "로펙 효율표"],
-      "agreement": "두 사이트 같은 값",
+      "sites": ["비교 기준 C 스펙 계산", "비교 기준 B 효율표"],
+      "agreement": "두 비교 기준 같은 값",
       "kraken": 77.21,
       "status": "MATCH"
     },
@@ -24,8 +24,8 @@
       "value": 208.40,
       "unit": "%",
       "source": "TARGET_SITE",
-      "sites": ["일로아", "로펙"],
-      "agreement": "두 사이트 같은 값",
+      "sites": ["비교 기준 C", "비교 기준 B"],
+      "agreement": "두 비교 기준 같은 값",
       "derivation": "기본 200% + 팔찌 '치명타 피해 +8.40%'. 일격 Lv.2의 '방향성 공격 스킬의 치명타 피해 +32%'는 스킬 한정이라 제외",
       "kraken": null,
       "status": "NOT_PROVIDED"
@@ -34,7 +34,7 @@
       "field": "attack",
       "value": { "base": 187350, "bonus": 10507, "total": 197857 },
       "source": "OFFICIAL_DISPLAY",
-      "sites": ["클로아", "일로아"],
+      "sites": ["비교 기준 D", "비교 기준 C"],
       "note": "공식 공격력 Tooltip 값. crit-speed 응답 필드는 아니며 전투력 모델 표본과 같은 원천이다"
     }
   ],

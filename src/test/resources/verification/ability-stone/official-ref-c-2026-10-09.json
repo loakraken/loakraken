@@ -147,14 +147,14 @@
    "id": "10칸 77·감소≤4",
    "slots": 10,
    "goalExpr": "a>=7&&b>=7&&c<=4",
-   "iloaPct": 4.8,
+   "refCPct": 4.8,
    "computedPct": 4.8145,
    "stoneQuantiles": [
     0.25,
     0.5,
     0.9
    ],
-   "iloaStones": [
+   "refCStones": [
     6,
     15,
     47
@@ -170,14 +170,14 @@
    "id": "10칸 97·79·10/6·6/10·감소≤4",
    "slots": 10,
    "goalExpr": "((a>=9&&b>=7)||(a>=7&&b>=9)||(a>=10&&b>=6)||(a>=6&&b>=10))&&c<=4",
-   "iloaPct": 0.14,
+   "refCPct": 0.14,
    "computedPct": 0.1356,
    "stoneQuantiles": [
     0.25,
     0.5,
     0.9
    ],
-   "iloaStones": [
+   "refCStones": [
     212,
     511,
     1697
@@ -192,7 +192,7 @@
  ],
  "verdict": {
   "rule": "MATCH: 성공 총합 분포 네 표 모두 반올림 범위(최대 0.00094%p)",
-  "manual": "MATCH: 일로아 표시값(정수·소수 둘째 자리)과 같음",
+  "manual": "MATCH: 비교 기준 C 표시값(정수·소수 둘째 자리)과 같음",
   "notCovered": "공식 자동 세공의 세 줄 결합분포(정책 세부 미공개, 최대 1~2%p 차), 등급↔칸 매핑"
  }
 }

@@ -46,7 +46,40 @@ public interface CharacterCardPort {
       String position,
       BigDecimal gemMeanLevel,
       boolean gemsObserved,
-      Instant observedAt) {}
+      Instant observedAt,
+      Efficiency efficiency) {
+    /** 효율 없이(L38·L39 이전 호출). 효율 열은 바꾸지 않는다. */
+    public Observation(
+        String serverName,
+        String characterName,
+        List<CharacterLoadout.Card> cards,
+        CardCollection.Learned learned,
+        String position,
+        BigDecimal gemMeanLevel,
+        boolean gemsObserved,
+        Instant observedAt) {
+      this(
+          serverName,
+          characterName,
+          cards,
+          learned,
+          position,
+          gemMeanLevel,
+          gemsObserved,
+          observedAt,
+          null);
+    }
+  }
+
+  /**
+   * 팔찌 효율·젬 효율(L38·L39 랭킹). 계산된(OK) 값만 있고, 못 하면 null이다. 규칙 버전은 값이 있을 때만 있다. 이 레코드가 null이면(장비를 관측하지
+   * 않음) 저장된 효율 열을 바꾸지 않는다.
+   */
+  record Efficiency(
+      BigDecimal braceletPct,
+      String braceletRuleVersion,
+      BigDecimal arkGridGemPct,
+      String arkGridRuleVersion) {}
 
   record RosterCards(List<CardCollection.OwnedCard> cards, int observedCharacters) {}
 }

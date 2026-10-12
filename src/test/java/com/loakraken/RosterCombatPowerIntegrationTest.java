@@ -192,6 +192,45 @@ class RosterCombatPowerIntegrationTest {
   }
 
   @Test
+  void 처리정지_대원과_없는_캐릭터는_응답_숫자가_같다() throws Exception {
+    // B5: 처리정지 대원도 대상·12명 상한 안에 두고 공식 호출 없이 건너뛴다. 없는 캐릭터와 fetched·remaining·빈 칸 수가 같다.
+    var stopped = rosterWithFirst("원정전투정", true);
+    var missing = rosterWithFirst("원정전투없", false);
+    assertThat(stopped.path("fetched").asInt())
+        .isEqualTo(missing.path("fetched").asInt())
+        .isEqualTo(11);
+    assertThat(stopped.path("remaining").asInt())
+        .isEqualTo(missing.path("remaining").asInt())
+        .isEqualTo(1);
+    assertThat(nullCount(stopped.path("items")))
+        .isEqualTo(nullCount(missing.path("items")))
+        .isEqualTo(2);
+    verify(detailsPort, never()).fetchProfile(eq("원정전투정가"), anyInt());
+  }
+
+  /** 13명 원정대(첫 대원이 아이템 레벨 가장 높음). stop이면 첫 대원은 처리정지, 아니면 공식 응답에 없는 캐릭터다. */
+  private JsonNode rosterWithFirst(String prefix, boolean stop) throws Exception {
+    var names = new ArrayList<String>();
+    for (int i = 0; i < 13; i++) names.add(prefix + (char) ('가' + i));
+    roster(names.toArray(String[]::new));
+    if (stop) stop(names.getFirst());
+    when(detailsPort.fetchProfile(anyString(), anyInt()))
+        .thenAnswer(
+            invocation -> {
+              if (invocation.getArgument(0).equals(names.getFirst()))
+                throw new CharacterException(CharacterErrorCode.CHARACTER_NOT_FOUND);
+              return profile(invocation.getArgument(0), "3000.00");
+            });
+    return data(post(names.get(1), stop ? "203.0.113.60" : "203.0.113.61"));
+  }
+
+  private static long nullCount(JsonNode items) {
+    long count = 0;
+    for (var item : items) if (item.path("combatPower").isNull()) count++;
+    return count;
+  }
+
+  @Test
   void 같은_원정대_동시_요청은_공식_호출_한_벌로_묶인다() throws Exception {
     roster("원정전투동가", "원정전투동나", "원정전투동다");
     var gate = new CountDownLatch(1);

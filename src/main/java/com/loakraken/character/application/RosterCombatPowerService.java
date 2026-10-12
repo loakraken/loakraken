@@ -104,8 +104,6 @@ public class RosterCombatPowerService {
     var staleBefore = now.minus(policy.staleAfter());
     var targets =
         roster.members().values().stream()
-            // 처리정지 목록은 공식 호출 전에 뺀다(PM-프론트·PM-백엔드 #410 P1). fetched·remaining에도 넣지 않는다.
-            .filter(member -> !stoppedNames.contains(member.characterName()))
             .filter(
                 member -> {
                   var record = known.get(member.characterName());
@@ -126,6 +124,9 @@ public class RosterCombatPowerService {
     for (var target : targets) {
       if (attempted == policy.maxTargets()) break;
       attempted++;
+      // 처리정지 목록은 공식 호출 없이 건너뛴다(#410 P1). 대상·12명 상한·remaining 산술은 없는 캐릭터와 같게 두어, 응답 숫자로
+      // 처리정지 여부가 드러나지 않게 한다(B5).
+      if (stoppedNames.contains(target.characterName())) continue;
       try {
         var profile = details.fetchProfile(target.characterName(), policy.reserve());
         // 처리정지 목록이면 받은 값을 기록하지 않는다(B5). 응답은 기록 없는 캐릭터와 같다.

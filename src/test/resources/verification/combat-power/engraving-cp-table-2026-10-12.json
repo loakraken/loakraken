@@ -7,7 +7,7 @@
  "status": "guide_MATCHES_TARGET_SITE_TABLE",
  "source": {
   "inven": "인벤 4821/106546 「딜러 전투력 로직 분석 (25년 7월 9일 패치 반영)」 각인 절: 각인 25종 × 각인서(유각 0·5·10·15·20장 = 레벨 0~4) × 스톤 0~4 전투력 증가 계수표. 2026-10-12 확인",
-  "targetSite": "#344 loalab-engraving-cp-2026-10-11.json loalabTable(목표 사이트 실측)",
+  "targetSite": "#344 ref-a-engraving-cp-2026-10-11.json loalabTable(목표 사이트 실측)",
   "rule": "출처 규칙(회귀 점검표 B4): 인벤은 한 곳으로 통과. 여기서는 목표 사이트 표와도 칸마다 대조"
  },
  "guideTable": {

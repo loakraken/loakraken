@@ -156,6 +156,38 @@ class OpenApiIntegrationTest {
                     "/components/schemas/RosterCombatPowerResponse/properties/refreshAvailableAt/anyOf/1/type")
                 .asText())
         .isEqualTo("null");
+    // 팔찌·젬 효율 랭킹(L38·L39): 두 경로가 같은 스키마, 필수와 nullable.
+    for (var path : List.of("bracelets", "ark-grid-gems"))
+      assertThat(
+              document
+                  .at("/paths/~1api~1v1~1rankings~1" + path + "/get/responses/200/content")
+                  .toString())
+          .as(path)
+          .contains("ApiResponseStatsEfficiencyRankingResponse");
+    assertThat(
+            document.at("/components/schemas/StatsEfficiencyRankingResponse/required").toString())
+        .contains("meta", "kind", "ruleVersion", "population", "page", "size", "rows");
+    assertThat(
+            document
+                .at(
+                    "/components/schemas/StatsEfficiencyRankingResponse/properties/ruleVersion/anyOf/1/type")
+                .asText())
+        .isEqualTo("null");
+    assertThat(
+            document
+                .at("/components/schemas/StatsEfficiencyRankedCharacterResponse/required")
+                .toString())
+        .contains("rank", "characterName", "valuePercent", "observedAt", "topPercent", "tier");
+    for (var field : List.of("position", "topPercent", "tier"))
+      assertThat(
+              document
+                  .at(
+                      "/components/schemas/StatsEfficiencyRankedCharacterResponse/properties/"
+                          + field
+                          + "/anyOf/1/type")
+                  .asText())
+          .as(field)
+          .isEqualTo("null");
     // 아크 그리드 효율(L29·L39): 캐릭터 응답의 nullable 필드, 필수와 nullable.
     assertThat(
             document

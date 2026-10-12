@@ -25,6 +25,12 @@ public interface StatsPort {
   RankingPage ranking(
       StatsConditions conditions, Instant since, Metric metric, int offset, int limit);
 
+  /**
+   * 팔찌·젬 효율 랭킹(L38·L39). 저장된 효율 중 지금 규칙 버전(가장 최근에 관측해 저장한 행의 버전) 값만 센다. 처리정지 목록은 모집단에서 뺀다.
+   */
+  EfficiencyPage efficiencyRanking(
+      StatsConditions conditions, Instant since, EfficiencyKind kind, int offset, int limit);
+
   Coverage coverage();
 
   /** 이름이 같은 캐릭터가 여러 서버에 있으면 가장 최근에 갱신한 캐릭터. */
@@ -81,6 +87,42 @@ public interface StatsPort {
       BigDecimal combatPower) {}
 
   record RankingPage(long total, List<RankingRow> rows) {}
+
+  /** 효율 랭킹 종류(L38 팔찌, L39 젬 옵션 합계). 열 이름은 characters 테이블이다. */
+  enum EfficiencyKind {
+    BRACELET("bracelet_efficiency_pct", "bracelet_rule_version"),
+    ARK_GRID_GEM("ark_grid_gem_pct", "ark_grid_rule_version");
+
+    private final String column;
+    private final String versionColumn;
+
+    EfficiencyKind(String column, String versionColumn) {
+      this.column = column;
+      this.versionColumn = versionColumn;
+    }
+
+    public String column() {
+      return column;
+    }
+
+    public String versionColumn() {
+      return versionColumn;
+    }
+  }
+
+  record EfficiencyRow(
+      long rank,
+      String characterName,
+      String serverName,
+      String className,
+      String position,
+      BigDecimal itemLevel,
+      BigDecimal combatPower,
+      BigDecimal value,
+      Instant observedAt) {}
+
+  /** ruleVersion이 null이면 저장된 값이 아직 없다. */
+  record EfficiencyPage(long total, String ruleVersion, List<EfficiencyRow> rows) {}
 
   /**
    * 수집품 랭킹 행(#295). 원정대 단위면 대표(아이템 레벨이 가장 높은 공개 캐릭터), 캐릭터 단위면 그 캐릭터다. point·maxPoint는 원정대 합(공식

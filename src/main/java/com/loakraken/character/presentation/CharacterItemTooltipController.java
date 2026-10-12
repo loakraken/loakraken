@@ -31,7 +31,7 @@ public class CharacterItemTooltipController {
   @Operation(
       summary = "아이템 툴팁 나머지 줄(공식 호출 없음)",
       description =
-          "캐릭터 검색 응답에 넣지 않은 공식 Tooltip 나머지 줄(extraLines: 내구도·분해불가·설명·획득처 등)을 줍니다(#227). "
+          "캐릭터 검색 응답에 넣지 않은 공식 Tooltip 나머지 줄(extraLines: 내구도·분해불가·설명·획득처 등)을 줍니다. "
               + "공식 API를 부르지 않고 캐릭터 캐시만 읽습니다. 캐시가 없으면 404 CHARACTER_NOT_CACHED이며, 웹은 검색 응답의 짧은 필드만으로 툴팁을 그립니다. "
               + "항목은 검색 응답과 키로 잇습니다: equipment는 loadout.equipment 순번(index, 0부터)과 type, gems·cards는 slot, skills는 name. "
               + "줄이 없는 항목은 목록에서 뺍니다.")
@@ -59,7 +59,7 @@ public class CharacterItemTooltipController {
         CharacterItemTooltipsResponse.from(tooltips.tooltips(request.characterName())));
   }
 
-  @Schema(description = "아이템 툴팁 나머지 줄(#227)")
+  @Schema(description = "아이템 툴팁 나머지 줄")
   public record CharacterItemTooltipsResponse(
       String characterName,
       @Schema(description = "더 이상 쓰지 않음(늘 false)") boolean hidden,
@@ -72,9 +72,7 @@ public class CharacterItemTooltipController {
       List<SlotLinesResponse> gems,
       List<SlotLinesResponse> cards,
       List<SkillLinesResponse> skills,
-      @Schema(
-              description =
-                  "아크 그리드 코어·젬 툴팁 줄(#288). 키는 검색 응답 arkGrid.slots[].index와 그 gems[].index")
+      @Schema(description = "아크 그리드 코어·젬 툴팁 줄. 키는 검색 응답 arkGrid.slots[].index와 그 gems[].index")
           List<GridLinesResponse> arkGrid) {
     static CharacterItemTooltipsResponse from(CharacterItemTooltipService.Tooltips value) {
       return new CharacterItemTooltipsResponse(
@@ -161,7 +159,7 @@ public class CharacterItemTooltipController {
           List<String> extraLines,
       @Schema(
               description =
-                  "extraLines와 같은 길이로, 각 줄 바로 앞에 나온 공식 Tooltip 섹션 제목(예: '팔찌 효과', '아크 패시브 포인트 효과'). 앞에 섹션이 없으면 빈 문자열. 캐시가 이전 형식이면 빈 목록이라 웹은 지금처럼 끝에 둔다(#285)",
+                  "extraLines와 같은 길이로, 각 줄 바로 앞에 나온 공식 Tooltip 섹션 제목(예: '팔찌 효과', '아크 패시브 포인트 효과'). 앞에 섹션이 없으면 빈 문자열. 캐시가 이전 형식이면 빈 목록이라 웹은 지금처럼 끝에 둔다",
               example = "[\"\", \"팔찌 효과\", \"팔찌 효과\"]")
           List<String> extraLineSections) {}
 

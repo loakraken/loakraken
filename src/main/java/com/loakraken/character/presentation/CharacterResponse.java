@@ -45,7 +45,7 @@ public record CharacterResponse(
         BraceletEfficiencyResponse braceletEfficiency,
     @Schema(
             description =
-                "아크 그리드 효율(전투력 기준, L29·L39): 지금 전투력이 아크 그리드 코어와 젬 옵션을 모두 뺀 전투력보다 몇 % 높은지(지금 ÷ 뺀 전투력 − 1), 코어만의 합(coresPercent), 줄별 값(코어마다 그 코어만 뺐을 때, 마지막 줄은 젬 옵션 합계). 줄별 값은 그 줄만 뺐을 때의 값이라 곱 구조상 줄별 합은 전체 값과 같지 않습니다. 아크 그리드가 없으면 null")
+                "아크 그리드 효율(전투력 기준): 지금 전투력이 아크 그리드 코어와 젬 옵션을 모두 뺀 전투력보다 몇 % 높은지(지금 ÷ 뺀 전투력 − 1), 코어만의 합(coresPercent), 줄별 값(코어마다 그 코어만 뺐을 때, 마지막 줄은 젬 옵션 합계). 줄별 값은 그 줄만 뺐을 때의 값이라 곱 구조상 줄별 합은 전체 값과 같지 않습니다. 아크 그리드가 없으면 null")
         @NullableResponse
         ArkGridEfficiencyResponse arkGridEfficiency,
     @Schema(description = "외부 API에서 실제 수집한 UTC 시각. 캐시 조회에서도 유지됩니다.") Instant fetchedAt,
@@ -274,7 +274,8 @@ public record CharacterResponse(
           @NullableResponse
           BigDecimal percent,
       @Schema(description = "OK 또는 UNSUPPORTED(문자열)") String status,
-      @NullableResponse String reasonCode,
+      @Schema(description = "UNSUPPORTED 이유 코드(시뮬레이터·스펙업과 같은 코드). OK면 null") @NullableResponse
+          String reasonCode,
       @Schema(description = "계산하지 않은 이유(OK면 null)") @NullableResponse String reason) {}
 
   public record BraceletLineEfficiencyResponse(

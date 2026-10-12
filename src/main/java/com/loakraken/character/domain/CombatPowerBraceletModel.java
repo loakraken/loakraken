@@ -10,9 +10,8 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * 전투력 시뮬레이터 팔찌(#327). 계산 검증 2026-10-11 21:00 모델 확정, 표본
- * verification/combat-power/loalab-bracelet-2026-10-11.json, 계수 리소스
- * combat-power/bracelet-coefficients.json.
+ * 전투력 시뮬레이터 팔찌(#327). 계산 검증 2026-10-11 21:00 모델 확정, 표본 verification/combat-power/의 팔찌
+ * 표본(2026-10-11), 계수 리소스 combat-power/bracelet-coefficients.json.
  *
  * <p>팔찌 효과 줄마다 독립 배수다. 특수 옵션은 (1 + c/100), 전투 특성(치명·특화·신속)은 캐릭터 합 T에 대해 (1 + 0.0003·T), 팔찌 도약 포인트는
  * 도약 합 P에 대해 (1 + 0.002·P), "무기 공격력 +N"은 재련 모델의 W 항이다. 옵션은 공식 문구 속 숫자로 판단한다("3%"와 "3.0%"는 같은 옵션).

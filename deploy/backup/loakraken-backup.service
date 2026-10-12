@@ -1,5 +1,5 @@
 # 운영 DB 외부 백업(1회 실행). loakraken-backup.timer가 매일 실행한다.
-# 설치: docs/ops/backup.md
+# 설치: 운영 문서 backup
 [Unit]
 Description=LOAKraken production database offsite backup
 Wants=network-online.target

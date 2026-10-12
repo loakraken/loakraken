@@ -107,7 +107,7 @@ class RosterRankingIntegrationTest {
     assertThat(names(rows.at("/1/composition")))
         .containsExactly("원정가", "원정나", "원정다", "원정라", "원정마", "원정바");
     assertThat(response.body()).doesNotContain("원정제외").doesNotContain("원정오래");
-    assertThat(response.body()).doesNotContain(SiteNames.FORBIDDEN);
+    SiteNames.assertAbsent(response.body());
 
     var sum = data(get("/api/v1/rankings/rosters?aggregate=TOP6_SUM&server=" + encode(SERVER)));
     assertThat(sum.at("/rows/0/characterName").asText()).isEqualTo("원정가");

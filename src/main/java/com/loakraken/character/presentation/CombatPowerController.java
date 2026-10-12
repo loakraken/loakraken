@@ -179,7 +179,7 @@ public class CombatPowerController {
     }
   }
 
-  @Schema(description = "바꾼 항목 하나. kind마다 쓰는 필드가 다르다(docs/combat-power-simulator.md)")
+  @Schema(description = "바꾼 항목 하나. kind마다 쓰는 필드가 다르다")
   public record ChangeRequest(
       @NotNull CombatPowerSimulationService.Kind kind,
       @Schema(description = "보석 slot(GEM_LEVEL)") Integer slot,
@@ -210,7 +210,7 @@ public class CombatPowerController {
       @Schema(description = "현재 세팅을 읽은 캐릭터 캐시의 수집 시각(검색 응답 fetchedAt과 비교)") Instant fetchedAt,
       @Schema(description = "공식 전투력(armory CombatPower). 없으면 null") @NullableResponse
           BigDecimal before,
-      @Schema(description = "현재 세팅의 모델값(계산 검증·QA용, 화면 표시 안 함). 계산식 확정 전 null") @NullableResponse
+      @Schema(description = "현재 세팅의 모델값(검증용, 화면 표시 안 함). 계산식 확정 전 null") @NullableResponse
           BigDecimal modelBefore,
       @Schema(description = "바꾼 항목을 함께 적용한 전투력(계산된 항목만)") @NullableResponse BigDecimal after,
       @NullableResponse BigDecimal delta,
@@ -257,7 +257,7 @@ public class CombatPowerController {
       @Schema(description = "순서대로 적용했을 때의 증가분. UNSUPPORTED면 null") @NullableResponse
           BigDecimal delta,
       @Schema(allowableValues = {"OK", "UNSUPPORTED"}) String status,
-      @Schema(description = "근거 문장(사이트 이름 없음)") String basis,
+      @Schema(description = "근거 문장") String basis,
       @Schema(
               description = "UNSUPPORTED 이유 코드(문자열, 값이 늘 수 있음, 스펙업·전투력 기여와 같은 코드). OK면 null",
               example = "SUPPORTER_MODEL_PENDING")
@@ -282,7 +282,7 @@ public class CombatPowerController {
           PolishValuesResponse polishValues,
       @Schema(
               description =
-                  "팔찌 효과 교체에 쓰는 옵션 계열(#327). name을 BRACELET_EFFECT의 name으로, grades는 LOW·MID·HIGH별 공식 문구. 줄을 빼려면 name \"없음\"")
+                  "팔찌 효과 교체에 쓰는 옵션 계열. name을 BRACELET_EFFECT의 name으로, grades는 LOW·MID·HIGH별 공식 문구. 줄을 빼려면 name \"없음\"")
           List<BraceletOptionResponse> braceletOptions,
       List<String> notes) {
     static CombatPowerOptionsResponse from(CombatPowerSimulationService.Options value) {

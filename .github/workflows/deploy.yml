@@ -3,7 +3,7 @@ name: Deploy
 # 서버가 가져오는 배포(pull)의 "릴리스 지정" 단계다. 서버에 SSH로 접속하지 않는다.
 # GHCR 이미지 채널 태그(:production 또는 :staging)를 지정한 커밋 이미지로 옮긴다.
 # 운영 승인은 서버에서 한다(PM 총괄 결정 2026-10-10): 무료 플랜 비공개 저장소라 GitHub Environments 승인자를 쓸 수 없어,
-# 운영 서버는 사용자가 브라우저 SSH에서 pull/approve.sh로 승인한 릴리스만 배포한다(docs/ops/deploy.md "운영 승인").
+# 운영 서버는 사용자가 브라우저 SSH에서 pull/approve.sh로 승인한 릴리스만 배포한다(운영 문서 deploy "운영 승인").
 # 규칙: Claude 세션은 production으로 이 워크플로를 실행하지 않는다. 운영 릴리스 지정과 승인은 사용자가 한다.
 #
 # 롤백: 이전 sha- 태그로 이 워크플로를 다시 실행한다.

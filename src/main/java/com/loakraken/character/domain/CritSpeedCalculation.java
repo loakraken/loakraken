@@ -18,7 +18,7 @@ public final class CritSpeedCalculation {
   public static final String RULE_VERSION = "crit-speed-v7";
 
   /**
-   * 치명타 피해 앞(같은 문장)에 오면 조건부로 보고 합산하지 않는 말. 로펙·일로아는 "폭주 중"·"마력 해방 중"(각성 상태)은 넣고 "사신화 상태에서"· "페르소나
+   * 치명타 피해 앞(같은 문장)에 오면 조건부로 보고 합산하지 않는 말. 목표 사이트 2곳은 "폭주 중"·"마력 해방 중"(각성 상태)은 넣고 "사신화 상태에서"· "페르소나
    * 상태일 때"는 뺀다(계산 검증 표본 5명, 10-09).
    */
   private static final List<String> CONDITIONAL_STATE = List.of("상태에서", "상태일 때");
@@ -35,7 +35,7 @@ public final class CritSpeedCalculation {
   static final BigDecimal CRIT_CAP = new BigDecimal("100");
   static final BigDecimal SPEED_CAP = new BigDecimal("40");
 
-  /** 기본 치명타 피해 200%. 일로아·로펙 표시값(언새늘 208.40% = 200 + 팔찌 8.40)과 같은 규칙이다(2026-10-09 계산 검증). */
+  /** 기본 치명타 피해 200%. 목표 사이트 표시값(언새늘 208.40% = 200 + 팔찌 8.40)과 같은 규칙이다(2026-10-09 계산 검증). */
   static final BigDecimal BASE_CRIT_DAMAGE = new BigDecimal("200");
 
   static final BluntThornRule BLUNT_THORN_REFERENCE =
@@ -201,9 +201,9 @@ public final class CritSpeedCalculation {
   }
 
   /**
-   * 직업 상태 가정 표(#189). 공식 노드 문구가 "어떤 상태에서 치명타 적중률이 X%로 바뀐다"인 경우, 목표 사이트(일로아·클로아)는 그 상태를 가정해 X를 더한다.
-   * 표에 있는 노드만 가정으로 더하고(출처 kind=ASSUMED, 이름에 상태와 노드), 요청 classState=false면 뺀다. 같은 구조의 다른 직업은 계산 검증
-   * 전수 표로 이 목록에 더한다.
+   * 직업 상태 가정 표(#189). 공식 노드 문구가 "어떤 상태에서 치명타 적중률이 X%로 바뀐다"인 경우, 목표 사이트 2곳은 그 상태를 가정해 X를 더한다. 표에 있는
+   * 노드만 가정으로 더하고(출처 kind=ASSUMED, 이름에 상태와 노드), 요청 classState=false면 뺀다. 같은 구조의 다른 직업은 계산 검증 전수 표로 이
+   * 목록에 더한다.
    */
   record StateAssumption(String node, String state, Pattern pattern) {}
 
@@ -332,8 +332,8 @@ public final class CritSpeedCalculation {
       boolean optimal) {}
 
   /**
-   * 스킬별 치명타 적중률(#168, 계산 검증 규칙 10-09: 클로아 17/17). total = base(crit.observedRate) + backAttack(백 어택
-   * +10) + tripod(선택 트라이포드 "치명타 적중률이 X% 증가" 합), effective는 상한(100, 뭉툭한 가시 장착 시 그 상한) 적용. 공격 타입을
+   * 스킬별 치명타 적중률(#168, 계산 검증 규칙 10-09: 목표 사이트 17/17). total = base(crit.observedRate) + backAttack(백
+   * 어택 +10) + tripod(선택 트라이포드 "치명타 적중률이 X% 증가" 합), effective는 상한(100, 뭉툭한 가시 장착 시 그 상한) 적용. 공격 타입을
    * 모르거나 갱신 전 캐시라 트라이포드 문구가 없으면 해당 값과 total·effective가 null이다(추정 금지). conditional은 조건부 문구라 더하지 않은
    * 트라이포드다.
    */
@@ -1132,10 +1132,10 @@ public final class CritSpeedCalculation {
     return baseValue == null ? null : value.subtract(baseValue);
   }
 
-  /** 기민함: 기본 공격·이동 속도 증가량(상한 40 적용)에 비율을 곱한다. 일로아 "질풍노도 기민함"과 같은 기준(정답표 c09 12/48). */
+  /** 기민함: 기본 공격·이동 속도 증가량(상한 40 적용)에 비율을 곱한다. 목표 사이트의 "질풍노도 기민함"과 같은 기준(정답표 c09 12/48). */
   private static void agilitySources(BigDecimal[] agility, List<Source> sources) {
     if (agility[0] == null && agility[1] == null) return;
-    // "기본 … 속도 증가량"은 증가분만 합한다. 질량 증가(공격 속도 -10%) 같은 감소는 빼지 않는다(일로아·로펙 일치, 정답표 6-2).
+    // "기본 … 속도 증가량"은 증가분만 합한다. 질량 증가(공격 속도 -10%) 같은 감소는 빼지 않는다(목표 사이트 2곳 일치, 정답표 6-2).
     var move = increase(sources, Axis.MOVE_SPEED).min(SPEED_CAP);
     var attack = increase(sources, Axis.ATTACK_SPEED).min(SPEED_CAP);
     if (agility[0] != null)

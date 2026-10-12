@@ -34,7 +34,7 @@ public final class StatsResponses {
       StatsCoverageResponse coverage,
       @Schema(
               description =
-                  "population을 세는 단위(#295): CHARACTER(캐릭터), ROSTER(원정대), GUILD(길드). 문자열이며 값이 늘 수 있음",
+                  "population을 세는 단위: CHARACTER(캐릭터), ROSTER(원정대), GUILD(길드). 문자열이며 값이 늘 수 있음",
               example = "CHARACTER")
           String populationUnit) {
     static StatsMetaResponse from(Meta meta) {

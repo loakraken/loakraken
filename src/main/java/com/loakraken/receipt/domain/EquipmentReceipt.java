@@ -21,7 +21,7 @@ import java.util.Set;
 public final class EquipmentReceipt {
   public static final int FROM_STAGE = 10;
 
-  /** 등급별 산정 시작 단계. 업화는 +10부터, 전율은 +11부터 센다(로아와·일로아 모두 전율 +11 시작, 계산 검증 10-10 09:02 #218 A). */
+  /** 등급별 산정 시작 단계. 업화는 +10부터, 전율은 +11부터 센다(목표 사이트 2곳 모두 전율 +11 시작, 계산 검증 10-10 09:02 #218 A). */
   static int fromStage(RefiningRules.Grade grade) {
     return grade == RefiningRules.Grade.JEONYUL ? 11 : FROM_STAGE;
   }

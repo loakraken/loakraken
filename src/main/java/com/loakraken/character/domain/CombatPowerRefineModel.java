@@ -10,9 +10,8 @@ import java.util.Set;
 import java.util.regex.Pattern;
 
 /**
- * 전투력 시뮬레이터 재련 단계(#319). 계산 검증 2026-10-11 18:05 모델 확정, 표본
- * verification/combat-power/loalab-refine-model-2026-10-11.json. 근거·단계표는 리소스
- * combat-power/refine-coefficients.json.
+ * 전투력 시뮬레이터 재련 단계(#319). 계산 검증 2026-10-11 18:05 모델 확정, 표본 verification/combat-power/의 재련 모델
+ * 표본(2026-10-11). 근거·단계표는 리소스 combat-power/refine-coefficients.json.
  *
  * <p>공식 기본 공격력 B = (R + F)(1 + q), R = √(S·W/6). F = 팔 보호구 "기본 공격력 +N", q = 기본 공격력 %(보석 모델과 같은 값),
  * W = (무기 + 팔 보호구 무기 공격력 + 장신구 "무기 공격력 +N") × (1 + 장신구 "무기 공격력 x%" + 깨달음 카르마 레벨 × 0.1%), S = 6R²/W.
@@ -282,8 +281,7 @@ public final class CombatPowerRefineModel {
 
   /**
    * 부위 수치. 전율은 단계표(상급 0만). 업화는 round(T(5·일반 + 상급) × (1 + 30단계 2% + 40단계 3%))이고, 방어구 T = round(투구 T
-   * × 부위 배수), 5의 배수 사이 칸은 ⌈T(a) + (T(a + 5) − T(a)) × f(j)⌉, 무기는 확인된 칸만(#333, 표본
-   * loalab-advanced-refine-2026-10-11.json).
+   * × 부위 배수), 5의 배수 사이 칸은 ⌈T(a) + (T(a + 5) − T(a)) × f(j)⌉, 무기는 확인된 칸만(#333, 상급 재련 표본 2026-10-11).
    */
   public static BigDecimal stat(
       Coefficients c, String type, Family family, int level, int advanced) {

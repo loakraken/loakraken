@@ -86,7 +86,7 @@ class TitleEquipIntegrationTest {
     assertThat(data.at("/titles/0/equippedPercent").decimalValue()).isEqualByComparingTo("33.33");
     assertThat(data.at("/titles/1/title").asText()).isEqualTo("혼돈의 지배자");
     assertThat(response.body()).doesNotContain("칭호제외").doesNotContain("보유율");
-    assertThat(response.body()).doesNotContain(SiteNames.FORBIDDEN);
+    SiteNames.assertAbsent(response.body());
 
     var one =
         data(

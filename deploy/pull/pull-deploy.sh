@@ -172,7 +172,7 @@ if compose up -d --wait --wait-timeout 300 --remove-orphans; then
   rm -f .failed .pending
   printf '%s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$want" >> deploy-history.log
   notify "배포 완료: api=${api_digest##*@sha256:} web=${web_digest##*@sha256:}"
-  sync_units || log "systemd 유닛 갱신 실패(배포는 끝남). 수동: docs/ops/deploy.md pull 배포 설치"
+  sync_units || log "systemd 유닛 갱신 실패(배포는 끝남). 수동: 운영 문서 deploy pull 배포 설치"
   exit 0
 fi
 
@@ -184,7 +184,7 @@ if [[ -f images.prev.env ]]; then
   if compose up -d --wait --wait-timeout 300 --remove-orphans; then
     notify "배포 실패 → 직전 릴리스로 되돌림(헬스 확인 통과). 실패 릴리스는 다시 시도하지 않음"
   else
-    notify "배포 실패, 되돌리기도 실패. 즉시 확인 필요(docs/ops/deploy.md 롤백)"
+    notify "배포 실패, 되돌리기도 실패. 즉시 확인 필요(운영 문서 deploy 롤백)"
   fi
 else
   notify "첫 배포 실패. 되돌릴 이전 릴리스가 없음. 즉시 확인 필요"

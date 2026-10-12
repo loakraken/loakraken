@@ -210,7 +210,7 @@ public record CharacterLoadoutResponse(
       @NullableResponse String icon,
       @NullableResponse Integer level,
       @NullableResponse String grade,
-      @Schema(description = "공식 Tooltip 등급 줄(예: '전설 보석', #285)") @NullableResponse String titleLine,
+      @Schema(description = "공식 Tooltip 등급 줄(예: '전설 보석')") @NullableResponse String titleLine,
       @Schema(description = "공식 Tooltip 아이템 레벨") @NullableResponse Integer itemLevel,
       @Schema(description = "공식 Tooltip 티어") @NullableResponse Integer tier,
       @Schema(description = "공식 Tooltip 귀속·거래 줄(예: '캐릭터 귀속됨', '거래 불가')") List<String> tradeLines) {

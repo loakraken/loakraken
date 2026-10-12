@@ -479,11 +479,11 @@ public class SpecUpGoalService {
   private static SpecUpCost gemCost(
       Map<String, MarketAuctionService.GemCell> gems, Instant[] pricesAt, GemSlot gem, int next) {
     if (gem.level() == gem.original())
-      return SpecUpService.gemCost(gems, pricesAt, gem.kind(), gem.level(), next, gem.bound());
-    if (gem.kind() == null || !gems.containsKey(gem.kind() + ":" + next))
+      return SpecUpService.gemCost(gems, pricesAt, gem.priceKind(), gem.level(), next, gem.bound());
+    if (gem.priceKind() == null || !gems.containsKey(gem.priceKind() + ":" + next))
       return SpecUpCost.NO_PRICE_SOURCE;
-    var nextCell = gems.get(gem.kind() + ":" + next);
-    var previousCell = gems.get(gem.kind() + ":" + gem.level());
+    var nextCell = gems.get(gem.priceKind() + ":" + next);
+    var previousCell = gems.get(gem.priceKind() + ":" + gem.level());
     if (nextCell.cell() == null
         || nextCell.cell().minBuyPrice() == null
         || previousCell == null
@@ -567,6 +567,7 @@ public class SpecUpGoalService {
   record GemSlot(
       int slot,
       String kind,
+      String priceKind,
       int original,
       int level,
       boolean bound,
@@ -590,6 +591,7 @@ public class SpecUpGoalService {
       var gems = new LinkedHashMap<Integer, GemSlot>();
       if (loadout.gems() != null) {
         var skills = new HashMap<Integer, String>();
+        var effects = SpecUpService.gemEffects(loadout);
         if (loadout.gems().effects() != null)
           for (var skill : loadout.gems().effects().skills())
             if (skill != null && skill.gemSlot() != null && skill.name() != null)
@@ -604,6 +606,7 @@ public class SpecUpGoalService {
               new GemSlot(
                   gem.slot(),
                   kind,
+                  SpecUpService.priceKind(kind, effects.get(gem.slot())),
                   gem.level(),
                   gem.level(),
                   SpecUpService.bound(gem),
@@ -666,6 +669,7 @@ public class SpecUpGoalService {
                 new GemSlot(
                     gem.slot(),
                     gem.kind(),
+                    gem.priceKind(),
                     gem.original(),
                     change.level(),
                     gem.bound(),

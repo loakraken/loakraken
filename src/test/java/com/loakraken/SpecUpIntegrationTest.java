@@ -635,6 +635,42 @@ class SpecUpIntegrationTest {
     assertThat(missing.body()).contains("CHARACTER_NOT_CACHED");
   }
 
+  @Test
+  void 광휘_보석은_효과와_같은_종류의_시세로_비용을_낸다() throws Exception {
+    // 공식 경매장 보석 검색에는 광휘가 없다. 피해 증가 광휘 = 겁화 시세, 귀속이면 판매가를 빼지 않는다(P0 #455 B1).
+    when(auctions.cachedGems()).thenReturn(gemCells(true));
+    search("스펙광휘");
+    var guide =
+        mapper
+            .readTree(get("/api/v1/characters/spec-up?characterName=" + encode("스펙광휘")).body())
+            .path("data");
+    var gem = find(guide.path("candidates"), "GEM_LEVEL:0:9");
+    assertThat(gem.path("target").asText()).isEqualTo("테스트 스킬 · 8레벨 광휘");
+    assertThat(gem.at("/cost/code").asText()).isEqualTo("GEM_UPGRADE");
+    assertThat(gem.at("/cost/amount").asLong()).isEqualTo(620_000);
+    var goal =
+        mapper
+            .readTree(
+                get("/api/v1/characters/spec-up/goal?characterName="
+                        + encode("스펙광휘")
+                        + "&targetCombatPower=3030")
+                    .body())
+            .path("data");
+    assertThat(goal.path("totalCost").asLong()).isEqualTo(3_000_000 - 380_000);
+    assertThat(goal.at("/steps/1/cost/code").asText()).isEqualTo("GEM_STEP");
+
+    search("스펙광휘귀속");
+    var bound =
+        find(
+            mapper
+                .readTree(
+                    get("/api/v1/characters/spec-up?characterName=" + encode("스펙광휘귀속")).body())
+                .at("/data/candidates"),
+            "GEM_LEVEL:0:9");
+    assertThat(bound.at("/cost/code").asText()).isEqualTo("GEM_BUY_BOUND");
+    assertThat(bound.at("/cost/amount").asLong()).isEqualTo(1_000_000);
+  }
+
   private void search(String name) throws Exception {
     when(detailsPort.fetch(anyString()))
         .thenAnswer(invocation -> fetched(invocation.getArgument(0)));
@@ -779,7 +815,16 @@ class SpecUpIntegrationTest {
                     name.contains("각인") ? "적에게 주는 피해가 23.25% 증가한다." : "설명")));
     var gems =
         new CharacterLoadout.Gems(
-            List.of(new CharacterLoadout.Gem(0, "8레벨 겁화의 보석", null, 8, "고대")),
+            List.of(
+                new CharacterLoadout.Gem(
+                    0,
+                    // 광휘 보석(효과는 피해 증가), 이름에 "귀속"이 있으면 귀속 광휘.
+                    name.contains("광휘")
+                        ? name.contains("귀속") ? "8레벨 광휘의 보석 (귀속)" : "8레벨 광휘의 보석"
+                        : "8레벨 겁화의 보석",
+                    null,
+                    8,
+                    "고대")),
             new CharacterLoadout.GemEffects(
                 "기본 공격력 총합 : 0.80%",
                 List.of(

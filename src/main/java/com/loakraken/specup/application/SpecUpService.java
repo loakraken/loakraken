@@ -217,6 +217,7 @@ public class SpecUpService {
       List<Planned> planned) {
     if (loadout.gems() == null) return;
     var skills = new HashMap<Integer, String>();
+    var effects = gemEffects(loadout);
     if (loadout.gems().effects() != null)
       for (var skill : loadout.gems().effects().skills())
         if (skill != null && skill.gemSlot() != null && skill.name() != null)
@@ -225,6 +226,7 @@ public class SpecUpService {
       if (gem == null || gem.slot() == null || gem.level() == null || gem.level() >= 10) continue;
       var matcher = gem.name() == null ? null : GEM.matcher(gem.name());
       String kind = matcher != null && matcher.find() ? matcher.group(2) : null;
+      String priceKind = priceKind(kind, effects.get(gem.slot()));
       String skill = skills.get(gem.slot());
       String label = gem.level() + "레벨 " + (kind == null ? "보석" : kind);
       String target = skill == null ? "보석 " + gem.slot() + "번 · " + label : skill + " · " + label;
@@ -241,8 +243,33 @@ public class SpecUpService {
                 gem.grade(),
                 skill,
                 change(Kind.GEM_LEVEL, gem.slot(), null, next, null, null),
-                gemCost(prices, pricesAt, kind, gem.level(), next, bound(gem))));
+                gemCost(prices, pricesAt, priceKind, gem.level(), next, bound(gem))));
     }
+  }
+
+  /** 보석 칸 → 공식 보석 효과 문구(armory Effects.Skills의 Description). */
+  static Map<Integer, List<String>> gemEffects(CharacterLoadout loadout) {
+    var effects = new HashMap<Integer, List<String>>();
+    if (loadout.gems() != null && loadout.gems().effects() != null)
+      for (var skill : loadout.gems().effects().skills())
+        if (skill != null && skill.gemSlot() != null)
+          effects.putIfAbsent(skill.gemSlot(), skill.description());
+    return effects;
+  }
+
+  /**
+   * 비용에 쓸 시세 종류. 광휘 보석은 공식 경매장 보석 검색에 종류가 없어("광휘" 검색 0건, 계산 검증 2026-10-13 확인) 그 칸 효과와 같은 종류의
+   * 시세를 쓴다: "피해 N% 증가" → 겁화, "재사용 대기시간 N% 감소" → 작열. 효과를 읽지 못하면 null(비용 없음, NO_PRICE_SOURCE).
+   */
+  static String priceKind(String kind, List<String> effects) {
+    if (!"광휘".equals(kind)) return kind;
+    if (effects == null) return null;
+    for (var line : effects) {
+      if (line == null) continue;
+      if (line.contains("재사용 대기시간") && line.contains("감소")) return "작열";
+      if (line.contains("피해") && line.contains("증가")) return "겁화";
+    }
+    return null;
   }
 
   static SpecUpCost gemCost(

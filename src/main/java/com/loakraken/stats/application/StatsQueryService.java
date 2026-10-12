@@ -911,7 +911,6 @@ public class StatsQueryService {
       BigDecimal topPercent,
       Tier tier) {}
 
-  /** ruleVersion이 null이면 저장된 효율이 아직 없다(rows 빈 목록). */
   public record EfficiencyRankingResult(
       Meta meta,
       StatsPort.EfficiencyKind kind,

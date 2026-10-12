@@ -26,7 +26,7 @@ public interface StatsPort {
       StatsConditions conditions, Instant since, Metric metric, int offset, int limit);
 
   /**
-   * 팔찌·젬 효율 랭킹(L38·L39). 저장된 효율 중 지금 규칙 버전(가장 최근에 관측해 저장한 행의 버전) 값만 센다. 처리정지 목록은 모집단에서 뺀다.
+   * 팔찌·젬 효율 랭킹(L38·L39). 저장된 효율 중 지금 규칙 버전({@link EfficiencyKind#ruleVersion()}) 값만 센다. 처리정지 목록은 모집단에서 뺀다.
    */
   EfficiencyPage efficiencyRanking(
       StatsConditions conditions, Instant since, EfficiencyKind kind, int offset, int limit);
@@ -88,17 +88,31 @@ public interface StatsPort {
 
   record RankingPage(long total, List<RankingRow> rows) {}
 
-  /** 효율 랭킹 종류(L38 팔찌, L39 젬 옵션 합계). 열 이름은 characters 테이블이다. */
+  /**
+   * 효율 랭킹 종류(L38 팔찌, L39 젬 옵션 합계). 열 이름은 characters 테이블이고, 지금 규칙 버전은 캐릭터 모듈이 저장할 때 쓰는 공통 상수다.
+   */
   enum EfficiencyKind {
-    BRACELET("bracelet_efficiency_pct", "bracelet_rule_version"),
-    ARK_GRID_GEM("ark_grid_gem_pct", "ark_grid_rule_version");
+    BRACELET(
+        "bracelet_efficiency_pct",
+        "bracelet_rule_version",
+        com.loakraken.common.api.EfficiencyRuleVersions.COMBAT_POWER_SIM),
+    ARK_GRID_GEM(
+        "ark_grid_gem_pct",
+        "ark_grid_rule_version",
+        com.loakraken.common.api.EfficiencyRuleVersions.ARK_GRID);
 
     private final String column;
     private final String versionColumn;
+    private final String ruleVersion;
 
-    EfficiencyKind(String column, String versionColumn) {
+    EfficiencyKind(String column, String versionColumn, String ruleVersion) {
       this.column = column;
       this.versionColumn = versionColumn;
+      this.ruleVersion = ruleVersion;
+    }
+
+    public String ruleVersion() {
+      return ruleVersion;
     }
 
     public String column() {
@@ -121,7 +135,6 @@ public interface StatsPort {
       BigDecimal value,
       Instant observedAt) {}
 
-  /** ruleVersion이 null이면 저장된 값이 아직 없다. */
   record EfficiencyPage(long total, String ruleVersion, List<EfficiencyRow> rows) {}
 
   /**

@@ -271,9 +271,7 @@ public final class StatsResponses {
       StatsMetaResponse meta,
       @Schema(description = "BRACELET(팔찌 효율) 또는 ARK_GRID_GEM(젬 옵션 합계 효율)", allowableValues = {"BRACELET", "ARK_GRID_GEM"})
           String kind,
-      @NullableResponse
-          @Schema(description = "순위에 쓴 계산 규칙 버전. 이 버전으로 계산된 값만 셉니다. 저장된 값이 아직 없으면 null")
-          String ruleVersion,
+      @Schema(description = "순위에 쓴 계산 규칙 버전. 이 버전으로 계산된 값만 셉니다") String ruleVersion,
       @Schema(
               description =
                   "순위 대상: 캐릭터 검색으로 장비를 관측해 효율을 계산한 캐릭터(딜러, 계산이 된 값만)입니다. 수집기만 거친 캐릭터는 들어가지 않습니다. 계산 모델이 바뀌면 다음 관측 때 갱신된 캐릭터부터 다시 셉니다.")

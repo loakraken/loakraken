@@ -169,12 +169,6 @@ class OpenApiIntegrationTest {
         .contains("meta", "kind", "ruleVersion", "population", "page", "size", "rows");
     assertThat(
             document
-                .at(
-                    "/components/schemas/StatsEfficiencyRankingResponse/properties/ruleVersion/anyOf/1/type")
-                .asText())
-        .isEqualTo("null");
-    assertThat(
-            document
                 .at("/components/schemas/StatsEfficiencyRankedCharacterResponse/required")
                 .toString())
         .contains("rank", "characterName", "valuePercent", "observedAt", "topPercent", "tier");

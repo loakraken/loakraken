@@ -711,19 +711,8 @@ class PostgresStatsRepository implements StatsPort {
       StatsConditions conditions, Instant since, EfficiencyKind kind, int offset, int limit) {
     String column = kind.column();
     String versionColumn = kind.versionColumn();
-    // 지금 규칙 버전: 앱은 늘 지금 버전으로 저장하므로 가장 최근에 관측해 저장한 행의 버전이다(모델이 바뀌면 다음 관측부터 새 버전만 센다).
-    var version =
-        jdbc.sql(
-                "SELECT "
-                    + versionColumn
-                    + " FROM characters WHERE "
-                    + versionColumn
-                    + " IS NOT NULL AND efficiency_observed_at IS NOT NULL"
-                    + " ORDER BY efficiency_observed_at DESC LIMIT 1")
-            .query(String.class)
-            .optional()
-            .orElse(null);
-    if (version == null) return new EfficiencyPage(0, null, List.of());
+    // 지금 규칙 버전(공통 상수) 값만 센다. 모델이 바뀌면 다음 관측 때 다시 저장된 캐릭터부터 들어간다.
+    var version = kind.ruleVersion();
     var rows = new ArrayList<EfficiencyRow>();
     long[] total = {0};
     String filter = " WHERE " + column + " IS NOT NULL AND " + versionColumn + " = :version";

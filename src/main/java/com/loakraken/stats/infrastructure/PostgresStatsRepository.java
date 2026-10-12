@@ -707,6 +707,59 @@ class PostgresStatsRepository implements StatsPort {
   }
 
   @Override
+  public EfficiencyPage efficiencyRanking(
+      StatsConditions conditions, Instant since, EfficiencyKind kind, int offset, int limit) {
+    String column = kind.column();
+    String versionColumn = kind.versionColumn();
+    // 지금 규칙 버전(공통 상수) 값만 센다. 모델이 바뀌면 다음 관측 때 다시 저장된 캐릭터부터 들어간다.
+    var version = kind.ruleVersion();
+    var rows = new ArrayList<EfficiencyRow>();
+    long[] total = {0};
+    String filter = " WHERE " + column + " IS NOT NULL AND " + versionColumn + " = :version";
+    population(conditions, since, true)
+        .statement(
+            "SELECT character_name, server_name, class_name, position, item_level, combat_power, "
+                + column
+                + " AS value, efficiency_observed_at, RANK() OVER (ORDER BY "
+                + column
+                + " DESC) AS rnk, COUNT(*) OVER () AS total FROM pop"
+                + filter
+                + " ORDER BY "
+                + column
+                + " DESC, combat_power DESC, character_name, server_name LIMIT :limit OFFSET :offset",
+            jdbc)
+        .param("version", version)
+        .param("limit", limit)
+        .param("offset", offset)
+        .query(
+            (ResultSet row) -> {
+              total[0] = row.getLong("total");
+              var observed =
+                  row.getObject("efficiency_observed_at", java.time.OffsetDateTime.class);
+              rows.add(
+                  new EfficiencyRow(
+                      row.getLong("rnk"),
+                      row.getString("character_name"),
+                      row.getString("server_name"),
+                      row.getString("class_name"),
+                      row.getString("position"),
+                      row.getBigDecimal("item_level"),
+                      row.getBigDecimal("combat_power"),
+                      row.getBigDecimal("value"),
+                      observed == null ? null : observed.toInstant()));
+            });
+    // 요청 페이지가 범위를 넘으면 행이 없어 total을 따로 센다.
+    if (rows.isEmpty())
+      total[0] =
+          population(conditions, since, true)
+              .statement("SELECT COUNT(*) FROM pop" + filter, jdbc)
+              .param("version", version)
+              .query(Long.class)
+              .single();
+    return new EfficiencyPage(total[0], version, rows);
+  }
+
+  @Override
   public Coverage coverage() {
     return jdbc.sql(
             """
@@ -827,7 +880,9 @@ class PostgresStatsRepository implements StatsPort {
               + " AND (e.server_name IS NULL OR e.server_name = c.server_name))");
     String cte =
         "WITH pop AS (SELECT c.character_name, c.server_name, c.class_name, c.item_level,"
-            + " c.combat_power, c.position, c.gem_mean_level FROM characters c WHERE "
+            + " c.combat_power, c.position, c.gem_mean_level, c.bracelet_efficiency_pct,"
+            + " c.bracelet_rule_version, c.ark_grid_gem_pct, c.ark_grid_rule_version,"
+            + " c.efficiency_observed_at FROM characters c WHERE "
             + where
             + ") ";
     return new Population(cte, params);

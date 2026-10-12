@@ -507,6 +507,51 @@ public class StatsQueryService {
   }
 
   /**
+   * 팔찌·젬 효율 랭킹(L38·L39). 모집단은 전투력 랭킹과 같은 조건(필터·기간·처리정지 제외)에, armory를 관측해 효율을 저장한(검색된) 캐릭터 중 지금 규칙
+   * 버전 값이 있는 캐릭터다. 공식 호출 없음.
+   */
+  public EfficiencyRankingResult efficiencyRanking(
+      StatsConditions conditions, StatsPort.EfficiencyKind kind, int page, int size) {
+    int offset = (page - 1) * size;
+    if (offset > MAX_RANKING_OFFSET)
+      throw new BusinessException(StatsErrorCode.STATS_INVALID_RANGE);
+    return cached(
+        "efficiency-ranking:" + kind + ":" + page + ":" + size + ":" + key(conditions),
+        EfficiencyRankingResult.class,
+        () -> {
+          var now = clock.instant();
+          var result =
+              stats.efficiencyRanking(conditions, conditions.since(now), kind, offset, size);
+          var meta = meta(conditions, result.total(), now);
+          boolean ready = meta.sampleStatus() == SampleStatus.READY;
+          return new EfficiencyRankingResult(
+              meta,
+              kind,
+              result.ruleVersion(),
+              page,
+              size,
+              result.rows().stream()
+                  .map(
+                      row -> {
+                        var top = ready ? StatsRules.topPercent(row.rank(), result.total()) : null;
+                        return new EfficiencyRankedCharacter(
+                            row.rank(),
+                            row.characterName(),
+                            row.serverName(),
+                            row.className(),
+                            row.position(),
+                            row.itemLevel(),
+                            row.combatPower(),
+                            row.value(),
+                            row.observedAt(),
+                            top,
+                            top == null ? null : Tier.of(top));
+                      })
+                  .toList());
+        });
+  }
+
+  /**
    * 캐릭터의 전체·서버·직업·서버 내 직업 순위. 캐릭터는 이 모집단 조건(필터)에 들어 있어야 순위가 나온다. 순위 모집단은 처리정지 목록을 뺀 것이라 랭킹 목록의 순위와
    * 같다. 처리정지 목록에 있는 본인은 관측이 없는 캐릭터와 같은 404다(#363). rankVisibility는 늘 VISIBLE이다.
    */
@@ -853,6 +898,27 @@ public class StatsQueryService {
 
   public record RankingResult(
       Meta meta, Metric metric, int page, int size, List<RankedCharacter> rows) {}
+
+  public record EfficiencyRankedCharacter(
+      long rank,
+      String characterName,
+      String serverName,
+      String className,
+      String position,
+      BigDecimal itemLevel,
+      BigDecimal combatPower,
+      BigDecimal value,
+      java.time.Instant observedAt,
+      BigDecimal topPercent,
+      Tier tier) {}
+
+  public record EfficiencyRankingResult(
+      Meta meta,
+      StatsPort.EfficiencyKind kind,
+      String ruleVersion,
+      int page,
+      int size,
+      List<EfficiencyRankedCharacter> rows) {}
 
   public record RankEntry(
       Metric metric,

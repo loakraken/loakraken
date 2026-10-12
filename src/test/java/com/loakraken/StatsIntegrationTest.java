@@ -9,6 +9,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
@@ -279,6 +280,115 @@ class StatsIntegrationTest {
     } finally {
       jdbc.sql("DELETE FROM public_exclusion WHERE character_name = '통계캐34'").update();
     }
+  }
+
+  @Test
+  void 팔찌_젬_효율_랭킹은_지금_규칙_버전_값만_높은_순으로_세고_처리정지는_뺀다() throws Exception {
+    // L38·L39: 저장된 효율 중 지금 규칙 버전(공통 상수) 값만 센다.
+    표본();
+    var t = Instant.now();
+    efficiency("통계캐1", "10.00", "sim-old", null, null, t.minus(Duration.ofHours(2)));
+    efficiency(
+        "통계캐2",
+        "14.42",
+        com.loakraken.common.api.EfficiencyRuleVersions.COMBAT_POWER_SIM,
+        "4.27",
+        com.loakraken.common.api.EfficiencyRuleVersions.ARK_GRID,
+        t.minus(Duration.ofHours(1)));
+    efficiency(
+        "통계캐3",
+        "12.00",
+        com.loakraken.common.api.EfficiencyRuleVersions.COMBAT_POWER_SIM,
+        "6.10",
+        com.loakraken.common.api.EfficiencyRuleVersions.ARK_GRID,
+        t.minus(Duration.ofMinutes(50)));
+    efficiency(
+        "통계캐5",
+        "12.00",
+        com.loakraken.common.api.EfficiencyRuleVersions.COMBAT_POWER_SIM,
+        null,
+        null,
+        t.minus(Duration.ofMinutes(40)));
+    efficiency(
+        "통계캐34",
+        "20.00",
+        com.loakraken.common.api.EfficiencyRuleVersions.COMBAT_POWER_SIM,
+        null,
+        null,
+        t.minus(Duration.ofMinutes(30)));
+    var bracelets = data("/api/v1/rankings/bracelets?size=10&server=" + encode(SERVER));
+    assertThat(bracelets.path("kind").asText()).isEqualTo("BRACELET");
+    assertThat(bracelets.path("ruleVersion").asText())
+        .isEqualTo(com.loakraken.common.api.EfficiencyRuleVersions.COMBAT_POWER_SIM);
+    assertThat(bracelets.path("populationNote").asText()).isNotBlank();
+    // 옛 버전(통계캐1)은 빠지고, 동률(12.00)은 같은 순위다.
+    assertThat(bracelets.at("/meta/population").asLong()).isEqualTo(4);
+    assertThat(bracelets.at("/rows/0/characterName").asText()).isEqualTo("통계캐34");
+    assertThat(bracelets.at("/rows/0/valuePercent").decimalValue()).isEqualByComparingTo("20.00");
+    assertThat(bracelets.at("/rows/1/characterName").asText()).isEqualTo("통계캐2");
+    assertThat(bracelets.at("/rows/2/rank").asLong()).isEqualTo(3);
+    assertThat(bracelets.at("/rows/3/rank").asLong()).isEqualTo(3);
+    assertThat(bracelets.at("/rows/0/observedAt").asText()).isNotBlank();
+    ApiContractFixture.write(
+        "rankings-bracelets.json",
+        get("/api/v1/rankings/bracelets?size=10&server=" + encode(SERVER)).body());
+
+    var gems = data("/api/v1/rankings/ark-grid-gems?size=10&server=" + encode(SERVER));
+    assertThat(gems.path("kind").asText()).isEqualTo("ARK_GRID_GEM");
+    assertThat(gems.path("ruleVersion").asText())
+        .isEqualTo(com.loakraken.common.api.EfficiencyRuleVersions.ARK_GRID);
+    assertThat(gems.at("/rows").size()).isEqualTo(2);
+    assertThat(gems.at("/rows/0/characterName").asText()).isEqualTo("통계캐3");
+    assertThat(gems.at("/rows/1/valuePercent").decimalValue()).isEqualByComparingTo("4.27");
+
+    // B5: 처리정지 목록 캐릭터는 빠진다.
+    jdbc.sql(
+            "INSERT INTO public_exclusion (character_name, server_name, reason_code) VALUES ('통계캐34', :s, 'REQUEST')")
+        .param("s", SERVER)
+        .update();
+    try {
+      var keys = redis.keys("stats:v1:*");
+      if (keys != null && !keys.isEmpty()) redis.delete(keys);
+      var excluded = data("/api/v1/rankings/bracelets?size=10&server=" + encode(SERVER));
+      assertThat(excluded.at("/meta/population").asLong()).isEqualTo(3);
+      assertThat(excluded.at("/rows/0/characterName").asText()).isEqualTo("통계캐2");
+      assertThat(excluded.toString()).doesNotContain("통계캐34");
+    } finally {
+      jdbc.sql("DELETE FROM public_exclusion WHERE character_name = '통계캐34'").update();
+    }
+  }
+
+  @Test
+  void 저장된_효율이_없으면_빈_랭킹이다() throws Exception {
+    표본();
+    var empty = data("/api/v1/rankings/ark-grid-gems?server=" + encode(SERVER));
+    assertThat(empty.path("ruleVersion").asText())
+        .isEqualTo(com.loakraken.common.api.EfficiencyRuleVersions.ARK_GRID);
+    assertThat(empty.at("/rows").size()).isZero();
+  }
+
+  private void efficiency(
+      String name,
+      String bracelet,
+      String braceletVersion,
+      String gem,
+      String gemVersion,
+      Instant observedAt) {
+    jdbc.sql(
+            """
+        UPDATE characters SET bracelet_efficiency_pct = CAST(:bracelet AS NUMERIC),
+          bracelet_rule_version = :bv, ark_grid_gem_pct = CAST(:gem AS NUMERIC),
+          ark_grid_rule_version = :gv, efficiency_observed_at = :at
+        WHERE character_name = :name AND server_name = :server
+        """)
+        .param("bracelet", bracelet == null ? null : new BigDecimal(bracelet))
+        .param("bv", braceletVersion)
+        .param("gem", gem == null ? null : new BigDecimal(gem))
+        .param("gv", gemVersion)
+        .param("at", observedAt.atOffset(ZoneOffset.UTC))
+        .param("name", name)
+        .param("server", SERVER)
+        .update();
   }
 
   private static JsonNode entry(JsonNode rank, String metric, String scope) {

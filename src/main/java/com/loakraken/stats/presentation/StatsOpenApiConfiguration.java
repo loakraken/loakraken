@@ -20,6 +20,7 @@ class StatsOpenApiConfiguration {
               StatsResponses.StatsDistributionResponse.class,
               StatsResponses.StatsSnapshotsResponse.class,
               StatsResponses.StatsRankingResponse.class,
+              StatsResponses.StatsEfficiencyRankingResponse.class,
               StatsResponses.StatsCharacterRankResponse.class))
         ResponseContracts.apply(type, schemas);
     };

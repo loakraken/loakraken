@@ -823,7 +823,7 @@ public class CombatPowerSimulationService {
         text("option", change.option());
         grade(change.grade());
         var current = item.detail().polishEffects().get(change.line());
-        var value = polishValue(item.type(), change.option(), change.grade());
+        var value = polishValue(polishValues, item.type(), change.option(), change.grade(), current);
         var option = optionName(change.option());
         var from = CombatPowerPolishModel.line(current.name(), current.value());
         var to = value == null ? null : CombatPowerPolishModel.line(option, value);
@@ -1014,9 +1014,18 @@ public class CombatPowerSimulationService {
    * 연마 수치 표(polish-values)에서 부위·옵션·등급의 공식 수치. 같은 부위에 같은 이름의 %·고정값 옵션이 둘 다 있으면(귀걸이 공격력·무기 공격력) % 쪽은
    * 옵션 끝에 " %"를 붙여 고른다(예: "공격력 %"). 없으면 null.
    */
-  private String polishValue(String part, String option, String grade) {
-    boolean percent = option.strip().endsWith("%");
+  static String polishValue(
+      CombatPowerPolishValues polishValues,
+      String part,
+      String option,
+      String grade,
+      CharacterLoadout.PolishEffect current) {
     var name = optionName(option);
+    // 같은 줄의 등급만 바꾸면(웹 시뮬레이터) 옵션 이름이 지금 줄과 같다. 그때는 지금 줄 값이 %인지로 고르고, 옵션을 바꿀 때만 끝의 " %" 표시를 본다.
+    boolean percent =
+        current != null && name.equals(current.name()) && !option.strip().endsWith("%")
+            ? current.value() != null && current.value().strip().endsWith("%")
+            : option.strip().endsWith("%");
     var matches =
         polishValues.options().stream()
             .filter(value -> value.option().equals(name) && value.parts().contains(part))

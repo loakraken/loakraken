@@ -245,7 +245,7 @@
     "polishStage": 3,
     "mainStat": 16009,
     "rangePct": 31.02,
-    "targetSitePct": 31.02,
+    "refPct": 31.02,
     "match": true
    },
    {
@@ -253,7 +253,7 @@
     "polishStage": 3,
     "mainStat": 13765,
     "rangePct": 94.05,
-    "targetSitePct": 94.05,
+    "refPct": 94.05,
     "match": true
    },
    {
@@ -261,7 +261,7 @@
     "polishStage": 3,
     "mainStat": 12036,
     "rangePct": 11.04,
-    "targetSitePct": 11.04,
+    "refPct": 11.04,
     "match": true
    },
    {
@@ -269,7 +269,7 @@
     "polishStage": 3,
     "mainStat": 12220,
     "rangePct": 65.01,
-    "targetSitePct": 65.01,
+    "refPct": 65.01,
     "match": true
    },
    {
@@ -277,7 +277,7 @@
     "polishStage": 3,
     "mainStat": 12046,
     "rangePct": 56.02,
-    "targetSitePct": 56.02,
+    "refPct": 56.02,
     "match": true
    }
   ],

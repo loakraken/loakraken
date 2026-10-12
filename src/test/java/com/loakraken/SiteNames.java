@@ -54,7 +54,8 @@ public final class SiteNames {
     }
     var names = new ArrayList<String>();
     for (var line : text.split("\\R")) {
-      var name = line.strip();
+      // 줄 앞의 분류 표시(예: "site: ", "character: ")는 떼고 이름만 쓴다.
+      var name = line.strip().replaceFirst("^[a-z]+:\\s+", "");
       if (!name.isEmpty() && !name.startsWith("#")) names.add(name);
     }
     return List.copyOf(names);

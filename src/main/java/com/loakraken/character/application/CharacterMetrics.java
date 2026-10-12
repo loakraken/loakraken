@@ -39,7 +39,7 @@ public class CharacterMetrics {
         .increment();
   }
 
-  /** 원정대 전투력 불러오기 결과(L19): ok·partial·limited·cooldown. */
+  /** 원정대 전투력 불러오기 결과: ok·partial·limited·cooldown. */
   public void rosterRefresh(String outcome) {
     registry.counter("loakraken.character.roster_refresh", "outcome", outcome).increment();
   }

@@ -1,5 +1,5 @@
 # LOAKraken 운영 스택 초안: 사업자와 무관한 Linux 서버 1대 + docker compose.
-# 절차·비밀 파일 준비는 docs/ops/deploy.md를 따른다.
+# 절차·비밀 파일 준비는 운영 문서 deploy를 따른다.
 #
 #   docker compose -f compose.prod.yaml --env-file stack.env up -d --wait
 #
@@ -67,7 +67,7 @@ services:
       # 기능 플래그(web #233): 치명 계산 도구(치적) 노출. on|off, 비우면 web 기본값(SITE_URL이 운영 주소일 때만 숨김).
       # 운영 stack.env는 off를 명시한다(PM 총괄 결정 10-09: 첫 운영 배포 제외). 스테이징은 비워 두어 보인다.
       CRIT_SPEED_TOOL: "${CRIT_SPEED_TOOL:-}"
-      # 전투력 시뮬레이터 화면(web #365). on|off, 비우면 web 기본값. 운영은 공개 기준(로아랩 대조) 전까지 off(백엔드 COMBAT_POWER_SIM_ENABLED=false와 이중 숨김).
+      # 전투력 시뮬레이터 화면(web #365). on|off, 비우면 web 기본값. 운영은 공개 기준(목표 사이트 대조) 전까지 off(백엔드 COMBAT_POWER_SIM_ENABLED=false와 이중 숨김).
       COMBAT_POWER_SIM: "${COMBAT_POWER_SIM:-}"
       # 원정대 영수증 화면(web). on|off, 비우면 web 기본값. 운영은 계산 재대조 전까지 off(PM 총괄 10-11, api RECEIPT_ENABLED=false와 함께).
       RECEIPT_TOOL: "${RECEIPT_TOOL:-}"
@@ -77,7 +77,7 @@ services:
       ROSTER_RANKING: "${ROSTER_RANKING:-}"
       # 캐릭터 화면의 전투정보실 페이지 정보 요청(web #519). on|off, 비우면 운영 호스트에서 꺼짐(요청 안 보냄). 백엔드 플래그와 함께 켠다.
       ARMORY_PAGE: "${ARMORY_PAGE:-}"
-      # Node 힙 상한. 컨테이너 한도(WEB_MEM_LIMIT)보다 작게 둬 한도에 닿기 전에 GC가 돈다(2GB 서버 기준, docs/ops/deploy.md "메모리 예산").
+      # Node 힙 상한. 컨테이너 한도(WEB_MEM_LIMIT)보다 작게 둬 한도에 닿기 전에 GC가 돈다(2GB 서버 기준, 운영 문서 deploy "메모리 예산").
       NODE_OPTIONS: "${WEB_NODE_OPTIONS:---max-old-space-size=256}"
     depends_on:
       api:
@@ -148,7 +148,7 @@ services:
       # liveness는 프로세스 생존, readiness는 DB·Valkey까지 확인한다(출시 점검표 R2).
       MANAGEMENT_ENDPOINT_HEALTH_PROBES_ENABLED: "true"
       MANAGEMENT_ENDPOINT_HEALTH_GROUP_READINESS_INCLUDE: readinessState,db,redis
-      # 구조화 로그(JSON, ECS 형식). 감시 설계의 로그 원칙(docs/ops/deploy.md).
+      # 구조화 로그(JSON, ECS 형식). 감시 설계의 로그 원칙(운영 문서 deploy).
       LOGGING_STRUCTURED_FORMAT_CONSOLE: ecs
       # JVM 힙 = 컨테이너 한도의 65%(768m이면 약 500MB). 나머지는 메타스페이스·스레드·코드 캐시 몫(2GB 서버 기준).
       JAVA_TOOL_OPTIONS: "${API_JAVA_OPTS:--XX:MaxRAMPercentage=65 -XX:+ExitOnOutOfMemoryError}"

@@ -56,7 +56,15 @@ class OpenApiIntegrationTest {
         .startsWith("LOST_ARK_RATE_LIMITED");
     ApiContractFixture.write("openapi.json", response.body());
     // 다른 사이트 이름 금지(#261): OpenAPI 설명·예시는 계약 산출물로 웹에 넘어간다.
-    assertThat(response.body()).doesNotContain(SiteNames.FORBIDDEN);
+    SiteNames.assertAbsent(response.body());
+    // 공개 계약에는 사이트 언급 자체를 두지 않는다(공개 저장소 규칙, 웹 계약 재수집 대상).
+    assertThat(response.body()).as("OpenAPI 전체 사이트 언급").doesNotContain("사이트");
+    // 이슈 번호·체크리스트 ID·팀 표기 같은 내부 기록도 공개 설명에 두지 않는다(공개 저장소 규칙).
+    var internal =
+        java.util.regex.Pattern.compile(
+                "(#d+)|#d{2,4}(?![0-9A-Fa-f])|(?<![0-9A-Za-z])[LKNE]d{1,2}(?![0-9A-Za-z])|PM 총괄|PM-백엔드|PM-프론트|계산 검증")
+            .matcher(response.body());
+    assertThat(internal.find() ? internal.group() : null).as("OpenAPI 내부 기록").isNull();
     assertThat(
             document
                 .at("/components/schemas/CharacterLoadoutResponse/properties/gems/anyOf/1/type")

@@ -1,5 +1,5 @@
 # 서버가 가져오는 배포(1회 실행). %i = production 또는 staging. loakraken-pull-deploy@%i.timer가 주기적으로 실행한다.
-# 설치: docs/ops/deploy.md "pull 배포"
+# 설치: 운영 문서 deploy "pull 배포"
 [Unit]
 Description=LOAKraken pull deploy (%i)
 Wants=network-online.target

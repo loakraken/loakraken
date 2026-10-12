@@ -8,8 +8,8 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 /**
- * 직업별 치명 효과 정답표(crit-speed-v4~, #189·#198). 계산 검증 [[직업별 치명 효과 정답표]](2026-10-09, 일로아 55명·로펙 53명 대조)를
- * 공식 노드 문구(같은 날 표본 50명 armory)와 맞춰 고정한 표다.
+ * 직업별 치명 효과 정답표(crit-speed-v4~, #189·#198). 계산 검증 정답표(2026-10-09, 목표 사이트 2곳 55명·53명 대조)를 공식 노드
+ * 문구(같은 날 표본 50명 armory)와 맞춰 고정한 표다.
  *
  * <ul>
  *   <li>아크 패시브 노드는 이름으로 판정한다. 문구 키워드로 추측하지 않는다.
@@ -69,7 +69,7 @@ public final class CritEffectTable {
           new NodeRule("날카로운 기공", null, Decision.INCLUDE),
           new NodeRule("연가비기", Decision.TOGGLE, null),
           new NodeRule("절정 II", null, Decision.INCLUDE),
-          // 공식 문구 "…치명타 적중률이 25.0% 증가한다."는 조건이 없어 기본 포함(정답표 6-1, 일로아가 뺀 것은 틀림)
+          // 공식 문구 "…치명타 적중률이 25.0% 증가한다."는 조건이 없어 기본 포함(정답표 6-1, 목표 사이트 한 곳이 뺀 것은 틀림)
           new NodeRule("회귀", Decision.INCLUDE, null),
           new NodeRule("관통 필살", Decision.SKILL, null),
           new NodeRule("충격 폭발", Decision.SKILL, null),
@@ -275,8 +275,8 @@ public final class CritEffectTable {
 
   /**
    * 노드 문구에 없는 직업 버프. 직업·장착 스킬·선택 트라이포드로 판정한다. 값은 정답표(두 사이트 일치) 값이고 문구가 있으면 문구 값을 쓴다. defaultOn:
-   * 아이덴티티·각성 상태(폭주)는 기본 켬, 스킬·트라이포드 버프 가정은 기본 끔(중복 기능은 로아랩 기준, PM 총괄 승인 10-10 18:26, 계산 검증 「치명 규칙
-   * 로아랩 재대조」).
+   * 아이덴티티·각성 상태(폭주)는 기본 켬, 스킬·트라이포드 버프 가정은 기본 끔(중복 기능은 전투력 시뮬레이터 목표 사이트 기준, PM 총괄 승인 10-10 18:26,
+   * 계산 검증 「치명 규칙 재대조」).
    */
   public record ClassBuff(
       String label,
@@ -338,7 +338,7 @@ public final class CritEffectTable {
               "슈르디 트라이포드 '빛의 성장'(스킬·트라이포드 버프 가정, 기본 끔)",
               false));
 
-  /** 공용 아크 그리드 코어. 두 사이트가 기본에 넣는다. 직업 코어의 치명 효과는 일로아 기준으로 넣지 않는다. */
+  /** 공용 아크 그리드 코어. 두 사이트가 기본에 넣는다. 직업 코어의 치명 효과는 목표 사이트 기준으로 넣지 않는다. */
   public static final Map<String, CritSpeedCalculation.Axis> COMMON_CORES =
       Map.of(
           "부수는 일격", CritSpeedCalculation.Axis.CRIT,
@@ -455,8 +455,8 @@ public final class CritEffectTable {
           .collect(Collectors.toUnmodifiableMap(SpeedRule::node, Function.identity()));
 
   /**
-   * 선택 트라이포드의 공이속(#198 재대조 10-10 02:10). 표에 없는 트라이포드의 공이속 문구는 더하지 않고 "분류 중"으로 남긴다. 갈림 항목(일로아만 포함)은
-   * PM 총괄 23:24 기준(공식 문구가 상황 조건 → 기본 끔 토글)으로 두고 PM 판단을 기다린다.
+   * 선택 트라이포드의 공이속(#198 재대조 10-10 02:10). 표에 없는 트라이포드의 공이속 문구는 더하지 않고 "분류 중"으로 남긴다. 갈림 항목(목표 사이트 한
+   * 곳만 포함)은 PM 총괄 23:24 기준(공식 문구가 상황 조건 → 기본 끔 토글)으로 두고 PM 판단을 기다린다.
    */
   public record TripodSpeed(String tripod, SpeedDecision decision, String label, String basis) {}
 
@@ -464,10 +464,10 @@ public final class CritEffectTable {
       List.of(
           // 건슬링어 기동 타격 "구르기 이후 8.0초 동안 공격 속도와 이동 속도가 19.2% 증가한다." — 두 사이트 포함(c10)
           new TripodSpeed("날렵함", SpeedDecision.SITUATIONAL, "날렵함 8초 유지 가정", "트라이포드 버프 가정, 기본 끔"),
-          // 배틀마스터 붕천퇴 "적에게 콤보 공격 적중 시 4.0초간 공격속도가 19.2% 증가하고 이동속도가 19.2% 증가한다." — 일로아만(c11)
+          // 배틀마스터 붕천퇴 "적에게 콤보 공격 적중 시 4.0초간 공격속도가 19.2% 증가하고 이동속도가 19.2% 증가한다." — 목표 사이트 한 곳만(c11)
           new TripodSpeed(
               "바람의 축복", SpeedDecision.SITUATIONAL, "바람의 축복 4초 가정", "공식 문구 상황 조건이라 기본 끔"),
-          // 버서커 마운틴 크래쉬 "스킬 사용 시 공격 속도가 4.0초 간 30.0% 증가한다." — 일로아만(TheG0D)
+          // 버서커 마운틴 크래쉬 "스킬 사용 시 공격 속도가 4.0초 간 30.0% 증가한다." — 목표 사이트 한 곳만(c16)
           new TripodSpeed("속공 준비", SpeedDecision.SITUATIONAL, "속공 준비 4초 가정", "공식 문구 상황 조건이라 기본 끔"));
 
   static TripodSpeed tripodSpeed(String name) {

@@ -1,5 +1,5 @@
 # 서버 자원 점검(1회 실행). %i = production 또는 staging. loakraken-host-check@%i.timer가 5분마다 실행한다.
-# 설치: docs/ops/deploy.md "자원 점검"
+# 설치: 운영 문서 deploy "자원 점검"
 [Unit]
 Description=LOAKraken host resource check (%i)
 After=docker.service

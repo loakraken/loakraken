@@ -26,7 +26,7 @@ public record RefiningPlanRequest(
             defaultValue = "true")
         Boolean useBook,
     @Schema(
-            description = "업화 목표 18단계 이하 재련 골드 20% 감소(공식 성장 지원). 상시 효과라 생략하면 켬(계산 검증 10-10 7절)",
+            description = "업화 목표 18단계 이하 재련 골드 20% 감소(공식 성장 지원). 상시 효과라 생략하면 켬",
             defaultValue = "true")
         Boolean growthSupport,
     @DecimalMin("0")
@@ -38,7 +38,7 @@ public record RefiningPlanRequest(
         Integer currentFailedAttempts,
     @Schema(
             description =
-                "장비 성장(경험치) 비용(단계당 1회 운명의 파편, #200)을 더함. 웹이 토글·표시를 넣고 true를 보낼 때까지 공개 합계가 바뀌지 않게 생략하면 끔(PM-백엔드 10-10 09:10)",
+                "장비 성장(경험치) 비용(단계당 1회 운명의 파편)을 더함. 웹이 토글·표시를 넣고 true를 보낼 때까지 공개 합계가 바뀌지 않게 생략하면 끔",
             defaultValue = "false")
         Boolean growthCost,
     @Schema(

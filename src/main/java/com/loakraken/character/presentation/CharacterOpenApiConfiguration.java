@@ -34,7 +34,7 @@ class CharacterOpenApiConfiguration {
       ResponseContracts.apply(
           CharacterSuggestController.CharacterSuggestResponse.class,
           document.getComponents().getSchemas());
-      // 원정대 캐릭터별 전투력(L19)
+      // 원정대 캐릭터별 전투력
       ResponseContracts.apply(
           RosterCombatPowerController.RosterCombatPowerResponse.class,
           document.getComponents().getSchemas());

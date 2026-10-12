@@ -267,7 +267,7 @@ class CollectibleRankingIntegrationTest {
     var data = mapper.readTree(response.body()).path("data");
     assertThat(data.path("rows").size()).isZero();
     assertThat(data.at("/meta/population").asLong()).isZero();
-    assertThat(response.body()).doesNotContain(SiteNames.FORBIDDEN);
+    SiteNames.assertAbsent(response.body());
   }
 
   @Test

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # 서버 자원 점검(2GB 서버용 최소 감시). systemd 타이머(loakraken-host-check@<환경>.timer)가 5분마다 실행한다.
 #
-# - 기록: host-metrics.log 한 줄(시각 메모리% 스왑MB 디스크% 재시작수 Valkey축출수) → 4GB 증설 판단 자료(docs/ops/deploy.md "4GB로 올리는 기준")
+# - 기록: host-metrics.log 한 줄(시각 메모리% 스왑MB 디스크% 재시작수 Valkey축출수) → 4GB 증설 판단 자료(운영 문서 deploy "4GB로 올리는 기준")
 # - 알림(Slack, 같은 문제는 처음 한 번과 복구 때만):
 #   메모리 90% 이상이면서 스왑 512MB 이상이 3회 연속 / 디스크 85% 이상 / 컨테이너 unhealthy / 컨테이너 재시작 수 증가 / Valkey 축출 급증
 # 알림 문구에는 개인정보를 넣지 않는다. 스택 디렉터리(/opt/loakraken/<환경>)에서 root로 실행한다.
@@ -68,7 +68,7 @@ tail -n "$KEEP_LINES" host-metrics.log > host-metrics.log.tmp && mv host-metrics
 if (( mem_pct >= MEM_ALERT_PCT && swap_mb >= SWAP_ALERT_MB )); then
   streak=$(( $(cat .host-alerts/mem.streak 2>/dev/null || echo 0) + 1 ))
   echo "$streak" > .host-alerts/mem.streak
-  (( streak >= 3 )) && raise mem "메모리 ${mem_pct}%, 스왑 ${swap_mb}MB가 15분 넘게 이어짐. 증설 기준 확인(docs/ops/deploy.md)"
+  (( streak >= 3 )) && raise mem "메모리 ${mem_pct}%, 스왑 ${swap_mb}MB가 15분 넘게 이어짐. 증설 기준 확인(운영 문서 deploy)"
 else
   rm -f .host-alerts/mem.streak
   clear_alert mem "메모리 정상으로 돌아옴(${mem_pct}%, 스왑 ${swap_mb}MB)"

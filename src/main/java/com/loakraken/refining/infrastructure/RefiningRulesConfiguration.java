@@ -21,7 +21,7 @@ class RefiningRulesConfiguration {
     }
   }
 
-  /** 장비 성장 비용(#200, 계산 검증 2026-10-10 로아와 단계 실측 + 일로아 구간 합). */
+  /** 장비 성장 비용(#200, 계산 검증 2026-10-10 목표 사이트 단계 실측 + 구간 합). */
   @Bean
   GrowthCosts growthCosts(JsonMapper mapper) throws IOException {
     try (var input = new ClassPathResource(GROWTH_RESOURCE).getInputStream()) {

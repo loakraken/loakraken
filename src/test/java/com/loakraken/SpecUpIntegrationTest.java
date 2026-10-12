@@ -76,7 +76,7 @@ class SpecUpIntegrationTest {
     var response = get("/api/v1/characters/spec-up?characterName=" + encode("스펙캐시"));
     assertThat(response.statusCode()).isEqualTo(200);
     ApiContractFixture.write("character-spec-up.json", response.body());
-    assertThat(response.body()).doesNotContain(SiteNames.FORBIDDEN);
+    SiteNames.assertAbsent(response.body());
     var data = mapper.readTree(response.body()).path("data");
     assertThat(data.path("ruleVersion").asText()).isEqualTo("spec-up-v1");
     assertThat(data.path("simulatorRuleVersion").asText()).isEqualTo("combat-power-sim-v8");

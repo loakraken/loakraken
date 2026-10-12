@@ -60,7 +60,7 @@ public class CharacterSuggestController {
                 new CharacterSuggestResponse(items)));
   }
 
-  @Schema(description = "캐릭터 이름 자동완성(#369)")
+  @Schema(description = "캐릭터 이름 자동완성")
   public record CharacterSuggestResponse(
       @Schema(description = "아이템 레벨 높은 순, 최대 8개. 없으면 빈 배열")
           List<CharacterSuggestItemResponse> items) {}

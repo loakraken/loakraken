@@ -59,7 +59,7 @@ public class CharacterPublicSummaryController {
         CharacterPublicSummaryResponse.from(summaries.summary(request.characterName())));
   }
 
-  @Schema(description = "캐릭터 공개 요약(#145)")
+  @Schema(description = "캐릭터 공개 요약")
   public record CharacterPublicSummaryResponse(
       String characterName,
       @NullableResponse String serverName,

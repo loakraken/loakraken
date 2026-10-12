@@ -137,7 +137,7 @@ class LostArkSkillTooltipTest {
         .isEqualTo(CharacterLoadout.AttackType.BACK_ATTACK);
   }
 
-  /** 공식 스킬 Tooltip의 SingleTextBox 형식(언새늘 블레이드 2026-10-09 응답의 줄 구성. 원문 전체가 아닌 해당 줄만). */
+  /** 공식 스킬 Tooltip의 SingleTextBox 형식(기준 캐릭터 2026-10-09 응답의 줄 구성. 원문 전체가 아닌 해당 줄만). */
   @ParameterizedTest
   @CsvSource(
       delimiter = '|',

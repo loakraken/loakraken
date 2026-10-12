@@ -46,7 +46,7 @@ class CritEffectTableTest {
             "광기/MOVE_SPEED/true/true");
     assertThat(result.limitations())
         .anyMatch(line -> line.contains("관통 필살 Lv.3 100%(적룡필살에만)"))
-        .noneMatch(line -> line.contains("로펙"));
+        .allSatisfy(com.loakraken.SiteNames::assertAbsent);
   }
 
   /** 계산 검증 10-10 01:55 환업·데니멀즈·소녀양점순 공식 코어 문구. */
@@ -468,7 +468,7 @@ class CritEffectTableTest {
   @Test
   void 노드_문구에_없는_직업_버프는_직업_스킬_트라이포드로_더하고_끄면_뺀다() {
     var skills = List.of(skill("용맹의 포효", "급소 노출", "빠른 준비"), skill("뇌명각", "급소 노출", "섬뢰"));
-    // 스킬·트라이포드 버프 가정은 기본 끔(중복 기능은 로아랩 기준, PM 총괄 승인 10-10 18:26)
+    // 스킬·트라이포드 버프 가정은 기본 끔(중복 기능은 비교 기준 A 기준, PM 총괄 승인 10-10 18:26)
     var defaults = calculate("배틀마스터", List.of(), skills, null, Assumptions.NONE);
     assertThat(values(defaults, Axis.CRIT, Category.ASSUMPTION)).isEmpty();
     assertThat(defaults.toggles())

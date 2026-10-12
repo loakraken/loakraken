@@ -45,7 +45,7 @@ class AccessoryStatRangeTest {
   }
 
   @Test
-  void 범위_퍼센트는_언새늘_5개가_목표_사이트_값과_같다() throws Exception {
+  void 범위_퍼센트는_기준_캐릭터_5개가_비교_기준값과_같다() throws Exception {
     var rows = sample().at("/samples/rows");
     assertThat(rows.size()).isEqualTo(5);
     for (var row : rows)

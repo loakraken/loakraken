@@ -9,7 +9,7 @@ import java.util.Collections;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
-/** 공식 응답을 해석한 도메인 형식(언새늘 10-09 검색 응답과 같은 문구)으로 만든 합성 데이터. 원문은 쓰지 않는다. */
+/** 공식 응답을 해석한 도메인 형식(기준 캐릭터 10-09 검색 응답과 같은 문구)으로 만든 합성 데이터. 원문은 쓰지 않는다. */
 class EquipmentSummaryTest {
   @Test
   void 계산_검증_필드를_도메인에서_뽑는다() {
@@ -93,7 +93,7 @@ class EquipmentSummaryTest {
 
   static CharacterProfile profile(String combatPower) {
     return new CharacterProfile(
-        "언새늘",
+        "기준캐릭터",
         "루페온",
         "블레이드",
         70,

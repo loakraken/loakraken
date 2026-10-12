@@ -15,7 +15,7 @@ import org.springframework.core.io.ClassPathResource;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * 재련 단계 모델(#319): 계산 검증 표본(loalab-refine-model-2026-10-11.json)의 세 캐릭터를 공식 응답과 같은 형식의 입력으로 다시 만들어,
+ * 재련 단계 모델(#319): 계산 검증 표본(ref-a-refine-model-2026-10-11.json)의 세 캐릭터를 공식 응답과 같은 형식의 입력으로 다시 만들어,
  * 기대 전투력을 ±0.01로 맞춘다.
  */
 class CombatPowerRefineModelTest {
@@ -30,7 +30,7 @@ class CombatPowerRefineModelTest {
   }
 
   @Test
-  void 언새늘_전율_무기와_투구_단계() {
+  void 기준_캐릭터_전율_무기와_투구_단계() {
     // B 188,163, q 7.45%, F 2,030, W 고정 222,947(무기 208,130 + 팔 보호구 14,817), 무공% 1.80 + 0.80 + 카르마
     // 29 × 0.1.
     var loadout =
@@ -104,7 +104,7 @@ class CombatPowerRefineModelTest {
 
   @Test
   void 업화_투구_단계표는_표본_칸과_맞고_무기는_확인된_칸만_있다() {
-    // #333 표본(loalab-advanced-refine-2026-10-11.json) 투구 8칸: 7칸 정확, 1칸 ±1 스탯(사이 칸 보간).
+    // #333 표본(ref-a-advanced-refine-2026-10-11.json) 투구 8칸: 7칸 정확, 1칸 ±1 스탯(사이 칸 보간).
     var helmet =
         Map.of(
             "11/2", 59632, "12/3", 61379, "15/3", 66175, "17/4", 70020, "20/1", 74560, "21/2",
@@ -194,7 +194,7 @@ class CombatPowerRefineModelTest {
 
   @Test
   void 팔_보호구_단계와_등급을_바꾸면_표본_7건과_같다() {
-    // #341 표본(loalab-bracer-armguard-2026-10-11.json): 언새늘 완갑 +13 전설, q 7.45%(보석 4.95 + 스톤 1.50 +
+    // #341 표본(ref-a-bracer-armguard-2026-10-11.json): 기준 캐릭터 완갑 +13 전설, q 7.45%(보석 4.95 + 스톤 1.50 +
     // 완갑 1.00).
     var base =
         loadout(19, 19, "운명의 전율 검", "208130", "2030", "14817", List.of("+1.80%", "+0.80%"), 29);

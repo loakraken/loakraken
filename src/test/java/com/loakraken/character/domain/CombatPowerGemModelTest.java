@@ -15,8 +15,8 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * 보석 B단계(#243) 근거 고정: 볼트 「전투력 검증 준비」 7절. 언새늘(공식 전투력 4,052.77, 4티어 6레벨 11칸, 스톤 레벨 보너스 1.50%, 완갑 +13
- * 추가 효과 1.00%)을 목표 사이트 시뮬레이터에 넣은 값 두 건을 재현한다. 캐릭터 데이터는 같은 형식의 합성 값이다. 계산 검증 표본(#244, 5명 30건)도 기대값으로
+ * 보석 B단계(#243) 근거 고정: 볼트 「전투력 검증 준비」 7절. 기준 캐릭터(공식 전투력 4,052.77, 4티어 6레벨 11칸, 스톤 레벨 보너스 1.50%, 완갑 +13
+ * 추가 효과 1.00%)을 비교 기준 시뮬레이터에 넣은 값 두 건을 재현한다. 캐릭터 데이터는 같은 형식의 합성 값이다. 계산 검증 표본(#244, 5명 30건)도 기대값으로
  * 쓴다.
  */
 class CombatPowerGemModelTest {
@@ -28,7 +28,7 @@ class CombatPowerGemModelTest {
   void 교차_검증_표본_5명_30건과_0_01_안에서_같다() throws Exception {
     JsonNode root;
     try (var input =
-        new ClassPathResource("verification/combat-power/loalab-gem-deltas-2026-10-10.json")
+        new ClassPathResource("verification/combat-power/ref-a-gem-deltas-2026-10-10.json")
             .getInputStream()) {
       root = new JsonMapper().readTree(input);
     }
@@ -63,7 +63,7 @@ class CombatPowerGemModelTest {
   }
 
   @Test
-  void 언새늘_보석_1칸_6에서_7은_4083_29다() {
+  void 기준_캐릭터_보석_1칸_6에서_7은_4083_29다() {
     var model = CombatPowerGemModel.of(COEFFICIENTS, loadout(6, "0.45", extraLines()));
     assertThat(model.unsupportedReason()).isNull();
     assertThat(model.otherBaseAttackPct()).isEqualByComparingTo("2.50");
@@ -71,7 +71,7 @@ class CombatPowerGemModelTest {
   }
 
   @Test
-  void 언새늘_보석_11칸_6에서_7은_4400_93이다() {
+  void 기준_캐릭터_보석_11칸_6에서_7은_4400_93이다() {
     var model = CombatPowerGemModel.of(COEFFICIENTS, loadout(6, "0.45", extraLines()));
     var all = new HashMap<Integer, Integer>();
     for (int slot = 0; slot < 11; slot++) all.put(slot, 7);

@@ -18,7 +18,7 @@ public class MaterialUnitPriceService {
   static final int MATERIAL_CATEGORY = 50000;
   private static final String SHARD_POUCH_SEARCH = "운명의 파편 주머니";
   // 공식 거래소 상세 Tooltip "사용 시, N 운명의 파편을 획득할 수 있다."(2026-10-05 확인)
-  private static final Map<String, Integer> SHARD_POUCHES =
+  static final Map<String, Integer> SHARD_POUCHES =
       Map.of(
           "운명의 파편 주머니(소)", 1000,
           "운명의 파편 주머니(중)", 2000,

@@ -29,14 +29,30 @@ public record SpecUpCost(String unit, Long amount, String status, String code, S
           "BOOK_COUNT_UNCONFIRMED",
           "각인 레벨당 필요한 각인서 수를 아직 확인하지 않아 비용을 계산하지 않았습니다.");
 
-  /** 재련·상급 재련 후보(시뮬레이터가 계산하는 경우): 재련 비용은 아직 연결하지 않았다(L30 후속). */
+  /** 재련 계획(업화·전율 일반 재련 11~25단계)이 다루지 않는 재련 후보(상급 재련, 계열을 모르는 장비). */
   public static final SpecUpCost REFINE_COST_UNCONFIRMED =
       new SpecUpCost(
           "GOLD",
           null,
           "UNKNOWN",
           "REFINE_COST_UNCONFIRMED",
-          "재련 비용(재련 계획의 기대 소모 × 재료 시세)을 아직 연결하지 않아 비용을 계산하지 않았습니다.");
+          "재련 계획(업화·전율 일반 재련 11~25단계)이 다루지 않는 항목이라 비용을 계산하지 않았습니다.");
+
+  /** 재련 재료 시세 예열 전이거나 필요한 재료 시세가 없을 때. code·status는 보석과 같은 PRICE_PENDING(새 값 없음). */
+  public static final SpecUpCost REFINE_PRICE_PENDING =
+      new SpecUpCost(
+          "GOLD", null, "PENDING", "PRICE_PENDING", "재련 재료 시세를 아직 받지 못했습니다. 잠시 뒤 다시 확인해 주세요.");
+
+  /** 일반 재련 +1 기대 비용(L30 후속): 재련 계획의 기대 소모 × 재료 1개 즉시 구매 최저가 + 기대 골드. 숨결 없음과 최대 사용 중 작은 쪽이다. */
+  public static SpecUpCost refineExpected(long amount) {
+    return new SpecUpCost(
+        "GOLD",
+        amount,
+        "OK",
+        "REFINE_EXPECTED",
+        "재련 계획의 기대 소모(장인의 기운·실패 횟수 0에서 시작, 숨결을 쓰지 않을 때와 최대로 쓸 때 중 기대 비용이 작은 쪽, 업화 18단계까지 성장 지원 골드 20% 할인)에"
+            + " 재료 1개 즉시 구매 최저가를 곱하고 골드를 더한 값입니다. 장비 성장(경험치) 비용은 넣지 않았습니다.");
+  }
 
   /**
    * 거래소(경매장) 판매 수수료: 판매 금액 전체의 5%, 1골드 미만 올림(계산 검증 10-11 20:35, 두 출처 이상). 레이드 경매 분배금 규칙(10만 골드

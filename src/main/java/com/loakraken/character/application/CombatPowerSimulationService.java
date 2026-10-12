@@ -36,7 +36,8 @@ import org.springframework.stereotype.Service;
  */
 @Service
 public class CombatPowerSimulationService {
-  public static final String RULE_VERSION = "combat-power-sim-v8";
+  public static final String RULE_VERSION =
+      com.loakraken.common.api.EfficiencyRuleVersions.COMBAT_POWER_SIM;
   private static final MathContext MATH = MathContext.DECIMAL64;
   private static final String GEM_BASIS =
       "보석 레벨별 배수와 기본 공격력 %(보석·스톤 레벨 보너스·완갑 추가 효과, 공식 툴팁)로 바뀐 비율을 공식 전투력에 곱했습니다.";

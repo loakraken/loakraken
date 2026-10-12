@@ -117,6 +117,27 @@ class PostgresCharacterCardRepository implements CharacterCardPort {
           .param("gemsObserved", observation.gemsObserved())
           .param("id", characterId.get())
           .update();
+      var efficiency = observation.efficiency();
+      if (efficiency != null)
+        // 팔찌·젬 효율(L38·L39). 장비를 관측했을 때만 바꾸고, 더 늦은 관측이 이미 있으면 덮지 않는다.
+        jdbc.sql(
+                """
+            UPDATE characters SET
+              bracelet_efficiency_pct = CAST(:bracelet AS NUMERIC),
+              bracelet_rule_version = :braceletVersion,
+              ark_grid_gem_pct = CAST(:gem AS NUMERIC),
+              ark_grid_rule_version = :gemVersion,
+              efficiency_observed_at = :at
+            WHERE character_id = :id
+              AND (efficiency_observed_at IS NULL OR efficiency_observed_at <= :at)
+            """)
+            .param("bracelet", efficiency.braceletPct())
+            .param("braceletVersion", efficiency.braceletRuleVersion())
+            .param("gem", efficiency.arkGridGemPct())
+            .param("gemVersion", efficiency.arkGridRuleVersion())
+            .param("at", at)
+            .param("id", characterId.get())
+            .update();
       for (var card : observation.cards()) {
         if (card == null || card.name() == null || card.name().isBlank()) continue;
         jdbc.sql(

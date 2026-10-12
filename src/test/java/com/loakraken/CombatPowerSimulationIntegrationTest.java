@@ -651,6 +651,33 @@ class CombatPowerSimulationIntegrationTest {
     assertThat(efficiency.at("/lines/6/slotIndex").isNull()).isTrue();
     assertThat(efficiency.at("/lines/6/percent").decimalValue()).isEqualByComparingTo("4.27");
     assertThat(efficiency.path("ruleVersion").asText()).isEqualTo("ark-grid-efficiency-v1");
+
+    // L38·L39 랭킹용 저장: armory 관측 기록(비동기)이 팔찌 효율과 젬 옵션 합계 줄을 규칙 버전과 함께 남긴다.
+    java.util.Map<String, Object> row = java.util.Map.of();
+    for (int i = 0; i < 100; i++) {
+      row =
+          jdbc
+              .sql(
+                  """
+              SELECT bracelet_efficiency_pct, bracelet_rule_version, ark_grid_gem_pct,
+                ark_grid_rule_version, efficiency_observed_at
+              FROM characters WHERE server_name = :s AND character_name = :n
+              """)
+              .param("s", SERVER)
+              .param("n", "시뮬아크")
+              .query()
+              .listOfRows()
+              .stream()
+              .findFirst()
+              .orElse(java.util.Map.of());
+      if (row.get("ark_grid_gem_pct") != null) break;
+      Thread.sleep(50);
+    }
+    assertThat((BigDecimal) row.get("bracelet_efficiency_pct")).isEqualByComparingTo("14.42");
+    assertThat(row.get("bracelet_rule_version")).isEqualTo("combat-power-sim-v8");
+    assertThat((BigDecimal) row.get("ark_grid_gem_pct")).isEqualByComparingTo("4.27");
+    assertThat(row.get("ark_grid_rule_version")).isEqualTo("ark-grid-efficiency-v1");
+    assertThat(row.get("efficiency_observed_at")).isNotNull();
   }
 
   private static CharacterLoadout.GridSlot gridSlot(

@@ -67,7 +67,7 @@ services:
       # 기능 플래그(web #233): 치명 계산 도구(치적) 노출. on|off, 비우면 web 기본값(SITE_URL이 운영 주소일 때만 숨김).
       # 운영 stack.env는 off를 명시한다(PM 총괄 결정 10-09: 첫 운영 배포 제외). 스테이징은 비워 두어 보인다.
       CRIT_SPEED_TOOL: "${CRIT_SPEED_TOOL:-}"
-      # 전투력 시뮬레이터 화면(web #365). on|off, 비우면 web 기본값. 운영은 공개 기준(목표 사이트 대조) 전까지 off(백엔드 COMBAT_POWER_SIM_ENABLED=false와 이중 숨김).
+      # 전투력 시뮬레이터 화면(web #365). on|off, 비우면 web 기본값. 운영은 공개 기준(비교 기준 대조) 전까지 off(백엔드 COMBAT_POWER_SIM_ENABLED=false와 이중 숨김).
       COMBAT_POWER_SIM: "${COMBAT_POWER_SIM:-}"
       # 원정대 영수증 화면(web). on|off, 비우면 web 기본값. 운영은 계산 재대조 전까지 off(PM 총괄 10-11, api RECEIPT_ENABLED=false와 함께).
       RECEIPT_TOOL: "${RECEIPT_TOOL:-}"

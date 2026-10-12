@@ -18,7 +18,7 @@ public final class CritSpeedCalculation {
   public static final String RULE_VERSION = "crit-speed-v7";
 
   /**
-   * 치명타 피해 앞(같은 문장)에 오면 조건부로 보고 합산하지 않는 말. 목표 사이트 2곳은 "폭주 중"·"마력 해방 중"(각성 상태)은 넣고 "사신화 상태에서"· "페르소나
+   * 치명타 피해 앞(같은 문장)에 오면 조건부로 보고 합산하지 않는 말. 비교 기준 2곳은 "폭주 중"·"마력 해방 중"(각성 상태)은 넣고 "사신화 상태에서"· "페르소나
    * 상태일 때"는 뺀다(계산 검증 표본 5명, 10-09).
    */
   private static final List<String> CONDITIONAL_STATE = List.of("상태에서", "상태일 때");
@@ -35,7 +35,7 @@ public final class CritSpeedCalculation {
   static final BigDecimal CRIT_CAP = new BigDecimal("100");
   static final BigDecimal SPEED_CAP = new BigDecimal("40");
 
-  /** 기본 치명타 피해 200%. 목표 사이트 표시값(언새늘 208.40% = 200 + 팔찌 8.40)과 같은 규칙이다(2026-10-09 계산 검증). */
+  /** 기본 치명타 피해 200%. 비교 기준값(기준 캐릭터 208.40% = 200 + 팔찌 8.40)과 같은 규칙이다(2026-10-09 계산 검증). */
   static final BigDecimal BASE_CRIT_DAMAGE = new BigDecimal("200");
 
   static final BluntThornRule BLUNT_THORN_REFERENCE =
@@ -141,7 +141,7 @@ public final class CritSpeedCalculation {
       BigDecimal extraMoveSpeed,
       boolean classState,
       Map<String, Boolean> toggles) {
-    /** 가정 입력이 없을 때. 직업 상태 가정은 목표 사이트와 같이 켠다(#189). */
+    /** 가정 입력이 없을 때. 직업 상태 가정은 비교 기준값과 같이 켠다(#189). */
     public static final Assumptions NONE =
         new Assumptions(false, false, 0, null, null, null, null, null, true);
 
@@ -201,7 +201,7 @@ public final class CritSpeedCalculation {
   }
 
   /**
-   * 직업 상태 가정 표(#189). 공식 노드 문구가 "어떤 상태에서 치명타 적중률이 X%로 바뀐다"인 경우, 목표 사이트 2곳은 그 상태를 가정해 X를 더한다. 표에 있는
+   * 직업 상태 가정 표(#189). 공식 노드 문구가 "어떤 상태에서 치명타 적중률이 X%로 바뀐다"인 경우, 비교 기준 2곳은 그 상태를 가정해 X를 더한다. 표에 있는
    * 노드만 가정으로 더하고(출처 kind=ASSUMED, 이름에 상태와 노드), 요청 classState=false면 뺀다. 같은 구조의 다른 직업은 계산 검증 전수 표로 이
    * 목록에 더한다.
    */
@@ -332,7 +332,7 @@ public final class CritSpeedCalculation {
       boolean optimal) {}
 
   /**
-   * 스킬별 치명타 적중률(#168, 계산 검증 규칙 10-09: 목표 사이트 17/17). total = base(crit.observedRate) + backAttack(백
+   * 스킬별 치명타 적중률(#168, 계산 검증 규칙 10-09: 대조 표본 17/17). total = base(crit.observedRate) + backAttack(백
    * 어택 +10) + tripod(선택 트라이포드 "치명타 적중률이 X% 증가" 합), effective는 상한(100, 뭉툭한 가시 장착 시 그 상한) 적용. 공격 타입을
    * 모르거나 갱신 전 캐시라 트라이포드 문구가 없으면 해당 값과 total·effective가 null이다(추정 금지). conditional은 조건부 문구라 더하지 않은
    * 트라이포드다.
@@ -537,7 +537,7 @@ public final class CritSpeedCalculation {
     limitations.add(
         "치명타 피해는 기본 200%에 장비·팔찌·각인·아크 패시브·카드의 일반 문구만 더합니다. 스킬 한정('방향성 공격 스킬의 치명타 피해' 등), 받는 치명타 피해, 특정 상태 한정('…상태에서')은 제외하고, 각성 중 상시 효과('폭주 중', '마력 해방 중')는 더합니다.");
     var skills =
-        // 스킬별 기본은 관측 + 직업 상태 가정(목표 사이트와 같은 기준, #189).
+        // 스킬별 기본은 관측 + 직업 상태 가정(비교 기준값과 같은 기준, #189).
         skillCrits(
             loadout,
             observedCrit.add(classStateCrit),
@@ -688,7 +688,7 @@ public final class CritSpeedCalculation {
         var stacks = BRACELET_STACKS.matcher(bracelet.text());
         for (var source : scanned) {
           boolean speed = source.axis() == Axis.ATTACK_SPEED || source.axis() == Axis.MOVE_SPEED;
-          // "공격 적중 시 매 초마다 … 공격 및 이동 속도가 1% 증가한다. (최대 6중첩)" → 두 사이트는 최대 중첩(×6)으로 본다(#198).
+          // "공격 적중 시 매 초마다 … 공격 및 이동 속도가 1% 증가한다. (최대 6중첩)" → 비교 기준 2곳은 최대 중첩(×6)으로 본다(#198).
           if (speed && stacks.reset().find())
             sources.add(
                 new Source(
@@ -1132,10 +1132,10 @@ public final class CritSpeedCalculation {
     return baseValue == null ? null : value.subtract(baseValue);
   }
 
-  /** 기민함: 기본 공격·이동 속도 증가량(상한 40 적용)에 비율을 곱한다. 목표 사이트의 "질풍노도 기민함"과 같은 기준(정답표 c09 12/48). */
+  /** 기민함: 기본 공격·이동 속도 증가량(상한 40 적용)에 비율을 곱한다. 비교 기준의 "질풍노도 기민함"과 같은 기준(정답표 c09 12/48). */
   private static void agilitySources(BigDecimal[] agility, List<Source> sources) {
     if (agility[0] == null && agility[1] == null) return;
-    // "기본 … 속도 증가량"은 증가분만 합한다. 질량 증가(공격 속도 -10%) 같은 감소는 빼지 않는다(목표 사이트 2곳 일치, 정답표 6-2).
+    // "기본 … 속도 증가량"은 증가분만 합한다. 질량 증가(공격 속도 -10%) 같은 감소는 빼지 않는다(비교 기준 2곳 일치, 정답표 6-2).
     var move = increase(sources, Axis.MOVE_SPEED).min(SPEED_CAP);
     var attack = increase(sources, Axis.ATTACK_SPEED).min(SPEED_CAP);
     if (agility[0] != null)
@@ -1305,7 +1305,7 @@ public final class CritSpeedCalculation {
     return null;
   }
 
-  /** 혼돈의 해 "재빠른 공격" 달성 구간의 공격 속도(10P 1.00 + 17P 3.00 = 4, 두 사이트 포함, 10-10). */
+  /** 혼돈의 해 "재빠른 공격" 달성 구간의 공격 속도(10P 1.00 + 17P 3.00 = 4, 비교 기준 2곳 포함, 10-10). */
   private static void commonCoreSpeed(CharacterLoadout.GridSlot slot, List<Source> sources) {
     var total = BigDecimal.ZERO;
     var texts = new ArrayList<String>();

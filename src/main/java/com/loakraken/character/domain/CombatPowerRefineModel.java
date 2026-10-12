@@ -148,7 +148,7 @@ public final class CombatPowerRefineModel {
       if (armGuardReason != null) return armGuardReason;
       var row = coefficients.armGuardTable().get(level);
       if (row == null || !row.confirmed()) return "이 팔 보호구 단계의 수치는 아직 확인하지 않아 계산하지 않았습니다.";
-      // 등급별 관측 범위(armGuardGradeRange)는 참고용이다. 대조 사이트도 범위 밖 조합을 같은 식으로 계산한다(표본 +25 전설).
+      // 등급별 관측 범위(armGuardGradeRange)는 참고용이다. 비교 기준도 범위 밖 조합을 같은 식으로 계산한다(표본 +25 전설).
       if (coefficients.armGuardGradePct().get(grade) == null)
         return "이 팔 보호구 등급(" + grade + ")의 효과는 아직 확인하지 않아 계산하지 않았습니다.";
       return null;

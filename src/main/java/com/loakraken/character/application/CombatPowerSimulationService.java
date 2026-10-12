@@ -27,7 +27,7 @@ import org.springframework.stereotype.Service;
  * 전투력 시뮬레이터(계약 v0, A단계). 볼트 「전투력 시뮬레이터 API 계약 초안」·PM-백엔드 18:27·PM-프론트 18:31 교차 확인.
  *
  * <p><b>공식 API를 부르지 않는다</b>: 캐릭터 캐시만 읽고, 없으면 CHARACTER_NOT_CACHED(404)다. 바꾼 항목(changes)을 검증하고 순서대로
- * 합친다. 처리정지 목록 캐릭터는 캐시가 없을 때와 같은 404다. 전투력 계산식은 계산 검증의 목표 사이트 실측 대조(Q1·Q2)로 항목별로 확정되기 전까지 그 항목을
+ * 합친다. 처리정지 목록 캐릭터는 캐시가 없을 때와 같은 404다. 전투력 계산식은 계산 검증의 비교 기준 실측 대조(Q1·Q2)로 항목별로 확정되기 전까지 그 항목을
  * UNSUPPORTED로 값 없이 낸다(추정 금지).
  *
  * <p>B단계(#243): 보석(GEM_LEVEL·GEM_LEVEL_ALL)을 계산한다({@link CombatPowerGemModel}). after = before ×

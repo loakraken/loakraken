@@ -670,16 +670,24 @@ class PostgresStatsRepository implements StatsPort {
     String tie = metric == Metric.COMBAT_POWER ? "item_level" : "combat_power";
     var rows = new ArrayList<RankingRow>();
     long[] total = {0};
+    String order = column + " DESC, " + tie + " DESC, character_name, server_name";
+    // 순위를 먼저 매겨 한 페이지만 자른 뒤, 그 행에만 마지막 장비 요약(아크 패시브 K32)을 붙인다.
     population(conditions, since, true)
         .statement(
-            "SELECT character_name, server_name, class_name, position, item_level, combat_power,"
-                + " RANK() OVER (ORDER BY "
+            ", ranked AS (SELECT character_id, character_name, server_name, class_name, position,"
+                + " item_level, combat_power, best_combat_power, RANK() OVER (ORDER BY "
                 + column
                 + " DESC) AS rnk, COUNT(*) OVER () AS total FROM pop ORDER BY "
-                + column
-                + " DESC, "
-                + tie
-                + " DESC, character_name, server_name LIMIT :limit OFFSET :offset",
+                + order
+                + " LIMIT :limit OFFSET :offset)"
+                + " SELECT r.*, s.ark_passive_title,"
+                + " CAST(s.features -> 'arkPassive' -> 'points' ->> 'evolution' AS INTEGER) AS ap_evolution,"
+                + " CAST(s.features -> 'arkPassive' -> 'points' ->> 'enlightenment' AS INTEGER) AS ap_enlightenment,"
+                + " CAST(s.features -> 'arkPassive' -> 'points' ->> 'leap' AS INTEGER) AS ap_leap"
+                + " FROM ranked r LEFT JOIN LATERAL (SELECT e.ark_passive_title, e.features"
+                + " FROM character_equipment_summary e WHERE e.character_id = r.character_id"
+                + " ORDER BY e.observed_at DESC LIMIT 1) s ON TRUE ORDER BY "
+                + order,
             jdbc)
         .param("limit", limit)
         .param("offset", offset)
@@ -694,7 +702,9 @@ class PostgresStatsRepository implements StatsPort {
                       row.getString("class_name"),
                       row.getString("position"),
                       row.getBigDecimal("item_level"),
-                      row.getBigDecimal("combat_power")));
+                      row.getBigDecimal("combat_power"),
+                      row.getBigDecimal("best_combat_power"),
+                      arkPassive(row)));
             });
     // 요청 페이지가 범위를 넘으면 행이 없어 total을 따로 센다.
     if (rows.isEmpty())
@@ -704,6 +714,16 @@ class PostgresStatsRepository implements StatsPort {
               .query(Long.class)
               .single();
     return new RankingPage(total[0], rows);
+  }
+
+  /** 마지막 장비 요약의 아크 패시브(K32). 요약이 없거나 모든 값이 없으면 null. */
+  private static ArkPassiveSummary arkPassive(ResultSet row) throws java.sql.SQLException {
+    var title = row.getString("ark_passive_title");
+    var evolution = (Integer) row.getObject("ap_evolution", Integer.class);
+    var enlightenment = (Integer) row.getObject("ap_enlightenment", Integer.class);
+    var leap = (Integer) row.getObject("ap_leap", Integer.class);
+    if (title == null && evolution == null && enlightenment == null && leap == null) return null;
+    return new ArkPassiveSummary(evolution, enlightenment, leap, title);
   }
 
   @Override
@@ -879,8 +899,8 @@ class PostgresStatsRepository implements StatsPort {
           " AND NOT EXISTS (SELECT 1 FROM public_exclusion e WHERE e.character_name = c.character_name"
               + " AND (e.server_name IS NULL OR e.server_name = c.server_name))");
     String cte =
-        "WITH pop AS (SELECT c.character_name, c.server_name, c.class_name, c.item_level,"
-            + " c.combat_power, c.position, c.gem_mean_level, c.bracelet_efficiency_pct,"
+        "WITH pop AS (SELECT c.character_id, c.character_name, c.server_name, c.class_name, c.item_level,"
+            + " c.combat_power, c.best_combat_power, c.position, c.gem_mean_level, c.bracelet_efficiency_pct,"
             + " c.bracelet_rule_version, c.ark_grid_gem_pct, c.ark_grid_rule_version,"
             + " c.efficiency_observed_at FROM characters c WHERE "
             + where

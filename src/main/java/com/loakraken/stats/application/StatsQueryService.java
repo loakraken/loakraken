@@ -500,7 +500,9 @@ public class StatsQueryService {
                             row.itemLevel(),
                             row.combatPower(),
                             top,
-                            top == null ? null : Tier.of(top));
+                            top == null ? null : Tier.of(top),
+                            row.bestCombatPower(),
+                            row.arkPassive());
                       })
                   .toList());
         });
@@ -803,7 +805,9 @@ public class StatsQueryService {
       BigDecimal itemLevel,
       BigDecimal combatPower,
       BigDecimal topPercent,
-      Tier tier) {}
+      Tier tier,
+      BigDecimal bestCombatPower,
+      StatsPort.ArkPassiveSummary arkPassive) {}
 
   /** 수집품 랭킹 결과(#295). unit은 ROSTER·CHARACTER(응답에서는 문자열). */
   public record CollectibleRankingResult(

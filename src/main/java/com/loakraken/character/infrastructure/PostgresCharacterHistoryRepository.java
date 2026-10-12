@@ -32,11 +32,12 @@ class PostgresCharacterHistoryRepository implements CharacterHistoryPort {
     var characterId =
         jdbc.sql(
                 """
-      INSERT INTO characters (character_id, character_name, server_name, class_name, item_level, combat_power, expedition_level, guild_name, image_url, last_synced_at, profile_refreshed_at, profile_checked_at)
-      VALUES (:id, :name, :server, :className, :itemLevel, :combatPower, :expeditionLevel, :guildName, :imageUrl, :fetchedAt, :fetchedAt, :fetchedAt)
+      INSERT INTO characters (character_id, character_name, server_name, class_name, item_level, combat_power, best_combat_power, expedition_level, guild_name, image_url, last_synced_at, profile_refreshed_at, profile_checked_at)
+      VALUES (:id, :name, :server, :className, :itemLevel, :combatPower, :combatPower, :expeditionLevel, :guildName, :imageUrl, :fetchedAt, :fetchedAt, :fetchedAt)
       ON CONFLICT (server_name, character_name) DO UPDATE SET
         class_name = EXCLUDED.class_name, item_level = EXCLUDED.item_level,
         combat_power = EXCLUDED.combat_power,
+        best_combat_power = GREATEST(characters.best_combat_power, EXCLUDED.combat_power),
         expedition_level = COALESCE(EXCLUDED.expedition_level, characters.expedition_level),
         guild_name = EXCLUDED.guild_name,
         image_url = COALESCE(EXCLUDED.image_url, characters.image_url),

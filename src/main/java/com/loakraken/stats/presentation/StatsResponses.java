@@ -264,7 +264,19 @@ public final class StatsResponses {
       @NullableResponse BigDecimal topPercent,
       @NullableResponse
           @Schema(allowableValues = {"TOP1", "TOP5", "TOP10", "TOP25", "TOP50", "REST"})
-          String tier) {}
+          String tier,
+      @NullableResponse @Schema(description = "관측한 최고 전투력(LOAKraken이 기록한 값 중 최고)")
+          BigDecimal bestCombatPower,
+      @NullableResponse
+          @Schema(description = "아크 패시브 진화·깨달음·도약 포인트(마지막으로 관측한 장비 기준). 관측하지 않았으면 null")
+          StatsArkPassivePointsResponse arkPassivePoints,
+      @NullableResponse @Schema(description = "직업 각인(깨달음 직업 노드, 공식 아크 패시브 칭호). 관측하지 않았으면 null")
+          String classEngraving) {}
+
+  public record StatsArkPassivePointsResponse(
+      @NullableResponse Integer evolution,
+      @NullableResponse Integer enlightenment,
+      @NullableResponse Integer leap) {}
 
   /** 팔찌·젬 효율 랭킹(L38·L39). 두 경로가 같은 모양이다. */
   public record StatsEfficiencyRankingResponse(
@@ -352,7 +364,18 @@ public final class StatsResponses {
                           row.itemLevel(),
                           row.combatPower(),
                           row.topPercent(),
-                          row.tier() == null ? null : row.tier().name()))
+                          row.tier() == null ? null : row.tier().name(),
+                          row.bestCombatPower(),
+                          row.arkPassive() == null
+                                  || (row.arkPassive().evolution() == null
+                                      && row.arkPassive().enlightenment() == null
+                                      && row.arkPassive().leap() == null)
+                              ? null
+                              : new StatsArkPassivePointsResponse(
+                                  row.arkPassive().evolution(),
+                                  row.arkPassive().enlightenment(),
+                                  row.arkPassive().leap()),
+                          row.arkPassive() == null ? null : row.arkPassive().classEngraving()))
               .toList());
     }
   }

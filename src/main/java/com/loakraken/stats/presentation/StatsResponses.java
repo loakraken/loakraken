@@ -277,7 +277,7 @@ public final class StatsResponses {
       @Schema(
               description =
                   "순위 대상: 캐릭터 검색으로 장비를 관측해 효율을 계산한 캐릭터(딜러, 계산이 된 값만)입니다. 수집기만 거친 캐릭터는 들어가지 않습니다. 계산 모델이 바뀌면 다음 관측 때 갱신된 캐릭터부터 다시 셉니다.")
-          String population,
+          String populationNote,
       int page,
       int size,
       @Schema(description = "효율 높은 순. 전체 순위 대상 수는 meta.population")

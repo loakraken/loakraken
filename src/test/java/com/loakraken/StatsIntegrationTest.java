@@ -320,7 +320,7 @@ class StatsIntegrationTest {
     assertThat(bracelets.path("kind").asText()).isEqualTo("BRACELET");
     assertThat(bracelets.path("ruleVersion").asText())
         .isEqualTo(com.loakraken.common.api.EfficiencyRuleVersions.COMBAT_POWER_SIM);
-    assertThat(bracelets.path("population").asText()).isNotBlank();
+    assertThat(bracelets.path("populationNote").asText()).isNotBlank();
     // 옛 버전(통계캐1)은 빠지고, 동률(12.00)은 같은 순위다.
     assertThat(bracelets.at("/meta/population").asLong()).isEqualTo(4);
     assertThat(bracelets.at("/rows/0/characterName").asText()).isEqualTo("통계캐34");

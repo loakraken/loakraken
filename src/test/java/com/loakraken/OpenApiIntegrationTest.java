@@ -166,7 +166,7 @@ class OpenApiIntegrationTest {
           .contains("ApiResponseStatsEfficiencyRankingResponse");
     assertThat(
             document.at("/components/schemas/StatsEfficiencyRankingResponse/required").toString())
-        .contains("meta", "kind", "ruleVersion", "population", "page", "size", "rows");
+        .contains("meta", "kind", "ruleVersion", "populationNote", "page", "size", "rows");
     assertThat(
             document
                 .at("/components/schemas/StatsEfficiencyRankedCharacterResponse/required")

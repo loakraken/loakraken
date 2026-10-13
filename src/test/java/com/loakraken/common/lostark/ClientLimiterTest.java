@@ -22,7 +22,7 @@ class ClientLimiterTest {
 
   @Test
   void 버킷마다_분당_한도를_넘으면_창이_끝날_때까지_거절한다() {
-    var limiter = limiter(new ClientLimitProperties(true, 2, 2, 3, 3, true, 2, 6, 20, 5));
+    var limiter = limiter(new ClientLimitProperties(true, 2, 2, 3, 3, true, 2, 6, 20, 5, 5));
     String client = limiter.clientKey("203.0.113.7");
     for (int i = 0; i < 3; i++)
       assertThat(limiter.check(ClientLimiter.Bucket.GENERAL, client).allowed()).isTrue();
@@ -49,7 +49,7 @@ class ClientLimiterTest {
 
   @Test
   void 클라이언트_키는_주소를_담지_않고_같은_주소면_같다() {
-    var limiter = limiter(new ClientLimitProperties(true, 2, 2, 3, 3, true, 2, 6, 20, 5));
+    var limiter = limiter(new ClientLimitProperties(true, 2, 2, 3, 3, true, 2, 6, 20, 5, 5));
     String key = limiter.clientKey("203.0.113.7");
     assertThat(key).hasSize(32).doesNotContain("203").isEqualTo(limiter.clientKey("203.0.113.7"));
     assertThat(key).isNotEqualTo(limiter.clientKey("203.0.113.8"));
@@ -59,7 +59,7 @@ class ClientLimiterTest {
   void 저장소_장애면_제한하지_않고_지표를_남긴다() {
     var limiter =
         new ClientLimiter(
-            new ClientLimitProperties(true, 1, 1, 1, 1, true, 2, 6, 20, 5),
+            new ClientLimitProperties(true, 1, 1, 1, 1, true, 2, 6, 20, 5, 5),
             (key, ttl) -> {
               throw new ClientLimitStore.Unavailable(new IllegalStateException("down"));
             },
@@ -74,7 +74,7 @@ class ClientLimiterTest {
 
   @Test
   void 공식_호출은_요청_클라이언트에만_매기고_공유_예산을_쓰기_전에_거절한다() {
-    var limiter = limiter(new ClientLimitProperties(true, 2, 10, 10, 10, true, 2, 6, 20, 5));
+    var limiter = limiter(new ClientLimitProperties(true, 2, 10, 10, 10, true, 2, 6, 20, 5, 5));
     var gateStore = new MemoryGateStore(clock);
     var gate =
         new LostArkRequestGate(
@@ -127,7 +127,7 @@ class ClientLimiterTest {
 
   @Test
   void 끄면_세지_않는다() {
-    var limiter = limiter(new ClientLimitProperties(false, 0, 0, 0, 0, true, 2, 6, 20, 5));
+    var limiter = limiter(new ClientLimitProperties(false, 0, 0, 0, 0, true, 2, 6, 20, 5, 5));
     assertThat(limiter.check(ClientLimiter.Bucket.GENERAL, "c").allowed()).isTrue();
     limiter.enter("c");
     try {
@@ -139,7 +139,7 @@ class ClientLimiterTest {
 
   @Test
   void 필터는_공개_주소를_세고_내부_주소는_세지_않는다() throws Exception {
-    var limiter = limiter(new ClientLimitProperties(true, 2, 1, 3, 3, true, 2, 6, 20, 5));
+    var limiter = limiter(new ClientLimitProperties(true, 2, 1, 3, 3, true, 2, 6, 20, 5, 5));
     var filter = new ClientLimitFilter(limiter);
     for (int i = 0; i < 5; i++)
       assertThat(run(filter, "/api/v1/markets/tabs", "127.0.0.1", null).getStatus()).isEqualTo(200);
@@ -166,7 +166,7 @@ class ClientLimiterTest {
 
   @Test
   void 봇은_주소별로_세어_한_주소가_다른_봇_주소를_막지_않는다() throws Exception {
-    var limiter = limiter(new ClientLimitProperties(true, 2, 10, 10, 2, true, 2, 6, 20, 5));
+    var limiter = limiter(new ClientLimitProperties(true, 2, 10, 10, 2, true, 2, 6, 20, 5, 5));
     var filter = new ClientLimitFilter(limiter);
     assertThat(run(filter, "/api/v1/characters/search", "66.249.66.1", "1").getStatus())
         .isEqualTo(200);
@@ -185,7 +185,7 @@ class ClientLimiterTest {
 
   @Test
   void 봇_표시_요청도_통계_경로는_그_주소의_STATS_한도를_받는다() throws Exception {
-    var limiter = limiter(new ClientLimitProperties(true, 20, 60, 240, 120, true, 2, 6, 20, 5));
+    var limiter = limiter(new ClientLimitProperties(true, 20, 60, 240, 120, true, 2, 6, 20, 5, 5));
     var filter = new ClientLimitFilter(limiter);
     for (int i = 0; i < 60; i++)
       assertThat(run(filter, "/api/v1/rankings", "66.249.70.1", "1").getStatus()).isEqualTo(200);
@@ -201,7 +201,7 @@ class ClientLimiterTest {
   @Test
   void 봇_공식_호출은_주소별_한도와_모든_봇_합계_상한을_함께_센다() {
     // 봇 주소별 공식 호출 2, 모든 봇 합계 3.
-    var limiter = limiter(new ClientLimitProperties(true, 2, 10, 10, 10, true, 2, 6, 3, 2));
+    var limiter = limiter(new ClientLimitProperties(true, 2, 10, 10, 10, true, 2, 6, 3, 2, 5));
     Runnable charge = limiter::chargeOfficial;
     limiter.enter(limiter.botKey("66.249.66.1"));
     try {
@@ -233,7 +233,7 @@ class ClientLimiterTest {
   @Test
   void 봇_한_주소는_기본값으로_공식_호출_5회까지이고_사람_클라이언트는_20회다() {
     // 한 봇 주소가 모든 봇 합계 상한(20)을 혼자 다 쓰지 못한다.
-    var limiter = limiter(new ClientLimitProperties(true, 20, 60, 240, 120, true, 2, 5, 20, 5));
+    var limiter = limiter(new ClientLimitProperties(true, 20, 60, 240, 120, true, 2, 5, 20, 5, 5));
     limiter.enter(limiter.botKey("66.249.66.3"));
     try {
       for (int i = 0; i < 5; i++) limiter.chargeOfficial();
@@ -255,24 +255,24 @@ class ClientLimiterTest {
       limiter.exit();
     }
     org.assertj.core.api.Assertions.assertThatThrownBy(
-            () -> new ClientLimitProperties(true, 20, 60, 240, 120, true, 2, 5, 20, 20))
+            () -> new ClientLimitProperties(true, 20, 60, 240, 120, true, 2, 5, 20, 20, 5))
         .isInstanceOf(IllegalArgumentException.class);
   }
 
   @Test
   void 봇_한도는_일반_클라이언트_한도보다_클_수_없다() {
-    var defaults = new ClientLimitProperties(true, 20, 60, 240, 120, true, 2, 6, 20, 5);
+    var defaults = new ClientLimitProperties(true, 20, 60, 240, 120, true, 2, 6, 20, 5, 5);
     assertThat(defaults.botPerMinute()).isLessThanOrEqualTo(defaults.generalPerMinute());
     org.assertj.core.api.Assertions.assertThatThrownBy(
-            () -> new ClientLimitProperties(true, 20, 60, 240, 241, true, 2, 6, 20, 5))
+            () -> new ClientLimitProperties(true, 20, 60, 240, 241, true, 2, 6, 20, 5, 5))
         .isInstanceOf(IllegalArgumentException.class);
     // 끈 상태는 검사하지 않는다.
-    new ClientLimitProperties(false, 0, 0, 0, 1, true, 2, 6, 20, 5);
+    new ClientLimitProperties(false, 0, 0, 0, 1, true, 2, 6, 20, 5, 5);
   }
 
   @Test
   void 필터는_요청을_처리하는_동안만_클라이언트를_스레드에_둔다() throws Exception {
-    var limiter = limiter(new ClientLimitProperties(true, 1, 10, 10, 10, true, 2, 6, 20, 5));
+    var limiter = limiter(new ClientLimitProperties(true, 1, 10, 10, 10, true, 2, 6, 20, 5, 5));
     var filter = new ClientLimitFilter(limiter);
     var request = request("/api/v1/characters/search", "203.0.113.9", null);
     var calls = new java.util.concurrent.atomic.AtomicInteger();

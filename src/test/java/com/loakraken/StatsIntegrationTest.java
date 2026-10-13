@@ -535,6 +535,31 @@ class StatsIntegrationTest {
   }
 
   @Test
+  void 처리정지_캐릭터는_다음_티어_경계값_후보에서_빠진다() throws Exception {
+    표본();
+    // 통계캐33(3330)을 빼면 서버 39명. 통계캐30(3300)은 큰 값이 3310·3320·3340 셋이라 4위(10.26%) TOP25.
+    // 다음 TOP10의 K = ⌊10×39/100⌋ = 3, 3번째로 높은 값은 3310(처리정지 3330을 넣었다면 3320).
+    jdbc.sql(
+            "INSERT INTO public_exclusion (character_name, server_name, reason_code) VALUES ('통계캐33', :s, 'REQUEST')")
+        .param("s", SERVER)
+        .update();
+    try {
+      var server =
+          entry(
+              data("/api/v1/characters/rank?characterName=" + encode("통계캐30")),
+              "COMBAT_POWER",
+              "SERVER");
+      assertThat(server.path("total").asLong()).isEqualTo(39);
+      assertThat(server.path("tier").asText()).isEqualTo("TOP25");
+      assertThat(server.path("nextTier").asText()).isEqualTo("TOP10");
+      assertThat(server.path("nextTierValue").decimalValue()).isEqualByComparingTo("3310");
+      assertThat(server.path("nextTierGap").decimalValue()).isEqualByComparingTo("10");
+    } finally {
+      jdbc.sql("DELETE FROM public_exclusion WHERE character_name = '통계캐33'").update();
+    }
+  }
+
+  @Test
   void 같은_조건은_10분_캐시를_쓴다() throws Exception {
     표본();
     var first = data("/api/v1/stats/summary?server=" + encode(SERVER));

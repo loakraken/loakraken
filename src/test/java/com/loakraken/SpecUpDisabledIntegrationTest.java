@@ -36,5 +36,20 @@ class SpecUpDisabledIntegrationTest {
     assertThat(response.statusCode()).isEqualTo(404);
     ApiContractFixture.write("character-spec-up-disabled.json", response.body());
     assertThat(response.body()).contains("SPEC_UP_DISABLED").doesNotContain("CHARACTER_NOT_CACHED");
+    // 목표 경로(L31)도 같은 플래그를 따른다.
+    var goal =
+        HttpClient.newHttpClient()
+            .send(
+                HttpRequest.newBuilder(
+                        URI.create(
+                            "http://localhost:"
+                                + port
+                                + "/api/v1/characters/spec-up/goal?targetCombatPower=3100&characterName="
+                                + URLEncoder.encode("스펙꺼짐", StandardCharsets.UTF_8)))
+                    .GET()
+                    .build(),
+                HttpResponse.BodyHandlers.ofString());
+    assertThat(goal.statusCode()).isEqualTo(404);
+    assertThat(goal.body()).contains("SPEC_UP_DISABLED");
   }
 }

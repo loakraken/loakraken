@@ -170,6 +170,46 @@ class OpenApiIntegrationTest {
                   .asText())
           .as(field)
           .isEqualTo("null");
+    // 에스더 무기 안쪽 필드(K32, #449 P3): 둘 다 required이고 못 읽으면 null.
+    assertThat(document.at("/components/schemas/StatsEstherWeaponResponse/required").toString())
+        .contains("refineLevel", "ellaStage");
+    for (var field : List.of("refineLevel", "ellaStage"))
+      assertThat(
+              document
+                  .at(
+                      "/components/schemas/StatsEstherWeaponResponse/properties/"
+                          + field
+                          + "/anyOf/1/type")
+                  .asText())
+          .as(field)
+          .isEqualTo("null");
+    // 스펙업 목표 경로(L31): 새 경로, 모든 필드 required, 값이 없을 수 있는 필드만 nullable.
+    assertThat(document.at("/paths/~1api~1v1~1characters~1spec-up~1goal/get").isMissingNode())
+        .isFalse();
+    assertThat(document.at("/components/schemas/SpecUpGoalResponse/required").toString())
+        .contains("finalCombatPower", "stopReasonCode", "totalCost", "unpricedSteps", "steps");
+    for (var field : List.of("combatPower", "finalCombatPower", "totalCost", "pricesAt"))
+      assertThat(
+              document
+                  .at(
+                      "/components/schemas/SpecUpGoalResponse/properties/"
+                          + field
+                          + "/anyOf/1/type")
+                  .asText())
+          .as(field)
+          .isEqualTo("null");
+    assertThat(document.at("/components/schemas/SpecUpGoalStepResponse/required").toString())
+        .contains("change", "deltaCombatPower", "combatPowerAfter", "cost", "cumulativeCost");
+    for (var field : List.of("cumulativeCost", "combatPowerPer10kGold", "icon"))
+      assertThat(
+              document
+                  .at(
+                      "/components/schemas/SpecUpGoalStepResponse/properties/"
+                          + field
+                          + "/anyOf/1/type")
+                  .asText())
+          .as(field)
+          .isEqualTo("null");
     // 팔찌·젬 효율 랭킹(L38·L39): 두 경로가 같은 스키마, 필수와 nullable.
     for (var path : List.of("bracelets", "ark-grid-gems"))
       assertThat(

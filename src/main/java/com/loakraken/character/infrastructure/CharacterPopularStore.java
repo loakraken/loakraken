@@ -24,6 +24,7 @@ import tools.jackson.databind.json.JsonMapper;
 class CharacterPopularStore implements CharacterPopularPort {
   static final String SEEN_PREFIX = "popular:v1:seen:";
   static final String RESULT_PREFIX = "popular:v1:result:";
+  static final String GUILD_RESULT_PREFIX = "popular:v1:guilds:";
   private static final Duration SEEN_TTL = Duration.ofHours(26);
   private final JdbcClient jdbc;
   private final StringRedisTemplate redis;
@@ -96,6 +97,60 @@ class CharacterPopularStore implements CharacterPopularPort {
                     row.getString("class_name"),
                     row.getBigDecimal("item_level")))
         .list();
+  }
+
+  @Override
+  public List<PopularGuildRow> topGuilds(
+      Instant since, String serverName, int minUniqueViews, int limit) {
+    // 인기 캐릭터와 같은 시간 버킷 합. 길드는 지금 캐릭터 행의 길드 이름이고, 처리정지 캐릭터 조회는 합에 넣지 않는다(길드는 남김, B5).
+    return jdbc.sql(
+            """
+        SELECT c.server_name, c.guild_name
+        FROM character_popular_hourly h
+        JOIN characters c ON c.server_name = h.server_name AND c.character_name = h.character_name
+        WHERE h.hour_bucket >= :since
+          AND c.guild_name IS NOT NULL
+          AND (CAST(:server AS VARCHAR) IS NULL OR c.server_name = CAST(:server AS VARCHAR))
+          AND NOT EXISTS (
+            SELECT 1 FROM public_exclusion e
+            WHERE e.character_name = h.character_name
+              AND (e.server_name IS NULL OR e.server_name = h.server_name))
+        GROUP BY c.server_name, c.guild_name
+        HAVING SUM(h.unique_views) >= :min
+        ORDER BY SUM(h.unique_views) DESC, c.guild_name, c.server_name
+        LIMIT :limit
+        """)
+        .param("since", utc(since))
+        .param("server", serverName)
+        .param("min", minUniqueViews)
+        .param("limit", limit)
+        .query(
+            (row, index) ->
+                new PopularGuildRow(row.getString("server_name"), row.getString("guild_name")))
+        .list();
+  }
+
+  @Override
+  public Optional<PopularGuildResult> findCachedGuilds(String key) {
+    try {
+      var json = redis.opsForValue().get(GUILD_RESULT_PREFIX + key);
+      return json == null
+          ? Optional.empty()
+          : Optional.of(mapper.readValue(json, PopularGuildResult.class));
+    } catch (DataAccessException | JacksonException | IllegalArgumentException exception) {
+      return Optional.empty();
+    }
+  }
+
+  @Override
+  public void saveCachedGuilds(String key, PopularGuildResult result) {
+    try {
+      redis
+          .opsForValue()
+          .set(GUILD_RESULT_PREFIX + key, mapper.writeValueAsString(result), policy.cacheTtl());
+    } catch (JacksonException exception) {
+      // 캐시를 쓰지 못해도 응답은 그대로 준다.
+    }
   }
 
   @Override

@@ -448,6 +448,7 @@ class AlertIntegrationTest {
     events.publishEvent(
         new MarketPricesObserved(
             clock.instant(),
+            Duration.ofSeconds(30),
             List.of(
                 new MarketPrice(
                     ITEM, "운명의 파괴석", "일반", null, 1, null, null, null, new BigDecimal(price)))));

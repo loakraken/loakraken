@@ -980,6 +980,34 @@ class OpenApiIntegrationTest {
         .isEqualTo("[\"TOP1\",\"TOP5\",\"TOP10\",\"TOP25\",\"TOP50\"]");
   }
 
+  @Test
+  void 분_단위_시세는_안쪽까지_required이고_없을_수_있는_값만_nullable이다() throws Exception {
+    var document = JsonMapper.builder().build().readTree(request("/v3/api-docs").body());
+    assertThat(
+            document.at("/paths/~1api~1v1~1markets~1items~1{itemId}~1minutes/get").isMissingNode())
+        .isFalse();
+    var schemas = document.at("/components/schemas");
+    assertThat(schemas.at("/MarketMinuteChartResponse/required").toString())
+        .contains(
+            "itemId", "itemName", "intervalSeconds", "sampleEverySeconds", "from", "to", "points");
+    for (var field : List.of("itemName", "sampleEverySeconds"))
+      assertThat(
+              schemas
+                  .at("/MarketMinuteChartResponse/properties/" + field + "/anyOf/1/type")
+                  .asText())
+          .as(field)
+          .isEqualTo("null");
+    assertThat(schemas.at("/MarketMinutePointResponse/required").toString())
+        .contains("minute", "currentMinPrice", "recentPrice");
+    for (var field : List.of("currentMinPrice", "recentPrice"))
+      assertThat(
+              schemas
+                  .at("/MarketMinutePointResponse/properties/" + field + "/anyOf/1/type")
+                  .asText())
+          .as(field)
+          .isEqualTo("null");
+  }
+
   private HttpResponse<String> request(String path) throws Exception {
     try (var client = HttpClient.newHttpClient()) {
       return client.send(

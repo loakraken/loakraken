@@ -98,13 +98,19 @@ class MarketHistoryWarmup {
     gauge(registry, "warmup_refining_materials", lastRefiningMaterialSuccess);
   }
 
-  /** 받은 가격을 시세 알림(M33)에 알린다. 듣는 쪽의 실패가 예열을 멈추지 않게 예외를 삼키고 종류만 남긴다(내용·주소는 남기지 않음). */
+  /**
+   * 받은 가격을 시세 알림(M33)·분 단위 차트(K35)에 알린다. sampleEvery는 이 품목들을 다시 받는 예열 주기다. 듣는 쪽의 실패가 예열을 멈추지 않게 예외를
+   * 삼키고 종류만 남긴다(내용·주소는 남기지 않음).
+   */
   private void publish(
-      Instant observedAt, java.util.List<com.loakraken.market.domain.MarketPrice> prices) {
+      Instant observedAt,
+      java.time.Duration sampleEvery,
+      java.util.List<com.loakraken.market.domain.MarketPrice> prices) {
     if (prices.isEmpty()) return;
     try {
       events.publishEvent(
-          new com.loakraken.market.application.MarketPricesObserved(observedAt, prices));
+          new com.loakraken.market.application.MarketPricesObserved(
+              observedAt, sampleEvery, prices));
     } catch (RuntimeException exception) {
       log.warn("시세 관측 알림에 실패했습니다. exceptionType={}", exception.getClass().getName());
     }
@@ -188,7 +194,8 @@ class MarketHistoryWarmup {
       try {
         var refreshed = gate.withReserve(RESERVE, () -> boards.refreshDefaultPage(tab));
         recordBoard(Outcome.REFRESHED);
-        if (refreshed != null) publish(refreshed.observedAt(), refreshed.page().items());
+        if (refreshed != null)
+          publish(refreshed.observedAt(), properties.boardInterval(), refreshed.page().items());
         lastBoardSuccess.set(clock.instant().getEpochSecond());
       } catch (BusinessException exception) {
         recordBoard(Outcome.FAILED);
@@ -228,7 +235,7 @@ class MarketHistoryWarmup {
         relicBooks.save(
             new RelicBookScan(relicObservedAt, relicTotal, java.util.List.copyOf(relicItems)),
             relicBookProperties.cacheTtl());
-        publish(relicObservedAt, java.util.List.copyOf(relicItems));
+        publish(relicObservedAt, relicBookProperties.interval(), java.util.List.copyOf(relicItems));
         recordRelic(Outcome.REFRESHED);
         lastRelicBookSuccess.set(now.getEpochSecond());
         relicDueAt = now.plus(relicBookProperties.interval());
@@ -312,7 +319,10 @@ class MarketHistoryWarmup {
         new com.loakraken.market.application.RefiningMaterialScan(
             observedAt == null ? now : observedAt, items),
         refiningMaterialProperties.cacheTtl());
-    publish(observedAt == null ? now : observedAt, java.util.List.copyOf(items));
+    publish(
+        observedAt == null ? now : observedAt,
+        refiningMaterialProperties.interval(),
+        java.util.List.copyOf(items));
     recordRefiningMaterials(Outcome.REFRESHED);
     lastRefiningMaterialSuccess.set(now.getEpochSecond());
     refiningMaterialDueAt = now.plus(refiningMaterialProperties.interval());

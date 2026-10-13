@@ -61,6 +61,7 @@ class MarketHistoryWarmupTest {
     assertThat(published).hasSize(1);
     var event = (com.loakraken.market.application.MarketPricesObserved) published.getFirst();
     assertThat(event.observedAt()).isEqualTo(clock.now);
+    assertThat(event.sampleEvery()).isEqualTo(Duration.ofSeconds(30));
     assertThat(event.prices()).extracting(MarketPrice::id).containsExactly(1000L, 1001L, 1002L);
 
     // 듣는 쪽이 실패해도 예외가 예열 밖으로 나가지 않는다.

@@ -78,15 +78,7 @@ public class GuildRankingController {
           Integer size) {
     var conditions =
         new StatsConditions(
-            server,
-            null,
-            null,
-            activeDays == null ? StatsConditions.defaults().activeDays() : activeDays,
-            null,
-            null,
-            null,
-            null,
-            false);
+            server, null, null, ActiveDays.of(activeDays), null, null, null, null, false);
     return ApiResponse.of(
         StatsSuccessCode.GUILD_RANKING_SUCCESS,
         GuildRankingResponse.from(

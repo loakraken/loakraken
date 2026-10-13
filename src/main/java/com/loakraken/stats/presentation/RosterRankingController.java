@@ -79,15 +79,7 @@ public class RosterRankingController {
           Integer size) {
     var conditions =
         new StatsConditions(
-            server,
-            null,
-            null,
-            activeDays == null ? StatsConditions.defaults().activeDays() : activeDays,
-            null,
-            null,
-            null,
-            null,
-            false);
+            server, null, null, ActiveDays.of(activeDays), null, null, null, null, false);
     return ApiResponse.of(
         StatsSuccessCode.ROSTER_RANKING_SUCCESS,
         RosterRankingResponse.from(

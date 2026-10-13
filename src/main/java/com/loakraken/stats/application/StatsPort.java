@@ -314,7 +314,8 @@ public interface StatsPort {
 
   /**
    * 한 길드의 관측 길드원(길드 탭, L36). 길드 랭킹 memberCount와 같은 정의: since 뒤 프로필 관측, 아이템 레벨 있음, 처리정지 제외. 길드 이름은
-   * 대소문자를 무시해 찾고, 철자가 여럿이면 길드원이 가장 많은 철자(같으면 이름순 첫째) 하나만 고른다(랭킹 한 줄과 같은 길드). 없으면 빈 목록.
+   * 대소문자를 무시해 찾고, 철자가 여럿이면 요청과 정확히 같은 철자를, 없으면 길드원이 가장 많은 철자(같으면 이름순 첫째) 하나만 고른다(랭킹 한 줄과 같은 길드).
+   * 없으면 빈 목록.
    */
   GuildMembers guildMembers(String server, String guild, Instant since);
 

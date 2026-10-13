@@ -71,15 +71,7 @@ public class CollectibleRankingController {
           Integer size) {
     var conditions =
         new StatsConditions(
-            server,
-            null,
-            null,
-            activeDays == null ? StatsConditions.defaults().activeDays() : activeDays,
-            null,
-            null,
-            null,
-            null,
-            false);
+            server, null, null, ActiveDays.of(activeDays), null, null, null, null, false);
     boolean characterUnit = "CHARACTER".equals(unit);
     return ApiResponse.of(
         StatsSuccessCode.COLLECTIBLE_RANKING_SUCCESS,
@@ -118,15 +110,7 @@ public class CollectibleRankingController {
           String unit) {
     var conditions =
         new StatsConditions(
-            server,
-            null,
-            null,
-            activeDays == null ? StatsConditions.defaults().activeDays() : activeDays,
-            null,
-            null,
-            null,
-            null,
-            false);
+            server, null, null, ActiveDays.of(activeDays), null, null, null, null, false);
     boolean characterUnit = "CHARACTER".equals(unit);
     var result = stats.collectibleStanding(conditions, characterName.strip(), characterUnit);
     return ApiResponse.of(

@@ -151,13 +151,9 @@ public class StatsQueryService {
   public GuildDetailResult guildDetail(String server, String guild, int activeDays) {
     var conditions =
         new StatsConditions(server, null, null, activeDays, null, null, null, null, false);
+    // 요청과 정확히 같은 철자를 먼저 고르므로 캐시 키도 요청 철자 그대로다(대소문자만 다른 요청이 다른 길드일 수 있음).
     return cached(
-        "guild-detail:"
-            + server
-            + ":"
-            + guild.toLowerCase(java.util.Locale.ROOT)
-            + ":"
-            + activeDays,
+        "guild-detail:" + server + ":" + guild + ":" + activeDays,
         GuildDetailResult.class,
         () -> {
           var now = clock.instant();

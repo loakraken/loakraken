@@ -62,15 +62,7 @@ public class CollectibleOwnershipController {
           String type) {
     var conditions =
         new StatsConditions(
-            server,
-            null,
-            null,
-            activeDays == null ? StatsConditions.defaults().activeDays() : activeDays,
-            null,
-            null,
-            null,
-            null,
-            false);
+            server, null, null, ActiveDays.of(activeDays), null, null, null, null, false);
     var result = stats.collectibleOwnership(conditions, type == null ? null : type.strip());
     return ApiResponse.of(
         StatsSuccessCode.COLLECTIBLE_OWNERSHIP_SUCCESS,

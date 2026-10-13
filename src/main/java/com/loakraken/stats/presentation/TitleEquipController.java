@@ -58,15 +58,7 @@ public class TitleEquipController {
           String title) {
     var conditions =
         new StatsConditions(
-            server,
-            null,
-            null,
-            activeDays == null ? StatsConditions.defaults().activeDays() : activeDays,
-            null,
-            null,
-            null,
-            null,
-            false);
+            server, null, null, ActiveDays.of(activeDays), null, null, null, null, false);
     var result =
         stats.titleEquip(conditions, title == null || title.isBlank() ? null : title.strip());
     return ApiResponse.of(

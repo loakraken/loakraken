@@ -167,6 +167,11 @@ class GuildDetailIntegrationTest {
     var data = data("/api/v1/guilds/" + encode(SERVER) + "/abcguild");
     assertThat(data.path("guildName").asText()).isEqualTo("AbcGuild");
     assertThat(data.at("/meta/memberCount").asLong()).isEqualTo(2);
+    // 요청과 정확히 같은 철자가 있으면 길드원이 적어도 그 철자다(랭킹의 그 줄에서 들어온 경우).
+    var exact = data("/api/v1/guilds/" + encode(SERVER) + "/ABCGUILD");
+    assertThat(exact.path("guildName").asText()).isEqualTo("ABCGUILD");
+    assertThat(exact.at("/meta/memberCount").asLong()).isEqualTo(1);
+    assertThat(exact.at("/members/0/characterName").asText()).isEqualTo("탭영다");
   }
 
   @Test

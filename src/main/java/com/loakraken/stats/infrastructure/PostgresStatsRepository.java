@@ -432,10 +432,13 @@ class PostgresStatsRepository implements StatsPort {
                             instant(row.getObject("profile_refreshed_at", OffsetDateTime.class)))))
             .list();
     if (rows.isEmpty()) return new GuildMembers(null, List.of());
-    // 철자가 여럿이면 길드 랭킹에서 따로 세는 길드라, 길드원이 가장 많은 철자 하나만 고른다.
+    // 철자가 여럿이면 길드 랭킹에서 따로 세는 길드라 하나만 고른다. 요청과 정확히 같은 철자가 있으면 그것(랭킹의 그 줄에서 들어온 경우),
+    // 없으면 길드원이 가장 많은 철자.
     var bySpelling = new java.util.TreeMap<String, List<GuildDetail.Member>>();
     for (var row : rows)
       bySpelling.computeIfAbsent(row.getKey(), key -> new ArrayList<>()).add(row.getValue());
+    var exact = bySpelling.get(guild);
+    if (exact != null) return new GuildMembers(guild, List.copyOf(exact));
     var chosen =
         bySpelling.entrySet().stream()
             .max(

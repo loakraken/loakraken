@@ -87,6 +87,9 @@ class RosterCombatPowerIntegrationTest {
     roster("원정전투가", "원정전투나", "원정전투다", "원정전투정지");
     record("원정전투가", "3100.50", Instant.now().minus(Duration.ofHours(2)));
     record("원정전투정지", "4000.00", Instant.now());
+    // 관측한 최고 전투력(L37과 같은 열): 가는 3300.00, 처리정지 캐릭터도 값은 있지만 응답에는 나오지 않아야 한다.
+    best("원정전투가", "3300.00");
+    best("원정전투정지", "4500.00");
     stop("원정전투정지");
 
     var response = get("/api/v1/characters/roster-combat-power?characterName=" + encode("원정전투가"));
@@ -98,11 +101,14 @@ class RosterCombatPowerIntegrationTest {
     assertThat(names(items)).containsExactly("원정전투가", "원정전투나", "원정전투다", "원정전투정지");
     assertThat(items.at("/0/combatPower").decimalValue()).isEqualByComparingTo("3100.50");
     assertThat(items.at("/0/combatPowerObservedAt").isNull()).isFalse();
+    assertThat(items.at("/0/bestCombatPower").decimalValue()).isEqualByComparingTo("3300.00");
     assertThat(items.at("/1/combatPower").isNull()).isTrue();
     assertThat(items.at("/1/combatPowerObservedAt").isNull()).isTrue();
+    assertThat(items.at("/1/bestCombatPower").isNull()).isTrue();
     // 처리정지 캐릭터는 기록이 있어도 기록 없는 캐릭터와 같은 모양(B5)
     assertThat(items.at("/3/combatPower").isNull()).isTrue();
     assertThat(items.at("/3/combatPowerObservedAt").isNull()).isTrue();
+    assertThat(items.at("/3/bestCombatPower").isNull()).isTrue();
     assertThat(ImmutableNames.of(items.get(3))).isEqualTo(ImmutableNames.of(items.get(1)));
     assertThat(data.path("missingCount").asInt()).isEqualTo(3);
     assertThat(data.path("refreshAvailableAt").isNull()).isTrue();
@@ -136,6 +142,10 @@ class RosterCombatPowerIntegrationTest {
     var items = data.path("items");
     assertThat(items.at("/1/combatPower").decimalValue()).isEqualByComparingTo("3500.00");
     assertThat(items.at("/2/combatPower").decimalValue()).isEqualByComparingTo("3500.00");
+    // 불러온 값은 최고 전투력에도 반영된다(GREATEST). 처리정지 캐릭터는 null.
+    assertThat(items.at("/1/bestCombatPower").decimalValue()).isEqualByComparingTo("3500.00");
+    assertThat(items.at("/2/bestCombatPower").decimalValue()).isEqualByComparingTo("3500.00");
+    assertThat(items.at("/3/bestCombatPower").isNull()).isTrue();
     // 처리정지 캐릭터는 불러와도 기록하지 않는다(B5).
     assertThat(items.at("/3/combatPower").isNull()).isTrue();
     assertThat(
@@ -288,6 +298,15 @@ class RosterCombatPowerIntegrationTest {
         .param("server", SERVER)
         .param("cp", new BigDecimal(combatPower))
         .param("at", at.atOffset(ZoneOffset.UTC))
+        .update();
+  }
+
+  private void best(String name, String combatPower) {
+    jdbc.sql(
+            "UPDATE characters SET best_combat_power = :cp WHERE character_name = :n AND server_name = :s")
+        .param("cp", new BigDecimal(combatPower))
+        .param("n", name)
+        .param("s", SERVER)
         .update();
   }
 

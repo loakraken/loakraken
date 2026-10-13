@@ -24,7 +24,7 @@ class PostgresRosterCombatPowerRepository implements RosterCombatPowerPort {
     // 처리정지 목록은 기록이 없는 캐릭터와 같게 뺀다(#366 원칙, 서버를 비운 항목은 모든 서버).
     jdbc.sql(
             """
-            SELECT c.character_name, c.combat_power,
+            SELECT c.character_name, c.combat_power, c.best_combat_power,
                    GREATEST(c.last_synced_at, c.profile_refreshed_at) AS observed_at
             FROM characters c
             WHERE c.server_name = :server AND c.character_name IN (:names)
@@ -42,7 +42,8 @@ class PostgresRosterCombatPowerRepository implements RosterCombatPowerPort {
                   row.getString("character_name"),
                   new Observed(
                       row.getBigDecimal("combat_power"),
-                      observedAt == null ? null : observedAt.toInstant()));
+                      observedAt == null ? null : observedAt.toInstant(),
+                      row.getBigDecimal("best_combat_power")));
               return null;
             })
         .list();

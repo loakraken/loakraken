@@ -13,5 +13,6 @@ public interface RosterCombatPowerPort {
   /** 이름들 가운데 처리정지 목록에 있는 캐릭터(서버를 비운 항목은 모든 서버). 한 번의 조회다. */
   java.util.Set<String> stopped(String serverName, Collection<String> characterNames);
 
-  record Observed(BigDecimal combatPower, Instant observedAt) {}
+  /** bestCombatPower: 관측한 최고 전투력(랭킹 L37과 같은 characters.best_combat_power). 아직 채워지지 않았으면 null. */
+  record Observed(BigDecimal combatPower, Instant observedAt, BigDecimal bestCombatPower) {}
 }

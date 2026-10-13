@@ -139,8 +139,15 @@ class OpenApiIntegrationTest {
             document.at("/components/schemas/RosterCombatPowerRefreshResponse/required").toString())
         .contains("items", "fetched", "remaining", "refreshAvailableAt");
     assertThat(document.at("/components/schemas/RosterCombatPowerItemResponse/required").toString())
-        .contains("characterName", "serverName", "combatPower", "combatPowerObservedAt");
-    for (var field : List.of("combatPower", "combatPowerObservedAt", "className", "itemLevel"))
+        .contains(
+            "characterName",
+            "serverName",
+            "combatPower",
+            "combatPowerObservedAt",
+            "bestCombatPower");
+    for (var field :
+        List.of(
+            "combatPower", "combatPowerObservedAt", "className", "itemLevel", "bestCombatPower"))
       assertThat(
               document
                   .at(

@@ -63,14 +63,18 @@ public class RosterCombatPowerService {
     this.clock = clock;
   }
 
-  /** 원정대 한 캐릭터의 공식 원정대 값과 우리 DB 전투력 기록. 기록이 없으면 combatPower·observedAt이 null. */
+  /**
+   * 원정대 한 캐릭터의 공식 원정대 값과 우리 DB 전투력 기록. 기록이 없으면 combatPower·observedAt·bestCombatPower가 null(처리정지도
+   * 같다, B5).
+   */
   public record Item(
       String characterName,
       String serverName,
       String className,
       BigDecimal itemLevel,
       BigDecimal combatPower,
-      Instant combatPowerObservedAt) {}
+      Instant combatPowerObservedAt,
+      BigDecimal bestCombatPower) {}
 
   public record View(List<Item> items, int missingCount, Instant refreshAvailableAt) {}
 
@@ -165,7 +169,8 @@ public class RosterCombatPowerService {
               member.className(),
               member.itemLevel(),
               record == null ? null : record.combatPower(),
-              record == null ? null : record.observedAt()));
+              record == null ? null : record.observedAt(),
+              record == null ? null : record.bestCombatPower()));
     }
     return List.copyOf(items);
   }

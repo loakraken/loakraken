@@ -15,7 +15,8 @@ import java.util.Set;
  *       한다.
  * </ul>
  *
- * 키는 서버 비밀값 HMAC이라 이름 원문을 두지 않는다. DB에 쓰지 않는다. 저장소 장애면 없는 것처럼 동작한다.
+ * 키는 서버 비밀값 HMAC이라 이름 원문을 두지 않는다. DB에 쓰지 않는다. 저장소 장애면 DataAccessException을 던진다(불러오기는 fail closed
+ * 503, 조회는 없는 값으로 둔다).
  */
 public interface RosterTransientPort {
   record Value(BigDecimal combatPower, Instant observedAt) {}

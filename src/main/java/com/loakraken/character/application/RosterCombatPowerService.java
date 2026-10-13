@@ -107,6 +107,14 @@ public class RosterCombatPowerService {
   }
 
   private Refresh fetch(Roster roster) {
+    // 기록하지 않은 캐릭터를 staleAfter 안에 이미 불렀으면 기록 있는 캐릭터처럼 대상에서 뺀다. 표시를 못 읽으면 처리정지 대원만 다시 대상이
+    // 되므로 공식 호출·쿨다운 전에 503으로 멈춘다(fail closed).
+    Set<String> marked;
+    try {
+      marked = transients.marked(roster.serverName(), roster.members().keySet());
+    } catch (DataAccessException exception) {
+      throw new CharacterException(CharacterErrorCode.CHARACTER_CACHE_UNAVAILABLE);
+    }
     var wait = cooldown.acquire(roster.key(), policy.cooldown());
     if (wait.isPresent()) {
       metrics.rosterRefresh("cooldown");
@@ -114,8 +122,6 @@ public class RosterCombatPowerService {
     }
     var now = clock.instant();
     var known = known(roster);
-    // 기록하지 않은 캐릭터를 staleAfter 안에 이미 불렀으면 기록 있는 캐릭터처럼 대상에서 뺀다.
-    var marked = transients.marked(roster.serverName(), roster.members().keySet());
     var staleBefore = now.minus(policy.staleAfter());
     var targets =
         roster.members().values().stream()
@@ -135,6 +141,7 @@ public class RosterCombatPowerService {
     int fetched = 0;
     int attempted = 0;
     boolean stopped = false;
+    boolean unavailable = false;
     for (var target : targets) {
       if (attempted == policy.maxTargets()) break;
       attempted++;
@@ -147,12 +154,18 @@ public class RosterCombatPowerService {
             history.record(profile, at);
           else {
             // 기록하지 않는다. 받은 값은 5분 임시 값으로만 응답에 쓰고, 값 없는 표시로 다음 대상 선정을 같게 한다.
-            transients.put(
-                roster.serverName(),
-                target.characterName(),
-                new RosterTransientPort.Value(profile.combatPower(), at),
-                policy.transientTtl());
-            transients.mark(roster.serverName(), target.characterName(), policy.staleAfter());
+            // 못 쓰면 이 응답과 다음 대상 선정에서 처리정지 대원만 달라지므로 성공으로 내지 않는다(아래에서 503).
+            try {
+              transients.put(
+                  roster.serverName(),
+                  target.characterName(),
+                  new RosterTransientPort.Value(profile.combatPower(), at),
+                  policy.transientTtl());
+              transients.mark(roster.serverName(), target.characterName(), policy.staleAfter());
+            } catch (DataAccessException exception) {
+              unavailable = true;
+              break;
+            }
           }
         }
         fetched++;
@@ -165,6 +178,11 @@ public class RosterCombatPowerService {
         break;
       }
     }
+    if (unavailable) {
+      // 이미 쓴 공식 호출 몫이 있으므로 쿨다운은 그대로 둔다.
+      metrics.rosterRefresh("unavailable");
+      throw new CharacterException(CharacterErrorCode.CHARACTER_CACHE_UNAVAILABLE);
+    }
     int remaining = targets.size() - attempted;
     var availableAt = now.plus(policy.cooldown());
     if (stopped && fetched == 0) {
@@ -173,18 +191,36 @@ public class RosterCombatPowerService {
       availableAt = null;
     }
     metrics.rosterRefresh(stopped || remaining > 0 ? (fetched == 0 ? "limited" : "partial") : "ok");
-    return new Refresh(items(roster), fetched, remaining, availableAt);
+    List<Item> items;
+    try {
+      items = items(roster, true);
+    } catch (DataAccessException exception) {
+      // 방금 쓴 임시 값을 못 읽으면 처리정지 대원만 비므로 성공으로 내지 않는다.
+      throw new CharacterException(CharacterErrorCode.CHARACTER_CACHE_UNAVAILABLE);
+    }
+    return new Refresh(items, fetched, remaining, availableAt);
   }
 
   private List<Item> items(Roster roster) {
+    return items(roster, false);
+  }
+
+  /**
+   * @param strict true면 임시 값 읽기 실패를 그대로 던진다(불러오기). false면 없는 값으로 둔다(조회: 5분 뒤와 같은 모양, 판정 ① 수용 범위).
+   */
+  private List<Item> items(Roster roster, boolean strict) {
     var known = known(roster);
     // 기록이 없는 캐릭터만 임시 값을 본다(처리정지 목록을 불러온 지 5분 안). 모양은 기록을 처음 남긴 캐릭터와 같다(최고 = 지금 값).
     var missing = new java.util.HashSet<>(roster.members().keySet());
     missing.removeAll(known.keySet());
-    var temporary =
-        policy.markerConfigured() && !missing.isEmpty()
-            ? transients.find(roster.serverName(), missing)
-            : Map.<String, RosterTransientPort.Value>of();
+    Map<String, RosterTransientPort.Value> temporary = Map.of();
+    if (policy.markerConfigured() && !missing.isEmpty()) {
+      try {
+        temporary = transients.find(roster.serverName(), missing);
+      } catch (DataAccessException exception) {
+        if (strict) throw exception;
+      }
+    }
     var items = new ArrayList<Item>();
     for (var member : roster.members().values()) {
       var record = known.get(member.characterName());

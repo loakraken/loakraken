@@ -113,7 +113,8 @@ public class RosterCombatPowerController {
                     item.className(),
                     item.itemLevel(),
                     item.combatPower(),
-                    item.combatPowerObservedAt()))
+                    item.combatPowerObservedAt(),
+                    item.bestCombatPower()))
         .toList();
   }
 
@@ -140,5 +141,8 @@ public class RosterCombatPowerController {
       @Schema(description = "LOAKraken에 기록된 전투력. 기록이 없으면 null") @NullableResponse
           BigDecimal combatPower,
       @Schema(description = "그 전투력을 확인한 시각. 기록이 없으면 null") @NullableResponse
-          Instant combatPowerObservedAt) {}
+          Instant combatPowerObservedAt,
+      @Schema(description = "LOAKraken이 관측한 최고 전투력(전투력 랭킹의 bestCombatPower와 같은 값). 기록이 없으면 null")
+          @NullableResponse
+          BigDecimal bestCombatPower) {}
 }

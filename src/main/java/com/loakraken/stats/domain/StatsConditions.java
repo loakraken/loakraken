@@ -74,6 +74,19 @@ public record StatsConditions(
         representativeOnly);
   }
 
+  public StatsConditions withItemLevelMin(BigDecimal value) {
+    return new StatsConditions(
+        server,
+        role,
+        className,
+        activeDays,
+        value,
+        itemLevelMax,
+        combatPowerMin,
+        combatPowerMax,
+        representativeOnly);
+  }
+
   public String cacheKey() {
     var key = new StringJoiner("|");
     key.add(String.valueOf(server))

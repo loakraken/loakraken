@@ -55,6 +55,9 @@ public interface AlertStore {
 
   void markSent(UUID conditionId, Instant at);
 
+  /** 일시 실패한 조건을 다시 발송 대기로 둔다. 그사이 새 대기 가격이 들어왔으면 그대로 둔다. */
+  void requeue(UUID conditionId, java.math.BigDecimal price);
+
   record Subscribed(UUID subscriptionId, boolean created) {}
 
   record Condition(

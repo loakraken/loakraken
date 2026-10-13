@@ -455,7 +455,20 @@ public final class StatsResponses {
       @NullableResponse
           @Schema(allowableValues = {"TOP1", "TOP5", "TOP10", "TOP25", "TOP50", "REST"})
           String tier,
-      @Schema(allowableValues = {"COLLECTING", "READY"}) String sampleStatus) {}
+      @Schema(allowableValues = {"COLLECTING", "READY"}) String sampleStatus,
+      @NullableResponse
+          @Schema(
+              description =
+                  "한 단계 높은 티어. 지금 TOP1이거나, 표본 30 미만(tier null)이거나, 인원이 적어 그 티어에 닿을 수 있는 순위가 없으면(⌊상한% × total / 100⌋ = 0) null",
+              allowableValues = {"TOP1", "TOP5", "TOP10", "TOP25", "TOP50"})
+          String nextTier,
+      @NullableResponse
+          @Schema(
+              description =
+                  "다음 티어 경계값: 나를 뺀 모집단에서 K번째(K = ⌊다음 티어 상한% × total / 100⌋)로 높은 값. 이 값과 같아지면 다음 티어가 됩니다. nextTier가 null이면 null")
+          BigDecimal nextTierValue,
+      @NullableResponse @Schema(description = "경계값 − 지금 값(0보다 큼). nextTier가 null이면 null")
+          BigDecimal nextTierGap) {}
 
   public record StatsCharacterRankResponse(
       String characterName,
@@ -505,7 +518,10 @@ public final class StatsResponses {
                           entry.total(),
                           entry.topPercent(),
                           entry.tier() == null ? null : entry.tier().name(),
-                          entry.sampleStatus().name()))
+                          entry.sampleStatus().name(),
+                          entry.nextTier() == null ? null : entry.nextTier().name(),
+                          entry.nextTierValue(),
+                          entry.nextTierGap()))
               .toList());
     }
   }

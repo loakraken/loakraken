@@ -227,6 +227,19 @@ class PostgresStatsRepository implements StatsPort {
         .single();
   }
 
+  @Override
+  public BigDecimal nthHighest(StatsConditions conditions, Instant since, Metric metric, long k) {
+    String column = metric.column();
+    return population(conditions, since)
+        .statement(
+            "SELECT " + column + " FROM pop ORDER BY " + column + " DESC LIMIT 1 OFFSET :skip",
+            jdbc)
+        .param("skip", k - 1)
+        .query(BigDecimal.class)
+        .optional()
+        .orElse(null);
+  }
+
   /** 수집품 랭킹 공통 CTE(#295). */
   private static final String COLLECTIBLE_RANKED =
       """

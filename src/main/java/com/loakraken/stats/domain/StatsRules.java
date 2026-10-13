@@ -81,6 +81,19 @@ public final class StatsRules {
         if (topPercent.compareTo(BigDecimal.valueOf(tier.upperPercent)) <= 0) return tier;
       return REST;
     }
+
+    /** 한 단계 높은 티어. TOP1이면 null. */
+    public Tier next() {
+      return ordinal() == 0 ? null : values()[ordinal() - 1];
+    }
+  }
+
+  /**
+   * 다음 티어(L2) 경계 순위 K = ⌊U × total / 100⌋(U = 그 티어 상한 %). U가 정수라 topPercent의 소수 둘째 자리 올림을 거쳐도
+   * {@code ceil₂(rank×100/total) ≤ U ⇔ rank ≤ K}다. 0이면 인원이 적어 누구도 그 티어에 닿을 수 없다.
+   */
+  public static long tierRank(Tier tier, long total) {
+    return tier.upperPercent() * total / 100;
   }
 
   /** 상위 몇 %인가. 1위/100명이면 1.00이다. 소수 둘째 자리 올림이라 상위 1%를 넘는 값이 1%로 보이지 않는다. */

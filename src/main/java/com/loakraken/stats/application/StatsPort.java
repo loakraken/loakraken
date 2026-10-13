@@ -40,6 +40,12 @@ public interface StatsPort {
   /** value보다 큰 캐릭터 수와 모집단 수. 처리정지 목록은 모집단에서 뺀다. */
   Standing standing(StatsConditions conditions, Instant since, Metric metric, BigDecimal value);
 
+  /**
+   * 모집단에서 k번째(1부터)로 높은 값(다음 티어 경계, L2). 같은 값은 각각 센다. k가 모집단보다 크면 null. 캐릭터마다 부르지 않고 (지표·조건·k)마다 한 번
+   * 구해 캐시한다.
+   */
+  BigDecimal nthHighest(StatsConditions conditions, Instant since, Metric metric, long k);
+
   RankingPage ranking(
       StatsConditions conditions, Instant since, Metric metric, int offset, int limit);
 

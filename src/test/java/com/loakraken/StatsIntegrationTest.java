@@ -486,6 +486,55 @@ class StatsIntegrationTest {
   }
 
   @Test
+  void 캐릭터_순위는_다음_티어_경계값과_남은_차이를_준다() throws Exception {
+    표본();
+    // 통계캐30(전투력 3300)은 서버 40명 중 5위(12.5%) TOP25. 다음 TOP10의 K = ⌊10×40/100⌋ = 4, 4번째로 높은 값 3310.
+    var rank = data("/api/v1/characters/rank?characterName=" + encode("통계캐30"));
+    var server = entry(rank, "COMBAT_POWER", "SERVER");
+    assertThat(server.path("tier").asText()).isEqualTo("TOP25");
+    assertThat(server.path("nextTier").asText()).isEqualTo("TOP10");
+    assertThat(server.path("nextTierValue").decimalValue()).isEqualByComparingTo("3310");
+    assertThat(server.path("nextTierGap").decimalValue()).isEqualByComparingTo("10");
+    // 경계값에 닿으면 실제로 다음 티어다: 3310은 3위보다 큰 값이 셋이라 4위(10%) TOP10, 3309.99면 5위(12.5%) TOP25.
+    var at =
+        data(
+            "/api/v1/stats/distribution?metric=COMBAT_POWER&percentileOf=3310&server="
+                + encode(SERVER));
+    assertThat(at.at("/percentileOf/tier").asText()).isEqualTo("TOP10");
+    var below =
+        data(
+            "/api/v1/stats/distribution?metric=COMBAT_POWER&percentileOf=3309.99&server="
+                + encode(SERVER));
+    assertThat(below.at("/percentileOf/tier").asText()).isEqualTo("TOP25");
+
+    // 통계캐34(3340)는 1위(2.5%) TOP5. 다음 TOP1의 K = ⌊1×40/100⌋ = 0이라 아무도 닿을 수 없어 null.
+    var top =
+        entry(
+            data("/api/v1/characters/rank?characterName=" + encode("통계캐34")),
+            "COMBAT_POWER",
+            "SERVER");
+    assertThat(top.path("tier").asText()).isEqualTo("TOP5");
+    assertThat(top.path("nextTier").isNull()).isTrue();
+    assertThat(top.path("nextTierValue").isNull()).isTrue();
+    assertThat(top.path("nextTierGap").isNull()).isTrue();
+
+    // 표본 30 미만(서버 내 직업 SMALL 5명)은 tier가 null이라 다음 티어도 null.
+    var small =
+        entry(
+            data("/api/v1/characters/rank?characterName=" + encode("통계소수0")),
+            "COMBAT_POWER",
+            "SERVER_CLASS");
+    assertThat(small.path("tier").isNull()).isTrue();
+    assertThat(small.path("nextTier").isNull()).isTrue();
+
+    // 아이템 레벨도 같은 정의: 통계캐30(1730)은 서버 5위 TOP25, 4번째로 높은 1731이 경계.
+    var level = entry(rank, "ITEM_LEVEL", "SERVER");
+    assertThat(level.path("nextTier").asText()).isEqualTo("TOP10");
+    assertThat(level.path("nextTierValue").decimalValue()).isEqualByComparingTo("1731");
+    assertThat(level.path("nextTierGap").decimalValue()).isEqualByComparingTo("1");
+  }
+
+  @Test
   void 같은_조건은_10분_캐시를_쓴다() throws Exception {
     표본();
     var first = data("/api/v1/stats/summary?server=" + encode(SERVER));

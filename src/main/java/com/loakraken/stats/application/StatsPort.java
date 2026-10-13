@@ -342,9 +342,19 @@ public interface StatsPort {
    */
   GuildMembers guildMembers(String server, String guild, Instant since);
 
-  /** guildName은 저장된 철자. 길드원이 없으면 guildName null·빈 목록. */
+  /**
+   * guildName은 저장된 철자. 길드원이 없으면 guildName null·빈 목록. rosterKeys: 캐릭터 이름 → 원정대 키(내부 값, 묶음 번호를 매길 때만
+   * 쓰고 응답·캐시에 넣지 않음). 원정대를 모르는 길드원은 이 맵에 없다.
+   */
   record GuildMembers(
-      String guildName, List<com.loakraken.stats.domain.GuildDetail.Member> members) {}
+      String guildName,
+      List<com.loakraken.stats.domain.GuildDetail.Member> members,
+      java.util.Map<String, java.util.UUID> rosterKeys) {
+    public GuildMembers(
+        String guildName, List<com.loakraken.stats.domain.GuildDetail.Member> members) {
+      this(guildName, members, java.util.Map.of());
+    }
+  }
 
   /** 수집품 항목별 보유(#305). owned = Point > 0, completed = Point ≥ 만점(사전의 최근 만점). */
   record CollectibleOwnershipRow(

@@ -461,11 +461,13 @@ class PostgresStatsRepository implements StatsPort {
 
   @Override
   public GuildMembers guildMembers(String server, String guild, Instant since) {
+    // 원정대 키는 묶음 번호를 매길 때만 쓰고 응답에 내보내지 않는다(K28).
+    var rosterKeys = new java.util.HashMap<String, java.util.UUID>();
     var rows =
         jdbc.sql(
                 """
             SELECT c.character_name, c.class_name, c.item_level, c.combat_power, c.guild_name,
-              c.guild_member_grade, c.profile_refreshed_at
+              c.guild_member_grade, c.profile_refreshed_at, c.roster_key
             FROM characters c
             WHERE c.server_name = :server AND c.guild_name IS NOT NULL
               AND lower(c.guild_name) = lower(:guild)
@@ -477,16 +479,20 @@ class PostgresStatsRepository implements StatsPort {
             .param("guild", guild)
             .param("since", since.atOffset(ZoneOffset.UTC))
             .query(
-                (row, index) ->
-                    Map.entry(
-                        row.getString("guild_name"),
-                        new GuildDetail.Member(
-                            row.getString("character_name"),
-                            row.getString("class_name"),
-                            row.getBigDecimal("item_level"),
-                            row.getBigDecimal("combat_power"),
-                            row.getString("guild_member_grade"),
-                            instant(row.getObject("profile_refreshed_at", OffsetDateTime.class)))))
+                (row, index) -> {
+                  var key = row.getObject("roster_key", java.util.UUID.class);
+                  if (key != null) rosterKeys.put(row.getString("character_name"), key);
+                  return Map.entry(
+                      row.getString("guild_name"),
+                      new GuildDetail.Member(
+                          row.getString("character_name"),
+                          row.getString("class_name"),
+                          row.getBigDecimal("item_level"),
+                          row.getBigDecimal("combat_power"),
+                          row.getString("guild_member_grade"),
+                          instant(row.getObject("profile_refreshed_at", OffsetDateTime.class)),
+                          null));
+                })
             .list();
     if (rows.isEmpty()) return new GuildMembers(null, List.of());
     // 철자가 여럿이면 길드 랭킹에서 따로 세는 길드라 하나만 고른다. 요청과 정확히 같은 철자가 있으면 그것(랭킹의 그 줄에서 들어온 경우),
@@ -495,7 +501,7 @@ class PostgresStatsRepository implements StatsPort {
     for (var row : rows)
       bySpelling.computeIfAbsent(row.getKey(), key -> new ArrayList<>()).add(row.getValue());
     var exact = bySpelling.get(guild);
-    if (exact != null) return new GuildMembers(guild, List.copyOf(exact));
+    if (exact != null) return new GuildMembers(guild, List.copyOf(exact), Map.copyOf(rosterKeys));
     var chosen =
         bySpelling.entrySet().stream()
             .max(
@@ -503,7 +509,8 @@ class PostgresStatsRepository implements StatsPort {
                         entry -> entry.getValue().size())
                     .thenComparing(Map.Entry::getKey, java.util.Comparator.reverseOrder()))
             .orElseThrow();
-    return new GuildMembers(chosen.getKey(), List.copyOf(chosen.getValue()));
+    return new GuildMembers(
+        chosen.getKey(), List.copyOf(chosen.getValue()), Map.copyOf(rosterKeys));
   }
 
   /**

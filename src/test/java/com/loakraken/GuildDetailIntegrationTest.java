@@ -131,6 +131,9 @@ class GuildDetailIntegrationTest {
     assertThat(observed).isEqualTo(now.truncatedTo(ChronoUnit.MINUTES));
     // 처리정지·기간 밖·다른 서버는 없다.
     assertThat(body).doesNotContain("탭정지", "탭오래", "탭다른", "9000");
+    // 원정대를 모르는 길드원은 묶음 번호가 null이다.
+    assertThat(members.at("/0/rosterGroup").isNull()).isTrue();
+    assertThat(members.at("/0").has("rosterGroup")).isTrue();
 
     // 같은 정의: 길드 랭킹(전체 기간 같은 30일)의 memberCount와 같다.
     var ranking =
@@ -172,6 +175,52 @@ class GuildDetailIntegrationTest {
     assertThat(exact.path("guildName").asText()).isEqualTo("ABCGUILD");
     assertThat(exact.at("/meta/memberCount").asLong()).isEqualTo(1);
     assertThat(exact.at("/members/0/characterName").asText()).isEqualTo("탭영다");
+  }
+
+  @Test
+  void 같은_원정대_길드원은_응답_안에서만_쓰는_같은_묶음_번호를_받고_처리정지_대원은_세지_않는다() throws Exception {
+    var rosterA = UUID.randomUUID();
+    var rosterB = UUID.randomUUID();
+    var rosterC = UUID.randomUUID();
+    // A: 두 명 + 처리정지 한 명, B: 두 명, C: 혼자, 모름: 원정대 키 없음.
+    member(SERVER, "묶음길드", "탭묶가", "바드", 1700, null, null, now);
+    member(SERVER, "묶음길드", "탭묶나", "바드", 1690, null, null, now);
+    member(SERVER, "묶음길드", "탭묶정", "바드", 1800, null, null, now);
+    member(SERVER, "묶음길드", "탭묶다", "바드", 1710, null, null, now);
+    member(SERVER, "묶음길드", "탭묶라", "바드", 1680, null, null, now);
+    member(SERVER, "묶음길드", "탭묶혼", "바드", 1720, null, null, now);
+    member(SERVER, "묶음길드", "탭묶모", "바드", 1705, null, null, now);
+    roster(rosterA, "탭묶가", "탭묶나", "탭묶정");
+    roster(rosterB, "탭묶다", "탭묶라");
+    roster(rosterC, "탭묶혼");
+    exclude("탭묶정");
+    var path = "/api/v1/guilds/" + encode(SERVER) + "/" + encode("묶음길드");
+
+    var response = get(path);
+    assertThat(response.statusCode()).isEqualTo(200);
+    var groups = groups(mapper.readTree(response.body()).path("data").path("members"));
+    // 묶음 인원 같으면(둘 다 2명) 묶음 최고 아이템 레벨 높은 B(1710)가 1, A(1700)가 2. 혼자인 C는 3, 모름은 null.
+    assertThat(groups)
+        .containsEntry("탭묶다", 1)
+        .containsEntry("탭묶라", 1)
+        .containsEntry("탭묶가", 2)
+        .containsEntry("탭묶나", 2)
+        .containsEntry("탭묶혼", 3)
+        .containsEntry("탭묶모", null)
+        .doesNotContainKey("탭묶정");
+    // 고정 키는 내보내지 않는다.
+    assertThat(response.body())
+        .doesNotContain(rosterA.toString(), rosterB.toString(), rosterC.toString(), "rosterKey");
+
+    // B5: 처리정지 대원이 아예 없는 경우와 응답이 같다(묶음 번호·인원 구별 불가).
+    jdbc.sql("DELETE FROM characters WHERE character_name = '탭묶정'").update();
+    var keys = redis.keys("stats:v1:*");
+    if (keys != null && !keys.isEmpty()) redis.delete(keys);
+    var without = get(path);
+    assertThat(groups(mapper.readTree(without.body()).path("data").path("members")))
+        .isEqualTo(groups);
+    assertThat(mapper.readTree(without.body()).at("/data/members").toString())
+        .isEqualTo(mapper.readTree(response.body()).at("/data/members").toString());
   }
 
   @Test
@@ -262,6 +311,25 @@ class GuildDetailIntegrationTest {
         .param("grade", grade)
         .param("at", observedAt.atOffset(ZoneOffset.UTC))
         .update();
+  }
+
+  private void roster(UUID key, String... names) {
+    for (var name : names)
+      jdbc.sql("UPDATE characters SET roster_key = :k WHERE character_name = :n")
+          .param("k", key)
+          .param("n", name)
+          .update();
+  }
+
+  /** 이름 → 묶음 번호(null 포함). */
+  private static java.util.Map<String, Integer> groups(JsonNode members) {
+    var result = new java.util.HashMap<String, Integer>();
+    members.forEach(
+        member ->
+            result.put(
+                member.path("characterName").asText(),
+                member.path("rosterGroup").isNull() ? null : member.path("rosterGroup").asInt()));
+    return result;
   }
 
   private void exclude(String name) {

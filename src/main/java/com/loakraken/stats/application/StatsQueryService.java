@@ -152,8 +152,9 @@ public class StatsQueryService {
     var conditions =
         new StatsConditions(server, null, null, activeDays, null, null, null, null, false);
     // 요청과 정확히 같은 철자를 먼저 고르므로 캐시 키도 요청 철자 그대로다(대소문자만 다른 요청이 다른 길드일 수 있음).
+    // v2: 길드원 묶음 번호(rosterGroup)가 들어간 결과. 옛 결과(번호 없음)를 읽지 않게 키를 바꾼다.
     return cached(
-        "guild-detail:" + server + ":" + guild + ":" + activeDays,
+        "guild-detail:v2:" + server + ":" + guild + ":" + activeDays,
         GuildDetailResult.class,
         () -> {
           var now = clock.instant();
@@ -161,7 +162,11 @@ public class StatsQueryService {
           if (found.members().isEmpty())
             throw new BusinessException(StatsErrorCode.STATS_GUILD_NOT_OBSERVED);
           return new GuildDetailResult(
-              server, found.guildName(), activeDays, now, GuildDetail.aggregate(found.members()));
+              server,
+              found.guildName(),
+              activeDays,
+              now,
+              GuildDetail.aggregate(found.members(), found.rosterKeys()));
         });
   }
 

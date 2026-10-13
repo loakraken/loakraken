@@ -112,7 +112,8 @@ public class GuildDetailController {
                           member.itemLevel(),
                           member.combatPower(),
                           member.guildMemberGrade(),
-                          member.observedAt()))
+                          member.observedAt(),
+                          member.rosterGroup()))
               .toList());
     }
 
@@ -156,7 +157,14 @@ public class GuildDetailController {
       @Schema(description = "공식 길드 직위 문자열 그대로(아직 확인 못 했으면 null). 문자열이며 값이 늘 수 있음", example = "길드원")
           @NullableResponse
           String guildMemberGrade,
-      @Schema(description = "마지막 프로필 관측 시각(분 단위)") Instant observedAt) {}
+      @Schema(description = "마지막 프로필 관측 시각(분 단위)") Instant observedAt,
+      @Schema(
+              description =
+                  "이 응답 안에서만 쓰는 원정대 묶음 번호(1부터). 같은 원정대(같은 계정) 길드원은 같은 번호이고, 이 길드에 혼자인 캐릭터도 자기 번호 하나를 받습니다. "
+                      + "묶음 인원 많은 순 → 묶음 최고 아이템 레벨 높은 순 → 이름순으로 매기며, 응답마다 새로 매기므로 다른 응답의 번호와 이어지지 않습니다. 원정대를 모르면 null",
+              example = "1")
+          @NullableResponse
+          Integer rosterGroup) {}
 
   @Configuration(proxyBeanMethods = false)
   @ConditionalOnProperty(prefix = "ranking.guilds", name = "enabled", havingValue = "true")

@@ -227,6 +227,33 @@ class ClassBuildsIntegrationTest {
   }
 
   @Test
+  void itemLevelMax만_1680_미만이면_공통_기본_1640을_쓰고_400이_아니다() throws Exception {
+    표본();
+    var below =
+        get(
+            "/api/v1/stats/classes/"
+                + encode(CLASS)
+                + "/builds?itemLevelMax=1660&server="
+                + encode(SERVER));
+    assertThat(below.statusCode()).as(below.body()).isEqualTo(200);
+    var belowData = mapper.readTree(below.body()).path("data");
+    assertThat(belowData.at("/meta/conditions/itemLevelMin").decimalValue())
+        .isEqualByComparingTo("1640");
+    // 1640~1660: 1660 비기 14명만.
+    assertThat(belowData.at("/meta/population").asLong()).isEqualTo(14);
+
+    var above =
+        data(
+            "/api/v1/stats/classes/"
+                + encode(CLASS)
+                + "/builds?itemLevelMax=1700&server="
+                + encode(SERVER));
+    assertThat(above.at("/meta/conditions/itemLevelMin").decimalValue())
+        .isEqualByComparingTo("1680");
+    assertThat(above.at("/meta/population").asLong()).isEqualTo(20);
+  }
+
+  @Test
   void 모르는_직업은_표본_0이다() throws Exception {
     var data = data("/api/v1/stats/classes/" + encode("없는직업") + "/builds");
     assertThat(data.at("/meta/population").asLong()).isZero();

@@ -51,7 +51,7 @@ public class ClassBuildsController {
       description =
           "그 직업 캐릭터의 마지막 장비 요약으로 센 빌드 통계입니다(class-builds-v1): 직업 각인 비율, 각인 조합, 개별 각인 채용률, 아크 패시브 포인트, "
               + "4티어 보석(겁화·작열·광휘) 효과 종류별 레벨, 카드 세트, 주력 전투 특성(top-1), 팔찌 전투 특성. 모집단은 /api/v1/stats/*와 같고(처리정지 캐릭터 없음), "
-              + "표본은 그 가운데 장비 요약이 있는 캐릭터입니다. itemLevelMin 기본값은 다른 통계(1640)와 달리 1680이고, 실제로 쓴 값은 meta.conditions.itemLevelMin에 있습니다. "
+              + "표본은 그 가운데 장비 요약이 있는 캐릭터입니다. itemLevelMin 기본값은 다른 통계(1640)와 달리 1680이고(단 itemLevelMax만 1680 미만으로 주면 1640), 실제로 쓴 값은 meta.conditions.itemLevelMin에 있습니다. "
               + "표본이 30 미만이면 sampleStatus=COLLECTING이고 항목이 모두 빈 목록입니다. "
               + "인원(보석은 개수)이 5 미만인 칸은 목록에 없습니다. 못 읽은 값은 그 항목의 분모(known)에서 빠집니다. 정의는 definitions에 있습니다. "
               + "400 INVALID_REQUEST·STATS_INVALID_RANGE, 503 STATS_UNAVAILABLE")
@@ -79,8 +79,11 @@ public class ClassBuildsController {
           @DecimalMax("2000")
           BigDecimal braceletItemLevelMin) {
     var conditions = filter.toConditions().withClassName(className);
-    // 빌드 통계만 기본 최소 아이템 레벨이 1680이다. 실제로 쓴 값은 meta.conditions.itemLevelMin에 나온다.
-    if (filter.itemLevelMin() == null)
+    // 빌드 통계만 기본 최소 아이템 레벨이 1680이다. 단 최대만 1680 미만으로 주면 범위가 뒤집히지 않게 공통 기본(1640)을 둔다.
+    // 실제로 쓴 값은 meta.conditions.itemLevelMin에 나온다.
+    if (filter.itemLevelMin() == null
+        && (filter.itemLevelMax() == null
+            || filter.itemLevelMax().compareTo(ClassBuilds.DEFAULT_ITEM_LEVEL_MIN) >= 0))
       conditions = conditions.withItemLevelMin(ClassBuilds.DEFAULT_ITEM_LEVEL_MIN);
     return ApiResponse.of(
         StatsSuccessCode.STATS_CLASS_BUILDS_SUCCESS,

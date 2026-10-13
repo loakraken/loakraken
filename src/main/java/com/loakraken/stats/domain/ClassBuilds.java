@@ -29,8 +29,8 @@ public final class ClassBuilds {
   public static final int MAX_LIMIT = 20;
 
   /**
-   * 빌드 통계의 기본 최소 아이템 레벨(PM 총괄 판정 2026-10-13). 다른 통계 기본값(1640)과 달리 1680이다. 1640.00에는 특성이 같은 캐릭터 묶음이
-   * 섞여 일부 직업의 분포가 뒤집힌다. itemLevelMin을 주면 그 값을 쓴다.
+   * 빌드 통계의 기본 최소 아이템 레벨(PM 판정 2026-10-13). 다른 통계 기본값(1640)과 달리 1680이다. 1640.00에는 특성이 같은 캐릭터 묶음이 섞여
+   * 일부 직업의 분포가 뒤집힌다. itemLevelMin을 주면 그 값을 쓴다.
    */
   public static final BigDecimal DEFAULT_ITEM_LEVEL_MIN = new BigDecimal("1680");
 
@@ -319,7 +319,7 @@ public final class ClassBuilds {
     var definitions = new LinkedHashMap<String, String>();
     definitions.put(
         "sample",
-        "최근 확인한 캐릭터 중 장비 요약이 있는 캐릭터(캐릭터마다 마지막 요약 1개). 기본 최소 아이템 레벨 1680(meta.conditions.itemLevelMin). 처리정지 캐릭터는 통계 어디에도 없음");
+        "최근 확인한 캐릭터 중 장비 요약이 있는 캐릭터(캐릭터마다 마지막 요약 1개). 기본 최소 아이템 레벨 1680, itemLevelMax만 1680 미만이면 1640(실제 값은 meta.conditions.itemLevelMin). 처리정지 캐릭터는 통계 어디에도 없음");
     definitions.put("classEngravings", "직업 각인별 인원. 직업 각인 필터와 무관하게 직업 전체 표본");
     definitions.put("engravingCombos", "각인 이름 집합이 같은 캐릭터 수");
     definitions.put("engravings", "그 각인을 가진 캐릭터 수 / 각인을 읽은 캐릭터 수(여러 각인에 셈)");

@@ -16,7 +16,8 @@ enum StatsSuccessCode implements SuccessCode {
   COLLECTIBLE_STANDING_SUCCESS,
   ROSTER_RANKING_SUCCESS,
   GUILD_RANKING_SUCCESS,
-  CHARACTER_RANK_SUCCESS;
+  CHARACTER_RANK_SUCCESS,
+  STATS_CLASS_BUILDS_SUCCESS;
 
   public HttpStatus httpStatus() {
     return HttpStatus.OK;
@@ -36,6 +37,7 @@ enum StatsSuccessCode implements SuccessCode {
       case ROSTER_RANKING_SUCCESS -> "원정대 랭킹 조회에 성공했습니다.";
       case GUILD_RANKING_SUCCESS -> "길드 랭킹 조회에 성공했습니다.";
       case CHARACTER_RANK_SUCCESS -> "캐릭터 순위 조회에 성공했습니다.";
+      case STATS_CLASS_BUILDS_SUCCESS -> "직업 빌드 통계 조회에 성공했습니다.";
       default -> "통계 조회에 성공했습니다.";
     };
   }

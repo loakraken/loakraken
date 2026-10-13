@@ -818,6 +818,72 @@ class OpenApiIntegrationTest {
         .contains("BACK_ATTACK", "HEAD_ATTACK", "NONE");
   }
 
+  @Test
+  void 직업_상세_빌드_통계는_안쪽_항목까지_required이고_없을_수_있는_값만_nullable이다() throws Exception {
+    var document = JsonMapper.builder().build().readTree(request("/v3/api-docs").body());
+    assertThat(
+            document
+                .at("/paths/~1api~1v1~1stats~1classes~1{className}~1builds/get")
+                .isMissingNode())
+        .isFalse();
+    var schemas = document.at("/components/schemas");
+    assertThat(schemas.at("/ClassBuildsResponse/required").toString())
+        .contains(
+            "meta",
+            "className",
+            "classEngraving",
+            "classPopulation",
+            "minCell",
+            "braceletItemLevelMin",
+            "classEngravingStatus",
+            "definitions",
+            "classEngravings",
+            "engravingCombos",
+            "engravings",
+            "arkPassivePoints",
+            "gems",
+            "cardSets",
+            "topStats",
+            "braceletStats");
+    assertThat(schemas.at("/ClassBuildsResponse/properties/classEngraving/anyOf/1/type").asText())
+        .isEqualTo("null");
+    assertThat(schemas.at("/ClassBuildNameSection/required").toString()).contains("known", "cells");
+    assertThat(schemas.at("/ClassBuildNameCell/required").toString())
+        .contains("name", "count", "share");
+    assertThat(schemas.at("/ClassBuildComboCell/required").toString())
+        .contains("engravings", "count", "share");
+    assertThat(schemas.at("/ClassBuildValueCell/required").toString())
+        .contains("value", "count", "share");
+    assertThat(schemas.at("/ClassBuildArkPassivePoints/required").toString())
+        .contains("evolution", "enlightenment", "leap");
+    assertThat(schemas.at("/ClassBuildGems/required").toString()).contains("damage", "cooldown");
+    assertThat(schemas.at("/ClassBuildCardCell/required").toString())
+        .contains("set", "pieces", "awakening", "count", "share");
+    assertThat(schemas.at("/ClassBuildCardCell/properties/awakening/anyOf/1/type").asText())
+        .isEqualTo("null");
+    assertThat(schemas.at("/ClassBuildTopStatSection/required").toString())
+        .contains("known", "ties", "cells");
+    assertThat(schemas.at("/ClassBuildBraceletSection/required").toString())
+        .contains("known", "unread", "hidden", "cells");
+    for (var section :
+        List.of(
+            "ClassBuildNameSection",
+            "ClassBuildComboSection",
+            "ClassBuildValueSection",
+            "ClassBuildCardSection",
+            "ClassBuildTopStatSection"))
+      assertThat(schemas.at("/" + section + "/required").toString()).as(section).contains("hidden");
+    assertThat(schemas.at("/ClassBuildHidden/required").toString()).contains("count", "share");
+    // 공통 meta를 여러 응답이 공유해도 조건의 nullable은 한 번만 감싼다.
+    assertThat(
+            schemas.at("/StatsConditionsResponse/properties/server/anyOf/0/anyOf").isMissingNode())
+        .isTrue();
+    assertThat(schemas.at("/StatsConditionsResponse/properties/server/anyOf/1/type").asText())
+        .isEqualTo("null");
+    assertThat(schemas.at("/ClassBuildHidden/properties/share/anyOf/1/type").asText())
+        .isEqualTo("null");
+  }
+
   private HttpResponse<String> request(String path) throws Exception {
     try (var client = HttpClient.newHttpClient()) {
       return client.send(

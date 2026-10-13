@@ -1,5 +1,6 @@
 package com.loakraken.stats.application;
 
+import com.loakraken.stats.domain.ClassBuilds;
 import com.loakraken.stats.domain.StatsConditions;
 import com.loakraken.stats.domain.StatsRules.Metric;
 import java.math.BigDecimal;
@@ -31,6 +32,12 @@ public interface StatsPort {
    */
   EfficiencyPage efficiencyRanking(
       StatsConditions conditions, Instant since, EfficiencyKind kind, int offset, int limit);
+
+  /**
+   * 직업 상세 빌드(M12) 표본. 모집단(처리정지 제외)에서 conditions.className 직업 캐릭터마다 마지막 장비 요약 1행을 읽는다. population은
+   * 요약이 없는 캐릭터도 센 모집단 수다.
+   */
+  ClassBuildSamples classBuildSamples(StatsConditions conditions, Instant since);
 
   Coverage coverage();
 
@@ -171,6 +178,8 @@ public interface StatsPort {
 
   /** 공식 수집품 종류 하나(공식 순서). */
   record CollectibleType(String type, int point, int maxPoint) {}
+
+  record ClassBuildSamples(long population, List<ClassBuilds.Sample> samples) {}
 
   record Coverage(long observedCharacters, long knownCharacters, long discoveredAccounts) {}
 

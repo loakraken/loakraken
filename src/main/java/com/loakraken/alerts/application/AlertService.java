@@ -101,7 +101,7 @@ public class AlertService {
   private void confirm(String endpoint, String p256dh, String auth) {
     switch (sender.send(endpoint, p256dh, auth, CONFIRM_PAYLOAD)) {
       case SENT -> {}
-      case RETRY -> throw new BusinessException(AlertErrorCode.ALERTS_FULL);
+      case RETRY -> throw new BusinessException(AlertErrorCode.ALERT_PUSH_UNAVAILABLE);
       case GONE -> {
         store.deleteSubscription(endpoint);
         throw new BusinessException(AlertErrorCode.ALERT_PUSH_NOT_DELIVERED);

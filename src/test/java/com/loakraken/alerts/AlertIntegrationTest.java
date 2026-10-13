@@ -303,7 +303,7 @@ class AlertIntegrationTest {
             null,
             body("https://web.push.apple.com/secret-4", UA_PUBLIC));
     assertThat(full.statusCode()).isEqualTo(503);
-    assertThat(full.body()).contains("ALERTS_FULL");
+    assertThat(full.body()).contains("ALERTS_FULL").doesNotContain("ALERT_PUSH_UNAVAILABLE");
     assertThat(
             postRaw("/api/v1/alerts/subscriptions", null, body(ENDPOINT, UA_PUBLIC)).statusCode())
         .isEqualTo(200);
@@ -473,14 +473,16 @@ class AlertIntegrationTest {
     assertThat(postRaw(path, null, body(ENDPOINT, UA_PUBLIC)).body())
         .contains("ALERT_PUSH_NOT_DELIVERED");
     assertThat(subscriptions()).isZero();
-    // 일시 장애(503·연결 실패): 다시 시도하라는 503, 저장 안 함.
+    // 일시 장애(503·연결 실패): 다시 시도하라는 503(상한이 찼다는 ALERTS_FULL과 다른 코드), 저장 안 함.
     transport.status = 503;
     var busy = postRaw(path, null, body(ENDPOINT, UA_PUBLIC));
     assertThat(busy.statusCode()).isEqualTo(503);
-    assertThat(busy.body()).contains("ALERTS_FULL");
+    assertThat(busy.body()).contains("ALERT_PUSH_UNAVAILABLE").doesNotContain("ALERTS_FULL");
     transport.status = 201;
     transport.fail = true;
-    assertThat(postRaw(path, null, body(ENDPOINT, UA_PUBLIC)).statusCode()).isEqualTo(503);
+    var down = postRaw(path, null, body(ENDPOINT, UA_PUBLIC));
+    assertThat(down.statusCode()).isEqualTo(503);
+    assertThat(down.body()).contains("ALERT_PUSH_UNAVAILABLE");
     assertThat(subscriptions()).isZero();
     // 시도마다 확인 알림 한 건씩이고, 로그에는 주소가 없다.
     assertThat(transport.endpoints).hasSize(3).containsOnly(URI.create(ENDPOINT));

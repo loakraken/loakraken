@@ -188,7 +188,7 @@ public final class CombatPowerRefineModel {
     /** 장비 index → (일반, 상급) 단계로 바꾼 상태의 전투력 비(#333). 계산할 수 없으면 null. */
     public BigDecimal ratioTargets(
         Map<Integer, Target> targets, BigDecimal weaponFlatDelta, BigDecimal mainStatDelta) {
-      return ratioFull(targets, weaponFlatDelta, mainStatDelta, null);
+      return ratioFull(targets, weaponFlatDelta, BigDecimal.ZERO, mainStatDelta, null);
     }
 
     /**
@@ -198,6 +198,7 @@ public final class CombatPowerRefineModel {
     public BigDecimal ratioFull(
         Map<Integer, Target> targets,
         BigDecimal weaponFlatDelta,
+        BigDecimal weaponPctDelta,
         BigDecimal mainStatDelta,
         ArmGuard armGuardTarget) {
       if (unsupportedReason != null) return null;
@@ -214,6 +215,15 @@ public final class CombatPowerRefineModel {
       }
       var nextS = s.add(mainStatDelta.multiply(statMultiplier, MATH), MATH);
       var nextW = w.add(weaponFlatDelta.multiply(BigDecimal.ONE.add(weaponPct), MATH), MATH);
+      // 연마 무공% 교체(#325): W = (고정 무기 공격력 합) × (1 + 무공%)라 무공%가 바뀌면 고정 합에 새 (1 + 무공%)를 곱한다.
+      var nextWeaponPct = weaponPct.add(weaponPctDelta, MATH);
+      if (weaponPctDelta.signum() != 0) {
+        if (BigDecimal.ONE.add(nextWeaponPct).signum() <= 0) return null;
+        nextW =
+            nextW
+                .divide(BigDecimal.ONE.add(weaponPct), MATH)
+                .multiply(BigDecimal.ONE.add(nextWeaponPct), MATH);
+      }
       for (var entry : targets.entrySet()) {
         var part = parts.get(entry.getKey());
         if (part == null) return null;
@@ -222,7 +232,7 @@ public final class CombatPowerRefineModel {
         if (from == null || to == null) return null;
         var delta = to.subtract(from);
         if ("무기".equals(part.type()))
-          nextW = nextW.add(delta.multiply(BigDecimal.ONE.add(weaponPct), MATH), MATH);
+          nextW = nextW.add(delta.multiply(BigDecimal.ONE.add(nextWeaponPct), MATH), MATH);
         else nextS = nextS.add(delta.multiply(statMultiplier, MATH), MATH);
       }
       if (nextS.signum() <= 0 || nextW.signum() <= 0) return null;

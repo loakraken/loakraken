@@ -188,7 +188,11 @@ public class CombatPowerController {
       @Schema(description = "보석 레벨(0은 보석 빼기)·상급 재련 단계·각인·스톤 레벨") Integer level,
       @Schema(description = "재련 단계(EQUIPMENT_REFINE)") Integer refine,
       @Schema(description = "품질(EQUIPMENT_QUALITY)") Integer quality,
-      @Schema(description = "연마 옵션 이름(POLISH)") @Size(max = 32) String option,
+      @Schema(
+              description =
+                  "연마 옵션 이름(POLISH, options의 polishValues.options[].option). 같은 부위에 같은 이름의 %·고정값이 둘 다 있으면(귀걸이 공격력·무기 공격력) % 쪽은 끝에 \" %\"를 붙인다(예: \"공격력 %\").")
+          @Size(max = 32)
+          String option,
       @Schema(description = "LOW·MID·HIGH(POLISH·BRACELET_EFFECT), 코어 등급(ARK_GRID_CORE)")
           @Size(max = 8)
           String grade,

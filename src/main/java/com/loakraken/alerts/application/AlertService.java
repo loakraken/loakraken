@@ -39,6 +39,8 @@ public class AlertService {
   private final BiConsumer<String, String> subscriptionKeyCheck;
   private long sendWindow = -1;
   private int sentInWindow;
+  // 한 번 다시 보내는 중인 조건(발송은 리더 한 인스턴스에서만 돈다). 성공·실패·삭제로 끝나면 뺀다.
+  private final java.util.Set<UUID> retried = java.util.concurrent.ConcurrentHashMap.newKeySet();
 
   /**
    * @param subscriptionKeyCheck 브라우저 구독 키(p256dh·auth)를 확인한다. 잘못되면 예외를 던진다(암호 코드는 인프라 한 곳에 둔다)
@@ -159,6 +161,7 @@ public class AlertService {
       sentInWindow++;
       var result =
           sender.send(pending.endpoint(), pending.p256dh(), pending.auth(), payload(pending));
+      if (result != PushSender.Result.RETRY) retried.remove(pending.conditionId());
       switch (result) {
         case SENT -> {
           store.markSent(pending.conditionId(), now);
@@ -169,6 +172,14 @@ public class AlertService {
           // 브라우저가 구독을 없앴다. 즉시 지운다(조건도 함께).
           store.deleteSubscription(pending.subscriptionId());
           log.info("만료된 알림 구독을 지웠습니다. subscriptionId={}", pending.subscriptionId());
+        }
+        case RETRY -> {
+          // 일시 실패는 다음 주기에 한 번 다시 보낸다. 두 번째도 일시 실패면 그때 보낸 것으로 기록한다(재발송 간격 적용).
+          if (retried.remove(pending.conditionId())) store.markSent(pending.conditionId(), now);
+          else {
+            retried.add(pending.conditionId());
+            store.requeue(pending.conditionId(), pending.price());
+          }
         }
         case FAILED -> store.markSent(pending.conditionId(), now);
       }

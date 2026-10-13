@@ -358,6 +358,47 @@ class AlertIntegrationTest {
   }
 
   @Test
+  void 일시_실패는_다음_주기에_한_번_다시_보내고_두_번째도_실패하면_기록한다() throws Exception {
+    observe("1300");
+    var sub = subscribe(ENDPOINT);
+    var id = sub.path("subscriptionId").asText();
+    var token = sub.path("manageToken").asText();
+    var conditionPath = "/api/v1/alerts/subscriptions/" + id + "/conditions";
+    data(post(conditionPath, token, condition(1200)));
+
+    // 503 한 번 → 보낸 것으로 기록하지 않고 다음 주기에 다시 → 성공.
+    transport.status = 503;
+    observe("1100");
+    assertThat(alerts.dispatch()).isZero();
+    assertThat(data(get(conditionPath, token)).get(0).path("lastSentAt").isNull()).isTrue();
+    transport.status = 201;
+    assertThat(alerts.dispatch()).isEqualTo(1);
+    assertThat(transport.endpoints).hasSize(2);
+
+    // 다음 전환(6시간 뒤)에서 429가 두 번이면 두 번째에 기록하고 더 보내지 않는다.
+    clock.now = clock.now.plus(Duration.ofHours(7));
+    observe("1300");
+    observe("1100");
+    transport.status = 429;
+    assertThat(alerts.dispatch()).isZero();
+    var before = data(get(conditionPath, token)).get(0).path("lastSentAt").asText();
+    assertThat(alerts.dispatch()).isZero();
+    var after = data(get(conditionPath, token)).get(0).path("lastSentAt").asText();
+    assertThat(after).isNotEqualTo(before);
+    assertThat(alerts.dispatch()).isZero();
+    assertThat(transport.endpoints).hasSize(4);
+
+    // 그 밖의 4xx(400)는 다시 보내지 않는다.
+    clock.now = clock.now.plus(Duration.ofHours(7));
+    observe("1300");
+    observe("1100");
+    transport.status = 400;
+    assertThat(alerts.dispatch()).isZero();
+    assertThat(alerts.dispatch()).isZero();
+    assertThat(transport.endpoints).hasSize(5);
+  }
+
+  @Test
   void 구독을_끄면_즉시_지우고_오래_안_쓴_구독은_정리한다() throws Exception {
     observe("1000");
     var sub = subscribe(ENDPOINT);

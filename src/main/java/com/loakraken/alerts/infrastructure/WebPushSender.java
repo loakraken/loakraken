@@ -62,13 +62,20 @@ class WebPushSender implements PushSender {
       if (status >= 200 && status < 300) return Result.SENT;
       if (status == 404 || status == 410) return Result.GONE;
       log.warn("시세 알림 발송에 실패했습니다. service={}, status={}", service.get(), status);
-      return Result.FAILED;
+      // 429·5xx는 푸시 서비스 쪽 일시 문제라 한 번 다시 보낸다. 그 밖의 4xx는 다시 보내도 같다.
+      return status == 429 || status >= 500 ? Result.RETRY : Result.FAILED;
     } catch (InterruptedException exception) {
       Thread.currentThread().interrupt();
       log.warn("시세 알림 발송이 중단됐습니다. service={}", service.get());
-      return Result.FAILED;
-    } catch (IOException | RuntimeException exception) {
-      // 예외 메시지에 주소가 들어 있을 수 있어 종류만 남긴다.
+      return Result.RETRY;
+    } catch (IOException exception) {
+      // 연결·시간 초과는 일시 실패. 예외 메시지에 주소가 들어 있을 수 있어 종류만 남긴다.
+      log.warn(
+          "시세 알림 발송에 실패했습니다. service={}, exceptionType={}",
+          service.get(),
+          exception.getClass().getName());
+      return Result.RETRY;
+    } catch (RuntimeException exception) {
       log.warn(
           "시세 알림 발송에 실패했습니다. service={}, exceptionType={}",
           service.get(),

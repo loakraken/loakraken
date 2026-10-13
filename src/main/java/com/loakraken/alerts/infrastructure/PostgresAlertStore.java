@@ -297,6 +297,15 @@ class PostgresAlertStore implements AlertStore {
   }
 
   @Override
+  public void requeue(UUID conditionId, BigDecimal price) {
+    jdbc.sql(
+            "UPDATE price_alert SET pending_price = :price WHERE alert_id = :id AND pending_price IS NULL")
+        .param("price", price)
+        .param("id", conditionId)
+        .update();
+  }
+
+  @Override
   public void markSent(UUID conditionId, Instant at) {
     jdbc.sql("UPDATE price_alert SET last_sent_at = :at WHERE alert_id = :id")
         .param("at", at(at))

@@ -281,14 +281,25 @@ public interface StatsPort {
       long combatPowerCount) {}
 
   /** excluded: 관측 길드원이 최소 인원 미만이라 뺀 길드 수. */
-  record GuildPage(long total, long excluded, List<GuildRow> rows) {}
+  /**
+   * @param total 순위에 든 전체 길드 수(이름 조건과 무관)
+   * @param excluded 길드원이 minMembers 미만이라 뺀 전체 길드 수
+   * @param excludedMatches 이름 조건이 있을 때 그 이름에 맞지만 minMembers 미만이라 뺀 길드 수. 이름 조건이 없으면 null
+   */
+  record GuildPage(long total, long excluded, Long excludedMatches, List<GuildRow> rows) {}
 
   /**
    * 길드 랭킹(#301). since 뒤에 프로필을 관측한 공개 캐릭터를 (서버, 길드 이름)으로 묶고, 관측 길드원이 minMembers 미만인 길드는 뺀다. sort 값
    * 내림차순으로 같은 순위(RANK, 소수 둘째 자리 기준)를 매긴다.
    */
   GuildPage guildRanking(
-      String server, Instant since, GuildSort sort, int minMembers, int offset, int limit);
+      String server,
+      Instant since,
+      GuildSort sort,
+      int minMembers,
+      int offset,
+      int limit,
+      String guild);
 
   /** 수집품 항목별 보유(#305). owned = Point > 0, completed = Point ≥ 만점(사전의 최근 만점). */
   record CollectibleOwnershipRow(

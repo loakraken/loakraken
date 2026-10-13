@@ -47,6 +47,7 @@ public class GuildRankingController {
       description =
           "같은 서버·같은 길드 이름(공식 프로필 GuildName)의 관측 캐릭터를 묶은 순위입니다. activeDays 안에 프로필을 관측한 공개 캐릭터만 넣으므로 값은 실제 길드 전체가 아니라 확인한 길드원 기준입니다. "
               + "sort: AVG(아이템 레벨 평균, 기본) 또는 SUM(아이템 레벨 합). 확인한 길드원이 minMembers(5명) 미만인 길드는 빼고 excludedGuilds에 수를 줍니다. "
+              + "guild(이름 일부)를 주면 그 이름에 맞는 줄만 주고 rank는 전체 순위 그대로입니다(맞는 줄이 없으면 rows=[]). "
               + "처리정지 목록는 캐릭터만 빼고 길드는 빼지 않습니다. 값이 같으면(소수 둘째 자리) 같은 순위입니다. 모집단이 30 미만이면 sampleStatus=COLLECTING이지만 값·순위는 그대로 줍니다(참고값). "
               + "400 INVALID_REQUEST·STATS_INVALID_RANGE, 503 STATS_UNAVAILABLE")
   @StatsController.StandardErrors
@@ -59,6 +60,11 @@ public class GuildRankingController {
       @Parameter(description = "최근 며칠 안에 프로필을 관측한 캐릭터(7·30·90, 기본 30)")
           @RequestParam(required = false)
           Integer activeDays,
+      @Parameter(description = "길드 이름 일부(1~12자, 글자·숫자만, 대소문자 무시). 결과 줄의 rank는 전체 순위 그대로")
+          @RequestParam(required = false)
+          @Size(min = 1, max = 12)
+          @Pattern(regexp = "[\\p{L}\\p{N}]+")
+          String guild,
       @Parameter(description = "AVG(기본) 또는 SUM")
           @RequestParam(required = false)
           @Pattern(regexp = "AVG|SUM")
@@ -88,7 +94,8 @@ public class GuildRankingController {
                 conditions,
                 sort == null ? GuildSort.AVG : GuildSort.valueOf(sort),
                 page == null ? 1 : page,
-                size == null ? 50 : size)));
+                size == null ? 50 : size,
+                guild)));
   }
 
   public record GuildRankingResponse(
@@ -98,6 +105,11 @@ public class GuildRankingController {
       int size,
       @Schema(description = "순위에 넣는 최소 확인 길드원 수", example = "5") int minMembers,
       @Schema(description = "확인한 길드원이 minMembers 미만이라 뺀 길드 수") long excludedGuilds,
+      @Schema(
+              description =
+                  "guild를 줬을 때 그 이름에 맞지만 확인한 길드원이 minMembers 미만이라 뺀 길드 수. guild가 없으면 null")
+          @NullableResponse
+          Long excludedMatches,
       List<GuildRankingRowResponse> rows) {
     static GuildRankingResponse from(StatsQueryService.GuildRankingResult result) {
       return new GuildRankingResponse(
@@ -107,6 +119,7 @@ public class GuildRankingController {
           result.size(),
           result.minMembers(),
           result.excludedGuilds(),
+          result.excludedMatches(),
           result.rows().stream()
               .map(
                   row ->
@@ -142,7 +155,7 @@ public class GuildRankingController {
     OpenApiCustomizer guildRankingResponseContract() {
       return document ->
           ResponseContracts.apply(
-              GuildRankingRowResponse.class, document.getComponents().getSchemas());
+              GuildRankingResponse.class, document.getComponents().getSchemas());
     }
   }
 }

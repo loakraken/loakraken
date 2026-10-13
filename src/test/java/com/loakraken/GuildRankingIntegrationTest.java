@@ -121,6 +121,70 @@ class GuildRankingIntegrationTest {
   }
 
   @Test
+  void 길드_이름_일부로_찾으면_전체_순위를_그대로_준다() throws Exception {
+    // M21: 평균 순위 높은길드 1710(1위) · 큰길드 1680(2위) · AbcGuild 1650(3위), 작은길드는 네 명이라 빠진다.
+    guild(SERVER, "높은길드", "길드높", 1720, 1715, 1710, 1705, 1700);
+    guild(SERVER, "큰길드", "길드큰", 1700, 1690, 1680, 1670, 1660);
+    guild(SERVER, "AbcGuild", "길드에이", 1650, 1650, 1650, 1650, 1650);
+    guild(SERVER, "작은길드", "길드작", 1750, 1750, 1750, 1750);
+
+    var big =
+        data(get("/api/v1/rankings/guilds?server=" + encode(SERVER) + "&guild=" + encode("큰")));
+    assertThat(big.path("rows").size()).isEqualTo(1);
+    assertThat(big.at("/rows/0/guildName").asText()).isEqualTo("큰길드");
+    // 다시 매기지 않는다: 전체 순위 2위 그대로.
+    assertThat(big.at("/rows/0/rank").asLong()).isEqualTo(2);
+    assertThat(big.path("excludedMatches").asLong()).isZero();
+    // 전체 값(모집단·제외 수)은 이름 조건과 무관하다.
+    assertThat(big.at("/meta/population").asLong()).isEqualTo(3);
+    assertThat(big.path("excludedGuilds").asLong()).isEqualTo(1);
+
+    // 대소문자 무시.
+    var ascii = data(get("/api/v1/rankings/guilds?server=" + encode(SERVER) + "&guild=abc"));
+    assertThat(ascii.at("/rows/0/guildName").asText()).isEqualTo("AbcGuild");
+    assertThat(ascii.at("/rows/0/rank").asLong()).isEqualTo(3);
+
+    // 여러 줄이 맞으면 원래 순서대로, 이름은 맞지만 5명 미만이라 빠진 길드는 excludedMatches.
+    var many =
+        data(get("/api/v1/rankings/guilds?server=" + encode(SERVER) + "&guild=" + encode("길드")));
+    assertThat(many.path("rows").size()).isEqualTo(2);
+    assertThat(many.at("/rows/0/guildName").asText()).isEqualTo("높은길드");
+    assertThat(many.at("/rows/0/rank").asLong()).isEqualTo(1);
+    assertThat(many.at("/rows/1/guildName").asText()).isEqualTo("큰길드");
+    assertThat(many.at("/rows/1/rank").asLong()).isEqualTo(2);
+    assertThat(many.path("excludedMatches").asLong()).isEqualTo(1);
+
+    // 맞는 줄이 없으면 200·빈 목록.
+    var small = get("/api/v1/rankings/guilds?server=" + encode(SERVER) + "&guild=" + encode("작은"));
+    assertThat(small.statusCode()).isEqualTo(200);
+    assertThat(data(small).path("rows").size()).isZero();
+    assertThat(data(small).path("excludedMatches").asLong()).isEqualTo(1);
+
+    // 다른 조건과 함께: 합계 순위(높은길드 8550 · 큰길드 8400 · AbcGuild 8250)에서도 큰길드는 2위.
+    var sum =
+        data(
+            get(
+                "/api/v1/rankings/guilds?sort=SUM&server="
+                    + encode(SERVER)
+                    + "&guild="
+                    + encode("큰")));
+    assertThat(sum.at("/rows/0/rank").asLong()).isEqualTo(2);
+
+    // guild가 없으면 excludedMatches는 null.
+    assertThat(
+            data(get("/api/v1/rankings/guilds?server=" + encode(SERVER)))
+                .path("excludedMatches")
+                .isNull())
+        .isTrue();
+
+    // 입력 검증: 13자, 공백, 기호는 400.
+    for (var bad : List.of("가나다라마바사아자차카타파", "큰 길드", "큰%", "a_b"))
+      assertThat(get("/api/v1/rankings/guilds?guild=" + encode(bad)).statusCode())
+          .as(bad)
+          .isEqualTo(400);
+  }
+
+  @Test
   void 길드가_30개_이상이면_READY다() throws Exception {
     for (int i = 0; i < 31; i++)
       guild(TIE_SERVER, "표본길드" + i, "길드표본" + i + "_", 1650 + i, 1650, 1650, 1650, 1650);

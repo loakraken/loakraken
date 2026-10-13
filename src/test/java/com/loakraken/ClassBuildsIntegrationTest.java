@@ -107,7 +107,11 @@ class ClassBuildsIntegrationTest {
   @Test
   void 마지막_장비_요약으로_항목별_인원과_비율을_세고_처리정지는_통계_어디에도_없다() throws Exception {
     표본();
-    var path = "/api/v1/stats/classes/" + encode(CLASS) + "/builds?server=" + encode(SERVER);
+    var path =
+        "/api/v1/stats/classes/"
+            + encode(CLASS)
+            + "/builds?itemLevelMin=1640&server="
+            + encode(SERVER);
     var body = get(path).body();
     var data = data(path);
 
@@ -174,7 +178,7 @@ class ClassBuildsIntegrationTest {
         data(
             "/api/v1/stats/classes/"
                 + encode(CLASS)
-                + "/builds?server="
+                + "/builds?itemLevelMin=1640&server="
                 + encode(SERVER)
                 + "&classEngraving="
                 + encode("비기"));
@@ -191,12 +195,62 @@ class ClassBuildsIntegrationTest {
         data(
             "/api/v1/stats/classes/"
                 + encode(CLASS)
-                + "/builds?limit=1&braceletItemLevelMin=1600&server="
+                + "/builds?itemLevelMin=1640&limit=1&braceletItemLevelMin=1600&server="
                 + encode(SERVER));
     assertThat(limited.at("/engravingCombos/cells").size()).isEqualTo(1);
     // 팔찌 기준은 itemLevelMin(1640)보다 낮출 수 없다. 1660 비기도 들어간다.
     assertThat(limited.path("braceletItemLevelMin").decimalValue()).isEqualByComparingTo("1640");
     assertThat(limited.at("/braceletStats/known").asLong()).isEqualTo(34);
+  }
+
+  @Test
+  void itemLevelMin을_주지_않으면_빌드_통계만_1680을_쓴다() throws Exception {
+    표본();
+    var data = data("/api/v1/stats/classes/" + encode(CLASS) + "/builds?server=" + encode(SERVER));
+    // 1660 비기 14명은 빠지고 1700 광기 20명만 표본이다(30 미만이라 COLLECTING).
+    assertThat(data.at("/meta/conditions/itemLevelMin").decimalValue())
+        .isEqualByComparingTo("1680");
+    assertThat(data.at("/meta/population").asLong()).isEqualTo(20);
+    assertThat(data.at("/meta/sampleStatus").asText()).isEqualTo("COLLECTING");
+    // 요약 없는 1700 캐릭터 1명을 더한 모집단. 같은 기준을 준 /stats/classes 인원과 같다.
+    assertThat(data.path("classPopulation").asLong()).isEqualTo(21);
+    var classes =
+        data("/api/v1/stats/classes?itemLevelMin=1680&server=" + encode(SERVER)).path("rows");
+    assertThat(classes.get(0).path("count").asLong()).isEqualTo(21);
+    assertThat(data.path("definitions").path("sample").asText()).contains("1680");
+    // 다른 통계 기본값은 1640 그대로.
+    assertThat(
+            data("/api/v1/stats/classes?server=" + encode(SERVER))
+                .at("/meta/conditions/itemLevelMin")
+                .decimalValue())
+        .isEqualByComparingTo("1640");
+  }
+
+  @Test
+  void itemLevelMax만_1680_미만이면_공통_기본_1640을_쓰고_400이_아니다() throws Exception {
+    표본();
+    var below =
+        get(
+            "/api/v1/stats/classes/"
+                + encode(CLASS)
+                + "/builds?itemLevelMax=1660&server="
+                + encode(SERVER));
+    assertThat(below.statusCode()).as(below.body()).isEqualTo(200);
+    var belowData = mapper.readTree(below.body()).path("data");
+    assertThat(belowData.at("/meta/conditions/itemLevelMin").decimalValue())
+        .isEqualByComparingTo("1640");
+    // 1640~1660: 1660 비기 14명만.
+    assertThat(belowData.at("/meta/population").asLong()).isEqualTo(14);
+
+    var above =
+        data(
+            "/api/v1/stats/classes/"
+                + encode(CLASS)
+                + "/builds?itemLevelMax=1700&server="
+                + encode(SERVER));
+    assertThat(above.at("/meta/conditions/itemLevelMin").decimalValue())
+        .isEqualByComparingTo("1680");
+    assertThat(above.at("/meta/population").asLong()).isEqualTo(20);
   }
 
   @Test

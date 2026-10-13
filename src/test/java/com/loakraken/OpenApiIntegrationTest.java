@@ -176,6 +176,14 @@ class OpenApiIntegrationTest {
                   .asText())
           .as(field)
           .isEqualTo("null");
+    // 인기 길드(M21): 새 경로, 숫자 없이 순위·서버·길드 이름만(모두 필수).
+    assertThat(document.at("/paths/~1api~1v1~1guilds~1popular/get").isMissingNode()).isFalse();
+    assertThat(document.at("/components/schemas/GuildPopularResponse/required").toString())
+        .contains("period", "aggregatedAt", "sampleStatus", "ruleVersion", "items");
+    assertThat(document.at("/components/schemas/GuildPopularItemResponse/required").toString())
+        .contains("rank", "serverName", "guildName");
+    assertThat(document.at("/components/schemas/GuildPopularItemResponse/properties").toString())
+        .doesNotContain("views");
     // 랭킹 행 최고 전투력·아크 패시브(L37·K32): 기존 응답에 nullable 필드 추가.
     assertThat(document.at("/components/schemas/StatsRankedCharacterResponse/required").toString())
         .contains("bestCombatPower", "arkPassivePoints", "classEngraving", "estherWeapon");

@@ -25,6 +25,23 @@ public interface CharacterPopularPort {
 
   void saveCached(String key, PopularResult result);
 
+  /**
+   * since 이후(포함) 길드원 고유 조회 합이 minUniqueViews 이상인 길드(M21). 길드는 집계 시점 characters.guild_name이고, 처리정지
+   * 캐릭터의 조회는 합에서 빼지만 길드는 남긴다. 합 내림차순, 같으면 길드 이름·서버 순. serverName이 null이면 모든 서버.
+   */
+  List<PopularGuildRow> topGuilds(Instant since, String serverName, int minUniqueViews, int limit);
+
+  Optional<PopularGuildResult> findCachedGuilds(String key);
+
+  void saveCachedGuilds(String key, PopularGuildResult result);
+
+  record PopularGuildRow(String serverName, String guildName) {}
+
+  record PopularGuildResult(
+      String period, Instant aggregatedAt, String sampleStatus, List<PopularGuildItem> items) {}
+
+  record PopularGuildItem(int rank, String serverName, String guildName) {}
+
   record PopularRow(
       String characterName, String serverName, String className, BigDecimal itemLevel) {}
 

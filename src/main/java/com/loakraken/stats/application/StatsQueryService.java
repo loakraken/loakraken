@@ -2,6 +2,7 @@ package com.loakraken.stats.application;
 
 import com.loakraken.common.api.BusinessException;
 import com.loakraken.stats.domain.ClassBuilds;
+import com.loakraken.stats.domain.GuildDetail;
 import com.loakraken.stats.domain.StatsConditions;
 import com.loakraken.stats.domain.StatsRules;
 import com.loakraken.stats.domain.StatsRules.Metric;
@@ -144,6 +145,28 @@ public class StatsQueryService {
         builds.cardSets(),
         builds.topStats(),
         builds.braceletStats());
+  }
+
+  /** 길드 탭 집계(L36·K28·M10). 관측 길드원이 없으면(처리정지만 있는 길드 포함) 모르는 길드와 같은 404다. 처리정지 여부가 드러나지 않는다. */
+  public GuildDetailResult guildDetail(String server, String guild, int activeDays) {
+    var conditions =
+        new StatsConditions(server, null, null, activeDays, null, null, null, null, false);
+    return cached(
+        "guild-detail:"
+            + server
+            + ":"
+            + guild.toLowerCase(java.util.Locale.ROOT)
+            + ":"
+            + activeDays,
+        GuildDetailResult.class,
+        () -> {
+          var now = clock.instant();
+          var found = stats.guildMembers(server, guild, conditions.since(now));
+          if (found.members().isEmpty())
+            throw new BusinessException(StatsErrorCode.STATS_GUILD_NOT_OBSERVED);
+          return new GuildDetailResult(
+              server, found.guildName(), activeDays, now, GuildDetail.aggregate(found.members()));
+        });
   }
 
   public ClassesResult classes(StatsConditions conditions) {
@@ -863,6 +886,14 @@ public class StatsQueryService {
       SampleStatus sampleStatus) {}
 
   public record ClassesResult(Meta meta, List<ClassStat> rows) {}
+
+  /** 길드 탭 결과. guildName은 저장된 철자. */
+  public record GuildDetailResult(
+      String serverName,
+      String guildName,
+      int activeDays,
+      Instant aggregatedAt,
+      GuildDetail.Result detail) {}
 
   /**
    * @param classPopulation 장비 요약이 없는 캐릭터도 센 그 직업 모집단 수(/stats/classes의 인원과 같은 모집단)

@@ -884,6 +884,62 @@ class OpenApiIntegrationTest {
         .isEqualTo("null");
   }
 
+  @Test
+  void 길드_탭_집계는_안쪽까지_required이고_전투력과_직위만_nullable이다() throws Exception {
+    var document = JsonMapper.builder().build().readTree(request("/v3/api-docs").body());
+    assertThat(
+            document.at("/paths/~1api~1v1~1guilds~1{serverName}~1{guildName}/get").isMissingNode())
+        .isFalse();
+    var schemas = document.at("/components/schemas");
+    assertThat(schemas.at("/GuildDetailResponse/required").toString())
+        .contains(
+            "meta",
+            "serverName",
+            "guildName",
+            "summary",
+            "classes",
+            "itemLevelBins",
+            "combatPowerBins",
+            "members");
+    assertThat(schemas.at("/GuildDetailMeta/required").toString())
+        .contains(
+            "memberCount",
+            "sampleStatus",
+            "minMembers",
+            "activeDays",
+            "aggregatedAt",
+            "ruleVersion");
+    assertThat(schemas.at("/GuildDetailSummary/required").toString())
+        .contains("itemLevelAvg", "combatPowerAvg", "combatPowerMedian", "combatPowerCount");
+    for (var field : List.of("combatPowerAvg", "combatPowerMedian"))
+      assertThat(schemas.at("/GuildDetailSummary/properties/" + field + "/anyOf/1/type").asText())
+          .as(field)
+          .isEqualTo("null");
+    assertThat(schemas.at("/GuildMemberResponse/required").toString())
+        .contains(
+            "characterName",
+            "className",
+            "itemLevel",
+            "combatPower",
+            "guildMemberGrade",
+            "observedAt");
+    for (var field : List.of("combatPower", "guildMemberGrade"))
+      assertThat(schemas.at("/GuildMemberResponse/properties/" + field + "/anyOf/1/type").asText())
+          .as(field)
+          .isEqualTo("null");
+    // 직위는 enum이 아닌 문자열이다(값이 늘어도 깨지지 않게).
+    assertThat(
+            schemas
+                .at("/GuildMemberResponse/properties/guildMemberGrade/anyOf/0/enum")
+                .isMissingNode())
+        .isTrue();
+    assertThat(schemas.at("/GuildMemberResponse/properties/guildMemberGrade/anyOf/0/type").asText())
+        .isEqualTo("string");
+    assertThat(schemas.at("/GuildClassCount/required").toString())
+        .contains("className", "count", "share");
+    assertThat(schemas.at("/GuildBin/required").toString()).contains("from", "count");
+  }
+
   private HttpResponse<String> request(String path) throws Exception {
     try (var client = HttpClient.newHttpClient()) {
       return client.send(

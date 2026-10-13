@@ -5,6 +5,7 @@ import com.loakraken.stats.application.StatsPort.GuildSort;
 import com.loakraken.stats.application.StatsPort.RosterAggregate;
 import com.loakraken.stats.application.StatsPort.RosterBasis;
 import com.loakraken.stats.domain.ClassBuilds;
+import com.loakraken.stats.domain.GuildDetail;
 import com.loakraken.stats.domain.StatsConditions;
 import com.loakraken.stats.domain.StatsRules.Metric;
 import java.math.BigDecimal;
@@ -399,6 +400,50 @@ class PostgresStatsRepository implements StatsPort {
                   .add(new RosterMember(row.getString(2), row.getString(3), row.getBigDecimal(4)));
             });
     return result;
+  }
+
+  @Override
+  public GuildMembers guildMembers(String server, String guild, Instant since) {
+    var rows =
+        jdbc.sql(
+                """
+            SELECT c.character_name, c.class_name, c.item_level, c.combat_power, c.guild_name,
+              c.guild_member_grade, c.profile_refreshed_at
+            FROM characters c
+            WHERE c.server_name = :server AND c.guild_name IS NOT NULL
+              AND lower(c.guild_name) = lower(:guild)
+              AND c.item_level IS NOT NULL AND c.profile_refreshed_at >= :since
+              AND %s
+            """
+                    .formatted(NOT_EXCLUDED))
+            .param("server", server)
+            .param("guild", guild)
+            .param("since", since.atOffset(ZoneOffset.UTC))
+            .query(
+                (row, index) ->
+                    Map.entry(
+                        row.getString("guild_name"),
+                        new GuildDetail.Member(
+                            row.getString("character_name"),
+                            row.getString("class_name"),
+                            row.getBigDecimal("item_level"),
+                            row.getBigDecimal("combat_power"),
+                            row.getString("guild_member_grade"),
+                            instant(row.getObject("profile_refreshed_at", OffsetDateTime.class)))))
+            .list();
+    if (rows.isEmpty()) return new GuildMembers(null, List.of());
+    // 철자가 여럿이면 길드 랭킹에서 따로 세는 길드라, 길드원이 가장 많은 철자 하나만 고른다.
+    var bySpelling = new java.util.TreeMap<String, List<GuildDetail.Member>>();
+    for (var row : rows)
+      bySpelling.computeIfAbsent(row.getKey(), key -> new ArrayList<>()).add(row.getValue());
+    var chosen =
+        bySpelling.entrySet().stream()
+            .max(
+                java.util.Comparator.<Map.Entry<String, List<GuildDetail.Member>>>comparingInt(
+                        entry -> entry.getValue().size())
+                    .thenComparing(Map.Entry::getKey, java.util.Comparator.reverseOrder()))
+            .orElseThrow();
+    return new GuildMembers(chosen.getKey(), List.copyOf(chosen.getValue()));
   }
 
   /**

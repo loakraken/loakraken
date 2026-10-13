@@ -52,6 +52,28 @@ class MarketHistoryWarmupTest {
   }
 
   private final SimpleMeterRegistry registry = new SimpleMeterRegistry();
+  private final List<Object> published = new java.util.ArrayList<>();
+
+  @Test
+  void 보드를_갱신하면_받은_가격을_시세_알림에_알리고_실패해도_예열은_계속한다() {
+    when(boards.refreshDefaultPage(MarketTab.REFINING)).thenReturn(page(1, 3));
+    warmup("key", List.of(), 15).warmBoards();
+    assertThat(published).hasSize(1);
+    var event = (com.loakraken.market.application.MarketPricesObserved) published.getFirst();
+    assertThat(event.observedAt()).isEqualTo(clock.now);
+    assertThat(event.prices()).extracting(MarketPrice::id).containsExactly(1000L, 1001L, 1002L);
+
+    // 듣는 쪽이 실패해도 예외가 예열 밖으로 나가지 않는다.
+    var failing =
+        warmup(
+            "key",
+            List.of(),
+            15,
+            event2 -> {
+              throw new IllegalStateException("듣는 쪽 실패");
+            });
+    org.assertj.core.api.Assertions.assertThatCode(failing::warmBoards).doesNotThrowAnyException();
+  }
 
   @Test
   void 키가_없으면_아무것도_하지_않는다() {
@@ -184,6 +206,14 @@ class MarketHistoryWarmupTest {
   }
 
   private MarketHistoryWarmup warmup(String key, List<Long> ids, int maxCalls) {
+    return warmup(key, ids, maxCalls, published::add);
+  }
+
+  private MarketHistoryWarmup warmup(
+      String key,
+      List<Long> ids,
+      int maxCalls,
+      org.springframework.context.ApplicationEventPublisher events) {
     var lostArk =
         new LostArkProperties(
             URI.create("http://127.0.0.1:1"),
@@ -212,7 +242,8 @@ class MarketHistoryWarmupTest {
         relicBooks,
         relicProperties,
         refiningMaterials,
-        refiningMaterialProperties);
+        refiningMaterialProperties,
+        events);
   }
 
   @Test

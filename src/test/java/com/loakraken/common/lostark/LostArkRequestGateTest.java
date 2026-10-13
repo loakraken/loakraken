@@ -96,7 +96,7 @@ class LostArkRequestGateTest {
     var clock = new MutableClock();
     var limiter =
         new ClientLimiter(
-            new ClientLimitProperties(true, 2, 10, 10, 10, true, 2, 6, 20, 5),
+            new ClientLimitProperties(true, 2, 10, 10, 10, true, 2, 6, 20, 5, 5),
             new ClientLimitStore.Memory(),
             clock,
             registry,

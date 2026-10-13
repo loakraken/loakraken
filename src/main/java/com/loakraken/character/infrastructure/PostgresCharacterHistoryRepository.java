@@ -32,14 +32,14 @@ class PostgresCharacterHistoryRepository implements CharacterHistoryPort {
     var characterId =
         jdbc.sql(
                 """
-      INSERT INTO characters (character_id, character_name, server_name, class_name, item_level, combat_power, best_combat_power, expedition_level, guild_name, image_url, last_synced_at, profile_refreshed_at, profile_checked_at)
-      VALUES (:id, :name, :server, :className, :itemLevel, :combatPower, :combatPower, :expeditionLevel, :guildName, :imageUrl, :fetchedAt, :fetchedAt, :fetchedAt)
+      INSERT INTO characters (character_id, character_name, server_name, class_name, item_level, combat_power, best_combat_power, expedition_level, guild_name, guild_member_grade, image_url, last_synced_at, profile_refreshed_at, profile_checked_at)
+      VALUES (:id, :name, :server, :className, :itemLevel, :combatPower, :combatPower, :expeditionLevel, :guildName, :guildGrade, :imageUrl, :fetchedAt, :fetchedAt, :fetchedAt)
       ON CONFLICT (server_name, character_name) DO UPDATE SET
         class_name = EXCLUDED.class_name, item_level = EXCLUDED.item_level,
         combat_power = EXCLUDED.combat_power,
         best_combat_power = GREATEST(characters.best_combat_power, EXCLUDED.combat_power),
         expedition_level = COALESCE(EXCLUDED.expedition_level, characters.expedition_level),
-        guild_name = EXCLUDED.guild_name,
+        guild_name = EXCLUDED.guild_name, guild_member_grade = EXCLUDED.guild_member_grade,
         image_url = COALESCE(EXCLUDED.image_url, characters.image_url),
         last_synced_at = EXCLUDED.last_synced_at,
         profile_refreshed_at = EXCLUDED.profile_refreshed_at, profile_checked_at = EXCLUDED.profile_checked_at
@@ -54,6 +54,7 @@ class PostgresCharacterHistoryRepository implements CharacterHistoryPort {
             .param("combatPower", profile.combatPower())
             .param("expeditionLevel", profile.expeditionLevel())
             .param("guildName", guildName(profile.guildName()))
+            .param("guildGrade", guildGrade(profile))
             .param("imageUrl", imageUrl(profile.imageUrl()))
             .param("fetchedAt", at)
             .query(UUID.class)
@@ -250,6 +251,15 @@ class PostgresCharacterHistoryRepository implements CharacterHistoryPort {
     if (value == null || value.isBlank()) return null;
     var name = value.strip();
     return name.length() > 64 ? null : name;
+  }
+
+  /** 길드 직위(공식 문자열 그대로, L36). 길드가 없으면 직위도 남기지 않는다(옛 직위가 남지 않게). */
+  private static String guildGrade(CharacterProfile profile) {
+    if (guildName(profile.guildName()) == null || profile.inner() == null) return null;
+    var grade = profile.inner().guildMemberGrade();
+    if (grade == null || grade.isBlank()) return null;
+    var value = grade.strip();
+    return value.length() > 32 ? null : value;
   }
 
   /** 자동완성 초상(#369). https 주소만 512자까지 저장한다. */

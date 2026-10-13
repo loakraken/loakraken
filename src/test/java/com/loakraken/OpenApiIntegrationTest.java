@@ -940,6 +940,27 @@ class OpenApiIntegrationTest {
     assertThat(schemas.at("/GuildBin/required").toString()).contains("from", "count");
   }
 
+  @Test
+  void 최고_전투력_통계는_required이고_작은_칸에서_숨기는_값만_nullable이다() throws Exception {
+    var document = JsonMapper.builder().build().readTree(request("/v3/api-docs").body());
+    assertThat(document.at("/paths/~1api~1v1~1stats~1best-combat-power/get").isMissingNode())
+        .isFalse();
+    var schemas = document.at("/components/schemas");
+    assertThat(schemas.at("/StatsBestCombatPowerResponse/required").toString())
+        .contains("meta", "overall", "classes");
+    assertThat(schemas.at("/StatsBestCombatPowerClassResponse/required").toString())
+        .contains("className", "value");
+    assertThat(schemas.at("/StatsBestCombatPowerRowResponse/required").toString())
+        .contains("count", "mean", "max", "percentiles", "sampleStatus");
+    for (var field : List.of("mean", "max", "percentiles"))
+      assertThat(
+              schemas
+                  .at("/StatsBestCombatPowerRowResponse/properties/" + field + "/anyOf/1/type")
+                  .asText())
+          .as(field)
+          .isEqualTo("null");
+  }
+
   private HttpResponse<String> request(String path) throws Exception {
     try (var client = HttpClient.newHttpClient()) {
       return client.send(

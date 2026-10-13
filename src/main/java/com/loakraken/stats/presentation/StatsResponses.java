@@ -140,6 +140,57 @@ public final class StatsResponses {
       @NullableResponse @Schema(description = "전투력 분위수") StatsPercentilesResponse combatPower,
       @Schema(allowableValues = {"COLLECTING", "READY"}) String sampleStatus) {}
 
+  @Schema(
+      description =
+          "최고 전투력은 그 캐릭터의 관측 이력 전체에서 가장 높았던 전투력입니다(랭킹 bestCombatPower와 같음). 표본 30 미만이면 mean·max·percentiles는 null입니다")
+  public record StatsBestCombatPowerRowResponse(
+      long count,
+      @NullableResponse @Schema(description = "평균, 소수 둘째 자리") BigDecimal mean,
+      @NullableResponse @Schema(description = "최고값") BigDecimal max,
+      @NullableResponse @Schema(description = "분위수(p50 = 중앙값)")
+          StatsPercentilesResponse percentiles,
+      @Schema(allowableValues = {"COLLECTING", "READY"}) String sampleStatus) {
+    static StatsBestCombatPowerRowResponse from(StatsQueryService.BestCombatPowerStat row) {
+      return new StatsBestCombatPowerRowResponse(
+          row.count(),
+          row.mean(),
+          row.max(),
+          row.percentiles() == null
+              ? null
+              : new StatsPercentilesResponse(
+                  row.percentiles().p10(),
+                  row.percentiles().p25(),
+                  row.percentiles().p50(),
+                  row.percentiles().p75(),
+                  row.percentiles().p90()),
+          row.sampleStatus().name());
+    }
+  }
+
+  public record StatsBestCombatPowerClassResponse(
+      String className, StatsBestCombatPowerRowResponse value) {}
+
+  @Schema(
+      description =
+          "meta.population은 최고 전투력이 있는 캐릭터 수입니다. 필터의 combatPowerMin·Max는 최고 전투력이 아니라 지금 전투력에 걸립니다")
+  public record StatsBestCombatPowerResponse(
+      StatsMetaResponse meta,
+      StatsBestCombatPowerRowResponse overall,
+      @Schema(description = "직업별, 인원 많은 순(같으면 직업 이름순)")
+          List<StatsBestCombatPowerClassResponse> classes) {
+    static StatsBestCombatPowerResponse from(StatsQueryService.BestCombatPowerResult result) {
+      return new StatsBestCombatPowerResponse(
+          StatsMetaResponse.from(result.meta()),
+          StatsBestCombatPowerRowResponse.from(result.overall()),
+          result.classes().stream()
+              .map(
+                  row ->
+                      new StatsBestCombatPowerClassResponse(
+                          row.className(), StatsBestCombatPowerRowResponse.from(row)))
+              .toList());
+    }
+  }
+
   public record StatsClassesResponse(StatsMetaResponse meta, List<StatsClassRowResponse> rows) {
     static StatsClassesResponse from(StatsQueryService.ClassesResult result) {
       return new StatsClassesResponse(

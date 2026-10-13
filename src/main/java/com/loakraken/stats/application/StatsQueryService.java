@@ -169,6 +169,38 @@ public class StatsQueryService {
         });
   }
 
+  /**
+   * 최고 전투력 통계(L5). 표본 30 미만인 칸(전체 포함)은 평균·최고·분위수를 모두 null로 두고 인원과 COLLECTING만 준다(작은 칸의 값은 사실상 한두
+   * 사람의 값이라, PM 판정 2026-10-13).
+   */
+  public BestCombatPowerResult bestCombatPower(StatsConditions conditions) {
+    return cached(
+        "best-combat-power:" + key(conditions),
+        BestCombatPowerResult.class,
+        () -> {
+          var now = clock.instant();
+          var result = stats.bestCombatPower(conditions, conditions.since(now));
+          return new BestCombatPowerResult(
+              meta(conditions, result.overall().count(), now),
+              bestRow(result.overall()),
+              result.classes().stream().map(StatsQueryService::bestRow).toList());
+        });
+  }
+
+  private static BestCombatPowerStat bestRow(StatsPort.BestCombatPowerRow row) {
+    var status = SampleStatus.of(row.count());
+    if (status != SampleStatus.READY)
+      return new BestCombatPowerStat(row.className(), row.count(), null, null, null, status);
+    var p = row.percentiles();
+    return new BestCombatPowerStat(
+        row.className(),
+        row.count(),
+        row.mean(),
+        row.max(),
+        p.size() == 5 ? new Percentiles(p.get(0), p.get(1), p.get(2), p.get(3), p.get(4)) : null,
+        status);
+  }
+
   public ClassesResult classes(StatsConditions conditions) {
     return cached(
         "classes:" + key(conditions),
@@ -894,6 +926,18 @@ public class StatsQueryService {
       int activeDays,
       Instant aggregatedAt,
       GuildDetail.Result detail) {}
+
+  /** className은 전체 줄이면 null. 30 미만이면 mean·max·percentiles는 null. */
+  public record BestCombatPowerStat(
+      String className,
+      long count,
+      BigDecimal mean,
+      BigDecimal max,
+      Percentiles percentiles,
+      SampleStatus sampleStatus) {}
+
+  public record BestCombatPowerResult(
+      Meta meta, BestCombatPowerStat overall, List<BestCombatPowerStat> classes) {}
 
   /**
    * @param classPopulation 장비 요약이 없는 캐릭터도 센 그 직업 모집단 수(/stats/classes의 인원과 같은 모집단)

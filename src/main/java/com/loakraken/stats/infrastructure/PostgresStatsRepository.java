@@ -78,6 +78,50 @@ class PostgresStatsRepository implements StatsPort {
   }
 
   @Override
+  public BestCombatPower bestCombatPower(StatsConditions conditions, Instant since) {
+    // GROUPING SETS로 직업별 줄과 전체 줄(class_name 묶음 없음)을 한 번에 센다. class_name은 NOT NULL이라 GROUPING()으로 전체
+    // 줄을 가린다.
+    var rows =
+        population(conditions, since)
+            .statement(
+                """
+        SELECT class_name, GROUPING(class_name) AS whole, COUNT(*) AS n,
+          AVG(best_combat_power) AS mean, MAX(best_combat_power) AS hi,
+          percentile_cont(ARRAY[0.1, 0.25, 0.5, 0.75, 0.9]) WITHIN GROUP (ORDER BY best_combat_power) AS cp
+        FROM pop WHERE best_combat_power IS NOT NULL
+        GROUP BY GROUPING SETS ((class_name), ())
+        """,
+                jdbc)
+            .query(
+                (row, index) ->
+                    Map.entry(
+                        row.getInt("whole") == 1,
+                        new BestCombatPowerRow(
+                            row.getInt("whole") == 1 ? null : row.getString("class_name"),
+                            row.getLong("n"),
+                            round(row.getBigDecimal("mean")),
+                            round(row.getBigDecimal("hi")),
+                            percentiles(row.getArray("cp")))))
+            .list();
+    var overall =
+        rows.stream()
+            .filter(Map.Entry::getKey)
+            .map(Map.Entry::getValue)
+            .findFirst()
+            .orElse(new BestCombatPowerRow(null, 0, null, null, List.of()));
+    var classes =
+        rows.stream()
+            .filter(entry -> !entry.getKey())
+            .map(Map.Entry::getValue)
+            .sorted(
+                java.util.Comparator.comparingLong(BestCombatPowerRow::count)
+                    .reversed()
+                    .thenComparing(BestCombatPowerRow::className))
+            .toList();
+    return new BestCombatPower(overall, classes);
+  }
+
+  @Override
   public List<ClassRow> classes(StatsConditions conditions, Instant since) {
     return population(conditions, since)
         .statement(

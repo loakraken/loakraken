@@ -66,6 +66,25 @@ public class StatsController {
         StatsResponses.StatsClassesResponse.from(stats.classes(filter.toConditions())));
   }
 
+  @GetMapping(
+      value = "/api/v1/stats/best-combat-power",
+      produces = MediaType.APPLICATION_JSON_VALUE)
+  @Operation(
+      summary = "최고 전투력 통계",
+      description =
+          "캐릭터마다 관측 이력 전체에서 가장 높았던 전투력(랭킹 bestCombatPower와 같음)의 전체·직업별 인원·평균·최고·분위수(p10~p90, p50 = 중앙값)입니다. "
+              + "모집단은 다른 통계와 같고(처리정지 캐릭터 없음) 그 가운데 최고 전투력이 있는 캐릭터만 셉니다. combatPowerMin·Max 필터는 지금 전투력에 걸립니다. "
+              + "표본 30 미만인 칸(전체 포함)은 mean·max·percentiles가 null이고 count·sampleStatus만 있습니다. "
+              + ERRORS)
+  @StandardErrors
+  public ApiResponse<StatsResponses.StatsBestCombatPowerResponse> bestCombatPower(
+      @Valid @ModelAttribute @ParameterObject StatsFilterRequest filter) {
+    return ApiResponse.of(
+        StatsSuccessCode.STATS_BEST_COMBAT_POWER_SUCCESS,
+        StatsResponses.StatsBestCombatPowerResponse.from(
+            stats.bestCombatPower(filter.toConditions())));
+  }
+
   @GetMapping(value = "/api/v1/stats/servers", produces = MediaType.APPLICATION_JSON_VALUE)
   @Operation(summary = "서버별 통계", description = "서버별 인원·비율, 아이템 레벨·전투력 중앙값. " + ERRORS)
   @StandardErrors

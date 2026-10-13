@@ -110,6 +110,11 @@ public class GuildRankingController {
                   "guild를 줬을 때 그 이름에 맞지만 확인한 길드원이 minMembers 미만이라 뺀 길드 수. guild가 없으면 null")
           @NullableResponse
           Long excludedMatches,
+      @Schema(
+              description =
+                  "guild를 줬을 때 그 이름에 맞고 순위에 든 길드 수(쪽 수는 이 값으로 셉니다). guild가 없으면 null이고 쪽 수는 meta.population으로 셉니다")
+          @NullableResponse
+          Long matchCount,
       List<GuildRankingRowResponse> rows) {
     static GuildRankingResponse from(StatsQueryService.GuildRankingResult result) {
       return new GuildRankingResponse(
@@ -120,6 +125,7 @@ public class GuildRankingController {
           result.minMembers(),
           result.excludedGuilds(),
           result.excludedMatches(),
+          result.matchCount(),
           result.rows().stream()
               .map(
                   row ->

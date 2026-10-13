@@ -370,6 +370,7 @@ public class StatsQueryService {
               GUILD_MIN_MEMBERS,
               result.excluded(),
               result.excludedMatches(),
+              result.matchCount(),
               result.rows().stream()
                   .map(
                       row ->
@@ -884,6 +885,7 @@ public class StatsQueryService {
       int minMembers,
       long excludedGuilds,
       Long excludedMatches,
+      Long matchCount,
       List<RankedGuild> rows) {}
 
   public record RankedGuild(

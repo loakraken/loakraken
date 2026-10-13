@@ -285,8 +285,10 @@ public interface StatsPort {
    * @param total 순위에 든 전체 길드 수(이름 조건과 무관)
    * @param excluded 길드원이 minMembers 미만이라 뺀 전체 길드 수
    * @param excludedMatches 이름 조건이 있을 때 그 이름에 맞지만 minMembers 미만이라 뺀 길드 수. 이름 조건이 없으면 null
+   * @param matchCount 이름 조건이 있을 때 그 이름에 맞고 순위에 든 길드 수(쪽 수 계산용). 이름 조건이 없으면 null
    */
-  record GuildPage(long total, long excluded, Long excludedMatches, List<GuildRow> rows) {}
+  record GuildPage(
+      long total, long excluded, Long excludedMatches, Long matchCount, List<GuildRow> rows) {}
 
   /**
    * 길드 랭킹(#301). since 뒤에 프로필을 관측한 공개 캐릭터를 (서버, 길드 이름)으로 묶고, 관측 길드원이 minMembers 미만인 길드는 뺀다. sort 값

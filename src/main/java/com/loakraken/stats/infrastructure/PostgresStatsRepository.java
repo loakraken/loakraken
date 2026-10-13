@@ -432,14 +432,15 @@ class PostgresStatsRepository implements StatsPort {
       int limit,
       String guild) {
     String base = GUILD_RANKED.replace("%ORDER%", sort == GuildSort.SUM ? "g.il_sum" : "g.il_avg");
-    var counts = new long[] {0, 0, 0};
+    var counts = new long[] {0, 0, 0, 0};
     var rows =
         jdbc.sql(
                 base
                     + """
                 SELECT ranked.*, (SELECT COUNT(*) FROM ranked) AS total,
                   (SELECT COUNT(*) FROM guilds WHERE member_count < :minMembers) AS excluded,
-                  (SELECT COUNT(*) FROM guilds WHERE member_count < :minMembers AND %MATCH%) AS excluded_matches
+                  (SELECT COUNT(*) FROM guilds WHERE member_count < :minMembers AND %MATCH%) AS excluded_matches,
+                  (SELECT COUNT(*) FROM ranked WHERE %MATCH%) AS matches
                 FROM ranked WHERE %MATCH%
                 ORDER BY rank, server_name, guild_name LIMIT :limit OFFSET :offset
                 """
@@ -455,6 +456,7 @@ class PostgresStatsRepository implements StatsPort {
                   counts[0] = row.getLong("total");
                   counts[1] = row.getLong("excluded");
                   counts[2] = row.getLong("excluded_matches");
+                  counts[3] = row.getLong("matches");
                   return new GuildRow(
                       row.getLong("rank"),
                       row.getString("server_name"),
@@ -472,6 +474,8 @@ class PostgresStatsRepository implements StatsPort {
                   + "SELECT (SELECT COUNT(*) FROM ranked), (SELECT COUNT(*) FROM guilds WHERE member_count < :minMembers),"
                   + " (SELECT COUNT(*) FROM guilds WHERE member_count < :minMembers AND "
                   + GUILD_MATCH
+                  + "), (SELECT COUNT(*) FROM ranked WHERE "
+                  + GUILD_MATCH
                   + ")")
           .param("since", since.atOffset(ZoneOffset.UTC))
           .param("server", server)
@@ -482,8 +486,14 @@ class PostgresStatsRepository implements StatsPort {
                 counts[0] = row.getLong(1);
                 counts[1] = row.getLong(2);
                 counts[2] = row.getLong(3);
+                counts[3] = row.getLong(4);
               });
-    return new GuildPage(counts[0], counts[1], guild == null ? null : counts[2], rows);
+    return new GuildPage(
+        counts[0],
+        counts[1],
+        guild == null ? null : counts[2],
+        guild == null ? null : counts[3],
+        rows);
   }
 
   /** 보유율 분모 원정대(#305): since 뒤 항목 관측 + 공개 캐릭터가 있음(server가 있으면 그 서버). */

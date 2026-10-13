@@ -163,15 +163,19 @@ class OpenApiIntegrationTest {
                     "/components/schemas/RosterCombatPowerResponse/properties/refreshAvailableAt/anyOf/1/type")
                 .asText())
         .isEqualTo("null");
-    // 길드 찾기(M21): guild가 없으면 null인 excludedMatches.
+    // 길드 찾기(M21): guild가 없으면 null인 excludedMatches·matchCount.
     assertThat(document.at("/components/schemas/GuildRankingResponse/required").toString())
-        .contains("excludedGuilds", "excludedMatches");
-    assertThat(
-            document
-                .at(
-                    "/components/schemas/GuildRankingResponse/properties/excludedMatches/anyOf/1/type")
-                .asText())
-        .isEqualTo("null");
+        .contains("excludedGuilds", "excludedMatches", "matchCount");
+    for (var field : List.of("excludedMatches", "matchCount"))
+      assertThat(
+              document
+                  .at(
+                      "/components/schemas/GuildRankingResponse/properties/"
+                          + field
+                          + "/anyOf/1/type")
+                  .asText())
+          .as(field)
+          .isEqualTo("null");
     // 랭킹 행 최고 전투력·아크 패시브(L37·K32): 기존 응답에 nullable 필드 추가.
     assertThat(document.at("/components/schemas/StatsRankedCharacterResponse/required").toString())
         .contains("bestCombatPower", "arkPassivePoints", "classEngraving", "estherWeapon");

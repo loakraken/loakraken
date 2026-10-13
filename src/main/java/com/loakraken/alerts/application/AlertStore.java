@@ -24,7 +24,13 @@ public interface AlertStore {
 
   boolean deleteSubscription(UUID subscriptionId);
 
+  /** 그 주소의 구독을 지운다(확인 푸시에서 푸시 서비스가 구독 없음이라고 할 때). */
+  boolean deleteSubscription(String endpoint);
+
   int deleteInactive(Instant before);
+
+  /** 조건이 하나도 없고 before 전부터 쓰지 않은 구독을 지운다. */
+  int deleteEmpty(Instant before);
 
   List<Condition> conditions(UUID subscriptionId);
 

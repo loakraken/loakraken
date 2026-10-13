@@ -3,6 +3,7 @@ package com.loakraken.alerts;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.loakraken.TestcontainersConfiguration;
+import com.loakraken.alerts.infrastructure.PushTransport;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -15,14 +16,17 @@ import java.util.Base64;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.test.web.server.LocalServerPort;
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
+import org.springframework.context.annotation.Primary;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 
-/** 시세 알림 구독 만들기는 클라이언트 분당 상한(시험 설정 2)을 넘으면 429다. */
-@Import(TestcontainersConfiguration.class)
+/** 시세 알림 구독 만들기는 클라이언트 분당 상한(시험 설정 2)을 넘으면 429다. 확인 알림은 가짜 전송이 받는다(실제 푸시 서비스 호출 없음). */
+@Import({TestcontainersConfiguration.class, AlertRateLimitIntegrationTest.Fakes.class})
 @SpringBootTest(
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
     properties = {
@@ -45,6 +49,15 @@ class AlertRateLimitIntegrationTest {
 
   @LocalServerPort int port;
   @Autowired JdbcClient jdbc;
+
+  @TestConfiguration(proxyBeanMethods = false)
+  static class Fakes {
+    @Bean
+    @Primary
+    PushTransport acceptingTransport() {
+      return (endpoint, headers, body) -> 201;
+    }
+  }
 
   @Test
   void 구독_만들기는_분당_상한을_넘으면_429다() throws Exception {

@@ -16,6 +16,7 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
  * @param sendsPerMinute 분당 발송 상한(넘으면 다음 주기로 미룸)
  * @param resendInterval 같은 조건의 최소 재발송 간격
  * @param inactiveRetention 이 기간 동안 쓰지 않은 구독은 지운다
+ * @param emptyRetention 조건이 하나도 없는 구독은 이 기간 동안 쓰지 않으면 지운다
  * @param itemFreshness 이 기간 안에 가격을 관측한 품목에만 조건을 걸 수 있다
  * @param dispatchInterval 발송 작업 주기
  * @param cleanupInterval 오래된 구독 삭제 작업 주기
@@ -32,6 +33,7 @@ public record AlertProperties(
     @DefaultValue("600") int sendsPerMinute,
     @DefaultValue("6h") Duration resendInterval,
     @DefaultValue("90d") Duration inactiveRetention,
+    @DefaultValue("24h") Duration emptyRetention,
     @DefaultValue("2h") Duration itemFreshness,
     @DefaultValue("15s") Duration dispatchInterval,
     @DefaultValue("1h") Duration cleanupInterval,
@@ -43,6 +45,8 @@ public record AlertProperties(
         || resendInterval.isNegative()
         || inactiveRetention.isNegative()
         || inactiveRetention.isZero()
+        || emptyRetention.isNegative()
+        || emptyRetention.isZero()
         || itemFreshness.isNegative()
         || itemFreshness.isZero()) throw new IllegalArgumentException("시세 알림 설정값이 올바르지 않습니다.");
   }

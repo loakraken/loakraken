@@ -55,7 +55,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class AlertController {
   static final String TOKEN_HEADER = "X-Alert-Token";
   private static final String ERRORS =
-      "400 INVALID_REQUEST·ALERT_INVALID_SUBSCRIPTION·ALERT_ITEM_NOT_ALERTABLE·ALERT_TOO_MANY_CONDITIONS, 404 ALERT_SUBSCRIPTION_NOT_FOUND·ALERT_CONDITION_NOT_FOUND, 429 CLIENT_RATE_LIMITED, 503 ALERTS_FULL";
+      "400 INVALID_REQUEST·ALERT_INVALID_SUBSCRIPTION·ALERT_PUSH_NOT_DELIVERED·ALERT_ITEM_NOT_ALERTABLE·ALERT_TOO_MANY_CONDITIONS, 404 ALERT_SUBSCRIPTION_NOT_FOUND·ALERT_CONDITION_NOT_FOUND, 429 CLIENT_RATE_LIMITED, 503 ALERTS_FULL";
   private final AlertService alerts;
   private final LostArkRequestGate gate;
   private final String vapidPublicKey;
@@ -111,6 +111,8 @@ public class AlertController {
       summary = "알림 구독 만들기",
       description =
           "브라우저 PushSubscription(endpoint·keys)을 등록하고 관리 토큰을 한 번 돌려줍니다(다시 보여 주지 않음). 같은 endpoint로 다시 등록하면 키와 토큰을 바꾸고(옛 토큰 무효) 옛 조건을 지웁니다. "
+              + "등록 전에 확인 알림(본문 {\"type\":\"SUBSCRIBED\"}, 가격 알림은 type PRICE)을 보내고, 푸시 서비스가 받지 않으면 저장하지 않습니다(400 ALERT_PUSH_NOT_DELIVERED, 일시 장애면 503 ALERTS_FULL). "
+              + "조건 없이 24시간 동안 쓰지 않은 구독은 지웁니다. "
               + ERRORS)
   public ApiResponse<SubscriptionResponse> subscribe(@Valid @RequestBody SubscribeRequest request) {
     gate.chargeClient(ClientLimiter.Bucket.ALERT_SUBSCRIBE);

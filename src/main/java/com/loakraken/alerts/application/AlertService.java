@@ -21,7 +21,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * 시세 알림 웹 푸시(M33). 구독은 로그인 없이 브라우저별로 만들고, 관리 토큰(무작위 256비트)을 한 번만 돌려준다. 저장은 토큰의 SHA-256 해시뿐이다.
+ * 시세 알림 웹 푸시(M33). 구독은 로그인 없이 브라우저별로 만들고, 관리 토큰(무작위 256비트)을 한 번만 돌려준다. 저장은 토큰의 SHA-256 해시뿐이다. 구독할 때
+ * 확인 알림을 보내 푸시 서비스가 받은 구독만 저장하고, 조건 없이 하루 동안 쓰지 않은 구독은 지운다(켜기 전 조건, 보안 3회차).
  *
  * <p>조건은 예열 품목에만 건다. 만들 때 이미 참이면 보내지 않고(armed=false로 시작), 거짓이 됐다가 다시 참이 될 때 보낸다. 같은 조건은
  * resendInterval 안에 다시 보내지 않는다. 로그에는 구독 주소·키·토큰 원문을 남기지 않는다.
@@ -30,6 +31,10 @@ public class AlertService {
   private static final Logger log = LoggerFactory.getLogger(AlertService.class);
   private static final Base64.Encoder URL = Base64.getUrlEncoder().withoutPadding();
   private static final Duration MINUTE = Duration.ofMinutes(1);
+
+  /** 구독 확인 알림 본문. 가격 알림({@code type=PRICE})과 종류로 나눈다. */
+  private static final byte[] CONFIRM_PAYLOAD =
+      "{\"type\":\"SUBSCRIBED\"}".getBytes(StandardCharsets.UTF_8);
 
   private final AlertStore store;
   private final PushSender sender;
@@ -83,9 +88,26 @@ public class AlertService {
     // 상한은 새 구독에만 건다(같은 endpoint 재구독은 수가 늘지 않음). 동시 요청으로 조금 넘을 수 있지만 상한은 남용 방지용이다.
     if (store.subscriptionCount() >= properties.maxSubscriptions()
         && !store.endpointExists(endpoint)) throw new BusinessException(AlertErrorCode.ALERTS_FULL);
+    confirm(endpoint, p256dh.strip(), auth.strip());
     var subscribed =
         store.upsertSubscription(endpoint, p256dh.strip(), auth.strip(), hash(tokenText), now);
     return new Subscription(subscribed.subscriptionId(), tokenText);
+  }
+
+  /**
+   * 구독 전에 확인 알림을 한 번 보낸다. 푸시 서비스가 받아야(2xx) 저장한다. 실제 브라우저 구독이 아닌 주소·키는 여기서 걸러진다. 일시 실패는 다시 시도하라는
+   * 503, 그 밖의 실패는 400이다. 구독 없음(404·410)이면 그 주소의 옛 구독도 지운다.
+   */
+  private void confirm(String endpoint, String p256dh, String auth) {
+    switch (sender.send(endpoint, p256dh, auth, CONFIRM_PAYLOAD)) {
+      case SENT -> {}
+      case RETRY -> throw new BusinessException(AlertErrorCode.ALERTS_FULL);
+      case GONE -> {
+        store.deleteSubscription(endpoint);
+        throw new BusinessException(AlertErrorCode.ALERT_PUSH_NOT_DELIVERED);
+      }
+      case FAILED -> throw new BusinessException(AlertErrorCode.ALERT_PUSH_NOT_DELIVERED);
+    }
   }
 
   public void unsubscribe(UUID subscriptionId, String token) {
@@ -187,17 +209,20 @@ public class AlertService {
     return sent;
   }
 
-  /** 오래 쓰지 않은 구독을 지운다. */
+  /** 오래 쓰지 않은 구독과, 조건 없이 emptyRetention(기본 24시간) 동안 쓰지 않은 구독을 지운다. */
   public int cleanup() {
-    int deleted = store.deleteInactive(clock.instant().minus(properties.inactiveRetention()));
-    if (deleted > 0) log.info("오래 쓰지 않은 알림 구독을 지웠습니다. count={}", deleted);
-    return deleted;
+    var now = clock.instant();
+    int inactive = store.deleteInactive(now.minus(properties.inactiveRetention()));
+    int empty = store.deleteEmpty(now.minus(properties.emptyRetention()));
+    if (inactive + empty > 0)
+      log.info("쓰지 않는 알림 구독을 지웠습니다. inactive={}, empty={}", inactive, empty);
+    return inactive + empty;
   }
 
-  /** 알림 본문: 품목·가격·조건뿐(JSON). */
+  /** 알림 본문: 종류·품목·가격·조건뿐(JSON). */
   static byte[] payload(AlertStore.Pending pending) {
     var json =
-        "{\"itemId\":"
+        "{\"type\":\"PRICE\",\"itemId\":"
             + pending.itemId()
             + ",\"itemName\":\""
             + escape(pending.itemName())

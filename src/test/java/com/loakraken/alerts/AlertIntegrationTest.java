@@ -411,11 +411,99 @@ class AlertIntegrationTest {
         .isZero();
     assertThat(jdbc.sql("SELECT COUNT(*) FROM price_alert").query(Long.class).single()).isZero();
 
-    subscribe(ENDPOINT_2);
+    // 조건이 있는 구독은 90일 동안 쓰지 않으면 지운다.
+    var kept = subscribe(ENDPOINT_2);
+    data(
+        post(
+            "/api/v1/alerts/subscriptions/" + kept.path("subscriptionId").asText() + "/conditions",
+            kept.path("manageToken").asText(),
+            condition(900)));
     clock.now = clock.now.plus(Duration.ofDays(89));
     assertThat(alerts.cleanup()).isZero();
     clock.now = clock.now.plus(Duration.ofDays(2));
     assertThat(alerts.cleanup()).isEqualTo(1);
+  }
+
+  @Test
+  void 조건_없는_구독은_하루_동안_쓰지_않으면_지운다() throws Exception {
+    observe("1000");
+    subscribe(ENDPOINT);
+    var withCondition = subscribe(ENDPOINT_2);
+    var id = withCondition.path("subscriptionId").asText();
+    var token = withCondition.path("manageToken").asText();
+    var conditionId =
+        data(post("/api/v1/alerts/subscriptions/" + id + "/conditions", token, condition(900)))
+            .path("conditionId")
+            .asText();
+
+    clock.now = clock.now.plus(Duration.ofHours(23));
+    assertThat(alerts.cleanup()).isZero();
+    // 24시간이 지나면 조건 없는 구독만 지운다.
+    clock.now = clock.now.plus(Duration.ofHours(2));
+    assertThat(alerts.cleanup()).isEqualTo(1);
+    assertThat(jdbc.sql("SELECT endpoint FROM push_subscription").query(String.class).list())
+        .containsExactly(ENDPOINT_2);
+
+    // 마지막 조건을 지운 구독도 그때부터 24시간 뒤에 지운다.
+    var removed =
+        request(
+            "DELETE",
+            "/api/v1/alerts/subscriptions/" + id + "/conditions/" + conditionId,
+            token,
+            null);
+    assertThat(removed.statusCode()).isEqualTo(200);
+    clock.now = clock.now.plus(Duration.ofHours(23));
+    assertThat(alerts.cleanup()).isZero();
+    clock.now = clock.now.plus(Duration.ofHours(2));
+    assertThat(alerts.cleanup()).isEqualTo(1);
+    assertThat(subscriptions()).isZero();
+  }
+
+  @Test
+  void 확인_알림을_푸시_서비스가_받지_않으면_구독을_저장하지_않는다(CapturedOutput output) throws Exception {
+    var path = "/api/v1/alerts/subscriptions";
+    // 그 밖의 4xx(가짜 구독 등): 400, 저장 안 함.
+    transport.status = 403;
+    var rejected = postRaw(path, null, body(ENDPOINT, UA_PUBLIC));
+    assertThat(rejected.statusCode()).isEqualTo(400);
+    assertThat(rejected.body()).contains("ALERT_PUSH_NOT_DELIVERED").doesNotContain("manageToken");
+    assertThat(subscriptions()).isZero();
+    // 구독 없음(410): 400, 저장 안 함.
+    transport.status = 410;
+    assertThat(postRaw(path, null, body(ENDPOINT, UA_PUBLIC)).body())
+        .contains("ALERT_PUSH_NOT_DELIVERED");
+    assertThat(subscriptions()).isZero();
+    // 일시 장애(503·연결 실패): 다시 시도하라는 503, 저장 안 함.
+    transport.status = 503;
+    var busy = postRaw(path, null, body(ENDPOINT, UA_PUBLIC));
+    assertThat(busy.statusCode()).isEqualTo(503);
+    assertThat(busy.body()).contains("ALERTS_FULL");
+    transport.status = 201;
+    transport.fail = true;
+    assertThat(postRaw(path, null, body(ENDPOINT, UA_PUBLIC)).statusCode()).isEqualTo(503);
+    assertThat(subscriptions()).isZero();
+    // 시도마다 확인 알림 한 건씩이고, 로그에는 주소가 없다.
+    assertThat(transport.endpoints).hasSize(3).containsOnly(URI.create(ENDPOINT));
+    assertThat(output.getAll()).doesNotContain("secret-endpoint-token-1", UA_PUBLIC);
+
+    // 받으면 저장한다.
+    transport.fail = false;
+    var sub = subscribe(ENDPOINT);
+    assertThat(subscriptions()).isEqualTo(1);
+    // 같은 주소로 다시 구독할 때 구독 없음(410)이면 옛 구독도 지운다. 그 밖의 실패는 옛 구독을 그대로 둔다.
+    transport.status = 403;
+    assertThat(postRaw(path, null, body(ENDPOINT, UA_PUBLIC)).statusCode()).isEqualTo(400);
+    assertThat(
+            get(
+                    "/api/v1/alerts/subscriptions/"
+                        + sub.path("subscriptionId").asText()
+                        + "/conditions",
+                    sub.path("manageToken").asText())
+                .statusCode())
+        .isEqualTo(200);
+    transport.status = 410;
+    assertThat(postRaw(path, null, body(ENDPOINT, UA_PUBLIC)).statusCode()).isEqualTo(400);
+    assertThat(subscriptions()).isZero();
   }
 
   @Test
@@ -495,8 +583,23 @@ class AlertIntegrationTest {
                     ITEM, "운명의 파괴석", "일반", null, 1, null, null, null, new BigDecimal(price)))));
   }
 
+  /** 구독을 만든다. 확인 알림 한 건이 나가는지 보고, 아래 발송 검사를 위해 기록을 비운다. */
   private JsonNode subscribe(String endpoint) throws Exception {
-    return data(postRaw("/api/v1/alerts/subscriptions", null, body(endpoint, UA_PUBLIC)));
+    var sent = transport.endpoints.size();
+    var created = data(postRaw("/api/v1/alerts/subscriptions", null, body(endpoint, UA_PUBLIC)));
+    assertThat(transport.endpoints).hasSize(sent + 1).last().isEqualTo(URI.create(endpoint));
+    clearTransport();
+    return created;
+  }
+
+  private void clearTransport() {
+    transport.endpoints.clear();
+    transport.headers.clear();
+    transport.bodies.clear();
+  }
+
+  private long subscriptions() {
+    return jdbc.sql("SELECT COUNT(*) FROM push_subscription").query(Long.class).single();
   }
 
   private static String body(String endpoint, String p256dh) {

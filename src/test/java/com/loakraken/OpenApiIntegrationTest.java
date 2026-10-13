@@ -163,6 +163,19 @@ class OpenApiIntegrationTest {
                     "/components/schemas/RosterCombatPowerResponse/properties/refreshAvailableAt/anyOf/1/type")
                 .asText())
         .isEqualTo("null");
+    // 길드 찾기(M21): guild가 없으면 null인 excludedMatches·matchCount.
+    assertThat(document.at("/components/schemas/GuildRankingResponse/required").toString())
+        .contains("excludedGuilds", "excludedMatches", "matchCount");
+    for (var field : List.of("excludedMatches", "matchCount"))
+      assertThat(
+              document
+                  .at(
+                      "/components/schemas/GuildRankingResponse/properties/"
+                          + field
+                          + "/anyOf/1/type")
+                  .asText())
+          .as(field)
+          .isEqualTo("null");
     // 인기 길드(M21): 새 경로, 숫자 없이 순위·서버·길드 이름만(모두 필수).
     assertThat(document.at("/paths/~1api~1v1~1guilds~1popular/get").isMissingNode()).isFalse();
     assertThat(document.at("/components/schemas/GuildPopularResponse/required").toString())

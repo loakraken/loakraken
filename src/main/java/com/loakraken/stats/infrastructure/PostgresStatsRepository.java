@@ -415,28 +415,48 @@ class PostgresStatsRepository implements StatsPort {
         FROM guilds g WHERE g.member_count >= :minMembers)
       """;
 
+  /**
+   * 길드 이름 일부(대소문자 무시). guild는 글자·숫자만 받으므로(컨트롤러 검증) LIKE 특수문자가 없다. 순위(ranked)를 먼저 매긴 뒤 이 조건으로 줄만
+   * 고르므로 rank는 전체 순위 그대로다.
+   */
+  private static final String GUILD_MATCH =
+      "(CAST(:guild AS VARCHAR) IS NULL OR guild_name ILIKE '%' || CAST(:guild AS VARCHAR) || '%')";
+
   @Override
   public GuildPage guildRanking(
-      String server, Instant since, GuildSort sort, int minMembers, int offset, int limit) {
+      String server,
+      Instant since,
+      GuildSort sort,
+      int minMembers,
+      int offset,
+      int limit,
+      String guild) {
     String base = GUILD_RANKED.replace("%ORDER%", sort == GuildSort.SUM ? "g.il_sum" : "g.il_avg");
-    var counts = new long[] {0, 0};
+    var counts = new long[] {0, 0, 0, 0};
     var rows =
         jdbc.sql(
                 base
                     + """
-                SELECT ranked.*, COUNT(*) OVER () AS total,
-                  (SELECT COUNT(*) FROM guilds WHERE member_count < :minMembers) AS excluded
-                FROM ranked ORDER BY rank, server_name, guild_name LIMIT :limit OFFSET :offset
-                """)
+                SELECT ranked.*, (SELECT COUNT(*) FROM ranked) AS total,
+                  (SELECT COUNT(*) FROM guilds WHERE member_count < :minMembers) AS excluded,
+                  (SELECT COUNT(*) FROM guilds WHERE member_count < :minMembers AND %MATCH%) AS excluded_matches,
+                  (SELECT COUNT(*) FROM ranked WHERE %MATCH%) AS matches
+                FROM ranked WHERE %MATCH%
+                ORDER BY rank, server_name, guild_name LIMIT :limit OFFSET :offset
+                """
+                        .replace("%MATCH%", GUILD_MATCH))
             .param("since", since.atOffset(ZoneOffset.UTC))
             .param("server", server)
             .param("minMembers", minMembers)
+            .param("guild", guild)
             .param("limit", limit)
             .param("offset", offset)
             .query(
                 (row, index) -> {
                   counts[0] = row.getLong("total");
                   counts[1] = row.getLong("excluded");
+                  counts[2] = row.getLong("excluded_matches");
+                  counts[3] = row.getLong("matches");
                   return new GuildRow(
                       row.getLong("rank"),
                       row.getString("server_name"),
@@ -451,16 +471,29 @@ class PostgresStatsRepository implements StatsPort {
     if (rows.isEmpty())
       jdbc.sql(
               base
-                  + "SELECT (SELECT COUNT(*) FROM ranked), (SELECT COUNT(*) FROM guilds WHERE member_count < :minMembers)")
+                  + "SELECT (SELECT COUNT(*) FROM ranked), (SELECT COUNT(*) FROM guilds WHERE member_count < :minMembers),"
+                  + " (SELECT COUNT(*) FROM guilds WHERE member_count < :minMembers AND "
+                  + GUILD_MATCH
+                  + "), (SELECT COUNT(*) FROM ranked WHERE "
+                  + GUILD_MATCH
+                  + ")")
           .param("since", since.atOffset(ZoneOffset.UTC))
           .param("server", server)
           .param("minMembers", minMembers)
+          .param("guild", guild)
           .query(
               (ResultSet row) -> {
                 counts[0] = row.getLong(1);
                 counts[1] = row.getLong(2);
+                counts[2] = row.getLong(3);
+                counts[3] = row.getLong(4);
               });
-    return new GuildPage(counts[0], counts[1], rows);
+    return new GuildPage(
+        counts[0],
+        counts[1],
+        guild == null ? null : counts[2],
+        guild == null ? null : counts[3],
+        rows);
   }
 
   /** 보유율 분모 원정대(#305): since 뒤 항목 관측 + 공개 캐릭터가 있음(server가 있으면 그 서버). */

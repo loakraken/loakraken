@@ -335,12 +335,21 @@ public class StatsQueryService {
    * sampleStatus=COLLECTING이지만 값·순위는 그대로 준다(참고값 원칙). 값은 소수 둘째 자리(HALF_UP)다.
    */
   public GuildRankingResult guildRanking(
-      StatsConditions conditions, StatsPort.GuildSort sort, int page, int size) {
+      StatsConditions conditions, StatsPort.GuildSort sort, int page, int size, String guild) {
     int offset = (page - 1) * size;
     if (offset > MAX_RANKING_OFFSET)
       throw new BusinessException(StatsErrorCode.STATS_INVALID_RANGE);
     return cached(
-        "guilds:" + sort + ":" + page + ":" + size + ":" + key(conditions),
+        "guilds:"
+            + sort
+            + ":"
+            + page
+            + ":"
+            + size
+            + ":"
+            + (guild == null ? "-" : guild)
+            + ":"
+            + key(conditions),
         GuildRankingResult.class,
         () -> {
           var now = clock.instant();
@@ -351,7 +360,8 @@ public class StatsQueryService {
                   sort,
                   GUILD_MIN_MEMBERS,
                   offset,
-                  size);
+                  size,
+                  guild);
           return new GuildRankingResult(
               meta(conditions, result.total(), now),
               sort.name(),
@@ -359,6 +369,8 @@ public class StatsQueryService {
               size,
               GUILD_MIN_MEMBERS,
               result.excluded(),
+              result.excludedMatches(),
+              result.matchCount(),
               result.rows().stream()
                   .map(
                       row ->
@@ -872,6 +884,8 @@ public class StatsQueryService {
       int size,
       int minMembers,
       long excludedGuilds,
+      Long excludedMatches,
+      Long matchCount,
       List<RankedGuild> rows) {}
 
   public record RankedGuild(

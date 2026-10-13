@@ -115,8 +115,27 @@ class PostgresAlertStore implements AlertStore {
   }
 
   @Override
+  public boolean deleteSubscription(String endpoint) {
+    return jdbc.sql("DELETE FROM push_subscription WHERE endpoint = :endpoint")
+            .param("endpoint", endpoint)
+            .update()
+        > 0;
+  }
+
+  @Override
   public int deleteInactive(Instant before) {
     return jdbc.sql("DELETE FROM push_subscription WHERE last_used_at < :before")
+        .param("before", at(before))
+        .update();
+  }
+
+  @Override
+  public int deleteEmpty(Instant before) {
+    return jdbc.sql(
+            """
+        DELETE FROM push_subscription s WHERE s.last_used_at < :before
+          AND NOT EXISTS (SELECT 1 FROM price_alert a WHERE a.subscription_id = s.subscription_id)
+        """)
         .param("before", at(before))
         .update();
   }

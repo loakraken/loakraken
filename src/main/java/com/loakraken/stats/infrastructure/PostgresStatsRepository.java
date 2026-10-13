@@ -67,9 +67,9 @@ class PostgresStatsRepository implements StatsPort {
                 new Summary(
                     row.getLong("n"),
                     round(row.getBigDecimal("il_mean")),
-                    round(row.getBigDecimal("il_median")),
-                    round(row.getBigDecimal("cp_median")),
-                    round(row.getBigDecimal("cp_p90")),
+                    percentile(row.getBigDecimal("il_median")),
+                    percentile(row.getBigDecimal("cp_median")),
+                    percentile(row.getBigDecimal("cp_p90")),
                     row.getLong("dealers"),
                     row.getLong("supports"),
                     round(row.getBigDecimal("gem_mean")),
@@ -173,8 +173,8 @@ class PostgresStatsRepository implements StatsPort {
                     new ServerRow(
                         row.getString("server_name"),
                         row.getLong("n"),
-                        round(row.getBigDecimal("il_median")),
-                        round(row.getBigDecimal("cp_median")),
+                        percentile(row.getBigDecimal("il_median")),
+                        percentile(row.getBigDecimal("cp_median")),
                         row.getLong("known"),
                         row.getLong("rosters")))
             .list();
@@ -1167,9 +1167,26 @@ class PostgresStatsRepository implements StatsPort {
     if (array == null) return List.of();
     var values = (Object[]) array.getArray();
     var result = new ArrayList<BigDecimal>();
-    for (var value : values)
-      result.add(value == null ? null : round(new BigDecimal(value.toString())));
+    for (var value : values) result.add(value == null ? null : percentile(value.toString()));
     return result;
+  }
+
+  /**
+   * percentile_cont 결과(double precision)를 소수 둘째 자리로. 정확한 값이 x.xx5인데 double로 x.xx4999…가 되면 그대로 반올림하면
+   * 한 자리 낮아진다(L5 대조: 1853.265 → 1853.26). 값이 소수 둘째 자리 원본의 보간이라 double 오차는 1e-10보다 훨씬 작으므로, 먼저 소수 열째
+   * 자리에서 잡음을 지운 뒤 반올림한다.
+   */
+  static BigDecimal percentile(String doubleText) {
+    return percentile(new BigDecimal(doubleText));
+  }
+
+  /** {@link #percentile(String)}와 같다. JDBC가 double 열을 BigDecimal로 준 값(요약·서버 중앙값·p90)에 쓴다. */
+  static BigDecimal percentile(BigDecimal value) {
+    return value == null
+        ? null
+        : value
+            .setScale(10, java.math.RoundingMode.HALF_UP)
+            .setScale(2, java.math.RoundingMode.HALF_UP);
   }
 
   private static BigDecimal round(BigDecimal value) {

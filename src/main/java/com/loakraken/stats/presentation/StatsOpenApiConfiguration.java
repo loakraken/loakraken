@@ -16,6 +16,7 @@ class StatsOpenApiConfiguration {
           List.of(
               StatsResponses.StatsSummaryResponse.class,
               StatsResponses.StatsClassesResponse.class,
+              StatsResponses.StatsBestCombatPowerResponse.class,
               StatsResponses.StatsServersResponse.class,
               StatsResponses.StatsDistributionResponse.class,
               StatsResponses.StatsSnapshotsResponse.class,

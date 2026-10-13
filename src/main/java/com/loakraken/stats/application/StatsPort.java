@@ -16,6 +16,23 @@ public interface StatsPort {
 
   List<ServerRow> servers(StatsConditions conditions, Instant since);
 
+  /**
+   * 최고 전투력(L5). 모집단(처리정지 제외) 중 best_combat_power(관측 이력 전체에서 가장 높았던 전투력)가 있는 캐릭터의 전체·직업별
+   * 인원·평균·최고·분위수. conditions의 전투력 범위는 지금 전투력에 걸린다.
+   */
+  BestCombatPower bestCombatPower(StatsConditions conditions, Instant since);
+
+  /** percentiles는 p10·p25·p50·p75·p90(percentile_cont). 인원이 0이면 값은 null·빈 목록. */
+  record BestCombatPowerRow(
+      String className,
+      long count,
+      BigDecimal mean,
+      BigDecimal max,
+      List<BigDecimal> percentiles) {}
+
+  /** overall은 늘 있고(인원 0이면 count 0), classes는 인원 많은 순. */
+  record BestCombatPower(BestCombatPowerRow overall, List<BestCombatPowerRow> classes) {}
+
   Range range(StatsConditions conditions, Instant since, Metric metric);
 
   List<Bin> histogram(StatsConditions conditions, Instant since, Metric metric, BigDecimal width);

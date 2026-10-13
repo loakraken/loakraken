@@ -1,6 +1,7 @@
 package com.loakraken.stats.application;
 
 import com.loakraken.common.api.BusinessException;
+import com.loakraken.stats.domain.ClassBuilds;
 import com.loakraken.stats.domain.StatsConditions;
 import com.loakraken.stats.domain.StatsRules;
 import com.loakraken.stats.domain.StatsRules.Metric;
@@ -65,6 +66,84 @@ public class StatsQueryService {
               summary.gemSample() > 0 ? summary.gemMeanLevel() : null,
               summary.gemSample());
         });
+  }
+
+  /**
+   * 직업 상세 빌드 통계(M12 1단계). 표본은 그 직업 모집단에서 장비 요약이 있는 캐릭터이고, classEngraving이 있으면 그 직업 각인 캐릭터만이다. 표본이
+   * 30 미만이면 COLLECTING이고 항목이 모두 빈 목록이다. 직업 각인 비율만은 직업 전체 표본 기준이라 상태를 따로 준다.
+   */
+  public ClassBuildsResult classBuilds(
+      StatsConditions conditions, String classEngraving, int limit, BigDecimal braceletMin) {
+    var bracelet =
+        StatsConditions.strip(
+            braceletMin == null ? ClassBuilds.DEFAULT_BRACELET_ITEM_LEVEL_MIN : braceletMin);
+    if (bracelet.compareTo(conditions.itemLevelMin()) < 0) bracelet = conditions.itemLevelMin();
+    var effectiveBracelet = bracelet;
+    return cached(
+        "class-builds:"
+            + key(conditions)
+            + ":"
+            + (classEngraving == null ? "-" : classEngraving)
+            + ":"
+            + limit
+            + ":"
+            + effectiveBracelet.toPlainString(),
+        ClassBuildsResult.class,
+        () -> {
+          var now = clock.instant();
+          var page = stats.classBuildSamples(conditions, conditions.since(now));
+          var all = page.samples();
+          var samples =
+              classEngraving == null
+                  ? all
+                  : all.stream()
+                      .filter(sample -> classEngraving.equals(sample.classEngraving()))
+                      .toList();
+          var status = SampleStatus.of(samples.size());
+          var allStatus = SampleStatus.of(all.size());
+          var builds =
+              status == SampleStatus.READY
+                  ? ClassBuilds.aggregate(all, samples, limit, effectiveBracelet)
+                  : ClassBuilds.Result.empty();
+          if (allStatus == SampleStatus.READY && status != SampleStatus.READY)
+            // 고른 직업 각인 표본이 작아도 직업 각인 비율은 직업 전체 표본으로 준다.
+            builds =
+                withClassEngravings(
+                    builds, ClassBuilds.aggregate(all, all, limit, effectiveBracelet));
+          return new ClassBuildsResult(
+              new Meta(
+                  samples.size(),
+                  conditions,
+                  now,
+                  StatsRules.SNAPSHOT_LATEST,
+                  ClassBuilds.RULE_VERSION,
+                  StatsRules.MIN_SAMPLE,
+                  status,
+                  cached("coverage", StatsPort.Coverage.class, stats::coverage)),
+              conditions.className(),
+              classEngraving,
+              page.population(),
+              effectiveBracelet,
+              allStatus,
+              ClassBuilds.definitions(),
+              builds);
+        });
+  }
+
+  private static ClassBuilds.Result withClassEngravings(
+      ClassBuilds.Result builds, ClassBuilds.Result source) {
+    return new ClassBuilds.Result(
+        source.classEngravings(),
+        builds.engravingCombos(),
+        builds.engravings(),
+        builds.evolutionPoints(),
+        builds.enlightenmentPoints(),
+        builds.leapPoints(),
+        builds.damageGems(),
+        builds.cooldownGems(),
+        builds.cardSets(),
+        builds.topStats(),
+        builds.braceletStats());
   }
 
   public ClassesResult classes(StatsConditions conditions) {
@@ -784,6 +863,21 @@ public class StatsQueryService {
       SampleStatus sampleStatus) {}
 
   public record ClassesResult(Meta meta, List<ClassStat> rows) {}
+
+  /**
+   * @param classPopulation 장비 요약이 없는 캐릭터도 센 그 직업 모집단 수(/stats/classes의 인원과 같은 모집단)
+   * @param braceletItemLevelMin 팔찌 전투 특성에 실제로 쓴 아이템 레벨 기준(itemLevelMin과 요청 값 중 큰 값)
+   * @param classEngravingStatus 직업 각인 비율의 표본 상태(직업 각인 필터와 무관한 직업 전체 표본 기준)
+   */
+  public record ClassBuildsResult(
+      Meta meta,
+      String className,
+      String classEngraving,
+      long classPopulation,
+      BigDecimal braceletItemLevelMin,
+      SampleStatus classEngravingStatus,
+      java.util.Map<String, String> definitions,
+      ClassBuilds.Result builds) {}
 
   public record ServerStat(
       String serverName,

@@ -4,6 +4,7 @@ import com.loakraken.stats.application.StatsPort;
 import com.loakraken.stats.application.StatsPort.GuildSort;
 import com.loakraken.stats.application.StatsPort.RosterAggregate;
 import com.loakraken.stats.application.StatsPort.RosterBasis;
+import com.loakraken.stats.domain.ClassBuilds;
 import com.loakraken.stats.domain.StatsConditions;
 import com.loakraken.stats.domain.StatsRules.Metric;
 import java.math.BigDecimal;
@@ -21,6 +22,8 @@ import java.util.Optional;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.json.JsonMapper;
 
 /**
  * characters를 읽기 전용으로 집계한다. 모집단 = 프로필(전투력)을 확인했고 since 이후 갱신한 캐릭터. 모든 필터 값은 바인딩 파라미터이고, 열 이름은
@@ -29,10 +32,17 @@ import org.springframework.transaction.annotation.Transactional;
 @Repository
 @Transactional(readOnly = true, timeout = 5)
 class PostgresStatsRepository implements StatsPort {
-  private final JdbcClient jdbc;
+  /** characters c가 처리정지 목록에 없다(B5). 모집단·커버리지·서버별 캐릭터 수에 같이 쓴다. */
+  private static final String NOT_EXCLUDED =
+      "NOT EXISTS (SELECT 1 FROM public_exclusion e WHERE e.character_name = c.character_name"
+          + " AND (e.server_name IS NULL OR e.server_name = c.server_name))";
 
-  PostgresStatsRepository(JdbcClient jdbc) {
+  private final JdbcClient jdbc;
+  private final JsonMapper mapper;
+
+  PostgresStatsRepository(JdbcClient jdbc, JsonMapper mapper) {
     this.jdbc = jdbc;
+    this.mapper = mapper;
   }
 
   @Override
@@ -101,7 +111,7 @@ class PostgresStatsRepository implements StatsPort {
                 """
             , known AS (
               SELECT server_name, COUNT(*) AS known, COUNT(DISTINCT roster_key) AS rosters
-              FROM characters GROUP BY server_name),
+              FROM characters c WHERE %NOT_EXCLUDED% GROUP BY server_name),
             stat AS (
               SELECT server_name, COUNT(*) AS n,
                 percentile_cont(0.5) WITHIN GROUP (ORDER BY item_level) AS il_median,
@@ -110,7 +120,8 @@ class PostgresStatsRepository implements StatsPort {
             SELECT k.server_name, COALESCE(s.n, 0) AS n, s.il_median, s.cp_median, k.known, k.rosters
             FROM known k LEFT JOIN stat s ON s.server_name = k.server_name
             ORDER BY n DESC, k.known DESC, k.server_name
-            """,
+            """
+                    .replace("%NOT_EXCLUDED%", NOT_EXCLUDED),
                 jdbc)
             .query(
                 (row, index) ->
@@ -160,7 +171,7 @@ class PostgresStatsRepository implements StatsPort {
   public Standing standing(
       StatsConditions conditions, Instant since, Metric metric, BigDecimal value) {
     String column = metric.column();
-    return population(conditions, since, true)
+    return population(conditions, since)
         .statement(
             "SELECT COUNT(*) FILTER (WHERE "
                 + column
@@ -705,7 +716,7 @@ class PostgresStatsRepository implements StatsPort {
     long[] total = {0};
     String order = column + " DESC, " + tie + " DESC, character_name, server_name";
     // 순위를 먼저 매겨 한 페이지만 자른 뒤, 그 행에만 마지막 장비 요약(아크 패시브 K32)을 붙인다.
-    population(conditions, since, true)
+    population(conditions, since)
         .statement(
             ", ranked AS (SELECT character_id, character_name, server_name, class_name, position,"
                 + " item_level, combat_power, best_combat_power, RANK() OVER (ORDER BY "
@@ -746,7 +757,7 @@ class PostgresStatsRepository implements StatsPort {
     // 요청 페이지가 범위를 넘으면 행이 없어 total을 따로 센다.
     if (rows.isEmpty())
       total[0] =
-          population(conditions, since, true)
+          population(conditions, since)
               .statement("SELECT COUNT(*) FROM pop", jdbc)
               .query(Long.class)
               .single();
@@ -783,7 +794,7 @@ class PostgresStatsRepository implements StatsPort {
     var rows = new ArrayList<EfficiencyRow>();
     long[] total = {0};
     String filter = " WHERE " + column + " IS NOT NULL AND " + versionColumn + " = :version";
-    population(conditions, since, true)
+    population(conditions, since)
         .statement(
             "SELECT character_name, server_name, class_name, position, item_level, combat_power, "
                 + column
@@ -818,7 +829,7 @@ class PostgresStatsRepository implements StatsPort {
     // 요청 페이지가 범위를 넘으면 행이 없어 total을 따로 센다.
     if (rows.isEmpty())
       total[0] =
-          population(conditions, since, true)
+          population(conditions, since)
               .statement("SELECT COUNT(*) FROM pop" + filter, jdbc)
               .param("version", version)
               .query(Long.class)
@@ -827,13 +838,120 @@ class PostgresStatsRepository implements StatsPort {
   }
 
   @Override
+  public ClassBuildSamples classBuildSamples(StatsConditions conditions, Instant since) {
+    long population =
+        population(conditions, since)
+            .statement("SELECT COUNT(*) FROM pop", jdbc)
+            .query(Long.class)
+            .single();
+    // 캐릭터마다 마지막 장비 요약 1행에서 집계에 쓰는 부분만 꺼낸다(M12).
+    var samples =
+        population(conditions, since)
+            .statement(
+                """
+            SELECT p.item_level, s.ark_passive_title,
+              CAST(jsonb_build_object(
+                'engravings', s.features -> 'engravings',
+                'gems', s.features -> 'gems',
+                'cards', s.features -> 'cards',
+                'points', s.features -> 'arkPassive' -> 'points',
+                'stats', s.features -> 'stats',
+                'bracelet', s.features -> 'braceletLines') AS TEXT) AS parts
+            FROM pop p JOIN LATERAL (
+              SELECT e.ark_passive_title, e.features FROM character_equipment_summary e
+              WHERE e.character_id = p.character_id ORDER BY e.observed_at DESC LIMIT 1) s ON TRUE
+            """,
+                jdbc)
+            .query(
+                (row, index) ->
+                    sample(
+                        row.getBigDecimal("item_level"),
+                        row.getString("ark_passive_title"),
+                        row.getString("parts")))
+            .list();
+    return new ClassBuildSamples(population, samples);
+  }
+
+  private ClassBuilds.Sample sample(BigDecimal itemLevel, String classEngraving, String parts) {
+    var node = mapper.readTree(parts);
+    List<String> engravings = null;
+    if (node.path("engravings").isArray()) {
+      engravings = new ArrayList<>();
+      for (var engraving : node.path("engravings")) {
+        var name = text(engraving.path("name"));
+        if (name != null) engravings.add(name);
+      }
+    }
+    List<ClassBuilds.Gem> gems = null;
+    if (node.path("gems").isArray()) {
+      gems = new ArrayList<>();
+      for (var gem : node.path("gems"))
+        gems.add(
+            new ClassBuilds.Gem(
+                text(gem.path("kind")), integer(gem.path("level")), text(gem.path("mode"))));
+    }
+    var cards = node.path("cards");
+    var points = node.path("points");
+    var stats = node.path("stats");
+    List<String> bracelet = null;
+    if (node.path("bracelet").isArray()) {
+      bracelet = new ArrayList<>();
+      for (var line : node.path("bracelet")) {
+        var value = text(line);
+        if (value != null) bracelet.add(value);
+      }
+    }
+    return new ClassBuilds.Sample(
+        itemLevel,
+        blankToNull(classEngraving),
+        engravings,
+        gems,
+        cards.isObject()
+            ? new ClassBuilds.CardSet(
+                text(cards.path("set")),
+                integer(cards.path("pieces")),
+                integer(cards.path("awakening")))
+            : null,
+        points.isObject()
+            ? new ClassBuilds.Points(
+                integer(points.path("evolution")),
+                integer(points.path("enlightenment")),
+                integer(points.path("leap")))
+            : null,
+        stats.isObject()
+            ? new ClassBuilds.CombatStats(
+                integer(stats.path("crit")),
+                integer(stats.path("spec")),
+                integer(stats.path("swift")),
+                integer(stats.path("domination")),
+                integer(stats.path("endurance")),
+                integer(stats.path("expertise")))
+            : null,
+        bracelet);
+  }
+
+  private static String text(JsonNode node) {
+    if (node == null || !node.isString()) return null;
+    return blankToNull(node.asString());
+  }
+
+  private static Integer integer(JsonNode node) {
+    return node != null && node.isIntegralNumber() ? node.asInt() : null;
+  }
+
+  private static String blankToNull(String value) {
+    return value == null || value.isBlank() ? null : value;
+  }
+
+  @Override
   public Coverage coverage() {
     return jdbc.sql(
             """
         SELECT COUNT(*) FILTER (WHERE combat_power IS NOT NULL) AS observed, COUNT(*) AS known,
           COUNT(DISTINCT roster_key) AS accounts
-        FROM characters
-        """)
+        FROM characters c WHERE %s
+        """
+                .formatted(NOT_EXCLUDED))
         .query(
             (row, index) ->
                 new Coverage(
@@ -879,7 +997,7 @@ class PostgresStatsRepository implements StatsPort {
 
   @Override
   public boolean contains(StatsConditions conditions, Instant since, Target target) {
-    return population(conditions, since, true)
+    return population(conditions, since)
         .statement(
             "SELECT EXISTS (SELECT 1 FROM pop WHERE server_name = :tServer AND character_name = :tName)",
             jdbc)
@@ -889,16 +1007,11 @@ class PostgresStatsRepository implements StatsPort {
         .single();
   }
 
-  /** 모집단 CTE와 그 바인딩 값. */
-  private static Population population(StatsConditions c, Instant since) {
-    return population(c, since, false);
-  }
-
   /**
-   * excludePublic이면 처리정지 목록(public_exclusion)의 캐릭터를 모집단에서 뺀다. 개인 순위·백분위(랭킹, 캐릭터 순위, percentileOf)에
-   * 쓰고, 개인을 드러내지 않는 집계(요약·직업·서버·히스토그램)에는 쓰지 않는다(PM 총괄 결정 2026-10-09).
+   * 모집단 CTE와 그 바인딩 값. 처리정지 목록(public_exclusion)의 캐릭터는 모든 통계·랭킹에서 뺀다(B5). 집계마다 모집단이 같아야 응답 사이의 차이로
+   * 처리정지 수를 거꾸로 셀 수 없다(M12 판정, 2026-10-09 '집계는 포함' 결정을 바꿈).
    */
-  private static Population population(StatsConditions c, Instant since, boolean excludePublic) {
+  private static Population population(StatsConditions c, Instant since) {
     var where =
         new StringBuilder(
             "c.combat_power IS NOT NULL AND c.profile_refreshed_at >= :since AND c.item_level >= :ilMin");
@@ -941,10 +1054,7 @@ class PostgresStatsRepository implements StatsPort {
              WHERE o.roster_key = c.roster_key AND o.server_name = c.server_name
                AND (o.item_level > c.item_level
                     OR (o.item_level = c.item_level AND o.character_name < c.character_name))))""");
-    if (excludePublic)
-      where.append(
-          " AND NOT EXISTS (SELECT 1 FROM public_exclusion e WHERE e.character_name = c.character_name"
-              + " AND (e.server_name IS NULL OR e.server_name = c.server_name))");
+    where.append(" AND ").append(NOT_EXCLUDED);
     String cte =
         "WITH pop AS (SELECT c.character_id, c.character_name, c.server_name, c.class_name, c.item_level,"
             + " c.combat_power, c.best_combat_power, c.position, c.gem_mean_level, c.bracelet_efficiency_pct,"

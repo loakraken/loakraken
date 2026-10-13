@@ -238,7 +238,7 @@ class StatsIntegrationTest {
   }
 
   @Test
-  void 공개_제외_목록은_개인_순위_모집단에서_빠지고_본인은_순위_비공개다() throws Exception {
+  void 공개_제외_목록은_순위와_집계_모집단_모두에서_빠지고_본인은_순위_비공개다() throws Exception {
     표본();
     jdbc.sql(
             "INSERT INTO public_exclusion (character_name, server_name, reason_code) VALUES ('통계캐34', :s, 'REQUEST')")
@@ -271,12 +271,17 @@ class StatsIntegrationTest {
       assertThat(of.path("rank").asLong()).isEqualTo(1);
       assertThat(of.path("total").asLong()).isEqualTo(39);
       assertThat(percentile.body()).doesNotContain("통계캐34");
-      // 개인을 드러내지 않는 집계에는 그대로 들어간다.
-      assertThat(
-              data("/api/v1/stats/summary?server=" + encode(SERVER))
-                  .at("/meta/population")
-                  .asLong())
-          .isEqualTo(40);
+      // 집계(요약·직업·서버·분포)에서도 빠진다(B5). 모든 통계가 같은 모집단이라 응답 사이 차이로 처리정지 수를 셀 수 없다.
+      var summary = data("/api/v1/stats/summary?server=" + encode(SERVER));
+      assertThat(summary.at("/meta/population").asLong()).isEqualTo(39);
+      assertThat(summary.path("supports").asLong()).isEqualTo(17);
+      var mainClass = data("/api/v1/stats/classes?server=" + encode(SERVER)).path("rows").get(0);
+      assertThat(mainClass.path("className").asText()).isEqualTo(MAIN_CLASS);
+      assertThat(mainClass.path("count").asLong()).isEqualTo(34);
+      var server = data("/api/v1/stats/servers?server=" + encode(SERVER)).path("rows").get(0);
+      assertThat(server.path("count").asLong()).isEqualTo(39);
+      // 알고 있는 캐릭터 수(필터 무관): 표본 42명 중 처리정지 1명을 뺀 41명.
+      assertThat(server.path("knownCharacters").asLong()).isEqualTo(41);
     } finally {
       jdbc.sql("DELETE FROM public_exclusion WHERE character_name = '통계캐34'").update();
     }

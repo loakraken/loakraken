@@ -78,7 +78,7 @@ public class RosterCombatPowerController {
         content = @Content(schema = @Schema(ref = "#/components/schemas/ErrorResponse"))),
     @io.swagger.v3.oas.annotations.responses.ApiResponse(
         responseCode = "404",
-        description = "CHARACTER_NOT_FOUND",
+        description = "CHARACTER_NOT_FOUND 또는 ROSTER_REFRESH_UNAVAILABLE(서버 설정이 없어 불러오기를 쓸 수 없음)",
         content = @Content(schema = @Schema(ref = "#/components/schemas/ErrorResponse"))),
     @io.swagger.v3.oas.annotations.responses.ApiResponse(
         responseCode = "429",

@@ -21,7 +21,11 @@ import org.springframework.transaction.TransactionException;
  * <p>조회는 원정대 목록 캐시(/siblings와 같은 캐시, 없으면 공식 1회)와 우리 DB 기록만 쓴다. 불러오기는 사용자가 누를 때만, 기록이 없거나 오래된(기본
  * 24시간) 캐릭터를 아이템 레벨 높은 순으로 최대 12명 공식 프로필 API(전투력 포함, 2026-10-12 확인)로 부르고 검색과 같은 기록 경로로 저장한다. 같은
  * 원정대는 한 번으로 묶고(single-flight) 끝나면 10분 쿨다운을 둔다. 공식 호출은 사용자 몫 30을 남기는 쪽으로만 하고, 모자라면 받은 만큼만 저장해 부분
- * 결과를 준다. 처리정지 목록 캐릭터는 응답이 기록 없는 캐릭터와 같고 불러와도 기록하지 않는다.
+ * 결과를 준다.
+ *
+ * <p>처리정지 목록 캐릭터도 불러오기 때는 다른 캐릭터와 똑같이 공식 값을 받는다. 다만 기록하지 않고, 받은 값은 5분 임시 값으로만 응답에 쓰며(처리방침 6항), 값 없는
+ * '불러옴' 표시를 24시간 둔다. 그래서 응답·fetched·remaining과 다음 불러오기 대상이 다른 캐릭터와 구별되지 않는다(B5, 보안 3회차 판정 b).
+ * 조회(view)에서는 임시 값이 끝나면(5분) 기록 없는 캐릭터와 같다.
  */
 @Service
 public class RosterCombatPowerService {
@@ -39,6 +43,7 @@ public class RosterCombatPowerService {
   private final CharacterStopList stopList;
   private final CharacterMetrics metrics;
   private final RosterCombatPowerPolicy policy;
+  private final RosterTransientPort transients;
   private final Clock clock;
   private final SingleFlight<Refresh> flights = new SingleFlight<>();
 
@@ -51,7 +56,9 @@ public class RosterCombatPowerService {
       CharacterStopList stopList,
       CharacterMetrics metrics,
       RosterCombatPowerPolicy policy,
+      RosterTransientPort transients,
       Clock clock) {
+    this.transients = transients;
     this.queries = queries;
     this.details = details;
     this.records = records;
@@ -92,11 +99,22 @@ public class RosterCombatPowerService {
   }
 
   public Refresh refresh(String characterName) {
+    // 표시 비밀값이 없으면 처리정지 대원만 매번 다시 대상이 되어 숫자로 드러나므로 열지 않는다.
+    if (!policy.markerConfigured())
+      throw new CharacterException(CharacterErrorCode.ROSTER_REFRESH_UNAVAILABLE);
     var roster = roster(characterName);
     return flights.run(roster.key(), () -> fetch(roster));
   }
 
   private Refresh fetch(Roster roster) {
+    // 기록하지 않은 캐릭터를 staleAfter 안에 이미 불렀으면 기록 있는 캐릭터처럼 대상에서 뺀다. 표시를 못 읽으면 처리정지 대원만 다시 대상이
+    // 되므로 공식 호출·쿨다운 전에 503으로 멈춘다(fail closed).
+    Set<String> marked;
+    try {
+      marked = transients.marked(roster.serverName(), roster.members().keySet());
+    } catch (DataAccessException exception) {
+      throw new CharacterException(CharacterErrorCode.CHARACTER_CACHE_UNAVAILABLE);
+    }
     var wait = cooldown.acquire(roster.key(), policy.cooldown());
     if (wait.isPresent()) {
       metrics.rosterRefresh("cooldown");
@@ -104,16 +122,14 @@ public class RosterCombatPowerService {
     }
     var now = clock.instant();
     var known = known(roster);
-    var stoppedNames = stopped(roster);
     var staleBefore = now.minus(policy.staleAfter());
     var targets =
         roster.members().values().stream()
             .filter(
                 member -> {
                   var record = known.get(member.characterName());
-                  return record == null
-                      || record.observedAt() == null
-                      || record.observedAt().isBefore(staleBefore);
+                  if (record == null) return !marked.contains(member.characterName());
+                  return record.observedAt() == null || record.observedAt().isBefore(staleBefore);
                 })
             .sorted(
                 Comparator.comparing(
@@ -125,17 +141,33 @@ public class RosterCombatPowerService {
     int fetched = 0;
     int attempted = 0;
     boolean stopped = false;
+    boolean unavailable = false;
     for (var target : targets) {
       if (attempted == policy.maxTargets()) break;
       attempted++;
-      // 처리정지 목록은 공식 호출 없이 건너뛴다(#410 P1). 대상·12명 상한·remaining 산술은 없는 캐릭터와 같게 두어, 응답 숫자로
-      // 처리정지 여부가 드러나지 않게 한다(B5).
-      if (stoppedNames.contains(target.characterName())) continue;
       try {
+        // 처리정지 목록도 다른 캐릭터와 똑같이 부른다(호출 수·fetched가 같아야 숫자로 드러나지 않음, B5).
         var profile = details.fetchProfile(target.characterName(), policy.reserve());
-        // 처리정지 목록이면 받은 값을 기록하지 않는다(B5). 응답은 기록 없는 캐릭터와 같다.
-        if (profile != null && stopList.recordable(profile.characterName(), profile.serverName()))
-          history.record(profile, clock.instant());
+        if (profile != null) {
+          var at = clock.instant();
+          if (stopList.recordable(profile.characterName(), profile.serverName()))
+            history.record(profile, at);
+          else {
+            // 기록하지 않는다. 받은 값은 5분 임시 값으로만 응답에 쓰고, 값 없는 표시로 다음 대상 선정을 같게 한다.
+            // 못 쓰면 이 응답과 다음 대상 선정에서 처리정지 대원만 달라지므로 성공으로 내지 않는다(아래에서 503).
+            try {
+              transients.put(
+                  roster.serverName(),
+                  target.characterName(),
+                  new RosterTransientPort.Value(profile.combatPower(), at),
+                  policy.transientTtl());
+              transients.mark(roster.serverName(), target.characterName(), policy.staleAfter());
+            } catch (DataAccessException exception) {
+              unavailable = true;
+              break;
+            }
+          }
+        }
         fetched++;
       } catch (BusinessException exception) {
         // 사용자 몫이 모자라거나 공식 장애면 받은 만큼만 두고 멈춘다. 없는 캐릭터 등은 건너뛴다.
@@ -146,6 +178,11 @@ public class RosterCombatPowerService {
         break;
       }
     }
+    if (unavailable) {
+      // 이미 쓴 공식 호출 몫이 있으므로 쿨다운은 그대로 둔다.
+      metrics.rosterRefresh("unavailable");
+      throw new CharacterException(CharacterErrorCode.CHARACTER_CACHE_UNAVAILABLE);
+    }
     int remaining = targets.size() - attempted;
     var availableAt = now.plus(policy.cooldown());
     if (stopped && fetched == 0) {
@@ -154,14 +191,52 @@ public class RosterCombatPowerService {
       availableAt = null;
     }
     metrics.rosterRefresh(stopped || remaining > 0 ? (fetched == 0 ? "limited" : "partial") : "ok");
-    return new Refresh(items(roster), fetched, remaining, availableAt);
+    List<Item> items;
+    try {
+      items = items(roster, true);
+    } catch (DataAccessException exception) {
+      // 방금 쓴 임시 값을 못 읽으면 처리정지 대원만 비므로 성공으로 내지 않는다.
+      throw new CharacterException(CharacterErrorCode.CHARACTER_CACHE_UNAVAILABLE);
+    }
+    return new Refresh(items, fetched, remaining, availableAt);
   }
 
   private List<Item> items(Roster roster) {
+    return items(roster, false);
+  }
+
+  /**
+   * @param strict true면 임시 값 읽기 실패를 그대로 던진다(불러오기). false면 없는 값으로 둔다(조회: 5분 뒤와 같은 모양, 판정 ① 수용 범위).
+   */
+  private List<Item> items(Roster roster, boolean strict) {
     var known = known(roster);
+    // 기록이 없는 캐릭터만 임시 값을 본다(처리정지 목록을 불러온 지 5분 안). 모양은 기록을 처음 남긴 캐릭터와 같다(최고 = 지금 값).
+    var missing = new java.util.HashSet<>(roster.members().keySet());
+    missing.removeAll(known.keySet());
+    Map<String, RosterTransientPort.Value> temporary = Map.of();
+    if (policy.markerConfigured() && !missing.isEmpty()) {
+      try {
+        temporary = transients.find(roster.serverName(), missing);
+      } catch (DataAccessException exception) {
+        if (strict) throw exception;
+      }
+    }
     var items = new ArrayList<Item>();
     for (var member : roster.members().values()) {
       var record = known.get(member.characterName());
+      var value = record == null ? temporary.get(member.characterName()) : null;
+      if (value != null) {
+        items.add(
+            new Item(
+                member.characterName(),
+                member.serverName(),
+                member.className(),
+                member.itemLevel(),
+                value.combatPower(),
+                value.combatPower() == null ? null : value.observedAt(),
+                value.combatPower()));
+        continue;
+      }
       items.add(
           new Item(
               member.characterName(),
@@ -178,14 +253,6 @@ public class RosterCombatPowerService {
   private Map<String, RosterCombatPowerPort.Observed> known(Roster roster) {
     try {
       return records.find(roster.serverName(), roster.members().keySet());
-    } catch (DataAccessException | TransactionException exception) {
-      throw new CharacterException(CharacterErrorCode.CHARACTER_STORAGE_UNAVAILABLE);
-    }
-  }
-
-  private java.util.Set<String> stopped(Roster roster) {
-    try {
-      return records.stopped(roster.serverName(), roster.members().keySet());
     } catch (DataAccessException | TransactionException exception) {
       throw new CharacterException(CharacterErrorCode.CHARACTER_STORAGE_UNAVAILABLE);
     }

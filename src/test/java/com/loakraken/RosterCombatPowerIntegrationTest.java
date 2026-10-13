@@ -42,7 +42,9 @@ import tools.jackson.databind.json.JsonMapper;
 
 /** 원정대 캐릭터별 전투력(L19). 설계 문서의 병합 조건 테스트(B5·B6·B7·B8). */
 @Import(TestcontainersConfiguration.class)
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@SpringBootTest(
+    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+    properties = "character.roster-combat-power.marker-secret=test-roster-marker-secret-0123456789")
 class RosterCombatPowerIntegrationTest {
   private static final String SERVER = "원정전투서버";
   private static final String OTHER = "원정전투다른서버";
@@ -75,6 +77,8 @@ class RosterCombatPowerIntegrationTest {
             "character:v11:원정전투*",
             "character:v1:원정전투*",
             "roster-cp:v1:refresh:*",
+            "roster-cp:v1:transient:*",
+            "roster-cp:v1:fetched:*",
             "lostark:client-limit:*")) {
       var found = redis.keys(pattern);
       if (found != null) keys.addAll(found);
@@ -119,7 +123,7 @@ class RosterCombatPowerIntegrationTest {
   }
 
   @Test
-  void 불러오기는_기록이_없거나_오래된_캐릭터만_부르고_처리정지는_기록하지_않으며_쿨다운은_409다() throws Exception {
+  void 불러오기는_기록이_없거나_오래된_캐릭터만_부르고_처리정지는_응답에만_쓰며_쿨다운은_409다() throws Exception {
     roster("원정전투가", "원정전투나", "원정전투다", "원정전투정지");
     record("원정전투가", "3100.50", Instant.now().minus(Duration.ofHours(2)));
     record("원정전투다", "2900.00", Instant.now().minus(Duration.ofHours(30)));
@@ -131,23 +135,24 @@ class RosterCombatPowerIntegrationTest {
     assertThat(response.statusCode()).isEqualTo(200);
     ApiContractFixture.write("roster-combat-power-refresh.json", response.body());
     var data = data(response);
-    // 기록 없는 나, 30시간 지난 다 = 2명. 2시간 전 기록인 가는 부르지 않는다. 처리정지는 공식 호출 전에 빠진다(PM-프론트 P1).
+    // 기록 없는 나·정지, 30시간 지난 다 = 3명. 2시간 전 기록인 가는 부르지 않는다. 처리정지도 다른 캐릭터처럼 부른다(B5, 판정 b).
     // 사용자 몫 30을 남긴다(B7).
     verify(detailsPort, never()).fetchProfile(eq("원정전투가"), anyInt());
-    verify(detailsPort, never()).fetchProfile(eq("원정전투정지"), anyInt());
-    verify(detailsPort, times(2)).fetchProfile(anyString(), eq(30));
-    assertThat(data.path("fetched").asInt()).isEqualTo(2);
+    verify(detailsPort, times(1)).fetchProfile(eq("원정전투정지"), anyInt());
+    verify(detailsPort, times(3)).fetchProfile(anyString(), eq(30));
+    assertThat(data.path("fetched").asInt()).isEqualTo(3);
     assertThat(data.path("remaining").asInt()).isZero();
     assertThat(data.path("refreshAvailableAt").isNull()).isFalse();
     var items = data.path("items");
     assertThat(items.at("/1/combatPower").decimalValue()).isEqualByComparingTo("3500.00");
     assertThat(items.at("/2/combatPower").decimalValue()).isEqualByComparingTo("3500.00");
-    // 불러온 값은 최고 전투력에도 반영된다(GREATEST). 처리정지 캐릭터는 null.
+    // 불러온 값은 최고 전투력에도 반영된다(GREATEST). 처리정지 캐릭터도 응답 모양은 같다(받은 값, 최고 = 지금 값).
     assertThat(items.at("/1/bestCombatPower").decimalValue()).isEqualByComparingTo("3500.00");
     assertThat(items.at("/2/bestCombatPower").decimalValue()).isEqualByComparingTo("3500.00");
-    assertThat(items.at("/3/bestCombatPower").isNull()).isTrue();
+    assertThat(items.at("/3/combatPower").decimalValue()).isEqualByComparingTo("3500.00");
+    assertThat(items.at("/3/bestCombatPower").decimalValue()).isEqualByComparingTo("3500.00");
+    assertThat(items.at("/3/combatPowerObservedAt").isNull()).isFalse();
     // 처리정지 캐릭터는 불러와도 기록하지 않는다(B5).
-    assertThat(items.at("/3/combatPower").isNull()).isTrue();
     assertThat(
             jdbc.sql("SELECT COUNT(*) FROM characters WHERE character_name = '원정전투정지'")
                 .query(Long.class)
@@ -160,7 +165,51 @@ class RosterCombatPowerIntegrationTest {
     assertThat(again.headers().firstValue("Retry-After")).isPresent();
     var view = data(get("/api/v1/characters/roster-combat-power?characterName=" + encode("원정전투가")));
     assertThat(view.path("refreshAvailableAt").isNull()).isFalse();
-    assertThat(view.path("missingCount").asInt()).isEqualTo(1);
+    // 5분 임시 값 안에서는 처리정지 캐릭터도 값이 있어 빈 칸이 없다.
+    assertThat(view.path("missingCount").asInt()).isZero();
+  }
+
+  @Test
+  void 처리정지_대원과_기록_없는_대원은_첫_번째와_두_번째_불러오기에서_구별되지_않는다() throws Exception {
+    // B5(보안 3회차 판정 b): 정지·없음 두 대원. 둘 다 처음엔 기록이 없다.
+    roster("원정전투비교정", "원정전투비교없");
+    stop("원정전투비교정");
+    when(detailsPort.fetchProfile(anyString(), anyInt()))
+        .thenAnswer(invocation -> profile(invocation.getArgument(0), "3200.00"));
+
+    var first = data(post("원정전투비교정", "203.0.113.70"));
+    assertThat(first.path("fetched").asInt()).isEqualTo(2);
+    assertThat(first.path("remaining").asInt()).isZero();
+    var items = first.path("items");
+    for (var field : List.of("combatPower", "bestCombatPower"))
+      assertThat(items.get(0).path(field).decimalValue())
+          .as(field)
+          .isEqualByComparingTo(items.get(1).path(field).decimalValue());
+    assertThat(items.get(0).path("combatPowerObservedAt").isNull())
+        .isEqualTo(items.get(1).path("combatPowerObservedAt").isNull())
+        .isFalse();
+    assertThat(ImmutableNames.of(items.get(0))).isEqualTo(ImmutableNames.of(items.get(1)));
+    // 처리정지 캐릭터는 DB에 행이 없다(값·표시는 임시 저장소에만, 키는 HMAC).
+    assertThat(
+            jdbc.sql("SELECT COUNT(*) FROM characters WHERE character_name = '원정전투비교정'")
+                .query(Long.class)
+                .single())
+        .isZero();
+    var keys = redis.keys("roster-cp:v1:*");
+    assertThat(keys).isNotNull().noneMatch(key -> key.contains("원정전투"));
+
+    // 10분 뒤(쿨다운 끝)·5분 임시 값도 끝난 뒤의 두 번째 불러오기: 둘 다 24시간 안에 불렀으므로 대상이 아니다.
+    redis.delete(redis.keys("roster-cp:v1:refresh:*"));
+    redis.delete(redis.keys("roster-cp:v1:transient:*"));
+    var second = data(post("원정전투비교없", "203.0.113.71"));
+    assertThat(second.path("fetched").asInt()).isZero();
+    assertThat(second.path("remaining").asInt()).isZero();
+    verify(detailsPort, times(2)).fetchProfile(anyString(), anyInt());
+    assertThat(
+            jdbc.sql("SELECT COUNT(*) FROM characters WHERE character_name = '원정전투비교정'")
+                .query(Long.class)
+                .single())
+        .isZero();
   }
 
   @Test
@@ -203,7 +252,7 @@ class RosterCombatPowerIntegrationTest {
 
   @Test
   void 처리정지_대원과_없는_캐릭터는_응답_숫자가_같다() throws Exception {
-    // B5: 처리정지 대원도 대상·12명 상한 안에 두고 공식 호출 없이 건너뛴다. 없는 캐릭터와 fetched·remaining·빈 칸 수가 같다.
+    // B5: 처리정지 대원도 대상·12명 상한 안에 두고 다른 캐릭터처럼 부른다. 공식에 없는 캐릭터와 fetched·remaining·빈 칸 수가 같다.
     var stopped = rosterWithFirst("원정전투정", true);
     var missing = rosterWithFirst("원정전투없", false);
     assertThat(stopped.path("fetched").asInt())
@@ -215,7 +264,6 @@ class RosterCombatPowerIntegrationTest {
     assertThat(nullCount(stopped.path("items")))
         .isEqualTo(nullCount(missing.path("items")))
         .isEqualTo(2);
-    verify(detailsPort, never()).fetchProfile(eq("원정전투정가"), anyInt());
   }
 
   /** 13명 원정대(첫 대원이 아이템 레벨 가장 높음). stop이면 첫 대원은 처리정지, 아니면 공식 응답에 없는 캐릭터다. */

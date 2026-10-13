@@ -49,20 +49,4 @@ class PostgresRosterCombatPowerRepository implements RosterCombatPowerPort {
         .list();
     return result;
   }
-
-  @Override
-  public java.util.Set<String> stopped(String serverName, Collection<String> characterNames) {
-    if (serverName == null || characterNames.isEmpty()) return java.util.Set.of();
-    return new java.util.HashSet<>(
-        jdbc.sql(
-                """
-                SELECT DISTINCT e.character_name FROM public_exclusion e
-                WHERE e.character_name IN (:names)
-                  AND (e.server_name IS NULL OR e.server_name = :server)
-                """)
-            .param("server", serverName)
-            .param("names", characterNames)
-            .query(String.class)
-            .list());
-  }
 }

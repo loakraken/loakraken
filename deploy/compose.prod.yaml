@@ -161,6 +161,9 @@ services:
         target: spring.data.redis.password
       - source: lostark_api_key
         target: LOSTARK_API_KEY
+      # 원정대 전투력 불러오기의 표시 키 비밀값(16자 이상). 없으면 불러오기가 404다.
+      - source: roster_marker_secret
+        target: character.roster-combat-power.marker-secret
     volumes:
       # 통계 시드 파일(#271). 저장소에 커밋하지 않는다. 디렉터리가 없어도 기동한다(파일이 없으면 시드 없이 수집).
       - ./seed:/seed:ro
@@ -257,6 +260,8 @@ secrets:
     file: ${SECRETS_DIR:?SECRETS_DIR가 필요합니다}/valkey_password
   lostark_api_key:
     file: ${SECRETS_DIR:?SECRETS_DIR가 필요합니다}/lostark_api_key
+  roster_marker_secret:
+    file: ${SECRETS_DIR:?SECRETS_DIR가 필요합니다}/roster_marker_secret
 
 networks:
   # edge ↔ web만 연결한다.

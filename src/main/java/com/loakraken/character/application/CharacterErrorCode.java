@@ -27,7 +27,9 @@ public enum CharacterErrorCode implements ErrorCode {
   CARD_COLLECTION_REFRESH_COOLDOWN(
       HttpStatus.TOO_MANY_REQUESTS, "원정대 기록은 10분에 한 번 채울 수 있습니다. 잠시 후 다시 시도해 주세요."),
   ROSTER_REFRESH_COOLDOWN(
-      HttpStatus.TOO_MANY_REQUESTS, "원정대 전투력은 10분에 한 번 불러올 수 있습니다. 잠시 후 다시 시도해 주세요.");
+      HttpStatus.TOO_MANY_REQUESTS, "원정대 전투력은 10분에 한 번 불러올 수 있습니다. 잠시 후 다시 시도해 주세요."),
+  /** 서버 설정(불러옴 표시 비밀값)이 없어 불러오기를 열지 않음. */
+  ROSTER_REFRESH_UNAVAILABLE(HttpStatus.NOT_FOUND, "원정대 전투력 불러오기를 지금 쓸 수 없습니다.");
 
   private final HttpStatus httpStatus;
   private final String message;

@@ -17,3 +17,8 @@ spring:
     redis:
       host: localhost
       port: ${VALKEY_PORT:6379}
+
+# 로컬 전용 값. 스테이징·운영은 비밀값 파일(roster_marker_secret)로 넣는다.
+character:
+  roster-combat-power:
+    marker-secret: ${CHARACTER_ROSTER_COMBAT_POWER_MARKER_SECRET:local-roster-marker-secret}

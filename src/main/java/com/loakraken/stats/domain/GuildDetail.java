@@ -31,6 +31,7 @@ public final class GuildDetail {
   /**
    * @param guildMemberGrade 공식 길드 직위 문자열(모르면 null)
    * @param observedAt 마지막 프로필 관측 시각
+   * @param rosterGroup 이 결과 안에서만 쓰는 원정대 묶음 번호(1부터, 같은 원정대면 같은 번호). 원정대를 모르면 null. 고정 키가 아니다
    */
   public record Member(
       String characterName,
@@ -38,7 +39,8 @@ public final class GuildDetail {
       BigDecimal itemLevel,
       BigDecimal combatPower,
       String guildMemberGrade,
-      Instant observedAt) {}
+      Instant observedAt,
+      Integer rosterGroup) {}
 
   /** 평균·중앙값은 소수 둘째 자리. 전투력 값은 전투력을 관측한 길드원(combatPowerCount)만으로 낸다. */
   public record Summary(
@@ -64,8 +66,18 @@ public final class GuildDetail {
       List<Bin> combatPowerBins,
       List<Member> members) {}
 
-  /** members는 비어 있지 않아야 한다(0명은 호출하는 쪽이 404로 다룬다). */
+  /** 원정대 키를 모르는 길드원만 있는 경우(묶음 번호 모두 null). */
   public static Result aggregate(List<Member> members) {
+    return aggregate(members, Map.of());
+  }
+
+  /**
+   * members는 비어 있지 않아야 한다(0명은 호출하는 쪽이 404로 다룬다).
+   *
+   * @param rosterKeys 캐릭터 이름 → 원정대 키(내부 값, 응답에 내보내지 않음). 없는 이름은 원정대를 모르는 것
+   */
+  public static Result aggregate(List<Member> members, Map<String, ?> rosterKeys) {
+    var groups = rosterGroups(members, rosterKeys);
     var sorted =
         members.stream()
             .map(
@@ -79,7 +91,8 @@ public final class GuildDetail {
                         // 화면 정밀도(분)로 맞춘다.
                         member.observedAt() == null
                             ? null
-                            : member.observedAt().truncatedTo(ChronoUnit.MINUTES)))
+                            : member.observedAt().truncatedTo(ChronoUnit.MINUTES),
+                        groups.get(member.characterName())))
             .sorted(
                 Comparator.comparing(Member::itemLevel, Comparator.reverseOrder())
                     .thenComparing(Member::characterName))
@@ -103,6 +116,35 @@ public final class GuildDetail {
         bins(itemLevels, ITEM_LEVEL_WIDTH),
         bins(combatPowers, COMBAT_POWER_WIDTH),
         sorted);
+  }
+
+  /**
+   * 이 결과 안에서만 쓰는 원정대 묶음 번호(K28). 같은 원정대 키의 길드원을 한 묶음으로 하고, 묶음 인원 많은 순 → 묶음 최고 아이템 레벨 높은 순 → 묶음 안 첫
+   * 이름순으로 1부터 매긴다. 키는 내보내지 않으므로 다른 길드·다른 시점 응답끼리 같은 계정을 이어 맞출 수 없다. 넘겨받은 길드원(처리정지 제외 뒤)만 세므로 처리정지
+   * 대원이 있는 원정대도 그 대원이 없는 원정대와 같게 보인다(B5).
+   */
+  private static Map<String, Integer> rosterGroups(List<Member> members, Map<String, ?> keys) {
+    var byKey = new java.util.HashMap<Object, List<Member>>();
+    for (var member : members) {
+      var key = keys.get(member.characterName());
+      if (key != null) byKey.computeIfAbsent(key, ignored -> new ArrayList<>()).add(member);
+    }
+    Comparator<Member> inGroup =
+        Comparator.comparing(Member::itemLevel, Comparator.reverseOrder())
+            .thenComparing(Member::characterName);
+    var ordered =
+        byKey.values().stream()
+            .map(group -> group.stream().sorted(inGroup).toList())
+            .sorted(
+                Comparator.<List<Member>>comparingInt(List::size)
+                    .reversed()
+                    .thenComparing(group -> group.getFirst().itemLevel(), Comparator.reverseOrder())
+                    .thenComparing(group -> group.getFirst().characterName()))
+            .toList();
+    var result = new java.util.HashMap<String, Integer>();
+    for (int i = 0; i < ordered.size(); i++)
+      for (var member : ordered.get(i)) result.put(member.characterName(), i + 1);
+    return result;
   }
 
   /** 인원 많은 순, 같으면 직업 이름순. share는 길드원 대비 %(소수 둘째 자리). */

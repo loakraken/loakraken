@@ -961,6 +961,25 @@ class OpenApiIntegrationTest {
           .isEqualTo("null");
   }
 
+  @Test
+  void 캐릭터_순위의_다음_티어_필드는_required이고_nullable이며_새_티어_값은_없다() throws Exception {
+    var schemas =
+        JsonMapper.builder()
+            .build()
+            .readTree(request("/v3/api-docs").body())
+            .at("/components/schemas");
+    assertThat(schemas.at("/StatsRankEntryResponse/required").toString())
+        .contains("tier", "nextTier", "nextTierValue", "nextTierGap");
+    for (var field : List.of("nextTier", "nextTierValue", "nextTierGap"))
+      assertThat(
+              schemas.at("/StatsRankEntryResponse/properties/" + field + "/anyOf/1/type").asText())
+          .as(field)
+          .isEqualTo("null");
+    // 다음 티어는 기존 티어 값 중 하나(REST 제외)라 새 값이 없다.
+    assertThat(schemas.at("/StatsRankEntryResponse/properties/nextTier/anyOf/0/enum").toString())
+        .isEqualTo("[\"TOP1\",\"TOP5\",\"TOP10\",\"TOP25\",\"TOP50\"]");
+  }
+
   private HttpResponse<String> request(String path) throws Exception {
     try (var client = HttpClient.newHttpClient()) {
       return client.send(

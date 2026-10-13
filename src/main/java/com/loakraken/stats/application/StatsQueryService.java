@@ -708,8 +708,8 @@ public class StatsQueryService {
     if (guard(() -> stats.excluded(target)))
       throw new BusinessException(StatsErrorCode.STATS_CHARACTER_NOT_OBSERVED);
     return cached(
-        // v2: 서버 내 직업(SERVER_CLASS) 칸 추가(#170). 이전 캐시가 새 칸 없이 남지 않게 키를 바꾼다.
-        "rank:v2:" + target.serverName() + ":" + target.characterName() + ":" + key(conditions),
+        // v2: 서버 내 직업(SERVER_CLASS) 칸 추가(#170), v3: 다음 티어 경계(L2). 이전 캐시가 새 값 없이 남지 않게 키를 바꾼다.
+        "rank:v3:" + target.serverName() + ":" + target.characterName() + ":" + key(conditions),
         CharacterRankResult.class,
         () -> {
           var now = clock.instant();
@@ -779,6 +779,19 @@ public class StatsQueryService {
         status == SampleStatus.READY && standing.total() > 0
             ? StatsRules.topPercent(Math.min(rank, standing.total()), standing.total())
             : null;
+    var tier = top == null ? null : Tier.of(top);
+    var next = tier == null ? null : tier.next();
+    BigDecimal nextValue = null;
+    if (next != null) {
+      long k = StatsRules.tierRank(next, standing.total());
+      // 다음 티어에 아직 못 닿은 캐릭터는 rank > k라 위의 k명이 모두 다른 캐릭터다. 그래서 '나를 뺀 k번째'가 '전체 k번째'와 같고,
+      // 캐릭터마다 구하지 않고 (지표·조건·k)마다 한 번 구해 캐시한다.
+      if (k > 0) {
+        var boundary = tierBoundary(conditions, since, metric, k);
+        // 캐시 시점이 달라 경계가 지금 값 이하로 보이면 내지 않는다(추정 금지).
+        if (boundary != null && boundary.compareTo(value) > 0) nextValue = boundary;
+      }
+    }
     return new RankEntry(
         metric,
         scope,
@@ -786,9 +799,24 @@ public class StatsQueryService {
         rank,
         standing.total(),
         top,
-        top == null ? null : Tier.of(top),
-        status);
+        tier,
+        status,
+        nextValue == null ? null : next,
+        nextValue,
+        nextValue == null ? null : nextValue.subtract(value));
   }
+
+  private BigDecimal tierBoundary(
+      StatsConditions conditions, Instant since, Metric metric, long k) {
+    return cached(
+            "tier-boundary:" + metric + ":" + k + ":" + key(conditions),
+            TierBoundary.class,
+            () -> new TierBoundary(stats.nthHighest(conditions, since, metric, k)))
+        .value();
+  }
+
+  /** 다음 티어 경계값 캐시(값이 없을 때도 캐시하려고 감싼다). */
+  public record TierBoundary(BigDecimal value) {}
 
   private PercentileOf standing(
       StatsConditions conditions, Metric metric, BigDecimal value, Instant aggregatedAt) {
@@ -1113,7 +1141,10 @@ public class StatsQueryService {
       long total,
       BigDecimal topPercent,
       Tier tier,
-      SampleStatus sampleStatus) {}
+      SampleStatus sampleStatus,
+      Tier nextTier,
+      BigDecimal nextTierValue,
+      BigDecimal nextTierGap) {}
 
   public record CharacterRankResult(
       String characterName,

@@ -4,7 +4,6 @@ import com.loakraken.stats.application.StatsPort;
 import com.loakraken.stats.application.StatsPort.GuildSort;
 import com.loakraken.stats.application.StatsPort.RosterAggregate;
 import com.loakraken.stats.application.StatsPort.RosterBasis;
-import com.loakraken.stats.domain.ClassBuilds;
 import com.loakraken.stats.domain.GuildDetail;
 import com.loakraken.stats.domain.StatsConditions;
 import com.loakraken.stats.domain.StatsRules.Metric;
@@ -23,7 +22,6 @@ import java.util.Optional;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
-import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
@@ -976,83 +974,12 @@ class PostgresStatsRepository implements StatsPort {
                 jdbc)
             .query(
                 (row, index) ->
-                    sample(
+                    com.loakraken.stats.application.ClassBuildSampleReader.fromParts(
                         row.getBigDecimal("item_level"),
                         row.getString("ark_passive_title"),
                         row.getString("parts")))
             .list();
     return new ClassBuildSamples(population, samples);
-  }
-
-  private ClassBuilds.Sample sample(BigDecimal itemLevel, String classEngraving, String parts) {
-    var node = mapper.readTree(parts);
-    List<String> engravings = null;
-    if (node.path("engravings").isArray()) {
-      engravings = new ArrayList<>();
-      for (var engraving : node.path("engravings")) {
-        var name = text(engraving.path("name"));
-        if (name != null) engravings.add(name);
-      }
-    }
-    List<ClassBuilds.Gem> gems = null;
-    if (node.path("gems").isArray()) {
-      gems = new ArrayList<>();
-      for (var gem : node.path("gems"))
-        gems.add(
-            new ClassBuilds.Gem(
-                text(gem.path("kind")), integer(gem.path("level")), text(gem.path("mode"))));
-    }
-    var cards = node.path("cards");
-    var points = node.path("points");
-    var stats = node.path("stats");
-    List<String> bracelet = null;
-    if (node.path("bracelet").isArray()) {
-      bracelet = new ArrayList<>();
-      for (var line : node.path("bracelet")) {
-        var value = text(line);
-        if (value != null) bracelet.add(value);
-      }
-    }
-    return new ClassBuilds.Sample(
-        itemLevel,
-        blankToNull(classEngraving),
-        engravings,
-        gems,
-        cards.isObject()
-            ? new ClassBuilds.CardSet(
-                text(cards.path("set")),
-                integer(cards.path("pieces")),
-                integer(cards.path("awakening")))
-            : null,
-        points.isObject()
-            ? new ClassBuilds.Points(
-                integer(points.path("evolution")),
-                integer(points.path("enlightenment")),
-                integer(points.path("leap")))
-            : null,
-        stats.isObject()
-            ? new ClassBuilds.CombatStats(
-                integer(stats.path("crit")),
-                integer(stats.path("spec")),
-                integer(stats.path("swift")),
-                integer(stats.path("domination")),
-                integer(stats.path("endurance")),
-                integer(stats.path("expertise")))
-            : null,
-        bracelet);
-  }
-
-  private static String text(JsonNode node) {
-    if (node == null || !node.isString()) return null;
-    return blankToNull(node.asString());
-  }
-
-  private static Integer integer(JsonNode node) {
-    return node != null && node.isIntegralNumber() ? node.asInt() : null;
-  }
-
-  private static String blankToNull(String value) {
-    return value == null || value.isBlank() ? null : value;
   }
 
   @Override

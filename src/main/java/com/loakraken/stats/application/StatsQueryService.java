@@ -96,6 +96,7 @@ public class StatsQueryService {
       int limit,
       BigDecimal braceletMin,
       ClassBuilds.Fix fix) {
+    requireKnownFix(conditions, braceletMin, fix);
     var effectiveBracelet = braceletMin(conditions, braceletMin);
     return cached(
         "class-builds:"
@@ -154,6 +155,29 @@ public class StatsQueryService {
         });
   }
 
+  /**
+   * 자유 입력인 각인·카드 세트 고정은 고정 없는 기본 빌드 통계(같은 조건, 칸 최대 20개, 캐시)의 칸 이름에 있을 때만 받는다. 없는 이름마다 새 캐시 키·새 집계가
+   * 생기지 않게 캐시 전에 400으로 멈춘다(풀스택 PM #503 P2). 칸은 최소 5명이라 드문 각인으로 몇 명을 짚어 보는 것도 막는다.
+   */
+  private void requireKnownFix(
+      StatsConditions conditions, BigDecimal braceletMin, ClassBuilds.Fix fix) {
+    if (fix.engravings().isEmpty() && fix.cardSet() == null) return;
+    var base =
+        classBuilds(conditions, null, ClassBuilds.MAX_LIMIT, braceletMin, ClassBuilds.Fix.NONE)
+            .builds();
+    var engravings =
+        base.engravings().cells().stream()
+            .map(ClassBuilds.Cell::key)
+            .collect(java.util.stream.Collectors.toSet());
+    var cardSets =
+        base.cardSets().cells().stream()
+            .map(cell -> cell.key().set())
+            .collect(java.util.stream.Collectors.toSet());
+    if (!engravings.containsAll(fix.engravings())
+        || (fix.cardSet() != null && !cardSets.contains(fix.cardSet())))
+      throw new BusinessException(StatsErrorCode.STATS_UNKNOWN_FIX);
+  }
+
   /** 상위 목록 상한(PM 판정 D4: 고정 표본 30명 이상일 때만, 최대 30명). */
   public static final int TOP_LIMIT = 30;
 
@@ -188,6 +212,7 @@ public class StatsQueryService {
       String classEngraving,
       BigDecimal braceletMin,
       ClassBuilds.Fix fix) {
+    requireKnownFix(conditions, braceletMin, fix);
     var effectiveBracelet = braceletMin(conditions, braceletMin);
     return cached(
         "class-builds-top:"

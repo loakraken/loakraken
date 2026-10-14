@@ -387,9 +387,24 @@ class ClassBuildsIntegrationTest {
     // 팔찌 고정은 팔찌 기준(1680) 이상만: 1660 비기는 치명 줄이 있어도 들지 않는다.
     var bracelet = data(base + "&fixBracelet=" + encode("치명"));
     assertThat(bracelet.at("/meta/population").asLong()).isEqualTo(30);
-    // 처리정지 캐릭터는 어떤 고정에도 없다.
-    assertThat(get(base + "&fixEngraving=" + encode("정지각인가")).body())
-        .doesNotContain("빌드정지", "정지각인");
+    // 처리정지 캐릭터만 가진 각인·없는 각인·없는 카드 세트는 기본 집계 칸에 없어 400이고 캐시를 만들지 않는다.
+    for (var query :
+        java.util.List.of(
+            "&fixEngraving=" + encode("정지각인가"),
+            "&fixEngraving=" + encode("없는각인"),
+            "&fixCardSet=" + encode("없는 카드 세트"))) {
+      for (var path : java.util.List.of(base, base.replace("/builds?", "/builds/top?"))) {
+        var rejected = get(path + query);
+        assertThat(rejected.statusCode()).as(path + query).isEqualTo(400);
+        assertThat(rejected.body()).contains("STATS_UNKNOWN_FIX").doesNotContain("빌드정지");
+      }
+    }
+    var fixKeys = redis.keys("stats:v1:*fix=*");
+    assertThat(fixKeys == null ? java.util.Set.of() : fixKeys)
+        .noneMatch(key -> key.contains("정지각인가") || key.contains("없는"));
+    // 기본 집계에 있는 카드 세트는 받는다.
+    assertThat(data(base + "&fixCardSet=" + encode("세상을 구하는 빛")).at("/meta/population").asLong())
+        .isEqualTo(44);
     // 고정 없는 결과는 그대로(44명).
     assertThat(data(base).at("/meta/population").asLong()).isEqualTo(44);
   }

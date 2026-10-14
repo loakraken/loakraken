@@ -222,7 +222,7 @@ public class ClassBuildsController {
               + "표본이 30 미만이면 sampleStatus=COLLECTING이고 항목이 모두 빈 목록입니다. "
               + "인원(보석은 개수)이 5 미만인 칸은 목록에 없습니다. 못 읽은 값은 그 항목의 분모(known)에서 빠집니다. 정의는 definitions에 있습니다. "
               + "고정 조건(fixEngraving·fixCardSet·fixTopStat·fixEvolution·fixEnlightenment·fixLeap·fixBracelet, 합쳐 최대 3개)을 주면 직업 각인 비율을 포함한 모든 항목을 조건에 맞는 표본으로 다시 셉니다. "
-              + "고정 뒤 표본이 30 미만이면 COLLECTING입니다. "
+              + "고정 뒤 표본이 30 미만이면 COLLECTING입니다. 각인·카드 세트 고정은 고정 없는 같은 조건 빌드 통계의 칸(각인 목록·카드 세트)에 있는 이름만 받고, 없으면 400 STATS_UNKNOWN_FIX입니다. "
               + "400 INVALID_REQUEST·STATS_INVALID_RANGE, 503 STATS_UNAVAILABLE")
   @StatsController.StandardErrors
   public ApiResponse<ClassBuildsResponse> builds(
@@ -268,7 +268,7 @@ public class ClassBuildsController {
       description =
           "빌드 통계와 같은 표본(처리정지 캐릭터 없음) 가운데 직업 각인·고정 조건에 맞는 캐릭터를 관측 전투력 내림차순으로 최대 30명 줍니다(같으면 아이템 레벨·이름순). "
               + "조건에 맞는 캐릭터가 30명 미만이면 status=COLLECTING이고 rows는 비어 있습니다. 전투력은 관측값이며 observedAt 기준입니다. rank는 이 응답 안의 번호입니다. "
-              + "고정 조건은 빌드 통계와 같은 파라미터이며 합쳐 최대 3개입니다. 공식 API를 부르지 않습니다. "
+              + "고정 조건은 빌드 통계와 같은 파라미터이며 합쳐 최대 3개이고, 각인·카드 세트는 빌드 통계 칸에 있는 이름만 받습니다(없으면 400 STATS_UNKNOWN_FIX). 공식 API를 부르지 않습니다. "
               + "400 INVALID_REQUEST·STATS_INVALID_RANGE, 503 STATS_UNAVAILABLE")
   @StatsController.StandardErrors
   public ApiResponse<ClassBuildTopResponse> top(

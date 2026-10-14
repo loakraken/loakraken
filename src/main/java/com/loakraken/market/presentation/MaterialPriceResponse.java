@@ -34,7 +34,7 @@ public record MaterialPriceResponse(
       @Schema(description = "요청한 재료 이름") String name,
       @Schema(
               description =
-                  "PRICED: 단가 계산, NOT_FOUND: 같은 이름 상품 없음, PRICE_UNAVAILABLE: 선택 가격이 없거나 0, 또는 지금 조회할 수 없음(요청당 검색 상한·공유 호출 예산)")
+                  "PRICED: 단가 계산, NOT_FOUND: 같은 이름 상품 없음(끝까지 찾아 없던 이름은 1시간 동안 다시 찾지 않음), PRICE_UNAVAILABLE: 선택 가격이 없거나 0, 또는 지금 조회할 수 없음(요청당 검색 상한·공유 호출 예산), UNTRADEABLE: 공식 거래소에서 사고팔 수 없는 품목(검색하지 않음). 값이 늘 수 있음")
           MaterialUnitPriceService.UnitPrice.Status status,
       @Schema(description = "1개당 골드(소수 여섯째 자리). 파편은 가장 싼 주머니 기준 파편 1개당") @NullableResponse
           BigDecimal unitPriceGold,

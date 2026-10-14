@@ -26,7 +26,8 @@ class MaterialUnitPriceServiceTest {
 
   {
     when(cache.findRefiningMaterials()).thenReturn(java.util.Optional.empty());
-    when(cache.findLifeMaterials()).thenReturn(java.util.Optional.empty());
+    when(cache.findLifeMaterials(org.mockito.ArgumentMatchers.anyInt()))
+        .thenReturn(java.util.Optional.empty());
     when(gate.withReserve(
             org.mockito.ArgumentMatchers.anyInt(), org.mockito.ArgumentMatchers.any()))
         .thenAnswer(invocation -> invocation.<java.util.function.Supplier<?>>getArgument(1).get());
@@ -79,8 +80,8 @@ class MaterialUnitPriceServiceTest {
     assertThat(result.get(1).status())
         .isEqualTo(MaterialUnitPriceService.UnitPrice.Status.PRICE_UNAVAILABLE);
     assertThat(result.get(1).sourceItemName()).isEqualTo("빙하의 숨결");
-    // 없는 재료는 강화 재료·생활 두 분류를 보고(2번), 빙하의 숨결은 강화 재료에서 찾는다(1번). 중복 이름은 다시 보지 않는다.
-    verify(markets, times(3)).search(any(), any());
+    // 없는 재료는 강화 재료·생활·전투 용품 세 분류를 보고(3번), 빙하의 숨결은 강화 재료에서 찾는다(1번). 중복 이름은 다시 보지 않는다.
+    verify(markets, times(4)).search(any(), any());
     verify(markets)
         .search(
             any(),
@@ -89,7 +90,7 @@ class MaterialUnitPriceServiceTest {
 
   @Test
   void 예열_스캔에_있는_이름은_검색하지_않고_한도도_쓰지_않는다() {
-    when(cache.findLifeMaterials())
+    when(cache.findLifeMaterials(90000))
         .thenReturn(
             java.util.Optional.of(
                 new LifeMaterialScan(observed, List.of(price(21, "목재", 100, "285")))));
@@ -115,7 +116,7 @@ class MaterialUnitPriceServiceTest {
 
   @Test
   void 캐시에_없으면_요청을_한_번만_세고_사용자_몫을_남기며_요청당_검색_상한까지만_본다() {
-    // 어디에도 없는 이름 25개 = 이름마다 분류 2번 = 50번이 필요하지만 상한 45번에서 멈춘다.
+    // 어디에도 없는 이름 25개 = 이름마다 분류 3번 = 75번이 필요하지만 상한 45번에서 멈춘다.
     when(markets.search(any(), any()))
         .thenAnswer(
             invocation ->
@@ -131,18 +132,18 @@ class MaterialUnitPriceServiceTest {
     verify(gate).withReserve(eq(MaterialUnitPriceService.REQUEST_RESERVE), any());
     verify(markets, times(MaterialUnitPriceService.MAX_REQUEST_SEARCHES)).search(any(), any());
     assertThat(result).hasSize(25);
-    // 22개는 두 분류를 다 봐서 NOT_FOUND, 23번째는 한 분류만 보고 상한, 그 뒤는 보지 못함.
-    assertThat(result.subList(0, 22))
+    // 15개는 세 분류를 다 봐서 NOT_FOUND, 16번째부터는 상한이라 보지 못함.
+    assertThat(result.subList(0, 15))
         .extracting(MaterialUnitPriceService.UnitPrice::status)
         .containsOnly(MaterialUnitPriceService.UnitPrice.Status.NOT_FOUND);
-    assertThat(result.subList(22, 25))
+    assertThat(result.subList(15, 25))
         .extracting(MaterialUnitPriceService.UnitPrice::status)
         .containsOnly(MaterialUnitPriceService.UnitPrice.Status.PRICE_UNAVAILABLE);
   }
 
   @Test
   void 공유_예산에_걸리면_그_뒤_이름은_알_수_없음이고_캐시에서_답한_이름은_그대로다() {
-    when(cache.findLifeMaterials())
+    when(cache.findLifeMaterials(90000))
         .thenReturn(
             java.util.Optional.of(
                 new LifeMaterialScan(observed, List.of(price(21, "목재", 100, "285")))));
@@ -156,6 +157,97 @@ class MaterialUnitPriceServiceTest {
     assertThat(result.subList(1, 3))
         .extracting(MaterialUnitPriceService.UnitPrice::status)
         .containsOnly(MaterialUnitPriceService.UnitPrice.Status.PRICE_UNAVAILABLE);
+    verify(markets, times(1)).search(any(), any());
+  }
+
+  @Test
+  void 거래_불가_품목은_검색하지_않고_UNTRADEABLE이며_한도도_쓰지_않는다() {
+    var names = List.of("고급 생명의 기운 회복물약", "중급 생명의 기운 회복물약", "환희의 전설 카드 팩", "환희의 전설~영웅 카드 팩");
+    var result = service.requestPrices(MaterialPriceBasis.CURRENT_MIN_PRICE, names);
+    assertThat(result)
+        .extracting(MaterialUnitPriceService.UnitPrice::status)
+        .containsOnly(MaterialUnitPriceService.UnitPrice.Status.UNTRADEABLE);
+    assertThat(result).allSatisfy(item -> assertThat(item.observedAt()).isNotNull());
+    verifyNoInteractions(markets);
+    verify(gate, never()).chargeClient(any());
+  }
+
+  @Test
+  void 끝까지_찾아_없던_이름은_음성_캐시로_다시_검색하지_않는다() {
+    when(markets.search(any(), any()))
+        .thenAnswer(
+            invocation ->
+                new MarketResult(
+                    MarketSource.ACTIVE_LISTING,
+                    observed,
+                    invocation.getArgument(1),
+                    new MarketPage(1, 10, 0, List.of())));
+    var first = service.requestPrices(MaterialPriceBasis.RECENT_PRICE, List.of("페온 아님"));
+    assertThat(first.getFirst().status())
+        .isEqualTo(MaterialUnitPriceService.UnitPrice.Status.NOT_FOUND);
+    verify(markets, times(3)).search(any(), any());
+    clearInvocations(markets, gate);
+    // 두 번째(1시간 안): 공식 검색 0, 재료 시세 한도도 안 셈.
+    var second = service.requestPrices(MaterialPriceBasis.RECENT_PRICE, List.of("페온 아님"));
+    assertThat(second.getFirst().status())
+        .isEqualTo(MaterialUnitPriceService.UnitPrice.Status.NOT_FOUND);
+    assertThat(second.getFirst().observedAt()).isEqualTo(first.getFirst().observedAt());
+    verifyNoInteractions(markets);
+    verify(gate, never()).chargeClient(any());
+  }
+
+  @Test
+  void 공식_호출_한도로_끝까지_못_본_이름은_음성_캐시에_넣지_않는다() {
+    when(markets.search(any(), any()))
+        .thenThrow(
+            new com.loakraken.common.api.BusinessException(
+                com.loakraken.common.lostark.LostArkErrorCode.LOST_ARK_RATE_LIMITED))
+        .thenAnswer(
+            invocation ->
+                new MarketResult(
+                    MarketSource.ACTIVE_LISTING,
+                    observed,
+                    invocation.getArgument(1),
+                    new MarketPage(1, 10, 0, List.of())));
+    assertThat(
+            service
+                .requestPrices(MaterialPriceBasis.RECENT_PRICE, List.of("잠깐 없는 재료"))
+                .getFirst()
+                .status())
+        .isEqualTo(MaterialUnitPriceService.UnitPrice.Status.PRICE_UNAVAILABLE);
+    clearInvocations(markets);
+    service.requestPrices(MaterialPriceBasis.RECENT_PRICE, List.of("잠깐 없는 재료"));
+    verify(markets, times(3)).search(any(), any());
+  }
+
+  @Test
+  void 예열로_다_받은_분류는_스캔에_없는_이름을_다시_검색하지_않는다() {
+    when(cache.findLifeMaterials(90000))
+        .thenReturn(
+            java.util.Optional.of(
+                new LifeMaterialScan(
+                    observed, List.of(price(21, "목재", 100, "285")), List.of(90000))));
+    when(cache.findLifeMaterials(60000))
+        .thenReturn(
+            java.util.Optional.of(
+                new LifeMaterialScan(
+                    observed, List.of(price(31, "아드로핀 물약", 1, "40")), List.of(60000))));
+    when(markets.search(any(), any()))
+        .thenAnswer(
+            invocation ->
+                new MarketResult(
+                    MarketSource.ACTIVE_LISTING,
+                    observed,
+                    invocation.getArgument(1),
+                    new MarketPage(1, 10, 0, List.of())));
+    var result =
+        service.requestPrices(MaterialPriceBasis.RECENT_PRICE, List.of("아드로핀 물약", "목재", "다른 이름"));
+    assertThat(result.get(0).status()).isEqualTo(MaterialUnitPriceService.UnitPrice.Status.PRICED);
+    assertThat(result.get(1).status()).isEqualTo(MaterialUnitPriceService.UnitPrice.Status.PRICED);
+    assertThat(result.get(2).status())
+        .isEqualTo(MaterialUnitPriceService.UnitPrice.Status.NOT_FOUND);
+    // 다른 이름: 다 받은 생활·전투 용품은 건너뛰고 강화 재료만 1번.
+    verify(markets, times(1)).search(any(), argThat(search -> search.categoryCode() == 50000));
     verify(markets, times(1)).search(any(), any());
   }
 

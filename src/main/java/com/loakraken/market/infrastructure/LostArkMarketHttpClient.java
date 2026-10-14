@@ -51,9 +51,26 @@ class LostArkMarketHttpClient {
     } else {
       throw new IllegalArgumentException("지원하지 않는 거래소 API");
     }
-    T payload = execute(endpoint, request, responseType);
+    T payload =
+        execute(
+            endpoint,
+            endpoint == Endpoint.MARKET_OPTIONS
+                ? null
+                : target(search.categoryCode(), search.itemName(), search.pageNo()),
+            request,
+            responseType);
     if (payload == null) throw error(LostArkErrorCode.LOST_ARK_API_ERROR);
     return payload;
+  }
+
+  /** 공식 호출 로그(로컬 DEBUG)의 호출 대상. 거래소 분류·품목 이름(게임 데이터)과 쪽 번호만. */
+  static String target(int categoryCode, String itemName, int pageNo) {
+    return "category="
+        + categoryCode
+        + " item="
+        + (itemName == null || itemName.isBlank() ? "-" : "\"" + itemName + "\"")
+        + " page="
+        + pageNo;
   }
 
   /** 경매장 검색. 즉시 구매가 오름차순이다. */
@@ -62,6 +79,7 @@ class LostArkMarketHttpClient {
     T payload =
         execute(
             Endpoint.AUCTION_ITEMS,
+            target(query.categoryCode(), query.itemName(), query.pageNo()),
             client
                 .post()
                 .uri("/auctions/items")
@@ -77,14 +95,18 @@ class LostArkMarketHttpClient {
     if (properties.apiKey().isBlank()) throw error(LostArkErrorCode.LOST_ARK_NOT_CONFIGURED);
     return execute(
         Endpoint.MARKET_ITEM_HISTORY,
+        "itemId=" + itemId,
         client.get().uri("/markets/items/{itemId}", itemId),
         responseType);
   }
 
   private <T> T execute(
-      Endpoint endpoint, RestClient.RequestHeadersSpec<?> request, Class<T> responseType) {
+      Endpoint endpoint,
+      String target,
+      RestClient.RequestHeadersSpec<?> request,
+      Class<T> responseType) {
     T payload;
-    gate.acquire(endpoint);
+    gate.acquire(endpoint, target);
     var sample = metrics.startApi();
     var outcome = new AtomicReference<>(ApiOutcome.ERROR);
     try {

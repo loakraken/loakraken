@@ -168,6 +168,66 @@ class MaterialPriceIntegrationTest {
             argThat(search -> search.itemName().equals("목재") && search.categoryCode() == 50000));
   }
 
+  @Test
+  void 캐시가_빈_상태에서_같은_요청_5건이_동시에_와도_같은_검색은_한_번만_공식_조회하고_모두_답한다() throws Exception {
+    var catalog = new java.util.ArrayList<java.util.Map.Entry<Integer, MarketPrice>>();
+    long id = 100;
+    catalog.add(java.util.Map.entry(50000, price(id++, "아비도스 융화 재료", 1, "90", "88")));
+    catalog.add(java.util.Map.entry(50000, price(id++, "상급 아비도스 융화 재료", 1, "130", "126")));
+    for (var name : CRAFT_NAMES.subList(2, CRAFT_NAMES.size()))
+      catalog.add(java.util.Map.entry(90000, price(id++, name, 100, "300", "285")));
+    // 공식 응답이 느린 상황(동시 요청이 겹치게).
+    when(prices.fetch(any(), any()))
+        .thenAnswer(
+            invocation -> {
+              Thread.sleep(40);
+              MarketSearch search = invocation.getArgument(1);
+              var matched =
+                  catalog.stream()
+                      .filter(entry -> entry.getKey() == search.categoryCode())
+                      .map(java.util.Map.Entry::getValue)
+                      .filter(item -> item.name().contains(search.itemName()))
+                      .toList();
+              int from = (search.pageNo() - 1) * 10;
+              return new MarketPage(
+                  search.pageNo(),
+                  10,
+                  matched.size(),
+                  matched.subList(Math.min(from, matched.size()), Math.min(from + 10, matched.size())));
+            });
+    var body =
+        "{\"priceBasis\":\"CURRENT_MIN_PRICE\",\"names\":["
+            + String.join(",", CRAFT_NAMES.stream().map(name -> "\"" + name + "\"").toList())
+            + "]}";
+    var start = new java.util.concurrent.CountDownLatch(1);
+    try (var pool = java.util.concurrent.Executors.newFixedThreadPool(5)) {
+      var futures = new java.util.ArrayList<java.util.concurrent.Future<HttpResponse<String>>>();
+      for (int i = 0; i < 5; i++)
+        futures.add(
+            pool.submit(
+                () -> {
+                  start.await();
+                  return send(body, "application/json");
+                }));
+      start.countDown();
+      for (var future : futures) {
+        var response = future.get(60, java.util.concurrent.TimeUnit.SECONDS);
+        assertThat(response.statusCode()).as(response.body()).isEqualTo(200);
+        mapper
+            .readTree(response.body())
+            .at("/data/items")
+            .forEach(item -> assertThat(item.path("status").asText()).isEqualTo("PRICED"));
+      }
+    }
+    // 같은 검색(분류·이름·페이지)은 공식 조회가 한 번뿐이다(5건이 겹쳐도 1건 분량).
+    var searches =
+        org.mockito.Mockito.mockingDetails(prices).getInvocations().stream()
+            .filter(invocation -> invocation.getMethod().getName().equals("fetch"))
+            .map(invocation -> (MarketSearch) invocation.getArgument(1))
+            .toList();
+    assertThat(searches).isNotEmpty().doesNotHaveDuplicates();
+  }
+
   @ParameterizedTest
   @ValueSource(
       strings = {

@@ -166,8 +166,7 @@ class MarketHistoryWarmup {
                 ? Outcome.REFRESHED
                 : Outcome.NOT_FOUND);
       } catch (BusinessException exception) {
-        record(Outcome.FAILED);
-        log.warn("시세 이력 예열에 실패했습니다. itemId={}, code={}", itemId, exception.errorCode().code());
+        record(failure("시세 이력", "itemId=" + itemId, exception));
         if (exception.errorCode() == LostArkErrorCode.LOST_ARK_RATE_LIMITED
             || exception.errorCode() == LostArkErrorCode.LOST_ARK_GATE_UNAVAILABLE) return;
       } catch (RuntimeException exception) {
@@ -208,8 +207,7 @@ class MarketHistoryWarmup {
           publish(refreshed.observedAt(), properties.boardInterval(), refreshed.page().items());
         lastBoardSuccess.set(clock.instant().getEpochSecond());
       } catch (BusinessException exception) {
-        recordBoard(Outcome.FAILED);
-        log.warn("시세 보드 예열에 실패했습니다. tab={}, code={}", tab, exception.errorCode().code());
+        recordBoard(failure("시세 보드", "tab=" + tab, exception));
         if (exception.errorCode() == LostArkErrorCode.LOST_ARK_RATE_LIMITED
             || exception.errorCode() == LostArkErrorCode.LOST_ARK_GATE_UNAVAILABLE) return;
       } catch (RuntimeException exception) {
@@ -265,8 +263,7 @@ class MarketHistoryWarmup {
         relicPage = page;
         if (relicTotal == 0) relicObservedAt = result.observedAt();
       } catch (BusinessException exception) {
-        recordRelic(Outcome.FAILED);
-        log.warn("각인서 시세 예열에 실패했습니다. page={}, code={}", page, exception.errorCode().code());
+        recordRelic(failure("각인서 시세", "page=" + page, exception));
         // 다음 틱에 같은 페이지부터 다시 받는다.
         return;
       } catch (RuntimeException exception) {
@@ -315,12 +312,8 @@ class MarketHistoryWarmup {
             observedAt = result.observedAt();
           if ((long) pageNo * 10 >= result.page().totalCount()) break;
         } catch (BusinessException exception) {
-          recordRefiningMaterials(Outcome.FAILED);
-          log.warn(
-              "재련 재료 시세 예열에 실패했습니다. tab={}, page={}, code={}",
-              tab,
-              pageNo,
-              exception.errorCode().code());
+          recordRefiningMaterials(
+              failure("재련 재료 시세", "tab=" + tab + ", page=" + pageNo, exception));
           return;
         }
       }
@@ -372,8 +365,7 @@ class MarketHistoryWarmup {
           observedAt = result.observedAt();
         if ((long) pageNo * 10 >= result.page().totalCount()) break;
       } catch (BusinessException exception) {
-        recordLifeMaterials(Outcome.FAILED);
-        log.warn("생활 재료 시세 예열에 실패했습니다. page={}, code={}", pageNo, exception.errorCode().code());
+        recordLifeMaterials(failure("생활 재료 시세", "page=" + pageNo, exception));
         return;
       } catch (RuntimeException exception) {
         recordLifeMaterials(Outcome.FAILED);
@@ -468,10 +460,34 @@ class MarketHistoryWarmup {
         .increment();
   }
 
+  /**
+   * 예열 실패를 로그로 남기고 결과를 고른다. 우리 관문이 사용자 몫을 남기려고·공식 한도 대기로·동시 상한으로 미룬 것은 실패가 아니라 DEFERRED(INFO)이고,
+   * 공식 서버의 429와 그 밖의 오류는 FAILED(WARN)다. 둘 다 다음 주기에 다시 받는다. 로그에는 이유(reason)를 남긴다.
+   */
+  private static Outcome failure(String job, String detail, BusinessException exception) {
+    var reason = com.loakraken.common.lostark.LostArkRateLimitedException.reasonOf(exception);
+    boolean deferred =
+        exception instanceof com.loakraken.common.lostark.LostArkRateLimitedException limited
+            && limited.limitCause()
+                != com.loakraken.common.lostark.LostArkRateLimitedException.Cause.UPSTREAM_429;
+    if (deferred) {
+      log.info("{} 예열을 관문이 미뤘습니다(다음 주기에 다시). {}, reason={}", job, detail, reason);
+      return Outcome.DEFERRED;
+    }
+    log.warn(
+        "{} 예열에 실패했습니다. {}, code={}, reason={}",
+        job,
+        detail,
+        exception.errorCode().code(),
+        reason);
+    return Outcome.FAILED;
+  }
+
   enum Outcome {
     REFRESHED,
     NOT_FOUND,
     FAILED,
+    DEFERRED,
     CAPPED
   }
 }

@@ -157,6 +157,11 @@ public class LostArkRequestGate {
 
   private void reject(GateEvent reason) {
     metrics.gate(reason);
-    throw new BusinessException(LostArkErrorCode.LOST_ARK_RATE_LIMITED);
+    throw new LostArkRateLimitedException(
+        switch (reason) {
+          case UPSTREAM_BACKOFF_REJECT -> LostArkRateLimitedException.Cause.GATE_BACKOFF;
+          case CONCURRENCY_REJECT -> LostArkRateLimitedException.Cause.GATE_CONCURRENCY;
+          default -> LostArkRateLimitedException.Cause.GATE_BUDGET;
+        });
   }
 }

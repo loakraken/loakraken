@@ -197,4 +197,94 @@ class ClassBuildsTest {
         .extracting(ClassBuilds.Cell::key)
         .containsExactly(100, 101);
   }
+
+  private static ClassBuilds.Sample detailed(
+      List<ClassBuilds.Core> cores, List<ClassBuilds.SkillUse> skills) {
+    return new ClassBuilds.Sample(
+        BRACELET_MIN, "광기", ENGRAVINGS, null, null, null, null, null, true, cores, skills);
+  }
+
+  private static List<ClassBuilds.Core> cores(String orderSun) {
+    var cores = new ArrayList<ClassBuilds.Core>();
+    cores.add(new ClassBuilds.Core("질서", "해", orderSun));
+    cores.add(new ClassBuilds.Core("질서", "달", "흐름의 결"));
+    cores.add(new ClassBuilds.Core("혼돈", "해", null));
+    return cores;
+  }
+
+  private static ClassBuilds.SkillUse windCut(String secondTier, String rune) {
+    return new ClassBuilds.SkillUse(
+        "윈드 컷",
+        List.of(new ClassBuilds.TripodKey(1, "빠른 준비"), new ClassBuilds.TripodKey(2, secondTier)),
+        rune);
+  }
+
+  @Test
+  void 상세_항목은_v2_표본이_30명_미만이면_칸을_비우고_표본_수와_비율만_준다() {
+    var samples = repeat(20, sample("광기", ENGRAVINGS, null, null, null, BRACELET_MIN));
+    samples.addAll(repeat(29, detailed(cores("살상연희"), List.of(windCut("강화된 일격", "질풍")))));
+
+    var details = ClassBuilds.details(samples, ClassBuilds.DEFAULT_LIMIT, 30);
+
+    assertThat(details.ready()).isFalse();
+    assertThat(details.detailedSamples()).isEqualTo(29);
+    assertThat(details.coverage()).isEqualByComparingTo("59.18");
+    assertThat(details.cores()).isEmpty();
+    assertThat(details.skills().cells()).isEmpty();
+    assertThat(details.skillDetails()).isEmpty();
+  }
+
+  @Test
+  void 상세_항목은_v2_표본만_코어_이름_스킬_트라이포드_룬으로_센다() {
+    var samples = repeat(10, sample("광기", ENGRAVINGS, null, null, null, BRACELET_MIN));
+    samples.addAll(repeat(20, detailed(cores("살상연희"), List.of(windCut("강화된 일격", "질풍")))));
+    samples.addAll(repeat(7, detailed(cores("불타는 일격"), List.of(windCut("약점 포착", null)))));
+    var rare =
+        List.of(windCut("약점 포착", null), new ClassBuilds.SkillUse("서프라이즈 어택", List.of(), "출혈"));
+    samples.addAll(repeat(3, detailed(cores("불타는 일격"), rare)));
+
+    var details = ClassBuilds.details(samples, ClassBuilds.DEFAULT_LIMIT, 30);
+
+    assertThat(details.ready()).isTrue();
+    assertThat(details.detailedSamples()).isEqualTo(30);
+    assertThat(details.coverage()).isEqualByComparingTo("75.00");
+    assertThat(details.cores())
+        .extracting(ClassBuilds.CoreSection::kind, ClassBuilds.CoreSection::position)
+        .containsExactly(
+            org.assertj.core.groups.Tuple.tuple("질서", "해"),
+            org.assertj.core.groups.Tuple.tuple("질서", "달"),
+            org.assertj.core.groups.Tuple.tuple("질서", "별"),
+            org.assertj.core.groups.Tuple.tuple("혼돈", "해"),
+            org.assertj.core.groups.Tuple.tuple("혼돈", "달"),
+            org.assertj.core.groups.Tuple.tuple("혼돈", "별"));
+    var orderSun = details.cores().get(0).names();
+    assertThat(orderSun.known()).isEqualTo(30);
+    assertThat(orderSun.cells())
+        .extracting(ClassBuilds.Cell::key, ClassBuilds.Cell::count)
+        .containsExactly(
+            org.assertj.core.groups.Tuple.tuple("살상연희", 20L),
+            org.assertj.core.groups.Tuple.tuple("불타는 일격", 10L));
+    // 이름을 못 읽은 칸(혼돈 해)과 없는 칸(질서 별)은 분모에서 빠진다.
+    assertThat(details.cores().get(2).names().known()).isZero();
+    assertThat(details.cores().get(3).names().known()).isZero();
+
+    // 3명뿐인 스킬은 칸에서 빠지고(hidden) 상세도 없다.
+    assertThat(details.skills().known()).isEqualTo(30);
+    assertThat(details.skills().cells()).extracting(ClassBuilds.Cell::key).containsExactly("윈드 컷");
+    assertThat(details.skills().hidden().count()).isEqualTo(3);
+    assertThat(details.skillDetails()).hasSize(1);
+    var windCut = details.skillDetails().get(0);
+    assertThat(windCut.users()).isEqualTo(30);
+    assertThat(windCut.tripods().cells())
+        .extracting(ClassBuilds.Cell::key, ClassBuilds.Cell::count)
+        .containsExactly(
+            org.assertj.core.groups.Tuple.tuple(new ClassBuilds.TripodKey(1, "빠른 준비"), 30L),
+            org.assertj.core.groups.Tuple.tuple(new ClassBuilds.TripodKey(2, "강화된 일격"), 20L),
+            org.assertj.core.groups.Tuple.tuple(new ClassBuilds.TripodKey(2, "약점 포착"), 10L));
+    // 룬을 안 낀 10명은 분모에만 든다.
+    assertThat(windCut.runes().known()).isEqualTo(30);
+    assertThat(windCut.runes().cells())
+        .extracting(ClassBuilds.Cell::key, ClassBuilds.Cell::share)
+        .containsExactly(org.assertj.core.groups.Tuple.tuple("질풍", new BigDecimal("66.67")));
+  }
 }

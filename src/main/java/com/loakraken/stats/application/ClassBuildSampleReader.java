@@ -16,16 +16,22 @@ public final class ClassBuildSampleReader {
 
   private ClassBuildSampleReader() {}
 
+  /** 코어 이름·스킬 상세가 없는 장비 요약 버전. 그 뒤 버전(v2~)은 상세 표본이다. */
+  static final String SCHEMA_V1 = "equipment-summary-v1";
+
   /**
    * 집계 SQL이 꺼낸 부분 JSON: {engravings, gems, cards, points(arkPassive.points), stats,
-   * bracelet(braceletLines)}.
+   * bracelet(braceletLines), schema(schema_version), cores(arkGrid.cores), skills}.
    */
   public static ClassBuilds.Sample fromParts(
       BigDecimal itemLevel, String classEngraving, String parts) {
     return sample(itemLevel, classEngraving, MAPPER.readTree(parts));
   }
 
-  /** 장비 요약 features JSON 전체. 집계 SQL의 jsonb_build_object와 같은 경로로 부분을 꺼낸다. */
+  /**
+   * 장비 요약 features JSON 전체. 집계 SQL의 jsonb_build_object와 같은 경로로 부분을 꺼낸다. 캐릭터 한 명 칸은 코어·스킬 항목을 아직 쓰지
+   * 않아 버전을 넘기지 않는다(상세 표본 아님).
+   */
   public static ClassBuilds.Sample fromFeatures(
       BigDecimal itemLevel, String classEngraving, String features) {
     var node = MAPPER.readTree(features);
@@ -94,7 +100,47 @@ public final class ClassBuildSampleReader {
                 integer(stats.path("endurance")),
                 integer(stats.path("expertise")))
             : null,
-        bracelet);
+        bracelet,
+        detailed(node),
+        cores(node.path("cores")),
+        skills(node.path("skills")));
+  }
+
+  private static boolean detailed(JsonNode node) {
+    var schema = text(node.path("schema"));
+    return schema != null && !SCHEMA_V1.equals(schema);
+  }
+
+  private static List<ClassBuilds.Core> cores(JsonNode node) {
+    if (!node.isArray()) return null;
+    var cores = new ArrayList<ClassBuilds.Core>();
+    for (var core : node)
+      cores.add(
+          new ClassBuilds.Core(
+              text(core.path("kind")), text(core.path("position")), text(core.path("name"))));
+    return cores;
+  }
+
+  private static List<ClassBuilds.SkillUse> skills(JsonNode node) {
+    if (!node.isArray()) return null;
+    var skills = new ArrayList<ClassBuilds.SkillUse>();
+    for (var skill : node) {
+      var tripods = new ArrayList<ClassBuilds.TripodKey>();
+      for (var tripod : skill.path("tripods")) {
+        var name = text(tripod.path("name"));
+        if (name != null) tripods.add(new ClassBuilds.TripodKey(tier(tripod.path("tier")), name));
+      }
+      skills.add(
+          new ClassBuilds.SkillUse(
+              text(skill.path("name")), tripods, text(skill.path("rune").path("name"))));
+    }
+    return skills;
+  }
+
+  /** 저장된 공식 Tier(0~2)를 게임 화면 단계(1~3)로. 저장값은 원본 그대로 두고 통계 응답에서만 바꾼다(PM 판정 10-14). */
+  static Integer tier(JsonNode node) {
+    var tier = integer(node);
+    return tier == null ? null : tier + 1;
   }
 
   private static String text(JsonNode node) {

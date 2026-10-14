@@ -114,7 +114,7 @@ public record EquipmentSummary(
     }
   }
 
-  /** 선택한 트라이포드. tier: 단계(1~3), slot: 그 단계의 위치(1~). */
+  /** 선택한 트라이포드. tier: 공식 Tier 원본(0~2, 게임 화면 단계 - 1), slot: 그 단계의 위치(1~). */
   public record Tripod(Integer tier, Integer slot, String name) {}
 
   public record Rune(String name, String grade) {}

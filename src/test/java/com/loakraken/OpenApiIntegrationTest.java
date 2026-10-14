@@ -882,6 +882,19 @@ class OpenApiIntegrationTest {
         .isEqualTo("null");
     assertThat(schemas.at("/ClassBuildHidden/properties/share/anyOf/1/type").asText())
         .isEqualTo("null");
+    // M26 2단계 4번: 코어·스킬 항목(필드 추가만).
+    assertThat(schemas.at("/ClassBuildsResponse/required").toString()).contains("details");
+    assertThat(schemas.at("/ClassBuildDetails/required").toString())
+        .contains(
+            "detailedSamples", "coverage", "status", "arkGridCores", "skills", "skillDetails");
+    assertThat(schemas.at("/ClassBuildDetails/properties/coverage/anyOf/1/type").asText())
+        .isEqualTo("null");
+    assertThat(schemas.at("/ClassBuildCoreSection/required").toString())
+        .contains("kind", "position", "known", "hidden", "cells");
+    assertThat(schemas.at("/ClassBuildSkillDetail/required").toString())
+        .contains("skill", "users", "tripods", "runes");
+    assertThat(schemas.at("/ClassBuildTripodCell/required").toString())
+        .contains("tier", "name", "count", "share");
   }
 
   @Test

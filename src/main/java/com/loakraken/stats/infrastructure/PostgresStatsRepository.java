@@ -969,9 +969,13 @@ class PostgresStatsRepository implements StatsPort {
                 'cards', s.features -> 'cards',
                 'points', s.features -> 'arkPassive' -> 'points',
                 'stats', s.features -> 'stats',
-                'bracelet', s.features -> 'braceletLines') AS TEXT) AS parts
+                'bracelet', s.features -> 'braceletLines',
+                'schema', s.schema_version,
+                'cores', s.features -> 'arkGrid' -> 'cores',
+                'skills', s.features -> 'skills') AS TEXT) AS parts
             FROM pop p JOIN LATERAL (
-              SELECT e.ark_passive_title, e.features FROM character_equipment_summary e
+              SELECT e.ark_passive_title, e.features, e.schema_version
+              FROM character_equipment_summary e
               WHERE e.character_id = p.character_id ORDER BY e.observed_at DESC LIMIT 1) s ON TRUE
             """,
             jdbc)

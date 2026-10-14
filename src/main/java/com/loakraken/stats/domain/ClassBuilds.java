@@ -66,7 +66,43 @@ public final class ClassBuilds {
       CardSet cards,
       Points points,
       CombatStats stats,
-      List<String> braceletLines) {}
+      List<String> braceletLines,
+      boolean detailed,
+      List<Core> cores,
+      List<SkillUse> skills) {
+    /** v1 표본(코어 이름·스킬 상세 없음). */
+    public Sample(
+        BigDecimal itemLevel,
+        String classEngraving,
+        List<String> engravings,
+        List<Gem> gems,
+        CardSet cards,
+        Points points,
+        CombatStats stats,
+        List<String> braceletLines) {
+      this(
+          itemLevel,
+          classEngraving,
+          engravings,
+          gems,
+          cards,
+          points,
+          stats,
+          braceletLines,
+          false,
+          null,
+          null);
+    }
+  }
+
+  /** 아크 그리드 코어 한 칸(v2). kind: 질서·혼돈, position: 해·달·별. */
+  public record Core(String kind, String position, String name) {}
+
+  /** 레벨 2 이상 스킬(v2). tripods: 선택한 트라이포드, rune: 룬 이름(없으면 null). */
+  public record SkillUse(String name, List<TripodKey> tripods, String rune) {}
+
+  /** 트라이포드 칸 key. tier: 게임 화면 단계(1~3, 저장된 공식 Tier 0~2에 1을 더한 값). */
+  public record TripodKey(Integer tier, String name) {}
 
   /** mode: DAMAGE(피해 증가)·COOLDOWN(재사용 대기시간 감소). */
   public record Gem(String kind, Integer level, String mode) {}
@@ -163,6 +199,126 @@ public final class ClassBuilds {
         perCharacter(samples, ClassBuilds::cardSet, limit, ClassBuilds::compareCards),
         topStats(samples),
         bracelets(samples, braceletItemLevelMin));
+  }
+
+  /** 코어 칸 순서(공식 아크 그리드 슬롯 순). */
+  public static final List<String> CORE_KINDS = List.of("질서", "혼돈");
+
+  public static final List<String> CORE_POSITIONS = List.of("해", "달", "별");
+
+  /** 코어 종류·위치 한 칸의 코어 이름 분포. */
+  public record CoreSection(String kind, String position, Section<String> names) {}
+
+  /**
+   * 채용 칸에 드는 스킬 하나의 트라이포드·룬 분포. users: 그 스킬을 쓰는(레벨 2 이상) v2 표본 수이고 트라이포드·룬의 분모다. 룬을 안 낀 사용자는 분모에만
+   * 든다.
+   */
+  public record SkillDetail(
+      String skill, long users, Section<TripodKey> tripods, Section<String> runes) {}
+
+  /**
+   * 장비 요약 v2로만 세는 항목(M26 2단계 4번). detailedSamples: 표본 가운데 v2 행 수, coverage: 그 비율(%, 표본이 없으면 null).
+   * ready가 false면(v2 표본 minSample 미만) 칸이 모두 비어 있다(작은 표본에서 한두 명의 세팅이 드러나지 않게, 기존 표본 30 규칙과 같다).
+   */
+  public record Details(
+      long detailedSamples,
+      BigDecimal coverage,
+      boolean ready,
+      List<CoreSection> cores,
+      Section<String> skills,
+      List<SkillDetail> skillDetails) {
+    public static Details empty(long detailedSamples, BigDecimal coverage) {
+      return new Details(
+          detailedSamples,
+          coverage,
+          false,
+          List.of(),
+          new Section<>(0, Hidden.NONE, List.of()),
+          List.of());
+    }
+  }
+
+  /**
+   * v2 표본으로 코어 이름(종류·위치 6칸), 스킬 채용(여러 값), 채용 칸 스킬마다 트라이포드(여러 값)·룬(한 값)을 센다. 최소 칸(5) 규칙은 기존 항목과 같다.
+   */
+  public static Details details(List<Sample> samples, int limit, int minSample) {
+    var detailed = samples.stream().filter(Sample::detailed).toList();
+    var coverage = samples.isEmpty() ? null : share(detailed.size(), samples.size());
+    if (detailed.size() < minSample) return Details.empty(detailed.size(), coverage);
+    var cores = new ArrayList<CoreSection>();
+    for (var kind : CORE_KINDS)
+      for (var position : CORE_POSITIONS)
+        cores.add(
+            new CoreSection(
+                kind,
+                position,
+                perCharacter(
+                    detailed,
+                    s -> coreName(s, kind, position),
+                    limit,
+                    Comparator.<String>naturalOrder())));
+    var skills = multi(detailed, ClassBuilds::skillNames, limit);
+    var skillDetails = new ArrayList<SkillDetail>();
+    for (var cell : skills.cells()) {
+      var skill = cell.key();
+      var users = detailed.stream().filter(s -> skillUse(s, skill) != null).toList();
+      skillDetails.add(
+          new SkillDetail(
+              skill,
+              users.size(),
+              multiKeys(
+                  users,
+                  s -> skillUse(s, skill).tripods(),
+                  limit,
+                  Comparator.comparing(TripodKey::tier, Comparator.nullsLast(Integer::compare))
+                      .thenComparing(TripodKey::name, Comparator.nullsLast(String::compareTo))),
+              multiKeys(
+                  users, s -> rune(skillUse(s, skill)), limit, Comparator.<String>naturalOrder())));
+    }
+    return new Details(
+        detailed.size(), coverage, true, List.copyOf(cores), skills, List.copyOf(skillDetails));
+  }
+
+  private static String coreName(Sample sample, String kind, String position) {
+    if (sample.cores() == null) return null;
+    for (var core : sample.cores())
+      if (core != null && kind.equals(core.kind()) && position.equals(core.position()))
+        return core.name();
+    return null;
+  }
+
+  /** 스킬을 못 읽었으면 null(분모에서 빠짐). */
+  private static List<String> skillNames(Sample sample) {
+    if (sample.skills() == null) return null;
+    var names = new ArrayList<String>();
+    for (var skill : sample.skills())
+      if (skill != null && skill.name() != null) names.add(skill.name());
+    return names;
+  }
+
+  private static SkillUse skillUse(Sample sample, String name) {
+    if (sample.skills() == null) return null;
+    for (var skill : sample.skills()) if (skill != null && name.equals(skill.name())) return skill;
+    return null;
+  }
+
+  /** 룬을 안 낀 스킬도 그 스킬 사용자 분모에는 든다(룬 없음은 못 읽은 값이 아님). 어느 칸에도 세지 않는다. */
+  private static List<String> rune(SkillUse use) {
+    return use.rune() == null ? List.of() : List.of(use.rune());
+  }
+
+  /** 캐릭터마다 key 여러 개를 센다(multi와 같고 key 형식만 다름). 목록이 null이면 분모에서 뺀다. */
+  private static <T> Section<T> multiKeys(
+      List<Sample> samples, Function<Sample, List<T>> keys, int limit, Comparator<T> tie) {
+    var counts = new HashMap<T, Long>();
+    long known = 0;
+    for (var sample : samples) {
+      var values = keys.apply(sample);
+      if (values == null) continue;
+      known++;
+      for (var value : new HashSet<>(values)) if (value != null) counts.merge(value, 1L, Long::sum);
+    }
+    return section(counts, known, limit, tie);
   }
 
   private static BraceletSection bracelets(List<Sample> samples, BigDecimal itemLevelMin) {
@@ -483,6 +639,14 @@ public final class ClassBuilds {
     definitions.put(
         "braceletStats",
         "팔찌에 그 전투 특성 줄이 있는 캐릭터 수 / 팔찌를 읽은 캐릭터 수(여러 특성에 셈, 합이 100% 넘음). 아이템 레벨 braceletItemLevelMin 이상만. unread는 팔찌를 못 읽은 수(0이면 분모 = 조건에 맞는 전체)");
+    definitions.put(
+        "details",
+        "코어 이름·스킬 상세를 저장한 표본(장비 요약 v2)만 셈. detailedSamples는 그 수, coverage는 표본(장비 요약이 있는 캐릭터, meta.population) 대비 %. 그 수가 30 미만이면 칸이 비어 있음(status COLLECTING)");
+    definitions.put("arkGridCores", "질서·혼돈 × 해·달·별 6칸마다 장착한 코어 이름별 인원");
+    definitions.put("skills", "그 스킬을 레벨 2 이상 올린 캐릭터 수 / 스킬을 읽은 캐릭터 수(여러 스킬에 셈)");
+    definitions.put(
+        "skillDetails",
+        "skills 칸에 든 스킬마다 사용자(users) 대비 트라이포드(단계·이름, 여러 개에 셈)·룬 이름별 인원. 룬을 안 낀 사용자는 분모에만 듦");
     definitions.put(
         "cells",
         "인원(보석은 개수) "

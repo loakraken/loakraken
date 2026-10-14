@@ -32,9 +32,9 @@ class EquipmentSummaryTest {
             new EquipmentSummary.Engraving("안정된 상태", "유물", 4, 0));
     assertThat(f.gems())
         .containsExactly(
-            new EquipmentSummary.Gem("광휘", 6, "DAMAGE"),
-            new EquipmentSummary.Gem("광휘", 6, "COOLDOWN"),
-            new EquipmentSummary.Gem("작열", 8, null));
+            new EquipmentSummary.Gem("광휘", 6, "DAMAGE", "윈드 컷"),
+            new EquipmentSummary.Gem("광휘", 6, "COOLDOWN", "서프라이즈 어택"),
+            new EquipmentSummary.Gem("작열", 8, null, null));
     assertThat(f.gemBaseAttackPct()).isEqualByComparingTo("4.95");
     assertThat(f.weapon())
         .isEqualTo(new EquipmentSummary.Weapon(100, new BigDecimal("30"), 208130, 19, null));
@@ -57,11 +57,23 @@ class EquipmentSummaryTest {
                 "해",
                 "유물",
                 18,
-                List.of("[10P] 피해 +1%", "[14P] 피해 +2%", "[17P] 피해 +3%", "[18P] 피해 +4%")),
-            new EquipmentSummary.Core("혼돈", "달", "고대", 17, List.of()));
+                List.of("[10P] 피해 +1%", "[14P] 피해 +2%", "[17P] 피해 +3%", "[18P] 피해 +4%"),
+                "살상연희"),
+            new EquipmentSummary.Core("혼돈", "달", "고대", 17, List.of(), "불타는 일격"));
     assertThat(f.cards())
         .isEqualTo(new EquipmentSummary.Cards("세상을 구하는 빛", 6, 30, new BigDecimal("15")));
-    assertThat(f.skills()).containsExactly(new EquipmentSummary.Skill("윈드 컷", "BACK_ATTACK"));
+    // 레벨 2 이상 스킬만. 선택 트라이포드는 단계·슬롯 순, 룬은 이름·등급.
+    assertThat(f.skills())
+        .containsExactly(
+            new EquipmentSummary.Skill(
+                "윈드 컷",
+                "BACK_ATTACK",
+                14,
+                List.of(
+                    new EquipmentSummary.Tripod(1, 2, "빠른 준비"),
+                    new EquipmentSummary.Tripod(2, 1, "강화된 일격")),
+                new EquipmentSummary.Rune("질풍", "전설")));
+    assertThat(EquipmentSummary.SCHEMA_VERSION).isEqualTo("equipment-summary-v2");
   }
 
   @Test
@@ -292,8 +304,8 @@ class EquipmentSummaryTest {
                 null,
                 null,
                 null,
-                List.of(),
-                null,
+                List.of(new Tripod(2, 1, "강화된 일격", null), new Tripod(1, 2, "빠른 준비", null)),
+                new Rune("질풍", null, "전설"),
                 List.of(),
                 AttackType.BACK_ATTACK),
             new Skill(

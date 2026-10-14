@@ -23,7 +23,8 @@ public record EquipmentSummary(
     String className,
     String arkPassiveTitle,
     Features features) {
-  public static final String SCHEMA_VERSION = "equipment-summary-v1";
+  /** v2(M26 2단계): 코어 이름, 스킬 레벨·선택 트라이포드·룬, 보석이 붙은 스킬을 더했다(필드 추가만). v1 행은 다음 관측 때 v2 행으로 바뀐다. */
+  public static final String SCHEMA_VERSION = "equipment-summary-v2";
 
   public record Features(
       Attack attack,
@@ -60,8 +61,15 @@ public record EquipmentSummary(
 
   public record Engraving(String name, String grade, Integer level, Integer stone) {}
 
-  /** mode: DAMAGE(피해 증가)·COOLDOWN(재사용 대기시간 감소). 보석 효과에서 못 찾으면 null. */
-  public record Gem(String kind, Integer level, String mode) {}
+  /**
+   * mode: DAMAGE(피해 증가)·COOLDOWN(재사용 대기시간 감소). 보석 효과에서 못 찾으면 null. skill: 이 보석이 붙은 스킬 이름(v2, 못 찾으면
+   * null).
+   */
+  public record Gem(String kind, Integer level, String mode, String skill) {
+    public Gem(String kind, Integer level, String mode) {
+      this(kind, level, mode, null);
+    }
+  }
 
   /** esther: 에스더 등급 무기만 값이 있다. 그 밖의 무기는 null이고 저장 JSON에서 빠져 기존 해시가 그대로다. */
   public record Weapon(
@@ -82,13 +90,34 @@ public record EquipmentSummary(
   /** effects: 그리드 효과 이름 → %. cores의 options는 현재 포인트로 달성한 구간 문장이다. */
   public record ArkGrid(Map<String, BigDecimal> effects, List<Core> cores) {}
 
+  /** name: 코어 이름(공식 슬롯 이름의 ' : ' 뒤, 예: 살상연희). v2, 없으면 null. */
   public record Core(
-      String kind, String position, String grade, Integer point, List<String> options) {}
+      String kind,
+      String position,
+      String grade,
+      Integer point,
+      List<String> options,
+      String name) {
+    public Core(String kind, String position, String grade, Integer point, List<String> options) {
+      this(kind, position, grade, point, options, null);
+    }
+  }
 
   /** set: 세트 이름, pieces: 가장 큰 세트 단계, awakening: 달성한 각성 합계 단계, elementPct: "…속성 피해 +x%" 합. */
   public record Cards(String set, Integer pieces, Integer awakening, BigDecimal elementPct) {}
 
-  public record Skill(String name, String attackType) {}
+  /** level: 스킬 레벨, tripods: 선택한 트라이포드(단계·슬롯 순), rune: 장착 룬. v2에서 더했고 못 읽으면 null(트라이포드는 빈 목록). */
+  public record Skill(
+      String name, String attackType, Integer level, List<Tripod> tripods, Rune rune) {
+    public Skill(String name, String attackType) {
+      this(name, attackType, null, List.of(), null);
+    }
+  }
+
+  /** 선택한 트라이포드. tier: 단계(1~3), slot: 그 단계의 위치(1~). */
+  public record Tripod(Integer tier, Integer slot, String name) {}
+
+  public record Rune(String name, String grade) {}
 
   private static final Pattern NUMBER = Pattern.compile("\\d+");
   private static final Pattern BASE_ATTACK = Pattern.compile("기본 공격력은 (\\d+)");
@@ -233,8 +262,22 @@ public record EquipmentSummary(
         .sorted(
             Comparator.comparing(
                 CharacterLoadout.Gem::slot, Comparator.nullsLast(Integer::compare)))
-        .map(gem -> new Gem(match(GEM_KIND, gem.name()), gem.level(), mode(gem, skills)))
+        .map(
+            gem ->
+                new Gem(
+                    match(GEM_KIND, gem.name()),
+                    gem.level(),
+                    mode(gem, skills),
+                    gemSkill(gem, skills)))
         .toList();
+  }
+
+  /** 보석이 붙은 스킬 이름(공식 보석 효과의 스킬 이름). 못 찾으면 null. */
+  private static String gemSkill(CharacterLoadout.Gem gem, List<CharacterLoadout.GemSkill> skills) {
+    for (var skill : skills)
+      if (skill != null && Objects.equals(skill.gemSlot(), gem.slot()) && skill.name() != null)
+        return skill.name().strip();
+    return null;
   }
 
   private static String mode(CharacterLoadout.Gem gem, List<CharacterLoadout.GemSkill> skills) {
@@ -370,9 +413,24 @@ public record EquipmentSummary(
         for (var option : slot.core().options())
           if (option != null && option.threshold() <= slot.point() && option.text() != null)
             options.add(option.text());
-      cores.add(new Core(kind, position, slot.grade(), slot.point(), List.copyOf(options)));
+      cores.add(
+          new Core(
+              kind,
+              position,
+              slot.grade(),
+              slot.point(),
+              List.copyOf(options),
+              coreName(slot.name())));
     }
     return new ArkGrid(effects, List.copyOf(cores));
+  }
+
+  /** 공식 슬롯 이름 "질서의 해 코어 : 살상연희"의 ' : ' 뒤. 없으면 null. */
+  private static String coreName(String slotName) {
+    int colon = slotName.indexOf(':');
+    if (colon < 0) return null;
+    var name = slotName.substring(colon + 1).strip();
+    return name.isEmpty() ? null : name;
   }
 
   private static Cards cards(CharacterLoadout.Cards cards) {
@@ -415,7 +473,21 @@ public record EquipmentSummary(
         .map(
             skill ->
                 new Skill(
-                    skill.name(), skill.attackType() == null ? null : skill.attackType().name()))
+                    skill.name(),
+                    skill.attackType() == null ? null : skill.attackType().name(),
+                    skill.level(),
+                    skill.tripods().stream()
+                        .filter(tripod -> tripod != null && tripod.name() != null)
+                        .map(tripod -> new Tripod(tripod.tier(), tripod.slot(), tripod.name()))
+                        .sorted(
+                            Comparator.comparing(
+                                    Tripod::tier, Comparator.nullsLast(Integer::compare))
+                                .thenComparing(Tripod::slot, Comparator.nullsLast(Integer::compare))
+                                .thenComparing(Tripod::name))
+                        .toList(),
+                    skill.rune() == null || skill.rune().name() == null
+                        ? null
+                        : new Rune(skill.rune().name(), skill.rune().grade())))
         .sorted(Comparator.comparing(Skill::name))
         .toList();
   }

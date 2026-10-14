@@ -202,7 +202,21 @@ public interface StatsPort {
   /** 공식 수집품 종류 하나(공식 순서). */
   record CollectibleType(String type, int point, int maxPoint) {}
 
-  record ClassBuildSamples(long population, List<ClassBuilds.Sample> samples) {}
+  /** characters는 samples와 같은 순서·같은 길이다(상위 목록에 쓴다). */
+  record ClassBuildSamples(
+      long population, List<ClassBuilds.Sample> samples, List<ClassBuildCharacter> characters) {
+    public ClassBuildSamples(long population, List<ClassBuilds.Sample> samples) {
+      this(population, samples, List.of());
+    }
+  }
+
+  /** 표본 캐릭터. 전투력은 관측값, observedAt은 마지막 프로필 확인 시각. */
+  record ClassBuildCharacter(
+      String characterName,
+      String serverName,
+      java.math.BigDecimal itemLevel,
+      java.math.BigDecimal combatPower,
+      Instant observedAt) {}
 
   record Coverage(long observedCharacters, long knownCharacters, long discoveredAccounts) {}
 

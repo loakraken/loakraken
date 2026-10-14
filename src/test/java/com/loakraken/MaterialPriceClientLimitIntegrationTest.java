@@ -1,0 +1,247 @@
+package com.loakraken;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+import com.loakraken.market.application.LifeMaterialScan;
+import com.loakraken.market.application.MarketCache;
+import com.loakraken.market.application.RefiningMaterialScan;
+import com.loakraken.market.domain.MarketPrice;
+import com.sun.net.httpserver.HttpServer;
+import java.math.BigDecimal;
+import java.net.InetSocketAddress;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.web.server.LocalServerPort;
+import org.springframework.context.annotation.Import;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.json.JsonMapper;
+
+/**
+ * 재료 시세는 사람 클라이언트(내부 주소 면제 끔)도 429 없이 답한다. 예열 캐시에 있으면 공식 호출 0이고, 없으면 요청 1번을 재료 시세 버킷에 세고 안쪽 검색은
+ * 클라이언트 공식 호출 한도(분당 20)에 매기지 않는다. 공식 API는 가짜 서버(분류 안 이름 부분 일치·10개씩)다.
+ */
+@Import(TestcontainersConfiguration.class)
+@SpringBootTest(
+    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+    properties = {
+      "lostark.client-limit.exempt-internal=false",
+      "lostark.client-limit.official-per-minute=20",
+      "lostark.client-limit.material-prices-per-minute=3"
+    })
+class MaterialPriceClientLimitIntegrationTest {
+  private static final JsonMapper MAPPER = new JsonMapper();
+  private static final AtomicInteger calls = new AtomicInteger();
+
+  /** 아비도스 제작 화면 20개(완성품 2 + 생활 재료 18). */
+  static final List<String> CRAFT =
+      List.of(
+          "아비도스 융화 재료",
+          "상급 아비도스 융화 재료",
+          "아비도스 목재",
+          "부드러운 목재",
+          "목재",
+          "아비도스 철광석",
+          "묵직한 철광석",
+          "철광석",
+          "아비도스 두툼한 생고기",
+          "다듬은 생고기",
+          "두툼한 생고기",
+          "아비도스 태양 잉어",
+          "붉은 살 생선",
+          "생선",
+          "아비도스 유물",
+          "희귀한 유물",
+          "고대 유물",
+          "아비도스 들꽃",
+          "수줍은 들꽃",
+          "들꽃");
+
+  /** 생명의 기운 효율 화면이 더 묻는 5개(제작 20개와 합쳐 25개). */
+  static final List<String> LIFE_EXTRA = List.of("튼튼한 목재", "단단한 철광석", "오레하 유물", "화사한 들꽃", "자연산 진주");
+
+  // 위 이름 목록 뒤에 만든다(정적 초기화 순서).
+  private static final List<Object[]> CATALOG = catalog();
+  private static final HttpServer server = server();
+
+  @LocalServerPort int port;
+  @Autowired MarketCache cache;
+  @Autowired StringRedisTemplate redis;
+
+  @DynamicPropertySource
+  static void properties(DynamicPropertyRegistry properties) {
+    properties.add("lostark.base-url", () -> "http://127.0.0.1:" + server.getAddress().getPort());
+    properties.add("lostark.api-key", () -> "local-test-token");
+    properties.add("lostark.requests-per-minute", () -> "600");
+  }
+
+  @AfterAll
+  static void stop() {
+    server.stop(0);
+  }
+
+  @BeforeEach
+  void 정리() {
+    var keys = new ArrayList<String>();
+    for (var pattern : List.of("market:v1:*", "lostark:*"))
+      if (redis.keys(pattern) != null) keys.addAll(redis.keys(pattern));
+    if (!keys.isEmpty()) redis.delete(keys);
+    calls.set(0);
+  }
+
+  @Test
+  void 예열_캐시에_있으면_20개와_25개_모두_공식_호출_없이_답하고_재료_시세_한도도_쓰지_않는다() throws Exception {
+    var now = Instant.now();
+    var refining = new ArrayList<MarketPrice>();
+    var life = new ArrayList<MarketPrice>();
+    for (var row : CATALOG) {
+      var price = (MarketPrice) row[1];
+      if ((int) row[0] == 50000) refining.add(price);
+      else life.add(price);
+    }
+    cache.saveRefiningMaterials(new RefiningMaterialScan(now, refining), Duration.ofMinutes(30));
+    cache.saveLifeMaterials(new LifeMaterialScan(now, life), Duration.ofMinutes(30));
+
+    // 재료 시세 버킷(시험 3)보다 많이 불러도 캐시에서 답하므로 429가 없다.
+    for (int i = 0; i < 5; i++) {
+      var items = priced(post(CRAFT, "198.51.100.30"));
+      assertThat(items).hasSize(20);
+    }
+    var rest = new ArrayList<>(CRAFT.subList(5, 20));
+    rest.addAll(LIFE_EXTRA);
+    assertThat(priced(post(rest, "198.51.100.30"))).hasSize(20);
+    assertThat(priced(post(CRAFT.subList(0, 5), "198.51.100.30"))).hasSize(5);
+    assertThat(calls).hasValue(0);
+  }
+
+  @Test
+  void 예열_전에는_요청_한_번만_세고_안쪽_검색은_공식_호출_한도에_매기지_않아_20개와_25개가_429_없이_답한다() throws Exception {
+    // 첫 요청: 생활 18개 × 분류 2 + 2 ≈ 38번 검색(공식 호출 한도 20을 넘지만 429 없음).
+    var first = priced(post(CRAFT, "203.0.113.40"));
+    assertThat(first).hasSize(20);
+    assertThat(calls.get()).isGreaterThan(20);
+    assertThat(first.get(4).path("unitPriceGold").decimalValue()).isEqualByComparingTo("2.85");
+
+    // 30초 캐시가 지난 뒤(캐시 비움) 두 번째: 찾은 분류부터 보므로 이름마다 1번.
+    redis.delete(redis.keys("market:v1:*"));
+    calls.set(0);
+    assertThat(priced(post(CRAFT, "203.0.113.40"))).hasSize(20);
+    assertThat(calls).hasValue(20);
+
+    // 생명의 기운 효율 25개(20 + 5): 세 번째 요청까지 재료 시세 한도(시험 3) 안.
+    redis.delete(redis.keys("market:v1:*"));
+    var rest = new ArrayList<>(CRAFT.subList(5, 20));
+    rest.addAll(LIFE_EXTRA);
+    assertThat(priced(post(rest, "203.0.113.40"))).hasSize(20);
+    // 네 번째 캐시 미스 요청은 재료 시세 한도로 429다(공식 검색 전에 멈춤).
+    redis.delete(redis.keys("market:v1:*"));
+    calls.set(0);
+    var limited = post(CRAFT.subList(0, 5), "203.0.113.40");
+    assertThat(limited.statusCode()).isEqualTo(429);
+    assertThat(calls).hasValue(0);
+  }
+
+  private List<JsonNode> priced(HttpResponse<String> response) throws Exception {
+    assertThat(response.statusCode()).as(response.body()).isEqualTo(200);
+    var items = new ArrayList<JsonNode>();
+    MAPPER.readTree(response.body()).at("/data/items").forEach(items::add);
+    for (var item : items)
+      assertThat(item.path("status").asText()).as(item.path("name").asText()).isEqualTo("PRICED");
+    return items;
+  }
+
+  private HttpResponse<String> post(List<String> names, String clientAddress) throws Exception {
+    var body =
+        "{\"priceBasis\":\"CURRENT_MIN_PRICE\",\"names\":["
+            + String.join(",", names.stream().map(name -> "\"" + name + "\"").toList())
+            + "]}";
+    try (var client = HttpClient.newHttpClient()) {
+      return client.send(
+          HttpRequest.newBuilder(
+                  URI.create("http://localhost:" + port + "/api/v1/markets/material-prices"))
+              .header("Content-Type", "application/json")
+              .header("X-Forwarded-For", clientAddress)
+              .POST(HttpRequest.BodyPublishers.ofString(body))
+              .build(),
+          HttpResponse.BodyHandlers.ofString());
+    }
+  }
+
+  /** [분류 코드, 상품]. 융화 재료는 강화 재료, 나머지는 생활(100개 묶음 285골드). */
+  private static List<Object[]> catalog() {
+    var rows = new ArrayList<Object[]>();
+    long id = 1;
+    rows.add(new Object[] {50000, price(id++, "아비도스 융화 재료", 1, "88")});
+    rows.add(new Object[] {50000, price(id++, "상급 아비도스 융화 재료", 1, "126")});
+    for (var name : CRAFT.subList(2, CRAFT.size()))
+      rows.add(new Object[] {90000, price(id++, name, 100, "285")});
+    for (var name : LIFE_EXTRA) rows.add(new Object[] {90000, price(id++, name, 100, "150")});
+    return rows;
+  }
+
+  private static MarketPrice price(long id, String name, int bundle, String min) {
+    return new MarketPrice(
+        id, name, "일반", null, bundle, null, null, new BigDecimal(min), new BigDecimal(min));
+  }
+
+  private static HttpServer server() {
+    try {
+      var server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+      server.createContext(
+          "/markets/items",
+          exchange -> {
+            calls.incrementAndGet();
+            var request = MAPPER.readTree(exchange.getRequestBody().readAllBytes());
+            int category = request.path("CategoryCode").asInt();
+            String name = request.path("ItemName").asText("");
+            int page = request.path("PageNo").asInt(1);
+            var matched =
+                CATALOG.stream()
+                    .filter(row -> (int) row[0] == category)
+                    .map(row -> (MarketPrice) row[1])
+                    .filter(item -> item.name().contains(name))
+                    .toList();
+            var items = new StringBuilder();
+            for (int i = (page - 1) * 10; i < Math.min(page * 10, matched.size()); i++) {
+              var item = matched.get(i);
+              if (!items.isEmpty()) items.append(',');
+              items.append(
+                  "{\"Id\":%d,\"Name\":\"%s\",\"Grade\":\"일반\",\"BundleCount\":%d,\"RecentPrice\":%s,\"CurrentMinPrice\":%s}"
+                      .formatted(
+                          item.id(),
+                          item.name(),
+                          item.bundleCount(),
+                          item.recentPrice().toPlainString(),
+                          item.currentMinPrice().toPlainString()));
+            }
+            var json =
+                "{\"PageNo\":%d,\"PageSize\":10,\"TotalCount\":%d,\"Items\":[%s]}"
+                    .formatted(page, matched.size(), items);
+            exchange.getResponseHeaders().set("Content-Type", "application/json");
+            byte[] bytes = json.getBytes(StandardCharsets.UTF_8);
+            exchange.sendResponseHeaders(200, bytes.length);
+            exchange.getResponseBody().write(bytes);
+            exchange.close();
+          });
+      server.start();
+      return server;
+    } catch (java.io.IOException exception) {
+      throw new java.io.UncheckedIOException(exception);
+    }
+  }
+}

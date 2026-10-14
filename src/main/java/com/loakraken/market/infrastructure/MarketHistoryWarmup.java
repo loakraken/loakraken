@@ -63,6 +63,11 @@ class MarketHistoryWarmup {
   private final java.util.concurrent.atomic.AtomicLong lastRefiningMaterialSuccess =
       new java.util.concurrent.atomic.AtomicLong();
   private Instant refiningMaterialDueAt = Instant.EPOCH;
+  private final com.loakraken.market.application.MaterialUnitPriceService lifeMaterials;
+  private final LifeMaterialWarmupProperties lifeMaterialProperties;
+  private final java.util.concurrent.atomic.AtomicLong lastLifeMaterialSuccess =
+      new java.util.concurrent.atomic.AtomicLong();
+  private Instant lifeMaterialDueAt = Instant.EPOCH;
   private final org.springframework.context.ApplicationEventPublisher events;
 
   MarketHistoryWarmup(
@@ -78,8 +83,12 @@ class MarketHistoryWarmup {
       RelicBookWarmupProperties relicBookProperties,
       com.loakraken.market.application.RefiningMaterialPriceService refiningMaterials,
       RefiningMaterialWarmupProperties refiningMaterialProperties,
+      com.loakraken.market.application.MaterialUnitPriceService lifeMaterials,
+      LifeMaterialWarmupProperties lifeMaterialProperties,
       org.springframework.context.ApplicationEventPublisher events) {
     this.events = events;
+    this.lifeMaterials = lifeMaterials;
+    this.lifeMaterialProperties = lifeMaterialProperties;
     this.markets = markets;
     this.boards = boards;
     this.clock = clock;
@@ -96,6 +105,7 @@ class MarketHistoryWarmup {
     gauge(registry, "warmup_board", lastBoardSuccess);
     gauge(registry, "warmup_relic_books", lastRelicBookSuccess);
     gauge(registry, "warmup_refining_materials", lastRefiningMaterialSuccess);
+    gauge(registry, "warmup_life_materials", lastLifeMaterialSuccess);
   }
 
   /**
@@ -326,6 +336,72 @@ class MarketHistoryWarmup {
     recordRefiningMaterials(Outcome.REFRESHED);
     lastRefiningMaterialSuccess.set(now.getEpochSecond());
     refiningMaterialDueAt = now.plus(refiningMaterialProperties.interval());
+  }
+
+  /**
+   * 생활 분류 시세(재료 시세 P0): 주기(기본 10분)마다 생활 분류 전체(2026-10-14 34종, 4페이지)를 받아 캐시(TTL = 주기 × 3)에 둔다. 재료 시세
+   * API가 목재·철광석·유물 같은 생활 재료를 공식 호출 없이 답한다. 분당 상한에 걸리거나 실패하면 이번 스캔을 버리고 다음 틱에 처음부터 받는다.
+   */
+  @Scheduled(fixedDelayString = "60s", initialDelayString = "${market.warmup.initial-delay:20s}")
+  void warmLifeMaterials() {
+    org.slf4j.MDC.put("entryPoint", "warmup");
+    try {
+      warmLifeMaterialPages();
+    } finally {
+      org.slf4j.MDC.remove("entryPoint");
+    }
+  }
+
+  synchronized void warmLifeMaterialPages() {
+    if (!lifeMaterialProperties.enabled() || lostArk.apiKey().isBlank()) return;
+    var now = clock.instant();
+    if (now.isBefore(lifeMaterialDueAt)) return;
+    if (!lease.hold(LEASE, properties.interval().plusMinutes(1))) return;
+    var items = new java.util.ArrayList<com.loakraken.market.domain.MarketPrice>();
+    Instant observedAt = null;
+    for (int page = 1; page <= lifeMaterialProperties.maxPages(); page++) {
+      if (!allowCall()) {
+        recordLifeMaterials(Outcome.CAPPED);
+        return;
+      }
+      int pageNo = page;
+      try {
+        var result = gate.withReserve(RESERVE, () -> lifeMaterials.fetchLifePage(pageNo));
+        items.addAll(result.page().items());
+        if (observedAt == null || result.observedAt().isBefore(observedAt))
+          observedAt = result.observedAt();
+        if ((long) pageNo * 10 >= result.page().totalCount()) break;
+      } catch (BusinessException exception) {
+        recordLifeMaterials(Outcome.FAILED);
+        log.warn("생활 재료 시세 예열에 실패했습니다. page={}, code={}", pageNo, exception.errorCode().code());
+        return;
+      } catch (RuntimeException exception) {
+        recordLifeMaterials(Outcome.FAILED);
+        log.warn(
+            "생활 재료 시세 예열에 실패했습니다. page={}, exceptionType={}",
+            pageNo,
+            exception.getClass().getName());
+        return;
+      }
+    }
+    lifeMaterials.saveLife(
+        new com.loakraken.market.application.LifeMaterialScan(
+            observedAt == null ? now : observedAt, items),
+        lifeMaterialProperties.cacheTtl());
+    recordLifeMaterials(Outcome.REFRESHED);
+    lastLifeMaterialSuccess.set(now.getEpochSecond());
+    lifeMaterialDueAt = now.plus(lifeMaterialProperties.interval());
+  }
+
+  private void recordLifeMaterials(Outcome outcome) {
+    registry
+        .counter(
+            "loakraken.market.warmup",
+            "outcome",
+            outcome.name().toLowerCase(Locale.ROOT),
+            "target",
+            "life_materials")
+        .increment();
   }
 
   private void recordRefiningMaterials(Outcome outcome) {

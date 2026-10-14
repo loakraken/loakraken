@@ -44,6 +44,10 @@ class MarketHistoryWarmupTest {
       mock(com.loakraken.market.application.RefiningMaterialPriceService.class);
   private RefiningMaterialWarmupProperties refiningMaterialProperties =
       new RefiningMaterialWarmupProperties(false, Duration.ofMinutes(10), 5);
+  private final com.loakraken.market.application.MaterialUnitPriceService lifeMaterials =
+      mock(com.loakraken.market.application.MaterialUnitPriceService.class);
+  private LifeMaterialWarmupProperties lifeMaterialProperties =
+      new LifeMaterialWarmupProperties(false, Duration.ofMinutes(10), 6);
 
   {
     when(lease.hold(any(), any())).thenReturn(true);
@@ -244,7 +248,42 @@ class MarketHistoryWarmupTest {
         relicProperties,
         refiningMaterials,
         refiningMaterialProperties,
+        lifeMaterials,
+        lifeMaterialProperties,
         events);
+  }
+
+  @Test
+  void 생활_재료_예열은_플래그가_꺼져_있으면_부르지_않는다() {
+    warmup("key", List.of()).warmLifeMaterialPages();
+    verifyNoInteractions(lifeMaterials);
+  }
+
+  @Test
+  void 생활_재료_예열은_생활_분류를_끝까지_받아_주기의_3배_TTL로_저장하고_주기_전에는_다시_부르지_않는다() {
+    lifeMaterialProperties = new LifeMaterialWarmupProperties(true, Duration.ofMinutes(10), 6);
+    // 생활 분류 34종 = 4페이지(2026-10-14 공식 TotalCount).
+    when(lifeMaterials.fetchLifePage(anyInt()))
+        .thenAnswer(invocation -> page(invocation.getArgument(0), 34));
+    var capped = warmup("key", List.of(), 3);
+    capped.warmLifeMaterialPages();
+    verify(lifeMaterials, times(3)).fetchLifePage(anyInt());
+    verify(lifeMaterials, never()).saveLife(any(), any());
+
+    var warmup = warmup("key", List.of());
+    warmup.warmLifeMaterialPages();
+    var scan =
+        org.mockito.ArgumentCaptor.forClass(
+            com.loakraken.market.application.LifeMaterialScan.class);
+    verify(lifeMaterials).saveLife(scan.capture(), eq(Duration.ofMinutes(30)));
+    assertThat(scan.getValue().items()).hasSize(34);
+    verify(lifeMaterials, never()).fetchLifePage(5);
+    // 사용자 몫(reserve)을 남기는 쪽으로만 부른다.
+    verify(gate, atLeast(4)).withReserve(eq(MarketHistoryWarmup.RESERVE), any());
+    org.mockito.Mockito.clearInvocations(lifeMaterials);
+    clock.now = clock.now.plus(Duration.ofMinutes(5));
+    warmup.warmLifeMaterialPages();
+    verifyNoInteractions(lifeMaterials);
   }
 
   @Test

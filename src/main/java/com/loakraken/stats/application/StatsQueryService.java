@@ -37,10 +37,24 @@ public class StatsQueryService {
   private final StatsCache cache;
   private final Clock clock;
 
-  public StatsQueryService(StatsPort stats, StatsCache cache, Clock clock) {
+  /**
+   * 빌드 통계 코어·스킬 항목(details)의 v2 표본 하한. 운영은 기본값 30(MIN_SAMPLE)이고, 로컬 대조에서만 application-local의 환경 변수로
+   * 낮춘다.
+   */
+  private final int detailMinSample;
+
+  public StatsQueryService(
+      StatsPort stats,
+      StatsCache cache,
+      Clock clock,
+      @org.springframework.beans.factory.annotation.Value(
+              "${stats.class-builds.detail-min-sample:" + StatsRules.MIN_SAMPLE + "}")
+          int detailMinSample) {
+    if (detailMinSample < 1) throw new IllegalArgumentException("detail-min-sample는 1 이상");
     this.stats = stats;
     this.cache = cache;
     this.clock = clock;
+    this.detailMinSample = detailMinSample;
   }
 
   public SummaryResult summary(StatsConditions conditions) {
@@ -100,6 +114,7 @@ public class StatsQueryService {
     var effectiveBracelet = braceletMin(conditions, braceletMin);
     return cached(
         "class-builds-v2:"
+            + (detailMinSample == StatsRules.MIN_SAMPLE ? "" : "dmin=" + detailMinSample + ":")
             + key(conditions)
             + ":"
             + (classEngraving == null ? "-" : classEngraving)
@@ -152,7 +167,7 @@ public class StatsQueryService {
               allStatus,
               ClassBuilds.definitions(),
               builds,
-              ClassBuilds.details(samples, limit, StatsRules.MIN_SAMPLE));
+              ClassBuilds.details(samples, limit, detailMinSample));
         });
   }
 

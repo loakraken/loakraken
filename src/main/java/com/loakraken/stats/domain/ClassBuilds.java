@@ -641,7 +641,7 @@ public final class ClassBuilds {
         "팔찌에 그 전투 특성 줄이 있는 캐릭터 수 / 팔찌를 읽은 캐릭터 수(여러 특성에 셈, 합이 100% 넘음). 아이템 레벨 braceletItemLevelMin 이상만. unread는 팔찌를 못 읽은 수(0이면 분모 = 조건에 맞는 전체)");
     definitions.put(
         "details",
-        "코어 이름·스킬 상세를 저장한 표본(장비 요약 v2)만 셈. detailedSamples는 그 수, coverage는 표본 대비 %. 그 수가 30 미만이면 칸이 비어 있음(status COLLECTING)");
+        "코어 이름·스킬 상세를 저장한 표본(장비 요약 v2)만 셈. detailedSamples는 그 수, coverage는 표본(장비 요약이 있는 캐릭터, meta.population) 대비 %. 그 수가 30 미만이면 칸이 비어 있음(status COLLECTING)");
     definitions.put("arkGridCores", "질서·혼돈 × 해·달·별 6칸마다 장착한 코어 이름별 인원");
     definitions.put("skills", "그 스킬을 레벨 2 이상 올린 캐릭터 수 / 스킬을 읽은 캐릭터 수(여러 스킬에 셈)");
     definitions.put(

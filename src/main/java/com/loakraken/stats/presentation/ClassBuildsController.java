@@ -559,7 +559,8 @@ public class ClassBuildsController {
   public record ClassBuildDetails(
       @Schema(description = "표본 가운데 코어 이름·스킬 상세가 있는 캐릭터 수", example = "412") long detailedSamples,
       @Schema(
-              description = "detailedSamples / 표본(meta.population) %, 소수 둘째 자리. 표본이 0이면 null",
+              description =
+                  "detailedSamples / 표본 %, 소수 둘째 자리. 분모 표본은 장비 요약이 있는 캐릭터(직업 각인 필터·고정 조건 적용)로 meta.population과 같은 수이고, 장비 요약이 없는 캐릭터까지 센 classPopulation이 아님. 표본이 0이면 null",
               example = "63.20")
           @NullableResponse
           BigDecimal coverage,

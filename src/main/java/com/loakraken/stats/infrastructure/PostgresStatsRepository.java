@@ -954,12 +954,15 @@ class PostgresStatsRepository implements StatsPort {
             .statement("SELECT COUNT(*) FROM pop", jdbc)
             .query(Long.class)
             .single();
-    // 캐릭터마다 마지막 장비 요약 1행에서 집계에 쓰는 부분만 꺼낸다(M12).
-    var samples =
-        population(conditions, since)
-            .statement(
-                """
-            SELECT p.item_level, s.ark_passive_title,
+    // 캐릭터마다 마지막 장비 요약 1행에서 집계에 쓰는 부분만 꺼낸다(M12). 상위 목록(M26)용 이름·서버·전투력·확인 시각도 함께.
+    var samples = new ArrayList<com.loakraken.stats.domain.ClassBuilds.Sample>();
+    var characters = new ArrayList<ClassBuildCharacter>();
+    population(conditions, since)
+        .statement(
+            """
+            SELECT p.item_level, s.ark_passive_title, p.character_name, p.server_name, p.combat_power,
+              (SELECT c.profile_refreshed_at FROM characters c WHERE c.character_id = p.character_id)
+                AS observed_at,
               CAST(jsonb_build_object(
                 'engravings', s.features -> 'engravings',
                 'gems', s.features -> 'gems',
@@ -971,15 +974,24 @@ class PostgresStatsRepository implements StatsPort {
               SELECT e.ark_passive_title, e.features FROM character_equipment_summary e
               WHERE e.character_id = p.character_id ORDER BY e.observed_at DESC LIMIT 1) s ON TRUE
             """,
-                jdbc)
-            .query(
-                (row, index) ->
-                    com.loakraken.stats.application.ClassBuildSampleReader.fromParts(
-                        row.getBigDecimal("item_level"),
-                        row.getString("ark_passive_title"),
-                        row.getString("parts")))
-            .list();
-    return new ClassBuildSamples(population, samples);
+            jdbc)
+        .query(
+            (ResultSet row) -> {
+              samples.add(
+                  com.loakraken.stats.application.ClassBuildSampleReader.fromParts(
+                      row.getBigDecimal("item_level"),
+                      row.getString("ark_passive_title"),
+                      row.getString("parts")));
+              var observed = row.getObject("observed_at", OffsetDateTime.class);
+              characters.add(
+                  new ClassBuildCharacter(
+                      row.getString("character_name"),
+                      row.getString("server_name"),
+                      row.getBigDecimal("item_level"),
+                      row.getBigDecimal("combat_power"),
+                      observed == null ? null : observed.toInstant()));
+            });
+    return new ClassBuildSamples(population, List.copyOf(samples), List.copyOf(characters));
   }
 
   @Override

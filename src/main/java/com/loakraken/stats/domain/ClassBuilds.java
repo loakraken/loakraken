@@ -250,6 +250,92 @@ public final class ClassBuilds {
       boolean braceletEligible,
       List<String> braceletStats) {}
 
+  /** 고정 조건 최대 개수(PM 판정 D3). 각인·팔찌 특성은 값 하나가 조건 하나다. */
+  public static final int MAX_FIXES = 3;
+
+  /**
+   * 고정 조건(M26 2단계). 걸린 조건을 모두 만족하는 표본만 남긴다. 판정은 집계·캐릭터 칸과 같은 키 함수다. null·빈 목록은 그 조건이 없는 것이다.
+   *
+   * @param engravings 이 각인을 모두 가진 캐릭터
+   * @param cardSet 가장 큰 카드 세트 이름
+   * @param topStat 주력 전투 특성
+   * @param braceletStats 팔찌에 이 전투 특성 줄이 모두 있는 캐릭터(팔찌 기준 레벨 이상만)
+   */
+  public record Fix(
+      List<String> engravings,
+      String cardSet,
+      String topStat,
+      Integer evolutionPoints,
+      Integer enlightenmentPoints,
+      Integer leapPoints,
+      List<String> braceletStats) {
+    public static final Fix NONE = new Fix(List.of(), null, null, null, null, null, List.of());
+
+    public Fix {
+      engravings = engravings == null ? List.of() : List.copyOf(new TreeSet<>(engravings));
+      braceletStats = braceletStats == null ? List.of() : List.copyOf(new TreeSet<>(braceletStats));
+    }
+
+    /** 걸린 조건 수. */
+    public int count() {
+      int count = engravings.size() + braceletStats.size();
+      for (var value :
+          java.util.Arrays.asList(
+              cardSet, topStat, evolutionPoints, enlightenmentPoints, leapPoints))
+        if (value != null) count++;
+      return count;
+    }
+
+    public boolean isEmpty() {
+      return count() == 0;
+    }
+
+    public boolean matches(Sample sample, BigDecimal braceletItemLevelMin) {
+      if (!engravings.isEmpty()) {
+        var combo = combo(sample);
+        if (combo == null || !combo.containsAll(engravings)) return false;
+      }
+      if (cardSet != null) {
+        var cards = ClassBuilds.cardSet(sample);
+        if (cards == null || !cardSet.equals(cards.set())) return false;
+      }
+      if (topStat != null) {
+        var top = ClassBuilds.topStat(sample);
+        if (top == null || !topStat.equals(top.stat())) return false;
+      }
+      if (evolutionPoints != null && !evolutionPoints.equals(point(sample, Points::evolution)))
+        return false;
+      if (enlightenmentPoints != null
+          && !enlightenmentPoints.equals(point(sample, Points::enlightenment))) return false;
+      if (leapPoints != null && !leapPoints.equals(point(sample, Points::leap))) return false;
+      if (!braceletStats.isEmpty()) {
+        boolean eligible =
+            sample.itemLevel() != null && sample.itemLevel().compareTo(braceletItemLevelMin) >= 0;
+        var stats = eligible ? ClassBuilds.braceletStats(sample) : null;
+        if (stats == null || !stats.containsAll(braceletStats)) return false;
+      }
+      return true;
+    }
+
+    /** 캐시 키 조각(값이 정렬돼 같은 조건은 같은 키). */
+    public String cacheKey() {
+      if (isEmpty()) return "-";
+      return String.join(",", engravings)
+          + "|"
+          + cardSet
+          + "|"
+          + topStat
+          + "|"
+          + evolutionPoints
+          + "|"
+          + enlightenmentPoints
+          + "|"
+          + leapPoints
+          + "|"
+          + String.join(",", braceletStats);
+    }
+  }
+
   public static CharacterCells cellsOf(Sample sample, BigDecimal braceletItemLevelMin) {
     boolean braceletEligible =
         sample.itemLevel() != null && sample.itemLevel().compareTo(braceletItemLevelMin) >= 0;

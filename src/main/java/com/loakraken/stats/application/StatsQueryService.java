@@ -75,11 +75,28 @@ public class StatsQueryService {
    */
   public ClassBuildsResult classBuilds(
       StatsConditions conditions, String classEngraving, int limit, BigDecimal braceletMin) {
+    return classBuilds(conditions, classEngraving, limit, braceletMin, ClassBuilds.Fix.NONE);
+  }
+
+  /** 팔찌 기준: 요청 값(없으면 1680)과 itemLevelMin 중 큰 값. */
+  private static BigDecimal braceletMin(StatsConditions conditions, BigDecimal braceletMin) {
     var bracelet =
         StatsConditions.strip(
             braceletMin == null ? ClassBuilds.DEFAULT_BRACELET_ITEM_LEVEL_MIN : braceletMin);
-    if (bracelet.compareTo(conditions.itemLevelMin()) < 0) bracelet = conditions.itemLevelMin();
-    var effectiveBracelet = bracelet;
+    return bracelet.compareTo(conditions.itemLevelMin()) < 0 ? conditions.itemLevelMin() : bracelet;
+  }
+
+  /**
+   * 고정 조건(M26 2단계)을 걸면 직업 각인 비율을 포함한 모든 항목을 고정 조건에 맞는 표본으로 다시 센다. 고정 뒤 표본이 30 미만이면 COLLECTING(칸
+   * 없음)이다.
+   */
+  public ClassBuildsResult classBuilds(
+      StatsConditions conditions,
+      String classEngraving,
+      int limit,
+      BigDecimal braceletMin,
+      ClassBuilds.Fix fix) {
+    var effectiveBracelet = braceletMin(conditions, braceletMin);
     return cached(
         "class-builds:"
             + key(conditions)
@@ -88,12 +105,18 @@ public class StatsQueryService {
             + ":"
             + limit
             + ":"
-            + effectiveBracelet.toPlainString(),
+            + effectiveBracelet.toPlainString()
+            + (fix.isEmpty() ? "" : ":fix=" + fix.cacheKey()),
         ClassBuildsResult.class,
         () -> {
           var now = clock.instant();
           var page = stats.classBuildSamples(conditions, conditions.since(now));
-          var all = page.samples();
+          var all =
+              fix.isEmpty()
+                  ? page.samples()
+                  : page.samples().stream()
+                      .filter(sample -> fix.matches(sample, effectiveBracelet))
+                      .toList();
           var samples =
               classEngraving == null
                   ? all
@@ -128,6 +151,107 @@ public class StatsQueryService {
               allStatus,
               ClassBuilds.definitions(),
               builds);
+        });
+  }
+
+  /** 상위 목록 상한(PM 판정 D4: 고정 표본 30명 이상일 때만, 최대 30명). */
+  public static final int TOP_LIMIT = 30;
+
+  /**
+   * @param status 고정(·직업 각인) 뒤 표본 상태. READY가 아니면 rows가 비어 있다(작은 표본에서 누가 쓰는지 드러나지 않게)
+   * @param sampleSize 고정 뒤 표본 수
+   */
+  public record ClassBuildTopResult(
+      Meta meta,
+      String className,
+      String classEngraving,
+      SampleStatus status,
+      long sampleSize,
+      BigDecimal braceletItemLevelMin,
+      List<ClassBuildTopRow> rows) {}
+
+  /** rank는 이 응답 안에서 1부터(관측 전투력 내림차순, 같으면 아이템 레벨·이름순). */
+  public record ClassBuildTopRow(
+      int rank,
+      String characterName,
+      String serverName,
+      BigDecimal itemLevel,
+      BigDecimal combatPower,
+      java.time.Instant observedAt) {}
+
+  /**
+   * 이 세팅(직업 각인·고정 조건)을 쓰는 캐릭터 가운데 관측 전투력 상위 30명(M26 2단계). 표본은 빌드 통계와 같다(처리정지 없음). 고정 뒤 표본이 30 미만이면
+   * 목록을 주지 않는다.
+   */
+  public ClassBuildTopResult classBuildTop(
+      StatsConditions conditions,
+      String classEngraving,
+      BigDecimal braceletMin,
+      ClassBuilds.Fix fix) {
+    var effectiveBracelet = braceletMin(conditions, braceletMin);
+    return cached(
+        "class-builds-top:"
+            + key(conditions)
+            + ":"
+            + (classEngraving == null ? "-" : classEngraving)
+            + ":"
+            + effectiveBracelet.toPlainString()
+            + ":fix="
+            + fix.cacheKey(),
+        ClassBuildTopResult.class,
+        () -> {
+          var now = clock.instant();
+          var page = stats.classBuildSamples(conditions, conditions.since(now));
+          var matched = new ArrayList<StatsPort.ClassBuildCharacter>();
+          for (int i = 0; i < page.samples().size(); i++) {
+            var sample = page.samples().get(i);
+            if (classEngraving != null && !classEngraving.equals(sample.classEngraving())) continue;
+            if (!fix.matches(sample, effectiveBracelet)) continue;
+            matched.add(page.characters().get(i));
+          }
+          var status = SampleStatus.of(matched.size());
+          var rows = new ArrayList<ClassBuildTopRow>();
+          if (status == SampleStatus.READY) {
+            var sorted =
+                matched.stream()
+                    .sorted(
+                        java.util.Comparator.comparing(
+                                StatsPort.ClassBuildCharacter::combatPower,
+                                java.util.Comparator.nullsLast(
+                                    java.util.Comparator.<BigDecimal>reverseOrder()))
+                            .thenComparing(
+                                StatsPort.ClassBuildCharacter::itemLevel,
+                                java.util.Comparator.nullsLast(
+                                    java.util.Comparator.<BigDecimal>reverseOrder()))
+                            .thenComparing(StatsPort.ClassBuildCharacter::characterName))
+                    .limit(TOP_LIMIT)
+                    .toList();
+            for (var character : sorted)
+              rows.add(
+                  new ClassBuildTopRow(
+                      rows.size() + 1,
+                      character.characterName(),
+                      character.serverName(),
+                      character.itemLevel(),
+                      character.combatPower(),
+                      character.observedAt()));
+          }
+          return new ClassBuildTopResult(
+              new Meta(
+                  matched.size(),
+                  conditions,
+                  now,
+                  StatsRules.SNAPSHOT_LATEST,
+                  ClassBuilds.RULE_VERSION,
+                  StatsRules.MIN_SAMPLE,
+                  status,
+                  cached("coverage", StatsPort.Coverage.class, stats::coverage)),
+              conditions.className(),
+              classEngraving,
+              status,
+              matched.size(),
+              effectiveBracelet,
+              List.copyOf(rows));
         });
   }
 

@@ -350,6 +350,104 @@ class ClassBuildsIntegrationTest {
     verifyNoInteractions(detailsPort);
   }
 
+  /** 광기 10명을 더해 광기 30 + 비기 14 = 44명(1640 기준). */
+  private void 표본_광기_30() {
+    표본();
+    for (int i = 20; i < 30; i++)
+      summary(
+          character("빌드광기" + i, "1700"),
+          1,
+          "광기",
+          features(ENGRAVINGS_A, "[]", 30, 140, 600, 1800, "[\"특화 +81\",\"치명 +70\"]"));
+  }
+
+  @Test
+  void 고정_조건을_걸면_그_표본으로_모든_항목을_다시_세고_30명_미만이면_칸이_없다() throws Exception {
+    표본_광기_30();
+    var base =
+        "/api/v1/stats/classes/"
+            + encode(CLASS)
+            + "/builds?itemLevelMin=1640&server="
+            + encode(SERVER);
+    // 돌격대장은 광기 30명만 가진다 → 직업 각인 비율도 광기 100%.
+    var fixed = data(base + "&fixEngraving=" + encode("돌격대장"));
+    assertThat(fixed.at("/meta/population").asLong()).isEqualTo(30);
+    assertThat(fixed.at("/meta/sampleStatus").asText()).isEqualTo("READY");
+    assertCells(fixed.path("classEngravings"), 30, "name", "광기", 30, "100.00");
+    assertCells(fixed.path("topStats"), 30, "name", "특화", 30, "100.00");
+    // 두 조건(돌격대장 + 주력 특화)도 같다. 조건 순서·중복과 무관하게 같은 결과.
+    var two = data(base + "&fixTopStat=" + encode("특화") + "&fixEngraving=" + encode("돌격대장"));
+    assertThat(two.at("/meta/population").asLong()).isEqualTo(30);
+    // 비기(치명 주력) 14명만 남으면 30 미만 → 칸 없음.
+    var small = data(base + "&fixTopStat=" + encode("치명"));
+    assertThat(small.at("/meta/population").asLong()).isEqualTo(14);
+    assertThat(small.at("/meta/sampleStatus").asText()).isEqualTo("COLLECTING");
+    assertThat(small.at("/classEngravings/cells").size()).isZero();
+    assertThat(small.at("/topStats/cells").size()).isZero();
+    // 팔찌 고정은 팔찌 기준(1680) 이상만: 1660 비기는 치명 줄이 있어도 들지 않는다.
+    var bracelet = data(base + "&fixBracelet=" + encode("치명"));
+    assertThat(bracelet.at("/meta/population").asLong()).isEqualTo(30);
+    // 처리정지 캐릭터는 어떤 고정에도 없다.
+    assertThat(get(base + "&fixEngraving=" + encode("정지각인가")).body())
+        .doesNotContain("빌드정지", "정지각인");
+    // 고정 없는 결과는 그대로(44명).
+    assertThat(data(base).at("/meta/population").asLong()).isEqualTo(44);
+  }
+
+  @ParameterizedTest
+  @ValueSource(
+      strings = {
+        "fixEngraving=%EA%B0%80&fixEngraving=%EB%82%98&fixEngraving=%EB%8B%A4&fixTopStat=%EC%B9%98%EB%AA%85",
+        "fixTopStat=%ED%8E%B8%EC%95%88",
+        "fixBracelet=%EA%B0%80",
+        "fixEvolution=-1",
+        "fixEngraving=%25"
+      })
+  void 고정_조건이_3개를_넘거나_형식이_틀리면_400이다(String query) throws Exception {
+    for (var path : java.util.List.of("/builds?", "/builds/top?"))
+      assertThat(get("/api/v1/stats/classes/" + encode(CLASS) + path + query).statusCode())
+          .as(path + query)
+          .isEqualTo(400);
+  }
+
+  @Test
+  void 이_세팅을_쓰는_상위_30명은_관측_전투력_순이고_30명_미만이면_목록이_없다() throws Exception {
+    표본_광기_30();
+    jdbc.sql("UPDATE characters SET combat_power = 3500 WHERE character_name = '빌드비기3'").update();
+    jdbc.sql("UPDATE characters SET combat_power = 3400 WHERE character_name = '빌드광기7'").update();
+    var base =
+        "/api/v1/stats/classes/"
+            + encode(CLASS)
+            + "/builds/top?itemLevelMin=1640&server="
+            + encode(SERVER);
+
+    var all = data(base);
+    assertThat(all.at("/meta/population").asLong()).isEqualTo(44);
+    assertThat(all.at("/meta/sampleStatus").asText()).isEqualTo("READY");
+    var rows = all.path("rows");
+    assertThat(rows.size()).isEqualTo(30);
+    assertThat(rows.at("/0/rank").asInt()).isEqualTo(1);
+    assertThat(rows.at("/0/characterName").asText()).isEqualTo("빌드비기3");
+    assertThat(rows.at("/0/combatPower").decimalValue()).isEqualByComparingTo("3500");
+    assertThat(rows.at("/1/characterName").asText()).isEqualTo("빌드광기7");
+    // 같은 전투력이면 아이템 레벨 높은 순(1700 광기가 1660 비기보다 앞).
+    assertThat(rows.at("/2/itemLevel").decimalValue()).isEqualByComparingTo("1700");
+    assertThat(rows.at("/29/rank").asInt()).isEqualTo(30);
+    assertThat(all.toString()).doesNotContain("빌드정지", "빌드요약없음");
+
+    // 고정: 돌격대장(광기 30) → 30명, 비기 없음.
+    var fixed = data(base + "&fixEngraving=" + encode("돌격대장"));
+    assertThat(fixed.path("rows").size()).isEqualTo(30);
+    assertThat(fixed.path("rows").toString()).doesNotContain("빌드비기");
+    assertThat(fixed.at("/rows/0/characterName").asText()).isEqualTo("빌드광기7");
+    // 30명 미만(치명 주력 비기 14) → 목록 없음.
+    var small = data(base + "&fixTopStat=" + encode("치명"));
+    assertThat(small.at("/meta/sampleStatus").asText()).isEqualTo("COLLECTING");
+    assertThat(small.at("/meta/population").asLong()).isEqualTo(14);
+    assertThat(small.path("rows").size()).isZero();
+    verifyNoInteractions(detailsPort);
+  }
+
   @Test
   void 처리정지_캐릭터의_칸_응답은_같은_상태의_기록_없는_캐릭터와_같다() throws Exception {
     // ① 캐시도 저장도 없음: 처리정지(저장 요약 있음) = 모르는 이름 = 같은 404·같은 본문.

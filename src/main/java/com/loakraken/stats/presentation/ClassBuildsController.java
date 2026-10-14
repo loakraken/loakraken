@@ -221,6 +221,8 @@ public class ClassBuildsController {
               + "표본은 그 가운데 장비 요약이 있는 캐릭터입니다. itemLevelMin 기본값은 다른 통계(1640)와 달리 1680이고(단 itemLevelMax만 1680 미만으로 주면 1640), 실제로 쓴 값은 meta.conditions.itemLevelMin에 있습니다. "
               + "표본이 30 미만이면 sampleStatus=COLLECTING이고 항목이 모두 빈 목록입니다. "
               + "인원(보석은 개수)이 5 미만인 칸은 목록에 없습니다. 못 읽은 값은 그 항목의 분모(known)에서 빠집니다. 정의는 definitions에 있습니다. "
+              + "고정 조건(fixEngraving·fixCardSet·fixTopStat·fixEvolution·fixEnlightenment·fixLeap·fixBracelet, 합쳐 최대 3개)을 주면 직업 각인 비율을 포함한 모든 항목을 조건에 맞는 표본으로 다시 셉니다. "
+              + "고정 뒤 표본이 30 미만이면 COLLECTING입니다. "
               + "400 INVALID_REQUEST·STATS_INVALID_RANGE, 503 STATS_UNAVAILABLE")
   @StatsController.StandardErrors
   public ApiResponse<ClassBuildsResponse> builds(
@@ -244,14 +246,9 @@ public class ClassBuildsController {
           @RequestParam(required = false)
           @DecimalMin("0")
           @DecimalMax("2000")
-          BigDecimal braceletItemLevelMin) {
-    var conditions = filter.toConditions().withClassName(className);
-    // 빌드 통계만 기본 최소 아이템 레벨이 1680이다. 단 최대만 1680 미만으로 주면 범위가 뒤집히지 않게 공통 기본(1640)을 둔다.
-    // 실제로 쓴 값은 meta.conditions.itemLevelMin에 나온다.
-    if (filter.itemLevelMin() == null
-        && (filter.itemLevelMax() == null
-            || filter.itemLevelMax().compareTo(ClassBuilds.DEFAULT_ITEM_LEVEL_MIN) >= 0))
-      conditions = conditions.withItemLevelMin(ClassBuilds.DEFAULT_ITEM_LEVEL_MIN);
+          BigDecimal braceletItemLevelMin,
+      @Valid @ModelAttribute @ParameterObject ClassBuildFixRequest fix) {
+    var conditions = buildConditions(className, filter);
     return ApiResponse.of(
         StatsSuccessCode.STATS_CLASS_BUILDS_SUCCESS,
         ClassBuildsResponse.from(
@@ -259,7 +256,95 @@ public class ClassBuildsController {
                 conditions,
                 classEngraving == null || classEngraving.isBlank() ? null : classEngraving.strip(),
                 limit == null ? ClassBuilds.DEFAULT_LIMIT : limit,
-                braceletItemLevelMin)));
+                braceletItemLevelMin,
+                fix.toFix())));
+  }
+
+  @GetMapping(
+      value = "/api/v1/stats/classes/{className}/builds/top",
+      produces = MediaType.APPLICATION_JSON_VALUE)
+  @Operation(
+      summary = "이 세팅을 쓰는 상위 캐릭터",
+      description =
+          "빌드 통계와 같은 표본(처리정지 캐릭터 없음) 가운데 직업 각인·고정 조건에 맞는 캐릭터를 관측 전투력 내림차순으로 최대 30명 줍니다(같으면 아이템 레벨·이름순). "
+              + "조건에 맞는 캐릭터가 30명 미만이면 status=COLLECTING이고 rows는 비어 있습니다. 전투력은 관측값이며 observedAt 기준입니다. rank는 이 응답 안의 번호입니다. "
+              + "고정 조건은 빌드 통계와 같은 파라미터이며 합쳐 최대 3개입니다. 공식 API를 부르지 않습니다. "
+              + "400 INVALID_REQUEST·STATS_INVALID_RANGE, 503 STATS_UNAVAILABLE")
+  @StatsController.StandardErrors
+  public ApiResponse<ClassBuildTopResponse> top(
+      @Parameter(description = "직업 이름(공식 표기)")
+          @PathVariable
+          @Size(min = 1, max = 16)
+          @Pattern(regexp = "[\\p{L}]+")
+          String className,
+      @Valid @ModelAttribute @ParameterObject StatsFilterRequest filter,
+      @Parameter(description = "직업 각인(공식 ArkPassive.Title)")
+          @RequestParam(required = false)
+          @Size(min = 1, max = 32)
+          @Pattern(regexp = "[\\p{L}\\p{N} ]+")
+          String classEngraving,
+      @Parameter(description = "팔찌 고정 조건에 쓰는 최소 아이템 레벨(기본 1680)")
+          @RequestParam(required = false)
+          @DecimalMin("0")
+          @DecimalMax("2000")
+          BigDecimal braceletItemLevelMin,
+      @Valid @ModelAttribute @ParameterObject ClassBuildFixRequest fix) {
+    return ApiResponse.of(
+        StatsSuccessCode.STATS_CLASS_BUILDS_SUCCESS,
+        ClassBuildTopResponse.from(
+            stats.classBuildTop(
+                buildConditions(className, filter),
+                classEngraving == null || classEngraving.isBlank() ? null : classEngraving.strip(),
+                braceletItemLevelMin,
+                fix.toFix())));
+  }
+
+  public record ClassBuildTopResponse(
+      @Schema(description = "population은 고정 조건에 맞는 표본 수") StatsResponses.StatsMetaResponse meta,
+      String className,
+      @NullableResponse String classEngraving,
+      @Schema(description = "팔찌 고정 조건에 쓴 최소 아이템 레벨") BigDecimal braceletItemLevelMin,
+      @Schema(description = "관측 전투력 내림차순 최대 30명. 표본 30 미만이면 빈 목록")
+          List<ClassBuildTopRowResponse> rows) {
+    static ClassBuildTopResponse from(StatsQueryService.ClassBuildTopResult result) {
+      return new ClassBuildTopResponse(
+          StatsResponses.StatsMetaResponse.from(result.meta()),
+          result.className(),
+          result.classEngraving(),
+          result.braceletItemLevelMin(),
+          result.rows().stream()
+              .map(
+                  row ->
+                      new ClassBuildTopRowResponse(
+                          row.rank(),
+                          row.characterName(),
+                          row.serverName(),
+                          row.itemLevel(),
+                          row.combatPower(),
+                          row.observedAt()))
+              .toList());
+    }
+  }
+
+  public record ClassBuildTopRowResponse(
+      @Schema(description = "이 응답 안의 순위(1부터)") int rank,
+      String characterName,
+      String serverName,
+      BigDecimal itemLevel,
+      @Schema(description = "관측 전투력") BigDecimal combatPower,
+      @Schema(description = "마지막 프로필 확인 시각") @NullableResponse java.time.Instant observedAt) {}
+
+  /** 빌드 통계 조건: 기본 최소 아이템 레벨 1680(단 itemLevelMax만 1680 미만이면 공통 기본 1640). */
+  private static com.loakraken.stats.domain.StatsConditions buildConditions(
+      String className, StatsFilterRequest filter) {
+    var conditions = filter.toConditions().withClassName(className);
+    // 빌드 통계만 기본 최소 아이템 레벨이 1680이다. 단 최대만 1680 미만으로 주면 범위가 뒤집히지 않게 공통 기본(1640)을 둔다.
+    // 실제로 쓴 값은 meta.conditions.itemLevelMin에 나온다.
+    if (filter.itemLevelMin() == null
+        && (filter.itemLevelMax() == null
+            || filter.itemLevelMax().compareTo(ClassBuilds.DEFAULT_ITEM_LEVEL_MIN) >= 0))
+      conditions = conditions.withItemLevelMin(ClassBuilds.DEFAULT_ITEM_LEVEL_MIN);
+    return conditions;
   }
 
   public record ClassBuildsResponse(
@@ -439,6 +524,7 @@ public class ClassBuildsController {
         ResponseContracts.apply(ClassBuildsResponse.class, document.getComponents().getSchemas());
         ResponseContracts.apply(
             ClassBuildCellsResponse.class, document.getComponents().getSchemas());
+        ResponseContracts.apply(ClassBuildTopResponse.class, document.getComponents().getSchemas());
       };
     }
   }

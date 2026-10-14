@@ -32,6 +32,57 @@ class LostArkRequestGateTest {
   }
 
   @Test
+  void 공식_호출_로그는_DEBUG일_때만_허가된_호출마다_종류와_경로를_한_줄씩_남긴다() {
+    var logger =
+        (ch.qos.logback.classic.Logger)
+            org.slf4j.LoggerFactory.getLogger(LostArkRequestGate.CALL_LOGGER);
+    var appender =
+        new ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent>();
+    appender.start();
+    logger.addAppender(appender);
+    var previous = logger.getLevel();
+    try {
+      var gate = gate(new MutableClock(), 90, 10);
+      // 운영처럼 INFO면 남기지 않는다.
+      logger.setLevel(ch.qos.logback.classic.Level.INFO);
+      gate.acquire(LostArkMetrics.Endpoint.PROFILE);
+      assertThat(appender.list).isEmpty();
+
+      logger.setLevel(ch.qos.logback.classic.Level.DEBUG);
+      gate.acquire(LostArkMetrics.Endpoint.PROFILE);
+      gate.withReserve(
+          40,
+          () -> {
+            gate.acquire(LostArkMetrics.Endpoint.MARKET_ITEMS);
+            return null;
+          });
+      gate.withUserReserve(
+          30,
+          () -> {
+            gate.acquire(LostArkMetrics.Endpoint.ARMORY);
+            return null;
+          });
+      assertThat(appender.list)
+          .extracting(ch.qos.logback.classic.spi.ILoggingEvent::getFormattedMessage)
+          .containsExactly(
+              "official-call endpoint=PROFILE origin=USER reserve=0",
+              "official-call endpoint=MARKET_ITEMS origin=BACKGROUND reserve=40",
+              "official-call endpoint=ARMORY origin=USER_RESERVE reserve=30");
+
+      // 거절된 호출(예산 초과)은 공식 호출이 아니므로 남기지 않는다.
+      appender.list.clear();
+      var tight = gate(new MutableClock(), 1, 10);
+      tight.acquire(LostArkMetrics.Endpoint.PROFILE);
+      assertThatThrownBy(() -> tight.acquire(LostArkMetrics.Endpoint.PROFILE))
+          .isInstanceOf(BusinessException.class);
+      assertThat(appender.list).hasSize(1);
+    } finally {
+      logger.setLevel(previous);
+      logger.detachAppender(appender);
+    }
+  }
+
+  @Test
   void 최근_1분의_호출_예산을_넘지_않는다() {
     var clock = new MutableClock();
     var gate = gate(clock, 1, 1);

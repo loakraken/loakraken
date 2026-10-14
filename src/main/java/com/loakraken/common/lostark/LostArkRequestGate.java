@@ -21,6 +21,11 @@ import org.springframework.stereotype.Component;
 public class LostArkRequestGate {
   private static final ThreadLocal<Integer> RESERVE = new ThreadLocal<>();
   private static final ThreadLocal<Boolean> CHARGE_CLIENT = new ThreadLocal<>();
+
+  /** 공식 호출 로그 로거 이름. 로컬 프로필(application-local)에서만 DEBUG다. */
+  public static final String CALL_LOGGER = "loakraken.official-calls";
+
+  private static final org.slf4j.Logger CALLS = org.slf4j.LoggerFactory.getLogger(CALL_LOGGER);
   private final Clock clock;
   private final int budget;
   private final Semaphore permits;
@@ -59,6 +64,30 @@ public class LostArkRequestGate {
    * 요청 중의 reserve 호출(경매 칸 채우기·N13 검색·L19 불러오기)은 {@link #withUserReserve}로 감싸 매긴다.
    */
   public void acquire() {
+    acquire(null);
+  }
+
+  /**
+   * {@link #acquire()}와 같고, 허가되면 공식 호출 로그(로거 {@value #CALL_LOGGER}, DEBUG)에 한 줄 남긴다. 로컬 프로필만 DEBUG로
+   * 켜고 운영은 꺼져 있다. 줄에는 호출 종류와 경로(백그라운드·사용자)만 있고 이름·주소·키는 없다.
+   */
+  public void acquire(LostArkMetrics.Endpoint endpoint) {
+    admit();
+    if (CALLS.isDebugEnabled())
+      CALLS.debug(
+          "official-call endpoint={} origin={} reserve={}",
+          endpoint == null ? "UNKNOWN" : endpoint.name(),
+          origin(),
+          currentReserve());
+  }
+
+  /** BACKGROUND: 예열·수집기(reserve, 클라이언트 한도 안 셈), USER_RESERVE: 사용자 요청 중 reserve 호출, USER: 사용자 요청. */
+  private static String origin() {
+    if (currentReserve() == 0) return "USER";
+    return Boolean.TRUE.equals(CHARGE_CLIENT.get()) ? "USER_RESERVE" : "BACKGROUND";
+  }
+
+  private void admit() {
     if (currentReserve() == 0 || Boolean.TRUE.equals(CHARGE_CLIENT.get())) clients.chargeOfficial();
     if (!permits.tryAcquire()) reject(GateEvent.CONCURRENCY_REJECT);
     GateStore.Admission admission;

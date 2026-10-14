@@ -115,7 +115,7 @@ class MaterialPriceClientLimitIntegrationTest {
       else life.add(price);
     }
     cache.saveRefiningMaterials(new RefiningMaterialScan(now, refining), Duration.ofMinutes(30));
-    cache.saveLifeMaterials(new LifeMaterialScan(now, life), Duration.ofMinutes(30));
+    cache.saveLifeMaterials(90000, new LifeMaterialScan(now, life), Duration.ofMinutes(30));
 
     // 재료 시세 버킷(시험 3)보다 많이 불러도 캐시에서 답하므로 429가 없다.
     for (int i = 0; i < 5; i++) {
@@ -156,6 +156,60 @@ class MaterialPriceClientLimitIntegrationTest {
     assertThat(calls).hasValue(0);
   }
 
+  /** 로아샵 화면이 묻는 15개(재련 5 + 배틀 아이템 5 + 페온 + 거래 불가 4). */
+  static final List<String> SHOP =
+      List.of(
+          "운명의 파괴석 결정",
+          "운명의 수호석 결정",
+          "상급 아비도스 융화 재료",
+          "용암의 숨결",
+          "빙하의 숨결",
+          "빛나는 정령의 회복약",
+          "빛나는 암흑 수류탄",
+          "빛나는 성스러운 폭탄",
+          "아드로핀 물약",
+          "각성 물약",
+          "고급 생명의 기운 회복물약",
+          "중급 생명의 기운 회복물약",
+          "환희의 전설 카드 팩",
+          "환희의 전설~영웅 카드 팩",
+          "페온");
+
+  @Test
+  void 예열이_있으면_로아샵_첫_열기는_공식_호출_10회_이하이고_두_번째는_0회다() throws Exception {
+    var now = Instant.now();
+    var refining = new ArrayList<MarketPrice>();
+    var life = new ArrayList<MarketPrice>();
+    var battle = new ArrayList<MarketPrice>();
+    for (var row : CATALOG) {
+      var price = (MarketPrice) row[1];
+      int category = (int) row[0];
+      if (category == 90000) life.add(price);
+      else if (category == 60000) battle.add(price);
+      else if (!price.name().equals("페온")) refining.add(price);
+    }
+    cache.saveRefiningMaterials(new RefiningMaterialScan(now, refining), Duration.ofMinutes(30));
+    cache.saveLifeMaterials(
+        90000, new LifeMaterialScan(now, life, List.of(90000)), Duration.ofMinutes(30));
+    cache.saveLifeMaterials(
+        60000, new LifeMaterialScan(now, battle, List.of(60000)), Duration.ofMinutes(30));
+
+    var first = MAPPER.readTree(post(SHOP, "198.51.100.60").body()).at("/data/items");
+    var statuses = new java.util.LinkedHashMap<String, String>();
+    first.forEach(item -> statuses.put(item.path("name").asText(), item.path("status").asText()));
+    for (var name : SHOP.subList(0, 10)) assertThat(statuses).containsEntry(name, "PRICED");
+    for (var name : SHOP.subList(10, 14)) assertThat(statuses).containsEntry(name, "UNTRADEABLE");
+    assertThat(statuses).containsEntry("페온", "PRICED");
+    // 페온만 검색(강화 재료 1번). 목표 10회 이하.
+    assertThat(calls.get()).isLessThanOrEqualTo(10).isEqualTo(1);
+
+    // 두 번째(캐시 유효 동안): 공식 호출 0.
+    calls.set(0);
+    var second = MAPPER.readTree(post(SHOP, "198.51.100.60").body()).at("/data/items");
+    assertThat(second.size()).isEqualTo(15);
+    assertThat(calls).hasValue(0);
+  }
+
   private List<JsonNode> priced(HttpResponse<String> response) throws Exception {
     assertThat(response.statusCode()).as(response.body()).isEqualTo(200);
     var items = new ArrayList<JsonNode>();
@@ -191,6 +245,10 @@ class MaterialPriceClientLimitIntegrationTest {
     for (var name : CRAFT.subList(2, CRAFT.size()))
       rows.add(new Object[] {90000, price(id++, name, 100, "285")});
     for (var name : LIFE_EXTRA) rows.add(new Object[] {90000, price(id++, name, 100, "150")});
+    for (var name : List.of("운명의 파괴석 결정", "운명의 수호석 결정", "용암의 숨결", "빙하의 숨결", "페온"))
+      rows.add(new Object[] {50000, price(id++, name, 1, "100")});
+    for (var name : List.of("빛나는 정령의 회복약", "빛나는 암흑 수류탄", "빛나는 성스러운 폭탄", "아드로핀 물약", "각성 물약"))
+      rows.add(new Object[] {60000, price(id++, name, 1, "30")});
     return rows;
   }
 

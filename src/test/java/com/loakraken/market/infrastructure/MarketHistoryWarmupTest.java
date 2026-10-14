@@ -256,8 +256,8 @@ class MarketHistoryWarmupTest {
   @Test
   void 관문이_미룬_예열은_DEFERRED로_공식_429는_FAILED로_이유와_함께_남기고_다음_주기에_다시_채운다() {
     lifeMaterialProperties = new LifeMaterialWarmupProperties(true, Duration.ofMinutes(10), 6);
-    when(lifeMaterials.fetchLifePage(anyInt()))
-        .thenAnswer(invocation -> page(invocation.getArgument(0), 34));
+    when(lifeMaterials.fetchCategoryPage(anyInt(), anyInt()))
+        .thenAnswer(invocation -> page(invocation.getArgument(1), 34));
     var logger =
         (ch.qos.logback.classic.Logger)
             org.slf4j.LoggerFactory.getLogger(MarketHistoryWarmup.class);
@@ -274,7 +274,7 @@ class MarketHistoryWarmupTest {
           .when(gate)
           .withReserve(anyInt(), any());
       warmup.warmLifeMaterialPages();
-      verify(lifeMaterials, never()).saveLife(any(), any());
+      verify(lifeMaterials, never()).saveCategoryScan(anyInt(), any(), any());
       assertThat(lifeCount("deferred")).isEqualTo(1);
       assertThat(lifeCount("failed")).isZero();
       // 2주기(1분 뒤): 공식 서버 429 → FAILED, 이유 UPSTREAM_429.
@@ -285,7 +285,7 @@ class MarketHistoryWarmupTest {
           .withReserve(anyInt(), any());
       clock.now = clock.now.plus(Duration.ofMinutes(1));
       warmup.warmLifeMaterialPages();
-      verify(lifeMaterials, never()).saveLife(any(), any());
+      verify(lifeMaterials, never()).saveCategoryScan(anyInt(), any(), any());
       assertThat(lifeCount("failed")).isEqualTo(1);
       assertThat(appender.list)
           .extracting(ch.qos.logback.classic.spi.ILoggingEvent::getFormattedMessage)
@@ -297,8 +297,9 @@ class MarketHistoryWarmupTest {
           .withReserve(anyInt(), any());
       clock.now = clock.now.plus(Duration.ofMinutes(1));
       warmup.warmLifeMaterialPages();
-      verify(lifeMaterials).saveLife(any(), eq(Duration.ofMinutes(30)));
-      assertThat(lifeCount("refreshed")).isEqualTo(1);
+      verify(lifeMaterials).saveCategoryScan(eq(90000), any(), eq(Duration.ofMinutes(30)));
+      verify(lifeMaterials).saveCategoryScan(eq(60000), any(), eq(Duration.ofMinutes(30)));
+      assertThat(lifeCount("refreshed")).isEqualTo(2);
     } finally {
       logger.detachAppender(appender);
     }
@@ -321,26 +322,36 @@ class MarketHistoryWarmupTest {
   }
 
   @Test
-  void 생활_재료_예열은_생활_분류를_끝까지_받아_주기의_3배_TTL로_저장하고_주기_전에는_다시_부르지_않는다() {
+  void 분류_예열은_생활과_전투_용품을_분류마다_끝까지_받아_다_받음으로_저장하고_주기_전에는_다시_부르지_않는다() {
     lifeMaterialProperties = new LifeMaterialWarmupProperties(true, Duration.ofMinutes(10), 6);
-    // 생활 분류 34종 = 4페이지(2026-10-14 공식 TotalCount).
-    when(lifeMaterials.fetchLifePage(anyInt()))
-        .thenAnswer(invocation -> page(invocation.getArgument(0), 34));
+    // 생활 분류 34종 = 4페이지(2026-10-14 공식 TotalCount), 전투 용품은 시험값 15종 = 2페이지.
+    when(lifeMaterials.fetchCategoryPage(eq(90000), anyInt()))
+        .thenAnswer(invocation -> page(invocation.getArgument(1), 34));
+    when(lifeMaterials.fetchCategoryPage(eq(60000), anyInt()))
+        .thenAnswer(invocation -> page(invocation.getArgument(1), 15));
     var capped = warmup("key", List.of(), 3);
     capped.warmLifeMaterialPages();
-    verify(lifeMaterials, times(3)).fetchLifePage(anyInt());
-    verify(lifeMaterials, never()).saveLife(any(), any());
+    verify(lifeMaterials, times(3)).fetchCategoryPage(anyInt(), anyInt());
+    verify(lifeMaterials, never()).saveCategoryScan(anyInt(), any(), any());
 
     var warmup = warmup("key", List.of());
     warmup.warmLifeMaterialPages();
-    var scan =
+    var life =
         org.mockito.ArgumentCaptor.forClass(
             com.loakraken.market.application.LifeMaterialScan.class);
-    verify(lifeMaterials).saveLife(scan.capture(), eq(Duration.ofMinutes(30)));
-    assertThat(scan.getValue().items()).hasSize(34);
-    verify(lifeMaterials, never()).fetchLifePage(5);
+    verify(lifeMaterials).saveCategoryScan(eq(90000), life.capture(), eq(Duration.ofMinutes(30)));
+    assertThat(life.getValue().items()).hasSize(34);
+    assertThat(life.getValue().completeCategories()).containsExactly(90000);
+    var battle =
+        org.mockito.ArgumentCaptor.forClass(
+            com.loakraken.market.application.LifeMaterialScan.class);
+    verify(lifeMaterials).saveCategoryScan(eq(60000), battle.capture(), eq(Duration.ofMinutes(30)));
+    assertThat(battle.getValue().items()).hasSize(15);
+    assertThat(battle.getValue().completeCategories()).containsExactly(60000);
+    verify(lifeMaterials, never()).fetchCategoryPage(90000, 5);
+    verify(lifeMaterials, never()).fetchCategoryPage(60000, 3);
     // 사용자 몫(reserve)을 남기는 쪽으로만 부른다.
-    verify(gate, atLeast(4)).withReserve(eq(MarketHistoryWarmup.RESERVE), any());
+    verify(gate, atLeast(6)).withReserve(eq(MarketHistoryWarmup.RESERVE), any());
     org.mockito.Mockito.clearInvocations(lifeMaterials);
     clock.now = clock.now.plus(Duration.ofMinutes(5));
     warmup.warmLifeMaterialPages();

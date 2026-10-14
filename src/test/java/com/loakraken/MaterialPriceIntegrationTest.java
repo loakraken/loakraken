@@ -69,8 +69,12 @@ class MaterialPriceIntegrationTest {
     assertThat(json.at("/data/items/2/status").asText()).isEqualTo("NOT_FOUND");
     assertThat(json.at("/data/items/2/unitPriceGold").isNull()).isTrue();
     assertThat(json.at("/data/items/2/observedAt").isString()).isTrue();
-    // 없는 재료는 강화 재료·생활 두 분류에서 찾아보고 NOT_FOUND다.
-    verify(prices, times(4)).fetch(eq(MarketSource.ACTIVE_LISTING), any());
+    // 없는 재료는 강화 재료·생활·전투 용품 세 분류에서 찾아보고 NOT_FOUND다.
+    verify(prices, times(5)).fetch(eq(MarketSource.ACTIVE_LISTING), any());
+    verify(prices)
+        .fetch(
+            any(),
+            argThat(search -> search.itemName().equals("없는 재료") && search.categoryCode() == 60000));
     verify(prices)
         .fetch(
             any(),

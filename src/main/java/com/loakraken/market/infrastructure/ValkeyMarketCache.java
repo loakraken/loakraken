@@ -29,7 +29,10 @@ class ValkeyMarketCache implements MarketCache {
   private static final String OPTIONS_KEY = "market:v1:options";
   private static final String RELIC_BOOKS_KEY = "market:v1:relic-books";
   private static final String REFINING_MATERIALS_KEY = "market:v1:refining-materials";
-  private static final String LIFE_MATERIALS_KEY = "market:v1:life-materials";
+
+  /** 뒤에 분류 코드를 붙인다(생활 90000·전투 용품 60000). */
+  private static final String LIFE_MATERIALS_KEY = "market:v1:category-scan:";
+
   private final StringRedisTemplate redis;
   private final JsonMapper mapper;
   private final MarketCacheProperties properties;
@@ -172,10 +175,11 @@ class ValkeyMarketCache implements MarketCache {
   }
 
   @Override
-  public Optional<com.loakraken.market.application.LifeMaterialScan> findLifeMaterials() {
+  public Optional<com.loakraken.market.application.LifeMaterialScan> findLifeMaterials(
+      int category) {
     // 만료는 키 TTL(예열 주기 × 3)로 정한다.
     return read(
-        LIFE_MATERIALS_KEY,
+        LIFE_MATERIALS_KEY + category,
         com.loakraken.market.application.LifeMaterialScan.class,
         Kind.LIFE_MATERIALS,
         scan -> true);
@@ -183,8 +187,8 @@ class ValkeyMarketCache implements MarketCache {
 
   @Override
   public void saveLifeMaterials(
-      com.loakraken.market.application.LifeMaterialScan scan, Duration ttl) {
-    write(LIFE_MATERIALS_KEY, scan, ttl, Kind.LIFE_MATERIALS);
+      int category, com.loakraken.market.application.LifeMaterialScan scan, Duration ttl) {
+    write(LIFE_MATERIALS_KEY + category, scan, ttl, Kind.LIFE_MATERIALS);
   }
 
   private static String boardKey(MarketTab tab, Integer tier) {

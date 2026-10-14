@@ -67,7 +67,8 @@ class MarketHistoryWarmup {
   private final LifeMaterialWarmupProperties lifeMaterialProperties;
   private final java.util.concurrent.atomic.AtomicLong lastLifeMaterialSuccess =
       new java.util.concurrent.atomic.AtomicLong();
-  private Instant lifeMaterialDueAt = Instant.EPOCH;
+  // 분류 코드 → 다음 스캔 시각(리더 한 곳에서만 돈다).
+  private final java.util.Map<Integer, Instant> lifeMaterialDueAt = new java.util.HashMap<>();
   private final org.springframework.context.ApplicationEventPublisher events;
 
   MarketHistoryWarmup(
@@ -345,44 +346,70 @@ class MarketHistoryWarmup {
     }
   }
 
+  /**
+   * 예열 분류(생활 90000·전투 용품 60000)마다 따로 받고 따로 저장한다(분류마다 다음 시각). 한 분류를 끝까지 받지 못하면(분당 상한·실패) 그 분류만 다음 틱에
+   * 처음부터 다시 받는다. TotalCount만큼 다 받으면 그 분류를 '다 받음'으로 저장해, 재료 시세가 거기 없는 이름을 다시 검색하지 않게 한다.
+   */
   synchronized void warmLifeMaterialPages() {
     if (!lifeMaterialProperties.enabled() || lostArk.apiKey().isBlank()) return;
     var now = clock.instant();
-    if (now.isBefore(lifeMaterialDueAt)) return;
+    if (com.loakraken.market.application.MaterialUnitPriceService.SCANNED_CATEGORIES.stream()
+        .allMatch(
+            category -> now.isBefore(lifeMaterialDueAt.getOrDefault(category, Instant.EPOCH))))
+      return;
     if (!lease.hold(LEASE, properties.interval().plusMinutes(1))) return;
+    for (var category :
+        com.loakraken.market.application.MaterialUnitPriceService.SCANNED_CATEGORIES) {
+      if (now.isBefore(lifeMaterialDueAt.getOrDefault(category, Instant.EPOCH))) continue;
+      if (!warmCategory(category, now)) return;
+    }
+  }
+
+  /** 한 분류를 끝까지 받아 저장한다. 멈췄으면 false(이번 틱의 나머지 분류도 건너뜀). */
+  private boolean warmCategory(int category, Instant now) {
     var items = new java.util.ArrayList<com.loakraken.market.domain.MarketPrice>();
     Instant observedAt = null;
+    int total = -1;
     for (int page = 1; page <= lifeMaterialProperties.maxPages(); page++) {
       if (!allowCall()) {
         recordLifeMaterials(Outcome.CAPPED);
-        return;
+        return false;
       }
       int pageNo = page;
       try {
-        var result = gate.withReserve(RESERVE, () -> lifeMaterials.fetchLifePage(pageNo));
+        var result =
+            gate.withReserve(RESERVE, () -> lifeMaterials.fetchCategoryPage(category, pageNo));
         items.addAll(result.page().items());
+        total = result.page().totalCount();
         if (observedAt == null || result.observedAt().isBefore(observedAt))
           observedAt = result.observedAt();
-        if ((long) pageNo * 10 >= result.page().totalCount()) break;
+        if ((long) pageNo * 10 >= total) break;
       } catch (BusinessException exception) {
-        recordLifeMaterials(failure("생활 재료 시세", "page=" + pageNo, exception));
-        return;
+        recordLifeMaterials(
+            failure("분류 시세", "category=" + category + ", page=" + pageNo, exception));
+        return false;
       } catch (RuntimeException exception) {
         recordLifeMaterials(Outcome.FAILED);
         log.warn(
-            "생활 재료 시세 예열에 실패했습니다. page={}, exceptionType={}",
+            "분류 시세 예열에 실패했습니다. category={}, page={}, exceptionType={}",
+            category,
             pageNo,
             exception.getClass().getName());
-        return;
+        return false;
       }
     }
-    lifeMaterials.saveLife(
+    boolean complete = total >= 0 && items.size() >= total;
+    lifeMaterials.saveCategoryScan(
+        category,
         new com.loakraken.market.application.LifeMaterialScan(
-            observedAt == null ? now : observedAt, items),
+            observedAt == null ? now : observedAt,
+            items,
+            complete ? java.util.List.of(category) : java.util.List.of()),
         lifeMaterialProperties.cacheTtl());
     recordLifeMaterials(Outcome.REFRESHED);
     lastLifeMaterialSuccess.set(now.getEpochSecond());
-    lifeMaterialDueAt = now.plus(lifeMaterialProperties.interval());
+    lifeMaterialDueAt.put(category, now.plus(lifeMaterialProperties.interval()));
+    return true;
   }
 
   private void recordLifeMaterials(Outcome outcome) {

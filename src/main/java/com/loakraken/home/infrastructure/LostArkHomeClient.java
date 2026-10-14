@@ -54,7 +54,7 @@ class LostArkHomeClient implements HomeSourcePort {
 
   private <T> T get(Endpoint endpoint, String path, Class<T> type) {
     if (properties.apiKey().isBlank()) throw error(LostArkErrorCode.LOST_ARK_NOT_CONFIGURED);
-    gate.acquire();
+    gate.acquire(endpoint);
     var sample = metrics.startApi();
     var outcome = new AtomicReference<>(ApiOutcome.ERROR);
     try {

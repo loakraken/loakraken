@@ -208,15 +208,85 @@ public final class ClassBuilds {
     var counts = new HashMap<Integer, Long>();
     long known = 0;
     for (var sample : samples) {
-      if (sample.gems() == null) continue;
-      for (var gem : sample.gems()) {
-        if (gem == null || gem.level() == null || !mode.equals(gem.mode())) continue;
-        if (!GEM_KINDS.contains(gem.kind())) continue;
+      var levels = gemLevels(sample, mode);
+      if (levels == null) continue;
+      for (var level : levels) {
         known++;
-        counts.merge(gem.level(), 1L, Long::sum);
+        counts.merge(level, 1L, Long::sum);
       }
     }
     return section(counts, known, limit, Comparator.reverseOrder());
+  }
+
+  /** 한 캐릭터의 그 효과 종류 4티어 보석 레벨(높은 순). 보석을 못 읽었으면 null, 없으면 빈 목록. */
+  static List<Integer> gemLevels(Sample sample, String mode) {
+    if (sample.gems() == null) return null;
+    var levels = new ArrayList<Integer>();
+    for (var gem : sample.gems()) {
+      if (gem == null || gem.level() == null || !mode.equals(gem.mode())) continue;
+      if (!GEM_KINDS.contains(gem.kind())) continue;
+      levels.add(gem.level());
+    }
+    levels.sort(Comparator.reverseOrder());
+    return List.copyOf(levels);
+  }
+
+  /**
+   * 캐릭터 한 명이 {@link #aggregate}의 어느 칸에 드는지(M26 2단계). 집계와 같은 키 함수를 그대로 써서 웹이 규칙을 다시 구현하지 않게 한다. 값이
+   * null이면 그 항목의 분모에서 빠지는 캐릭터다(못 읽음). 팔찌는 아이템 레벨이 braceletItemLevelMin 미만이면
+   * braceletEligible=false이고 값이 null이다.
+   */
+  public record CharacterCells(
+      String classEngraving,
+      List<String> engravingCombo,
+      List<String> engravings,
+      Integer evolutionPoints,
+      Integer enlightenmentPoints,
+      Integer leapPoints,
+      List<Integer> damageGems,
+      List<Integer> cooldownGems,
+      CardSet cardSet,
+      TopStat topStat,
+      boolean braceletEligible,
+      List<String> braceletStats) {}
+
+  public static CharacterCells cellsOf(Sample sample, BigDecimal braceletItemLevelMin) {
+    boolean braceletEligible =
+        sample.itemLevel() != null && sample.itemLevel().compareTo(braceletItemLevelMin) >= 0;
+    var combo = combo(sample);
+    return new CharacterCells(
+        sample.classEngraving(),
+        combo,
+        combo,
+        point(sample, Points::evolution),
+        point(sample, Points::enlightenment),
+        point(sample, Points::leap),
+        gemLevels(sample, "DAMAGE"),
+        gemLevels(sample, "COOLDOWN"),
+        cardSet(sample),
+        topStat(sample),
+        braceletEligible,
+        braceletEligible ? distinct(braceletStats(sample)) : null);
+  }
+
+  /** 집계(multi)는 한 캐릭터의 같은 값을 한 번만 센다. 칸도 같게 겹친 값을 뺀다(순서 유지). */
+  private static List<String> distinct(List<String> values) {
+    return values == null ? null : List.copyOf(new java.util.LinkedHashSet<>(values));
+  }
+
+  /** 한 캐릭터의 주력 특성. tie는 가장 큰 값이 둘 이상이라 고정 순서의 앞 특성을 골랐다는 뜻이다. */
+  public record TopStat(String stat, boolean tie) {}
+
+  /** 6종 중 값이 가장 큰 특성 하나. 같은 값이면 고정 순서의 앞 특성. 6종 중 하나라도 못 읽었으면 null. */
+  static TopStat topStat(Sample sample) {
+    if (sample.stats() == null) return null;
+    var values = sample.stats().values();
+    if (values.contains(null)) return null;
+    int best = 0;
+    for (int i = 1; i < values.size(); i++) if (values.get(i) > values.get(best)) best = i;
+    int max = values.get(best);
+    return new TopStat(
+        COMBAT_STATS.get(best), values.stream().filter(value -> value == max).count() > 1);
   }
 
   /** 6종 중 값이 가장 큰 특성 하나. 같은 값이면 고정 순서의 앞 특성이고 ties로 센다. 6종 중 하나라도 못 읽었으면 분모에서 뺀다. */
@@ -225,15 +295,11 @@ public final class ClassBuilds {
     long known = 0;
     long ties = 0;
     for (var sample : samples) {
-      if (sample.stats() == null) continue;
-      var values = sample.stats().values();
-      if (values.contains(null)) continue;
-      int best = 0;
-      for (int i = 1; i < values.size(); i++) if (values.get(i) > values.get(best)) best = i;
-      int max = values.get(best);
-      if (values.stream().filter(value -> value == max).count() > 1) ties++;
+      var top = topStat(sample);
+      if (top == null) continue;
+      if (top.tie()) ties++;
       known++;
-      counts.merge(COMBAT_STATS.get(best), 1L, Long::sum);
+      counts.merge(top.stat(), 1L, Long::sum);
     }
     var section = section(counts, known, COMBAT_STATS.size(), ClassBuilds::compareStatsThenNames);
     return new TopStatSection(known, ties, section.hidden(), section.cells());

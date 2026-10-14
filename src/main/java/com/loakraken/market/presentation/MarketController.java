@@ -166,9 +166,11 @@ public class MarketController {
   @Operation(
       summary = "재료 이름별 1개당 시세",
       description =
-          "재료 이름(최대 20개)마다 강화 재료 분류의 현재 판매 목록 첫 페이지에서 이름이 정확히 같은 상품을 찾아 선택한 기준 가격 ÷ 묶음 수로 1개당 골드를 계산합니다. "
+          "재료 이름(최대 20개)마다 이름이 정확히 같은 거래소 상품을 찾아 선택한 기준 가격 ÷ 묶음 수로 1개당 골드를 계산합니다. "
+              + "먼저 서버 예열 시세(T4 재련 재료·추가 재료, 생활 분류 전체)에서 찾고, 없으면 강화 재료 분류 → 생활 분류 현재 판매 목록(분류마다 최대 3페이지)을 검색합니다. "
               + "운명의 파편은 운명의 파편 주머니(소 1,000·중 2,000·대 3,000개, 공식 Tooltip)를 파편 1개당 가격으로 바꿔 가장 싼 주머니를 고릅니다. "
-              + "이름별 검색 페이지를 기존 30초 캐시·공유 호출 예산 안에서 조회합니다. 재련 계획의 재료 이름을 그대로 넣을 수 있습니다.")
+              + "예열 시세에 없는 이름이 있는 요청은 클라이언트당 분당 재료 시세 한도에 한 번 세고(넘으면 429 CLIENT_RATE_LIMITED), 검색은 요청당 상한까지만 하며 넘거나 공유 호출 예산이 모자라면 그 이름은 PRICE_UNAVAILABLE입니다. "
+              + "재련 계획의 재료 이름을 그대로 넣을 수 있습니다.")
   @io.swagger.v3.oas.annotations.responses.ApiResponse(
       responseCode = "415",
       description = "UNSUPPORTED_MEDIA_TYPE",
@@ -179,6 +181,6 @@ public class MarketController {
         MarketSuccessCode.MATERIAL_PRICE_SUCCESS,
         MaterialPriceResponse.from(
             request.priceBasis(),
-            unitPrices.prices(request.priceBasis(), request.normalizedNames())));
+            unitPrices.requestPrices(request.priceBasis(), request.normalizedNames())));
   }
 }

@@ -29,6 +29,7 @@ class ValkeyMarketCache implements MarketCache {
   private static final String OPTIONS_KEY = "market:v1:options";
   private static final String RELIC_BOOKS_KEY = "market:v1:relic-books";
   private static final String REFINING_MATERIALS_KEY = "market:v1:refining-materials";
+  private static final String LIFE_MATERIALS_KEY = "market:v1:life-materials";
   private final StringRedisTemplate redis;
   private final JsonMapper mapper;
   private final MarketCacheProperties properties;
@@ -168,6 +169,22 @@ class ValkeyMarketCache implements MarketCache {
   public void saveRefiningMaterials(
       com.loakraken.market.application.RefiningMaterialScan scan, Duration ttl) {
     write(REFINING_MATERIALS_KEY, scan, ttl, Kind.REFINING_MATERIALS);
+  }
+
+  @Override
+  public Optional<com.loakraken.market.application.LifeMaterialScan> findLifeMaterials() {
+    // 만료는 키 TTL(예열 주기 × 3)로 정한다.
+    return read(
+        LIFE_MATERIALS_KEY,
+        com.loakraken.market.application.LifeMaterialScan.class,
+        Kind.LIFE_MATERIALS,
+        scan -> true);
+  }
+
+  @Override
+  public void saveLifeMaterials(
+      com.loakraken.market.application.LifeMaterialScan scan, Duration ttl) {
+    write(LIFE_MATERIALS_KEY, scan, ttl, Kind.LIFE_MATERIALS);
   }
 
   private static String boardKey(MarketTab tab, Integer tier) {

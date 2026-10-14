@@ -63,6 +63,11 @@ class MarketHistoryWarmup {
   private final java.util.concurrent.atomic.AtomicLong lastRefiningMaterialSuccess =
       new java.util.concurrent.atomic.AtomicLong();
   private Instant refiningMaterialDueAt = Instant.EPOCH;
+  private final com.loakraken.market.application.MaterialUnitPriceService lifeMaterials;
+  private final LifeMaterialWarmupProperties lifeMaterialProperties;
+  private final java.util.concurrent.atomic.AtomicLong lastLifeMaterialSuccess =
+      new java.util.concurrent.atomic.AtomicLong();
+  private Instant lifeMaterialDueAt = Instant.EPOCH;
   private final org.springframework.context.ApplicationEventPublisher events;
 
   MarketHistoryWarmup(
@@ -78,8 +83,12 @@ class MarketHistoryWarmup {
       RelicBookWarmupProperties relicBookProperties,
       com.loakraken.market.application.RefiningMaterialPriceService refiningMaterials,
       RefiningMaterialWarmupProperties refiningMaterialProperties,
+      com.loakraken.market.application.MaterialUnitPriceService lifeMaterials,
+      LifeMaterialWarmupProperties lifeMaterialProperties,
       org.springframework.context.ApplicationEventPublisher events) {
     this.events = events;
+    this.lifeMaterials = lifeMaterials;
+    this.lifeMaterialProperties = lifeMaterialProperties;
     this.markets = markets;
     this.boards = boards;
     this.clock = clock;
@@ -96,6 +105,7 @@ class MarketHistoryWarmup {
     gauge(registry, "warmup_board", lastBoardSuccess);
     gauge(registry, "warmup_relic_books", lastRelicBookSuccess);
     gauge(registry, "warmup_refining_materials", lastRefiningMaterialSuccess);
+    gauge(registry, "warmup_life_materials", lastLifeMaterialSuccess);
   }
 
   /**
@@ -156,8 +166,7 @@ class MarketHistoryWarmup {
                 ? Outcome.REFRESHED
                 : Outcome.NOT_FOUND);
       } catch (BusinessException exception) {
-        record(Outcome.FAILED);
-        log.warn("시세 이력 예열에 실패했습니다. itemId={}, code={}", itemId, exception.errorCode().code());
+        record(failure("시세 이력", "itemId=" + itemId, exception));
         if (exception.errorCode() == LostArkErrorCode.LOST_ARK_RATE_LIMITED
             || exception.errorCode() == LostArkErrorCode.LOST_ARK_GATE_UNAVAILABLE) return;
       } catch (RuntimeException exception) {
@@ -198,8 +207,7 @@ class MarketHistoryWarmup {
           publish(refreshed.observedAt(), properties.boardInterval(), refreshed.page().items());
         lastBoardSuccess.set(clock.instant().getEpochSecond());
       } catch (BusinessException exception) {
-        recordBoard(Outcome.FAILED);
-        log.warn("시세 보드 예열에 실패했습니다. tab={}, code={}", tab, exception.errorCode().code());
+        recordBoard(failure("시세 보드", "tab=" + tab, exception));
         if (exception.errorCode() == LostArkErrorCode.LOST_ARK_RATE_LIMITED
             || exception.errorCode() == LostArkErrorCode.LOST_ARK_GATE_UNAVAILABLE) return;
       } catch (RuntimeException exception) {
@@ -255,8 +263,7 @@ class MarketHistoryWarmup {
         relicPage = page;
         if (relicTotal == 0) relicObservedAt = result.observedAt();
       } catch (BusinessException exception) {
-        recordRelic(Outcome.FAILED);
-        log.warn("각인서 시세 예열에 실패했습니다. page={}, code={}", page, exception.errorCode().code());
+        recordRelic(failure("각인서 시세", "page=" + page, exception));
         // 다음 틱에 같은 페이지부터 다시 받는다.
         return;
       } catch (RuntimeException exception) {
@@ -305,12 +312,8 @@ class MarketHistoryWarmup {
             observedAt = result.observedAt();
           if ((long) pageNo * 10 >= result.page().totalCount()) break;
         } catch (BusinessException exception) {
-          recordRefiningMaterials(Outcome.FAILED);
-          log.warn(
-              "재련 재료 시세 예열에 실패했습니다. tab={}, page={}, code={}",
-              tab,
-              pageNo,
-              exception.errorCode().code());
+          recordRefiningMaterials(
+              failure("재련 재료 시세", "tab=" + tab + ", page=" + pageNo, exception));
           return;
         }
       }
@@ -326,6 +329,71 @@ class MarketHistoryWarmup {
     recordRefiningMaterials(Outcome.REFRESHED);
     lastRefiningMaterialSuccess.set(now.getEpochSecond());
     refiningMaterialDueAt = now.plus(refiningMaterialProperties.interval());
+  }
+
+  /**
+   * 생활 분류 시세(재료 시세 P0): 주기(기본 10분)마다 생활 분류 전체(2026-10-14 34종, 4페이지)를 받아 캐시(TTL = 주기 × 3)에 둔다. 재료 시세
+   * API가 목재·철광석·유물 같은 생활 재료를 공식 호출 없이 답한다. 분당 상한에 걸리거나 실패하면 이번 스캔을 버리고 다음 틱에 처음부터 받는다.
+   */
+  @Scheduled(fixedDelayString = "60s", initialDelayString = "${market.warmup.initial-delay:20s}")
+  void warmLifeMaterials() {
+    org.slf4j.MDC.put("entryPoint", "warmup");
+    try {
+      warmLifeMaterialPages();
+    } finally {
+      org.slf4j.MDC.remove("entryPoint");
+    }
+  }
+
+  synchronized void warmLifeMaterialPages() {
+    if (!lifeMaterialProperties.enabled() || lostArk.apiKey().isBlank()) return;
+    var now = clock.instant();
+    if (now.isBefore(lifeMaterialDueAt)) return;
+    if (!lease.hold(LEASE, properties.interval().plusMinutes(1))) return;
+    var items = new java.util.ArrayList<com.loakraken.market.domain.MarketPrice>();
+    Instant observedAt = null;
+    for (int page = 1; page <= lifeMaterialProperties.maxPages(); page++) {
+      if (!allowCall()) {
+        recordLifeMaterials(Outcome.CAPPED);
+        return;
+      }
+      int pageNo = page;
+      try {
+        var result = gate.withReserve(RESERVE, () -> lifeMaterials.fetchLifePage(pageNo));
+        items.addAll(result.page().items());
+        if (observedAt == null || result.observedAt().isBefore(observedAt))
+          observedAt = result.observedAt();
+        if ((long) pageNo * 10 >= result.page().totalCount()) break;
+      } catch (BusinessException exception) {
+        recordLifeMaterials(failure("생활 재료 시세", "page=" + pageNo, exception));
+        return;
+      } catch (RuntimeException exception) {
+        recordLifeMaterials(Outcome.FAILED);
+        log.warn(
+            "생활 재료 시세 예열에 실패했습니다. page={}, exceptionType={}",
+            pageNo,
+            exception.getClass().getName());
+        return;
+      }
+    }
+    lifeMaterials.saveLife(
+        new com.loakraken.market.application.LifeMaterialScan(
+            observedAt == null ? now : observedAt, items),
+        lifeMaterialProperties.cacheTtl());
+    recordLifeMaterials(Outcome.REFRESHED);
+    lastLifeMaterialSuccess.set(now.getEpochSecond());
+    lifeMaterialDueAt = now.plus(lifeMaterialProperties.interval());
+  }
+
+  private void recordLifeMaterials(Outcome outcome) {
+    registry
+        .counter(
+            "loakraken.market.warmup",
+            "outcome",
+            outcome.name().toLowerCase(Locale.ROOT),
+            "target",
+            "life_materials")
+        .increment();
   }
 
   private void recordRefiningMaterials(Outcome outcome) {
@@ -392,10 +460,30 @@ class MarketHistoryWarmup {
         .increment();
   }
 
+  /**
+   * 예열 실패를 로그로 남기고 결과를 고른다. 우리 관문이 사용자 몫을 남기려고·공식 한도 대기로·동시 상한으로 미룬 것은 실패가 아니라 DEFERRED(INFO)이고, 공식
+   * 서버의 429와 그 밖의 오류는 FAILED(WARN)다. 둘 다 다음 주기에 다시 받는다. 로그에는 이유(reason)를 남긴다.
+   */
+  private static Outcome failure(String job, String detail, BusinessException exception) {
+    var reason = com.loakraken.common.lostark.LostArkRateLimitedException.reasonOf(exception);
+    boolean deferred =
+        exception instanceof com.loakraken.common.lostark.LostArkRateLimitedException limited
+            && limited.limitCause()
+                != com.loakraken.common.lostark.LostArkRateLimitedException.Cause.UPSTREAM_429;
+    if (deferred) {
+      log.info("{} 예열을 관문이 미뤘습니다(다음 주기에 다시). {}, reason={}", job, detail, reason);
+      return Outcome.DEFERRED;
+    }
+    log.warn(
+        "{} 예열에 실패했습니다. {}, code={}, reason={}", job, detail, exception.errorCode().code(), reason);
+    return Outcome.FAILED;
+  }
+
   enum Outcome {
     REFRESHED,
     NOT_FOUND,
     FAILED,
+    DEFERRED,
     CAPPED
   }
 }

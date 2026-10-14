@@ -44,4 +44,11 @@ public interface MarketCache {
   }
 
   default void saveRefiningMaterials(RefiningMaterialScan scan, java.time.Duration ttl) {}
+
+  /** 생활 분류 전체 시세 스캔(재료 시세 예열). 키 TTL이 지났으면 없다. */
+  default Optional<LifeMaterialScan> findLifeMaterials() {
+    return Optional.empty();
+  }
+
+  default void saveLifeMaterials(LifeMaterialScan scan, java.time.Duration ttl) {}
 }

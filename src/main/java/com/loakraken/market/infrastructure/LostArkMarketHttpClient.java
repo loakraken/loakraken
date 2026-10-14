@@ -95,7 +95,9 @@ class LostArkMarketHttpClient {
                 gate.observe(response.getHeaders(), status == 429);
                 if (status == 429) {
                   outcome.set(ApiOutcome.RATE_LIMITED);
-                  throw error(LostArkErrorCode.LOST_ARK_RATE_LIMITED);
+                  // 관문이 미룬 것과 구분되게 이유를 붙인다(응답 코드는 같은 LOST_ARK_RATE_LIMITED).
+                  throw new com.loakraken.common.lostark.LostArkRateLimitedException(
+                      com.loakraken.common.lostark.LostArkRateLimitedException.Cause.UPSTREAM_429);
                 }
                 if (status == 404) outcome.set(ApiOutcome.NOT_FOUND);
                 if (status != 200) throw error(LostArkErrorCode.LOST_ARK_API_ERROR);

@@ -44,6 +44,10 @@ class MarketHistoryWarmupTest {
       mock(com.loakraken.market.application.RefiningMaterialPriceService.class);
   private RefiningMaterialWarmupProperties refiningMaterialProperties =
       new RefiningMaterialWarmupProperties(false, Duration.ofMinutes(10), 5);
+  private final com.loakraken.market.application.MaterialUnitPriceService lifeMaterials =
+      mock(com.loakraken.market.application.MaterialUnitPriceService.class);
+  private LifeMaterialWarmupProperties lifeMaterialProperties =
+      new LifeMaterialWarmupProperties(false, Duration.ofMinutes(10), 6);
 
   {
     when(lease.hold(any(), any())).thenReturn(true);
@@ -244,7 +248,103 @@ class MarketHistoryWarmupTest {
         relicProperties,
         refiningMaterials,
         refiningMaterialProperties,
+        lifeMaterials,
+        lifeMaterialProperties,
         events);
+  }
+
+  @Test
+  void 관문이_미룬_예열은_DEFERRED로_공식_429는_FAILED로_이유와_함께_남기고_다음_주기에_다시_채운다() {
+    lifeMaterialProperties = new LifeMaterialWarmupProperties(true, Duration.ofMinutes(10), 6);
+    when(lifeMaterials.fetchLifePage(anyInt()))
+        .thenAnswer(invocation -> page(invocation.getArgument(0), 34));
+    var logger =
+        (ch.qos.logback.classic.Logger)
+            org.slf4j.LoggerFactory.getLogger(MarketHistoryWarmup.class);
+    var appender =
+        new ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent>();
+    appender.start();
+    logger.addAppender(appender);
+    try {
+      var warmup = warmup("key", List.of());
+      // 1주기: 관문이 사용자 몫(reserve)을 남기려고 미룸 → 저장 없음, DEFERRED, 이유 GATE_BUDGET.
+      doThrow(
+              new com.loakraken.common.lostark.LostArkRateLimitedException(
+                  com.loakraken.common.lostark.LostArkRateLimitedException.Cause.GATE_BUDGET))
+          .when(gate)
+          .withReserve(anyInt(), any());
+      warmup.warmLifeMaterialPages();
+      verify(lifeMaterials, never()).saveLife(any(), any());
+      assertThat(lifeCount("deferred")).isEqualTo(1);
+      assertThat(lifeCount("failed")).isZero();
+      // 2주기(1분 뒤): 공식 서버 429 → FAILED, 이유 UPSTREAM_429.
+      doThrow(
+              new com.loakraken.common.lostark.LostArkRateLimitedException(
+                  com.loakraken.common.lostark.LostArkRateLimitedException.Cause.UPSTREAM_429))
+          .when(gate)
+          .withReserve(anyInt(), any());
+      clock.now = clock.now.plus(Duration.ofMinutes(1));
+      warmup.warmLifeMaterialPages();
+      verify(lifeMaterials, never()).saveLife(any(), any());
+      assertThat(lifeCount("failed")).isEqualTo(1);
+      assertThat(appender.list)
+          .extracting(ch.qos.logback.classic.spi.ILoggingEvent::getFormattedMessage)
+          .anyMatch(line -> line.contains("관문이 미뤘습니다") && line.contains("reason=GATE_BUDGET"))
+          .anyMatch(line -> line.contains("실패했습니다") && line.contains("reason=UPSTREAM_429"));
+      // 3주기: 관문이 허가하면 미뤘던 생활 시세를 다시 채운다(주기 대기 없이 다음 틱).
+      doAnswer(invocation -> invocation.<java.util.function.Supplier<?>>getArgument(1).get())
+          .when(gate)
+          .withReserve(anyInt(), any());
+      clock.now = clock.now.plus(Duration.ofMinutes(1));
+      warmup.warmLifeMaterialPages();
+      verify(lifeMaterials).saveLife(any(), eq(Duration.ofMinutes(30)));
+      assertThat(lifeCount("refreshed")).isEqualTo(1);
+    } finally {
+      logger.detachAppender(appender);
+    }
+  }
+
+  private double lifeCount(String outcome) {
+    var counter =
+        registry
+            .find("loakraken.market.warmup")
+            .tag("target", "life_materials")
+            .tag("outcome", outcome)
+            .counter();
+    return counter == null ? 0 : counter.count();
+  }
+
+  @Test
+  void 생활_재료_예열은_플래그가_꺼져_있으면_부르지_않는다() {
+    warmup("key", List.of()).warmLifeMaterialPages();
+    verifyNoInteractions(lifeMaterials);
+  }
+
+  @Test
+  void 생활_재료_예열은_생활_분류를_끝까지_받아_주기의_3배_TTL로_저장하고_주기_전에는_다시_부르지_않는다() {
+    lifeMaterialProperties = new LifeMaterialWarmupProperties(true, Duration.ofMinutes(10), 6);
+    // 생활 분류 34종 = 4페이지(2026-10-14 공식 TotalCount).
+    when(lifeMaterials.fetchLifePage(anyInt()))
+        .thenAnswer(invocation -> page(invocation.getArgument(0), 34));
+    var capped = warmup("key", List.of(), 3);
+    capped.warmLifeMaterialPages();
+    verify(lifeMaterials, times(3)).fetchLifePage(anyInt());
+    verify(lifeMaterials, never()).saveLife(any(), any());
+
+    var warmup = warmup("key", List.of());
+    warmup.warmLifeMaterialPages();
+    var scan =
+        org.mockito.ArgumentCaptor.forClass(
+            com.loakraken.market.application.LifeMaterialScan.class);
+    verify(lifeMaterials).saveLife(scan.capture(), eq(Duration.ofMinutes(30)));
+    assertThat(scan.getValue().items()).hasSize(34);
+    verify(lifeMaterials, never()).fetchLifePage(5);
+    // 사용자 몫(reserve)을 남기는 쪽으로만 부른다.
+    verify(gate, atLeast(4)).withReserve(eq(MarketHistoryWarmup.RESERVE), any());
+    org.mockito.Mockito.clearInvocations(lifeMaterials);
+    clock.now = clock.now.plus(Duration.ofMinutes(5));
+    warmup.warmLifeMaterialPages();
+    verifyNoInteractions(lifeMaterials);
   }
 
   @Test

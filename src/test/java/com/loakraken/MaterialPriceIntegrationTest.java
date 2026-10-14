@@ -69,9 +69,164 @@ class MaterialPriceIntegrationTest {
     assertThat(json.at("/data/items/2/status").asText()).isEqualTo("NOT_FOUND");
     assertThat(json.at("/data/items/2/unitPriceGold").isNull()).isTrue();
     assertThat(json.at("/data/items/2/observedAt").isString()).isTrue();
-    verify(prices, times(3)).fetch(eq(MarketSource.ACTIVE_LISTING), any());
+    // 없는 재료는 강화 재료·생활 두 분류에서 찾아보고 NOT_FOUND다.
+    verify(prices, times(4)).fetch(eq(MarketSource.ACTIVE_LISTING), any());
+    verify(prices)
+        .fetch(
+            any(),
+            argThat(search -> search.itemName().equals("없는 재료") && search.categoryCode() == 50000));
+    verify(prices)
+        .fetch(
+            any(),
+            argThat(search -> search.itemName().equals("없는 재료") && search.categoryCode() == 90000));
     verifyNoInteractions(options);
     ApiContractFixture.write("material-prices.json", response.body());
+  }
+
+  /** 아비도스 제작 화면이 묻는 20개(완성품 2 + 생활 재료 18). */
+  private static final List<String> CRAFT_NAMES =
+      List.of(
+          "아비도스 융화 재료",
+          "상급 아비도스 융화 재료",
+          "아비도스 목재",
+          "부드러운 목재",
+          "목재",
+          "아비도스 철광석",
+          "묵직한 철광석",
+          "철광석",
+          "아비도스 두툼한 생고기",
+          "다듬은 생고기",
+          "두툼한 생고기",
+          "아비도스 태양 잉어",
+          "붉은 살 생선",
+          "생선",
+          "아비도스 유물",
+          "희귀한 유물",
+          "고대 유물",
+          "아비도스 들꽃",
+          "수줍은 들꽃",
+          "들꽃");
+
+  @Test
+  void 생활_재료도_생활_분류에서_정확한_이름으로_찾아_묶음_수량으로_나눈다() throws Exception {
+    // 공식 거래소처럼 분류 안에서 이름 부분 일치·현재 최저가 오름차순·페이지당 10개로 답하는 가짜 목록.
+    var catalog = new java.util.ArrayList<java.util.Map.Entry<Integer, MarketPrice>>();
+    long id = 1;
+    catalog.add(java.util.Map.entry(50000, price(id++, "아비도스 융화 재료", 1, "90", "88")));
+    catalog.add(java.util.Map.entry(50000, price(id++, "상급 아비도스 융화 재료", 1, "130", "126")));
+    for (var name : CRAFT_NAMES.subList(2, CRAFT_NAMES.size()))
+      catalog.add(java.util.Map.entry(90000, price(id++, name, 100, "300", "285")));
+    // 이름이 겹치는 더 싼 품목 10개: '고대 유물'은 2페이지에 있다.
+    for (int i = 0; i < 10; i++)
+      catalog.add(java.util.Map.entry(90000, price(id++, "고대 유물 꾸러미 " + i, 1, "1", "1")));
+    when(prices.fetch(any(), any()))
+        .thenAnswer(
+            invocation -> {
+              MarketSearch search = invocation.getArgument(1);
+              var matched =
+                  catalog.stream()
+                      .filter(entry -> entry.getKey() == search.categoryCode())
+                      .map(java.util.Map.Entry::getValue)
+                      .filter(item -> item.name().contains(search.itemName()))
+                      .sorted(java.util.Comparator.comparing(MarketPrice::currentMinPrice))
+                      .toList();
+              int from = (search.pageNo() - 1) * 10;
+              var items =
+                  matched.subList(
+                      Math.min(from, matched.size()), Math.min(from + 10, matched.size()));
+              return new MarketPage(search.pageNo(), 10, matched.size(), items);
+            });
+    var body =
+        "{\"priceBasis\":\"CURRENT_MIN_PRICE\",\"names\":["
+            + String.join(",", CRAFT_NAMES.stream().map(name -> "\"" + name + "\"").toList())
+            + "]}";
+
+    var json = mapper.readTree(send(body, "application/json").body());
+    var items = json.at("/data/items");
+    assertThat(items.size()).isEqualTo(20);
+    for (var item : items) {
+      assertThat(item.path("status").asText()).as(item.path("name").asText()).isEqualTo("PRICED");
+      assertThat(item.path("sourceItemName").asText()).isEqualTo(item.path("name").asText());
+    }
+    // 융화 재료는 강화 재료 분류에서 1개 묶음, 생활 재료는 100개 묶음 285골드 → 1개당 2.85.
+    assertThat(items.at("/0/unitPriceGold").decimalValue()).isEqualByComparingTo("88");
+    assertThat(items.at("/4/name").asText()).isEqualTo("목재");
+    assertThat(items.at("/4/bundleCount").asInt()).isEqualTo(100);
+    assertThat(items.at("/4/unitPriceGold").decimalValue()).isEqualByComparingTo("2.85");
+    assertThat(items.at("/16/name").asText()).isEqualTo("고대 유물");
+    assertThat(items.at("/16/unitPriceGold").decimalValue()).isEqualByComparingTo("2.85");
+
+    // 한 번 찾은 이름은 그 분류부터 찾는다: 캐시를 비운 두 번째 요청은 이름마다 1번(고대 유물만 2페이지라 2번) = 21번.
+    clearCache();
+    clearInvocations(prices);
+    var again = mapper.readTree(send(body, "application/json").body());
+    assertThat(again.at("/data/items/5/status").asText()).isEqualTo("PRICED");
+    verify(prices, times(21)).fetch(eq(MarketSource.ACTIVE_LISTING), any());
+    verify(prices, never())
+        .fetch(
+            any(),
+            argThat(search -> search.itemName().equals("목재") && search.categoryCode() == 50000));
+  }
+
+  @Test
+  void 캐시가_빈_상태에서_같은_요청_5건이_동시에_와도_같은_검색은_한_번만_공식_조회하고_모두_답한다() throws Exception {
+    var catalog = new java.util.ArrayList<java.util.Map.Entry<Integer, MarketPrice>>();
+    long id = 100;
+    catalog.add(java.util.Map.entry(50000, price(id++, "아비도스 융화 재료", 1, "90", "88")));
+    catalog.add(java.util.Map.entry(50000, price(id++, "상급 아비도스 융화 재료", 1, "130", "126")));
+    for (var name : CRAFT_NAMES.subList(2, CRAFT_NAMES.size()))
+      catalog.add(java.util.Map.entry(90000, price(id++, name, 100, "300", "285")));
+    // 공식 응답이 느린 상황(동시 요청이 겹치게).
+    when(prices.fetch(any(), any()))
+        .thenAnswer(
+            invocation -> {
+              Thread.sleep(40);
+              MarketSearch search = invocation.getArgument(1);
+              var matched =
+                  catalog.stream()
+                      .filter(entry -> entry.getKey() == search.categoryCode())
+                      .map(java.util.Map.Entry::getValue)
+                      .filter(item -> item.name().contains(search.itemName()))
+                      .toList();
+              int from = (search.pageNo() - 1) * 10;
+              return new MarketPage(
+                  search.pageNo(),
+                  10,
+                  matched.size(),
+                  matched.subList(
+                      Math.min(from, matched.size()), Math.min(from + 10, matched.size())));
+            });
+    var body =
+        "{\"priceBasis\":\"CURRENT_MIN_PRICE\",\"names\":["
+            + String.join(",", CRAFT_NAMES.stream().map(name -> "\"" + name + "\"").toList())
+            + "]}";
+    var start = new java.util.concurrent.CountDownLatch(1);
+    try (var pool = java.util.concurrent.Executors.newFixedThreadPool(5)) {
+      var futures = new java.util.ArrayList<java.util.concurrent.Future<HttpResponse<String>>>();
+      for (int i = 0; i < 5; i++)
+        futures.add(
+            pool.submit(
+                () -> {
+                  start.await();
+                  return send(body, "application/json");
+                }));
+      start.countDown();
+      for (var future : futures) {
+        var response = future.get(60, java.util.concurrent.TimeUnit.SECONDS);
+        assertThat(response.statusCode()).as(response.body()).isEqualTo(200);
+        mapper
+            .readTree(response.body())
+            .at("/data/items")
+            .forEach(item -> assertThat(item.path("status").asText()).isEqualTo("PRICED"));
+      }
+    }
+    // 같은 검색(분류·이름·페이지)은 공식 조회가 한 번뿐이다(5건이 겹쳐도 1건 분량).
+    var searches =
+        org.mockito.Mockito.mockingDetails(prices).getInvocations().stream()
+            .filter(invocation -> invocation.getMethod().getName().equals("fetch"))
+            .map(invocation -> (MarketSearch) invocation.getArgument(1))
+            .toList();
+    assertThat(searches).isNotEmpty().doesNotHaveDuplicates();
   }
 
   @ParameterizedTest
@@ -113,6 +268,19 @@ class MaterialPriceIntegrationTest {
 
   private MarketPrice price(long id, String name, int bundle, String recent) {
     return new MarketPrice(id, name, null, null, bundle, null, null, new BigDecimal(recent), null);
+  }
+
+  private MarketPrice price(long id, String name, int bundle, String recent, String currentMin) {
+    return new MarketPrice(
+        id,
+        name,
+        null,
+        null,
+        bundle,
+        null,
+        null,
+        new BigDecimal(recent),
+        new BigDecimal(currentMin));
   }
 
   private HttpResponse<String> send(String body, String type) throws Exception {

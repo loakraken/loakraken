@@ -37,6 +37,7 @@ public class MarketMetrics {
     BOARD_SCAN,
     RELIC_BOOKS,
     REFINING_MATERIALS,
+    LIFE_MATERIALS,
     AUCTION_SEARCH
   }
 

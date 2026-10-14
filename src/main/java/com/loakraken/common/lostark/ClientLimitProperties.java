@@ -18,6 +18,8 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
  * @param botAddressOfficialPerMinute 검색봇 표시 요청 한 주소가 일으킬 수 있는 공식 API 호출 수. 한 주소가 전체 상한을 혼자 다 쓰지
  *     못하도록 botOfficialPerMinute보다 작아야 한다(사람 클라이언트의 officialPerMinute 대신 쓴다)
  * @param alertSubscribePerMinute 시세 알림 구독 만들기(POST /api/v1/alerts/subscriptions) 요청 수(M33)
+ * @param materialPricesPerMinute 재료 시세(POST /api/v1/markets/material-prices) 가운데 예열 캐시에 없는 이름이 있어
+ *     공식 조회를 일으킨 요청 수. 그 안의 공식 조회는 사용자 몫(reserve)을 남기는 쪽으로 요청당 상한까지만 하고 officialPerMinute에는 매기지 않는다
  * @param exemptInternal 원격 주소가 루프백·사설망이면 세지 않는다. 운영에서는 웹이 실제 IP를 X-Forwarded-For로 넘기므로, 사설 주소는 헤더가
  *     빠진 내부 요청이다
  */
@@ -33,12 +35,42 @@ public record ClientLimitProperties(
     @DefaultValue("5") int auctionSearchPerMinute,
     @DefaultValue("20") int botOfficialPerMinute,
     @DefaultValue("5") int botAddressOfficialPerMinute,
-    @DefaultValue("5") int alertSubscribePerMinute) {
+    @DefaultValue("5") int alertSubscribePerMinute,
+    @DefaultValue("10") int materialPricesPerMinute) {
+  @org.springframework.boot.context.properties.bind.ConstructorBinding
   public ClientLimitProperties {
     if (enabled && botPerMinute > generalPerMinute)
       throw new IllegalArgumentException("봇 한도는 일반 클라이언트 한도보다 클 수 없습니다.");
     if (enabled && botAddressOfficialPerMinute >= botOfficialPerMinute)
       throw new IllegalArgumentException("봇 주소별 공식 호출 한도는 모든 봇 합계 상한보다 작아야 합니다.");
+  }
+
+  /** 재료 시세 한도를 기본값(10)으로 둔다(기존 호출·테스트 호환). */
+  public ClientLimitProperties(
+      boolean enabled,
+      int officialPerMinute,
+      int statsPerMinute,
+      int generalPerMinute,
+      int botPerMinute,
+      boolean exemptInternal,
+      int rosterRefreshPerMinute,
+      int auctionSearchPerMinute,
+      int botOfficialPerMinute,
+      int botAddressOfficialPerMinute,
+      int alertSubscribePerMinute) {
+    this(
+        enabled,
+        officialPerMinute,
+        statsPerMinute,
+        generalPerMinute,
+        botPerMinute,
+        exemptInternal,
+        rosterRefreshPerMinute,
+        auctionSearchPerMinute,
+        botOfficialPerMinute,
+        botAddressOfficialPerMinute,
+        alertSubscribePerMinute,
+        10);
   }
 
   public int limit(ClientLimiter.Bucket bucket) {
@@ -52,6 +84,7 @@ public record ClientLimitProperties(
       case BOT_OFFICIAL -> botOfficialPerMinute;
       case BOT_ADDRESS_OFFICIAL -> botAddressOfficialPerMinute;
       case ALERT_SUBSCRIBE -> alertSubscribePerMinute;
+      case MATERIAL_PRICES -> materialPricesPerMinute;
     };
   }
 }

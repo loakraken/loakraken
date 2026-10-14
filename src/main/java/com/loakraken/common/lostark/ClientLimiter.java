@@ -69,7 +69,8 @@ public class ClientLimiter {
     AUCTION_SEARCH,
     BOT_OFFICIAL,
     BOT_ADDRESS_OFFICIAL,
-    ALERT_SUBSCRIBE
+    ALERT_SUBSCRIBE,
+    MATERIAL_PRICES
   }
 
   /** 판정 결과. 거절이면 retryAfterSeconds는 지금 창이 끝날 때까지 남은 초(1 이상)다. */

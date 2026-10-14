@@ -84,7 +84,7 @@ class LostArkMarketHttpClient {
   private <T> T execute(
       Endpoint endpoint, RestClient.RequestHeadersSpec<?> request, Class<T> responseType) {
     T payload;
-    gate.acquire();
+    gate.acquire(endpoint);
     var sample = metrics.startApi();
     var outcome = new AtomicReference<>(ApiOutcome.ERROR);
     try {

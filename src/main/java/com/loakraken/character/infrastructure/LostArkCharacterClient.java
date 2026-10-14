@@ -154,7 +154,7 @@ class LostArkCharacterClient implements CharacterDetailsPort {
     if (properties.apiKey().isBlank())
       throw new CharacterException(CharacterErrorCode.LOST_ARK_NOT_CONFIGURED);
     try {
-      gate.acquire();
+      gate.acquire(endpoint);
     } catch (BusinessException exception) {
       // 게이트 저장소 장애는 호출 한도가 아니라 503이다(#107).
       // 클라이언트 한도(#108)도 공유 한도와 구분해 그대로 돌려준다.

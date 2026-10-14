@@ -1,6 +1,9 @@
 package com.loakraken;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
 
 import java.math.BigDecimal;
 import java.net.URI;
@@ -41,14 +44,20 @@ class ClassBuildsIntegrationTest {
   @LocalServerPort int port;
   @Autowired StringRedisTemplate redis;
   @Autowired JdbcClient jdbc;
+
+  @org.springframework.test.context.bean.override.mockito.MockitoBean
+  com.loakraken.character.application.CharacterDetailsPort detailsPort;
+
   private final JsonMapper mapper = new JsonMapper();
   private final Instant now = Instant.now();
 
   @BeforeEach
   @AfterEach
   void 정리() {
-    var keys = redis.keys("stats:v1:*");
-    if (keys != null && !keys.isEmpty()) redis.delete(keys);
+    var keys = new java.util.ArrayList<String>();
+    for (var pattern : java.util.List.of("stats:v1:*", "character:v*빌드*"))
+      if (redis.keys(pattern) != null) keys.addAll(redis.keys(pattern));
+    if (!keys.isEmpty()) redis.delete(keys);
     jdbc.sql("DELETE FROM public_exclusion WHERE server_name = :s").param("s", SERVER).update();
     jdbc.sql("DELETE FROM characters WHERE server_name = :s").param("s", SERVER).update();
   }
@@ -262,9 +271,182 @@ class ClassBuildsIntegrationTest {
     assertThat(data.at("/topStats/known").asLong()).isZero();
   }
 
+  @Test
+  void 캐릭터_한_명의_칸은_빌드_통계_응답의_칸과_같은_모양이고_그_칸이_통계에_있다() throws Exception {
+    표본();
+    var builds =
+        data(
+            "/api/v1/stats/classes/"
+                + encode(CLASS)
+                + "/builds?itemLevelMin=1640&limit=20&server="
+                + encode(SERVER));
+    // 광기 5명(1700, 팔찌 대상) + 비기 5명(1660, 팔찌 기준 1680 미만) = 10명.
+    for (var name :
+        java.util.List.of(
+            "빌드광기0", "빌드광기1", "빌드광기2", "빌드광기3", "빌드광기4", "빌드비기0", "빌드비기1", "빌드비기2", "빌드비기3",
+            "빌드비기4")) {
+      var response =
+          data(
+              "/api/v1/stats/classes/"
+                  + encode(CLASS)
+                  + "/builds/character?itemLevelMin=1640&characterName="
+                  + encode(name));
+      assertThat(response.path("source").asText()).isEqualTo("STORED_OBSERVATION");
+      assertThat(response.path("inSample").asBoolean()).as(name).isTrue();
+      assertThat(response.path("reasons").size()).isZero();
+      assertThat(response.path("ruleVersion").asText()).isEqualTo("class-builds-v1");
+      var cells = response.path("cells");
+      assertContains(builds.at("/classEngravings/cells"), cells.path("classEngravings"), "name");
+      assertContains(
+          builds.at("/engravingCombos/cells"), cells.path("engravingCombos"), "engravings");
+      for (var engraving : cells.path("engravings"))
+        assertContains(builds.at("/engravings/cells"), engraving, "name");
+      for (var tree : java.util.List.of("evolution", "enlightenment", "leap"))
+        assertContains(
+            builds.at("/arkPassivePoints/" + tree + "/cells"),
+            cells.at("/arkPassivePoints/" + tree),
+            "value");
+      for (var mode : java.util.List.of("damage", "cooldown"))
+        for (var gem : cells.at("/gems/" + mode))
+          assertContains(builds.at("/gems/" + mode + "/cells"), gem, "value");
+      assertContains(
+          builds.at("/cardSets/cells"), cells.path("cardSets"), "set", "pieces", "awakening");
+      assertContains(builds.at("/topStats/cells"), cells.path("topStats"), "name");
+      assertThat(cells.at("/topStats/tie").asBoolean()).isFalse();
+      boolean eligible = name.startsWith("빌드광기");
+      assertThat(cells.path("braceletEligible").asBoolean()).as(name).isEqualTo(eligible);
+      if (eligible) {
+        assertThat(cells.path("braceletStats").size()).isEqualTo(2);
+        for (var stat : cells.path("braceletStats"))
+          assertContains(builds.at("/braceletStats/cells"), stat, "name");
+      } else assertThat(cells.path("braceletStats").isNull()).isTrue();
+    }
+    // 광기 0번은 마지막 요약(광기)의 칸이다(옛 비기 요약이 아님).
+    var first =
+        data(
+            "/api/v1/stats/classes/"
+                + encode(CLASS)
+                + "/builds/character?characterName="
+                + encode("빌드광기0"));
+    assertThat(first.at("/cells/classEngravings/name").asText()).isEqualTo("광기");
+    // 기본 itemLevelMin(1680)이면 1660 비기는 조건 밖이고 칸은 그대로 준다.
+    var low =
+        data(
+            "/api/v1/stats/classes/"
+                + encode(CLASS)
+                + "/builds/character?characterName="
+                + encode("빌드비기0"));
+    assertThat(low.path("inSample").asBoolean()).isFalse();
+    assertThat(low.path("reasons").toString()).isEqualTo("[\"ITEM_LEVEL_OUT_OF_RANGE\"]");
+    assertThat(low.at("/conditions/itemLevelMin").decimalValue()).isEqualByComparingTo("1680");
+    assertThat(low.at("/cells/classEngravings/name").asText()).isEqualTo("비기");
+    var otherClass =
+        data(
+            "/api/v1/stats/classes/"
+                + encode("다른직업")
+                + "/builds/character?itemLevelMin=1640&characterName="
+                + encode("빌드광기1"));
+    assertThat(otherClass.path("reasons").toString()).isEqualTo("[\"OTHER_CLASS\"]");
+    verifyNoInteractions(detailsPort);
+  }
+
+  @Test
+  void 처리정지_캐릭터의_칸_응답은_같은_상태의_기록_없는_캐릭터와_같다() throws Exception {
+    // ① 캐시도 저장도 없음: 처리정지(저장 요약 있음) = 모르는 이름 = 같은 404·같은 본문.
+    표본();
+    var stopped = get(characterPath("빌드정지0"));
+    var unknown = get(characterPath("빌드없는캐릭터"));
+    assertThat(stopped.statusCode()).isEqualTo(404).isEqualTo(unknown.statusCode());
+    assertThat(stopped.body()).isEqualTo(unknown.body()).contains("CHARACTER_NOT_CACHED");
+
+    // ② 최근 검색 캐시가 있음: 처리정지(검색 전 등록, 기록 안 됨) = 기록 없는 일반 캐릭터(검색 뒤 행 삭제) = 같은 칸.
+    when(detailsPort.fetch(anyString()))
+        .thenAnswer(invocation -> fetched(invocation.getArgument(0)));
+    jdbc.sql(
+            "INSERT INTO public_exclusion (character_name, server_name, reason_code) VALUES ('빌드캐시정지', :s, 'PRIVACY_STOP')")
+        .param("s", SERVER)
+        .update();
+    search("빌드캐시정지");
+    search("빌드캐시없음");
+    jdbc.sql("DELETE FROM characters WHERE character_name = '빌드캐시없음'").update();
+    assertThat(
+            jdbc.sql("SELECT COUNT(*) FROM characters WHERE character_name = '빌드캐시정지'")
+                .query(Long.class)
+                .single())
+        .isZero();
+    var stoppedLive = mapper.readTree(get(characterPath("빌드캐시정지")).body());
+    var unknownLive = mapper.readTree(get(characterPath("빌드캐시없음")).body());
+    assertThat(stoppedLive.at("/data/source").asText()).isEqualTo("LIVE_CACHE");
+    // 이름과 검색 시각(두 검색의 시각 차)만 다르고 나머지 응답은 같다.
+    for (var response : java.util.List.of(stoppedLive, unknownLive)) {
+      assertThat(response.at("/data/observedAt").isNull()).isFalse();
+      ((tools.jackson.databind.node.ObjectNode) response.path("data")).remove("characterName");
+      ((tools.jackson.databind.node.ObjectNode) response.path("data")).remove("observedAt");
+    }
+    assertThat(stoppedLive).isEqualTo(unknownLive);
+
+    // 처리정지 캐릭터는 집계에도 없다.
+    var builds =
+        get(
+            "/api/v1/stats/classes/"
+                + encode(CLASS)
+                + "/builds?itemLevelMin=1640&server="
+                + encode(SERVER));
+    assertThat(builds.body()).doesNotContain("빌드캐시정지", "정지각인");
+  }
+
+  private String characterPath(String name) {
+    return "/api/v1/stats/classes/"
+        + encode(CLASS)
+        + "/builds/character?itemLevelMin=1640&characterName="
+        + encode(name);
+  }
+
+  /** builds 칸 목록에 key 필드가 같은 칸이 있다. */
+  private static void assertContains(JsonNode cells, JsonNode key, String... fields) {
+    assertThat(key.isNull() || key.isMissingNode()).as("key " + key).isFalse();
+    boolean found = false;
+    for (var cell : cells) {
+      boolean same = true;
+      for (var field : fields) same &= cell.path(field).equals(key.path(field));
+      found |= same;
+    }
+    assertThat(found).as(key + " in " + cells).isTrue();
+  }
+
+  private void search(String name) throws Exception {
+    var response = get("/api/v1/characters/search?characterName=" + encode(name));
+    assertThat(response.statusCode()).as(response.body()).isEqualTo(200);
+  }
+
+  private com.loakraken.character.application.FetchedCharacter fetched(String name) {
+    var profile =
+        new com.loakraken.character.domain.CharacterProfile(
+            name,
+            SERVER,
+            CLASS,
+            70,
+            new BigDecimal("1700"),
+            new BigDecimal("3000"),
+            null,
+            null,
+            null,
+            null,
+            java.util.List.of());
+    var loadout =
+        new com.loakraken.character.domain.CharacterLoadout(
+            java.util.List.of(), null, null, null, null, null, java.util.List.of());
+    return new com.loakraken.character.application.FetchedCharacter(
+        CharacterTestFixture.details(profile, loadout, java.util.List.of()), "{}", "[]");
+  }
+
   @ParameterizedTest
   @ValueSource(
       strings = {
+        "/api/v1/stats/classes/CLASS/builds/character",
+        "/api/v1/stats/classes/CLASS/builds/character?characterName=%25",
+        "/api/v1/stats/classes/CLASS/builds/character?characterName=a&activeDays=5",
+        "/api/v1/stats/classes/CLASS/builds/character?characterName=a&itemLevelMin=1700&itemLevelMax=1600",
         "/api/v1/stats/classes/%EC%A7%81%EC%97%851/builds",
         "/api/v1/stats/classes/CLASS/builds?classEngraving=%25",
         "/api/v1/stats/classes/CLASS/builds?limit=21",

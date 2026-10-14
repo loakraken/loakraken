@@ -38,10 +38,177 @@ import org.springframework.web.bind.annotation.RestController;
 @Tag(name = "통계·랭킹")
 public class ClassBuildsController {
   private final StatsQueryService stats;
+  private final com.loakraken.stats.application.ClassBuildCellsService characterCells;
 
-  public ClassBuildsController(StatsQueryService stats) {
+  public ClassBuildsController(
+      StatsQueryService stats,
+      com.loakraken.stats.application.ClassBuildCellsService characterCells) {
     this.stats = stats;
+    this.characterCells = characterCells;
   }
+
+  @GetMapping(
+      value = "/api/v1/stats/classes/{className}/builds/character",
+      produces = MediaType.APPLICATION_JSON_VALUE)
+  @Operation(
+      summary = "직업 빌드 통계에서 캐릭터 한 명의 칸",
+      description =
+          "캐릭터 한 명이 직업 빌드 통계(class-builds-v1)의 어느 칸에 드는지 줍니다. 집계와 같은 규칙이며, cells의 항목 이름은 빌드 통계 응답의 항목, 값은 그 항목 cells[]의 key와 같은 모양입니다. "
+              + "공식 API를 부르지 않습니다: 최근 검색 캐시 → 저장된 마지막 장비 요약 순서로 찾고, 둘 다 없으면 404 CHARACTER_NOT_CACHED입니다. "
+              + "inSample은 그 캐릭터 값이 이 조건(직업·아이템 레벨 범위·최근 확인 기간·전투력 관측)에 맞는지이며, 실제로 집계에 들어갔는지는 뜻하지 않습니다. "
+              + "itemLevelMin·braceletItemLevelMin 기본값은 빌드 통계와 같습니다. "
+              + "400 INVALID_REQUEST, 404 CHARACTER_NOT_CACHED, 503 CHARACTER_STORAGE_UNAVAILABLE")
+  @StatsController.StandardErrors
+  public ApiResponse<ClassBuildCellsResponse> character(
+      @Parameter(description = "직업 이름(공식 표기)")
+          @PathVariable
+          @Size(min = 1, max = 16)
+          @Pattern(regexp = "[\\p{L}]+")
+          String className,
+      @Valid @ModelAttribute @ParameterObject ClassBuildCellsRequest request) {
+    return ApiResponse.of(
+        StatsSuccessCode.STATS_CLASS_BUILDS_SUCCESS,
+        ClassBuildCellsResponse.from(
+            characterCells.cells(
+                className,
+                request.characterName(),
+                request.itemLevelMin(),
+                request.itemLevelMax(),
+                request.activeDays(),
+                request.braceletItemLevelMin())));
+  }
+
+  @Schema(
+      description =
+          "캐릭터 한 명의 칸. cells의 항목 이름 = 빌드 통계 응답 항목, 값 = 그 항목 cells[] key와 같은 모양. 값이 null이면 그 항목을 못 읽어 분모에서 빠지는 캐릭터")
+  public record ClassBuildCellsResponse(
+      String characterName,
+      String serverName,
+      @Schema(description = "캐릭터의 직업(공식 표기)") String className,
+      BigDecimal itemLevel,
+      @Schema(description = "값을 읽은 관측 시각(캐시면 검색 시각, 저장이면 마지막 프로필 확인 시각)") @NullableResponse
+          java.time.Instant observedAt,
+      @Schema(
+              description = "LIVE_CACHE: 최근 검색 캐시, STORED_OBSERVATION: 저장된 마지막 장비 요약",
+              allowableValues = {"LIVE_CACHE", "STORED_OBSERVATION"})
+          String source,
+      @Schema(description = "이 캐릭터 값이 조건(직업·아이템 레벨·최근 확인 기간·전투력 관측)에 맞는가. 실제 집계 포함 여부는 뜻하지 않음")
+          boolean inSample,
+      @Schema(
+              description =
+                  "inSample=false인 까닭(여러 개 가능, 맞으면 빈 목록). OTHER_CLASS: 요청 직업과 다름, ITEM_LEVEL_OUT_OF_RANGE: 아이템 레벨 범위 밖, NOT_RECENT: activeDays 안에 확인 안 됨, NO_COMBAT_POWER: 전투력 관측 없음. 문자열이며 값이 늘 수 있음")
+          List<String> reasons,
+      ClassBuildCellsConditions conditions,
+      ClassBuildCells cells,
+      @Schema(example = "class-builds-v1") String ruleVersion) {
+    static ClassBuildCellsResponse from(
+        com.loakraken.stats.application.ClassBuildCellsService.Result result) {
+      var cells = result.cells();
+      return new ClassBuildCellsResponse(
+          result.characterName(),
+          result.serverName(),
+          result.className(),
+          result.itemLevel(),
+          result.observedAt(),
+          result.source().name(),
+          result.inSample(),
+          result.reasons().stream().map(Enum::name).toList(),
+          new ClassBuildCellsConditions(
+              result.itemLevelMin(),
+              result.itemLevelMax(),
+              result.activeDays(),
+              result.braceletItemLevelMin()),
+          new ClassBuildCells(
+              cells.classEngraving() == null ? null : new ClassBuildNameKey(cells.classEngraving()),
+              cells.engravingCombo() == null
+                  ? null
+                  : new ClassBuildComboKey(cells.engravingCombo()),
+              nameKeys(cells.engravings()),
+              new ClassBuildPointKeys(
+                  valueKey(cells.evolutionPoints()),
+                  valueKey(cells.enlightenmentPoints()),
+                  valueKey(cells.leapPoints())),
+              new ClassBuildGemKeys(valueKeys(cells.damageGems()), valueKeys(cells.cooldownGems())),
+              cells.cardSet() == null
+                  ? null
+                  : new ClassBuildCardKey(
+                      cells.cardSet().set(), cells.cardSet().pieces(), cells.cardSet().awakening()),
+              cells.topStat() == null
+                  ? null
+                  : new ClassBuildTopStatKey(cells.topStat().stat(), cells.topStat().tie()),
+              cells.braceletEligible(),
+              nameKeys(cells.braceletStats())),
+          ClassBuilds.RULE_VERSION);
+    }
+
+    private static List<ClassBuildNameKey> nameKeys(List<String> names) {
+      return names == null ? null : names.stream().map(ClassBuildNameKey::new).toList();
+    }
+
+    private static ClassBuildValueKey valueKey(Integer value) {
+      return value == null ? null : new ClassBuildValueKey(value);
+    }
+
+    private static List<ClassBuildValueKey> valueKeys(List<Integer> values) {
+      return values == null ? null : values.stream().map(ClassBuildValueKey::new).toList();
+    }
+  }
+
+  @Schema(description = "실제로 쓴 조건(빌드 통계 meta.conditions와 같은 기본값 규칙)")
+  public record ClassBuildCellsConditions(
+      BigDecimal itemLevelMin,
+      @NullableResponse BigDecimal itemLevelMax,
+      int activeDays,
+      BigDecimal braceletItemLevelMin) {}
+
+  @Schema(description = "항목 이름은 빌드 통계 응답과 같다. 값이 null이면 그 항목을 못 읽음(분모에서 빠짐)")
+  public record ClassBuildCells(
+      @Schema(description = "classEngravings cells[].name과 같음") @NullableResponse
+          ClassBuildNameKey classEngravings,
+      @Schema(description = "engravingCombos cells[].engravings와 같음") @NullableResponse
+          ClassBuildComboKey engravingCombos,
+      @Schema(description = "engravings에서 이 캐릭터가 세지는 칸들(cells[].name)") @NullableResponse
+          List<ClassBuildNameKey> engravings,
+      ClassBuildPointKeys arkPassivePoints,
+      ClassBuildGemKeys gems,
+      @Schema(description = "cardSets cells[]의 set·pieces·awakening과 같음") @NullableResponse
+          ClassBuildCardKey cardSets,
+      @Schema(description = "topStats cells[].name과 같음. tie는 집계의 ties에 세지는 캐릭터") @NullableResponse
+          ClassBuildTopStatKey topStats,
+      @Schema(
+              description =
+                  "아이템 레벨이 braceletItemLevelMin 이상이라 팔찌 전투 특성 집계 대상인가. false면 braceletStats는 null")
+          boolean braceletEligible,
+      @Schema(
+              description =
+                  "braceletStats에서 이 캐릭터가 세지는 칸들(cells[].name). 대상이 아니거나 팔찌를 못 읽었으면 null, 전투 특성 줄이 없으면 빈 목록")
+          @NullableResponse
+          List<ClassBuildNameKey> braceletStats) {}
+
+  public record ClassBuildNameKey(String name) {}
+
+  public record ClassBuildComboKey(@Schema(description = "각인 이름(가나다순)") List<String> engravings) {}
+
+  public record ClassBuildValueKey(@Schema(description = "포인트 값 또는 보석 레벨") int value) {}
+
+  public record ClassBuildPointKeys(
+      @NullableResponse ClassBuildValueKey evolution,
+      @NullableResponse ClassBuildValueKey enlightenment,
+      @NullableResponse ClassBuildValueKey leap) {}
+
+  @Schema(description = "보석 1개마다 한 칸(높은 레벨부터). 보석을 못 읽었으면 null, 그 효과 종류 4티어 보석이 없으면 빈 목록")
+  public record ClassBuildGemKeys(
+      @NullableResponse List<ClassBuildValueKey> damage,
+      @NullableResponse List<ClassBuildValueKey> cooldown) {}
+
+  public record ClassBuildCardKey(
+      String set,
+      int pieces,
+      @Schema(description = "각성 합계(없으면 null)") @NullableResponse Integer awakening) {}
+
+  public record ClassBuildTopStatKey(
+      String name,
+      @Schema(description = "가장 큰 값이 둘 이상이라 고정 순서(치명→특화→신속→제압→인내→숙련)로 골랐는가") boolean tie) {}
 
   @GetMapping(
       value = "/api/v1/stats/classes/{className}/builds",
@@ -268,8 +435,11 @@ public class ClassBuildsController {
   static class ClassBuildsOpenApiConfiguration {
     @Bean
     OpenApiCustomizer classBuildsResponseContract() {
-      return document ->
-          ResponseContracts.apply(ClassBuildsResponse.class, document.getComponents().getSchemas());
+      return document -> {
+        ResponseContracts.apply(ClassBuildsResponse.class, document.getComponents().getSchemas());
+        ResponseContracts.apply(
+            ClassBuildCellsResponse.class, document.getComponents().getSchemas());
+      };
     }
   }
 }

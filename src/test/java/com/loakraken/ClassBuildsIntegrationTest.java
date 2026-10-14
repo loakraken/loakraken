@@ -203,7 +203,8 @@ class ClassBuildsIntegrationTest {
               + orderSun
               + "\"},{\"kind\":\"혼돈\",\"position\":\"달\",\"grade\":\"유물\",\"point\":17,\"options\":[],\"name\":null}]},"
               + "\"skills\":[{\"name\":\"윈드 컷\",\"attackType\":\"백 어택\",\"level\":14,\"tripods\":["
-              + "{\"tier\":1,\"slot\":1,\"name\":\"빠른 준비\"},{\"tier\":2,\"slot\":2,\"name\":\""
+              // 저장값은 공식 Tier 원본(0부터). 응답은 게임 화면 단계(1부터).
+              + "{\"tier\":0,\"slot\":1,\"name\":\"빠른 준비\"},{\"tier\":1,\"slot\":2,\"name\":\""
               + secondTier
               + "\"}],\"rune\":"
               + rune
@@ -251,6 +252,7 @@ class ClassBuildsIntegrationTest {
     assertThat(tripods.at("/0/tier").asInt()).isEqualTo(1);
     assertThat(tripods.at("/0/name").asText()).isEqualTo("빠른 준비");
     assertThat(tripods.at("/0/count").asLong()).isEqualTo(30);
+    assertThat(tripods.at("/1/tier").asInt()).isEqualTo(2);
     assertThat(tripods.at("/1/name").asText()).isEqualTo("강화된 일격");
     assertThat(tripods.at("/1/count").asLong()).isEqualTo(18);
     assertThat(tripods.at("/2/name").asText()).isEqualTo("약점 포착");

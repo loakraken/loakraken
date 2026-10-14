@@ -101,7 +101,7 @@ public final class ClassBuilds {
   /** 레벨 2 이상 스킬(v2). tripods: 선택한 트라이포드, rune: 룬 이름(없으면 null). */
   public record SkillUse(String name, List<TripodKey> tripods, String rune) {}
 
-  /** 트라이포드 칸 key. tier: 단계(1~3). */
+  /** 트라이포드 칸 key. tier: 게임 화면 단계(1~3, 저장된 공식 Tier 0~2에 1을 더한 값). */
   public record TripodKey(Integer tier, String name) {}
 
   /** mode: DAMAGE(피해 증가)·COOLDOWN(재사용 대기시간 감소). */

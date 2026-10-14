@@ -128,14 +128,19 @@ public final class ClassBuildSampleReader {
       var tripods = new ArrayList<ClassBuilds.TripodKey>();
       for (var tripod : skill.path("tripods")) {
         var name = text(tripod.path("name"));
-        if (name != null)
-          tripods.add(new ClassBuilds.TripodKey(integer(tripod.path("tier")), name));
+        if (name != null) tripods.add(new ClassBuilds.TripodKey(tier(tripod.path("tier")), name));
       }
       skills.add(
           new ClassBuilds.SkillUse(
               text(skill.path("name")), tripods, text(skill.path("rune").path("name"))));
     }
     return skills;
+  }
+
+  /** 저장된 공식 Tier(0~2)를 게임 화면 단계(1~3)로. 저장값은 원본 그대로 두고 통계 응답에서만 바꾼다(PM 판정 10-14). */
+  static Integer tier(JsonNode node) {
+    var tier = integer(node);
+    return tier == null ? null : tier + 1;
   }
 
   private static String text(JsonNode node) {

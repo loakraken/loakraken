@@ -48,6 +48,10 @@ class MaterialPriceClientLimitIntegrationTest {
   private static final JsonMapper MAPPER = new JsonMapper();
   private static final AtomicInteger calls = new AtomicInteger();
 
+  /** 공식 검색 기록(분류|이름|페이지). */
+  private static final java.util.Queue<String> searched =
+      new java.util.concurrent.ConcurrentLinkedQueue<>();
+
   /** 아비도스 제작 화면 20개(완성품 2 + 생활 재료 18). */
   static final List<String> CRAFT =
       List.of(
@@ -102,6 +106,7 @@ class MaterialPriceClientLimitIntegrationTest {
       if (redis.keys(pattern) != null) keys.addAll(redis.keys(pattern));
     if (!keys.isEmpty()) redis.delete(keys);
     calls.set(0);
+    searched.clear();
   }
 
   @Test
@@ -210,6 +215,42 @@ class MaterialPriceClientLimitIntegrationTest {
     assertThat(calls).hasValue(0);
   }
 
+  @Test
+  void 예열_전_캐시가_빈_상태에서_로아샵_5건이_동시에_와도_같은_검색은_한_번이고_429가_없다() throws Exception {
+    var start = new java.util.concurrent.CountDownLatch(1);
+    var responses = new ArrayList<HttpResponse<String>>();
+    try (var pool = java.util.concurrent.Executors.newFixedThreadPool(5)) {
+      var futures = new ArrayList<java.util.concurrent.Future<HttpResponse<String>>>();
+      for (int i = 0; i < 5; i++) {
+        // 서로 다른 사람(주소)이 같은 화면을 동시에 연다.
+        var address = "192.0.2." + (90 + i);
+        futures.add(
+            pool.submit(
+                () -> {
+                  start.await();
+                  return post(SHOP, address);
+                }));
+      }
+      start.countDown();
+      for (var future : futures)
+        responses.add(future.get(60, java.util.concurrent.TimeUnit.SECONDS));
+    }
+    for (var response : responses) {
+      assertThat(response.statusCode()).as(response.body()).isEqualTo(200);
+      var statuses = new java.util.HashMap<String, String>();
+      MAPPER
+          .readTree(response.body())
+          .at("/data/items")
+          .forEach(item -> statuses.put(item.path("name").asText(), item.path("status").asText()));
+      for (var name : SHOP.subList(0, 10)) assertThat(statuses).containsEntry(name, "PRICED");
+      assertThat(statuses).containsEntry("페온", "PRICED");
+      for (var name : SHOP.subList(10, 14)) assertThat(statuses).containsEntry(name, "UNTRADEABLE");
+    }
+    // 같은 검색(분류·이름·페이지)은 한 번만: 5건이 겹쳐도 한 요청 분량(재련 5 + 배틀 5 × 3분류 + 페온 1 = 21) 이하.
+    assertThat(searched).doesNotHaveDuplicates();
+    assertThat(calls.get()).isLessThanOrEqualTo(21);
+  }
+
   private List<JsonNode> priced(HttpResponse<String> response) throws Exception {
     assertThat(response.statusCode()).as(response.body()).isEqualTo(200);
     var items = new ArrayList<JsonNode>();
@@ -268,6 +309,13 @@ class MaterialPriceClientLimitIntegrationTest {
             int category = request.path("CategoryCode").asInt();
             String name = request.path("ItemName").asText("");
             int page = request.path("PageNo").asInt(1);
+            searched.add(category + "|" + name + "|" + page);
+            try {
+              // 공식 응답이 느린 상황(동시 요청이 겹치게).
+              Thread.sleep(20);
+            } catch (InterruptedException exception) {
+              Thread.currentThread().interrupt();
+            }
             var matched =
                 CATALOG.stream()
                     .filter(row -> (int) row[0] == category)

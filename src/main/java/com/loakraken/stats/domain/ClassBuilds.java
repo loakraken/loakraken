@@ -16,8 +16,8 @@ import java.util.function.Function;
 import java.util.regex.Pattern;
 
 /**
- * 직업 상세 빌드 통계(M12 1단계, class-builds-v1). 캐릭터마다 마지막 장비 요약(equipment-summary-v1) 한 행을 표본으로 항목별 인원·비율을
- * 센다.
+ * 직업 상세 빌드 통계(M12 1단계, class-builds-v1). 캐릭터마다 마지막 장비 요약(equipment-summary v1·v2, 집계에 쓰는 필드는 같음) 한
+ * 행을 표본으로 항목별 인원·비율을 센다.
  *
  * <p>못 읽은 값은 그 항목의 분모(known)에서 뺀다(추정 금지). 인원(보석은 개수)이 {@link #MIN_CELL} 미만인 칸은 목록에서 뺀다. 한두 명의 증감이
  * 칸으로 드러나지 않게 하려는 것이다. 비율(share)은 분모 대비 %(소수 둘째 자리)로 기존 통계와 같다.

@@ -62,7 +62,12 @@ class MaterialUnitPriceServiceTest {
     assertThat(result.get(1).status())
         .isEqualTo(MaterialUnitPriceService.UnitPrice.Status.PRICE_UNAVAILABLE);
     assertThat(result.get(1).sourceItemName()).isEqualTo("빙하의 숨결");
-    verify(markets, times(2)).search(any(), any());
+    // 없는 재료는 강화 재료·생활 두 분류를 보고(2번), 빙하의 숨결은 강화 재료에서 찾는다(1번). 중복 이름은 다시 보지 않는다.
+    verify(markets, times(3)).search(any(), any());
+    verify(markets)
+        .search(
+            any(),
+            argThat(search -> search.itemName().equals("없는 재료") && search.categoryCode() == 90000));
   }
 
   private void stub(String itemName, MarketPrice... items) {

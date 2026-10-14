@@ -320,6 +320,46 @@ class LostArkMarketClientTest {
     assertThat(calls).hasValue(1);
   }
 
+  @Test
+  void 공식_호출_로그에_거래소_분류_품목_이름_쪽과_상품_ID만_남기고_키는_남기지_않는다() {
+    var logger =
+        (ch.qos.logback.classic.Logger)
+            org.slf4j.LoggerFactory.getLogger(LostArkRequestGate.CALL_LOGGER);
+    var appender =
+        new ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent>();
+    appender.start();
+    logger.addAppender(appender);
+    var previous = logger.getLevel();
+    try {
+      logger.setLevel(ch.qos.logback.classic.Level.DEBUG);
+      var http = httpClient("test-token", Duration.ofSeconds(2));
+      new LostArkMarketClient(http).fetch(MarketSource.ACTIVE_LISTING, search);
+      body = "[]";
+      new LostArkMarketItemClient(http).fetchHistory(66102006L);
+      body = "{\"Categories\":[],\"ItemGrades\":[],\"ItemTiers\":[],\"Classes\":[]}";
+      new LostArkMarketOptionsClient(http).fetchOptions();
+
+      assertThat(appender.list)
+          .extracting(ch.qos.logback.classic.spi.ILoggingEvent::getFormattedMessage)
+          .containsExactly(
+              "official-call endpoint=MARKET_ITEMS origin=USER reserve=0 category=50000 item=\"검증 재료\" page=1",
+              "official-call endpoint=MARKET_ITEM_HISTORY origin=USER reserve=0 itemId=66102006",
+              "official-call endpoint=MARKET_OPTIONS origin=USER reserve=0")
+          .noneMatch(line -> line.contains("test-token") || line.contains("http"));
+    } finally {
+      logger.setLevel(previous);
+      logger.detachAppender(appender);
+    }
+  }
+
+  @Test
+  void 호출_대상은_이름이_없으면_대시다() {
+    assertThat(LostArkMarketHttpClient.target(60000, null, 3))
+        .isEqualTo("category=60000 item=- page=3");
+    assertThat(LostArkMarketHttpClient.target(60000, " ", 1))
+        .isEqualTo("category=60000 item=- page=1");
+  }
+
   private LostArkMarketHttpClient httpClient(String key, Duration timeout) {
     var properties =
         new LostArkProperties(

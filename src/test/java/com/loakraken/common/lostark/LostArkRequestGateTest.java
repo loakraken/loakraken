@@ -53,7 +53,7 @@ class LostArkRequestGateTest {
       gate.withReserve(
           40,
           () -> {
-            gate.acquire(LostArkMetrics.Endpoint.MARKET_ITEMS);
+            gate.acquire(LostArkMetrics.Endpoint.MARKET_ITEMS, "category=90000 item=\"들꽃\" page=2");
             return null;
           });
       gate.withUserReserve(
@@ -66,7 +66,7 @@ class LostArkRequestGateTest {
           .extracting(ch.qos.logback.classic.spi.ILoggingEvent::getFormattedMessage)
           .containsExactly(
               "official-call endpoint=PROFILE origin=USER reserve=0",
-              "official-call endpoint=MARKET_ITEMS origin=BACKGROUND reserve=40",
+              "official-call endpoint=MARKET_ITEMS origin=BACKGROUND reserve=40 category=90000 item=\"들꽃\" page=2",
               "official-call endpoint=ARMORY origin=USER_RESERVE reserve=30");
 
       // 거절된 호출(예산 초과)은 공식 호출이 아니므로 남기지 않는다.

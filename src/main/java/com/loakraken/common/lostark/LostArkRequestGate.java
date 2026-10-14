@@ -69,16 +69,25 @@ public class LostArkRequestGate {
 
   /**
    * {@link #acquire()}와 같고, 허가되면 공식 호출 로그(로거 {@value #CALL_LOGGER}, DEBUG)에 한 줄 남긴다. 로컬 프로필만 DEBUG로
-   * 켜고 운영은 꺼져 있다. 줄에는 호출 종류와 경로(백그라운드·사용자)만 있고 이름·주소·키는 없다.
+   * 켜고 운영은 꺼져 있다. 줄에는 호출 종류와 경로(백그라운드·사용자)만 있고 캐릭터 이름·주소·키는 없다.
    */
   public void acquire(LostArkMetrics.Endpoint endpoint) {
+    acquire(endpoint, null);
+  }
+
+  /**
+   * {@link #acquire(LostArkMetrics.Endpoint)}에 호출 대상(거래소 분류·품목 이름처럼 게임 데이터만, 캐릭터 이름은 넣지 않음)을 덧붙인다.
+   * 시세 화면 한 번 열기의 호출 수를 품목·분류별로 나누려는 것이다.
+   */
+  public void acquire(LostArkMetrics.Endpoint endpoint, String target) {
     admit();
     if (CALLS.isDebugEnabled())
       CALLS.debug(
-          "official-call endpoint={} origin={} reserve={}",
+          "official-call endpoint={} origin={} reserve={}{}",
           endpoint == null ? "UNKNOWN" : endpoint.name(),
           origin(),
-          currentReserve());
+          currentReserve(),
+          target == null ? "" : " " + target);
   }
 
   /** BACKGROUND: 예열·수집기(reserve, 클라이언트 한도 안 셈), USER_RESERVE: 사용자 요청 중 reserve 호출, USER: 사용자 요청. */

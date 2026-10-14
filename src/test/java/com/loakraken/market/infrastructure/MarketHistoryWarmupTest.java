@@ -259,7 +259,8 @@ class MarketHistoryWarmupTest {
     when(lifeMaterials.fetchLifePage(anyInt()))
         .thenAnswer(invocation -> page(invocation.getArgument(0), 34));
     var logger =
-        (ch.qos.logback.classic.Logger) org.slf4j.LoggerFactory.getLogger(MarketHistoryWarmup.class);
+        (ch.qos.logback.classic.Logger)
+            org.slf4j.LoggerFactory.getLogger(MarketHistoryWarmup.class);
     var appender =
         new ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent>();
     appender.start();
@@ -267,19 +268,21 @@ class MarketHistoryWarmupTest {
     try {
       var warmup = warmup("key", List.of());
       // 1주기: 관문이 사용자 몫(reserve)을 남기려고 미룸 → 저장 없음, DEFERRED, 이유 GATE_BUDGET.
-      when(gate.withReserve(anyInt(), any()))
-          .thenThrow(
+      doThrow(
               new com.loakraken.common.lostark.LostArkRateLimitedException(
-                  com.loakraken.common.lostark.LostArkRateLimitedException.Cause.GATE_BUDGET));
+                  com.loakraken.common.lostark.LostArkRateLimitedException.Cause.GATE_BUDGET))
+          .when(gate)
+          .withReserve(anyInt(), any());
       warmup.warmLifeMaterialPages();
       verify(lifeMaterials, never()).saveLife(any(), any());
       assertThat(lifeCount("deferred")).isEqualTo(1);
       assertThat(lifeCount("failed")).isZero();
       // 2주기(1분 뒤): 공식 서버 429 → FAILED, 이유 UPSTREAM_429.
-      when(gate.withReserve(anyInt(), any()))
-          .thenThrow(
+      doThrow(
               new com.loakraken.common.lostark.LostArkRateLimitedException(
-                  com.loakraken.common.lostark.LostArkRateLimitedException.Cause.UPSTREAM_429));
+                  com.loakraken.common.lostark.LostArkRateLimitedException.Cause.UPSTREAM_429))
+          .when(gate)
+          .withReserve(anyInt(), any());
       clock.now = clock.now.plus(Duration.ofMinutes(1));
       warmup.warmLifeMaterialPages();
       verify(lifeMaterials, never()).saveLife(any(), any());
@@ -289,8 +292,9 @@ class MarketHistoryWarmupTest {
           .anyMatch(line -> line.contains("관문이 미뤘습니다") && line.contains("reason=GATE_BUDGET"))
           .anyMatch(line -> line.contains("실패했습니다") && line.contains("reason=UPSTREAM_429"));
       // 3주기: 관문이 허가하면 미뤘던 생활 시세를 다시 채운다(주기 대기 없이 다음 틱).
-      when(gate.withReserve(anyInt(), any()))
-          .thenAnswer(invocation -> invocation.<java.util.function.Supplier<?>>getArgument(1).get());
+      doAnswer(invocation -> invocation.<java.util.function.Supplier<?>>getArgument(1).get())
+          .when(gate)
+          .withReserve(anyInt(), any());
       clock.now = clock.now.plus(Duration.ofMinutes(1));
       warmup.warmLifeMaterialPages();
       verify(lifeMaterials).saveLife(any(), eq(Duration.ofMinutes(30)));

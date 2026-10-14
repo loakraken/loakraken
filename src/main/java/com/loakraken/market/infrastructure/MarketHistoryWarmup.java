@@ -461,8 +461,8 @@ class MarketHistoryWarmup {
   }
 
   /**
-   * 예열 실패를 로그로 남기고 결과를 고른다. 우리 관문이 사용자 몫을 남기려고·공식 한도 대기로·동시 상한으로 미룬 것은 실패가 아니라 DEFERRED(INFO)이고,
-   * 공식 서버의 429와 그 밖의 오류는 FAILED(WARN)다. 둘 다 다음 주기에 다시 받는다. 로그에는 이유(reason)를 남긴다.
+   * 예열 실패를 로그로 남기고 결과를 고른다. 우리 관문이 사용자 몫을 남기려고·공식 한도 대기로·동시 상한으로 미룬 것은 실패가 아니라 DEFERRED(INFO)이고, 공식
+   * 서버의 429와 그 밖의 오류는 FAILED(WARN)다. 둘 다 다음 주기에 다시 받는다. 로그에는 이유(reason)를 남긴다.
    */
   private static Outcome failure(String job, String detail, BusinessException exception) {
     var reason = com.loakraken.common.lostark.LostArkRateLimitedException.reasonOf(exception);
@@ -475,11 +475,7 @@ class MarketHistoryWarmup {
       return Outcome.DEFERRED;
     }
     log.warn(
-        "{} 예열에 실패했습니다. {}, code={}, reason={}",
-        job,
-        detail,
-        exception.errorCode().code(),
-        reason);
+        "{} 예열에 실패했습니다. {}, code={}, reason={}", job, detail, exception.errorCode().code(), reason);
     return Outcome.FAILED;
   }
 

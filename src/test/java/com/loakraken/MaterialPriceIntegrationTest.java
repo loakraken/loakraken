@@ -193,7 +193,8 @@ class MaterialPriceIntegrationTest {
                   search.pageNo(),
                   10,
                   matched.size(),
-                  matched.subList(Math.min(from, matched.size()), Math.min(from + 10, matched.size())));
+                  matched.subList(
+                      Math.min(from, matched.size()), Math.min(from + 10, matched.size())));
             });
     var body =
         "{\"priceBasis\":\"CURRENT_MIN_PRICE\",\"names\":["

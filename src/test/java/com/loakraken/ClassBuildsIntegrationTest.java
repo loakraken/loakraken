@@ -175,9 +175,100 @@ class ClassBuildsIntegrationTest {
             data("/api/v1/stats/summary?server=" + encode(SERVER)).at("/meta/population").asLong())
         .isEqualTo(35);
 
+    // 코어·스킬 항목: 표본이 모두 v1이라 칸이 비어 있고 표본 수·비율만 있다.
+    assertThat(data.at("/details/status").asText()).isEqualTo("COLLECTING");
+    assertThat(data.at("/details/detailedSamples").asLong()).isZero();
+    assertThat(data.at("/details/coverage").decimalValue()).isEqualByComparingTo("0");
+    assertThat(data.at("/details/arkGridCores").size()).isZero();
+    assertThat(data.at("/details/skills/cells").size()).isZero();
+    assertThat(data.at("/details/skillDetails").size()).isZero();
+
     // 두 번째 요청은 캐시에서 같은 응답이다.
     assertThat(get(path).body()).isEqualTo(body);
     ApiContractFixture.write("stats-class-builds.json", body);
+  }
+
+  /** v1 표본 44명(표본_광기_30)에 v2(코어 이름·스킬 상세) 광기 30명을 더한다. */
+  private void 표본_상세_30() {
+    표본_광기_30();
+    for (int i = 0; i < 30; i++) {
+      var orderSun = i < 22 ? "살상연희" : "불타는 일격";
+      var secondTier = i < 18 ? "강화된 일격" : "약점 포착";
+      var rune = i < 12 ? "{\"name\":\"질풍\",\"grade\":\"전설\"}" : "null";
+      var v1 = features(ENGRAVINGS_A, "[]", 30, 140, 600, 1800, "[\"특화 +81\"]");
+      var v2 =
+          v1.substring(0, v1.length() - 1)
+              + ",\"arkGrid\":{\"effects\":{},\"cores\":["
+              + "{\"kind\":\"질서\",\"position\":\"해\",\"grade\":\"유물\",\"point\":17,\"options\":[],\"name\":\""
+              + orderSun
+              + "\"},{\"kind\":\"혼돈\",\"position\":\"달\",\"grade\":\"유물\",\"point\":17,\"options\":[],\"name\":null}]},"
+              + "\"skills\":[{\"name\":\"윈드 컷\",\"attackType\":\"백 어택\",\"level\":14,\"tripods\":["
+              + "{\"tier\":1,\"slot\":1,\"name\":\"빠른 준비\"},{\"tier\":2,\"slot\":2,\"name\":\""
+              + secondTier
+              + "\"}],\"rune\":"
+              + rune
+              + "}"
+              + (i < 3
+                  ? ",{\"name\":\"서프라이즈 어택\",\"attackType\":null,\"level\":4,\"tripods\":[],\"rune\":null}"
+                  : "")
+              + "]}";
+      summary(character("빌드상세" + i, "1700"), 1, "광기", v2, "equipment-summary-v2");
+    }
+  }
+
+  @Test
+  void 코어와_스킬_항목은_v2_표본만_세고_v2가_30명_미만이면_칸이_비어_있다() throws Exception {
+    표본_상세_30();
+    var base =
+        "/api/v1/stats/classes/"
+            + encode(CLASS)
+            + "/builds?itemLevelMin=1640&server="
+            + encode(SERVER);
+    var data = data(base);
+    assertThat(data.at("/meta/population").asLong()).isEqualTo(74);
+    var details = data.path("details");
+    assertThat(details.path("status").asText()).isEqualTo("READY");
+    assertThat(details.path("detailedSamples").asLong()).isEqualTo(30);
+    // 30 / 74
+    assertThat(details.path("coverage").decimalValue()).isEqualByComparingTo("40.54");
+    var cores = details.path("arkGridCores");
+    assertThat(cores.size()).isEqualTo(6);
+    assertThat(cores.at("/0/kind").asText()).isEqualTo("질서");
+    assertThat(cores.at("/0/position").asText()).isEqualTo("해");
+    assertCells(cores.get(0), 30, "name", "살상연희", 22, "73.33", "불타는 일격", 8, "26.67");
+    // 이름을 못 읽은 칸(혼돈 달)과 없는 칸은 분모 0이다.
+    assertThat(cores.at("/4/known").asLong()).isZero();
+    assertThat(cores.at("/5/known").asLong()).isZero();
+    // 3명만 쓴 스킬은 칸에서 빠진다(hidden 3).
+    assertCells(details.path("skills"), 30, "name", "윈드 컷", 30, "100.00");
+    assertThat(details.at("/skills/hidden/count").asLong()).isEqualTo(3);
+    var windCut = details.at("/skillDetails/0");
+    assertThat(details.path("skillDetails").size()).isEqualTo(1);
+    assertThat(windCut.path("skill").asText()).isEqualTo("윈드 컷");
+    assertThat(windCut.path("users").asLong()).isEqualTo(30);
+    var tripods = windCut.at("/tripods/cells");
+    assertThat(tripods.size()).isEqualTo(3);
+    assertThat(tripods.at("/0/tier").asInt()).isEqualTo(1);
+    assertThat(tripods.at("/0/name").asText()).isEqualTo("빠른 준비");
+    assertThat(tripods.at("/0/count").asLong()).isEqualTo(30);
+    assertThat(tripods.at("/1/name").asText()).isEqualTo("강화된 일격");
+    assertThat(tripods.at("/1/count").asLong()).isEqualTo(18);
+    assertThat(tripods.at("/2/name").asText()).isEqualTo("약점 포착");
+    assertThat(tripods.at("/2/count").asLong()).isEqualTo(12);
+    // 룬을 안 낀 18명은 분모에만 든다.
+    assertCells(windCut.path("runes"), 30, "name", "질풍", 12, "40.00");
+    assertThat(data.path("definitions").path("skillDetails").asText()).contains("트라이포드");
+
+    // 직업 각인 비기(v1 14명): 코어·스킬 칸 없음, 표본 수·비율만.
+    var small = data(base + "&classEngraving=" + encode("비기"));
+    assertThat(small.at("/details/status").asText()).isEqualTo("COLLECTING");
+    assertThat(small.at("/details/detailedSamples").asLong()).isZero();
+    assertThat(small.at("/details/arkGridCores").size()).isZero();
+    // 고정 조건을 걸면 고정 뒤 표본으로 센다(돌격대장 = 광기 v1 30 + v2 30).
+    var fixed = data(base + "&fixEngraving=" + encode("돌격대장"));
+    assertThat(fixed.at("/meta/population").asLong()).isEqualTo(60);
+    assertThat(fixed.at("/details/detailedSamples").asLong()).isEqualTo(30);
+    assertThat(fixed.at("/details/coverage").decimalValue()).isEqualByComparingTo("50.00");
   }
 
   @Test
@@ -627,14 +718,19 @@ class ClassBuildsIntegrationTest {
   }
 
   private void summary(UUID id, int hoursAgo, String title, String features) {
+    summary(id, hoursAgo, title, features, "equipment-summary-v1");
+  }
+
+  private void summary(UUID id, int hoursAgo, String title, String features, String schema) {
     jdbc.sql(
             """
         INSERT INTO character_equipment_summary (character_id, observed_at, last_confirmed_at,
           schema_version, combat_power, item_level, class_name, ark_passive_title, features, features_hash)
-        VALUES (:id, :at, :at, 'equipment-summary-v1', 3000, 1700, :className, :title,
+        VALUES (:id, :at, :at, :schema, 3000, 1700, :className, :title,
           CAST(:features AS JSONB), :hash)
         """)
         .param("id", id)
+        .param("schema", schema)
         .param("at", now.minus(hoursAgo, ChronoUnit.HOURS).atOffset(ZoneOffset.UTC))
         .param("className", CLASS)
         .param("title", title)

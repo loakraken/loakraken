@@ -99,7 +99,7 @@ public class StatsQueryService {
     requireKnownFix(conditions, braceletMin, fix);
     var effectiveBracelet = braceletMin(conditions, braceletMin);
     return cached(
-        "class-builds:"
+        "class-builds-v2:"
             + key(conditions)
             + ":"
             + (classEngraving == null ? "-" : classEngraving)
@@ -151,7 +151,8 @@ public class StatsQueryService {
               effectiveBracelet,
               allStatus,
               ClassBuilds.definitions(),
-              builds);
+              builds,
+              ClassBuilds.details(samples, limit, StatsRules.MIN_SAMPLE));
         });
   }
 
@@ -1121,6 +1122,7 @@ public class StatsQueryService {
    * @param classPopulation 장비 요약이 없는 캐릭터도 센 그 직업 모집단 수(/stats/classes의 인원과 같은 모집단)
    * @param braceletItemLevelMin 팔찌 전투 특성에 실제로 쓴 아이템 레벨 기준(itemLevelMin과 요청 값 중 큰 값)
    * @param classEngravingStatus 직업 각인 비율의 표본 상태(직업 각인 필터와 무관한 직업 전체 표본 기준)
+   * @param details 장비 요약 v2 표본으로만 센 코어·스킬 항목(v2 표본 30 미만이면 빈 칸)
    */
   public record ClassBuildsResult(
       Meta meta,
@@ -1130,7 +1132,8 @@ public class StatsQueryService {
       BigDecimal braceletItemLevelMin,
       SampleStatus classEngravingStatus,
       java.util.Map<String, String> definitions,
-      ClassBuilds.Result builds) {}
+      ClassBuilds.Result builds,
+      ClassBuilds.Details details) {}
 
   public record ServerStat(
       String serverName,

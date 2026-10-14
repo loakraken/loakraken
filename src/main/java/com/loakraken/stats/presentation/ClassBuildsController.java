@@ -372,9 +372,12 @@ public class ClassBuildsController {
       ClassBuildCardSection cardSets,
       @Schema(description = "주력 전투 특성 top-1(6종, 합 100%)") ClassBuildTopStatSection topStats,
       @Schema(description = "팔찌에 그 전투 특성 줄이 있는 캐릭터 수(여러 특성에 셈, 합이 100%를 넘음)")
-          ClassBuildBraceletSection braceletStats) {
+          ClassBuildBraceletSection braceletStats,
+      @Schema(description = "코어 이름·스킬 상세를 저장한 표본으로만 센 항목(그 표본 30명 미만이면 칸이 비어 있음)")
+          ClassBuildDetails details) {
     static ClassBuildsResponse from(StatsQueryService.ClassBuildsResult result) {
       var builds = result.builds();
+      var details = result.details();
       return new ClassBuildsResponse(
           StatsResponses.StatsMetaResponse.from(result.meta()),
           result.className(),
@@ -418,7 +421,41 @@ public class ClassBuildsController {
               builds.braceletStats().known(),
               builds.braceletStats().unread(),
               hidden(builds.braceletStats().hidden()),
-              nameCells(builds.braceletStats().cells())));
+              nameCells(builds.braceletStats().cells())),
+          new ClassBuildDetails(
+              details.detailedSamples(),
+              details.coverage(),
+              details.ready() ? "READY" : "COLLECTING",
+              details.cores().stream()
+                  .map(
+                      core ->
+                          new ClassBuildCoreSection(
+                              core.kind(),
+                              core.position(),
+                              core.names().known(),
+                              hidden(core.names().hidden()),
+                              nameCells(core.names().cells())))
+                  .toList(),
+              names(details.skills()),
+              details.skillDetails().stream()
+                  .map(
+                      skill ->
+                          new ClassBuildSkillDetail(
+                              skill.skill(),
+                              skill.users(),
+                              new ClassBuildTripodSection(
+                                  skill.tripods().known(),
+                                  hidden(skill.tripods().hidden()),
+                                  cells(
+                                      skill.tripods(),
+                                      cell ->
+                                          new ClassBuildTripodCell(
+                                              cell.key().tier(),
+                                              cell.key().name(),
+                                              cell.count(),
+                                              cell.share()))),
+                              names(skill.runes())))
+                  .toList()));
     }
 
     private static ClassBuildNameSection names(ClassBuilds.Section<String> section) {
@@ -515,6 +552,50 @@ public class ClassBuildsController {
           "known: 기준 레벨 이상에서 팔찌를 읽은 캐릭터 수(분모). unread: 기준 레벨 이상인데 팔찌를 못 읽은(없는) 캐릭터 수(0이면 분모 = 조건에 맞는 전체)")
   public record ClassBuildBraceletSection(
       long known, long unread, ClassBuildHidden hidden, List<ClassBuildNameCell> cells) {}
+
+  @Schema(
+      description =
+          "장비 요약 v2(코어 이름·스킬 상세 저장) 표본으로만 센 항목. status가 COLLECTING이면(v2 표본 30명 미만) 목록이 모두 비어 있고 detailedSamples·coverage만 의미가 있습니다")
+  public record ClassBuildDetails(
+      @Schema(description = "표본 가운데 코어 이름·스킬 상세가 있는 캐릭터 수", example = "412") long detailedSamples,
+      @Schema(
+              description = "detailedSamples / 표본(meta.population) %, 소수 둘째 자리. 표본이 0이면 null",
+              example = "63.20")
+          @NullableResponse
+          BigDecimal coverage,
+      @Schema(
+              description = "detailedSamples 30 이상이면 READY",
+              allowableValues = {"COLLECTING", "READY"})
+          String status,
+      @Schema(description = "질서·혼돈 × 해·달·별 6칸(이 순서). COLLECTING이면 빈 목록")
+          List<ClassBuildCoreSection> arkGridCores,
+      @Schema(description = "스킬별 채용(레벨 2 이상) 캐릭터 수(여러 스킬에 셈)") ClassBuildNameSection skills,
+      @Schema(description = "skills.cells에 든 스킬마다 트라이포드·룬 분포(skills.cells 순서)")
+          List<ClassBuildSkillDetail> skillDetails) {}
+
+  @Schema(description = "코어 한 칸. cells.name은 코어 이름, known은 그 칸 코어 이름을 읽은 캐릭터 수")
+  public record ClassBuildCoreSection(
+      @Schema(allowableValues = {"질서", "혼돈"}) String kind,
+      @Schema(allowableValues = {"해", "달", "별"}) String position,
+      long known,
+      ClassBuildHidden hidden,
+      List<ClassBuildNameCell> cells) {}
+
+  @Schema(description = "users: 그 스킬을 레벨 2 이상 올린 캐릭터 수(트라이포드·룬의 분모)")
+  public record ClassBuildSkillDetail(
+      String skill,
+      long users,
+      @Schema(description = "선택한 트라이포드(한 캐릭터가 단계마다 하나씩 여러 칸에 듦)") ClassBuildTripodSection tripods,
+      @Schema(description = "룬 이름별 인원. 룬을 안 낀 사용자는 분모(known)에만 듦") ClassBuildNameSection runes) {}
+
+  public record ClassBuildTripodSection(
+      long known, ClassBuildHidden hidden, List<ClassBuildTripodCell> cells) {}
+
+  public record ClassBuildTripodCell(
+      @Schema(description = "트라이포드 단계(1~3)", example = "1") @NullableResponse Integer tier,
+      String name,
+      long count,
+      @Schema(description = "known 대비 %, 소수 둘째 자리") BigDecimal share) {}
 
   @Configuration(proxyBeanMethods = false)
   static class ClassBuildsOpenApiConfiguration {

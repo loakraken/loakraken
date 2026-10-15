@@ -303,7 +303,11 @@ public class SpecUpController {
       @Schema(description = "화면에 그대로 쓰는 대상 이름", example = "블레이드 버스트 · 7레벨 겁화") String target,
       @Schema(description = "바꾸기 전(화면 문자열)", example = "7레벨") @NullableResponse String from,
       @Schema(description = "바꾼 뒤(화면 문자열)", example = "8레벨") @NullableResponse String to,
-      @Schema(description = "공식 아이템 이미지 URL(캐릭터 캐시)") @NullableResponse String icon,
+      @Schema(
+              description =
+                  "공식 아이템 이미지 URL(캐릭터 캐시). 각인 후보는 같은 이름 유물 각인서의 공식 아이콘(각인서 시세 캐시)이고, 캐시에 없으면 null")
+          @NullableResponse
+          String icon,
       @Schema(description = "공식 등급 문자열") @NullableResponse String grade,
       @Schema(description = "보석이 붙은 스킬 이름(보석 후보만)") @NullableResponse String skillName,
       @Schema(description = "권장 목표 단계(강화 후보용, to와 별개). 지금은 늘 null") @NullableResponse

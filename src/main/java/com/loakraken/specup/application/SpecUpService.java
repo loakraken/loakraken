@@ -117,7 +117,7 @@ public class SpecUpService {
     var planned = new ArrayList<Planned>();
     gems(loadout, prices, pricesAt, planned);
     quality(loadout, planned);
-    engravings(loadout, books::price, pricesAt, planned);
+    engravings(loadout, books::price, books::icon, pricesAt, planned);
     refines(loadout, materials.cached(), pricesAt, planned);
     others(loadout, planned);
 
@@ -339,12 +339,14 @@ public class SpecUpService {
 
   /**
    * 유물 각인서 +1: 장착 각인마다 레벨 + 1(4 미만). 비용(L30) = 5권 × 유물 각인서 즉시 구매 최저가(예열 캐시만, 없으면 PRICE_PENDING).
-   * 유물이 아닌 각인은 권수·시세 근거가 없어 UNKNOWN이다.
+   * 유물이 아닌 각인은 권수·시세 근거가 없어 UNKNOWN이다. 공식 각인 응답에는 아이콘이 없어 같은 이름 유물 각인서의 공식 아이콘(시세 캐시)을 쓰고, 캐시에 없으면
+   * null이다(아이콘을 위한 공식 호출 없음, PM 판정 10-15).
    */
   private static void engravings(
       CharacterLoadout loadout,
       java.util.function.Function<String, java.util.Optional<RelicBookPriceService.Price>>
           bookPrice,
+      java.util.function.Function<String, java.util.Optional<String>> bookIcon,
       Instant[] pricesAt,
       List<Planned> planned) {
     if (loadout.engravings() == null) return;
@@ -359,7 +361,7 @@ public class SpecUpService {
               engraving.name() + " 각인",
               engraving.level() + "레벨",
               next + "레벨",
-              null,
+              bookIcon.apply(engraving.name()).orElse(null),
               engraving.grade(),
               null,
               new Change(

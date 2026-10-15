@@ -45,6 +45,44 @@ class RelicBookPriceServiceTest {
     assertThat(service.price(null)).isEmpty();
   }
 
+  @Test
+  void 아이콘은_같은_이름_유물_각인서의_공식_아이콘이고_시세가_없어도_쓴다() {
+    when(cache.findRelicBooks())
+        .thenReturn(
+            Optional.of(
+                new RelicBookScan(
+                    at,
+                    3,
+                    List.of(
+                        new MarketPrice(
+                            1,
+                            "유물 원한 각인서",
+                            "유물",
+                            "https://cdn.example/a.png",
+                            1,
+                            null,
+                            null,
+                            null,
+                            null),
+                        new MarketPrice(2, "유물 실드관통 각인서", "유물", " ", 1, null, null, null, null),
+                        new MarketPrice(
+                            3,
+                            "전설 아드레날린 각인서",
+                            "전설",
+                            "https://cdn.example/b.png",
+                            1,
+                            null,
+                            null,
+                            null,
+                            null)))));
+    assertThat(service.icon("원한")).contains("https://cdn.example/a.png");
+    assertThat(service.icon("실드 관통")).isEmpty();
+    assertThat(service.icon("아드레날린")).isEmpty();
+    assertThat(service.icon(null)).isEmpty();
+    when(cache.findRelicBooks()).thenThrow(new IllegalStateException("down"));
+    assertThat(service.icon("원한")).isEmpty();
+  }
+
   private static MarketPrice price(long id, String name, int bundle, String min) {
     return new MarketPrice(
         id, name, "유물", null, bundle, null, null, null, min == null ? null : new BigDecimal(min));

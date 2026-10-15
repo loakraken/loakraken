@@ -170,6 +170,8 @@ class SpecUpIntegrationTest {
     assertThat(pending.at("/cost/status").asText()).isEqualTo("PENDING");
     assertThat(pending.at("/cost/code").asText()).isEqualTo("PRICE_PENDING");
     assertThat(pending.at("/cost/basis").asText()).contains("각인서 시세");
+    // 공식 각인 응답에는 아이콘이 없다. 각인서 시세 캐시가 없으면 아이콘도 없다(따로 공식 호출 안 함).
+    assertThat(pending.path("icon").isNull()).isTrue();
 
     marketCache.saveRelicBooks(
         new RelicBookScan(
@@ -177,7 +179,15 @@ class SpecUpIntegrationTest {
             1,
             List.of(
                 new MarketPrice(
-                    1, "유물 원한 각인서", "유물", null, 1, null, null, null, new BigDecimal("12000")))),
+                    1,
+                    "유물 원한 각인서",
+                    "유물",
+                    "https://cdn.example/use_9_25.png",
+                    1,
+                    null,
+                    null,
+                    null,
+                    new BigDecimal("12000")))),
         Duration.ofMinutes(5));
     var response = get("/api/v1/characters/spec-up?characterName=" + encode("스펙각인"));
     var engraving =
@@ -185,6 +195,8 @@ class SpecUpIntegrationTest {
     assertThat(engraving.at("/cost/status").asText()).isEqualTo("OK");
     assertThat(engraving.at("/cost/code").asText()).isEqualTo("ENGRAVING_BOOK_BUY");
     assertThat(engraving.at("/cost/amount").asLong()).isEqualTo(60_000);
+    // 같은 이름 유물 각인서의 공식 아이콘.
+    assertThat(engraving.path("icon").asText()).isEqualTo("https://cdn.example/use_9_25.png");
     // 18.26 × 10000 / 60000 = 3.04
     assertThat(engraving.path("combatPowerPer10kGold").decimalValue()).isEqualByComparingTo("3.04");
     assertThat(mapper.readTree(response.body()).at("/data/pricesAt").isNull()).isFalse();

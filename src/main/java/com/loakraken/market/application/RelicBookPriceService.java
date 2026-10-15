@@ -1,5 +1,6 @@
 package com.loakraken.market.application;
 
+import com.loakraken.market.domain.MarketPrice;
 import com.loakraken.market.domain.MarketTab;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -52,6 +53,29 @@ public class RelicBookPriceService {
                                     BigDecimal.valueOf(item.bundleCount()), 0, RoundingMode.CEILING)
                                 .longValue(),
                             value.observedAt())));
+  }
+
+  /**
+   * 캐시에 있으면 그 각인의 유물 각인서 공식 아이콘 주소. 공식 각인 응답(아크 패시브 각인)에는 아이콘이 없어 스펙업 각인 줄 그림으로 쓴다. 없거나 캐시를 읽지 못하면
+   * 빈 값(공식 호출 없음). 시세가 없는 매물이어도 아이콘은 쓴다.
+   */
+  public Optional<String> icon(String engravingName) {
+    if (engravingName == null || engravingName.isBlank()) return Optional.empty();
+    Optional<RelicBookScan> scan;
+    try {
+      scan = cache.findRelicBooks();
+    } catch (RuntimeException exception) {
+      return Optional.empty();
+    }
+    var target = compact(GRADE + " " + engravingName + " 각인서");
+    return scan.flatMap(
+        value ->
+            value.items().stream()
+                .filter(item -> target.equals(compact(item.name())))
+                .filter(item -> item.grade() == null || GRADE.equals(item.grade()))
+                .map(MarketPrice::icon)
+                .filter(icon -> icon != null && !icon.isBlank())
+                .findFirst());
   }
 
   /** 예열용: 한 페이지를 공식 API에서 새로 받는다. */

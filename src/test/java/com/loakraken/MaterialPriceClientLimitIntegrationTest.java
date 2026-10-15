@@ -136,6 +136,8 @@ class MaterialPriceClientLimitIntegrationTest {
 
   @Test
   void 예열_전에는_요청_한_번만_세고_안쪽_검색은_공식_호출_한도에_매기지_않아_20개와_25개가_429_없이_답한다() throws Exception {
+    // 한도는 실제 시각 기준 1분 고정 창이다. 네 요청이 한 창 안에 들어야 네 번째가 429다(분 경계를 넘으면 새 창에서 허용).
+    awaitMinuteWithAtLeast(Duration.ofSeconds(40));
     // 첫 요청: 생활 18개 × 분류 2 + 2 ≈ 38번 검색(공식 호출 한도 20을 넘지만 429 없음).
     var first = priced(post(CRAFT, "203.0.113.40"));
     assertThat(first).hasSize(20);
@@ -159,6 +161,13 @@ class MaterialPriceClientLimitIntegrationTest {
     var limited = post(CRAFT.subList(0, 5), "203.0.113.40");
     assertThat(limited.statusCode()).isEqualTo(429);
     assertThat(calls).hasValue(0);
+  }
+
+  /** 지금 분(UTC 1분 창)에 남은 시간이 needed보다 짧으면 다음 분이 시작될 때까지 기다린다. */
+  private static void awaitMinuteWithAtLeast(Duration needed) throws InterruptedException {
+    long minute = Duration.ofMinutes(1).toMillis();
+    long remaining = minute - System.currentTimeMillis() % minute;
+    if (remaining < needed.toMillis()) Thread.sleep(remaining + 50);
   }
 
   /** 로아샵 화면이 묻는 15개(재련 5 + 배틀 아이템 5 + 페온 + 거래 불가 4). */

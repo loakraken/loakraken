@@ -496,6 +496,33 @@ class SpecUpIntegrationTest {
   }
 
   @Test
+  void 기본_공격력_근거가_없는_1에서_5레벨_보석이_있어도_500이_아니다() throws Exception {
+    // 코덱스 리뷰 P1: 계수표 1~5레벨 baseAttackPct가 null이라 후보를 만들다 NPE가 났다.
+    when(auctions.cachedGems()).thenReturn(gemCells(true));
+    search("스펙저레벨");
+    var response = get("/api/v1/characters/spec-up?characterName=" + encode("스펙저레벨"));
+    assertThat(response.statusCode()).isEqualTo(200);
+    var gem = find(mapper.readTree(response.body()).at("/data/candidates"), "GEM_LEVEL:0:4");
+    assertThat(gem.path("from").asText()).isEqualTo("3레벨");
+    assertThat(gem.path("baseAttackPctFrom").isNull()).isTrue();
+    assertThat(gem.path("baseAttackPctTo").isNull()).isTrue();
+    assertThat(find(mapper.readTree(response.body()).at("/data/candidates"), "GEM_LEVEL:0:6")
+            .path("baseAttackPctTo")
+            .decimalValue())
+        .isEqualByComparingTo("0.45");
+  }
+
+  @Test
+  void 보석_정보를_받지_못했으면_빈_칸_후보를_내지_않는다() throws Exception {
+    when(auctions.cachedGems()).thenReturn(gemCells(true));
+    search("스펙보석정보없음");
+    var response = get("/api/v1/characters/spec-up?characterName=" + encode("스펙보석정보없음"));
+    assertThat(response.statusCode()).isEqualTo(200);
+    for (var candidate : mapper.readTree(response.body()).at("/data/candidates"))
+      assertThat(candidate.path("kind").asText()).as(candidate.path("id").asText()).isNotEqualTo("GEM_LEVEL");
+  }
+
+  @Test
   void 빈_칸_보석_후보는_시세가_비면_비용만_PENDING이다() throws Exception {
     when(auctions.cachedGems()).thenReturn(List.of());
     search("스펙빈칸대기");
@@ -915,7 +942,17 @@ class SpecUpIntegrationTest {
                     // 원한 L3 S1 = 18 + 0.75 × 3 + 3 = 23.25(공식 설명 형식). 그 밖 캐릭터는 설명이 달라 UNSUPPORTED.
                     name.contains("각인") ? "적에게 주는 피해가 23.25% 증가한다." : "설명")));
     var gems =
-        name.contains("빈칸")
+        name.contains("보석정보없음")
+            ? null
+            : name.contains("저레벨")
+                ? new CharacterLoadout.Gems(
+                    List.of(new CharacterLoadout.Gem(0, "3레벨 겁화의 보석", null, 3, "희귀")),
+                    new CharacterLoadout.GemEffects(
+                        "",
+                        List.of(
+                            new CharacterLoadout.GemSkill(
+                                0, "테스트 스킬", List.of("피해 9.60% 증가"), null, null))))
+            : name.contains("빈칸")
             ? new CharacterLoadout.Gems(List.of(), new CharacterLoadout.GemEffects("", List.of()))
             : new CharacterLoadout.Gems(
                 List.of(

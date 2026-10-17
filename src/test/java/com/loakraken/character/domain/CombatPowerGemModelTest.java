@@ -119,6 +119,24 @@ class CombatPowerGemModelTest {
   }
 
   @Test
+  void 보석_정보를_받지_못했으면_모든_칸_0레벨로_계산하지_않는다() {
+    for (var gems :
+        java.util.Arrays.asList(
+            null, new CharacterLoadout.Gems(List.of(), null))) {
+      var loadout = new CharacterLoadout(extraLines(), null, gems, null, null, null, List.of());
+      assertThat(CombatPowerGemModel.observed(gems)).isFalse();
+      var model = CombatPowerGemModel.of(COEFFICIENTS, loadout);
+      assertThat(model.unsupportedReason()).isEqualTo("보석 정보를 받지 못했습니다.");
+      assertThat(model.ratio(Map.of(0, 10))).isNull();
+    }
+    // 공식 보석 0개 응답(Gems: null, Effects 있음)은 받은 것이다.
+    assertThat(
+            CombatPowerGemModel.observed(
+                new CharacterLoadout.Gems(List.of(), new CharacterLoadout.GemEffects("", List.of()))))
+        .isTrue();
+  }
+
+  @Test
   void 보석이_없어도_모델을_만들고_빈_칸_11개에_끼울_수_있다() {
     var loadout =
         new CharacterLoadout(

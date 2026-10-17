@@ -176,16 +176,26 @@ public final class CombatPowerGemModel {
 
   private CombatPowerGemModel() {}
 
+  /**
+   * 보석 정보를 받았는가. 공식 응답은 보석이 하나도 없는 캐릭터에게 ArmoryGem을 {Gems: null, Effects: {Description: "", Skills:
+   * []}}로 준다(기준 캐릭터 원본 2026-10-18 확인) — 이것은 '보석 0개'다. ArmoryGem 자체가 없거나 보석도 효과도 없으면 받지 못한 것으로 보고 모든 칸
+   * 0레벨로 계산하지 않는다(보석 기여가 0인 틀린 숫자를 내지 않기 위해).
+   */
+  public static boolean observed(CharacterLoadout.Gems gems) {
+    return gems != null && (!gems.items().isEmpty() || gems.effects() != null);
+  }
+
   public static Model of(Coefficients coefficients, CharacterLoadout loadout) {
     var slots = new LinkedHashMap<Integer, Slot>();
     var gems = loadout.gems();
+    if (!observed(gems)) return new Model(slots, BigDecimal.ZERO, "보석 정보를 받지 못했습니다.");
     // 보석이 하나도 없어도 모델을 만든다: 모든 칸이 0레벨(보석 없음)이고 빈 칸에 끼우는 변화를 계산할 수 있다(스펙업 빈 칸 후보).
     var emptyTier = coefficients.tierOf(EMPTY_SLOT_KIND);
     var options = new LinkedHashMap<Integer, String>();
-    if (gems != null && gems.effects() != null)
+    if (gems.effects() != null)
       for (var skill : gems.effects().skills())
         if (skill != null && skill.gemSlot() != null) options.put(skill.gemSlot(), skill.option());
-    for (var gem : gems == null ? List.<CharacterLoadout.Gem>of() : gems.items()) {
+    for (var gem : gems.items()) {
       if (gem == null || gem.slot() == null || gem.level() == null) continue;
       var kind = match(GEM_KIND, gem.name());
       var tier = kind == null ? null : coefficients.tierOf(kind);

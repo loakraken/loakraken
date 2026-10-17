@@ -339,7 +339,7 @@ public class SpecUpController {
           BigDecimal baseAttackPctFrom,
       @Schema(
               description =
-                  "보석 후보만: 바꾼 뒤 그 칸 보석의 기본 공격력 %(공식 보석 효과 기준 6~10레벨 0.45·0.60·0.80·1.00·1.20). 모르면 null",
+                  "보석 후보만: 바꾼 뒤 그 칸 보석의 기본 공격력 %(보석 계수표 6~10레벨 0.45·0.60·0.80·1.00·1.20 — 6·10레벨은 공식 보석 효과 확인값). 모르면 null",
               example = "0.80")
           @NullableResponse
           BigDecimal baseAttackPctTo) {

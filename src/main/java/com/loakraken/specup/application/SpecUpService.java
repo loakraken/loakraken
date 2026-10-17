@@ -274,8 +274,8 @@ public class SpecUpService {
       Map<String, MarketAuctionService.GemCell> prices,
       Instant[] pricesAt,
       List<Planned> planned) {
-    // 보석 응답 자체가 없으면(관측 안 됨) 빈 칸인지 모른다. 공식 응답의 Gems:null은 items가 빈 목록으로 온다.
-    if (gems == null) return;
+    // 보석 정보를 받지 못했으면 빈 칸인지 모른다(CombatPowerGemModel.observed).
+    if (!CombatPowerGemModel.observed(gems)) return;
     var occupied = new TreeSet<Integer>();
     for (var gem : gems.items()) if (gem != null && gem.slot() != null) occupied.add(gem.slot());
     var empty = new ArrayList<Integer>();
@@ -303,13 +303,17 @@ public class SpecUpService {
               baseAttackPct(tier, next)));
   }
 
-  /** 보석 하나의 기본 공격력 %(계수표 = 공식 보석 효과 "기본 공격력 n% 증가" 6~10레벨 0.45·0.60·0.80·1.00·1.20). 모르면 null. */
+  /**
+   * 보석 하나의 기본 공격력 %(보석 계수표 combat-power/gem-coefficients.json: 6·10레벨은 공식 보석 효과 확인값, 7~9레벨은 공개 분석 값 — 비교 기준
+   * 5명 대조 일치). 6~10레벨 0.45·0.60·0.80·1.00·1.20, 1~5레벨은 근거가 없어 null.
+   */
   static BigDecimal baseAttackPct(CombatPowerGemModel.Tier tier, int level) {
     if (tier == null || !tier.supported()) return null;
     return tier.levels().stream()
         .filter(value -> value.level() == level)
-        .map(CombatPowerGemModel.Level::baseAttackPct)
         .findFirst()
+        // 1~5레벨은 계수표 값이 null이다. map을 findFirst 앞에 두면 null 원소에서 NPE(스펙업 전체 500)가 난다.
+        .map(CombatPowerGemModel.Level::baseAttackPct)
         .orElse(null);
   }
 

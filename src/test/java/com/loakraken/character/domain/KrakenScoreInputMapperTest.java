@@ -15,7 +15,7 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * 크라켄 점수 입력 변환(#559) 고정 테스트: 같은 시각에 받은 기준 캐릭터 6명(l01~l06)의 공식 armories 응답(변환기가 읽는 부분만, 식별 정보 없음)을
+ * 크라켄 점수 입력 변환(#559) 고정 테스트: 같은 시각에 받은 기준 캐릭터 6명(l01~l06)과 서폿 공증 조건(스킬 + 빠른 준비)이 참인 서폿 표본 1명(l07)의 공식 armories 응답(변환기가 읽는 부분만, 식별 정보 없음)을
  * 바꾼 입력이 비교 기준 B 입력의 '엔진이 읽는 경로' 값과 같고, 그 입력의 점수가 비교 기준 B 점수와 double 끝자리까지 같은지 본다.
  */
 class KrakenScoreInputMapperTest {
@@ -59,7 +59,7 @@ class KrakenScoreInputMapperTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = {"l01", "l02", "l03", "l04", "l05", "l06"})
+  @ValueSource(strings = {"l01", "l02", "l03", "l04", "l05", "l06", "l07"})
   void 공식_원문에서_만든_입력이_비교_기준_입력의_엔진이_읽는_값과_같다(String id) throws IOException {
     var doc = read(id);
     var input = KrakenScoreInputMapper.from(doc.path("raw"));
@@ -90,7 +90,7 @@ class KrakenScoreInputMapperTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = {"l01", "l02", "l03", "l04", "l05", "l06"})
+  @ValueSource(strings = {"l01", "l02", "l03", "l04", "l05", "l06", "l07"})
   void 변환_입력의_점수가_비교_기준_점수와_끝자리까지_같다(String id) throws IOException {
     var doc = read(id);
     var input = KrakenScoreInputMapper.from(doc.path("raw"));
@@ -115,7 +115,7 @@ class KrakenScoreInputMapperTest {
     // 연결 PR 조건: 응답 p95 증가 ≤ 5ms. 응답 때 하는 일은 캐시에 든 입력으로 점수 한 번 계산뿐이다(변환은 공식 조회 때 한 번).
     var inputs = new ArrayList<JsonNode>();
     var roles = new ArrayList<Boolean>();
-    for (var id : Arrays.asList("l01", "l02", "l03", "l04", "l05", "l06")) {
+    for (var id : Arrays.asList("l01", "l02", "l03", "l04", "l05", "l06", "l07")) {
       var doc = read(id);
       inputs.add(KrakenScoreInputMapper.from(doc.path("raw")));
       roles.add("SUPPORT".equals(doc.path("role").asString("")));

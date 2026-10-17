@@ -97,7 +97,11 @@ public class GuildDetailController {
               summary.itemLevelMin(),
               summary.combatPowerAvg(),
               summary.combatPowerMedian(),
-              summary.combatPowerCount()),
+              summary.combatPowerCount(),
+              summary.combatPowerAvgTop(),
+              GuildDetail.TOP_ITEM_LEVEL,
+              summary.combatPowerTopCount(),
+              summary.combatPowerTotal()),
           detail.classes().stream()
               .map(row -> new GuildClassCount(row.className(), row.count(), row.share()))
               .toList(),
@@ -140,7 +144,22 @@ public class GuildDetailController {
       @Schema(description = "전투력을 관측한 길드원이 없으면 null") @NullableResponse BigDecimal combatPowerAvg,
       @Schema(description = "전투력을 관측한 길드원이 없으면 null") @NullableResponse
           BigDecimal combatPowerMedian,
-      long combatPowerCount) {}
+      long combatPowerCount,
+      @Schema(
+              description = "아이템 레벨 1750 이상이면서 전투력을 관측한 길드원의 전투력 평균. 그런 길드원이 없으면 null",
+              example = "3120.45")
+          @NullableResponse
+          BigDecimal combatPowerAvgTop,
+      @Schema(
+              description = "combatPowerAvgTop의 최소 아이템 레벨 기준(화면이 기준을 하드코딩하지 않게 함)",
+              example = "1750")
+          BigDecimal combatPowerTopItemLevelMin,
+      @Schema(description = "combatPowerAvgTop에 쓴 길드원 수", example = "8") long combatPowerTopCount,
+      @Schema(
+              description = "전투력을 관측한 길드원 전체(combatPowerCount명)의 전투력 합. 관측한 길드원이 없으면 null",
+              example = "35120.80")
+          @NullableResponse
+          BigDecimal combatPowerTotal) {}
 
   public record GuildClassCount(
       String className,

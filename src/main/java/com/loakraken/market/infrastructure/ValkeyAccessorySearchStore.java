@@ -14,13 +14,14 @@ import tools.jackson.core.JacksonException;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * 악세 경매 검색기(N13) 결과 캐시 `market:v1:auction-search:{키}`와 기능 몫 카운터
+ * 악세 경매 검색기(N13) 결과 캐시 `market:v2:auction-search:{키}`와 기능 몫 카운터
  * `market:v1:auction-search-quota:{분}`(1분 고정 창, 모든 인스턴스 공유). 캐시 장애는 검색을 막지 않고, 몫 카운터 장애는 공식 예산을
  * 지키려고 거절한다.
  */
 @Component
 class ValkeyAccessorySearchStore implements AccessorySearchStorePort {
-  static final String CACHE_PREFIX = "market:v1:auction-search:";
+  // v2: 매물 이미지·기본 효과가 더해져(#524) 옛 결과(v1)는 쓰지 않는다.
+  static final String CACHE_PREFIX = "market:v2:auction-search:";
   static final String QUOTA_PREFIX = "market:v1:auction-search-quota:";
   private static final Duration WINDOW = Duration.ofMinutes(1);
   private static final Logger log = LoggerFactory.getLogger(ValkeyAccessorySearchStore.class);

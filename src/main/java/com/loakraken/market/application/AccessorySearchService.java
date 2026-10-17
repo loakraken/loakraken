@@ -248,10 +248,14 @@ public class AccessorySearchService {
 
   static Item item(Slot slot, AuctionListing listing) {
     var polish = new ArrayList<Polish>();
+    var baseEffects = new ArrayList<AccessorySearch.BaseEffect>();
     Integer enlightenment = null;
     Integer mainStat = null;
     for (var option : listing.options()) {
       var name = option.name() == null ? "" : option.name().strip();
+      // 기본 효과: STAT 줄만 공식 순서대로, 숫자 값이 있는 줄만.
+      if ("STAT".equals(option.type()) && !name.isEmpty() && option.value() != null)
+        baseEffects.add(new AccessorySearch.BaseEffect(name, option.value()));
       if ("ACCESSORY_UPGRADE".equals(option.type())) {
         var known = AuctionCatalog.PolishOption.byOfficialName(name).orElse(null);
         var level = known == null ? null : known.levelOf(option.value()).orElse(null);
@@ -281,7 +285,9 @@ public class AccessorySearchService {
         // 입찰만 가능한 매물은 공식 BuyPrice가 0이거나 없다. 화면이 0G로 보이지 않게 null 하나로 준다.
         listing.buyPrice() == null || listing.buyPrice() <= 0 ? null : listing.buyPrice(),
         listing.bidStartPrice(),
-        listing.endDate());
+        listing.endDate(),
+        listing.icon() == null || listing.icon().isBlank() ? null : listing.icon(),
+        baseEffects);
   }
 
   private Result flight(String key, Supplier<Result> loader) {

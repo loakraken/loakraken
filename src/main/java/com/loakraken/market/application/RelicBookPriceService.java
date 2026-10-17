@@ -78,6 +78,15 @@ public class RelicBookPriceService {
                 .findFirst());
   }
 
+  /** 캐시된 유물 각인서 시세의 관측 시각. 캐시가 없거나 읽지 못하면 빈 값(공식 호출 없음). 결과 캐시 키에 넣어 시세가 바뀌면 다시 계산하게 한다. */
+  public Optional<Instant> observedAt() {
+    try {
+      return cache.findRelicBooks().map(RelicBookScan::observedAt);
+    } catch (RuntimeException exception) {
+      return Optional.empty();
+    }
+  }
+
   /** 예열용: 한 페이지를 공식 API에서 새로 받는다. */
   public MarketResult fetchPage(int page) {
     return markets.refreshSearch(MarketSource.ACTIVE_LISTING, search(page));

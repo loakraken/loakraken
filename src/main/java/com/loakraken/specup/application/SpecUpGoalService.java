@@ -152,6 +152,8 @@ public class SpecUpGoalService {
             String.valueOf(snapshot.fetchedAt() == null ? 0 : snapshot.fetchedAt().toEpochMilli()),
             String.valueOf(latest(gems)),
             String.valueOf(refinePrices.map(p -> p.observedAt().toEpochMilli()).orElse(0L)),
+            // 각인서 시세가 바뀌면 각인 비용이 달라지므로 다시 계산한다(시세가 그대로면 캐시 그대로).
+            String.valueOf(books.observedAt().map(Instant::toEpochMilli).orElse(0L)),
             RULE_VERSION,
             CombatPowerSimulationService.RULE_VERSION);
     var cached = store.find(key);

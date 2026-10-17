@@ -83,6 +83,16 @@ class RelicBookPriceServiceTest {
     assertThat(service.icon("원한")).isEmpty();
   }
 
+  @Test
+  void 관측_시각은_캐시된_스캔_시각이고_캐시가_없거나_장애면_빈_값이다() {
+    when(cache.findRelicBooks()).thenReturn(Optional.of(new RelicBookScan(at, 0, List.of())));
+    assertThat(service.observedAt()).contains(at);
+    when(cache.findRelicBooks()).thenReturn(Optional.empty());
+    assertThat(service.observedAt()).isEmpty();
+    when(cache.findRelicBooks()).thenThrow(new IllegalStateException("down"));
+    assertThat(service.observedAt()).isEmpty();
+  }
+
   private static MarketPrice price(long id, String name, int bundle, String min) {
     return new MarketPrice(
         id, name, "유물", null, bundle, null, null, null, min == null ? null : new BigDecimal(min));

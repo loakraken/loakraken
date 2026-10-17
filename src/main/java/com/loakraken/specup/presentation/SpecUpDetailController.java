@@ -49,6 +49,7 @@ public class SpecUpDetailController {
               + "보석·각인서 후보는 market(사는 품목 BUY, 지금 보석 판매 기대가를 비용에서 뺐으면 SELL 줄도), 일반 재련 후보는 refine·materials·goldFee를 줍니다. "
               + "재련 비용(cost.amount)은 materials의 반올림 전 금액 합 + goldFee를 올림한 값이라 표시 값의 합과 1골드 안쪽으로 다를 수 있습니다. "
               + "stats는 근거가 확인된 스탯만 담고(지금은 보석 기본 공격력 %), 없으면 빈 목록입니다. 해당 없는 칸은 null입니다. "
+              + "요청이 많으면 429 CLIENT_RATE_LIMITED와 Retry-After(초)를 줍니다. "
               + "role·priceStatus·priceBasis·breath는 문자열이며 값이 늘 수 있습니다.")
   @ApiResponses({
     @io.swagger.v3.oas.annotations.responses.ApiResponse(
@@ -62,6 +63,10 @@ public class SpecUpDetailController {
         responseCode = "404",
         description =
             "SPEC_UP_CANDIDATE_NOT_FOUND: 지금 목록에 그 후보가 없음(세팅이 바뀜, 목록을 다시 부름) · SPEC_UP_DISABLED: 기능이 꺼져 있음 · CHARACTER_NOT_CACHED: 캐릭터를 먼저 검색해야 함",
+        content = @Content(schema = @Schema(ref = "#/components/schemas/ErrorResponse"))),
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(
+        responseCode = "429",
+        description = "CLIENT_RATE_LIMITED: 요청이 많음(Retry-After 초)",
         content = @Content(schema = @Schema(ref = "#/components/schemas/ErrorResponse"))),
     @io.swagger.v3.oas.annotations.responses.ApiResponse(
         responseCode = "503",

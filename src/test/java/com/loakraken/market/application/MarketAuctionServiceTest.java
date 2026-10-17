@@ -199,9 +199,12 @@ class MarketAuctionServiceTest {
     public void saveListings(String key, AuctionPage page) {}
 
     @Override
-    public boolean tryAcquireGemFilterQuota(int limit) {
-      return true;
+    public Optional<String> acquireGemFilterQuota(int limit) {
+      return Optional.of("quota");
     }
+
+    @Override
+    public void releaseGemFilterQuota(String key) {}
 
     @Override
     public void recordDaily(String key, LocalDate day, AuctionCell cell) {

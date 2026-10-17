@@ -92,7 +92,7 @@ class KrakenScoreServiceTest {
     var score =
         service.ok(
             KrakenScoreService.Role.DEALER,
-            new BigDecimal("2499.996"),
+            2499.996,
             List.of(
                 new KrakenScoreService.Factor(
                     "ATTACK", new BigDecimal("1.05"), KrakenScoreService.Status.OK, null)));
@@ -100,5 +100,29 @@ class KrakenScoreServiceTest {
     assertThat(score.score()).isEqualByComparingTo("2500.00");
     assertThat(score.tier().code()).isEqualTo("BRONZE");
     assertThat(score.factors()).hasSize(1);
+    // 표시 점수도 원본 toFixed(2)와 같다: 1.005(double은 1.00499…)는 1.00.
+    assertThat(service.ok(KrakenScoreService.Role.DEALER, 1.005, List.of()).score())
+        .isEqualByComparingTo("1.00");
+  }
+
+  @Test
+  void 음수_NaN_무한대_점수는_OK도_티어도_아니다() {
+    var registry = new SimpleMeterRegistry();
+    var service = new KrakenScoreService(TABLE, true, registry);
+    for (double bad : new double[] {-1, Double.NaN, Double.NEGATIVE_INFINITY}) {
+      var score = service.ok(KrakenScoreService.Role.DEALER, bad, List.of());
+      assertThat(score.status()).isEqualTo(KrakenScoreService.Status.UNSUPPORTED);
+      assertThat(score.reason()).isEqualTo(KrakenScoreService.Reason.SCORE_UNAVAILABLE);
+      assertThat(score.score()).isNull();
+      assertThat(score.tier()).isNull();
+      assertThat(score.role()).isEqualTo(KrakenScoreService.Role.DEALER);
+    }
+    assertThat(
+            registry
+                .get("loakraken.kraken_score.unsupported")
+                .tag("reason", "SCORE_UNAVAILABLE")
+                .counter()
+                .count())
+        .isEqualTo(3);
   }
 }

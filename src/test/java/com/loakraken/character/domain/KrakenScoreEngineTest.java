@@ -1,6 +1,7 @@
 package com.loakraken.character.domain;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.io.IOException;
@@ -97,6 +98,31 @@ class KrakenScoreEngineTest {
     var series = KrakenScoreGems.bySeries(input, TABLES, score);
     assertEfficiency(expected.path("질서"), series.get("질서"));
     assertEfficiency(expected.path("혼돈"), series.get("혼돈"));
+  }
+
+  @Test
+  void 아크_그리드가_없거나_객체가_아니면_젬_효율은_빈_값이고_예외가_없다() throws IOException {
+    var base = (tools.jackson.databind.node.ObjectNode) fixture("g01").path("input");
+    java.util.function.ToDoubleFunction<JsonNode> score = e -> KrakenScoreEngine.dealerScore(e, TABLES);
+    var nullGrid = base.deepCopy();
+    nullGrid.putNull("arkGrid");
+    var missing = base.deepCopy();
+    missing.remove("arkGrid");
+    var text = base.deepCopy();
+    text.put("arkGrid", "x");
+    var brokenCore = base.deepCopy();
+    ((tools.jackson.databind.node.ObjectNode) brokenCore.get("arkGrid"))
+        .set("core", MAPPER.createArrayNode().addNull().add(1));
+    for (JsonNode input :
+        List.<JsonNode>of(nullGrid, missing, text, tools.jackson.databind.node.JsonNodeFactory.instance.nullNode())) {
+      assertThat(KrakenScoreGems.total(input, TABLES, score)).isEqualTo(KrakenScoreGems.UNAVAILABLE);
+      assertThat(KrakenScoreGems.bySeries(input, TABLES, score))
+          .containsOnlyKeys("질서", "혼돈")
+          .allSatisfy((series, efficiency) -> assertThat(efficiency).isNull());
+    }
+    // 코어 칸이 객체가 아니어도 500(ClassCastException) 없이 계산한다.
+    assertThatCode(() -> KrakenScoreGems.total(brokenCore, TABLES, score)).doesNotThrowAnyException();
+    assertThatCode(() -> KrakenScoreGems.bySeries(brokenCore, TABLES, score)).doesNotThrowAnyException();
   }
 
   @Test

@@ -27,8 +27,17 @@ public final class KrakenScoreGems {
   /** 전체 또는 한 계열(질서·혼돈)의 효율. 계산할 수 없으면 값 null. */
   public record Efficiency(Double efficiency, Double optionEfficiency, Double pointEfficiency, List<Line> lines) {}
 
-  /** 원본 o(e, t): 젬 전체(옵션 + 포인트). */
+  /** 계산할 수 없을 때(아크 그리드 없음). */
+  public static final Efficiency UNAVAILABLE = new Efficiency(null, null, null, List.of());
+
+  private static boolean hasArkGrid(JsonNode e) {
+    return e != null && e.isObject() && e.path("arkGrid").isObject();
+  }
+
+  /** 원본 o(e, t): 젬 전체(옵션 + 포인트). 아크 그리드가 없으면 {@link #UNAVAILABLE}. */
   public static Efficiency total(JsonNode e, KrakenScoreEngine.Tables tables, ToDoubleFunction<JsonNode> score) {
+    // 아크 그리드가 없거나 객체가 아니면 젬 효율을 계산하지 않는다(값 null, 500 아님).
+    if (!hasArkGrid(e)) return UNAVAILABLE;
     double c = score.applyAsDouble(e);
     double m = score.applyAsDouble(withGemEffects(e, null));
     var noGem = withGemEffects(e, null);
@@ -58,6 +67,7 @@ public final class KrakenScoreGems {
     var result = new LinkedHashMap<String, Efficiency>();
     result.put("질서", null);
     result.put("혼돈", null);
+    if (!hasArkGrid(e)) return result;
     var cores = e.path("arkGrid").path("core");
     var effects = e.path("arkGrid").path("gemEffects");
     if (cores.size() == 0 || effects.size() == 0) return result;
@@ -165,7 +175,7 @@ public final class KrakenScoreGems {
 
   /** 원본 u: 젬이 준 포인트를 뺀 코어(17P 아래로는 내리지 않음), 젬 없음. */
   private static JsonNode reducedCore(JsonNode core) {
-    var copy = (ObjectNode) core.deepCopy();
+    if (!(core.deepCopy() instanceof ObjectNode copy)) return core;
     copy.put("point", basePoint(core));
     copy.putNull("gem");
     return copy;
@@ -187,8 +197,9 @@ public final class KrakenScoreGems {
 
   /** 젬 옵션 목록을 바꾼 입력(null은 빼고, 남는 것이 없으면 null). */
   private static JsonNode withGemEffects(JsonNode e, List<JsonNode> effects) {
+    // 부르는 쪽이 hasArkGrid를 확인했다(입력과 아크 그리드 모두 객체).
     var copy = (ObjectNode) e.deepCopy();
-    var arkGrid = (ObjectNode) copy.path("arkGrid");
+    var arkGrid = (ObjectNode) copy.get("arkGrid");
     var kept = new ArrayList<JsonNode>();
     if (effects != null) for (var effect : effects) if (effect != null) kept.add(effect);
     if (kept.isEmpty()) arkGrid.putNull("gemEffects");

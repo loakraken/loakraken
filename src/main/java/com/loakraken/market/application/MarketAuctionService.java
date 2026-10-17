@@ -35,10 +35,13 @@ import org.springframework.stereotype.Service;
  * 요청·인스턴스가 끼어들어도 사용자 몫을 파고들지 않는다(#130). 칸 채우기도 요청 클라이언트의 분당 공식 호출 한도(OFFICIAL)에 매기므로, 한도에 걸리면 남은 칸은
  * 다음 요청으로 미룬다. 한 요청에 최대 {@link #MAX_FETCH_PER_REQUEST}칸, 동시에 한 요청만 채운다. 채우지 못한 칸은 PENDING으로 준다. 전일
  * 대비는 우리가 관측한 KST 날짜별 마지막 최저가로 계산한다.
+ *
+ * <p>한 요청이 채우는 칸을 적게 둔다(#526): 캐시가 빈 순간의 방문 한 번이 표 전체(보석 20칸)를 한꺼번에 부르면 몇 명만 와도 사용자 몫을 다 쓴다. 남은 칸은
+ * PENDING으로 두고 다음 요청이 이어서 채운다.
  */
 @Service
 public class MarketAuctionService {
-  public static final int MAX_FETCH_PER_REQUEST = 24;
+  public static final int MAX_FETCH_PER_REQUEST = 5;
   public static final int RESERVE = 40;
   public static final ZoneId KST = ZoneId.of("Asia/Seoul");
   private static final Logger log = LoggerFactory.getLogger(MarketAuctionService.class);

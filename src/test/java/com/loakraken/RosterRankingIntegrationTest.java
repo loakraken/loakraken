@@ -156,8 +156,9 @@ class RosterRankingIntegrationTest {
     member(SERVER, key, "원정섞임대표", 1950, "3000.00", null, Instant.now());
     member(SERVER, key, "원정섞임가", 1940, "2900.00", null, Instant.now());
     member(SERVER, key, "원정섞임나", 1930, "2800.00", null, Instant.now());
+    // 원정대 레벨은 다른 서버 캐릭터 하나에만 있다(대표 서버 캐릭터는 미수집 null).
     for (int i = 0; i < 4; i++)
-      member(TIE_SERVER, key, "원정섞임다른" + i, 1945 - i, null, null, Instant.now());
+      member(TIE_SERVER, key, "원정섞임다른" + i, 1945 - i, null, i == 0 ? 300 : null, Instant.now());
 
     // 서버 조건 없음: 대표 서버(SERVER) 3명만 — (1950 + 1940 + 1930) ÷ 6 = 970. 예전처럼 서버를 섞으면 1944였다.
     var all = data(get("/api/v1/rankings/rosters?basis=ITEM_LEVEL&aggregate=TOP6_AVG&size=100"));
@@ -174,6 +175,13 @@ class RosterRankingIntegrationTest {
     // 전투력: 다른 서버의 미관측 고레벨 캐릭터 때문에 빠지지 않는다 — (3000 + 2900 + 2800) ÷ 6 = 1450.
     var cp = data(get("/api/v1/rankings/rosters?basis=COMBAT_POWER&aggregate=TOP6_AVG&size=100"));
     assertThat(rowOf(cp, "원정섞임대표").path("value").decimalValue()).isEqualByComparingTo("1450.00");
+
+    // 원정대 레벨은 계정 공통 값: 대표 서버 캐릭터가 모두 null이어도 원정대 전체 최댓값 300. 서버 조건이 있어도 같다.
+    var levelPath = "/api/v1/rankings/rosters?basis=ROSTER_LEVEL&size=100";
+    for (var path : List.of(levelPath, levelPath + "&server=" + encode(SERVER))) {
+      var value = rowOf(data(get(path)), "원정섞임대표").path("value").decimalValue();
+      assertThat(value).as(path).isEqualByComparingTo("300");
+    }
 
     // 서버 조건이 있으면 그 서버 캐릭터만: TIE_SERVER 4명 (1945 + 1944 + 1943 + 1942) ÷ 6 = 1295.67.
     var tie =

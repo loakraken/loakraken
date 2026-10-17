@@ -5,6 +5,7 @@ import com.loakraken.character.application.CombatPowerSimulationService;
 import com.loakraken.character.application.CombatPowerSimulationService.Change;
 import com.loakraken.character.application.CombatPowerSimulationService.Kind;
 import com.loakraken.character.domain.CharacterLoadout;
+import com.loakraken.character.domain.CombatPowerGemModel;
 import com.loakraken.character.domain.CombatPowerReasons;
 import com.loakraken.common.api.BusinessException;
 import com.loakraken.market.application.MarketAuctionService;
@@ -45,7 +46,11 @@ public class SpecUpService {
   private final RelicBookPriceService books;
   private final RefiningPlanService plans;
   private final RefiningMaterialPriceService materials;
+  private final CombatPowerGemModel.Coefficients gemCoefficients;
   private final boolean enabled;
+
+  /** 빈 칸 후보 레벨: 기본 공격력 %가 확인된 6~10레벨만(1~5레벨은 계수표에 근거가 없어 계산하지 않는다). */
+  static final int EMPTY_SLOT_MIN_LEVEL = 6;
 
   public SpecUpService(
       CombatPowerSimulationService simulator,
@@ -53,12 +58,14 @@ public class SpecUpService {
       RelicBookPriceService books,
       RefiningPlanService plans,
       RefiningMaterialPriceService materials,
+      CombatPowerGemModel.Coefficients gemCoefficients,
       @Value("${spec-up.enabled:false}") boolean enabled) {
     this.simulator = simulator;
     this.auctions = auctions;
     this.books = books;
     this.plans = plans;
     this.materials = materials;
+    this.gemCoefficients = gemCoefficients;
     this.enabled = enabled;
   }
 
@@ -86,7 +93,10 @@ public class SpecUpService {
       BigDecimal combatPowerPer10kGold,
       String reasonCode,
       String reason,
-      String reasonDetail) {}
+      String reasonDetail,
+      Boolean emptySlot,
+      BigDecimal baseAttackPctFrom,
+      BigDecimal baseAttackPctTo) {}
 
   public record Guide(
       String characterName,
@@ -115,7 +125,7 @@ public class SpecUpService {
     for (var cell : auctions.cachedGems()) prices.put(cell.kind() + ":" + cell.level(), cell);
     var pricesAt = new Instant[1];
     var planned = new ArrayList<Planned>();
-    gems(loadout, prices, pricesAt, planned);
+    gems(loadout, gemCoefficients, prices, pricesAt, planned);
     quality(loadout, planned);
     engravings(loadout, books::price, books::icon, pricesAt, planned);
     refines(loadout, materials.cached(), pricesAt, planned);
@@ -212,6 +222,7 @@ public class SpecUpService {
   /** 보석 +1: 슬롯마다 현재 레벨 + 1(10 미만). 대상 이름은 보석이 붙은 스킬(PM-프론트 16:27 ③). */
   private static void gems(
       CharacterLoadout loadout,
+      CombatPowerGemModel.Coefficients coefficients,
       Map<String, MarketAuctionService.GemCell> prices,
       Instant[] pricesAt,
       List<Planned> planned) {
@@ -229,6 +240,7 @@ public class SpecUpService {
       String priceKind = priceKind(kind, effects.get(gem.slot()));
       String skill = skills.get(gem.slot());
       String label = gem.level() + "레벨 " + (kind == null ? "보석" : kind);
+      var tier = kind == null ? null : coefficients.tierOf(kind);
       String target = skill == null ? "보석 " + gem.slot() + "번 · " + label : skill + " · " + label;
       // 슬롯마다 다음 레벨부터 10까지 단계별 후보를 각각 낸다(PM-프론트·PM-백엔드 16:37 ①).
       for (int next = gem.level() + 1; next <= 10; next++)
@@ -243,8 +255,66 @@ public class SpecUpService {
                 gem.grade(),
                 skill,
                 change(Kind.GEM_LEVEL, gem.slot(), null, next, null, null),
-                gemCost(prices, pricesAt, priceKind, gem.level(), next, bound(gem))));
+                gemCost(prices, pricesAt, priceKind, gem.level(), next, bound(gem)),
+                false,
+                baseAttackPct(tier, gem.level()),
+                baseAttackPct(tier, next)));
     }
+    emptySlot(loadout.gems(), coefficients, prices, pricesAt, planned);
+  }
+
+  /**
+   * 빈 보석 칸 = '보석 장착' 후보(사용자 지적 10-17: 보석이 없는 캐릭터는 스펙업 결과가 비어 있었음). 4티어 보석은 어느 칸이든 전투력 계수가 같아 칸마다 같은
+   * 값이므로 가장 앞 빈 칸 하나로 6~10레벨을 낸다(같은 줄을 빈 칸 수만큼 반복하지 않음). 비용은 겁화(작열 제외 기본) 목표 레벨 즉시 구매 최저가, 팔 보석이
+   * 없으니 판매가를 빼지 않는다(GEM_BUY).
+   */
+  static void emptySlot(
+      CharacterLoadout.Gems gems,
+      CombatPowerGemModel.Coefficients coefficients,
+      Map<String, MarketAuctionService.GemCell> prices,
+      Instant[] pricesAt,
+      List<Planned> planned) {
+    // 보석 정보를 받지 못했으면 빈 칸인지 모른다(CombatPowerGemModel.observed).
+    if (!CombatPowerGemModel.observed(gems)) return;
+    var occupied = new TreeSet<Integer>();
+    for (var gem : gems.items()) if (gem != null && gem.slot() != null) occupied.add(gem.slot());
+    var empty = new ArrayList<Integer>();
+    for (int slot = 0; slot < CombatPowerGemModel.SLOT_COUNT; slot++)
+      if (!occupied.contains(slot)) empty.add(slot);
+    if (empty.isEmpty()) return;
+    var tier = coefficients.tierOf(CombatPowerGemModel.EMPTY_SLOT_KIND);
+    int slot = empty.getFirst();
+    String target = "빈 보석 칸 " + empty.size() + "개";
+    for (int next = EMPTY_SLOT_MIN_LEVEL; next <= 10; next++)
+      planned.add(
+          new Planned(
+              "GEM_LEVEL:" + slot + ":" + next,
+              Kind.GEM_LEVEL.name(),
+              target,
+              "빈 칸",
+              next + "레벨 " + CombatPowerGemModel.EMPTY_SLOT_KIND,
+              null,
+              null,
+              null,
+              change(Kind.GEM_LEVEL, slot, null, next, null, null),
+              gemCost(prices, pricesAt, CombatPowerGemModel.EMPTY_SLOT_KIND, 0, next, false),
+              true,
+              BigDecimal.ZERO,
+              baseAttackPct(tier, next)));
+  }
+
+  /**
+   * 보석 하나의 기본 공격력 %(보석 계수표 combat-power/gem-coefficients.json: 6·10레벨은 공식 보석 효과 확인값, 7~9레벨은 공개 분석 값
+   * — 비교 기준 5명 대조 일치). 6~10레벨 0.45·0.60·0.80·1.00·1.20, 1~5레벨은 근거가 없어 null.
+   */
+  static BigDecimal baseAttackPct(CombatPowerGemModel.Tier tier, int level) {
+    if (tier == null || !tier.supported()) return null;
+    return tier.levels().stream()
+        .filter(value -> value.level() == level)
+        .findFirst()
+        // 1~5레벨은 계수표 값이 null이다. map을 findFirst 앞에 두면 null 원소에서 NPE(스펙업 전체 500)가 난다.
+        .map(CombatPowerGemModel.Level::baseAttackPct)
+        .orElse(null);
   }
 
   /** 보석 칸 → 공식 보석 효과 문구(armory Effects.Skills의 Description). */
@@ -544,7 +614,7 @@ public class SpecUpService {
         kind, slot, index, null, level, refine, quality, null, null, null, null, null, null, null);
   }
 
-  private record Planned(
+  record Planned(
       String id,
       String kind,
       String target,
@@ -554,7 +624,24 @@ public class SpecUpService {
       String grade,
       String skillName,
       Change change,
-      SpecUpCost cost) {
+      SpecUpCost cost,
+      Boolean emptySlot,
+      BigDecimal baseAttackPctFrom,
+      BigDecimal baseAttackPctTo) {
+    Planned(
+        String id,
+        String kind,
+        String target,
+        String from,
+        String to,
+        String icon,
+        String grade,
+        String skillName,
+        Change change,
+        SpecUpCost cost) {
+      this(id, kind, target, from, to, icon, grade, skillName, change, cost, null, null, null);
+    }
+
     static Planned line(Kind kind, String target) {
       return line(kind.name(), target);
     }
@@ -589,7 +676,10 @@ public class SpecUpService {
           efficiency,
           reason == null ? null : reason.code(),
           reason == null ? null : reason.text(),
-          detail);
+          detail,
+          emptySlot,
+          baseAttackPctFrom,
+          baseAttackPctTo);
     }
   }
 }

@@ -334,8 +334,8 @@ class PostgresStatsRepository implements StatsPort {
 
   /**
    * 식스맨(TOP6)은 한 서버 안의 아이템 레벨 상위 6명(irn ≤ 6)이고, 평균은 6명보다 적어도 늘 6으로 나눈다(비교 기준 B와 같은 규칙, PM 판정
-   * 10-15·10-18). 서버 조건이 없으면 원정대 대표 캐릭터(아이템 레벨 최고)의 서버(home)만 본다 — 다른 서버 캐릭터는 irn이 null이라 식스맨에
-   * 들지 않는다. used_top6은 그 6명 중 값이 있는 수다.
+   * 10-15·10-18). 서버 조건이 없으면 원정대 대표 캐릭터(아이템 레벨 최고)의 서버(home)만 본다 — 다른 서버 캐릭터는 irn이 null이라 식스맨에 들지
+   * 않는다. used_top6은 그 6명 중 값이 있는 수다.
    */
   private static final String ROSTER_RANKED =
       """

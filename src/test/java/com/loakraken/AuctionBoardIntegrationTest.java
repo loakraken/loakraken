@@ -9,6 +9,7 @@ import com.loakraken.market.application.AuctionPort.AuctionPage;
 import com.loakraken.market.application.AuctionPort.AuctionQuery;
 import com.loakraken.market.application.AuctionPort.ListingOption;
 import com.loakraken.market.application.AuctionSearchPort;
+import com.loakraken.market.application.MarketAuctionService;
 import java.math.BigDecimal;
 import java.net.URI;
 import java.net.URLEncoder;
@@ -69,7 +70,18 @@ class AuctionBoardIntegrationTest {
         .param("d", LocalDate.now(ZoneId.of("Asia/Seoul")).minusDays(1))
         .update();
 
-    var data = data("/api/v1/markets/auctions/gems");
+    // 요청 하나는 빈 칸을 최대 5칸만 채운다(#526). 첫 방문은 5칸 READY·15칸 PENDING이다.
+    var firstVisit = data("/api/v1/markets/auctions/gems");
+    assertThat(firstVisit.path("complete").asBoolean()).isFalse();
+    assertThat(firstVisit.path("cells").size()).isEqualTo(20);
+    long ready = 0;
+    for (var cell : firstVisit.path("cells"))
+      if (cell.path("status").asText().equals("READY")) ready++;
+    assertThat(ready).isEqualTo(MarketAuctionService.MAX_FETCH_PER_REQUEST);
+    verify(search, times(MarketAuctionService.MAX_FETCH_PER_REQUEST)).search(any());
+    // 이어지는 방문이 남은 칸을 채운다(20칸 = 5칸 × 4번).
+    JsonNode data = firstVisit;
+    for (int visit = 2; visit <= 4; visit++) data = data("/api/v1/markets/auctions/gems");
     assertThat(data.path("ruleVersion").asText()).isEqualTo("auction-board-v1");
     assertThat(data.path("complete").asBoolean()).isTrue();
     assertThat(data.path("cells").size()).isEqualTo(20);
@@ -153,9 +165,13 @@ class AuctionBoardIntegrationTest {
                 gate.release();
               }
             });
-    var response =
-        get("/api/v1/markets/auctions/accessories?grade=ANCIENT&role=DEALER", "203.0.113.40");
-    assertThat(response.statusCode()).isEqualTo(200);
+    // 요청마다 최대 5칸: 4번의 요청이 20칸(클라이언트 한도 20)을 채우고, 5번째 요청의 첫 호출이 한도에 걸린다.
+    HttpResponse<String> response = null;
+    for (int visit = 1; visit <= 5; visit++) {
+      response =
+          get("/api/v1/markets/auctions/accessories?grade=ANCIENT&role=DEALER", "203.0.113.40");
+      assertThat(response.statusCode()).isEqualTo(200);
+    }
     var cells = new ArrayList<JsonNode>();
     for (var slot : mapper.readTree(response.body()).at("/data/slots"))
       for (var cell : slot.path("cells")) cells.add(cell);

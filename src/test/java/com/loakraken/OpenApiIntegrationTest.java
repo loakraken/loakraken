@@ -356,6 +356,14 @@ class OpenApiIntegrationTest {
                 .at("/components/schemas/AccessorySearchResponse/properties/nextPage/anyOf/1/type")
                 .asText())
         .isEqualTo("null");
+    // 매물 이미지·기본 효과(#524): api는 둘 다 늘 준다(icon은 nullable, baseEffects는 빈 배열).
+    assertThat(document.at("/components/schemas/AccessorySearchItemResponse/required").toString())
+        .contains("icon", "baseEffects");
+    assertThat(
+            document
+                .at("/components/schemas/AccessorySearchBaseEffectResponse/required")
+                .toString())
+        .contains("name", "value");
     for (var field :
         List.of(
             "grade",
@@ -366,7 +374,8 @@ class OpenApiIntegrationTest {
             "tradeAllowCount",
             "buyPrice",
             "bidStartPrice",
-            "endDate"))
+            "endDate",
+            "icon"))
       assertThat(
               document
                   .at(
@@ -964,8 +973,17 @@ class OpenApiIntegrationTest {
             "aggregatedAt",
             "ruleVersion");
     assertThat(schemas.at("/GuildDetailSummary/required").toString())
-        .contains("itemLevelAvg", "combatPowerAvg", "combatPowerMedian", "combatPowerCount");
-    for (var field : List.of("combatPowerAvg", "combatPowerMedian"))
+        .contains(
+            "itemLevelAvg",
+            "combatPowerAvg",
+            "combatPowerMedian",
+            "combatPowerCount",
+            "combatPowerAvgTop",
+            "combatPowerTopItemLevelMin",
+            "combatPowerTopCount",
+            "combatPowerTotal");
+    for (var field :
+        List.of("combatPowerAvg", "combatPowerMedian", "combatPowerAvgTop", "combatPowerTotal"))
       assertThat(schemas.at("/GuildDetailSummary/properties/" + field + "/anyOf/1/type").asText())
           .as(field)
           .isEqualTo("null");
@@ -1013,6 +1031,30 @@ class OpenApiIntegrationTest {
                   .asText())
           .as(field)
           .isEqualTo("null");
+  }
+
+  @Test
+  void 전투정보실_페이지_정보는_required이고_읽지_못한_값만_nullable이며_트라이포드와_스킬_코드는_없다() throws Exception {
+    var document = JsonMapper.builder().build().readTree(request("/v3/api-docs").body());
+    assertThat(document.at("/paths/~1api~1v1~1characters~1armory-page/get").isMissingNode())
+        .isFalse();
+    var schemas = document.at("/components/schemas");
+    assertThat(schemas.at("/CharacterArmoryPageResponse/required").toString())
+        .contains("characterName", "enabled", "source", "fetchedAt", "lifeSkills");
+    for (var field : List.of("source", "fetchedAt", "lifeSkills"))
+      assertThat(
+              schemas
+                  .at("/CharacterArmoryPageResponse/properties/" + field + "/anyOf/1/type")
+                  .asText())
+          .as(field)
+          .isEqualTo("null");
+    assertThat(schemas.at("/CharacterArmoryPageResponse/properties/skills").isMissingNode())
+        .isTrue();
+    assertThat(schemas.at("/CharacterArmoryPageResponse/properties/skillCode").isMissingNode())
+        .isTrue();
+    assertThat(schemas.at("/LifeSkillResponse/required").toString()).contains("name", "level");
+    assertThat(schemas.at("/LifeSkillResponse/properties/level/anyOf/1/type").asText())
+        .isEqualTo("null");
   }
 
   @Test

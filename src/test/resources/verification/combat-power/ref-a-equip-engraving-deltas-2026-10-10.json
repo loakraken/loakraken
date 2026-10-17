@@ -2,8 +2,8 @@
  "checkedAt": "2026-10-10T23:21+09:00",
  "source": {
   "kind": "REF",
-  "site": "로아랩 딜러 전투력 시뮬레이터",
-  "url": "https://lo4.app/characters?name=<이름>&simulator=true",
+  "site": "비교 기준 A 딜러 전투력 시뮬레이터",
+  "url": "비교 기준 A 캐릭터 시뮬레이터 화면",
   "method": "한 항목만 바꾸고 \"계산\"을 누른 표시 전투력. 바꿀 때마다 원래 값으로 되돌리면 같은 기준 전투력이 다시 나오는 것을 확인했다."
  },
  "baseline": {

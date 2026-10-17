@@ -142,6 +142,22 @@ class AccessorySearchServiceTest {
   }
 
   @Test
+  void 기본_효과는_STAT_줄만_공식_순서로_담고_이미지가_없으면_null이다() {
+    var item = AccessorySearchService.item(Slot.NECKLACE, listing(17000, 1000L));
+    assertThat(item.icon()).isNull();
+    assertThat(item.baseEffects())
+        .extracting(AccessorySearch.BaseEffect::name)
+        .containsExactly("힘", "민첩", "지능", "체력");
+    assertThat(item.baseEffects().get(3).value()).isEqualByComparingTo("4100");
+    var noStat =
+        AccessorySearchService.item(
+            Slot.NECKLACE,
+            new AuctionListing("목걸이", "고대", 90, 1000L, 0L, 1000L, NOW, 0, List.of(), " "));
+    assertThat(noStat.baseEffects()).isEmpty();
+    assertThat(noStat.icon()).isNull();
+  }
+
+  @Test
   void 입찰만_가능한_매물의_즉시_구매가는_0이_아니라_null이다() {
     var bidOnly = listing(17000, 0L);
     var item = AccessorySearchService.item(Slot.NECKLACE, bidOnly);

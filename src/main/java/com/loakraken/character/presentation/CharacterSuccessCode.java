@@ -16,6 +16,7 @@ enum CharacterSuccessCode implements SuccessCode {
   CHARACTER_TITLES_SUCCESS,
   CHARACTER_PUBLIC_SUMMARY_SUCCESS,
   CHARACTER_ITEM_TOOLTIPS_SUCCESS,
+  CHARACTER_ARMORY_PAGE_SUCCESS,
   CHARACTER_COMBAT_POWER_OPTIONS_SUCCESS,
   CHARACTER_COMBAT_POWER_SIMULATE_SUCCESS,
   CHARACTER_COMBAT_POWER_CONTRIBUTIONS_SUCCESS,
@@ -44,6 +45,7 @@ enum CharacterSuccessCode implements SuccessCode {
       case CHARACTER_TITLES_SUCCESS -> "원정대 칭호 조회에 성공했습니다.";
       case CHARACTER_PUBLIC_SUMMARY_SUCCESS -> "캐릭터 공개 요약 조회에 성공했습니다.";
       case CHARACTER_ITEM_TOOLTIPS_SUCCESS -> "아이템 툴팁 줄 조회에 성공했습니다.";
+      case CHARACTER_ARMORY_PAGE_SUCCESS -> "전투정보실 페이지 정보 조회에 성공했습니다.";
       case CHARACTER_COMBAT_POWER_OPTIONS_SUCCESS -> "전투력 시뮬레이터 입력 범위 조회에 성공했습니다.";
       case CHARACTER_COMBAT_POWER_SIMULATE_SUCCESS -> "전투력 시뮬레이션에 성공했습니다.";
       case CHARACTER_COMBAT_POWER_CONTRIBUTIONS_SUCCESS -> "전투력 기여 조회에 성공했습니다.";

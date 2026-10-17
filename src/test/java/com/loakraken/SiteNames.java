@@ -18,7 +18,7 @@ public final class SiteNames {
   static final Path LOCAL_FILE = Path.of("config", "blocked-terms.local");
 
   /** 화면에 '목표 사이트' 같은 간접 표현도 쓰지 않는다(성장 도구 10-10 23:47). */
-  private static final List<String> INDIRECT = List.of("목표 사이트", "두 사이트", "계산 사이트");
+  static final List<String> INDIRECT = List.of("목표 사이트", "두 사이트", "계산 사이트", "대조 사이트");
 
   /** 비밀값·로컬 파일에서 읽은 이름. 없으면 빈 목록. */
   public static final List<String> BLOCKED = load();

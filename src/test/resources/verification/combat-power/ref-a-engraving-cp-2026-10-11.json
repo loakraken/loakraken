@@ -1,6 +1,6 @@
 {
  "checkedAt": "2026-10-11",
- "source": "로아랩 시뮬레이터 서버 계산(언새늘, 각인 하나를 바꿔 넣은 전투력 비) + 로펙 예상 전투력(같은 변경 21건) + 공식 armory 각인 설명(ArkPassiveEffects, 300명 조회)",
+ "source": "비교 기준 A 시뮬레이터 서버 계산(기준 캐릭터, 각인 하나를 바꿔 넣은 전투력 비) + 비교 기준 B 예상 전투력(같은 변경 21건) + 공식 armory 각인 설명(ArkPassiveEffects, 300명 조회)",
  "status": "CONFIRMED_EXCEPT_NOTED",
  "model": {
   "combine": "각인마다 독립 배수(1 + c/100)를 전투력에 곱한다(#263과 같음). 각인 하나의 전투력 기여 % = c",

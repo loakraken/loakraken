@@ -156,7 +156,12 @@ public record CharacterResponse(
               allowableValues = {"OK", "UNSUPPORTED", "DISABLED"},
               example = "OK")
           String status,
-      @Schema(description = "UNSUPPORTED 이유 코드(화면은 이 코드로 그림). 그 밖에는 null", example = "ROLE_UNKNOWN")
+      @Schema(
+              description =
+                  "UNSUPPORTED 이유 코드(화면은 이 코드로 그림). 그 밖에는 null. 지금 값: ROLE_UNKNOWN(딜러·서포터 판정 못 함)·"
+                      + "FACTOR_PENDING(요소 계산 전 단계)·SCORE_UNAVAILABLE(점수가 음수·수 아님). 열린 값이라 단계마다 늘 수 있음 — "
+                      + "모르는 코드는 '-'로 그림",
+              example = "ROLE_UNKNOWN")
           @NullableResponse
           String reasonCode,
       @Schema(description = "이유 문장(로그·디버그용, 화면 문구로 쓰지 않음). OK·DISABLED면 null") @NullableResponse

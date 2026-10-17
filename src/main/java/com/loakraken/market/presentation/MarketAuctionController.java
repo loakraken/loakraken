@@ -84,8 +84,7 @@ public class MarketAuctionController {
     var listings = gemSkills.listings(kind, level, pageNo, className, skill);
     return ApiResponse.of(
         MarketSuccessCode.AUCTION_LISTINGS_SUCCESS,
-        AuctionResponses.AuctionListingsResponse.from(
-            listings.page(), pageNo, listings.filter()));
+        AuctionResponses.AuctionListingsResponse.from(listings.page(), pageNo, listings.filter()));
   }
 
   @GetMapping("/accessories")

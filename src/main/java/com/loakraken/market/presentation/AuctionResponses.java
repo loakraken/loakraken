@@ -134,7 +134,7 @@ public final class AuctionResponses {
       Instant observedAt,
       @Schema(description = "즉시 구매가 오름차순, 페이지당 10개") List<AuctionListingResponse> items,
       @Schema(description = "보석 매물을 직업·스킬로 거른 조건. 조건 없는 검색·장신구 매물은 null") @NullableResponse
-          GemFilterResponse filter) {
+          AuctionGemFilterResponse filter) {
     static AuctionListingsResponse from(AuctionPort.AuctionPage page, int pageNo) {
       return from(page, pageNo, null);
     }
@@ -146,19 +146,19 @@ public final class AuctionResponses {
           pageNo,
           page.observedAt(),
           page.items().stream().map(AuctionListingResponse::from).toList(),
-          GemFilterResponse.from(filter));
+          AuctionGemFilterResponse.from(filter));
     }
   }
 
-  public record GemFilterResponse(
+  public record AuctionGemFilterResponse(
       @Schema(description = "공식 직업 이름", example = "블래스터") String className,
       @Schema(description = "공식 스킬 코드. 직업만 거르면 null", example = "30210") @NullableResponse
           Integer skill,
       @Schema(description = "공식 스킬 이름. 직업만 거르면 null", example = "플라즈마 스톰") @NullableResponse
           String skillName) {
-    static GemFilterResponse from(GemSkillCatalog.Filter filter) {
+    static AuctionGemFilterResponse from(GemSkillCatalog.Filter filter) {
       if (filter == null) return null;
-      return new GemFilterResponse(
+      return new AuctionGemFilterResponse(
           filter.className(),
           filter.skill() == null ? null : filter.skill().code(),
           filter.skill() == null ? null : filter.skill().name());
@@ -166,28 +166,29 @@ public final class AuctionResponses {
   }
 
   public record AuctionGemSkillsResponse(
-      @Schema(description = "목록을 공식 경매장 검색 옵션과 맞춘 날짜(KST)", example = "2026-10-18") String checkedOn,
-      @Schema(description = "공식 직업 순서 그대로") List<GemClassResponse> classes) {
+      @Schema(description = "목록을 공식 경매장 검색 옵션과 맞춘 날짜(KST)", example = "2026-10-18")
+          String checkedOn,
+      @Schema(description = "공식 직업 순서 그대로") List<AuctionGemClassResponse> classes) {
     static AuctionGemSkillsResponse from(GemSkillCatalog catalog) {
       return new AuctionGemSkillsResponse(
-          catalog.checkedOn(), catalog.classes().stream().map(GemClassResponse::from).toList());
+          catalog.checkedOn(), catalog.classes().stream().map(AuctionGemClassResponse::from).toList());
     }
   }
 
-  public record GemClassResponse(
-      @Schema(example = "블래스터") String className, List<GemSkillResponse> skills) {
-    static GemClassResponse from(GemSkillCatalog.GemClass value) {
-      return new GemClassResponse(
-          value.className(), value.skills().stream().map(GemSkillResponse::from).toList());
+  public record AuctionGemClassResponse(
+      @Schema(example = "블래스터") String className, List<AuctionGemSkillResponse> skills) {
+    static AuctionGemClassResponse from(GemSkillCatalog.GemClass value) {
+      return new AuctionGemClassResponse(
+          value.className(), value.skills().stream().map(AuctionGemSkillResponse::from).toList());
     }
   }
 
-  public record GemSkillResponse(
+  public record AuctionGemSkillResponse(
       @Schema(description = "공식 스킬 코드(매물 조회 skill에 그대로)", example = "30210") int code,
       @Schema(description = "공식 스킬 이름", example = "플라즈마 스톰") String name,
       @Schema(description = "이 스킬로 거를 수 있는 보석 종류(겁화·작열, 문자열)") List<String> kinds) {
-    static GemSkillResponse from(GemSkillCatalog.GemSkill value) {
-      return new GemSkillResponse(value.code(), value.name(), value.kinds());
+    static AuctionGemSkillResponse from(GemSkillCatalog.GemSkill value) {
+      return new AuctionGemSkillResponse(value.code(), value.name(), value.kinds());
     }
   }
 

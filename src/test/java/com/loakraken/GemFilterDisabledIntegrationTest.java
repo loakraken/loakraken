@@ -45,8 +45,7 @@ class GemFilterDisabledIntegrationTest {
     verifyNoInteractions(search);
 
     when(search.search(any())).thenReturn(new AuctionPage(0, List.of(), Instant.now()));
-    var plain =
-        get("/api/v1/markets/auctions/gems/listings?kind=" + encode("겁화") + "&level=10");
+    var plain = get("/api/v1/markets/auctions/gems/listings?kind=" + encode("겁화") + "&level=10");
     assertThat(plain.statusCode()).isEqualTo(200);
     verify(search, times(1)).search(any());
   }

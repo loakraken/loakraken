@@ -58,8 +58,7 @@ public interface AuctionPort {
         Integer minQuality,
         List<EtcFilter> etcOptions,
         int pageNo) {
-      this(
-          categoryCode, itemTier, itemGrade, itemName, minQuality, etcOptions, pageNo, null, null);
+      this(categoryCode, itemTier, itemGrade, itemName, minQuality, etcOptions, pageNo, null, null);
     }
 
     /** 직업·스킬 조건이 붙은 검색인가(결과를 시세판 칸에 저장하지 않는다). */

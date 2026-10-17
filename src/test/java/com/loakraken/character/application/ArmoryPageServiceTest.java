@@ -47,11 +47,23 @@ class ArmoryPageServiceTest {
   private void cached(String name) {
     var profile =
         new CharacterProfile(
-            name, "서비스서버", "바드", 70, new BigDecimal("1700"), null, null, null, null, null, List.of());
+            name,
+            "서비스서버",
+            "바드",
+            70,
+            new BigDecimal("1700"),
+            null,
+            null,
+            null,
+            null,
+            null,
+            List.of());
     var loadout = new CharacterLoadout(List.of(), null, null, null, null, null, List.of());
     when(cache.find(name))
         .thenReturn(
-            Optional.of(new CharacterResult(CharacterTestFixture.details(profile, loadout, List.of()), clock.instant())));
+            Optional.of(
+                new CharacterResult(
+                    CharacterTestFixture.details(profile, loadout, List.of()), clock.instant())));
     when(stopList.recordable(name, "서비스서버")).thenReturn(true);
   }
 

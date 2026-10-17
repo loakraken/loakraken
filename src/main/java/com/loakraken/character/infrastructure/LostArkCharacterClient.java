@@ -55,10 +55,10 @@ class LostArkCharacterClient implements CharacterDetailsPort {
   @Override
   public FetchedCharacter fetch(String characterName) {
     var armoryPayload = armory(characterName);
-    // 로컬 대조 전용(#540): local 프로필 + ARMORY_RAW_DUMP_DIR일 때만 본문을 파일로 남긴다.
-    rawDump.ifAvailable(dump -> dump.write(characterName, armoryPayload.json()));
     var armory = armoryPayload.value();
     var profile = LostArkProfileMapper.from(armory.profile());
+    // 로컬 대조 전용(#540): local 프로필 + ARMORY_RAW_DUMP_DIR일 때만, 처리정지 목록 밖 캐릭터의 본문을 파일로 남긴다.
+    rawDump.ifAvailable(dump -> dump.write(profile, armoryPayload.json()));
     var siblingsPayload = siblings(characterName, CharacterErrorCode.LOST_ARK_API_ERROR);
     var siblings = siblingsPayload.value();
     var details =
@@ -73,12 +73,12 @@ class LostArkCharacterClient implements CharacterDetailsPort {
   @Override
   public FetchedCharacter fetchArmory(String characterName) {
     var armoryPayload = armory(characterName);
-    // 로컬 대조 전용(#540): local 프로필 + ARMORY_RAW_DUMP_DIR일 때만 본문을 파일로 남긴다.
-    rawDump.ifAvailable(dump -> dump.write(characterName, armoryPayload.json()));
     var armory = armoryPayload.value();
+    var profile = LostArkProfileMapper.from(armory.profile());
+    rawDump.ifAvailable(dump -> dump.write(profile, armoryPayload.json()));
     var details =
         new CharacterDetails(
-            LostArkProfileMapper.from(armory.profile()),
+            profile,
             armory.toLoadout(),
             null,
             armory.coverage(null));

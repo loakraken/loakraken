@@ -1,5 +1,7 @@
 package com.loakraken.character.infrastructure;
 
+import com.loakraken.character.application.CharacterStopList;
+import com.loakraken.character.domain.CharacterProfile;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -15,7 +17,7 @@ import org.springframework.stereotype.Component;
 
 /**
  * 로컬 대조 전용(#540): 캐릭터 조회 때 받은 공식 armories 응답 본문을 {@code ARMORY_RAW_DUMP_DIR}에 파일로 남긴다. {@code local} 프로필에서
- * 설정이 있을 때만 부품이 만들어진다(운영·스테이징에는 없음). 본문만 쓰고 API 키·요청 헤더는 다루지 않는다. 저장 실패는 조회를 막지 않으며, 로그에는
+ * 설정이 있을 때만 부품이 만들어진다(운영·스테이징에는 없음). 처리정지 목록 캐릭터(확인 실패 포함)는 쓰지 않는다(B5). 본문만 쓰고 API 키·요청 헤더는 다루지 않는다. 저장 실패는 조회를 막지 않으며, 로그에는
  * 캐릭터 이름을 남기지 않는다.
  */
 @Component
@@ -26,10 +28,21 @@ class ArmoryRawDump {
   private static final DateTimeFormatter STAMP = DateTimeFormatter.ofPattern("yyyyMMdd'T'HHmmssSSS'Z'");
   private final Path dir;
   private final Clock clock;
+  private final CharacterStopList stopList;
 
-  ArmoryRawDump(@Value("${ARMORY_RAW_DUMP_DIR}") String dir, Clock clock) {
+  ArmoryRawDump(@Value("${ARMORY_RAW_DUMP_DIR}") String dir, Clock clock, CharacterStopList stopList) {
     this.dir = Path.of(dir);
     this.clock = clock;
+    this.stopList = stopList;
+  }
+
+  /** 처리정지 목록 밖이면 본문을 쓴다(목록 확인에 실패해도 쓰지 않음). */
+  void write(CharacterProfile profile, String body) {
+    if (profile == null || !stopList.recordable(profile.characterName(), profile.serverName())) {
+      log.info("event=armory_raw_dump_skipped reason=not_recordable");
+      return;
+    }
+    write(profile.characterName(), body);
   }
 
   /** 본문을 '이름_UTC시각.json'으로 쓴다. 이름은 문자·숫자만 남긴다. */

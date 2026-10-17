@@ -96,7 +96,8 @@ class KrakenScoreServiceTest {
     var registry = new SimpleMeterRegistry();
     var service = new KrakenScoreService(TABLE, ENGINE, true, registry);
     // 옛 캐시(입력 없음)와 캐시를 다시 읽어 JSON null이 된 경우 모두 다시 조회하면 계산된다.
-    for (var input : new JsonNode[] {null, tools.jackson.databind.node.JsonNodeFactory.instance.nullNode()}) {
+    for (var input :
+        new JsonNode[] {null, tools.jackson.databind.node.JsonNodeFactory.instance.nullNode()}) {
       var score = service.score(withInput(input));
       assertThat(score.status()).isEqualTo(KrakenScoreService.Status.UNSUPPORTED);
       assertThat(score.reason()).isEqualTo(KrakenScoreService.Reason.INPUT_PENDING);
@@ -125,7 +126,8 @@ class KrakenScoreServiceTest {
   void 공식_원문에서_만든_입력으로_딜러와_서폿_점수를_내고_티어를_정한다() throws IOException {
     var tiers =
         MAPPER.readValue(
-            new ClassPathResource("kraken-score/tiers.json").getContentAsString(StandardCharsets.UTF_8),
+            new ClassPathResource("kraken-score/tiers.json")
+                .getContentAsString(StandardCharsets.UTF_8),
             KrakenScoreTier.Table.class);
     var registry = new SimpleMeterRegistry();
     var service = new KrakenScoreService(tiers, ENGINE, true, registry);

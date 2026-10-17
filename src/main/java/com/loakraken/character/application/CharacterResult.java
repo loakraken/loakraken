@@ -7,8 +7,8 @@ import java.time.Instant;
 import tools.jackson.databind.JsonNode;
 
 /**
- * refreshAvailableAt은 캐시 만료 예정 시각이다. 이전 캐시 값처럼 알 수 없으면 null이다. krakenScoreInput은 공식 armories에서 만든 크라켄 점수 엔진
- * 입력(#559, 원문이 아니라 엔진이 읽는 값만)이고, 옛 캐시이거나 만들지 못했으면 null이다.
+ * refreshAvailableAt은 캐시 만료 예정 시각이다. 이전 캐시 값처럼 알 수 없으면 null이다. krakenScoreInput은 공식 armories에서 만든
+ * 크라켄 점수 엔진 입력(#559, 원문이 아니라 엔진이 읽는 값만)이고, 옛 캐시이거나 만들지 못했으면 null이다.
  */
 public record CharacterResult(
     CharacterDetails details,

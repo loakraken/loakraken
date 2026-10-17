@@ -70,7 +70,10 @@ class LostArkCharacterClient implements CharacterDetailsPort {
             toDomain(siblings),
             armory.coverage(Arrays.asList(siblings)));
     return new FetchedCharacter(
-        details, armoryPayload.json(), siblingsPayload.json(), krakenScoreInput(armoryPayload.json()));
+        details,
+        armoryPayload.json(),
+        siblingsPayload.json(),
+        krakenScoreInput(armoryPayload.json()));
   }
 
   @Override
@@ -90,7 +93,8 @@ class LostArkCharacterClient implements CharacterDetailsPort {
    */
   private tools.jackson.databind.JsonNode krakenScoreInput(String armoryJson) {
     try {
-      return com.loakraken.character.domain.KrakenScoreInputMapper.from(mapper.readTree(armoryJson));
+      return com.loakraken.character.domain.KrakenScoreInputMapper.from(
+          mapper.readTree(armoryJson));
     } catch (RuntimeException exception) {
       log.warn("event=kraken_score_input_failed type={}", exception.getClass().getSimpleName());
       return null;

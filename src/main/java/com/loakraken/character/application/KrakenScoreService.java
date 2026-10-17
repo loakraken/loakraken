@@ -17,9 +17,9 @@ import tools.jackson.databind.JsonNode;
  * 크라켄 점수(비교 기준 B의 점수식, #522·#539·#559). 공식 전투력과 별개의 점수·티어다.
  *
  * <p>공식 armories를 받을 때 만든 엔진 입력(캐릭터 결과에 함께 캐시)으로 응답 때 계산한다 — 공식 호출이 없다. 설정 {@code
- * kraken-score.enabled}가 꺼져 있으면(기본) status DISABLED. 입력이 없는 이전 조회 결과는 UNSUPPORTED(INPUT_PENDING, 다시 조회하면
- * 계산), 계산할 수 없는 값(음수·NaN·예외)은 UNSUPPORTED(SCORE_UNAVAILABLE)이고 근사값은 내지 않는다. 딜러는 딜러 점수, 서포터(서포터 각인
- * 직업)는 서포터 점수식이다.
+ * kraken-score.enabled}가 꺼져 있으면(기본) status DISABLED. 입력이 없는 이전 조회 결과는 UNSUPPORTED(INPUT_PENDING, 다시
+ * 조회하면 계산), 계산할 수 없는 값(음수·NaN·예외)은 UNSUPPORTED(SCORE_UNAVAILABLE)이고 근사값은 내지 않는다. 딜러는 딜러 점수, 서포터(서포터
+ * 각인 직업)는 서포터 점수식이다.
  */
 @Service
 public class KrakenScoreService {

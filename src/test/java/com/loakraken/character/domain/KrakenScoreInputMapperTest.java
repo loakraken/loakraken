@@ -15,8 +15,9 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * 크라켄 점수 입력 변환(#559) 고정 테스트: 같은 시각에 받은 기준 캐릭터 6명(l01~l06)과 서폿 공증 조건(스킬 + 빠른 준비)이 참인 서폿 표본 1명(l07)의 공식 armories 응답(변환기가 읽는 부분만, 식별 정보 없음)을
- * 바꾼 입력이 비교 기준 B 입력의 '엔진이 읽는 경로' 값과 같고, 그 입력의 점수가 비교 기준 B 점수와 double 끝자리까지 같은지 본다.
+ * 크라켄 점수 입력 변환(#559) 고정 테스트: 같은 시각에 받은 기준 캐릭터 6명(l01~l06)과 서폿 공증 조건(스킬 + 빠른 준비)이 참인 서폿 표본 1명(l07)의
+ * 공식 armories 응답(변환기가 읽는 부분만, 식별 정보 없음)을 바꾼 입력이 비교 기준 B 입력의 '엔진이 읽는 경로' 값과 같고, 그 입력의 점수가 비교 기준 B
+ * 점수와 double 끝자리까지 같은지 본다.
  */
 class KrakenScoreInputMapperTest {
   private static final JsonMapper MAPPER = JsonMapper.builder().build();
@@ -34,7 +35,8 @@ class KrakenScoreInputMapperTest {
 
   private static JsonNode read(String id) throws IOException {
     return MAPPER.readTree(
-        new ClassPathResource("kraken-score/" + id + ".json").getContentAsString(StandardCharsets.UTF_8));
+        new ClassPathResource("kraken-score/" + id + ".json")
+            .getContentAsString(StandardCharsets.UTF_8));
   }
 
   /** "a.b[2].c[0]" 같은 경로의 값(없으면 missing). */
@@ -103,7 +105,8 @@ class KrakenScoreInputMapperTest {
 
   @Test
   void 빈_원문이나_모르는_모양이어도_예외_없이_빈_입력을_만든다() throws IOException {
-    for (var raw : new String[] {"{}", "{\"ArmoryEquipment\":[{\"Type\":\"무기\",\"Tooltip\":\"깨진\"}]}", "[]"}) {
+    for (var raw :
+        new String[] {"{}", "{\"ArmoryEquipment\":[{\"Type\":\"무기\",\"Tooltip\":\"깨진\"}]}", "[]"}) {
       var input = KrakenScoreInputMapper.from(MAPPER.readTree(raw));
       assertThat(input.path("profile").path("supportCheck").asBoolean(true)).isFalse();
       assertThat(input.path("gem").path("gems").size()).isZero();

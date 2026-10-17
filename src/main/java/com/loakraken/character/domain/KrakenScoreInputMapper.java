@@ -62,8 +62,20 @@ public final class KrakenScoreInputMapper {
       Map.of("진화", "evolution", "깨달음", "enlightenment", "도약", "leap");
   private static final Map<String, String> EQUIPMENT =
       Map.of(
-          "무기", "weapon", "투구", "helmet", "상의", "armor", "하의", "pants", "장갑", "gloves", "어깨",
-          "shoulder", "완갑", "vambrace");
+          "무기",
+          "weapon",
+          "투구",
+          "helmet",
+          "상의",
+          "armor",
+          "하의",
+          "pants",
+          "장갑",
+          "gloves",
+          "어깨",
+          "shoulder",
+          "완갑",
+          "vambrace");
   private static final Map<String, String> BRACELET_STATS =
       Map.of("치명", "critical", "특화", "special", "신속", "haste");
 
@@ -182,7 +194,9 @@ public final class KrakenScoreInputMapper {
             text.append(strip(write(e.path("value")))).append('\n');
         var gem = gems.addObject();
         var point = GEM_POINT.matcher(text);
-        gem.set("orderChaosPoint", point.find() ? number(Integer.parseInt(point.group(1))) : F.nullNode());
+        gem.set(
+            "orderChaosPoint",
+            point.find() ? number(Integer.parseInt(point.group(1))) : F.nullNode());
         var effects = gem.putArray("effects");
         var m = GEM_EFFECT.matcher(text);
         while (m.find()) {
@@ -195,7 +209,9 @@ public final class KrakenScoreInputMapper {
     }
     // 원본 입력은 질서 해·달·별 → 혼돈 해·달·별 순서다(공식 슬롯 순서와 다를 수 있음). 같은 순위는 원래 순서(안정 정렬).
     cores.sort(
-        (a, b) -> Integer.compare(coreRank(a.path("name").asString("")), coreRank(b.path("name").asString(""))));
+        (a, b) ->
+            Integer.compare(
+                coreRank(a.path("name").asString("")), coreRank(b.path("name").asString(""))));
     var out = F.objectNode();
     var core = out.putArray("core");
     cores.forEach(core::add);
@@ -294,7 +310,8 @@ public final class KrakenScoreInputMapper {
     var out = new LinkedHashMap<String, Double>();
     for (var option : armory.path("accessory").path("bangle").path("option")) {
       var m = BRACELET_STAT.matcher(option.asString(""));
-      if (m.find()) out.merge(BRACELET_STATS.get(m.group(1)), Double.parseDouble(m.group(2)), Double::sum);
+      if (m.find())
+        out.merge(BRACELET_STATS.get(m.group(1)), Double.parseDouble(m.group(2)), Double::sum);
     }
     return out;
   }
@@ -328,7 +345,9 @@ public final class KrakenScoreInputMapper {
       // 효과 줄에 재사용 대기시간이 있으면 쿨 보석, 그 밖(피해·지원 효과)은 딜 보석.
       row.set(
           "type",
-          desc.isEmpty() ? F.nullNode() : F.stringNode(desc.contains("재사용 대기시간") ? "cooldown" : "damage"));
+          desc.isEmpty()
+              ? F.nullNode()
+              : F.stringNode(desc.contains("재사용 대기시간") ? "cooldown" : "damage"));
       var name = skill == null ? null : text(skill.path("Name"));
       row.put("skill", name);
       var bonus = GEM_BONUS.matcher(skill == null ? "" : skill.path("Option").asString(""));
@@ -410,7 +429,8 @@ public final class KrakenScoreInputMapper {
   }
 
   private static JsonNode itemTitle(JsonNode tooltip) {
-    for (var e : elements(tooltip)) if ("ItemTitle".equals(e.path("type").asString(""))) return e.path("value");
+    for (var e : elements(tooltip))
+      if ("ItemTitle".equals(e.path("type").asString(""))) return e.path("value");
     return F.missingNode();
   }
 
@@ -444,7 +464,9 @@ public final class KrakenScoreInputMapper {
   }
 
   private static Double firstNumber(JsonNode node) {
-    return node == null || node.isNull() || node.isMissingNode() ? null : firstNumber(node.asString(""));
+    return node == null || node.isNull() || node.isMissingNode()
+        ? null
+        : firstNumber(node.asString(""));
   }
 
   private static Double firstNumber(String text) {
@@ -471,5 +493,4 @@ public final class KrakenScoreInputMapper {
       return F.numberNode((long) value);
     return F.numberNode(value);
   }
-
 }

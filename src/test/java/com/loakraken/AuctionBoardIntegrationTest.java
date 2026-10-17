@@ -140,6 +140,110 @@ class AuctionBoardIntegrationTest {
   }
 
   @Test
+  void 보석_매물_직업_스킬_목록은_공식_호출_없이_준다() throws Exception {
+    var response = get("/api/v1/markets/auctions/gems/skills");
+    ApiContractFixture.write("auction-gem-skills.json", response.body());
+    var data = mapper.readTree(response.body()).path("data");
+    assertThat(data.path("checkedOn").asText()).isEqualTo("2026-10-18");
+    assertThat(data.path("classes").size()).isEqualTo(30);
+    JsonNode demonic = null;
+    for (var value : data.path("classes"))
+      if (value.path("className").asText().equals("데모닉")) demonic = value;
+    assertThat(demonic).isNotNull();
+    JsonNode piercing = null;
+    for (var skill : demonic.path("skills"))
+      if (skill.path("code").asInt() == 27960) piercing = skill;
+    assertThat(piercing.path("name").asText()).isEqualTo("블러드 피어싱");
+    assertThat(piercing.path("kinds").toString()).isEqualTo("[\"겁화\",\"작열\"]");
+    verifyNoInteractions(search);
+  }
+
+  @Test
+  void 직업_스킬로_거른_보석_매물은_따로_캐시하고_시세판_칸에_저장하지_않는다() throws Exception {
+    when(search.search(any())).thenAnswer(invocation -> page(invocation.getArgument(0)));
+    String path =
+        "/api/v1/markets/auctions/gems/listings?kind="
+            + encode("겁화")
+            + "&level=10&className="
+            + encode("데모닉")
+            + "&skill=27960";
+    var listings = data(path);
+    ApiContractFixture.write("auction-gem-listings-filtered.json", get(path).body());
+    assertThat(listings.path("totalCount").asLong()).isEqualTo(25);
+    assertThat(listings.at("/filter/className").asText()).isEqualTo("데모닉");
+    assertThat(listings.at("/filter/skill").asInt()).isEqualTo(27960);
+    assertThat(listings.at("/filter/skillName").asText()).isEqualTo("블러드 피어싱");
+    // 공식 검색에 직업과 SkillOptions(스킬 코드, 겁화 = 피해 증가 500)가 들어간다. 두 번째 같은 요청은 1분 캐시.
+    var captor = org.mockito.ArgumentCaptor.forClass(AuctionQuery.class);
+    verify(search, times(1)).search(captor.capture());
+    var query = captor.getValue();
+    assertThat(query.itemName()).isEqualTo("10레벨 겁화의 보석");
+    assertThat(query.characterClass()).isEqualTo("데모닉");
+    assertThat(query.skillOptions())
+        .containsExactly(new com.loakraken.market.application.AuctionPort.SkillFilter(27960, 500));
+    // 거른 최저가는 시세판 칸(전체 최저가)·일별 기록이 아니다.
+    var plain = new AuctionQuery(210000, 4, null, "10레벨 겁화의 보석", null, List.of(), 1);
+    assertThat(query.key()).isNotEqualTo(plain.key());
+    assertThat(redis.hasKey("market:v1:auction-cell:" + query.key())).isFalse();
+    assertThat(redis.hasKey("market:v1:auction-cell:" + plain.key())).isFalse();
+    Thread.sleep(200);
+    assertThat(jdbc.sql("SELECT COUNT(*) FROM auction_price_daily").query(Long.class).single())
+        .isZero();
+
+    // 직업만 거르면 SkillOptions 없이, 작열은 재사용 대기시간 감소(2700)로 간다. 조건 없는 매물은 예전처럼 칸에 저장한다.
+    data(
+        "/api/v1/markets/auctions/gems/listings?kind="
+            + encode("작열")
+            + "&level=9&className="
+            + encode("데모닉"));
+    data("/api/v1/markets/auctions/gems/listings?kind=" + encode("작열") + "&level=9&skill=");
+    data(
+        "/api/v1/markets/auctions/gems/listings?kind="
+            + encode("작열")
+            + "&level=8&className="
+            + encode("데모닉")
+            + "&skill=27960");
+    var all = org.mockito.ArgumentCaptor.forClass(AuctionQuery.class);
+    verify(search, times(4)).search(all.capture());
+    var classOnly = all.getAllValues().get(1);
+    assertThat(classOnly.characterClass()).isEqualTo("데모닉");
+    assertThat(classOnly.skillOptions()).isEmpty();
+    var unfiltered = all.getAllValues().get(2);
+    assertThat(unfiltered.filtered()).isFalse();
+    assertThat(redis.hasKey("market:v1:auction-cell:" + unfiltered.key())).isTrue();
+    assertThat(all.getAllValues().get(3).skillOptions())
+        .containsExactly(new com.loakraken.market.application.AuctionPort.SkillFilter(27960, 2700));
+  }
+
+  @Test
+  void 목록에_없는_직업_스킬_조건은_입력을_되돌리지_않는_400이다() throws Exception {
+    var gem = "/api/v1/markets/auctions/gems/listings?level=10&kind=";
+    for (var path :
+        List.of(
+            // 직업 없이 스킬, 목록에 없는 직업, 그 직업에 없는 스킬(블래스터 스킬), 겁화만 되는 스킬로 작열
+            gem + encode("겁화") + "&skill=27960",
+            gem + encode("겁화") + "&className=" + encode("없는직업<script>"),
+            gem + encode("겁화") + "&className=" + encode("데모닉") + "&skill=30210",
+            gem + encode("작열") + "&className=" + encode("데모닉") + "&skill=" + demonicDamageOnly())) {
+      var response = get(path);
+      assertThat(response.statusCode()).as(path).isEqualTo(400);
+      assertThat(response.body()).as(path).contains("INVALID_GEM_FILTER").doesNotContain("script");
+    }
+    verifyNoInteractions(search);
+  }
+
+  /** 데모닉 스킬 가운데 겁화(피해 증가)만 있는 스킬 코드(리소스에서 찾는다). */
+  private int demonicDamageOnly() throws Exception {
+    var data = data("/api/v1/markets/auctions/gems/skills");
+    for (var value : data.path("classes"))
+      if (value.path("className").asText().equals("데모닉"))
+        for (var skill : value.path("skills"))
+          if (skill.path("kinds").size() == 1 && skill.at("/kinds/0").asText().equals("겁화"))
+            return skill.path("code").asInt();
+    throw new AssertionError("겁화만 되는 데모닉 스킬이 없습니다");
+  }
+
+  @Test
   void 잘못된_조건은_400이다() throws Exception {
     for (var path :
         List.of(

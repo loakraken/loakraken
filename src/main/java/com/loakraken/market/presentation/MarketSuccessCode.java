@@ -15,7 +15,8 @@ enum MarketSuccessCode implements SuccessCode {
   AUCTION_GEMS_SUCCESS,
   AUCTION_ACCESSORIES_SUCCESS,
   AUCTION_LISTINGS_SUCCESS,
-  AUCTION_SEARCH_SUCCESS;
+  AUCTION_SEARCH_SUCCESS,
+  AUCTION_GEM_SKILLS_SUCCESS;
 
   public HttpStatus httpStatus() {
     return HttpStatus.OK;
@@ -39,6 +40,7 @@ enum MarketSuccessCode implements SuccessCode {
       case AUCTION_ACCESSORIES_SUCCESS -> "장신구 시세 조회에 성공했습니다.";
       case AUCTION_LISTINGS_SUCCESS -> "경매장 매물 조회에 성공했습니다.";
       case AUCTION_SEARCH_SUCCESS -> "장신구 경매 검색에 성공했습니다.";
+      case AUCTION_GEM_SKILLS_SUCCESS -> "보석 매물 직업·스킬 목록 조회에 성공했습니다.";
     };
   }
 }

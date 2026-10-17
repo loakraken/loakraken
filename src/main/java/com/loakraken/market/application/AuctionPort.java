@@ -29,6 +29,8 @@ public interface AuctionPort {
 
   /**
    * @param etcOptions 연마 효과 필터. min·max는 공식 값(×100 정수)
+   * @param characterClass 공식 직업 이름(보석 매물 직업 필터). 없으면 null
+   * @param skillOptions 공식 SkillOptions(보석 매물 스킬 필터). 없으면 빈 목록
    */
   record AuctionQuery(
       int categoryCode,
@@ -37,9 +39,29 @@ public interface AuctionPort {
       String itemName,
       Integer minQuality,
       List<EtcFilter> etcOptions,
-      int pageNo) {
+      int pageNo,
+      String characterClass,
+      List<SkillFilter> skillOptions) {
     public AuctionQuery {
       etcOptions = etcOptions == null ? List.of() : List.copyOf(etcOptions);
+      skillOptions = skillOptions == null ? List.of() : List.copyOf(skillOptions);
+    }
+
+    public AuctionQuery(
+        int categoryCode,
+        int itemTier,
+        String itemGrade,
+        String itemName,
+        Integer minQuality,
+        List<EtcFilter> etcOptions,
+        int pageNo) {
+      this(
+          categoryCode, itemTier, itemGrade, itemName, minQuality, etcOptions, pageNo, null, null);
+    }
+
+    /** 직업·스킬 조건이 붙은 검색인가(결과를 시세판 칸에 저장하지 않는다). */
+    public boolean filtered() {
+      return characterClass != null || !skillOptions.isEmpty();
     }
 
     /** 캐시·일별 기록 키. 같은 조건이면 같다. */
@@ -63,6 +85,10 @@ public interface AuctionPort {
             .append(option.min())
             .append(':')
             .append(option.max());
+      // 조건 없는 검색의 키는 예전과 같다(시세판 칸·일별 기록 키 유지).
+      if (characterClass != null) text.append("|class:").append(characterClass);
+      for (var option : skillOptions)
+        text.append("|skill:").append(option.first()).append(':').append(option.second());
       try {
         var digest =
             MessageDigest.getInstance("SHA-256")
@@ -75,11 +101,22 @@ public interface AuctionPort {
 
     public AuctionQuery page(int value) {
       return new AuctionQuery(
-          categoryCode, itemTier, itemGrade, itemName, minQuality, etcOptions, value);
+          categoryCode,
+          itemTier,
+          itemGrade,
+          itemName,
+          minQuality,
+          etcOptions,
+          value,
+          characterClass,
+          skillOptions);
     }
   }
 
   record EtcFilter(int first, int second, int min, int max) {}
+
+  /** 공식 SkillOptions 한 줄: first = 스킬 코드, second = 트라이포드 값(보석 종류). 레벨은 아이템 이름으로 거르므로 범위는 비운다. */
+  record SkillFilter(int first, int second) {}
 
   record AuctionPage(long totalCount, List<AuctionListing> items, Instant observedAt) {
     public AuctionPage {

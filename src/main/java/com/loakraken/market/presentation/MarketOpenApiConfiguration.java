@@ -22,7 +22,8 @@ class MarketOpenApiConfiguration {
           java.util.List.of(
               AuctionResponses.AuctionGemBoardResponse.class,
               AuctionResponses.AuctionAccessoryBoardResponse.class,
-              AuctionResponses.AuctionListingsResponse.class))
+              AuctionResponses.AuctionListingsResponse.class,
+              AuctionResponses.AuctionGemSkillsResponse.class))
         ResponseContracts.apply(type, document.getComponents().getSchemas());
     };
   }

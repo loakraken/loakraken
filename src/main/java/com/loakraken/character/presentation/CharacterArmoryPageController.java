@@ -100,8 +100,7 @@ public class CharacterArmoryPageController {
   public record CharacterSkillCodeResponse(
       String characterName,
       @Schema(description = "기능이 켜져 있으면 true. false면 나머지 값은 모두 null") boolean enabled,
-      @Schema(description = "공식 페이지에서 코드를 받은 시각(받지 못했으면 null)") @NullableResponse
-          Instant fetchedAt,
+      @Schema(description = "공식 페이지에서 코드를 받은 시각(받지 못했으면 null)") @NullableResponse Instant fetchedAt,
       @Schema(description = "128자 16진수 스킬 코드(대문자). 받지 못했으면 null") @NullableResponse
           String skillCode) {}
 

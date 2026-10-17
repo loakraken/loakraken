@@ -29,8 +29,8 @@ import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 
 /**
- * 전투정보실 페이지 정보 서비스(#531·#532): 캐시 쓰기 실패, single-flight 안 캐시 재확인, 생활 스킬·스킬 코드가 페이지 GET 하나를 함께 씀.
- * 실제 공식 요청 0.
+ * 전투정보실 페이지 정보 서비스(#531·#532): 캐시 쓰기 실패, single-flight 안 캐시 재확인, 생활 스킬·스킬 코드가 페이지 GET 하나를 함께 씀. 실제
+ * 공식 요청 0.
  */
 class ArmoryPageServiceTest {
   private final Clock clock = Clock.fixed(Instant.parse("2026-10-18T03:00:00Z"), ZoneOffset.UTC);
@@ -54,11 +54,23 @@ class ArmoryPageServiceTest {
   private void cached(String name) {
     var profile =
         new CharacterProfile(
-            name, "서비스서버", "바드", 70, new BigDecimal("1700"), null, null, null, null, null, List.of());
+            name,
+            "서비스서버",
+            "바드",
+            70,
+            new BigDecimal("1700"),
+            null,
+            null,
+            null,
+            null,
+            null,
+            List.of());
     var loadout = new CharacterLoadout(List.of(), null, null, null, null, null, List.of());
     when(cache.find(name))
         .thenReturn(
-            Optional.of(new CharacterResult(CharacterTestFixture.details(profile, loadout, List.of()), clock.instant())));
+            Optional.of(
+                new CharacterResult(
+                    CharacterTestFixture.details(profile, loadout, List.of()), clock.instant())));
     when(stopList.recordable(name, "서비스서버")).thenReturn(true);
   }
 
@@ -94,16 +106,20 @@ class ArmoryPageServiceTest {
   }
 
   private static final String HEX = "AB".repeat(64);
-  private static final ArmoryPagePort.Identity IDENTITY = new ArmoryPagePort.Identity("1", "2", "3");
+  private static final ArmoryPagePort.Identity IDENTITY =
+      new ArmoryPagePort.Identity("1", "2", "3");
 
   @Test
   void 스킬_코드는_페이지_GET_하나로_생활_스킬_캐시도_채운다() {
     cached("라");
     when(pages.fetch("라"))
-        .thenReturn(new ArmoryPagePort.Page(List.of(new ArmoryPagePort.LifeSkill("채집", 10)), IDENTITY));
+        .thenReturn(
+            new ArmoryPagePort.Page(List.of(new ArmoryPagePort.LifeSkill("채집", 10)), IDENTITY));
     when(pages.skillCode(IDENTITY)).thenReturn(HEX);
     assertThat(service.skillCode("라").skillCode()).isEqualTo(HEX);
-    assertThat(store.entries.get("라").lifeSkills()).extracting(ArmoryPagePort.LifeSkill::level).containsExactly(10);
+    assertThat(store.entries.get("라").lifeSkills())
+        .extracting(ArmoryPagePort.LifeSkill::level)
+        .containsExactly(10);
     // 생활 스킬은 캐시에서, 스킬 코드도 캐시에서.
     assertThat(service.page("라").lifeSkills()).hasSize(1);
     assertThat(service.skillCode("라").skillCode()).isEqualTo(HEX);
@@ -121,7 +137,8 @@ class ArmoryPageServiceTest {
             invocation -> {
               entered.countDown();
               release.await(5, TimeUnit.SECONDS);
-              return new ArmoryPagePort.Page(List.of(new ArmoryPagePort.LifeSkill("낚시", 3)), IDENTITY);
+              return new ArmoryPagePort.Page(
+                  List.of(new ArmoryPagePort.LifeSkill("낚시", 3)), IDENTITY);
             });
     when(pages.skillCode(IDENTITY)).thenReturn(HEX);
     var pageResult = new AtomicReference<ArmoryPageService.View>();
@@ -133,7 +150,8 @@ class ArmoryPageServiceTest {
     b.start();
     // B가 A의 페이지 GET을 기다리기 시작할 때까지(CompletableFuture.join에서 멈춤).
     long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
-    while (b.getState() != Thread.State.WAITING && System.nanoTime() < deadline) Thread.onSpinWait();
+    while (b.getState() != Thread.State.WAITING && System.nanoTime() < deadline)
+      Thread.onSpinWait();
     release.countDown();
     a.join(5_000);
     b.join(5_000);
@@ -160,7 +178,8 @@ class ArmoryPageServiceTest {
     cached("자");
     cached("차");
     when(pages.fetch("자"))
-        .thenReturn(new ArmoryPagePort.Page(List.of(new ArmoryPagePort.LifeSkill("벌목", 1)), IDENTITY));
+        .thenReturn(
+            new ArmoryPagePort.Page(List.of(new ArmoryPagePort.LifeSkill("벌목", 1)), IDENTITY));
     when(pages.skillCode(IDENTITY)).thenReturn(HEX);
     store.codeWritable = false;
     assertThat(service.skillCode("자").skillCode()).isEqualTo(HEX);

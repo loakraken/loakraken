@@ -17,13 +17,13 @@ import org.springframework.stereotype.Component;
  * 않음').
  *
  * <ul>
- *   <li>간격: 요청 사이 최소 {@code minInterval}(GET·POST 합산). 기다림이 {@code maxWait}를 넘으면 요청하지 않는다. <b>기다린 뒤 정지·쉬기를
- *       다시 확인</b>한다.
- *   <li>쉬기: 공식 쪽 실패(429·5xx·3xx·시간 초과)마다 {@code backoffInitial}부터 두 배, {@code backoffMax}까지. 실패마다 세대 번호를 올리고,
- *       그보다 먼저 시작한 요청의 늦은 성공은 쉬기·실패 수를 지우지 못한다. 실패 수는 단계(페이지·코드)별로 세고 같은 단계의 성공으로만 지운다.
- *   <li>멈춤: 한 단계의 공식 쪽 연속 실패 {@code stopAfterFailures}번이면 {@code backoffMax} 동안 전체가 멈추고, 그 뒤 <b>시험 요청 하나만</b>
- *       내보낸다. 페이지 구조를 연속 {@code stopAfterParseFailures}번 못 읽거나 페이지가 401·403이면 재시작 전까지 전체가 멈춘다. 스킬 코드 요청이
- *       거절(401·403·code≠0)되거나 형식이 연속 바뀌면 <b>스킬 코드만</b> 재시작 전까지 멈춘다(우회하지 않음).
+ *   <li>간격: 요청 사이 최소 {@code minInterval}(GET·POST 합산). 기다림이 {@code maxWait}를 넘으면 요청하지 않는다. <b>기다린 뒤
+ *       정지·쉬기를 다시 확인</b>한다.
+ *   <li>쉬기: 공식 쪽 실패(429·5xx·3xx·시간 초과)마다 {@code backoffInitial}부터 두 배, {@code backoffMax}까지. 실패마다
+ *       세대 번호를 올리고, 그보다 먼저 시작한 요청의 늦은 성공은 쉬기·실패 수를 지우지 못한다. 실패 수는 단계(페이지·코드)별로 세고 같은 단계의 성공으로만 지운다.
+ *   <li>멈춤: 한 단계의 공식 쪽 연속 실패 {@code stopAfterFailures}번이면 {@code backoffMax} 동안 전체가 멈추고, 그 뒤 <b>시험
+ *       요청 하나만</b> 내보낸다. 페이지 구조를 연속 {@code stopAfterParseFailures}번 못 읽거나 페이지가 401·403이면 재시작 전까지
+ *       전체가 멈춘다. 스킬 코드 요청이 거절(401·403·code≠0)되거나 형식이 연속 바뀌면 <b>스킬 코드만</b> 재시작 전까지 멈춘다(우회하지 않음).
  *   <li>캐시를 쓰지 못하면 {@link #pause}로 실패 캐시 시간만큼 쉰다(같은 캐릭터를 거듭 부르지 않게).
  * </ul>
  */

@@ -14,8 +14,8 @@ import tools.jackson.core.JacksonException;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * armory-page:v1:{캐릭터 이름}(생활 스킬)과 armory-page:v1:code:{캐릭터 이름}(스킬 코드) — 전투정보실 페이지에서 뽑은 값만(#531·#532).
- * 원문 HTML과 페이지 식별 값은 저장하지 않는다.
+ * armory-page:v1:{캐릭터 이름}(생활 스킬)과 armory-page:v1:code:{캐릭터 이름}(스킬 코드) — 전투정보실 페이지에서 뽑은
+ * 값만(#531·#532). 원문 HTML과 페이지 식별 값은 저장하지 않는다.
  */
 @Component
 class ValkeyArmoryPageStore implements ArmoryPageStorePort {

@@ -36,8 +36,8 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * 전투정보실 페이지 정보(#531)·스킬 코드(#532): 검색한 캐릭터만, 값만 캐시, 처리정지는 실패와 같은 응답, 로그에 이름 없음, 식별 값은 어디에도
- * 남지 않음. 실제 공식 요청 0.
+ * 전투정보실 페이지 정보(#531)·스킬 코드(#532): 검색한 캐릭터만, 값만 캐시, 처리정지는 실패와 같은 응답, 로그에 이름 없음, 식별 값은 어디에도 남지 않음. 실제
+ * 공식 요청 0.
  */
 @Import(TestcontainersConfiguration.class)
 @SpringBootTest(
@@ -158,9 +158,9 @@ class ArmoryPageIntegrationTest {
   }
 
   @Test
-  void 스킬_코드는_페이지와_코드_요청으로_받고_식별_값은_어디에도_남지_않는다(CapturedOutput output)
-      throws Exception {
-    when(detailsPort.fetch(anyString())).thenAnswer(invocation -> fetched(invocation.getArgument(0)));
+  void 스킬_코드는_페이지와_코드_요청으로_받고_식별_값은_어디에도_남지_않는다(CapturedOutput output) throws Exception {
+    when(detailsPort.fetch(anyString()))
+        .thenAnswer(invocation -> fetched(invocation.getArgument(0)));
     var identity = new ArmoryPagePort.Identity("IDMEMBERSECRET1", "IDWORLDSECRET2", "IDPCSECRET3");
     when(pages.fetch("전투페코드"))
         .thenReturn(
@@ -196,9 +196,9 @@ class ArmoryPageIntegrationTest {
   }
 
   @Test
-  void 스킬_코드를_받지_못하면_값이_null이고_페이지에_식별_값이_없으면_코드_요청을_하지_않는다()
-      throws Exception {
-    when(detailsPort.fetch(anyString())).thenAnswer(invocation -> fetched(invocation.getArgument(0)));
+  void 스킬_코드를_받지_못하면_값이_null이고_페이지에_식별_값이_없으면_코드_요청을_하지_않는다() throws Exception {
+    when(detailsPort.fetch(anyString()))
+        .thenAnswer(invocation -> fetched(invocation.getArgument(0)));
     when(pages.fetch("전투페코드없음"))
         .thenReturn(new ArmoryPagePort.Page(List.of(new ArmoryPagePort.LifeSkill("낚시", 1))));
     get("/api/v1/characters/search", "전투페코드없음");

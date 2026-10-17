@@ -97,7 +97,10 @@ class OfficialArmoryPageClientTest {
         .expect(requestTo("https://lostark.game.onstove.com/Profile/SkillRecommend"))
         .andExpect(method(HttpMethod.POST))
         .andExpect(header("User-Agent", "LOAKraken"))
-        .andExpect(header("Content-Type", org.hamcrest.Matchers.startsWith("application/x-www-form-urlencoded")))
+        .andExpect(
+            header(
+                "Content-Type",
+                org.hamcrest.Matchers.startsWith("application/x-www-form-urlencoded")))
         .andExpect(
             org.springframework.test.web.client.match.MockRestRequestMatchers.content()
                 .string("memberNo=M1&worldNo=W1&pcId=P1"))
@@ -109,7 +112,8 @@ class OfficialArmoryPageClientTest {
                 MediaType.APPLICATION_JSON));
     var result =
         new OfficialArmoryPageClient(policy(3_000_000, ""), builder)
-            .skillCode(new com.loakraken.character.application.ArmoryPagePort.Identity("M1", "W1", "P1"));
+            .skillCode(
+                new com.loakraken.character.application.ArmoryPagePort.Identity("M1", "W1", "P1"));
     assertThat(result).isEqualTo(code.toUpperCase());
     server.verify();
   }
@@ -117,19 +121,23 @@ class OfficialArmoryPageClientTest {
   @Test
   void 스킬_코드_거절은_우회하지_않고_접근_거부로_형식이_다르면_구조_변경으로_센다() {
     // 응답 code≠0(로그인 필요 안내 등)·401·403은 접근 거부.
-    assertThatThrownBy(() -> OfficialArmoryPageClient.code("{\"code\":1,\"message\":\"로그인이 필요합니다\"}"))
+    assertThatThrownBy(
+            () -> OfficialArmoryPageClient.code("{\"code\":1,\"message\":\"로그인이 필요합니다\"}"))
         .isInstanceOfSatisfying(
             ArmoryPageFetchException.class,
             e -> assertThat(e.kind()).isEqualTo(Kind.ACCESS_DENIED));
     for (var status : java.util.List.of(HttpStatus.FORBIDDEN, HttpStatus.UNAUTHORIZED)) {
       var builder = RestClient.builder();
       var server = MockRestServiceServer.bindTo(builder).build();
-      server.expect(requestTo("https://lostark.game.onstove.com/Profile/SkillRecommend")).andRespond(withStatus(status));
+      server
+          .expect(requestTo("https://lostark.game.onstove.com/Profile/SkillRecommend"))
+          .andRespond(withStatus(status));
       assertThatThrownBy(
               () ->
                   new OfficialArmoryPageClient(policy(3_000_000, ""), builder)
                       .skillCode(
-                          new com.loakraken.character.application.ArmoryPagePort.Identity("M", "W", "P")))
+                          new com.loakraken.character.application.ArmoryPagePort.Identity(
+                              "M", "W", "P")))
           .isInstanceOfSatisfying(
               ArmoryPageFetchException.class,
               e -> assertThat(e.kind()).isEqualTo(Kind.ACCESS_DENIED));
@@ -156,7 +164,11 @@ class OfficialArmoryPageClientTest {
     // 같은 값이 두 번 나오는 것은 괜찮다(복사 버튼 등).
     assertThat(
             OfficialArmoryPageClient.code(
-                "{\"code\":0,\"content\":\"<input value='" + hex.toLowerCase() + "'><b>" + hex + "</b>\"}"))
+                "{\"code\":0,\"content\":\"<input value='"
+                    + hex.toLowerCase()
+                    + "'><b>"
+                    + hex
+                    + "</b>\"}"))
         .isEqualTo(hex);
   }
 
@@ -238,7 +250,7 @@ class OfficialArmoryPageClientTest {
                     Duration.ofMinutes(30),
                     5,
                     3,
-        new ArmoryPagePolicy.SkillCode(true)))
+                    new ArmoryPagePolicy.SkillCode(true)))
         .isInstanceOf(IllegalArgumentException.class);
     assertThatThrownBy(
             () ->
@@ -258,7 +270,7 @@ class OfficialArmoryPageClientTest {
                     Duration.ofMinutes(30),
                     5,
                     3,
-        new ArmoryPagePolicy.SkillCode(true)))
+                    new ArmoryPagePolicy.SkillCode(true)))
         .isInstanceOf(IllegalArgumentException.class);
   }
 

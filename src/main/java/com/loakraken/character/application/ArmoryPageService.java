@@ -32,10 +32,12 @@ public class ArmoryPageService {
       List<ArmoryPagePort.LifeSkill> lifeSkills) {}
 
   /** 스킬 코드 응답 값(#532). enabled가 false면 나머지는 null, 읽지 못했으면 enabled true에 나머지 null. */
-  public record CodeView(String characterName, boolean enabled, Instant fetchedAt, String skillCode) {}
+  public record CodeView(
+      String characterName, boolean enabled, Instant fetchedAt, String skillCode) {}
 
   /** 페이지 GET 한 번의 결과. page가 null이면 요청하지 않았거나(skipped) 실패. 식별 값은 메모리에서만 쓴다. */
-  private record PageFetch(ArmoryPagePort.Page page, ArmoryPageStorePort.Entry entry, String skipped) {}
+  private record PageFetch(
+      ArmoryPagePort.Page page, ArmoryPageStorePort.Entry entry, String skipped) {}
 
   private final ArmoryPagePolicy policy;
   private final CharacterCache cache;
@@ -193,8 +195,8 @@ public class ArmoryPageService {
   }
 
   /**
-   * 페이지 GET 한 번. 같은 캐릭터를 생활 스킬·스킬 코드가 동시에 원하면 한 번만 부른다. 결과는 생활 스킬 캐시에 저장한다(실패는 실패 캐시 시간).
-   * 직전에 캐시된 값이 있어도 스킬 코드는 식별 값이 필요해 다시 부른다.
+   * 페이지 GET 한 번. 같은 캐릭터를 생활 스킬·스킬 코드가 동시에 원하면 한 번만 부른다. 결과는 생활 스킬 캐시에 저장한다(실패는 실패 캐시 시간). 직전에 캐시된
+   * 값이 있어도 스킬 코드는 식별 값이 필요해 다시 부른다.
    */
   private PageFetch fetchPage(String official) {
     return pageFetches.run(

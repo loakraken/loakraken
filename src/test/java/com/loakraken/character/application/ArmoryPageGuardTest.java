@@ -178,7 +178,8 @@ class ArmoryPageGuardTest {
     guard.failure(guard.acquire(), Kind.TOO_LARGE);
     clock.advance(Duration.ofSeconds(2));
     assertThat(guard.acquire().allowed()).isTrue();
-    guard.failure(new ArmoryPageGuard.Permit(Decision.ALLOWED, Phase.PAGE, 0, false), Kind.PARSE_ERROR);
+    guard.failure(
+        new ArmoryPageGuard.Permit(Decision.ALLOWED, Phase.PAGE, 0, false), Kind.PARSE_ERROR);
     clock.advance(Duration.ofDays(1));
     assertThat(guard.acquire().decision()).isEqualTo(Decision.STOPPED);
 
@@ -186,7 +187,8 @@ class ArmoryPageGuardTest {
     other.failure(other.acquire(), Kind.NOT_FOUND);
     clock.advance(Duration.ofSeconds(2));
     assertThat(other.acquire().allowed()).isTrue();
-    other.failure(new ArmoryPageGuard.Permit(Decision.ALLOWED, Phase.PAGE, 0, false), Kind.ACCESS_DENIED);
+    other.failure(
+        new ArmoryPageGuard.Permit(Decision.ALLOWED, Phase.PAGE, 0, false), Kind.ACCESS_DENIED);
     clock.advance(Duration.ofDays(1));
     assertThat(other.acquire().decision()).isEqualTo(Decision.STOPPED);
   }

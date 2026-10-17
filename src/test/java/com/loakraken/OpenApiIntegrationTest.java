@@ -1016,13 +1016,17 @@ class OpenApiIntegrationTest {
         .isEqualTo("null");
     // 스킬 코드(#532)는 따로 부르는 경로다.
     assertThat(
-            document.at("/paths/~1api~1v1~1characters~1armory-page~1skill-code/get").isMissingNode())
+            document
+                .at("/paths/~1api~1v1~1characters~1armory-page~1skill-code/get")
+                .isMissingNode())
         .isFalse();
     assertThat(schemas.at("/CharacterSkillCodeResponse/required").toString())
         .contains("characterName", "enabled", "fetchedAt", "skillCode");
     for (var field : List.of("fetchedAt", "skillCode"))
       assertThat(
-              schemas.at("/CharacterSkillCodeResponse/properties/" + field + "/anyOf/1/type").asText())
+              schemas
+                  .at("/CharacterSkillCodeResponse/properties/" + field + "/anyOf/1/type")
+                  .asText())
           .as(field)
           .isEqualTo("null");
   }

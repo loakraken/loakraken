@@ -86,8 +86,9 @@ class OfficialArmoryPageClient implements ArmoryPagePort {
   }
 
   /**
-   * 페이지의 스킬 코드 버튼과 같은 요청({@code POST /Profile/SkillRecommend}, 폼 본문 memberNo·worldNo·pcId). 응답 JSON의 code가 0이
-   * 아니면 거절로 보고 ACCESS_DENIED(우회하지 않음 — 쿠키·로그인·토큰을 흉내 내지 않는다). content 안의 128자 16진수만 꺼낸다.
+   * 페이지의 스킬 코드 버튼과 같은 요청({@code POST /Profile/SkillRecommend}, 폼 본문 memberNo·worldNo·pcId). 응답
+   * JSON의 code가 0이 아니면 거절로 보고 ACCESS_DENIED(우회하지 않음 — 쿠키·로그인·토큰을 흉내 내지 않는다). content 안의 128자 16진수만
+   * 꺼낸다.
    */
   @Override
   public String skillCode(Identity identity) {

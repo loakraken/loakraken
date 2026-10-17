@@ -802,6 +802,181 @@ class SpecUpIntegrationTest {
     assertThat(bound.at("/cost/amount").asLong()).isEqualTo(1_000_000);
   }
 
+  @Test
+  void 줄_상세는_목록과_같은_후보에_보석_시세와_기본_공격력을_붙인다() throws Exception {
+    // #544: 같은 캐릭터 캐시·같은 시세로 목록을 다시 만들어 찾는다(공식 호출 없음).
+    when(auctions.cachedGems()).thenReturn(gemCells(true));
+    search("스펙캐시");
+    var listBody =
+        mapper
+            .readTree(get("/api/v1/characters/spec-up?characterName=" + encode("스펙캐시")).body())
+            .path("data");
+    var list = listBody.path("candidates");
+    clearInvocations(detailsPort);
+    var response = detail("GEM_LEVEL:0:9", "스펙캐시");
+    assertThat(response.statusCode()).isEqualTo(200);
+    ApiContractFixture.write("character-spec-up-detail-gem.json", response.body());
+    SiteNames.assertAbsent(response.body());
+    var body = mapper.readTree(response.body());
+    assertThat(body.path("code").asText()).isEqualTo("SPEC_UP_DETAIL_SUCCESS");
+    var data = body.path("data");
+    assertThat(data.path("candidate")).isEqualTo(find(list, "GEM_LEVEL:0:9"));
+    assertThat(data.path("pricesAt").asText()).isEqualTo(listBody.path("pricesAt").asText());
+    assertThat(data.path("combatPowerBefore").decimalValue()).isEqualByComparingTo("3000.00");
+    assertThat(data.path("combatPowerAfter").decimalValue()).isEqualByComparingTo("3024.00");
+    assertThat(data.path("stats")).hasSize(1);
+    assertThat(data.at("/stats/0/name").asText()).isEqualTo("기본 공격력");
+    assertThat(data.at("/stats/0/before").decimalValue()).isEqualByComparingTo("0.80");
+    assertThat(data.at("/stats/0/after").decimalValue()).isEqualByComparingTo("1.00");
+    assertThat(data.at("/stats/0/unit").asText()).isEqualTo("%");
+    // 사는 9레벨 1,000,000, 파는 8레벨 400,000(판매 기대가 380,000) → 목록 비용 620,000과 같다.
+    var market = data.path("market");
+    assertThat(market).hasSize(2);
+    assertThat(market.at("/0/role").asText()).isEqualTo("BUY");
+    assertThat(market.at("/0/itemName").asText()).isEqualTo("9레벨 겁화의 보석");
+    assertThat(market.at("/0/price").asLong()).isEqualTo(1_000_000);
+    assertThat(market.at("/0/quantity").asInt()).isEqualTo(1);
+    assertThat(market.at("/0/listedCount").asLong()).isEqualTo(5);
+    assertThat(market.at("/1/role").asText()).isEqualTo("SELL");
+    assertThat(market.at("/1/price").asLong()).isEqualTo(400_000);
+    assertThat(market.at("/1/expectedSalePrice").asLong()).isEqualTo(380_000);
+    assertThat(market.at("/0/price").asLong() - market.at("/1/expectedSalePrice").asLong())
+        .isEqualTo(data.at("/candidate/cost/amount").asLong());
+    assertThat(data.path("materials").isNull()).isTrue();
+    assertThat(data.path("goldFee").isNull()).isTrue();
+    assertThat(data.path("refine").isNull()).isTrue();
+
+    // 빈 칸 10레벨: 사는 줄만(팔 보석 없음), 기본 공격력 0 → 1.20.
+    var empty = mapper.readTree(detail("GEM_LEVEL:1:10", "스펙캐시").body()).path("data");
+    assertThat(empty.path("candidate")).isEqualTo(find(list, "GEM_LEVEL:1:10"));
+    assertThat(empty.path("market")).hasSize(1);
+    assertThat(empty.at("/market/0/itemName").asText()).isEqualTo("10레벨 겁화의 보석");
+    assertThat(empty.at("/market/0/price").asLong()).isEqualTo(3_000_000);
+    assertThat(empty.at("/stats/0/before").decimalValue()).isEqualByComparingTo("0");
+    assertThat(empty.at("/stats/0/after").decimalValue()).isEqualByComparingTo("1.20");
+
+    // 근거가 없는 후보(품질)는 stats 빈 목록, 나머지 null.
+    var quality =
+        mapper.readTree(detail("EQUIPMENT_QUALITY:0:100", "스펙캐시").body()).path("data");
+    assertThat(quality.path("stats")).isEmpty();
+    assertThat(quality.path("market").isNull()).isTrue();
+    assertThat(quality.path("refine").isNull()).isTrue();
+    verifyNoInteractions(detailsPort);
+  }
+
+  @Test
+  void 줄_상세_각인은_유물_각인서_5권_시세를_준다() throws Exception {
+    when(auctions.cachedGems()).thenReturn(gemCells(true));
+    search("스펙각인");
+    marketCache.saveRelicBooks(
+        new RelicBookScan(
+            Instant.now(),
+            1,
+            List.of(
+                new MarketPrice(
+                    1,
+                    "유물 원한 각인서",
+                    "유물",
+                    "https://cdn.example/use_9_25.png",
+                    1,
+                    null,
+                    null,
+                    null,
+                    new BigDecimal("12000")))),
+        Duration.ofMinutes(5));
+    var data = mapper.readTree(detail("ENGRAVING_LEVEL:원한:4", "스펙각인").body()).path("data");
+    assertThat(data.at("/candidate/cost/amount").asLong()).isEqualTo(60_000);
+    assertThat(data.path("market")).hasSize(1);
+    assertThat(data.at("/market/0/role").asText()).isEqualTo("BUY");
+    assertThat(data.at("/market/0/itemName").asText()).isEqualTo("유물 원한 각인서");
+    assertThat(data.at("/market/0/grade").asText()).isEqualTo("유물");
+    assertThat(data.at("/market/0/icon").asText()).isEqualTo("https://cdn.example/use_9_25.png");
+    assertThat(data.at("/market/0/price").asLong() * data.at("/market/0/quantity").asInt())
+        .isEqualTo(60_000);
+    assertThat(data.path("stats")).isEmpty();
+    redis.delete("market:v1:relic-books");
+  }
+
+  @Test
+  void 줄_상세_재련은_재료_내역_합이_목록_비용과_같고_시세가_없으면_PENDING이다() throws Exception {
+    stubRefineOk();
+    when(auctions.cachedGems()).thenReturn(gemCells(true));
+    search("스펙업화");
+    // 시세 예열 전: 기대 수량은 있고 단가·금액은 null, priceStatus PENDING.
+    var pending = mapper.readTree(detail("EQUIPMENT_REFINE:0:21", "스펙업화").body()).path("data");
+    assertThat(pending.at("/candidate/cost/status").asText()).isEqualTo("PENDING");
+    assertThat(pending.path("materials")).isNotEmpty();
+    for (var row : pending.path("materials")) {
+      assertThat(row.path("priceStatus").asText()).isEqualTo("PENDING");
+      assertThat(row.path("unitPrice").isNull()).isTrue();
+      assertThat(row.path("gold").isNull()).isTrue();
+    }
+    assertThat(pending.at("/refine/fromStage").asInt()).isEqualTo(20);
+    assertThat(pending.at("/refine/toStage").asInt()).isEqualTo(21);
+
+    marketCache.saveRefiningMaterials(
+        new com.loakraken.market.application.RefiningMaterialScan(
+            Instant.parse("2026-10-12T02:00:00Z"),
+            List.of(
+                material(1, "운명의 파괴석", 100, "152"),
+                material(2, "운명의 돌파석", 1, "4"),
+                material(3, "아비도스 융화 재료", 1, "210"),
+                material(4, "운명의 파편 주머니(소)", 1, "87"),
+                material(5, "운명의 파편 주머니(대)", 1, "219"),
+                material(6, "용암의 숨결", 1, "459"))),
+        java.time.Duration.ofMinutes(5));
+    var list =
+        mapper
+            .readTree(get("/api/v1/characters/spec-up?characterName=" + encode("스펙업화")).body())
+            .at("/data/candidates");
+    var response = detail("EQUIPMENT_REFINE:0:21", "스펙업화");
+    assertThat(response.statusCode()).isEqualTo(200);
+    ApiContractFixture.write("character-spec-up-detail-refine.json", response.body());
+    SiteNames.assertAbsent(response.body());
+    var data = mapper.readTree(response.body()).path("data");
+    assertThat(data.path("candidate")).isEqualTo(find(list, "EQUIPMENT_REFINE:0:21"));
+    assertThat(data.path("combatPowerAfter").decimalValue()).isEqualByComparingTo("3012.34");
+    assertThat(data.at("/refine/breath").asText()).isIn("NONE", "MAX");
+    assertThat(data.at("/refine/expectedAttempts").decimalValue()).isPositive();
+    assertThat(data.at("/refine/firstAttemptSuccessRateBp").asInt()).isPositive();
+    var sum = data.path("goldFee").decimalValue();
+    for (var row : data.path("materials")) {
+      assertThat(row.path("priceStatus").asText()).isEqualTo("OK");
+      assertThat(row.path("priceBasis").asText()).isEqualTo("MARKET_MIN_UNIT");
+      assertThat(row.path("icon").isNull()).isTrue();
+      sum = sum.add(row.path("gold").decimalValue());
+    }
+    // 표시 값(소수 둘째 자리)의 합을 올림하면 목록 비용과 1골드 안쪽.
+    long amount = data.at("/candidate/cost/amount").asLong();
+    assertThat(Math.abs(sum.setScale(0, java.math.RoundingMode.CEILING).longValue() - amount))
+        .isLessThanOrEqualTo(1);
+    assertThat(data.path("market").isNull()).isTrue();
+    org.mockito.Mockito.reset(simulator);
+  }
+
+  @Test
+  void 줄_상세는_없는_후보면_404이고_id_형식이_틀리면_400이고_캐시가_없으면_CHARACTER_NOT_CACHED다()
+      throws Exception {
+    when(auctions.cachedGems()).thenReturn(gemCells(true));
+    search("스펙캐시");
+    var missing = detail("GEM_LEVEL:9:9", "스펙캐시");
+    assertThat(missing.statusCode()).isEqualTo(404);
+    ApiContractFixture.write("character-spec-up-detail-not-found.json", missing.body());
+    assertThat(missing.body()).contains("SPEC_UP_CANDIDATE_NOT_FOUND");
+    assertThat(detail("gem<9>", "스펙캐시").statusCode()).isEqualTo(400);
+    var notCached = detail("GEM_LEVEL:0:9", "스펙없음");
+    assertThat(notCached.statusCode()).isEqualTo(404);
+    assertThat(notCached.body()).contains("CHARACTER_NOT_CACHED");
+  }
+
+  private HttpResponse<String> detail(String candidateId, String name) throws Exception {
+    return get(
+        "/api/v1/characters/spec-up/candidates/"
+            + encode(candidateId).replace("+", "%20")
+            + "?characterName="
+            + encode(name));
+  }
+
   private void search(String name) throws Exception {
     when(detailsPort.fetch(anyString()))
         .thenAnswer(invocation -> fetched(invocation.getArgument(0)));

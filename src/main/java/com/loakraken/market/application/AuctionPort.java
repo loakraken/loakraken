@@ -105,9 +105,34 @@ public interface AuctionPort {
       Long bidStartPrice,
       Instant endDate,
       Integer tradeAllowCount,
-      List<ListingOption> options) {
+      List<ListingOption> options,
+      String icon) {
     public AuctionListing {
       options = options == null ? List.of() : List.copyOf(options);
+    }
+
+    /** 이미지 없이(공식 Icon을 읽기 전 모양). */
+    public AuctionListing(
+        String name,
+        String grade,
+        Integer quality,
+        Long buyPrice,
+        Long bidPrice,
+        Long bidStartPrice,
+        Instant endDate,
+        Integer tradeAllowCount,
+        List<ListingOption> options) {
+      this(
+          name,
+          grade,
+          quality,
+          buyPrice,
+          bidPrice,
+          bidStartPrice,
+          endDate,
+          tradeAllowCount,
+          options,
+          null);
     }
   }
 

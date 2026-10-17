@@ -78,11 +78,18 @@ public final class AccessorySearch {
       Integer tradeAllowCount,
       Long buyPrice,
       Long bidStartPrice,
-      Instant endDate) {
+      Instant endDate,
+      String icon,
+      List<BaseEffect> baseEffects) {
     public Item {
       polish = polish == null ? List.of() : List.copyOf(polish);
+      // 기본 효과가 없으면 빈 목록(null 아님, 계약).
+      baseEffects = baseEffects == null ? List.of() : List.copyOf(baseEffects);
     }
   }
+
+  /** 기본 효과 한 줄: 공식 옵션 중 STAT 줄(힘·민첩·지능·체력 등)의 이름과 숫자 값. */
+  public record BaseEffect(String name, BigDecimal value) {}
 
   /**
    * @param name 공식 연마 효과 이름(앞뒤 공백 제거)

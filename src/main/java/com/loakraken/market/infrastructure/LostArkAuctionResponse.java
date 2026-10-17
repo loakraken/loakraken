@@ -30,7 +30,8 @@ record LostArkAuctionResponse(
       @JsonProperty("Grade") String grade,
       @JsonProperty("GradeQuality") Integer quality,
       @JsonProperty("AuctionInfo") AuctionInfo auctionInfo,
-      @JsonProperty("Options") List<Option> options) {
+      @JsonProperty("Options") List<Option> options,
+      @JsonProperty("Icon") String icon) {
     AuctionPort.AuctionListing toListing() {
       var info = auctionInfo == null ? new AuctionInfo(null, null, null, null, null) : auctionInfo;
       return new AuctionPort.AuctionListing(

@@ -57,7 +57,10 @@ public final class AccessorySearchResponses {
       @NullableResponse @Schema(description = "구매 후 거래 가능 횟수(0이면 거래 불가)") Integer tradeAllowCount,
       @NullableResponse @Schema(description = "즉시 구매가. 입찰만 가능한 매물이면 null(0은 주지 않음)") Long buyPrice,
       @NullableResponse Long bidStartPrice,
-      @NullableResponse @Schema(description = "경매 종료 시각") Instant endDate) {
+      @NullableResponse @Schema(description = "경매 종료 시각") Instant endDate,
+      @NullableResponse @Schema(description = "공식 경매장 아이템 이미지 URL") String icon,
+      @Schema(description = "기본 효과(공식 옵션 중 STAT 줄: 힘·민첩·지능·체력 등) 공식 순서. 숫자 값이 있는 줄만, 없으면 빈 배열")
+          List<AccessorySearchBaseEffectResponse> baseEffects) {
     static AccessorySearchItemResponse from(AccessorySearch.Item item) {
       return new AccessorySearchItemResponse(
           item.name(),
@@ -71,9 +74,17 @@ public final class AccessorySearchResponses {
           item.tradeAllowCount(),
           item.buyPrice(),
           item.bidStartPrice(),
-          item.endDate());
+          item.endDate(),
+          item.icon(),
+          item.baseEffects().stream()
+              .map(effect -> new AccessorySearchBaseEffectResponse(effect.name(), effect.value()))
+              .toList());
     }
   }
+
+  public record AccessorySearchBaseEffectResponse(
+      @Schema(description = "공식 옵션 이름", example = "민첩") String name,
+      @Schema(description = "공식 값", example = "15000") BigDecimal value) {}
 
   public record AccessorySearchPolishResponse(
       @Schema(description = "공식 연마 효과 이름") String name,

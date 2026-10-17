@@ -199,6 +199,11 @@ class MarketAuctionServiceTest {
     public void saveListings(String key, AuctionPage page) {}
 
     @Override
+    public boolean tryAcquireGemFilterQuota(int limit) {
+      return true;
+    }
+
+    @Override
     public void recordDaily(String key, LocalDate day, AuctionCell cell) {
       daily.put(key + "@" + day, cell);
     }

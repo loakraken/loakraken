@@ -12,6 +12,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
   RelicBookWarmupProperties.class,
   RefiningMaterialWarmupProperties.class,
   LifeMaterialWarmupProperties.class,
-  com.loakraken.market.application.AccessorySearchPolicy.class
+  com.loakraken.market.application.AccessorySearchPolicy.class,
+  com.loakraken.market.application.GemFilterPolicy.class
 })
 class MarketConfiguration {}

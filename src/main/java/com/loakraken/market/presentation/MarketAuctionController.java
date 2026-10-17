@@ -1,6 +1,7 @@
 package com.loakraken.market.presentation;
 
 import com.loakraken.common.api.ApiResponse;
+import com.loakraken.market.application.GemSkillFilterService;
 import com.loakraken.market.application.MarketAuctionService;
 import com.loakraken.market.domain.AuctionCatalog;
 import io.swagger.v3.oas.annotations.Operation;
@@ -30,9 +31,23 @@ import org.springframework.web.bind.annotation.RestController;
         "공식 경매장 T4 보석·장신구 시세 표(auction-board-v1). 칸마다 3분 캐시하고, 빈 칸은 사용자 몫이 남을 때만 채웁니다(PENDING). 전일 대비는 LOAKraken 관측 기준입니다.")
 public class MarketAuctionController {
   private final MarketAuctionService auctions;
+  private final GemSkillFilterService gemSkills;
 
-  public MarketAuctionController(MarketAuctionService auctions) {
+  public MarketAuctionController(MarketAuctionService auctions, GemSkillFilterService gemSkills) {
     this.auctions = auctions;
+    this.gemSkills = gemSkills;
+  }
+
+  @GetMapping("/gems/skills")
+  @Operation(
+      summary = "보석 매물 직업·스킬 목록",
+      description =
+          "보석 매물을 거를 직업과 스킬(공식 경매장 검색 옵션 가운데 보석에 붙는 스킬). 공식 호출 없음. 매물 조회의 className·skill에 이 값을 그대로 쓴다. 기능이 꺼져 있으면 404 GEM_FILTER_DISABLED(화면은 필터를 숨김).")
+  @StandardErrors
+  public ApiResponse<AuctionResponses.AuctionGemSkillsResponse> gemSkills() {
+    return ApiResponse.of(
+        MarketSuccessCode.AUCTION_GEM_SKILLS_SUCCESS,
+        AuctionResponses.AuctionGemSkillsResponse.from(gemSkills.catalog()));
   }
 
   @GetMapping("/gems")
@@ -47,18 +62,29 @@ public class MarketAuctionController {
   }
 
   @GetMapping("/gems/listings")
-  @Operation(summary = "T4 보석 매물", description = "즉시 구매가 오름차순 10개(1분 캐시). 공식 호출 최대 1회.")
+  @Operation(
+      summary = "T4 보석 매물",
+      description =
+          "즉시 구매가 오름차순 10개(1분 캐시). 공식 호출 최대 1회. className(직업)·skill(스킬 코드, 직업 필요)로 거를 수 있고 값은 /gems/skills 목록을 쓴다. 목록에 없는 조건은 400 INVALID_GEM_FILTER, 필터가 꺼져 있으면 404 GEM_FILTER_DISABLED. 조건 붙은 검색은 기능 전용 분당 몫(모든 사용자 합)을 넘으면 캐시만 주고 캐시가 없으면 503 MARKET_SEARCH_BUSY + Retry-After, 같은 조건 동시 요청은 공식 검색 하나로 묶는다.")
   @StandardErrors
   public ApiResponse<AuctionResponses.AuctionListingsResponse> gemListings(
       @Parameter(description = "겁화 또는 작열") @RequestParam @Pattern(regexp = "겁화|작열") String kind,
       @Parameter(description = "1~10") @RequestParam @Min(1) @Max(10) int level,
       @Parameter(description = "페이지(1~10)") @RequestParam(required = false) @Min(1) @Max(10)
-          Integer page) {
+          Integer page,
+      @Parameter(description = "공식 직업 이름(/gems/skills의 className)")
+          @RequestParam(required = false)
+          @Size(max = 20)
+          String className,
+      @Parameter(description = "공식 스킬 코드(/gems/skills의 code). className이 필요하다")
+          @RequestParam(required = false)
+          @Min(1)
+          Integer skill) {
     int pageNo = page == null ? 1 : page;
+    var listings = gemSkills.listings(kind, level, pageNo, className, skill);
     return ApiResponse.of(
         MarketSuccessCode.AUCTION_LISTINGS_SUCCESS,
-        AuctionResponses.AuctionListingsResponse.from(
-            auctions.gemListings(kind, level, pageNo), pageNo));
+        AuctionResponses.AuctionListingsResponse.from(listings.page(), pageNo, listings.filter()));
   }
 
   @GetMapping("/accessories")

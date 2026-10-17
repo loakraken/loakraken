@@ -30,6 +30,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.springframework.beans.factory.support.StaticListableBeanFactory;
 import tools.jackson.databind.json.JsonMapper;
 
 class LostArkCharacterClientTest {
@@ -480,7 +481,8 @@ class LostArkCharacterClientTest {
         properties,
         new LostArkRequestGate(Clock.systemUTC(), properties, metrics),
         new JsonMapper(),
-        metrics);
+        metrics,
+        new StaticListableBeanFactory().getBeanProvider(ArmoryRawDump.class));
   }
 
   private void assertError(LostArkCharacterClient client, CharacterErrorCode code) {

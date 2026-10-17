@@ -35,18 +35,21 @@ class LostArkCharacterClient implements CharacterDetailsPort {
   private final LostArkRequestGate gate;
   private final JsonMapper mapper;
   private final LostArkMetrics metrics;
+  private final org.springframework.beans.factory.ObjectProvider<ArmoryRawDump> rawDump;
 
   LostArkCharacterClient(
       RestClient lostArkRestClient,
       LostArkProperties properties,
       LostArkRequestGate gate,
       JsonMapper mapper,
-      LostArkMetrics metrics) {
+      LostArkMetrics metrics,
+      org.springframework.beans.factory.ObjectProvider<ArmoryRawDump> rawDump) {
     this.client = lostArkRestClient;
     this.properties = properties;
     this.gate = gate;
     this.mapper = mapper;
     this.metrics = metrics;
+    this.rawDump = rawDump;
   }
 
   @Override
@@ -54,6 +57,8 @@ class LostArkCharacterClient implements CharacterDetailsPort {
     var armoryPayload = armory(characterName);
     var armory = armoryPayload.value();
     var profile = LostArkProfileMapper.from(armory.profile());
+    // 로컬 대조 전용(#540): local 프로필 + ARMORY_RAW_DUMP_DIR일 때만, 처리정지 목록 밖 캐릭터의 본문을 파일로 남긴다.
+    rawDump.ifAvailable(dump -> dump.write(profile, armoryPayload.json()));
     var siblingsPayload = siblings(characterName, CharacterErrorCode.LOST_ARK_API_ERROR);
     var siblings = siblingsPayload.value();
     var details =
@@ -69,12 +74,9 @@ class LostArkCharacterClient implements CharacterDetailsPort {
   public FetchedCharacter fetchArmory(String characterName) {
     var armoryPayload = armory(characterName);
     var armory = armoryPayload.value();
-    var details =
-        new CharacterDetails(
-            LostArkProfileMapper.from(armory.profile()),
-            armory.toLoadout(),
-            null,
-            armory.coverage(null));
+    var profile = LostArkProfileMapper.from(armory.profile());
+    rawDump.ifAvailable(dump -> dump.write(profile, armoryPayload.json()));
+    var details = new CharacterDetails(profile, armory.toLoadout(), null, armory.coverage(null));
     return new FetchedCharacter(details, armoryPayload.json(), null);
   }
 

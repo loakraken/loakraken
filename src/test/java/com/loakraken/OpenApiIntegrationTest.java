@@ -272,7 +272,48 @@ class OpenApiIntegrationTest {
                 .asText())
         .isEqualTo("null");
     assertThat(document.at("/components/schemas/CharacterResponse/required").toString())
-        .contains("braceletEfficiency", "arkGridEfficiency");
+        .contains("braceletEfficiency", "arkGridEfficiency", "krakenScore");
+    // 크라켄 점수(#522): 늘 들어 있는 필드, 닫힌 값은 확정, 요소 코드는 열린 문자열.
+    assertThat(
+            document
+                .at("/components/schemas/CharacterResponse/properties/krakenScore/anyOf")
+                .isMissingNode())
+        .isTrue();
+    assertThat(document.at("/components/schemas/KrakenScoreResponse/required").toString())
+        .contains(
+            "status", "reasonCode", "reason", "role", "score", "tier", "factors", "ruleVersion");
+    assertThat(
+            document
+                .at("/components/schemas/KrakenScoreResponse/properties/status/enum")
+                .toString())
+        .contains("OK", "UNSUPPORTED", "DISABLED");
+    for (var field : List.of("reasonCode", "reason", "role", "score", "tier", "ruleVersion"))
+      assertThat(
+              document
+                  .at(
+                      "/components/schemas/KrakenScoreResponse/properties/"
+                          + field
+                          + "/anyOf/1/type")
+                  .asText())
+          .as(field)
+          .isEqualTo("null");
+    assertThat(document.at("/components/schemas/KrakenScoreTierResponse/required").toString())
+        .contains("code", "min", "nextCode", "nextMin", "remaining", "progressPercent");
+    for (var field : List.of("nextCode", "nextMin", "remaining"))
+      assertThat(
+              document
+                  .at(
+                      "/components/schemas/KrakenScoreTierResponse/properties/"
+                          + field
+                          + "/anyOf/1/type")
+                  .asText())
+          .as(field)
+          .isEqualTo("null");
+    assertThat(
+            document
+                .at("/components/schemas/KrakenScoreFactorResponse/properties/code/enum")
+                .isMissingNode())
+        .isTrue();
     assertThat(document.at("/components/schemas/ArkGridEfficiencyResponse/required").toString())
         .contains(
             "percent", "coresPercent", "status", "reasonCode", "reason", "lines", "ruleVersion");

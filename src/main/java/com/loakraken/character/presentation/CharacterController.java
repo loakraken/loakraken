@@ -35,6 +35,7 @@ public class CharacterController {
   private final CharacterCardRefreshService cardRefresh;
   private final CombatPowerSimulationService simulator;
   private final ArkGridEfficiencyService arkGrids;
+  private final com.loakraken.character.application.KrakenScoreService scores;
   private static final org.slf4j.Logger log =
       org.slf4j.LoggerFactory.getLogger(CharacterController.class);
 
@@ -45,7 +46,8 @@ public class CharacterController {
       CharacterPopularService popular,
       CharacterCardRefreshService cardRefresh,
       CombatPowerSimulationService simulator,
-      ArkGridEfficiencyService arkGrids) {
+      ArkGridEfficiencyService arkGrids,
+      com.loakraken.character.application.KrakenScoreService scores) {
     this.queryService = queryService;
     this.views = views;
     this.cards = cards;
@@ -53,6 +55,18 @@ public class CharacterController {
     this.cardRefresh = cardRefresh;
     this.simulator = simulator;
     this.arkGrids = arkGrids;
+    this.scores = scores;
+  }
+
+  /** 크라켄 점수(#522). 메모리 계산이고 실패해도 검색 응답은 막지 않는다(DISABLED 모양). */
+  private com.loakraken.character.application.KrakenScoreService.KrakenScore krakenScore(
+      CharacterResult result) {
+    try {
+      return scores.score(result);
+    } catch (RuntimeException exception) {
+      log.warn("크라켄 점수를 계산하지 못했습니다. 예외 유형={}", exception.getClass().getSimpleName());
+      return null;
+    }
   }
 
   /** 팔찌 효율(#345). 메모리 계산이고 실패해도 검색 응답은 막지 않는다(null). */
@@ -130,7 +144,8 @@ public class CharacterController {
     popular.record(profile.characterName(), profile.serverName(), http.getRemoteAddr());
     return ApiResponse.of(
         CharacterSuccessCode.CHARACTER_SEARCH_SUCCESS,
-        CharacterResponse.from(result, braceletEfficiency(result), arkGridEfficiency(result)));
+        CharacterResponse.from(
+            result, braceletEfficiency(result), arkGridEfficiency(result), krakenScore(result)));
   }
 
   @GetMapping("/popular")

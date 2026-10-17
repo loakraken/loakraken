@@ -150,6 +150,41 @@ class RosterRankingIntegrationTest {
   }
 
   @Test
+  void 서버_조건이_없으면_대표_캐릭터_서버의_상위_6명만_식스맨이다() throws Exception {
+    // 한 원정대가 두 서버에 걸쳐 있다: 대표(1950)는 SERVER, 더 많은 고레벨 캐릭터는 TIE_SERVER.
+    var key = UUID.randomUUID();
+    member(SERVER, key, "원정섞임대표", 1950, null, null, Instant.now());
+    member(SERVER, key, "원정섞임가", 1940, null, null, Instant.now());
+    member(SERVER, key, "원정섞임나", 1930, null, null, Instant.now());
+    for (int i = 0; i < 4; i++)
+      member(TIE_SERVER, key, "원정섞임다른" + i, 1945 - i, null, null, Instant.now());
+
+    // 서버 조건 없음: 대표 서버(SERVER) 3명만 — (1950 + 1940 + 1930) ÷ 6 = 970. 예전처럼 서버를 섞으면 1944였다.
+    var all = data(get("/api/v1/rankings/rosters?basis=ITEM_LEVEL&aggregate=TOP6_AVG&size=100"));
+    var row = rowOf(all, "원정섞임대표");
+    assertThat(row.path("value").decimalValue()).isEqualByComparingTo("970.00");
+    assertThat(row.path("usedCharacters").asLong()).isEqualTo(3);
+    assertThat(row.path("composition").toString()).doesNotContain("원정섞임다른");
+
+    // 서버 조건이 있으면 그 서버 캐릭터만: TIE_SERVER 4명 (1945 + 1944 + 1943 + 1942) ÷ 6 = 1295.67.
+    var tie =
+        data(
+            get(
+                "/api/v1/rankings/rosters?basis=ITEM_LEVEL&aggregate=TOP6_AVG&server="
+                    + encode(TIE_SERVER)));
+    var tieRow = rowOf(tie, "원정섞임다른0");
+    assertThat(tieRow.path("value").decimalValue()).isEqualByComparingTo("1295.67");
+    assertThat(tieRow.path("usedCharacters").asLong()).isEqualTo(4);
+  }
+
+  private static tools.jackson.databind.JsonNode rowOf(
+      tools.jackson.databind.JsonNode data, String representative) {
+    for (var row : data.path("rows"))
+      if (row.path("characterName").asText().equals(representative)) return row;
+    throw new AssertionError("대표 캐릭터 행이 없습니다: " + representative);
+  }
+
+  @Test
   void 식스맨은_값이_아니라_아이템_레벨_상위_6명으로_고른다() throws Exception {
     // 전투력 기준: 전투력이 가장 높은 1600 캐릭터는 아이템 레벨 7위라 식스맨에 들지 않는다.
     var key = UUID.randomUUID();

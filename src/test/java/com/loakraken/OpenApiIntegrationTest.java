@@ -253,6 +253,36 @@ class OpenApiIntegrationTest {
                   .asText())
           .as(field)
           .isEqualTo("null");
+    // 스펙업 줄 상세(#544): 새 경로, 모든 필드 required, 해당 없는 칸만 nullable.
+    assertThat(
+            document
+                .at("/paths/~1api~1v1~1characters~1spec-up~1candidates~1{candidateId}/get")
+                .isMissingNode())
+        .isFalse();
+    assertThat(document.at("/components/schemas/SpecUpDetailResponse/required").toString())
+        .contains("candidate", "stats", "materials", "goldFee", "market", "refine");
+    for (var field :
+        List.of(
+            "pricesAt",
+            "combatPowerBefore",
+            "combatPowerAfter",
+            "materials",
+            "goldFee",
+            "market",
+            "refine"))
+      assertThat(
+              document
+                  .at(
+                      "/components/schemas/SpecUpDetailResponse/properties/"
+                          + field
+                          + "/anyOf/1/type")
+                  .asText())
+          .as(field)
+          .isEqualTo("null");
+    assertThat(document.at("/components/schemas/SpecUpMaterialResponse/required").toString())
+        .contains("itemName", "quantity", "unitPrice", "gold", "priceStatus");
+    assertThat(document.at("/components/schemas/SpecUpMarketResponse/required").toString())
+        .contains("role", "itemName", "price", "quantity", "observedAt");
     // 팔찌·젬 효율 랭킹(L38·L39): 두 경로가 같은 스키마, 필수와 nullable.
     for (var path : List.of("bracelets", "ark-grid-gems"))
       assertThat(

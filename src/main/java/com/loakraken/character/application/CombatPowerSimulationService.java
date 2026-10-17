@@ -738,6 +738,8 @@ public class CombatPowerSimulationService {
         range("level", change.level(), 0, 10);
         var targets = new LinkedHashMap<Integer, Integer>();
         String reason = gemModel.unsupportedReason();
+        // 전체 바꾸기는 장착한 칸만 대상이다. 보석이 하나도 없으면 바꿀 칸이 없다(빈 칸 끼우기는 GEM_LEVEL로).
+        if (reason == null && gemModel.slots().isEmpty()) reason = "장착한 보석이 없습니다.";
         for (var slot : gemModel.slots().keySet()) {
           targets.put(slot, change.level());
           if (reason == null) reason = gemModel.cannotSet(slot, change.level());
@@ -764,7 +766,19 @@ public class CombatPowerSimulationService {
                                 && change.slot().equals(item.slot()))
                     .findFirst()
                     .orElse(null);
-        if (gem == null) throw notFound("보석 slot " + change.slot());
+        if (gem == null) {
+          // 빈 칸(0~10 안, 보석 없음)은 0레벨에서 목표 레벨 4티어 보석을 끼우는 변화다(스펙업 빈 칸 후보).
+          if (change.slot() == null || !gemModel.empty(change.slot()))
+            throw notFound("보석 slot " + change.slot());
+          yield new Planned(
+              change,
+              "보석 " + change.slot() + "번(빈 칸)",
+              "0",
+              str(change.level()),
+              new GemEffect(Map.of(change.slot(), change.level())),
+              GEM_BASIS,
+              gemModel.cannotSet(change.slot(), change.level()));
+        }
         yield new Planned(
             change,
             "보석 " + gem.slot() + "번(" + gem.name() + ")",

@@ -77,6 +77,21 @@ services:
       ROSTER_RANKING: "${ROSTER_RANKING:-}"
       # 캐릭터 화면의 전투정보실 페이지 정보 요청(web #519). on|off, 비우면 운영 호스트에서 꺼짐(요청 안 보냄). 백엔드 플래그와 함께 켠다.
       ARMORY_PAGE: "${ARMORY_PAGE:-}"
+      # 나머지 화면 스위치도 모두 넘긴다(오픈 준비 A3). 규칙은 위와 같다: on|off, 비우면 web 기본값(운영 SITE_URL이면 숨김).
+      # 켤 때는 백엔드 짝과 같이 켠다: SPEC_UP_GUIDE↔SPEC_UP_ENABLED, ACCESSORY_SEARCH_TOOL↔FEATURE_AUCTION_SEARCH,
+      # COLLECTIBLE_RANKING↔RANKING_COLLECTIBLES_ENABLED, GUILD_RANKING·POPULAR_GUILDS↔RANKING_GUILDS_ENABLED,
+      # TITLE_STATS↔RANKING_TITLES_ENABLED, PRICE_ALERTS↔ALERTS_PUSH_ENABLED(+VAPID 키, 따로 준비).
+      ACCESSORY_SEARCH_TOOL: "${ACCESSORY_SEARCH_TOOL:-}"
+      CHARACTER_EFFICIENCY: "${CHARACTER_EFFICIENCY:-}"
+      COLLECTIBLE_RANKING: "${COLLECTIBLE_RANKING:-}"
+      EFFICIENCY_RANKING: "${EFFICIENCY_RANKING:-}"
+      GUILD_RANKING: "${GUILD_RANKING:-}"
+      POPULAR_GUILDS: "${POPULAR_GUILDS:-}"
+      SPEC_UP_GUIDE: "${SPEC_UP_GUIDE:-}"
+      TITLE_STATS: "${TITLE_STATS:-}"
+      # 이 둘은 비우면 어디서나 꺼짐(on일 때만 켜짐): 검색엔진 색인, 시세 알림 화면.
+      CHARACTER_INDEXING: "${CHARACTER_INDEXING:-}"
+      PRICE_ALERTS: "${PRICE_ALERTS:-}"
       # Node 힙 상한. 컨테이너 한도(WEB_MEM_LIMIT)보다 작게 둬 한도에 닿기 전에 GC가 돈다(2GB 서버 기준, 운영 문서 deploy "메모리 예산").
       NODE_OPTIONS: "${WEB_NODE_OPTIONS:---max-old-space-size=256}"
     depends_on:
@@ -142,6 +157,14 @@ services:
       RANKING_GUILDS_ENABLED: ${RANKING_GUILDS_ENABLED:-false}
       # 칭호 장착 확인 비율(#311): 웹 화면이 준비될 때까지 꺼짐.
       RANKING_TITLES_ENABLED: ${RANKING_TITLES_ENABLED:-false}
+      # 나머지 기능 스위치(오픈 준비 A3). 기본값은 앱 기본값과 같다 — 넘기기만 하고 동작은 바꾸지 않는다.
+      SPEC_UP_ENABLED: ${SPEC_UP_ENABLED:-false}
+      FEATURE_AUCTION_SEARCH: ${FEATURE_AUCTION_SEARCH:-false}
+      # 시세 알림 웹 푸시. 켜도 VAPID 키가 없으면 경로가 404다(키 전달은 켜기로 정할 때 따로).
+      ALERTS_PUSH_ENABLED: ${ALERTS_PUSH_ENABLED:-false}
+      # 시세 예열 세부(MARKET_WARMUP_ENABLED가 켜진 인스턴스에서만 돈다). 재련 재료·유물 각인서는 켜면 공식 호출이 늘어 수집기와 게이트를 나눈다.
+      MARKET_WARMUP_REFINING_MATERIALS_ENABLED: ${MARKET_WARMUP_REFINING_MATERIALS_ENABLED:-false}
+      MARKET_WARMUP_RELIC_BOOKS_ENABLED: ${MARKET_WARMUP_RELIC_BOOKS_ENABLED:-false}
       API_DOCS_ENABLED: "false"
       # 관리(actuator) 포트를 앱 포트와 나눈다. internal·data망 안에서만 닿고 edge는 이 망에 없다.
       MANAGEMENT_SERVER_PORT: "9090"

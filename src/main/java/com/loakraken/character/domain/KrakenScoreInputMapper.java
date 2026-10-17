@@ -207,7 +207,7 @@ public final class KrakenScoreInputMapper {
       }
       cores.add(core);
     }
-    // 원본 입력은 질서 해·달·별 → 혼돈 해·달·별 순서다(공식 슬롯 순서와 다를 수 있음). 같은 순위는 원래 순서(안정 정렬).
+    // 원본 입력은 질서 해·달·별 → 혼돈 해·달·별 순서다 — 공식 슬롯 순서를 이 순서로 다시 정렬한다. 같은 순위는 원래 순서(안정 정렬).
     cores.sort(
         (a, b) ->
             Integer.compare(

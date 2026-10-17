@@ -379,9 +379,9 @@ public class SpecUpService {
     if (at != null && (pricesAt[0] == null || at.isBefore(pricesAt[0]))) pricesAt[0] = at;
   }
 
-  /** 귀속 보석은 팔 수 없다(영수증과 같은 판정: 이름의 "(귀속)"). */
+  /** 귀속 보석은 팔 수 없다(영수증과 같은 판정: 이름의 "(귀속)" 또는 공식 툴팁 거래 줄, #560). */
   static boolean bound(CharacterLoadout.Gem gem) {
-    return gem.name() != null && gem.name().contains("(귀속)");
+    return com.loakraken.character.domain.GemTrade.bound(gem);
   }
 
   /** 무기 품질: 지금보다 높은 다음 10 단위 값과 100(추가 피해 식이 0~100 전부를 다룸). */

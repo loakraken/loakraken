@@ -41,6 +41,10 @@ class CharacterOpenApiConfiguration {
       ResponseContracts.apply(
           RosterCombatPowerController.RosterCombatPowerRefreshResponse.class,
           document.getComponents().getSchemas());
+      // 전투정보실 페이지 정보(#531)
+      ResponseContracts.apply(
+          CharacterArmoryPageController.CharacterArmoryPageResponse.class,
+          document.getComponents().getSchemas());
     };
   }
 }

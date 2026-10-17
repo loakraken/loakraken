@@ -100,6 +100,13 @@ market:
     max-scan-pages: ${MARKET_AUCTION_SEARCH_MAX_SCAN_PAGES:3}
     cache-ttl: ${MARKET_AUCTION_SEARCH_CACHE_TTL:120s}
 
+# 공식 전투정보실 페이지 정보(#531). 꺼져 있으면 200에 값 null이고 공식 페이지를 부르지 않는다.
+# 검색한 캐릭터만, 뽑은 값만 캐시, 인스턴스 전체 요청 간격 1초, 실패하면 쉬고 계속되면 멈춘다.
+armory-page:
+  enabled: ${ARMORY_PAGE_ENABLED:false}
+  # User-Agent에 서비스 이름과 함께 밝히는 연락 주소(서비스 안내 페이지 또는 서비스 전용 메일). 운영 설정에서 넣는다.
+  contact: ${ARMORY_PAGE_CONTACT:}
+
 loakraken:
   features:
     # 악세 경매 검색기(N13) 경로. 끄면 404이고 OpenAPI에도 없습니다.

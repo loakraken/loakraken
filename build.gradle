@@ -44,6 +44,8 @@ dependencies {
 
     // Observability
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
+    // 공식 전투정보실 페이지에서 필요한 값만 뽑는 HTML 해석기(#531)
+    implementation 'org.jsoup:jsoup:1.23.2'
     runtimeOnly 'io.micrometer:micrometer-registry-prometheus'
 
     // Lombok

@@ -993,6 +993,30 @@ class OpenApiIntegrationTest {
   }
 
   @Test
+  void 전투정보실_페이지_정보는_required이고_읽지_못한_값만_nullable이며_트라이포드와_스킬_코드는_없다() throws Exception {
+    var document = JsonMapper.builder().build().readTree(request("/v3/api-docs").body());
+    assertThat(document.at("/paths/~1api~1v1~1characters~1armory-page/get").isMissingNode())
+        .isFalse();
+    var schemas = document.at("/components/schemas");
+    assertThat(schemas.at("/CharacterArmoryPageResponse/required").toString())
+        .contains("characterName", "enabled", "source", "fetchedAt", "lifeSkills");
+    for (var field : List.of("source", "fetchedAt", "lifeSkills"))
+      assertThat(
+              schemas
+                  .at("/CharacterArmoryPageResponse/properties/" + field + "/anyOf/1/type")
+                  .asText())
+          .as(field)
+          .isEqualTo("null");
+    assertThat(schemas.at("/CharacterArmoryPageResponse/properties/skills").isMissingNode())
+        .isTrue();
+    assertThat(schemas.at("/CharacterArmoryPageResponse/properties/skillCode").isMissingNode())
+        .isTrue();
+    assertThat(schemas.at("/LifeSkillResponse/required").toString()).contains("name", "level");
+    assertThat(schemas.at("/LifeSkillResponse/properties/level/anyOf/1/type").asText())
+        .isEqualTo("null");
+  }
+
+  @Test
   void 캐릭터_순위의_다음_티어_필드는_required이고_nullable이며_새_티어_값은_없다() throws Exception {
     var schemas =
         JsonMapper.builder()

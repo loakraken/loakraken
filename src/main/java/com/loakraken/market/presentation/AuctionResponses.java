@@ -171,7 +171,8 @@ public final class AuctionResponses {
       @Schema(description = "공식 직업 순서 그대로") List<AuctionGemClassResponse> classes) {
     static AuctionGemSkillsResponse from(GemSkillCatalog catalog) {
       return new AuctionGemSkillsResponse(
-          catalog.checkedOn(), catalog.classes().stream().map(AuctionGemClassResponse::from).toList());
+          catalog.checkedOn(),
+          catalog.classes().stream().map(AuctionGemClassResponse::from).toList());
     }
   }
 

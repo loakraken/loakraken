@@ -66,10 +66,10 @@ class SpecUpDetailServiceTest {
             new BigDecimal("18432.5"),
             0);
     var prices =
-        new RefiningMaterialPriceService.Prices(
-            AT, Map.of("운명의 파괴석", new BigDecimal("1.525")));
+        new RefiningMaterialPriceService.Prices(AT, Map.of("운명의 파괴석", new BigDecimal("1.525")));
     var rows = SpecUpDetailService.materialRows(plan, prices);
-    assertThat(rows).extracting(SpecUpDetailService.Material::itemName)
+    assertThat(rows)
+        .extracting(SpecUpDetailService.Material::itemName)
         .containsExactly("운명의 파괴석", "아비도스 융화 재료");
     var stone = rows.getFirst();
     assertThat(stone.quantity()).isEqualByComparingTo("1250.40");
@@ -90,7 +90,6 @@ class SpecUpDetailServiceTest {
 
   private static SpecUpDetailService.Market market(
       String role, long price, int quantity, Long sale) {
-    return new SpecUpDetailService.Market(
-        role, "보석", null, null, price, quantity, sale, null, AT);
+    return new SpecUpDetailService.Market(role, "보석", null, null, price, quantity, sale, null, AT);
   }
 }

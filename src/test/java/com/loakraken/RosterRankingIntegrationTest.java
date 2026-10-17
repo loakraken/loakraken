@@ -150,12 +150,12 @@ class RosterRankingIntegrationTest {
   }
 
   @Test
-  void 서버_조건이_없으면_대표_캐릭터_서버의_상위_6명만_식스맨이다() throws Exception {
-    // 한 원정대가 두 서버에 걸쳐 있다: 대표(1950)는 SERVER, 더 많은 고레벨 캐릭터는 TIE_SERVER.
+  void 서버_조건이_없으면_대표_캐릭터_서버만으로_모든_값을_센다() throws Exception {
+    // 한 원정대가 두 서버에 걸쳐 있다: 대표(1950)는 SERVER(전투력 관측), 더 많은 고레벨 캐릭터는 TIE_SERVER(전투력 미관측).
     var key = UUID.randomUUID();
-    member(SERVER, key, "원정섞임대표", 1950, null, null, Instant.now());
-    member(SERVER, key, "원정섞임가", 1940, null, null, Instant.now());
-    member(SERVER, key, "원정섞임나", 1930, null, null, Instant.now());
+    member(SERVER, key, "원정섞임대표", 1950, "3000.00", null, Instant.now());
+    member(SERVER, key, "원정섞임가", 1940, "2900.00", null, Instant.now());
+    member(SERVER, key, "원정섞임나", 1930, "2800.00", null, Instant.now());
     for (int i = 0; i < 4; i++)
       member(TIE_SERVER, key, "원정섞임다른" + i, 1945 - i, null, null, Instant.now());
 
@@ -164,7 +164,16 @@ class RosterRankingIntegrationTest {
     var row = rowOf(all, "원정섞임대표");
     assertThat(row.path("value").decimalValue()).isEqualByComparingTo("970.00");
     assertThat(row.path("usedCharacters").asLong()).isEqualTo(3);
+    assertThat(row.path("characterCount").asLong()).isEqualTo(3);
     assertThat(row.path("composition").toString()).doesNotContain("원정섞임다른");
+
+    // 전체 평균도 같은 3명: (1950 + 1940 + 1930) ÷ 3 = 1940.
+    var avg = data(get("/api/v1/rankings/rosters?basis=ITEM_LEVEL&aggregate=ALL_AVG&size=100"));
+    assertThat(rowOf(avg, "원정섞임대표").path("value").decimalValue()).isEqualByComparingTo("1940.00");
+
+    // 전투력: 다른 서버의 미관측 고레벨 캐릭터 때문에 빠지지 않는다 — (3000 + 2900 + 2800) ÷ 6 = 1450.
+    var cp = data(get("/api/v1/rankings/rosters?basis=COMBAT_POWER&aggregate=TOP6_AVG&size=100"));
+    assertThat(rowOf(cp, "원정섞임대표").path("value").decimalValue()).isEqualByComparingTo("1450.00");
 
     // 서버 조건이 있으면 그 서버 캐릭터만: TIE_SERVER 4명 (1945 + 1944 + 1943 + 1942) ÷ 6 = 1295.67.
     var tie =

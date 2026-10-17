@@ -326,16 +326,15 @@ class PostgresStatsRepository implements StatsPort {
         FROM members ORDER BY roster_key, item_level DESC NULLS LAST, character_name),
       valued AS (
         SELECT m.*, %VALUE% AS value,
-          CASE WHEN m.server_name = h.home_server THEN ROW_NUMBER() OVER (
-            PARTITION BY m.roster_key, m.server_name = h.home_server
-            ORDER BY m.item_level DESC NULLS LAST, m.character_name) END AS irn
-        FROM members m JOIN home h ON h.roster_key = m.roster_key)
+          ROW_NUMBER() OVER (PARTITION BY m.roster_key
+            ORDER BY m.item_level DESC NULLS LAST, m.character_name) AS irn
+        FROM members m JOIN home h ON h.roster_key = m.roster_key AND m.server_name = h.home_server)
       """;
 
   /**
-   * 식스맨(TOP6)은 한 서버 안의 아이템 레벨 상위 6명(irn ≤ 6)이고, 평균은 6명보다 적어도 늘 6으로 나눈다(비교 기준 B와 같은 규칙, PM 판정
-   * 10-15·10-18). 서버 조건이 없으면 원정대 대표 캐릭터(아이템 레벨 최고)의 서버(home)만 본다 — 다른 서버 캐릭터는 irn이 null이라 식스맨에 들지
-   * 않는다. used_top6은 그 6명 중 값이 있는 수다.
+   * 원정대 값은 모두 한 서버 기준이다(비교 기준 B와 같은 규칙, PM 판정 10-18): 서버 조건이 있으면 그 서버, 없으면 원정대 대표 캐릭터(아이템 레벨 최고)의
+   * 서버(home)만 남기고 식스맨·전체 평균·인원·원정대 레벨·전투력 미관측 제외를 모두 그 범위로 센다. 식스맨(TOP6)은 그 안의 아이템 레벨 상위 6명(irn ≤
+   * 6)이고, 평균은 6명보다 적어도 늘 6으로 나눈다(PM 판정 10-15). used_top6은 그 6명 중 값이 있는 수다.
    */
   private static final String ROSTER_RANKED =
       """

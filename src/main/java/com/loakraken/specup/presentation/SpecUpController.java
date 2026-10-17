@@ -328,7 +328,21 @@ public class SpecUpController {
       @Schema(description = "화면용 이유 문장(같은 코드는 같은 문장)") @NullableResponse String reason,
       @Schema(description = "시뮬레이터의 원래 문장(슬롯 번호·툴팁 원문이 들어가므로 같은 코드라도 문장이 후보마다 다름). 고정 문장과 같으면 null")
           @NullableResponse
-          String reasonDetail) {
+          String reasonDetail,
+      @Schema(
+              description =
+                  "보석 후보만: 빈 보석 칸에 새로 끼우는 후보면 true, 장착한 보석을 올리는 후보면 false. 그 밖의 후보는 null. 빈 칸은 어느 칸이든 값이 같아 가장 앞 빈 칸 하나로 6~10레벨을 낸다(from = 빈 칸, 겁화 기준 — 4티어 겁화·작열은 전투력 값이 같고 비용은 겁화 시세)")
+          @NullableResponse
+          Boolean emptySlot,
+      @Schema(description = "보석 후보만: 바꾸기 전 그 칸 보석의 기본 공격력 %(빈 칸은 0). 모르면 null", example = "0.60")
+          @NullableResponse
+          BigDecimal baseAttackPctFrom,
+      @Schema(
+              description =
+                  "보석 후보만: 바꾼 뒤 그 칸 보석의 기본 공격력 %(보석 계수표 6~10레벨 0.45·0.60·0.80·1.00·1.20 — 6·10레벨은 공식 보석 효과 확인값). 모르면 null",
+              example = "0.80")
+          @NullableResponse
+          BigDecimal baseAttackPctTo) {
     static CandidateResponse from(SpecUpService.Candidate candidate) {
       return new CandidateResponse(
           candidate.id(),
@@ -348,7 +362,10 @@ public class SpecUpController {
           candidate.combatPowerPer10kGold(),
           candidate.reasonCode(),
           candidate.reason(),
-          candidate.reasonDetail());
+          candidate.reasonDetail(),
+          candidate.emptySlot(),
+          candidate.baseAttackPctFrom(),
+          candidate.baseAttackPctTo());
     }
   }
 

@@ -21,6 +21,7 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
  * @param backoffMax 쉬는 시간 상한이자 연속 실패로 멈춘 뒤 다시 한 번 시험하기까지의 시간
  * @param stopAfterFailures 공식 쪽 연속 실패가 이 수에 이르면 멈춘다
  * @param stopAfterParseFailures 페이지 구조를 못 읽은 일이 연속 이 수에 이르면 멈춘다(재시작 전까지)
+ * @param skillCode 스킬 코드(#532) 설정. 페이지 정보와 따로 켜고 끈다(기본 꺼짐)
  */
 @ConfigurationProperties("armory-page")
 public record ArmoryPagePolicy(
@@ -38,7 +39,11 @@ public record ArmoryPagePolicy(
     @DefaultValue("1m") Duration backoffInitial,
     @DefaultValue("30m") Duration backoffMax,
     @DefaultValue("5") int stopAfterFailures,
-    @DefaultValue("3") int stopAfterParseFailures) {
+    @DefaultValue("3") int stopAfterParseFailures,
+    @DefaultValue SkillCode skillCode) {
+  /** 스킬 코드(#532). 꺼져 있으면 응답은 200에 값 null이고 공식 요청이 없다. */
+  public record SkillCode(@DefaultValue("false") boolean enabled) {}
+
   public static final String HOST = "lostark.game.onstove.com";
 
   public ArmoryPagePolicy {

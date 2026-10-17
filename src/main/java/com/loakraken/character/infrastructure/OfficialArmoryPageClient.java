@@ -28,9 +28,12 @@ import tools.jackson.databind.json.JsonMapper;
  */
 @Component
 class OfficialArmoryPageClient implements ArmoryPagePort {
-  /** 영숫자 한 덩어리 전체가 128자 16진수(앞뒤가 영숫자가 아님 — 더 긴 값의 일부를 잘라 쓰지 않음). */
+  /**
+   * 값 한 덩어리 전체가 128자 16진수. 앞뒤에 글자·숫자·밑줄·하이픈이 붙어 있으면(더 긴 값의 일부) 잘라 쓰지 않고 실패로 본다. 값 경계는 따옴표·공백·꺾쇠 같은
+   * 구분 문자다.
+   */
   private static final Pattern CODE =
-      Pattern.compile("(?<![0-9A-Za-z])[0-9A-Fa-f]{128}(?![0-9A-Za-z])");
+      Pattern.compile("(?<![\\p{L}\\p{N}_-])[0-9A-Fa-f]{128}(?![\\p{L}\\p{N}_-])");
 
   private static final JsonMapper JSON = JsonMapper.builder().build();
   private final RestClient client;

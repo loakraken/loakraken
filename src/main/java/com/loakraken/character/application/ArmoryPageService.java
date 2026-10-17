@@ -152,7 +152,19 @@ public class ArmoryPageService {
       codeSkipped("stopped");
       return ArmoryPageStorePort.CodeEntry.failed();
     }
-    var fetch = fetchPage(official);
+    // 페이지가 실패로 캐시돼 있으면(404 등) 실패 캐시 시간 동안 코드용 GET도 하지 않는다.
+    ArmoryPageStorePort.Entry cachedPage;
+    try {
+      cachedPage = store.find(official).orElse(null);
+    } catch (CharacterException exception) {
+      codeSkipped("cache_unavailable");
+      return ArmoryPageStorePort.CodeEntry.failed();
+    }
+    if (cachedPage != null && cachedPage.failure()) {
+      codeSkipped("page_failed");
+      return ArmoryPageStorePort.CodeEntry.failed();
+    }
+    var fetch = fetchPage(official, cachedPage);
     if (fetch.skipped() != null) {
       // 요청하지 않은 것은 캐시하지 않는다(장치가 풀리면 바로 읽음).
       codeSkipped(fetch.skipped());
@@ -196,9 +208,14 @@ public class ArmoryPageService {
 
   /**
    * 페이지 GET 한 번. 같은 캐릭터를 생활 스킬·스킬 코드가 동시에 원하면 한 번만 부른다. 결과는 생활 스킬 캐시에 저장한다(실패는 실패 캐시 시간). 직전에 캐시된
-   * 값이 있어도 스킬 코드는 식별 값이 필요해 다시 부른다.
+   * 값이 있어도 스킬 코드는 식별 값이 필요해 다시 부른다. 그때 GET이 실패하면 이미 있는 생활 스킬 성공 캐시를 실패로 덮지 않는다({@code
+   * cachedSuccess}를 그대로 돌려줌).
    */
   private PageFetch fetchPage(String official) {
+    return fetchPage(official, null);
+  }
+
+  private PageFetch fetchPage(String official, ArmoryPageStorePort.Entry cachedSuccess) {
     return pageFetches.run(
         official,
         () -> {
@@ -220,6 +237,8 @@ public class ArmoryPageService {
                 "event=armory_page_fetch_failed phase=page result={} status={}",
                 exception.kind().label(),
                 exception.status());
+            if (cachedSuccess != null && !cachedSuccess.failure())
+              return new PageFetch(null, cachedSuccess, null);
             var failed = ArmoryPageStorePort.Entry.failed();
             save(official, failed, policy.failureTtl());
             return new PageFetch(null, failed, null);

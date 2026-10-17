@@ -110,6 +110,30 @@ class ArmoryPageServiceTest {
       new ArmoryPagePort.Identity("1", "2", "3");
 
   @Test
+  void 코드용_GET이_실패해도_생활_스킬_성공_캐시는_그대로다() {
+    cached("타");
+    when(pages.fetch("타"))
+        .thenReturn(new ArmoryPagePort.Page(List.of(new ArmoryPagePort.LifeSkill("수렵", 5))))
+        .thenThrow(new ArmoryPageFetchException(ArmoryPageFetchException.Kind.HTTP_ERROR, 500));
+    assertThat(service.page("타").lifeSkills()).hasSize(1);
+    assertThat(service.skillCode("타").skillCode()).isNull();
+    assertThat(store.entries.get("타").failure()).isFalse();
+    assertThat(service.page("타").lifeSkills()).extracting(ArmoryPagePort.LifeSkill::level).containsExactly(5);
+    assertThat(store.codes.get("타").failure()).isTrue();
+    verify(pages, times(2)).fetch("타");
+  }
+
+  @Test
+  void 페이지가_실패로_캐시돼_있으면_코드용_GET도_하지_않는다() {
+    cached("파");
+    store.entries.put("파", ArmoryPageStorePort.Entry.failed());
+    assertThat(service.skillCode("파").skillCode()).isNull();
+    verify(pages, never()).fetch(anyString());
+    // 요청하지 않은 것은 캐시하지 않는다(페이지 실패 캐시가 끝나면 바로 읽음).
+    assertThat(store.codes).doesNotContainKey("파");
+  }
+
+  @Test
   void 스킬_코드는_페이지_GET_하나로_생활_스킬_캐시도_채운다() {
     cached("라");
     when(pages.fetch("라"))

@@ -175,19 +175,37 @@ class RosterCombatPowerIntegrationTest {
     roster("원정전투비교정", "원정전투비교없");
     stop("원정전투비교정");
     when(detailsPort.fetchProfile(anyString(), anyInt()))
-        .thenAnswer(invocation -> profile(invocation.getArgument(0), "3200.00"));
+        // 소수 한 자리 값: DB 최고 전투력(NUMERIC(12,2))과 임시 값(받은 문자열)의 자릿수 차이가 드러나지 않는지 본다.
+        .thenAnswer(invocation -> profile(invocation.getArgument(0), "3200.5"));
 
-    var first = data(post("원정전투비교정", "203.0.113.70"));
+    var firstResponse = post("원정전투비교정", "203.0.113.70");
+    var first = data(firstResponse);
     assertThat(first.path("fetched").asInt()).isEqualTo(2);
     assertThat(first.path("remaining").asInt()).isZero();
     var items = first.path("items");
-    for (var field : List.of("combatPower", "bestCombatPower"))
-      assertThat(items.get(0).path(field).decimalValue())
-          .as(field)
-          .isEqualByComparingTo(items.get(1).path(field).decimalValue());
+    // 값뿐 아니라 응답 원문 글자(자릿수)까지 같다: 두 대원 모두 "3200.50".
+    for (var field : List.of("combatPower", "bestCombatPower")) {
+      var matcher =
+          java.util.regex.Pattern.compile("\"" + field + "\":([0-9.]+)")
+              .matcher(firstResponse.body());
+      var values = new ArrayList<String>();
+      while (matcher.find()) values.add(matcher.group(1));
+      assertThat(values).as(field).containsExactly("3200.50", "3200.50");
+    }
     assertThat(items.get(0).path("combatPowerObservedAt").isNull())
         .isEqualTo(items.get(1).path("combatPowerObservedAt").isNull())
         .isFalse();
+    // 관측 시각 형식도 같다: 임시 값(정지)과 DB 기록(없음 → 이번에 기록)이 같은 정밀도(밀리초 이하)로 나온다.
+    for (var item : items)
+      assertThat(item.path("combatPowerObservedAt").asText())
+          .as(item.path("characterName").asText())
+          .matches("^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{3})?Z$");
+    // 5분 안의 조회(GET)도 같다.
+    var view =
+        data(get("/api/v1/characters/roster-combat-power?characterName=" + encode("원정전투비교정")));
+    for (var item : view.path("items"))
+      assertThat(item.path("combatPowerObservedAt").asText())
+          .matches("^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{3})?Z$");
     assertThat(ImmutableNames.of(items.get(0))).isEqualTo(ImmutableNames.of(items.get(1)));
     // 처리정지 캐릭터는 DB에 행이 없다(값·표시는 임시 저장소에만, 키는 HMAC).
     assertThat(

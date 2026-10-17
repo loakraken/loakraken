@@ -232,9 +232,9 @@ public class RosterCombatPowerService {
                 member.serverName(),
                 member.className(),
                 member.itemLevel(),
-                value.combatPower(),
-                value.combatPower() == null ? null : value.observedAt(),
-                value.combatPower()));
+                power(value.combatPower()),
+                value.combatPower() == null ? null : observedAt(value.observedAt()),
+                power(value.combatPower())));
         continue;
       }
       items.add(
@@ -243,11 +243,27 @@ public class RosterCombatPowerService {
               member.serverName(),
               member.className(),
               member.itemLevel(),
-              record == null ? null : record.combatPower(),
-              record == null ? null : record.observedAt(),
-              record == null ? null : record.bestCombatPower()));
+              record == null ? null : power(record.combatPower()),
+              record == null ? null : observedAt(record.observedAt()),
+              record == null ? null : power(record.bestCombatPower())));
     }
     return List.copyOf(items);
+  }
+
+  /**
+   * 응답의 관측 시각은 모든 대원을 밀리초로 자른다. 임시 값(밀리초로 저장)과 DB 기록(마이크로초)의 자릿수가 달라 대원의 종류가 응답 모양으로 드러나지 않게
+   * 한다(B5).
+   */
+  static java.time.Instant observedAt(java.time.Instant value) {
+    return value == null ? null : value.truncatedTo(java.time.temporal.ChronoUnit.MILLIS);
+  }
+
+  /**
+   * 전투력도 같은 이유로 소수 둘째 자리로 맞춘다. 임시 값은 받은 문자열의 자릿수 그대로이고 DB 최고 전투력은 NUMERIC(12,2)로 늘 둘째 자리다. 공식 전투력은
+   * 소수 둘째 자리라 값은 바뀌지 않는다.
+   */
+  static BigDecimal power(BigDecimal value) {
+    return value == null ? null : value.setScale(2, java.math.RoundingMode.HALF_UP);
   }
 
   private Map<String, RosterCombatPowerPort.Observed> known(Roster roster) {

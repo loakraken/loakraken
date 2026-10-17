@@ -95,31 +95,45 @@ public class ArmoryPageService {
   }
 
   private ArmoryPageStorePort.Entry load(String official) {
-    var decision = guard.acquire();
-    if (decision != ArmoryPageGuard.Decision.ALLOWED) {
+    // 같은 이름을 먼저 받은 요청이 방금 캐시했을 수 있다(single-flight 안에서 다시 확인).
+    try {
+      var cached = store.find(official);
+      if (cached.isPresent()) return cached.get();
+    } catch (CharacterException exception) {
+      skipped("cache_unavailable");
+      return ArmoryPageStorePort.Entry.failed();
+    }
+    var permit = guard.acquire();
+    if (!permit.allowed()) {
       // 요청하지 않은 것은 캐시하지 않는다(장치가 풀리면 바로 읽음).
-      skipped(decision.name().toLowerCase(java.util.Locale.ROOT));
+      skipped(permit.decision().name().toLowerCase(java.util.Locale.ROOT));
       return ArmoryPageStorePort.Entry.failed();
     }
     var sample = Timer.start(registry);
+    ArmoryPagePort.Page page;
     try {
-      var page = pages.fetch(official);
-      guard.success();
-      fetched("ok", sample);
-      var entry = new ArmoryPageStorePort.Entry(clock.instant(), page.lifeSkills());
-      store.save(official, entry, policy.cacheTtl());
-      return entry;
+      page = pages.fetch(official);
     } catch (ArmoryPageFetchException exception) {
-      guard.failure(exception.kind());
+      guard.failure(permit, exception.kind());
       fetched(exception.kind().label(), sample);
       log.warn(
           "event=armory_page_fetch_failed phase=page result={} status={}",
           exception.kind().label(),
           exception.status());
       var failed = ArmoryPageStorePort.Entry.failed();
-      store.save(official, failed, policy.failureTtl());
+      save(official, failed, policy.failureTtl());
       return failed;
     }
+    guard.success(permit);
+    fetched("ok", sample);
+    var entry = new ArmoryPageStorePort.Entry(clock.instant(), page.lifeSkills());
+    save(official, entry, policy.cacheTtl());
+    return entry;
+  }
+
+  /** 캐시를 쓰지 못하면 실패 캐시 시간만큼 모든 요청을 쉰다(보호 캐시 없이 같은 캐릭터를 거듭 부르지 않게). */
+  private void save(String official, ArmoryPageStorePort.Entry entry, java.time.Duration ttl) {
+    if (!store.save(official, entry, ttl)) guard.pause(policy.failureTtl(), "cache_write");
   }
 
   private View failed(String official) {

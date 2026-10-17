@@ -44,12 +44,14 @@ class ValkeyArmoryPageStore implements ArmoryPageStorePort {
   }
 
   @Override
-  public void save(String characterName, Entry entry, Duration ttl) {
+  public boolean save(String characterName, Entry entry, Duration ttl) {
     try {
       redis.opsForValue().set(PREFIX + characterName, mapper.writeValueAsString(entry), ttl);
+      return true;
     } catch (DataAccessException | JacksonException exception) {
       log.warn(
           "event=armory_page_cache_write_failed type={}", exception.getClass().getSimpleName());
+      return false;
     }
   }
 }

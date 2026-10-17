@@ -160,6 +160,8 @@ services:
       # 나머지 기능 스위치(오픈 준비 A3). 기본값은 앱 기본값과 같다 — 넘기기만 하고 동작은 바꾸지 않는다.
       SPEC_UP_ENABLED: ${SPEC_UP_ENABLED:-false}
       FEATURE_AUCTION_SEARCH: ${FEATURE_AUCTION_SEARCH:-false}
+      MARKET_GEM_FILTER_ENABLED: ${MARKET_GEM_FILTER_ENABLED:-true}
+      MARKET_GEM_FILTER_QUOTA: ${MARKET_GEM_FILTER_QUOTA:-10}
       # 시세 알림 웹 푸시. 켜도 VAPID 키가 없으면 경로가 404다(키 전달은 켜기로 정할 때 따로).
       ALERTS_PUSH_ENABLED: ${ALERTS_PUSH_ENABLED:-false}
       # 전투정보실 페이지 정보(생활 스킬). 웹 ARMORY_PAGE와 같이 켠다. 켜면 검색한 캐릭터마다 공식 전투정보실 페이지를 읽는다(간격 1초·캐시 6시간).

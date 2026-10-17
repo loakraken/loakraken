@@ -12,6 +12,7 @@ import com.loakraken.market.domain.AuctionCatalog.Level;
 import com.loakraken.market.domain.AuctionCatalog.PolishOption;
 import com.loakraken.market.domain.AuctionCatalog.Role;
 import com.loakraken.market.domain.AuctionCatalog.Slot;
+import com.loakraken.market.domain.GemSkillCatalog;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Clock;
@@ -191,7 +192,8 @@ public class MarketAuctionService {
     if (cached.isPresent()) return cached.get();
     var page = search.search(query);
     auctions.saveListings(key, page);
-    if (query.pageNo() == 1) remember(query.key(), toCell(page));
+    // 조건 붙은 검색(#542)은 GemSkillFilterService가 따로 하지만, 걸러진 최저가가 칸에 들어가지 않게 여기서도 막는다.
+    if (query.pageNo() == 1 && !query.filtered()) remember(query.key(), toCell(page));
     return page;
   }
 
@@ -275,6 +277,22 @@ public class MarketAuctionService {
         null,
         List.of(),
         page);
+  }
+
+  static AuctionQuery gemQuery(String kind, int level, int page, GemSkillCatalog.Filter filter) {
+    var base = gemQuery(kind, level, page);
+    return new AuctionQuery(
+        base.categoryCode(),
+        base.itemTier(),
+        base.itemGrade(),
+        base.itemName(),
+        base.minQuality(),
+        base.etcOptions(),
+        base.pageNo(),
+        filter.className(),
+        filter.skill() == null
+            ? List.of()
+            : List.of(new AuctionPort.SkillFilter(filter.skill().code(), filter.secondOption())));
   }
 
   static AuctionQuery accessoryQuery(

@@ -118,7 +118,9 @@ class ArmoryPageServiceTest {
     assertThat(service.page("타").lifeSkills()).hasSize(1);
     assertThat(service.skillCode("타").skillCode()).isNull();
     assertThat(store.entries.get("타").failure()).isFalse();
-    assertThat(service.page("타").lifeSkills()).extracting(ArmoryPagePort.LifeSkill::level).containsExactly(5);
+    assertThat(service.page("타").lifeSkills())
+        .extracting(ArmoryPagePort.LifeSkill::level)
+        .containsExactly(5);
     assertThat(store.codes.get("타").failure()).isTrue();
     verify(pages, times(2)).fetch("타");
   }

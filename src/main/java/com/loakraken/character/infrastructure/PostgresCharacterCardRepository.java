@@ -26,9 +26,71 @@ class PostgresCharacterCardRepository implements CharacterCardPort {
   private final JdbcClient jdbc;
   // 학습한 구성원·효과는 거의 바뀌지 않으므로 이미 쓴 것은 다시 쓰지 않는다.
   private final Set<Object> known = ConcurrentHashMap.newKeySet();
+  // 수집품 항목 사전: (종류, 이름) → {item_id, 공식 순서, 만점, 종류 순서, 마지막 갱신 날}(#305).
+  private final Map<String, int[]> items = new ConcurrentHashMap<>();
 
   PostgresCharacterCardRepository(JdbcClient jdbc) {
     this.jdbc = jdbc;
+  }
+
+  @Override
+  @Transactional(timeout = 5)
+  public void recordCollectibles(
+      String serverName,
+      String characterName,
+      List<com.loakraken.character.domain.CharacterLoadout.Collectible> collectibles,
+      java.time.Instant observedAt) {
+    var owner =
+        jdbc.sql(
+                "SELECT character_id, roster_key FROM characters WHERE server_name = :server AND character_name = :name")
+            .param("server", serverName)
+            .param("name", characterName)
+            .query(
+                (row, index) ->
+                    new UUID[] {row.getObject(1, UUID.class), row.getObject(2, UUID.class)})
+            .optional();
+    if (owner.isEmpty() || owner.get()[1] == null) return;
+    var at = utc(observedAt);
+    var observedTypes = new ArrayList<String>();
+    int order = 0;
+    for (var collectible : collectibles) {
+      order++;
+      if (collectible == null
+          || collectible.type() == null
+          || collectible.type().isBlank()
+          || collectible.point() == null
+          || collectible.maxPoint() == null) continue;
+      observedTypes.add(collectible.type().strip());
+      jdbc.sql(
+              """
+          INSERT INTO roster_collectible (roster_key, type, sort_order, point, max_point, observed_at, source_character_id)
+          VALUES (:roster, :type, :order, :point, :max, :at, :source)
+          ON CONFLICT (roster_key, type) DO UPDATE SET sort_order = EXCLUDED.sort_order, point = EXCLUDED.point,
+            max_point = EXCLUDED.max_point, observed_at = EXCLUDED.observed_at,
+            source_character_id = EXCLUDED.source_character_id
+          WHERE roster_collectible.observed_at <= EXCLUDED.observed_at
+          """)
+          .param("roster", owner.get()[1])
+          .param("type", collectible.type().strip())
+          .param("order", order)
+          .param("point", collectible.point())
+          .param("max", collectible.maxPoint())
+          .param("at", at)
+          .param("source", owner.get()[0])
+          .update();
+    }
+    recordItems(owner.get()[1], collectibles, at);
+    // 공식 종류가 바뀌거나 사라지면 옛 종류가 합계에 섞이지 않게 이번 관측에 없는 종류를 지운다(더 새 관측은 건드리지 않음).
+    if (observedTypes.isEmpty()) return;
+    jdbc.sql(
+            """
+        DELETE FROM roster_collectible
+        WHERE roster_key = :roster AND type NOT IN (:types) AND observed_at <= :at
+        """)
+        .param("roster", owner.get()[1])
+        .param("types", observedTypes)
+        .param("at", at)
+        .update();
   }
 
   @Override
@@ -55,6 +117,27 @@ class PostgresCharacterCardRepository implements CharacterCardPort {
           .param("gemsObserved", observation.gemsObserved())
           .param("id", characterId.get())
           .update();
+      var efficiency = observation.efficiency();
+      if (efficiency != null)
+        // 팔찌·젬 효율(L38·L39). 장비를 관측했을 때만 바꾸고, 더 늦은 관측이 이미 있으면 덮지 않는다.
+        jdbc.sql(
+                """
+            UPDATE characters SET
+              bracelet_efficiency_pct = CAST(:bracelet AS NUMERIC),
+              bracelet_rule_version = :braceletVersion,
+              ark_grid_gem_pct = CAST(:gem AS NUMERIC),
+              ark_grid_rule_version = :gemVersion,
+              efficiency_observed_at = :at
+            WHERE character_id = :id
+              AND (efficiency_observed_at IS NULL OR efficiency_observed_at <= :at)
+            """)
+            .param("bracelet", efficiency.braceletPct())
+            .param("braceletVersion", efficiency.braceletRuleVersion())
+            .param("gem", efficiency.arkGridGemPct())
+            .param("gemVersion", efficiency.arkGridRuleVersion())
+            .param("at", at)
+            .param("id", characterId.get())
+            .update();
       for (var card : observation.cards()) {
         if (card == null || card.name() == null || card.name().isBlank()) continue;
         jdbc.sql(
@@ -218,5 +301,96 @@ class PostgresCharacterCardRepository implements CharacterCardPort {
 
   private static OffsetDateTime utc(Instant value) {
     return value.atOffset(ZoneOffset.UTC);
+  }
+
+  /**
+   * 수집품 항목(#305): 사전에 없는 항목을 더하고, 원정대가 가진 항목(Point > 0)을 (item_id, point) 배열 한 행으로 덮어쓴다. 사전은 거의 바뀌지
+   * 않으므로 메모리에 두고 모르는 이름이나 순서·만점이 바뀐 항목만 DB에 쓴다.
+   */
+  private void recordItems(
+      UUID rosterKey,
+      List<com.loakraken.character.domain.CharacterLoadout.Collectible> collectibles,
+      OffsetDateTime at) {
+    // 같은 종류 안에 같은 이름이 두 번 와도 원정대를 두 번 세지 않게 (type, name) 하나로 합친다(큰 point).
+    var held = new java.util.LinkedHashMap<Short, Integer>();
+    boolean any = false;
+    int typeOrder = 0;
+    for (var collectible : collectibles) {
+      typeOrder++;
+      if (collectible == null || collectible.type() == null || collectible.type().isBlank())
+        continue;
+      String type = collectible.type().strip();
+      int order = 0;
+      for (var item : collectible.items()) {
+        order++;
+        if (item == null || item.name() == null || item.name().isBlank() || item.maxPoint() == null)
+          continue;
+        String name = item.name().strip();
+        if (type.length() > 32 || name.length() > 64) continue;
+        any = true;
+        short id = itemId(type, name, typeOrder, order, item.maxPoint(), at);
+        int point = item.point() == null ? 0 : item.point();
+        if (point > 0) held.merge(id, Math.min(point, Short.MAX_VALUE), Math::max);
+      }
+    }
+    // 항목 목록이 없는 응답(이전 형식·해석 실패)은 원정대 행을 비우지 않는다.
+    if (!any) return;
+    var ids = new StringBuilder();
+    var points = new StringBuilder();
+    for (var entry : held.entrySet()) {
+      if (!ids.isEmpty()) {
+        ids.append(',');
+        points.append(',');
+      }
+      ids.append(entry.getKey());
+      points.append(entry.getValue());
+    }
+    jdbc.sql(
+            """
+        INSERT INTO roster_collectible_item (roster_key, item_ids, points, observed_at)
+        VALUES (:roster, CAST(:ids AS SMALLINT[]), CAST(:points AS SMALLINT[]), :at)
+        ON CONFLICT (roster_key) DO UPDATE SET item_ids = EXCLUDED.item_ids, points = EXCLUDED.points,
+          observed_at = EXCLUDED.observed_at
+        WHERE roster_collectible_item.observed_at <= EXCLUDED.observed_at
+        """)
+        .param("roster", rosterKey)
+        .param("ids", "{" + ids + "}")
+        .param("points", "{" + points + "}")
+        .param("at", at)
+        .update();
+  }
+
+  private short itemId(
+      String type, String name, int typeOrder, int order, int maxPoint, OffsetDateTime at) {
+    String key = type + '\u0000' + name;
+    var cached = items.get(key);
+    // 순서·만점이 같고 오늘 이미 last_seen_at을 갱신했으면 DB에 가지 않는다(사라진 항목 판단은 하루 단위면 충분).
+    int day = (int) at.toLocalDate().toEpochDay();
+    if (cached != null
+        && cached[1] == order
+        && cached[2] == maxPoint
+        && cached[3] == typeOrder
+        && cached[4] == day) return (short) cached[0];
+    short id =
+        jdbc.sql(
+                """
+            INSERT INTO collectible_item (type, name, type_order, sort_order, max_point, last_seen_at)
+            VALUES (:type, :name, :typeOrder, :order, :max, :at)
+            ON CONFLICT (type, name) DO UPDATE SET type_order = EXCLUDED.type_order,
+              sort_order = EXCLUDED.sort_order, max_point = EXCLUDED.max_point,
+              last_seen_at = GREATEST(collectible_item.last_seen_at, EXCLUDED.last_seen_at)
+            RETURNING item_id
+            """)
+            .param("type", type)
+            .param("name", name)
+            .param("typeOrder", typeOrder)
+            .param("order", order)
+            .param("max", Math.min(maxPoint, Short.MAX_VALUE))
+            .param("at", at)
+            .query(Short.class)
+            .single();
+    if (items.size() > KNOWN_LIMIT) items.clear();
+    items.put(key, new int[] {id, order, maxPoint, typeOrder, day});
+    return id;
   }
 }

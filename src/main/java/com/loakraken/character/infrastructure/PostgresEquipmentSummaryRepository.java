@@ -1,5 +1,6 @@
 package com.loakraken.character.infrastructure;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.loakraken.character.application.EquipmentSummaryPort;
 import com.loakraken.character.domain.EquipmentSummary;
 import java.nio.charset.StandardCharsets;
@@ -26,6 +27,7 @@ class PostgresEquipmentSummaryRepository implements EquipmentSummaryPort {
       JsonMapper.builder()
           .enable(MapperFeature.SORT_PROPERTIES_ALPHABETICALLY)
           .enable(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS)
+          .addMixIn(EquipmentSummary.Weapon.class, WeaponMixIn.class)
           .build();
   private final JdbcClient jdbc;
 
@@ -98,6 +100,45 @@ class PostgresEquipmentSummaryRepository implements EquipmentSummaryPort {
     return Outcome.CREATED;
   }
 
+  @Override
+  public String canonicalFeatures(EquipmentSummary summary) {
+    return CANONICAL.writeValueAsString(summary.features());
+  }
+
+  @Override
+  public java.util.Optional<Stored> latest(String characterName) {
+    return jdbc.sql(
+            """
+        SELECT c.character_name, c.server_name, c.class_name, c.item_level, c.combat_power,
+               s.ark_passive_title, c.profile_refreshed_at, CAST(s.features AS TEXT) AS features
+        FROM characters c
+        JOIN LATERAL (
+          SELECT e.ark_passive_title, e.features FROM character_equipment_summary e
+          WHERE e.character_id = c.character_id ORDER BY e.observed_at DESC LIMIT 1) s ON TRUE
+        WHERE c.character_name = :name
+          AND NOT EXISTS (SELECT 1 FROM public_exclusion x
+            WHERE x.character_name = c.character_name
+              AND (x.server_name IS NULL OR x.server_name = c.server_name))
+        ORDER BY GREATEST(c.last_synced_at, c.profile_refreshed_at) DESC NULLS LAST
+        LIMIT 1
+        """)
+        .param("name", characterName)
+        .query(
+            (row, index) -> {
+              var observed = row.getObject("profile_refreshed_at", java.time.OffsetDateTime.class);
+              return new Stored(
+                  row.getString("character_name"),
+                  row.getString("server_name"),
+                  row.getString("class_name"),
+                  row.getBigDecimal("item_level"),
+                  row.getBigDecimal("combat_power"),
+                  row.getString("ark_passive_title"),
+                  observed == null ? null : observed.toInstant(),
+                  row.getString("features"));
+            })
+        .optional();
+  }
+
   /** 정렬 직렬화한 features + 스키마 버전 + 공식 전투력. 둘 중 하나라도 바뀌면 새 행이다. */
   static String hash(String canonicalFeatures, EquipmentSummary summary) {
     try {
@@ -117,4 +158,10 @@ class PostgresEquipmentSummaryRepository implements EquipmentSummaryPort {
   }
 
   private record Latest(long id, String hash) {}
+
+  /** 에스더 무기 값이 없으면 키를 빼서, 필드를 더하기 전에 저장한 요약과 해시가 같게 둔다. */
+  abstract static class WeaponMixIn {
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    abstract EquipmentSummary.Esther esther();
+  }
 }

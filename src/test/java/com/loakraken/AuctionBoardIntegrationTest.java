@@ -9,6 +9,7 @@ import com.loakraken.market.application.AuctionPort.AuctionPage;
 import com.loakraken.market.application.AuctionPort.AuctionQuery;
 import com.loakraken.market.application.AuctionPort.ListingOption;
 import com.loakraken.market.application.AuctionSearchPort;
+import com.loakraken.market.application.MarketAuctionService;
 import java.math.BigDecimal;
 import java.net.URI;
 import java.net.URLEncoder;
@@ -41,6 +42,7 @@ class AuctionBoardIntegrationTest {
   @Autowired StringRedisTemplate redis;
   @Autowired JdbcClient jdbc;
   @MockitoBean AuctionSearchPort search;
+  @Autowired com.loakraken.common.lostark.LostArkRequestGate gate;
   private final JsonMapper mapper = new JsonMapper();
 
   @BeforeEach
@@ -49,6 +51,8 @@ class AuctionBoardIntegrationTest {
     var keys = new ArrayList<String>();
     var found = redis.keys("market:v1:auction-*");
     if (found != null) keys.addAll(found);
+    var limits = redis.keys("lostark:client-limit:*");
+    if (limits != null) keys.addAll(limits);
     if (!keys.isEmpty()) redis.delete(keys);
     jdbc.sql("DELETE FROM auction_price_daily").update();
   }
@@ -66,7 +70,18 @@ class AuctionBoardIntegrationTest {
         .param("d", LocalDate.now(ZoneId.of("Asia/Seoul")).minusDays(1))
         .update();
 
-    var data = data("/api/v1/markets/auctions/gems");
+    // 요청 하나는 빈 칸을 최대 5칸만 채운다(#526). 첫 방문은 5칸 READY·15칸 PENDING이다.
+    var firstVisit = data("/api/v1/markets/auctions/gems");
+    assertThat(firstVisit.path("complete").asBoolean()).isFalse();
+    assertThat(firstVisit.path("cells").size()).isEqualTo(20);
+    long ready = 0;
+    for (var cell : firstVisit.path("cells"))
+      if (cell.path("status").asText().equals("READY")) ready++;
+    assertThat(ready).isEqualTo(MarketAuctionService.MAX_FETCH_PER_REQUEST);
+    verify(search, times(MarketAuctionService.MAX_FETCH_PER_REQUEST)).search(any());
+    // 이어지는 방문이 남은 칸을 채운다(20칸 = 5칸 × 4번).
+    JsonNode data = firstVisit;
+    for (int visit = 2; visit <= 4; visit++) data = data("/api/v1/markets/auctions/gems");
     assertThat(data.path("ruleVersion").asText()).isEqualTo("auction-board-v1");
     assertThat(data.path("complete").asBoolean()).isTrue();
     assertThat(data.path("cells").size()).isEqualTo(20);
@@ -137,6 +152,58 @@ class AuctionBoardIntegrationTest {
     verifyNoInteractions(search);
   }
 
+  @Test
+  void 시세표_칸_채우기도_요청_클라이언트의_공식_호출_한도에_매긴다() throws Exception {
+    // 가짜 검색도 실제 클라이언트처럼 호출마다 공유 게이트를 지난다. 딜러 장신구 표는 24칸이고 클라이언트 공식 한도는 분당 20이다.
+    when(search.search(any()))
+        .thenAnswer(
+            invocation -> {
+              gate.acquire();
+              try {
+                return page(invocation.getArgument(0));
+              } finally {
+                gate.release();
+              }
+            });
+    // 요청마다 최대 5칸: 4번의 요청이 20칸(클라이언트 한도 20)을 채우고, 5번째 요청의 첫 호출이 한도에 걸린다.
+    HttpResponse<String> response = null;
+    for (int visit = 1; visit <= 5; visit++) {
+      response =
+          get("/api/v1/markets/auctions/accessories?grade=ANCIENT&role=DEALER", "203.0.113.40");
+      assertThat(response.statusCode()).isEqualTo(200);
+    }
+    var cells = new ArrayList<JsonNode>();
+    for (var slot : mapper.readTree(response.body()).at("/data/slots"))
+      for (var cell : slot.path("cells")) cells.add(cell);
+    assertThat(cells).hasSize(24);
+    assertThat(cells.stream().filter(cell -> cell.path("status").asText().equals("READY")))
+        .hasSize(20);
+    assertThat(cells.stream().filter(cell -> cell.path("status").asText().equals("PENDING")))
+        .hasSize(4);
+    verify(search, times(21)).search(any());
+  }
+
+  @Test
+  void 장신구_조건_검색은_기능_플래그가_꺼져_있으면_404다() throws Exception {
+    try (var client = HttpClient.newHttpClient()) {
+      var response =
+          client.send(
+              HttpRequest.newBuilder(
+                      URI.create(
+                          "http://localhost:"
+                              + port
+                              + "/api/v1/markets/auctions/accessories/search"))
+                  .header("Content-Type", "application/json")
+                  .POST(
+                      HttpRequest.BodyPublishers.ofString(
+                          "{\"slot\":\"NECKLACE\",\"grade\":\"ANCIENT\"}"))
+                  .build(),
+              HttpResponse.BodyHandlers.ofString());
+      assertThat(response.statusCode()).isEqualTo(404);
+    }
+    verifyNoInteractions(search);
+  }
+
   private static AuctionPage page(AuctionQuery query) {
     var now = Instant.now();
     var options =
@@ -160,6 +227,18 @@ class AuctionBoardIntegrationTest {
     var response = get(path);
     assertThat(response.statusCode()).as(path + " " + response.body()).isEqualTo(200);
     return mapper.readTree(response.body()).path("data");
+  }
+
+  private HttpResponse<String> get(String path, String clientAddress) throws Exception {
+    try (var client = HttpClient.newHttpClient()) {
+      return client.send(
+          HttpRequest.newBuilder(URI.create("http://localhost:" + port + path))
+              // 테스트 클라이언트(127.0.0.1)는 신뢰 프록시라 이 헤더가 원격 주소가 된다.
+              .header("X-Forwarded-For", clientAddress)
+              .GET()
+              .build(),
+          HttpResponse.BodyHandlers.ofString());
+    }
   }
 
   private HttpResponse<String> get(String path) throws Exception {

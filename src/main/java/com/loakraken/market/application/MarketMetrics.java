@@ -23,11 +23,22 @@ public class MarketMetrics {
         .increment();
   }
 
+  /**
+   * 악세 경매 검색기(N13) 사건: quota_reject(기능 몫), gate_reject(공유 게이트), incomplete(뒤 필터 complete=false).
+   */
+  public void auctionSearch(String event) {
+    registry.counter("loakraken.market.auction_search", "event", event).increment();
+  }
+
   public enum Kind {
     PRICES,
     OPTIONS,
     ITEM_HISTORY,
-    BOARD_SCAN
+    BOARD_SCAN,
+    RELIC_BOOKS,
+    REFINING_MATERIALS,
+    LIFE_MATERIALS,
+    AUCTION_SEARCH
   }
 
   public enum Outcome {

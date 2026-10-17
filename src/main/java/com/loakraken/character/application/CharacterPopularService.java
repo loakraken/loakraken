@@ -1,5 +1,7 @@
 package com.loakraken.character.application;
 
+import com.loakraken.character.application.CharacterPopularPort.PopularGuildItem;
+import com.loakraken.character.application.CharacterPopularPort.PopularGuildResult;
 import com.loakraken.character.application.CharacterPopularPort.PopularItem;
 import com.loakraken.character.application.CharacterPopularPort.PopularResult;
 import com.loakraken.common.api.ClientAddresses;
@@ -44,6 +46,7 @@ public class CharacterPopularService {
   static final int QUEUE_CAPACITY = 1000;
   private static final Logger log = LoggerFactory.getLogger(CharacterPopularService.class);
   private final CharacterPopularPort popular;
+  private final CharacterStopList stopList;
   private final CharacterPopularPolicy policy;
   private final CharacterMetrics metrics;
   private final Clock clock;
@@ -64,8 +67,10 @@ public class CharacterPopularService {
       CharacterPopularPort popular,
       CharacterPopularPolicy policy,
       CharacterMetrics metrics,
-      Clock clock) {
+      Clock clock,
+      CharacterStopList stopList) {
     this.popular = popular;
+    this.stopList = stopList;
     this.policy = policy;
     this.metrics = metrics;
     this.clock = clock;
@@ -114,6 +119,8 @@ public class CharacterPopularService {
   private void write(
       LocalDate day, String key, String characterName, String serverName, Instant now) {
     try {
+      // 처리정지 목록의 캐릭터는 세지 않는다(#351).
+      if (!stopList.recordable(characterName, serverName)) return;
       if (popular.markSeen(day, key))
         popular.increment(characterName, serverName, now.truncatedTo(ChronoUnit.HOURS));
       metrics.popular(true);
@@ -157,6 +164,43 @@ public class CharacterPopularService {
       popular.saveCached(cacheKey, result);
     } catch (DataAccessException exception) {
       log.warn("인기 검색 캐시를 쓰지 못했습니다. 예외 유형={}", exception.getClass().getSimpleName());
+    }
+    return result;
+  }
+
+  /**
+   * 인기 길드(M21, popular-guild-v1). 순위 기준은 집계 시점 길드원 캐릭터들의 고유 조회 합이고(인기 캐릭터와 같은 원천·하루 1회 규칙), 숫자는
+   * 공개하지 않는다. 같은 합은 1,2,3 차례(길드 이름순)다. 최소 조회 수와 표본 기준은 인기 캐릭터와 같다. serverName이 null이면 모든 서버.
+   */
+  public PopularGuildResult popularGuilds(Period period, String serverName, int limit) {
+    if (!policy.enabled())
+      throw new CharacterException(CharacterErrorCode.CHARACTER_POPULAR_DISABLED);
+    String cacheKey = period.key() + ":" + (serverName == null ? "-" : serverName) + ":" + limit;
+    try {
+      var cached = popular.findCachedGuilds(cacheKey);
+      if (cached.isPresent()) return cached.get();
+    } catch (DataAccessException exception) {
+      // 캐시 장애는 집계로 대신한다.
+    }
+    var now = clock.instant();
+    var since = now.truncatedTo(ChronoUnit.HOURS).minus(Duration.ofHours(period.hours - 1L));
+    PopularGuildResult result;
+    try {
+      boolean ready = popular.totalUniqueViews(since) >= policy.minSample();
+      var items = new ArrayList<PopularGuildItem>();
+      if (ready) {
+        int rank = 1;
+        for (var row : popular.topGuilds(since, serverName, minUniqueViews(period), limit))
+          items.add(new PopularGuildItem(rank++, row.serverName(), row.guildName()));
+      }
+      result = new PopularGuildResult(period.key(), now, ready ? "READY" : "COLLECTING", items);
+    } catch (DataAccessException | TransactionException exception) {
+      throw new CharacterException(CharacterErrorCode.CHARACTER_POPULAR_UNAVAILABLE);
+    }
+    try {
+      popular.saveCachedGuilds(cacheKey, result);
+    } catch (DataAccessException exception) {
+      log.warn("인기 길드 캐시를 쓰지 못했습니다. 예외 유형={}", exception.getClass().getSimpleName());
     }
     return result;
   }

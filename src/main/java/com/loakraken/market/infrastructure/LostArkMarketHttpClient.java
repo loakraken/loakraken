@@ -51,10 +51,34 @@ class LostArkMarketHttpClient {
     } else {
       throw new IllegalArgumentException("지원하지 않는 거래소 API");
     }
-    T payload = execute(endpoint, request, responseType);
+    T payload =
+        execute(
+            endpoint,
+            endpoint == Endpoint.MARKET_OPTIONS
+                ? null
+                : target(search.categoryCode(), search.itemName(), search.pageNo()),
+            request,
+            responseType);
     if (payload == null) throw error(LostArkErrorCode.LOST_ARK_API_ERROR);
     return payload;
   }
+
+  /**
+   * 공식 호출 로그(로컬 DEBUG)의 호출 대상. 거래소 분류·품목 이름(게임 데이터)과 쪽 번호만. 품목 이름은 사용자 입력이 섞일 수 있어 제어 문자는 지우고
+   * 역슬래시·따옴표는 이스케이프한다(로그 한 줄이 깨지거나 가짜 줄이 생기지 않게).
+   */
+  static String target(int categoryCode, String itemName, int pageNo) {
+    var item = itemName == null ? "" : CONTROL.matcher(itemName).replaceAll("");
+    return "category="
+        + categoryCode
+        + " item="
+        + (item.isBlank() ? "-" : "\"" + item.replace("\\", "\\\\").replace("\"", "\\\"") + "\"")
+        + " page="
+        + pageNo;
+  }
+
+  private static final java.util.regex.Pattern CONTROL =
+      java.util.regex.Pattern.compile("[\\p{Cntrl}\\p{Zl}\\p{Zp}]");
 
   /** 경매장 검색. 즉시 구매가 오름차순이다. */
   <T> T requestAuction(AuctionPort.AuctionQuery query, Class<T> responseType) {
@@ -62,6 +86,7 @@ class LostArkMarketHttpClient {
     T payload =
         execute(
             Endpoint.AUCTION_ITEMS,
+            target(query.categoryCode(), query.itemName(), query.pageNo()),
             client
                 .post()
                 .uri("/auctions/items")
@@ -77,14 +102,18 @@ class LostArkMarketHttpClient {
     if (properties.apiKey().isBlank()) throw error(LostArkErrorCode.LOST_ARK_NOT_CONFIGURED);
     return execute(
         Endpoint.MARKET_ITEM_HISTORY,
+        "itemId=" + itemId,
         client.get().uri("/markets/items/{itemId}", itemId),
         responseType);
   }
 
   private <T> T execute(
-      Endpoint endpoint, RestClient.RequestHeadersSpec<?> request, Class<T> responseType) {
+      Endpoint endpoint,
+      String target,
+      RestClient.RequestHeadersSpec<?> request,
+      Class<T> responseType) {
     T payload;
-    gate.acquire();
+    gate.acquire(endpoint, target);
     var sample = metrics.startApi();
     var outcome = new AtomicReference<>(ApiOutcome.ERROR);
     try {
@@ -95,7 +124,9 @@ class LostArkMarketHttpClient {
                 gate.observe(response.getHeaders(), status == 429);
                 if (status == 429) {
                   outcome.set(ApiOutcome.RATE_LIMITED);
-                  throw error(LostArkErrorCode.LOST_ARK_RATE_LIMITED);
+                  // 관문이 미룬 것과 구분되게 이유를 붙인다(응답 코드는 같은 LOST_ARK_RATE_LIMITED).
+                  throw new com.loakraken.common.lostark.LostArkRateLimitedException(
+                      com.loakraken.common.lostark.LostArkRateLimitedException.Cause.UPSTREAM_429);
                 }
                 if (status == 404) outcome.set(ApiOutcome.NOT_FOUND);
                 if (status != 200) throw error(LostArkErrorCode.LOST_ARK_API_ERROR);

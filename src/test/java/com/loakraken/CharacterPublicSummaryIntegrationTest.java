@@ -88,23 +88,53 @@ class CharacterPublicSummaryIntegrationTest {
   void 최근_검색_캐시가_있으면_LIVE_CACHE를_쓴다() throws Exception {
     when(detailsPort.fetch(anyString()))
         .thenAnswer(invocation -> fetched(invocation.getArgument(0)));
-    var search =
-        HttpClient.newHttpClient()
-            .send(
-                HttpRequest.newBuilder(
-                        URI.create(
-                            "http://localhost:"
-                                + port
-                                + "/api/v1/characters/search?characterName="
-                                + encode("공개요약캐시")))
-                    .GET()
-                    .build(),
-                HttpResponse.BodyHandlers.ofString());
-    assertThat(search.statusCode()).isEqualTo(200);
+    search("공개요약캐시");
     var data = mapper.readTree(get("공개요약캐시").body()).path("data");
     assertThat(data.path("dataSource").asText()).isEqualTo("LIVE_CACHE");
     assertThat(data.path("combatPower").decimalValue()).isEqualByComparingTo("3000");
+    // 검색이 관측을 저장했으므로 색인한다.
+    assertThat(data.path("indexable").asBoolean()).isTrue();
+    // 처리정지 목록에 넣으면 저장된 관측을 쓰지 않으므로 값은 캐시 그대로이고 색인하지 않는다(#363).
+    jdbc.sql(
+            "INSERT INTO public_exclusion (character_name, server_name, reason_code) VALUES ('공개요약캐시', NULL, 'PRIVACY_STOP')")
+        .update();
+    var stopped = mapper.readTree(get("공개요약캐시").body()).path("data");
+    assertThat(stopped.path("indexable").asBoolean()).isFalse();
+    assertThat(stopped.path("dataSource").asText()).isEqualTo("LIVE_CACHE");
+    assertThat(stopped.path("combatPower").decimalValue()).isEqualByComparingTo("3000");
     verify(detailsPort, times(1)).fetch(anyString());
+  }
+
+  @Test
+  void 캐시로만_찾은_캐릭터는_처리정지든_기록이_없든_같은_모양으로_색인하지_않는다() throws Exception {
+    // B5(보안 3회차): 색인 값이 처리정지 확인 결과로 바로 이어지지 않는다. 저장된 관측이 없으면 둘 다 noindex.
+    when(detailsPort.fetch(anyString()))
+        .thenAnswer(invocation -> fetched(invocation.getArgument(0)));
+    jdbc.sql(
+            "INSERT INTO public_exclusion (character_name, server_name, reason_code) VALUES ('공개요약캐시정지', NULL, 'PRIVACY_STOP')")
+        .update();
+    search("공개요약캐시정지");
+    search("공개요약캐시없음");
+    // 검색 캐시는 있지만 저장된 관측이 없는 일반 캐릭터(기록 전·기록 실패와 같음)를 행 삭제로 만든다.
+    jdbc.sql("DELETE FROM characters WHERE character_name = '공개요약캐시없음'").update();
+    assertThat(
+            jdbc.sql("SELECT COUNT(*) FROM characters WHERE character_name = '공개요약캐시정지'")
+                .query(Long.class)
+                .single())
+        .isZero();
+
+    var stopped = mapper.readTree(get("공개요약캐시정지").body()).path("data");
+    var unknown = mapper.readTree(get("공개요약캐시없음").body()).path("data");
+    for (var data : List.of(stopped, unknown)) {
+      assertThat(data.path("dataSource").asText()).isEqualTo("LIVE_CACHE");
+      assertThat(data.path("indexable").asBoolean()).isFalse();
+      assertThat(data.path("combatPower").decimalValue()).isEqualByComparingTo("3000");
+    }
+    var stoppedFields = new java.util.ArrayList<String>();
+    stopped.propertyNames().forEach(stoppedFields::add);
+    var unknownFields = new java.util.ArrayList<String>();
+    unknown.propertyNames().forEach(unknownFields::add);
+    assertThat(stoppedFields).isEqualTo(unknownFields);
   }
 
   @Test
@@ -120,31 +150,27 @@ class CharacterPublicSummaryIntegrationTest {
   }
 
   @Test
-  void 공개_제외_캐릭터는_indexable_false이고_이름_외_값이_없다() throws Exception {
+  void 처리정지_목록_캐릭터는_저장된_관측을_쓰지_않고_기록_없는_캐릭터와_같은_404다() throws Exception {
+    // #363: 운영자가 기록을 지우기 전 남은 관측이 있어도 쓰지 않는다. 예전 숨김 응답(indexable=false, null 값) 없음.
     character("공개요약제외", OffsetDateTime.now(ZoneOffset.UTC));
     jdbc.sql(
             "INSERT INTO public_exclusion (character_name, server_name, reason_code) VALUES ('공개요약제외', NULL, 'USER_REQUEST')")
         .update();
-    var data = mapper.readTree(get("공개요약제외").body()).path("data");
-    assertThat(data.path("indexable").asBoolean()).isFalse();
-    assertThat(data.path("characterName").asText()).isEqualTo("공개요약제외");
-    assertThat(data.path("serverName").isNull()).isTrue();
-    assertThat(data.path("itemLevel").isNull()).isTrue();
-    assertThat(data.path("observedAt").isNull()).isTrue();
-    assertThat(data.path("dataSource").isNull()).isTrue();
+    var response = get("공개요약제외");
+    assertThat(response.statusCode()).isEqualTo(404);
+    assertThat(response.body()).contains("CHARACTER_NOT_CACHED").doesNotContain("indexable");
   }
 
   @Test
-  void 기록이_없는_공개_제외_이름도_404가_아니라_같은_숨김_응답이다() throws Exception {
+  void 기록이_없는_처리정지_목록_이름도_일반_이름과_같은_404다() throws Exception {
     jdbc.sql(
             "INSERT INTO public_exclusion (character_name, server_name, reason_code) VALUES ('공개요약제외기록없음', '다른서버', 'USER_REQUEST')")
         .update();
-    var response = get("공개요약제외기록없음");
-    assertThat(response.statusCode()).isEqualTo(200);
-    var data = mapper.readTree(response.body()).path("data");
-    assertThat(data.path("indexable").asBoolean()).isFalse();
-    assertThat(data.path("dataSource").isNull()).isTrue();
-    assertThat(data.path("serverName").isNull()).isTrue();
+    var stopped = get("공개요약제외기록없음");
+    var unknown = get("공개요약없는이름");
+    assertThat(stopped.statusCode()).isEqualTo(404).isEqualTo(unknown.statusCode());
+    assertThat(mapper.readTree(stopped.body()).path("code").asText())
+        .isEqualTo(mapper.readTree(unknown.body()).path("code").asText());
     verifyNoInteractions(detailsPort);
   }
 
@@ -181,6 +207,22 @@ class CharacterPublicSummaryIntegrationTest {
     var loadout = new CharacterLoadout(List.of(), null, null, null, null, null, List.of());
     return new FetchedCharacter(
         CharacterTestFixture.details(profile, loadout, List.of()), "{}", "[]");
+  }
+
+  private void search(String name) throws Exception {
+    var response =
+        HttpClient.newHttpClient()
+            .send(
+                HttpRequest.newBuilder(
+                        URI.create(
+                            "http://localhost:"
+                                + port
+                                + "/api/v1/characters/search?characterName="
+                                + encode(name)))
+                    .GET()
+                    .build(),
+                HttpResponse.BodyHandlers.ofString());
+    assertThat(response.statusCode()).as(response.body()).isEqualTo(200);
   }
 
   private HttpResponse<String> get(String name) throws Exception {

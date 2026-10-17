@@ -31,13 +31,17 @@ import org.springframework.stereotype.Service;
  * 경매장 보석·장신구 시세 표(auction-board-v1).
  *
  * <p>표의 칸마다 공식 검색이 1회 든다(보석 20칸, 장신구 표 19~24칸). 사용자 검색을 보호하기 위해 칸을 따로 3분 캐시하고, 비어 있는 칸만 {@code
- * gate.withReserve(RESERVE, …)}로 채운다. 공유 게이트가 사용자 몫(reserve)을 남기는지 판정과 기록을 한 번에 하므로, 다른 요청·인스턴스가
- * 끼어들어도 사용자 몫을 파고들지 않는다(#130). 한 요청에 최대 {@link #MAX_FETCH_PER_REQUEST}칸, 동시에 한 요청만 채운다. 채우지 못한 칸은
- * PENDING으로 준다. 전일 대비는 우리가 관측한 KST 날짜별 마지막 최저가로 계산한다.
+ * gate.withUserReserve(RESERVE, …)}로 채운다. 공유 게이트가 사용자 몫(reserve)을 남기는지 판정과 기록을 한 번에 하므로, 다른
+ * 요청·인스턴스가 끼어들어도 사용자 몫을 파고들지 않는다(#130). 칸 채우기도 요청 클라이언트의 분당 공식 호출 한도(OFFICIAL)에 매기므로, 한도에 걸리면 남은 칸은
+ * 다음 요청으로 미룬다. 한 요청에 최대 {@link #MAX_FETCH_PER_REQUEST}칸, 동시에 한 요청만 채운다. 채우지 못한 칸은 PENDING으로 준다. 전일
+ * 대비는 우리가 관측한 KST 날짜별 마지막 최저가로 계산한다.
+ *
+ * <p>한 요청이 채우는 칸을 적게 둔다(#526): 캐시가 빈 순간의 방문 한 번이 표 전체(보석 20칸)를 한꺼번에 부르면 몇 명만 와도 사용자 몫을 다 쓴다. 남은 칸은
+ * PENDING으로 두고 다음 요청이 이어서 채운다.
  */
 @Service
 public class MarketAuctionService {
-  public static final int MAX_FETCH_PER_REQUEST = 24;
+  public static final int MAX_FETCH_PER_REQUEST = 5;
   public static final int RESERVE = 40;
   public static final ZoneId KST = ZoneId.of("Asia/Seoul");
   private static final Logger log = LoggerFactory.getLogger(MarketAuctionService.class);
@@ -114,6 +118,27 @@ public class MarketAuctionService {
     return result;
   }
 
+  /**
+   * 보석 시세 표를 캐시에서만 읽는다(#315 스펙업 가이드). 빈 칸을 채우려고 공식 API를 부르지 않으므로, 아직 관측하지 못한 칸은 PENDING이다. 전일 대비는
+   * 주지 않는다(null).
+   */
+  public List<GemCell> cachedGems() {
+    var result = new ArrayList<GemCell>();
+    for (var kind : AuctionCatalog.GEM_KINDS)
+      for (int level = AuctionCatalog.MAX_GEM_LEVEL; level >= 1; level--) {
+        var cell = auctions.findCell(gemQuery(kind, level, 1).key()).orElse(null);
+        result.add(
+            new GemCell(
+                kind,
+                level,
+                AuctionCatalog.gemName(kind, level),
+                cell,
+                null,
+                cell == null ? Status.PENDING : Status.READY));
+      }
+    return result;
+  }
+
   public List<AccessorySlot> accessories(Grade grade, Role role, Integer minQuality) {
     var specs = new ArrayList<AccessorySpec>();
     for (var slot : Slot.values()) {
@@ -180,7 +205,8 @@ public class MarketAuctionService {
           if (cells.get(query.key()) != null) continue;
           if (fetched == MAX_FETCH_PER_REQUEST) break;
           try {
-            var cell = toCell(gate.withReserve(RESERVE, () -> search.search(query)));
+            // 사용자 요청 중 호출이므로 요청 클라이언트의 공식 호출 한도에도 매긴다.
+            var cell = toCell(gate.withUserReserve(RESERVE, () -> search.search(query)));
             fetched++;
             cells.put(query.key(), cell);
             remember(query.key(), cell);

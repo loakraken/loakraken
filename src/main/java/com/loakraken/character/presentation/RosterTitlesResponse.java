@@ -7,7 +7,7 @@ import java.util.List;
 
 @Schema(
     description =
-        "원정대 보유 칭호(title-record-v1). LOAKraken에서 처음 확인한 순서입니다. 장착한 칭호만 기록되며 실제 획득일·획득 순서와 다를 수 있습니다. 기록이 없어도 200입니다.")
+        "원정대 보유 칭호(title-record-v1). LOAKraken에서 처음 확인한 순서입니다. 장착한 칭호만 기록되며 순서는 실제 획득일이 아니라 LOAKraken이 처음 확인한 순서입니다. 기록이 없어도 200입니다.")
 public record RosterTitlesResponse(
     String characterName,
     String serverName,
@@ -43,7 +43,7 @@ public record RosterTitlesResponse(
       @Schema(description = "LOAKraken이 이 칭호를 장착 상태로 처음 확인한 시각(획득일 아님)") Instant firstObservedAt,
       @Schema(
               description =
-                  "firstObservedAt의 KST 날짜. 같은 날 처음 확인한 칭호는 한 번에 기록된 것이라 observedOrder의 앞뒤에 의미가 없다(#144)")
+                  "firstObservedAt의 KST 날짜. 같은 날 처음 확인한 칭호는 한 번에 기록된 것이라 observedOrder의 앞뒤에 의미가 없다")
           java.time.LocalDate firstObservedDate,
       @Schema(description = "마지막으로 장착 상태를 확인한 시각") Instant lastObservedAt,
       @Schema(description = "처음 확인한 순서(1부터). 획득 순서가 아님") int observedOrder,

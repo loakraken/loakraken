@@ -157,13 +157,18 @@ record LostArkArmoryResponse(
       @JsonProperty("Grade") String grade,
       @JsonProperty("Tooltip") String tooltip) {
     CharacterLoadout.Gem toDomain() {
+      var lines = LostArkTooltipLines.parse(tooltip, null);
       return new CharacterLoadout.Gem(
           slot,
           LostArkText.plain(name),
           icon,
           level,
           grade,
-          LostArkTooltipLines.parse(tooltip, null).extraLines());
+          lines.extraLines(),
+          lines.titleLine(),
+          lines.itemLevel(),
+          lines.tier(),
+          lines.tradeLines());
     }
   }
 
@@ -311,7 +316,8 @@ record LostArkArmoryResponse(
           point,
           grade,
           map(gems, GridGem::toDomain),
-          LostArkArkGridTooltip.core(tooltip));
+          LostArkArkGridTooltip.core(tooltip),
+          tooltipLines(tooltip));
     }
   }
 
@@ -334,8 +340,16 @@ record LostArkArmoryResponse(
       @JsonProperty("Tooltip") String tooltip) {
     CharacterLoadout.GridGem toDomain() {
       return new CharacterLoadout.GridGem(
-          index, icon, active, grade, LostArkArkGridTooltip.gem(tooltip));
+          index, icon, active, grade, LostArkArkGridTooltip.gem(tooltip), tooltipLines(tooltip));
     }
+  }
+
+  /** 코어·젬 툴팁 표시용 줄(#288). Tooltip이 없으면 null. */
+  static CharacterLoadout.TooltipLines tooltipLines(String tooltip) {
+    if (tooltip == null || tooltip.isBlank()) return null;
+    var lines = LostArkTooltipLines.parse(tooltip, null);
+    return new CharacterLoadout.TooltipLines(
+        lines.titleLine(), lines.tradeLines(), lines.extraLines());
   }
 
   @JsonIgnoreProperties(ignoreUnknown = true)
@@ -365,7 +379,23 @@ record LostArkArmoryResponse(
           rune == null ? null : rune.toDomain(),
           parsed.gemEffects(),
           parsed.attackType(),
-          parsed.category());
+          parsed.category(),
+          parsed.titleLines(),
+          parsed.infoLines(),
+          tripods == null
+              ? List.of()
+              : tripods.stream()
+                  .filter(
+                      tripod -> tripod != null && tripod.name() != null && !tripod.name().isBlank())
+                  .map(
+                      tripod ->
+                          new CharacterLoadout.TripodOption(
+                              tripod.tier(),
+                              tripod.slot(),
+                              LostArkText.plain(tripod.name()),
+                              tripod.icon(),
+                              Boolean.TRUE.equals(tripod.selected())))
+                  .toList());
     }
   }
 

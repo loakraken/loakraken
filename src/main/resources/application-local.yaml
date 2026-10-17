@@ -17,3 +17,18 @@ spring:
     redis:
       host: localhost
       port: ${VALKEY_PORT:6379}
+
+# 로컬 전용 값. 스테이징·운영은 비밀값 파일(roster_marker_secret)로 넣는다.
+character:
+  roster-combat-power:
+    marker-secret: ${CHARACTER_ROSTER_COMBAT_POWER_MARKER_SECRET:local-roster-marker-secret}
+
+# 로컬 대조용: 빌드 통계 코어·스킬 항목(details)의 v2 표본 하한. 운영 프로필에는 없어 30 그대로다.
+stats:
+  class-builds:
+    detail-min-sample: ${CLASS_BUILDS_DETAIL_MIN_SAMPLE:30}
+
+# 로컬 대조용: 공식 API 호출마다 한 줄(시각·호출 종류·백그라운드/사용자). 운영 프로필에는 없어 꺼져 있다. 끄려면 OFFICIAL_CALL_LOG=INFO.
+logging:
+  level:
+    loakraken.official-calls: ${OFFICIAL_CALL_LOG:DEBUG}

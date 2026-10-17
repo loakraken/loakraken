@@ -1,0 +1,225 @@
+{
+ "checkedAt": "2026-10-12",
+ "checklist": [
+  "L30",
+  "L31"
+ ],
+ "status": "MODEL_EQUALS_OBSERVED_RULE",
+ "source": "인벤 4821/84928 「[계량재련학] Appendix. 재련 확률 완벽 가이드」(2022-01-05): 장인의 기운 증가분 = 그 시도의 최종 성공률 ÷ 2.15, 소수 셋째 자리 아래 버림(게임 내 실측 90% → 41.86, 100% → 46.51). 기본 1%면 장기백 112회. 공식 가이드 「재련」은 \"실패 시 성공률에 따라 상승\"만 적음",
+ "rule": {
+  "model": "재련 모델: 증가분 = 최종 성공률 × 0.465(반올림 없음), 실패마다 기본 확률의 1/10씩 최대 2배",
+  "observedRule": "실측 규칙: 최종 성공률 ÷ 2.15, 0.01 아래 버림",
+  "roundedTenthRule": "비교 기준값 재현: 증가분을 0.1로 반올림(기본 1%에서 2% 구간 0.93 → 0.9)"
+ },
+ "cases": [
+  {
+   "basePct": 10,
+   "bonusPct": 0,
+   "model": {
+    "expectedAttempts": 6.638,
+    "maxAttempts": 15
+   },
+   "observedRule": {
+    "expectedAttempts": 6.638,
+    "maxAttempts": 15
+   },
+   "roundedTenthRule": {
+    "expectedAttempts": 6.638,
+    "maxAttempts": 15
+   },
+   "modelEqualsObservedRule": true
+  },
+  {
+   "basePct": 10,
+   "bonusPct": 10,
+   "model": {
+    "expectedAttempts": 4.1705,
+    "maxAttempts": 10
+   },
+   "observedRule": {
+    "expectedAttempts": 4.1705,
+    "maxAttempts": 10
+   },
+   "roundedTenthRule": {
+    "expectedAttempts": 4.1705,
+    "maxAttempts": 10
+   },
+   "modelEqualsObservedRule": true
+  },
+  {
+   "basePct": 5,
+   "bonusPct": 0,
+   "model": {
+    "expectedAttempts": 11.4427,
+    "maxAttempts": 26
+   },
+   "observedRule": {
+    "expectedAttempts": 11.4427,
+    "maxAttempts": 26
+   },
+   "roundedTenthRule": {
+    "expectedAttempts": 11.4427,
+    "maxAttempts": 26
+   },
+   "modelEqualsObservedRule": true
+  },
+  {
+   "basePct": 5,
+   "bonusPct": 5,
+   "model": {
+    "expectedAttempts": 7.5236,
+    "maxAttempts": 18
+   },
+   "observedRule": {
+    "expectedAttempts": 7.5236,
+    "maxAttempts": 18
+   },
+   "roundedTenthRule": {
+    "expectedAttempts": 7.5236,
+    "maxAttempts": 18
+   },
+   "modelEqualsObservedRule": true
+  },
+  {
+   "basePct": 4,
+   "bonusPct": 0,
+   "model": {
+    "expectedAttempts": 13.6999,
+    "maxAttempts": 31
+   },
+   "observedRule": {
+    "expectedAttempts": 13.6999,
+    "maxAttempts": 31
+   },
+   "roundedTenthRule": {
+    "expectedAttempts": 13.6999,
+    "maxAttempts": 31
+   },
+   "modelEqualsObservedRule": true
+  },
+  {
+   "basePct": 4,
+   "bonusPct": 4,
+   "model": {
+    "expectedAttempts": 9.0342,
+    "maxAttempts": 21
+   },
+   "observedRule": {
+    "expectedAttempts": 9.0342,
+    "maxAttempts": 21
+   },
+   "roundedTenthRule": {
+    "expectedAttempts": 9.0342,
+    "maxAttempts": 21
+   },
+   "modelEqualsObservedRule": true
+  },
+  {
+   "basePct": 3,
+   "bonusPct": 0,
+   "model": {
+    "expectedAttempts": 17.4733,
+    "maxAttempts": 40
+   },
+   "observedRule": {
+    "expectedAttempts": 17.4733,
+    "maxAttempts": 40
+   },
+   "roundedTenthRule": {
+    "expectedAttempts": 17.4733,
+    "maxAttempts": 40
+   },
+   "modelEqualsObservedRule": true
+  },
+  {
+   "basePct": 3,
+   "bonusPct": 3,
+   "model": {
+    "expectedAttempts": 11.5857,
+    "maxAttempts": 27
+   },
+   "observedRule": {
+    "expectedAttempts": 11.5857,
+    "maxAttempts": 27
+   },
+   "roundedTenthRule": {
+    "expectedAttempts": 11.5857,
+    "maxAttempts": 27
+   },
+   "modelEqualsObservedRule": true
+  },
+  {
+   "basePct": 1.5,
+   "bonusPct": 0,
+   "model": {
+    "expectedAttempts": 32.3574,
+    "maxAttempts": 76
+   },
+   "observedRule": {
+    "expectedAttempts": 32.3574,
+    "maxAttempts": 76
+   },
+   "roundedTenthRule": {
+    "expectedAttempts": 32.3574,
+    "maxAttempts": 76
+   },
+   "modelEqualsObservedRule": true
+  },
+  {
+   "basePct": 1.5,
+   "bonusPct": 1.5,
+   "model": {
+    "expectedAttempts": 21.5726,
+    "maxAttempts": 51
+   },
+   "observedRule": {
+    "expectedAttempts": 21.5726,
+    "maxAttempts": 51
+   },
+   "roundedTenthRule": {
+    "expectedAttempts": 21.5726,
+    "maxAttempts": 51
+   },
+   "modelEqualsObservedRule": true
+  },
+  {
+   "basePct": 1,
+   "bonusPct": 0,
+   "model": {
+    "expectedAttempts": 47.1509,
+    "maxAttempts": 112
+   },
+   "observedRule": {
+    "expectedAttempts": 47.1509,
+    "maxAttempts": 112
+   },
+   "roundedTenthRule": {
+    "expectedAttempts": 47.4745,
+    "maxAttempts": 115
+   },
+   "modelEqualsObservedRule": true
+  },
+  {
+   "basePct": 1,
+   "bonusPct": 1,
+   "model": {
+    "expectedAttempts": 31.4594,
+    "maxAttempts": 75
+   },
+   "observedRule": {
+    "expectedAttempts": 31.4594,
+    "maxAttempts": 75
+   },
+   "roundedTenthRule": {
+    "expectedAttempts": 31.4594,
+    "maxAttempts": 75
+   },
+   "modelEqualsObservedRule": true
+  }
+ ],
+ "findings": [
+  "12조건 모두 재련 모델과 실측 규칙의 기대 시도·최대 시도가 같다",
+  "0.1 반올림 규칙은 기본 1%·보너스 0 한 칸만 다르다: 47.4745회·최대 115회(모델 47.1509회·최대 112회, +0.69%). 비교 기준값의 업화 22→23 시도 수 차이와 장기백 비용(115회분)이 이것으로 재현된다",
+  "따라서 그 차이는 비교 기준값의 반올림 근사로 증명된 차이이고, 모델 값을 유지한다"
+ ]
+}

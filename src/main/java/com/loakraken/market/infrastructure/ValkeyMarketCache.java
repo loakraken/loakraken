@@ -27,6 +27,12 @@ import tools.jackson.databind.json.JsonMapper;
 @Component
 class ValkeyMarketCache implements MarketCache {
   private static final String OPTIONS_KEY = "market:v1:options";
+  private static final String RELIC_BOOKS_KEY = "market:v1:relic-books";
+  private static final String REFINING_MATERIALS_KEY = "market:v1:refining-materials";
+
+  /** 뒤에 분류 코드를 붙인다(생활 90000·전투 용품 60000). */
+  private static final String LIFE_MATERIALS_KEY = "market:v1:category-scan:";
+
   private final StringRedisTemplate redis;
   private final JsonMapper mapper;
   private final MarketCacheProperties properties;
@@ -139,6 +145,50 @@ class ValkeyMarketCache implements MarketCache {
 
   public void saveBoardScan(MarketBoardScan scan) {
     write(boardKey(scan.tab(), scan.tier()), scan, properties.boardScanTtl(), Kind.BOARD_SCAN);
+  }
+
+  @Override
+  public Optional<RelicBookScan> findRelicBooks() {
+    // 만료는 키 TTL(예열 주기 × 3)로 정한다.
+    return read(RELIC_BOOKS_KEY, RelicBookScan.class, Kind.RELIC_BOOKS, scan -> true);
+  }
+
+  @Override
+  public void saveRelicBooks(RelicBookScan scan, Duration ttl) {
+    write(RELIC_BOOKS_KEY, scan, ttl, Kind.RELIC_BOOKS);
+  }
+
+  @Override
+  public Optional<com.loakraken.market.application.RefiningMaterialScan> findRefiningMaterials() {
+    // 만료는 키 TTL(예열 주기 × 3)로 정한다.
+    return read(
+        REFINING_MATERIALS_KEY,
+        com.loakraken.market.application.RefiningMaterialScan.class,
+        Kind.REFINING_MATERIALS,
+        scan -> true);
+  }
+
+  @Override
+  public void saveRefiningMaterials(
+      com.loakraken.market.application.RefiningMaterialScan scan, Duration ttl) {
+    write(REFINING_MATERIALS_KEY, scan, ttl, Kind.REFINING_MATERIALS);
+  }
+
+  @Override
+  public Optional<com.loakraken.market.application.LifeMaterialScan> findLifeMaterials(
+      int category) {
+    // 만료는 키 TTL(예열 주기 × 3)로 정한다.
+    return read(
+        LIFE_MATERIALS_KEY + category,
+        com.loakraken.market.application.LifeMaterialScan.class,
+        Kind.LIFE_MATERIALS,
+        scan -> true);
+  }
+
+  @Override
+  public void saveLifeMaterials(
+      int category, com.loakraken.market.application.LifeMaterialScan scan, Duration ttl) {
+    write(LIFE_MATERIALS_KEY + category, scan, ttl, Kind.LIFE_MATERIALS);
   }
 
   private static String boardKey(MarketTab tab, Integer tier) {

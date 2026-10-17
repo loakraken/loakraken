@@ -21,7 +21,12 @@ import tools.jackson.databind.json.JsonMapper;
       "receipt.enabled=true",
       "gem.enabled=true",
       "crit-speed.enabled=true",
-      "combat-power-sim.enabled=true"
+      "combat-power-sim.enabled=true",
+      "ranking.collectibles.enabled=true",
+      "ranking.rosters.enabled=true",
+      "ranking.guilds.enabled=true",
+      "ranking.titles.enabled=true",
+      "loakraken.features.auction-search=true"
     })
 class OpenApiIntegrationTest {
   @LocalServerPort private int port;
@@ -52,7 +57,15 @@ class OpenApiIntegrationTest {
         .startsWith("LOST_ARK_RATE_LIMITED");
     ApiContractFixture.write("openapi.json", response.body());
     // 다른 사이트 이름 금지(#261): OpenAPI 설명·예시는 계약 산출물로 웹에 넘어간다.
-    assertThat(response.body()).doesNotContain(SiteNames.FORBIDDEN);
+    SiteNames.assertAbsent(response.body());
+    // 공개 계약에는 사이트 언급 자체를 두지 않는다(공개 저장소 규칙, 웹 계약 재수집 대상).
+    assertThat(response.body()).as("OpenAPI 전체 사이트 언급").doesNotContain("사이트");
+    // 이슈 번호·체크리스트 ID·팀 표기 같은 내부 기록도 공개 설명에 두지 않는다(공개 저장소 규칙).
+    var internal =
+        java.util.regex.Pattern.compile(
+                "(#d+)|#d{2,4}(?![0-9A-Fa-f])|(?<![0-9A-Za-z])[LKNE]d{1,2}(?![0-9A-Za-z])|PM 총괄|PM-백엔드|PM-프론트|계산 검증")
+            .matcher(response.body());
+    assertThat(internal.find() ? internal.group() : null).as("OpenAPI 내부 기록").isNull();
     assertThat(
             document
                 .at("/components/schemas/CharacterLoadoutResponse/properties/gems/anyOf/1/type")
@@ -108,6 +121,236 @@ class OpenApiIntegrationTest {
         .contains("skills", "avatars", "collectibles");
     assertThat(document.at("/components/schemas/CharacterResponse/required").toString())
         .contains("tendencies", "decorations", "honorPoint", "townName", "avatars", "collectibles");
+    // 자동완성(#372): 필수 필드와 nullable 초상(프론트 10-12 05:32 계약 검증).
+    assertThat(document.at("/components/schemas/CharacterSuggestResponse/required").toString())
+        .contains("items");
+    assertThat(document.at("/components/schemas/CharacterSuggestItemResponse/required").toString())
+        .contains("characterName", "serverName", "className", "itemLevel", "characterImage");
+    assertThat(
+            document
+                .at(
+                    "/components/schemas/CharacterSuggestItemResponse/properties/characterImage/anyOf/1/type")
+                .asText())
+        .isEqualTo("null");
+    // 원정대 캐릭터별 전투력(L19): 필수와 nullable(기록 없음·쿨다운 없음).
+    assertThat(document.at("/components/schemas/RosterCombatPowerResponse/required").toString())
+        .contains("items", "missingCount", "refreshAvailableAt");
+    assertThat(
+            document.at("/components/schemas/RosterCombatPowerRefreshResponse/required").toString())
+        .contains("items", "fetched", "remaining", "refreshAvailableAt");
+    assertThat(document.at("/components/schemas/RosterCombatPowerItemResponse/required").toString())
+        .contains(
+            "characterName",
+            "serverName",
+            "combatPower",
+            "combatPowerObservedAt",
+            "bestCombatPower");
+    for (var field :
+        List.of(
+            "combatPower", "combatPowerObservedAt", "className", "itemLevel", "bestCombatPower"))
+      assertThat(
+              document
+                  .at(
+                      "/components/schemas/RosterCombatPowerItemResponse/properties/"
+                          + field
+                          + "/anyOf/1/type")
+                  .asText())
+          .as(field)
+          .isEqualTo("null");
+    assertThat(
+            document
+                .at(
+                    "/components/schemas/RosterCombatPowerResponse/properties/refreshAvailableAt/anyOf/1/type")
+                .asText())
+        .isEqualTo("null");
+    // 길드 찾기(M21): guild가 없으면 null인 excludedMatches·matchCount.
+    assertThat(document.at("/components/schemas/GuildRankingResponse/required").toString())
+        .contains("excludedGuilds", "excludedMatches", "matchCount");
+    for (var field : List.of("excludedMatches", "matchCount"))
+      assertThat(
+              document
+                  .at(
+                      "/components/schemas/GuildRankingResponse/properties/"
+                          + field
+                          + "/anyOf/1/type")
+                  .asText())
+          .as(field)
+          .isEqualTo("null");
+    // 인기 길드(M21): 새 경로, 숫자 없이 순위·서버·길드 이름만(모두 필수).
+    assertThat(document.at("/paths/~1api~1v1~1guilds~1popular/get").isMissingNode()).isFalse();
+    assertThat(document.at("/components/schemas/GuildPopularResponse/required").toString())
+        .contains("period", "aggregatedAt", "sampleStatus", "ruleVersion", "items");
+    assertThat(document.at("/components/schemas/GuildPopularItemResponse/required").toString())
+        .contains("rank", "serverName", "guildName");
+    assertThat(document.at("/components/schemas/GuildPopularItemResponse/properties").toString())
+        .doesNotContain("views");
+    // 랭킹 행 최고 전투력·아크 패시브(L37·K32): 기존 응답에 nullable 필드 추가.
+    assertThat(document.at("/components/schemas/StatsRankedCharacterResponse/required").toString())
+        .contains("bestCombatPower", "arkPassivePoints", "classEngraving", "estherWeapon");
+    for (var field :
+        List.of("bestCombatPower", "arkPassivePoints", "classEngraving", "estherWeapon"))
+      assertThat(
+              document
+                  .at(
+                      "/components/schemas/StatsRankedCharacterResponse/properties/"
+                          + field
+                          + "/anyOf/1/type")
+                  .asText())
+          .as(field)
+          .isEqualTo("null");
+    // 에스더 무기 안쪽 필드(K32, #449 P3): 둘 다 required이고 못 읽으면 null.
+    assertThat(document.at("/components/schemas/StatsEstherWeaponResponse/required").toString())
+        .contains("refineLevel", "ellaStage");
+    for (var field : List.of("refineLevel", "ellaStage"))
+      assertThat(
+              document
+                  .at(
+                      "/components/schemas/StatsEstherWeaponResponse/properties/"
+                          + field
+                          + "/anyOf/1/type")
+                  .asText())
+          .as(field)
+          .isEqualTo("null");
+    // 스펙업 목표 경로(L31): 새 경로, 모든 필드 required, 값이 없을 수 있는 필드만 nullable.
+    assertThat(document.at("/paths/~1api~1v1~1characters~1spec-up~1goal/get").isMissingNode())
+        .isFalse();
+    assertThat(document.at("/components/schemas/SpecUpGoalResponse/required").toString())
+        .contains("finalCombatPower", "stopReasonCode", "totalCost", "unpricedSteps", "steps");
+    for (var field : List.of("combatPower", "finalCombatPower", "totalCost", "pricesAt"))
+      assertThat(
+              document
+                  .at(
+                      "/components/schemas/SpecUpGoalResponse/properties/"
+                          + field
+                          + "/anyOf/1/type")
+                  .asText())
+          .as(field)
+          .isEqualTo("null");
+    assertThat(document.at("/components/schemas/SpecUpGoalStepResponse/required").toString())
+        .contains("change", "deltaCombatPower", "combatPowerAfter", "cost", "cumulativeCost");
+    for (var field : List.of("cumulativeCost", "combatPowerPer10kGold", "icon"))
+      assertThat(
+              document
+                  .at(
+                      "/components/schemas/SpecUpGoalStepResponse/properties/"
+                          + field
+                          + "/anyOf/1/type")
+                  .asText())
+          .as(field)
+          .isEqualTo("null");
+    // 팔찌·젬 효율 랭킹(L38·L39): 두 경로가 같은 스키마, 필수와 nullable.
+    for (var path : List.of("bracelets", "ark-grid-gems"))
+      assertThat(
+              document
+                  .at("/paths/~1api~1v1~1rankings~1" + path + "/get/responses/200/content")
+                  .toString())
+          .as(path)
+          .contains("ApiResponseStatsEfficiencyRankingResponse");
+    assertThat(
+            document.at("/components/schemas/StatsEfficiencyRankingResponse/required").toString())
+        .contains("meta", "kind", "ruleVersion", "populationNote", "page", "size", "rows");
+    assertThat(
+            document
+                .at("/components/schemas/StatsEfficiencyRankedCharacterResponse/required")
+                .toString())
+        .contains("rank", "characterName", "valuePercent", "observedAt", "topPercent", "tier");
+    for (var field : List.of("position", "topPercent", "tier"))
+      assertThat(
+              document
+                  .at(
+                      "/components/schemas/StatsEfficiencyRankedCharacterResponse/properties/"
+                          + field
+                          + "/anyOf/1/type")
+                  .asText())
+          .as(field)
+          .isEqualTo("null");
+    // 아크 그리드 효율(L29·L39): 캐릭터 응답의 nullable 필드, 필수와 nullable.
+    assertThat(
+            document
+                .at(
+                    "/components/schemas/CharacterResponse/properties/arkGridEfficiency/anyOf/1/type")
+                .asText())
+        .isEqualTo("null");
+    assertThat(document.at("/components/schemas/CharacterResponse/required").toString())
+        .contains("braceletEfficiency", "arkGridEfficiency");
+    assertThat(document.at("/components/schemas/ArkGridEfficiencyResponse/required").toString())
+        .contains(
+            "percent", "coresPercent", "status", "reasonCode", "reason", "lines", "ruleVersion");
+    for (var field : List.of("percent", "coresPercent", "reasonCode"))
+      assertThat(
+              document
+                  .at(
+                      "/components/schemas/ArkGridEfficiencyResponse/properties/"
+                          + field
+                          + "/anyOf/1/type")
+                  .asText())
+          .as(field)
+          .isEqualTo("null");
+    assertThat(document.at("/components/schemas/ArkGridLineEfficiencyResponse/required").toString())
+        .contains("slotIndex", "text", "percent", "status", "reasonCode", "reason");
+    for (var field : List.of("slotIndex", "percent", "reasonCode", "reason"))
+      assertThat(
+              document
+                  .at(
+                      "/components/schemas/ArkGridLineEfficiencyResponse/properties/"
+                          + field
+                          + "/anyOf/1/type")
+                  .asText())
+          .as(field)
+          .isEqualTo("null");
+    // 악세 경매 검색기(N13): 필수와 nullable.
+    assertThat(document.at("/components/schemas/AccessorySearchResponse/required").toString())
+        .contains(
+            "ruleVersion",
+            "totalCount",
+            "page",
+            "observedAt",
+            "cached",
+            "complete",
+            "scannedPages",
+            "nextPage",
+            "items");
+    assertThat(
+            document
+                .at("/components/schemas/AccessorySearchResponse/properties/nextPage/anyOf/1/type")
+                .asText())
+        .isEqualTo("null");
+    for (var field :
+        List.of(
+            "grade",
+            "quality",
+            "enlightenment",
+            "mainStat",
+            "mainStatRangePct",
+            "tradeAllowCount",
+            "buyPrice",
+            "bidStartPrice",
+            "endDate"))
+      assertThat(
+              document
+                  .at(
+                      "/components/schemas/AccessorySearchItemResponse/properties/"
+                          + field
+                          + "/anyOf/1/type")
+                  .asText())
+          .as(field)
+          .isEqualTo("null");
+    for (var field : List.of("option", "shortName", "value", "level"))
+      assertThat(
+              document
+                  .at(
+                      "/components/schemas/AccessorySearchPolishResponse/properties/"
+                          + field
+                          + "/anyOf/1/type")
+                  .asText())
+          .as(field)
+          .isEqualTo("null");
+    assertThat(
+            document
+                .at(
+                    "/paths/~1api~1v1~1markets~1auctions~1accessories~1search/post/responses/503/description")
+                .asText())
+        .contains("MARKET_SEARCH_BUSY");
     var search = document.at("/paths/~1api~1v1~1characters~1search/get/parameters");
     assertThat(search.toString()).contains("includeSiblings");
     assertThat(document.at("/paths/~1api~1v1~1characters~1history/get/responses").has("503"))
@@ -573,6 +816,209 @@ class OpenApiIntegrationTest {
     assertThat(schemas.at("/SkillResponse/required").toString()).contains("attackType");
     assertThat(schemas.at("/SkillResponse/properties/attackType/anyOf/0/enum").toString())
         .contains("BACK_ATTACK", "HEAD_ATTACK", "NONE");
+  }
+
+  @Test
+  void 직업_상세_빌드_통계는_안쪽_항목까지_required이고_없을_수_있는_값만_nullable이다() throws Exception {
+    var document = JsonMapper.builder().build().readTree(request("/v3/api-docs").body());
+    assertThat(
+            document
+                .at("/paths/~1api~1v1~1stats~1classes~1{className}~1builds/get")
+                .isMissingNode())
+        .isFalse();
+    var schemas = document.at("/components/schemas");
+    assertThat(schemas.at("/ClassBuildsResponse/required").toString())
+        .contains(
+            "meta",
+            "className",
+            "classEngraving",
+            "classPopulation",
+            "minCell",
+            "braceletItemLevelMin",
+            "classEngravingStatus",
+            "definitions",
+            "classEngravings",
+            "engravingCombos",
+            "engravings",
+            "arkPassivePoints",
+            "gems",
+            "cardSets",
+            "topStats",
+            "braceletStats");
+    assertThat(schemas.at("/ClassBuildsResponse/properties/classEngraving/anyOf/1/type").asText())
+        .isEqualTo("null");
+    assertThat(schemas.at("/ClassBuildNameSection/required").toString()).contains("known", "cells");
+    assertThat(schemas.at("/ClassBuildNameCell/required").toString())
+        .contains("name", "count", "share");
+    assertThat(schemas.at("/ClassBuildComboCell/required").toString())
+        .contains("engravings", "count", "share");
+    assertThat(schemas.at("/ClassBuildValueCell/required").toString())
+        .contains("value", "count", "share");
+    assertThat(schemas.at("/ClassBuildArkPassivePoints/required").toString())
+        .contains("evolution", "enlightenment", "leap");
+    assertThat(schemas.at("/ClassBuildGems/required").toString()).contains("damage", "cooldown");
+    assertThat(schemas.at("/ClassBuildCardCell/required").toString())
+        .contains("set", "pieces", "awakening", "count", "share");
+    assertThat(schemas.at("/ClassBuildCardCell/properties/awakening/anyOf/1/type").asText())
+        .isEqualTo("null");
+    assertThat(schemas.at("/ClassBuildTopStatSection/required").toString())
+        .contains("known", "ties", "cells");
+    assertThat(schemas.at("/ClassBuildBraceletSection/required").toString())
+        .contains("known", "unread", "hidden", "cells");
+    for (var section :
+        List.of(
+            "ClassBuildNameSection",
+            "ClassBuildComboSection",
+            "ClassBuildValueSection",
+            "ClassBuildCardSection",
+            "ClassBuildTopStatSection"))
+      assertThat(schemas.at("/" + section + "/required").toString()).as(section).contains("hidden");
+    assertThat(schemas.at("/ClassBuildHidden/required").toString()).contains("count", "share");
+    // 공통 meta를 여러 응답이 공유해도 조건의 nullable은 한 번만 감싼다.
+    assertThat(
+            schemas.at("/StatsConditionsResponse/properties/server/anyOf/0/anyOf").isMissingNode())
+        .isTrue();
+    assertThat(schemas.at("/StatsConditionsResponse/properties/server/anyOf/1/type").asText())
+        .isEqualTo("null");
+    assertThat(schemas.at("/ClassBuildHidden/properties/share/anyOf/1/type").asText())
+        .isEqualTo("null");
+    // M26 2단계 4번: 코어·스킬 항목(필드 추가만).
+    assertThat(schemas.at("/ClassBuildsResponse/required").toString()).contains("details");
+    assertThat(schemas.at("/ClassBuildDetails/required").toString())
+        .contains(
+            "detailedSamples", "coverage", "status", "arkGridCores", "skills", "skillDetails");
+    assertThat(schemas.at("/ClassBuildDetails/properties/coverage/anyOf/1/type").asText())
+        .isEqualTo("null");
+    assertThat(schemas.at("/ClassBuildCoreSection/required").toString())
+        .contains("kind", "position", "known", "hidden", "cells");
+    assertThat(schemas.at("/ClassBuildSkillDetail/required").toString())
+        .contains("skill", "users", "tripods", "runes");
+    assertThat(schemas.at("/ClassBuildTripodCell/required").toString())
+        .contains("tier", "name", "count", "share");
+  }
+
+  @Test
+  void 길드_탭_집계는_안쪽까지_required이고_전투력과_직위만_nullable이다() throws Exception {
+    var document = JsonMapper.builder().build().readTree(request("/v3/api-docs").body());
+    assertThat(
+            document.at("/paths/~1api~1v1~1guilds~1{serverName}~1{guildName}/get").isMissingNode())
+        .isFalse();
+    var schemas = document.at("/components/schemas");
+    assertThat(schemas.at("/GuildDetailResponse/required").toString())
+        .contains(
+            "meta",
+            "serverName",
+            "guildName",
+            "summary",
+            "classes",
+            "itemLevelBins",
+            "combatPowerBins",
+            "members");
+    assertThat(schemas.at("/GuildDetailMeta/required").toString())
+        .contains(
+            "memberCount",
+            "sampleStatus",
+            "minMembers",
+            "activeDays",
+            "aggregatedAt",
+            "ruleVersion");
+    assertThat(schemas.at("/GuildDetailSummary/required").toString())
+        .contains("itemLevelAvg", "combatPowerAvg", "combatPowerMedian", "combatPowerCount");
+    for (var field : List.of("combatPowerAvg", "combatPowerMedian"))
+      assertThat(schemas.at("/GuildDetailSummary/properties/" + field + "/anyOf/1/type").asText())
+          .as(field)
+          .isEqualTo("null");
+    assertThat(schemas.at("/GuildMemberResponse/required").toString())
+        .contains(
+            "characterName",
+            "className",
+            "itemLevel",
+            "combatPower",
+            "guildMemberGrade",
+            "observedAt");
+    for (var field : List.of("combatPower", "guildMemberGrade"))
+      assertThat(schemas.at("/GuildMemberResponse/properties/" + field + "/anyOf/1/type").asText())
+          .as(field)
+          .isEqualTo("null");
+    // 직위는 enum이 아닌 문자열이다(값이 늘어도 깨지지 않게).
+    assertThat(
+            schemas
+                .at("/GuildMemberResponse/properties/guildMemberGrade/anyOf/0/enum")
+                .isMissingNode())
+        .isTrue();
+    assertThat(schemas.at("/GuildMemberResponse/properties/guildMemberGrade/anyOf/0/type").asText())
+        .isEqualTo("string");
+    assertThat(schemas.at("/GuildClassCount/required").toString())
+        .contains("className", "count", "share");
+    assertThat(schemas.at("/GuildBin/required").toString()).contains("from", "count");
+  }
+
+  @Test
+  void 최고_전투력_통계는_required이고_작은_칸에서_숨기는_값만_nullable이다() throws Exception {
+    var document = JsonMapper.builder().build().readTree(request("/v3/api-docs").body());
+    assertThat(document.at("/paths/~1api~1v1~1stats~1best-combat-power/get").isMissingNode())
+        .isFalse();
+    var schemas = document.at("/components/schemas");
+    assertThat(schemas.at("/StatsBestCombatPowerResponse/required").toString())
+        .contains("meta", "overall", "classes");
+    assertThat(schemas.at("/StatsBestCombatPowerClassResponse/required").toString())
+        .contains("className", "value");
+    assertThat(schemas.at("/StatsBestCombatPowerRowResponse/required").toString())
+        .contains("count", "mean", "max", "percentiles", "sampleStatus");
+    for (var field : List.of("mean", "max", "percentiles"))
+      assertThat(
+              schemas
+                  .at("/StatsBestCombatPowerRowResponse/properties/" + field + "/anyOf/1/type")
+                  .asText())
+          .as(field)
+          .isEqualTo("null");
+  }
+
+  @Test
+  void 캐릭터_순위의_다음_티어_필드는_required이고_nullable이며_새_티어_값은_없다() throws Exception {
+    var schemas =
+        JsonMapper.builder()
+            .build()
+            .readTree(request("/v3/api-docs").body())
+            .at("/components/schemas");
+    assertThat(schemas.at("/StatsRankEntryResponse/required").toString())
+        .contains("tier", "nextTier", "nextTierValue", "nextTierGap");
+    for (var field : List.of("nextTier", "nextTierValue", "nextTierGap"))
+      assertThat(
+              schemas.at("/StatsRankEntryResponse/properties/" + field + "/anyOf/1/type").asText())
+          .as(field)
+          .isEqualTo("null");
+    // 다음 티어는 기존 티어 값 중 하나(REST 제외)라 새 값이 없다.
+    assertThat(schemas.at("/StatsRankEntryResponse/properties/nextTier/anyOf/0/enum").toString())
+        .isEqualTo("[\"TOP1\",\"TOP5\",\"TOP10\",\"TOP25\",\"TOP50\"]");
+  }
+
+  @Test
+  void 분_단위_시세는_안쪽까지_required이고_없을_수_있는_값만_nullable이다() throws Exception {
+    var document = JsonMapper.builder().build().readTree(request("/v3/api-docs").body());
+    assertThat(
+            document.at("/paths/~1api~1v1~1markets~1items~1{itemId}~1minutes/get").isMissingNode())
+        .isFalse();
+    var schemas = document.at("/components/schemas");
+    assertThat(schemas.at("/MarketMinuteChartResponse/required").toString())
+        .contains(
+            "itemId", "itemName", "intervalSeconds", "sampleEverySeconds", "from", "to", "points");
+    for (var field : List.of("itemName", "sampleEverySeconds"))
+      assertThat(
+              schemas
+                  .at("/MarketMinuteChartResponse/properties/" + field + "/anyOf/1/type")
+                  .asText())
+          .as(field)
+          .isEqualTo("null");
+    assertThat(schemas.at("/MarketMinutePointResponse/required").toString())
+        .contains("minute", "currentMinPrice", "recentPrice");
+    for (var field : List.of("currentMinPrice", "recentPrice"))
+      assertThat(
+              schemas
+                  .at("/MarketMinutePointResponse/properties/" + field + "/anyOf/1/type")
+                  .asText())
+          .as(field)
+          .isEqualTo("null");
   }
 
   private HttpResponse<String> request(String path) throws Exception {

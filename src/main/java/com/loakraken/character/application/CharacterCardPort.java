@@ -15,6 +15,16 @@ public interface CharacterCardPort {
    */
   void record(Observation observation);
 
+  /**
+   * 수집품(#295): 이 캐릭터의 원정대 값(공식 Point·MaxPoint)을 덮어쓴다. 수집품은 원정대가 함께 모은다. 캐릭터가 없거나 원정대 키가 아직 없으면(원정대를
+   * 훑기 전) 아무것도 하지 않는다. 다음 관측에서 다시 기록된다.
+   */
+  void recordCollectibles(
+      String serverName,
+      String characterName,
+      List<com.loakraken.character.domain.CharacterLoadout.Collectible> collectibles,
+      Instant observedAt);
+
   /** 같은 서버의 원정대 캐릭터들이 기록한 카드. recordedBy는 그 최고 기록을 남긴 캐릭터다. */
   RosterCards rosterCards(String serverName, Collection<String> characterNames);
 
@@ -36,7 +46,54 @@ public interface CharacterCardPort {
       String position,
       BigDecimal gemMeanLevel,
       boolean gemsObserved,
-      Instant observedAt) {}
+      Instant observedAt,
+      Efficiency efficiency) {
+    /** 같은 관측에 효율만 바꾼 값. */
+    public Observation withEfficiency(Efficiency value) {
+      return new Observation(
+          serverName,
+          characterName,
+          cards,
+          learned,
+          position,
+          gemMeanLevel,
+          gemsObserved,
+          observedAt,
+          value);
+    }
+
+    /** 효율 없이(L38·L39 이전 호출). 효율 열은 바꾸지 않는다. */
+    public Observation(
+        String serverName,
+        String characterName,
+        List<CharacterLoadout.Card> cards,
+        CardCollection.Learned learned,
+        String position,
+        BigDecimal gemMeanLevel,
+        boolean gemsObserved,
+        Instant observedAt) {
+      this(
+          serverName,
+          characterName,
+          cards,
+          learned,
+          position,
+          gemMeanLevel,
+          gemsObserved,
+          observedAt,
+          null);
+    }
+  }
+
+  /**
+   * 팔찌 효율·젬 효율(L38·L39 랭킹). 계산된(OK) 값만 있고, 못 하면 null이다. 규칙 버전은 값이 있을 때만 있다. 이 레코드가 null이면(장비를 관측하지
+   * 않음) 저장된 효율 열을 바꾸지 않는다.
+   */
+  record Efficiency(
+      BigDecimal braceletPct,
+      String braceletRuleVersion,
+      BigDecimal arkGridGemPct,
+      String arkGridRuleVersion) {}
 
   record RosterCards(List<CardCollection.OwnedCard> cards, int observedCharacters) {}
 }

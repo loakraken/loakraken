@@ -9,6 +9,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
@@ -95,7 +96,7 @@ class StatsIntegrationTest {
   }
 
   @Test
-  void 요약_직업_서버_분포는_최근_확인한_관측_캐릭터로_집계하고_표본이_작으면_값을_비운다() throws Exception {
+  void 요약_직업_서버_분포는_최근_확인한_관측_캐릭터로_집계하고_표본이_작으면_분위수만_비운다() throws Exception {
     표본();
     var summary = data("/api/v1/stats/summary?server=" + encode(SERVER));
     assertThat(summary.at("/meta/population").asLong()).isEqualTo(40);
@@ -127,7 +128,8 @@ class StatsIntegrationTest {
     assertThat(classes.at("/rows/1/className").asText()).isEqualTo(SMALL_CLASS);
     assertThat(classes.at("/rows/1/sampleStatus").asText()).isEqualTo("COLLECTING");
     assertThat(classes.at("/rows/1/combatPower").isNull()).isTrue();
-    assertThat(classes.at("/rows/1/itemLevelMean").isNull()).isTrue();
+    // 30명 미만이어도 평균은 참고값으로 준다(#273). 분위수는 30명 기준 그대로 null.
+    assertThat(classes.at("/rows/1/itemLevelMean").decimalValue()).isEqualByComparingTo("1650");
     ApiContractFixture.write(
         "stats-classes.json", get("/api/v1/stats/classes?server=" + encode(SERVER)).body());
 
@@ -176,7 +178,10 @@ class StatsIntegrationTest {
         data("/api/v1/stats/summary?role=SUPPORT&itemLevelMin=1710&server=" + encode(SERVER));
     assertThat(supportsOnly.at("/meta/population").asLong()).isEqualTo(13);
     assertThat(supportsOnly.at("/meta/sampleStatus").asText()).isEqualTo("COLLECTING");
-    assertThat(supportsOnly.path("itemLevelMedian").isNull()).isTrue();
+    // 13명이라 분위수(p90)는 비우고 중앙값·평균은 참고값으로 준다(#273).
+    assertThat(supportsOnly.path("itemLevelMedian").isNull()).isFalse();
+    assertThat(supportsOnly.path("itemLevelMean").isNull()).isFalse();
+    assertThat(supportsOnly.path("combatPowerP90").isNull()).isTrue();
   }
 
   @Test
@@ -233,7 +238,7 @@ class StatsIntegrationTest {
   }
 
   @Test
-  void 공개_제외_목록은_개인_순위_모집단에서_빠지고_본인은_순위_비공개다() throws Exception {
+  void 공개_제외_목록은_순위와_집계_모집단_모두에서_빠지고_본인은_순위_비공개다() throws Exception {
     표본();
     jdbc.sql(
             "INSERT INTO public_exclusion (character_name, server_name, reason_code) VALUES ('통계캐34', :s, 'REQUEST')")
@@ -250,15 +255,13 @@ class StatsIntegrationTest {
       var serverCombat = entry(next, "COMBAT_POWER", "SERVER");
       assertThat(serverCombat.path("rank").asLong()).isEqualTo(1);
       assertThat(serverCombat.path("total").asLong()).isEqualTo(39);
-      // 제외된 본인은 순위 비공개다. 순위·백분위·티어가 어디에도 없다.
+      // 처리정지 목록의 본인은 관측이 없는 캐릭터와 같은 404다(#363). 순위·백분위·티어도 값도 없다.
       var hidden = get("/api/v1/characters/rank?characterName=" + encode("통계캐34"));
-      var self = mapper.readTree(hidden.body()).path("data");
-      assertThat(self.path("rankVisibility").asText()).isEqualTo("HIDDEN");
-      assertThat(self.path("included").asBoolean()).isFalse();
-      assertThat(self.path("entries").size()).isZero();
-      assertThat(self.path("combatPower").decimalValue()).isEqualByComparingTo("3340");
-      assertThat(hidden.body()).doesNotContain("topPercent", "\"tier\"", "percentile");
-      ApiContractFixture.write("character-rank-hidden.json", hidden.body());
+      var unknown = get("/api/v1/characters/rank?characterName=" + encode("통계없는이름"));
+      assertThat(hidden.statusCode()).isEqualTo(404).isEqualTo(unknown.statusCode());
+      assertThat(mapper.readTree(hidden.body()).path("code").asText())
+          .isEqualTo(mapper.readTree(unknown.body()).path("code").asText());
+      assertThat(hidden.body()).doesNotContain("3340", "rankVisibility");
       // 제외된 캐릭터의 값을 percentileOf에 넣어도 제외 반영 모집단 기준이고, 그 캐릭터를 특정할 정보가 없다.
       var percentile =
           get(
@@ -268,15 +271,211 @@ class StatsIntegrationTest {
       assertThat(of.path("rank").asLong()).isEqualTo(1);
       assertThat(of.path("total").asLong()).isEqualTo(39);
       assertThat(percentile.body()).doesNotContain("통계캐34");
-      // 개인을 드러내지 않는 집계에는 그대로 들어간다.
-      assertThat(
-              data("/api/v1/stats/summary?server=" + encode(SERVER))
-                  .at("/meta/population")
-                  .asLong())
-          .isEqualTo(40);
+      // 집계(요약·직업·서버·분포)에서도 빠진다(B5). 모든 통계가 같은 모집단이라 응답 사이 차이로 처리정지 수를 셀 수 없다.
+      var summary = data("/api/v1/stats/summary?server=" + encode(SERVER));
+      assertThat(summary.at("/meta/population").asLong()).isEqualTo(39);
+      assertThat(summary.path("supports").asLong()).isEqualTo(17);
+      var mainClass = data("/api/v1/stats/classes?server=" + encode(SERVER)).path("rows").get(0);
+      assertThat(mainClass.path("className").asText()).isEqualTo(MAIN_CLASS);
+      assertThat(mainClass.path("count").asLong()).isEqualTo(34);
+      var server = data("/api/v1/stats/servers?server=" + encode(SERVER)).path("rows").get(0);
+      assertThat(server.path("count").asLong()).isEqualTo(39);
+      // 알고 있는 캐릭터 수(필터 무관): 표본 42명 중 처리정지 1명을 뺀 41명.
+      assertThat(server.path("knownCharacters").asLong()).isEqualTo(41);
     } finally {
       jdbc.sql("DELETE FROM public_exclusion WHERE character_name = '통계캐34'").update();
     }
+  }
+
+  @Test
+  void 팔찌_젬_효율_랭킹은_지금_규칙_버전_값만_높은_순으로_세고_처리정지는_뺀다() throws Exception {
+    // L38·L39: 저장된 효율 중 지금 규칙 버전(공통 상수) 값만 센다.
+    표본();
+    var t = Instant.now();
+    efficiency("통계캐1", "10.00", "sim-old", null, null, t.minus(Duration.ofHours(2)));
+    efficiency(
+        "통계캐2",
+        "14.42",
+        com.loakraken.common.api.EfficiencyRuleVersions.COMBAT_POWER_SIM,
+        "4.27",
+        com.loakraken.common.api.EfficiencyRuleVersions.ARK_GRID,
+        t.minus(Duration.ofHours(1)));
+    efficiency(
+        "통계캐3",
+        "12.00",
+        com.loakraken.common.api.EfficiencyRuleVersions.COMBAT_POWER_SIM,
+        "6.10",
+        com.loakraken.common.api.EfficiencyRuleVersions.ARK_GRID,
+        t.minus(Duration.ofMinutes(50)));
+    efficiency(
+        "통계캐5",
+        "12.00",
+        com.loakraken.common.api.EfficiencyRuleVersions.COMBAT_POWER_SIM,
+        null,
+        null,
+        t.minus(Duration.ofMinutes(40)));
+    efficiency(
+        "통계캐34",
+        "20.00",
+        com.loakraken.common.api.EfficiencyRuleVersions.COMBAT_POWER_SIM,
+        null,
+        null,
+        t.minus(Duration.ofMinutes(30)));
+    var bracelets = data("/api/v1/rankings/bracelets?size=10&server=" + encode(SERVER));
+    assertThat(bracelets.path("kind").asText()).isEqualTo("BRACELET");
+    assertThat(bracelets.path("ruleVersion").asText())
+        .isEqualTo(com.loakraken.common.api.EfficiencyRuleVersions.COMBAT_POWER_SIM);
+    assertThat(bracelets.path("populationNote").asText()).isNotBlank();
+    // 옛 버전(통계캐1)은 빠지고, 동률(12.00)은 같은 순위다.
+    assertThat(bracelets.at("/meta/population").asLong()).isEqualTo(4);
+    assertThat(bracelets.at("/rows/0/characterName").asText()).isEqualTo("통계캐34");
+    assertThat(bracelets.at("/rows/0/valuePercent").decimalValue()).isEqualByComparingTo("20.00");
+    assertThat(bracelets.at("/rows/1/characterName").asText()).isEqualTo("통계캐2");
+    assertThat(bracelets.at("/rows/2/rank").asLong()).isEqualTo(3);
+    assertThat(bracelets.at("/rows/3/rank").asLong()).isEqualTo(3);
+    assertThat(bracelets.at("/rows/0/observedAt").asText()).isNotBlank();
+    ApiContractFixture.write(
+        "rankings-bracelets.json",
+        get("/api/v1/rankings/bracelets?size=10&server=" + encode(SERVER)).body());
+
+    var gems = data("/api/v1/rankings/ark-grid-gems?size=10&server=" + encode(SERVER));
+    assertThat(gems.path("kind").asText()).isEqualTo("ARK_GRID_GEM");
+    assertThat(gems.path("ruleVersion").asText())
+        .isEqualTo(com.loakraken.common.api.EfficiencyRuleVersions.ARK_GRID);
+    assertThat(gems.at("/rows").size()).isEqualTo(2);
+    assertThat(gems.at("/rows/0/characterName").asText()).isEqualTo("통계캐3");
+    assertThat(gems.at("/rows/1/valuePercent").decimalValue()).isEqualByComparingTo("4.27");
+
+    // B5: 처리정지 목록 캐릭터는 빠진다.
+    jdbc.sql(
+            "INSERT INTO public_exclusion (character_name, server_name, reason_code) VALUES ('통계캐34', :s, 'REQUEST')")
+        .param("s", SERVER)
+        .update();
+    try {
+      var keys = redis.keys("stats:v1:*");
+      if (keys != null && !keys.isEmpty()) redis.delete(keys);
+      var excluded = data("/api/v1/rankings/bracelets?size=10&server=" + encode(SERVER));
+      assertThat(excluded.at("/meta/population").asLong()).isEqualTo(3);
+      assertThat(excluded.at("/rows/0/characterName").asText()).isEqualTo("통계캐2");
+      assertThat(excluded.toString()).doesNotContain("통계캐34");
+    } finally {
+      jdbc.sql("DELETE FROM public_exclusion WHERE character_name = '통계캐34'").update();
+    }
+  }
+
+  @Test
+  void 전투력_랭킹_행은_관측한_최고_전투력과_마지막_장비의_아크_패시브를_준다() throws Exception {
+    // L37·K32: 최고 전투력은 characters.best_combat_power, 아크 패시브는 마지막 장비 요약(포인트·직업 각인).
+    표본();
+    jdbc.sql(
+            "UPDATE characters SET best_combat_power = 3500 WHERE character_name = '통계캐34' AND server_name = :s")
+        .param("s", SERVER)
+        .update();
+    var id =
+        jdbc.sql(
+                "SELECT character_id FROM characters WHERE character_name = '통계캐34' AND server_name = :s")
+            .param("s", SERVER)
+            .query(UUID.class)
+            .single();
+    for (var row : new Object[][] {{"버스트", 120, 90, 60, 2, 8, 2}, {"버스트", 140, 101, 70, 1, 10, 3}})
+      jdbc.sql(
+              """
+          INSERT INTO character_equipment_summary (character_id, observed_at, last_confirmed_at,
+            schema_version, combat_power, item_level, class_name, ark_passive_title, features, features_hash)
+          VALUES (:id, :at, :at, 'equipment-summary-v1', 3330, 1734, '버서커', :title, CAST(:features AS JSONB), :hash)
+          """)
+          .param("id", id)
+          .param("at", now.minus((int) row[4], ChronoUnit.HOURS).atOffset(ZoneOffset.UTC))
+          .param("title", row[0])
+          .param(
+              "features",
+              "{\"arkPassive\":{\"points\":{\"evolution\":"
+                  + row[1]
+                  + ",\"enlightenment\":"
+                  + row[2]
+                  + ",\"leap\":"
+                  + row[3]
+                  + "}},\"weapon\":{\"esther\":{\"refineLevel\":"
+                  + row[5]
+                  + ",\"ellaStage\":"
+                  + row[6]
+                  + "}}}")
+          .param("hash", "h".repeat(63) + row[4])
+          .update();
+    var ranking = data("/api/v1/rankings?metric=COMBAT_POWER&size=2&server=" + encode(SERVER));
+    var top = ranking.at("/rows/0");
+    assertThat(top.path("characterName").asText()).isEqualTo("통계캐34");
+    assertThat(top.path("bestCombatPower").decimalValue()).isEqualByComparingTo("3500");
+    // 마지막(1시간 전) 장비 요약 값이다.
+    assertThat(top.at("/arkPassivePoints/evolution").asInt()).isEqualTo(140);
+    assertThat(top.at("/arkPassivePoints/enlightenment").asInt()).isEqualTo(101);
+    assertThat(top.at("/arkPassivePoints/leap").asInt()).isEqualTo(70);
+    assertThat(top.path("classEngraving").asText()).isEqualTo("버스트");
+    assertThat(top.at("/estherWeapon/refineLevel").asInt()).isEqualTo(10);
+    assertThat(top.at("/estherWeapon/ellaStage").asInt()).isEqualTo(3);
+    // 장비 요약·최고 전투력이 없는 캐릭터는 null이다.
+    var second = ranking.at("/rows/1");
+    assertThat(second.path("bestCombatPower").isNull()).isTrue();
+    assertThat(second.path("arkPassivePoints").isNull()).isTrue();
+    assertThat(second.path("classEngraving").isNull()).isTrue();
+    assertThat(second.path("estherWeapon").isNull()).isTrue();
+    // 칭호가 빈 문자열인 요약은 직업 각인 null, 포인트는 그대로다.
+    var secondId =
+        jdbc.sql(
+                "SELECT character_id FROM characters WHERE character_name = :n AND server_name = :s")
+            .param("n", second.path("characterName").asText())
+            .param("s", SERVER)
+            .query(UUID.class)
+            .single();
+    jdbc.sql(
+            """
+        INSERT INTO character_equipment_summary (character_id, observed_at, last_confirmed_at,
+          schema_version, combat_power, item_level, class_name, ark_passive_title, features, features_hash)
+        VALUES (:id, :at, :at, 'equipment-summary-v1', 3000, 1720, '버서커', '',
+          CAST('{"arkPassive":{"points":{"evolution":120}}}' AS JSONB), :hash)
+        """)
+        .param("id", secondId)
+        .param("at", now.minus(1, ChronoUnit.HOURS).atOffset(ZoneOffset.UTC))
+        .param("hash", "e".repeat(64))
+        .update();
+    var again =
+        // 캐시 키가 다르도록 size를 바꿔 다시 읽는다.
+        data("/api/v1/rankings?metric=COMBAT_POWER&size=3&server=" + encode(SERVER)).at("/rows/1");
+    assertThat(again.at("/arkPassivePoints/evolution").asInt()).isEqualTo(120);
+    assertThat(again.path("classEngraving").isNull()).isTrue();
+  }
+
+  @Test
+  void 저장된_효율이_없으면_빈_랭킹이다() throws Exception {
+    표본();
+    var empty = data("/api/v1/rankings/ark-grid-gems?server=" + encode(SERVER));
+    assertThat(empty.path("ruleVersion").asText())
+        .isEqualTo(com.loakraken.common.api.EfficiencyRuleVersions.ARK_GRID);
+    assertThat(empty.at("/rows").size()).isZero();
+  }
+
+  private void efficiency(
+      String name,
+      String bracelet,
+      String braceletVersion,
+      String gem,
+      String gemVersion,
+      Instant observedAt) {
+    jdbc.sql(
+            """
+        UPDATE characters SET bracelet_efficiency_pct = CAST(:bracelet AS NUMERIC),
+          bracelet_rule_version = :bv, ark_grid_gem_pct = CAST(:gem AS NUMERIC),
+          ark_grid_rule_version = :gv, efficiency_observed_at = :at
+        WHERE character_name = :name AND server_name = :server
+        """)
+        .param("bracelet", bracelet == null ? null : new BigDecimal(bracelet))
+        .param("bv", braceletVersion)
+        .param("gem", gem == null ? null : new BigDecimal(gem))
+        .param("gv", gemVersion)
+        .param("at", observedAt.atOffset(ZoneOffset.UTC))
+        .param("name", name)
+        .param("server", SERVER)
+        .update();
   }
 
   private static JsonNode entry(JsonNode rank, String metric, String scope) {
@@ -284,6 +483,80 @@ class StatsIntegrationTest {
       if (entry.path("metric").asText().equals(metric)
           && entry.path("scope").asText().equals(scope)) return entry;
     throw new AssertionError(metric + " " + scope + " 항목이 없습니다.");
+  }
+
+  @Test
+  void 캐릭터_순위는_다음_티어_경계값과_남은_차이를_준다() throws Exception {
+    표본();
+    // 통계캐30(전투력 3300)은 서버 40명 중 5위(12.5%) TOP25. 다음 TOP10의 K = ⌊10×40/100⌋ = 4, 4번째로 높은 값 3310.
+    var rank = data("/api/v1/characters/rank?characterName=" + encode("통계캐30"));
+    var server = entry(rank, "COMBAT_POWER", "SERVER");
+    assertThat(server.path("tier").asText()).isEqualTo("TOP25");
+    assertThat(server.path("nextTier").asText()).isEqualTo("TOP10");
+    assertThat(server.path("nextTierValue").decimalValue()).isEqualByComparingTo("3310");
+    assertThat(server.path("nextTierGap").decimalValue()).isEqualByComparingTo("10");
+    // 경계값에 닿으면 실제로 다음 티어다: 3310은 3위보다 큰 값이 셋이라 4위(10%) TOP10, 3309.99면 5위(12.5%) TOP25.
+    var at =
+        data(
+            "/api/v1/stats/distribution?metric=COMBAT_POWER&percentileOf=3310&server="
+                + encode(SERVER));
+    assertThat(at.at("/percentileOf/tier").asText()).isEqualTo("TOP10");
+    var below =
+        data(
+            "/api/v1/stats/distribution?metric=COMBAT_POWER&percentileOf=3309.99&server="
+                + encode(SERVER));
+    assertThat(below.at("/percentileOf/tier").asText()).isEqualTo("TOP25");
+
+    // 통계캐34(3340)는 1위(2.5%) TOP5. 다음 TOP1의 K = ⌊1×40/100⌋ = 0이라 아무도 닿을 수 없어 null.
+    var top =
+        entry(
+            data("/api/v1/characters/rank?characterName=" + encode("통계캐34")),
+            "COMBAT_POWER",
+            "SERVER");
+    assertThat(top.path("tier").asText()).isEqualTo("TOP5");
+    assertThat(top.path("nextTier").isNull()).isTrue();
+    assertThat(top.path("nextTierValue").isNull()).isTrue();
+    assertThat(top.path("nextTierGap").isNull()).isTrue();
+
+    // 표본 30 미만(서버 내 직업 SMALL 5명)은 tier가 null이라 다음 티어도 null.
+    var small =
+        entry(
+            data("/api/v1/characters/rank?characterName=" + encode("통계소수0")),
+            "COMBAT_POWER",
+            "SERVER_CLASS");
+    assertThat(small.path("tier").isNull()).isTrue();
+    assertThat(small.path("nextTier").isNull()).isTrue();
+
+    // 아이템 레벨도 같은 정의: 통계캐30(1730)은 서버 5위 TOP25, 4번째로 높은 1731이 경계.
+    var level = entry(rank, "ITEM_LEVEL", "SERVER");
+    assertThat(level.path("nextTier").asText()).isEqualTo("TOP10");
+    assertThat(level.path("nextTierValue").decimalValue()).isEqualByComparingTo("1731");
+    assertThat(level.path("nextTierGap").decimalValue()).isEqualByComparingTo("1");
+  }
+
+  @Test
+  void 처리정지_캐릭터는_다음_티어_경계값_후보에서_빠진다() throws Exception {
+    표본();
+    // 통계캐33(3330)을 빼면 서버 39명. 통계캐30(3300)은 큰 값이 3310·3320·3340 셋이라 4위(10.26%) TOP25.
+    // 다음 TOP10의 K = ⌊10×39/100⌋ = 3, 3번째로 높은 값은 3310(처리정지 3330을 넣었다면 3320).
+    jdbc.sql(
+            "INSERT INTO public_exclusion (character_name, server_name, reason_code) VALUES ('통계캐33', :s, 'REQUEST')")
+        .param("s", SERVER)
+        .update();
+    try {
+      var server =
+          entry(
+              data("/api/v1/characters/rank?characterName=" + encode("통계캐30")),
+              "COMBAT_POWER",
+              "SERVER");
+      assertThat(server.path("total").asLong()).isEqualTo(39);
+      assertThat(server.path("tier").asText()).isEqualTo("TOP25");
+      assertThat(server.path("nextTier").asText()).isEqualTo("TOP10");
+      assertThat(server.path("nextTierValue").decimalValue()).isEqualByComparingTo("3310");
+      assertThat(server.path("nextTierGap").decimalValue()).isEqualByComparingTo("10");
+    } finally {
+      jdbc.sql("DELETE FROM public_exclusion WHERE character_name = '통계캐33'").update();
+    }
   }
 
   @Test

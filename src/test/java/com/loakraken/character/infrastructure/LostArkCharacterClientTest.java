@@ -161,6 +161,9 @@ class LostArkCharacterClientTest {
     assertThat(skill.partBreakLevel()).isEqualTo(1);
     assertThat(skill.counter()).isTrue();
     assertThat(skill.tripods()).extracting("name").containsExactly("약점 노출");
+    // 트라이포드 전체 선택지(#307): 선택하지 않은 것도 공식 순서로, 선택 여부와 함께.
+    assertThat(skill.tripodOptions()).hasSize(2);
+    assertThat(skill.tripodOptions()).extracting("selected").containsExactly(true, false);
     assertThat(skill.rune().grade()).isEqualTo("전설");
     assertThat(skill.gemEffects().getFirst().kind())
         .isEqualTo(com.loakraken.character.domain.CharacterLoadout.GemEffectKind.DAMAGE);
@@ -192,7 +195,7 @@ class LostArkCharacterClientTest {
         .contains(
             "테스트 무기",
             "원정대캐릭터",
-            "\"parserVersion\":\"equipment-tooltip-v5\"",
+            "\"parserVersion\":\"equipment-tooltip-v6\"",
             // 트라이포드 효과는 공식 원문을 일반 텍스트로 내린다(아이템 툴팁 계약 10-10).
             "\"effect\":\"치명타 적중률이 10.0% 증가한다.\"")
         .doesNotContain(

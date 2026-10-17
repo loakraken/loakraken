@@ -12,7 +12,7 @@ import java.util.Map;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.json.JsonMapper;
 
-/** 원정대 영수증 계산 규칙. 재련 규칙은 실제 리소스(t4-refining-v2)를 쓴다. */
+/** 원정대 영수증 계산 규칙. 재련 규칙은 실제 리소스(t4-refining-v3)를 쓴다. */
 class ReceiptDomainTest {
   private static final RefiningRules RULES =
       JsonMapper.builder()
@@ -39,7 +39,7 @@ class ReceiptDomainTest {
         .containsExactly("무기", "투구", "상의");
     var weapon = result.parts().get(0);
     assertThat(weapon.grade()).isEqualTo(RefiningRules.Grade.JEONYUL);
-    // 전율은 +11부터 센다(두 사이트, #218 A).
+    // 전율은 +11부터 센다(비교 기준 두 곳, #218 A).
     assertThat(weapon.fromStage()).isEqualTo(11);
     assertThat(weapon.toStage()).isEqualTo(19);
     assertThat(weapon.stages()).hasSize(8);
@@ -142,7 +142,7 @@ class ReceiptDomainTest {
         .containsExactly("「+22 운명의 전율 검」: 21단계 한계 해방 비용(고통의 가시·해방 비용)은 공식 수치가 없어 산정하지 않았습니다.");
   }
 
-  /** 공식 Tooltip "[상급 재련] N단계"(equipment-tooltip-v5). 1단계 이상이면 부위마다, 모르는 이전 캐시면 캐릭터마다 한 줄. */
+  /** 공식 Tooltip "[상급 재련] N단계"(equipment-tooltip-v6). 1단계 이상이면 부위마다, 모르는 이전 캐시면 캐릭터마다 한 줄. */
   @Test
   void 상급_재련은_단계가_있는_부위마다_알리고_모르면_한_줄로_알린다() {
     var known =

@@ -6,15 +6,26 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * 경매장 시세 표(auction-board-v1). 일로아 보석·장신구 탭 구성을 따른다.
+ * 경매장 시세 표(auction-board-v1). 비교 기준의 보석·장신구 탭 구성을 따른다.
  *
  * <p>T4 연마 효과의 하·중·상 값은 공식 `/auctions/options`의 연마 효과(EtcOptions 7) 값 목록 중 T4 값이다. 2026-10-09 실검색으로
- * 고대 목걸이 적주피·추피 상상 4,877,777G, 하상 11,000G, 중중 6,000G가 일로아와 일치함을 확인했다. 공식 값은 100배 정수다(2.00% → 200).
+ * 고대 목걸이 적주피·추피 상상 4,877,777G, 하상 11,000G, 중중 6,000G가 비교 기준값과 일치함을 확인했다. 공식 값은 100배 정수다(2.00% →
+ * 200).
  */
 public final class AuctionCatalog {
   public static final String RULE_VERSION = "auction-board-v1";
   public static final int GEM_CATEGORY = 210000;
   public static final int POLISH_OPTION = 7;
+
+  /** 공식 `/auctions/options` 장신구 기본 효과(1) 중 힘·민첩·지능(11). 2026-10-12 확인(N13 0단계). */
+  public static final int BASE_EFFECT_OPTION = 1;
+
+  public static final int MAIN_STAT_SECOND = 11;
+
+  /** 공식 `/auctions/options` 아크 패시브(8) 중 깨달음(1). 목걸이·귀걸이·반지에 적용. 2026-10-12 확인(N13 0단계). */
+  public static final int ARK_PASSIVE_OPTION = 8;
+
+  public static final int ENLIGHTENMENT_SECOND = 1;
   public static final int TIER = 4;
   public static final List<String> GEM_KINDS = List.of("겁화", "작열");
   public static final int MAX_GEM_LEVEL = 10;
@@ -142,7 +153,7 @@ public final class AuctionCatalog {
     }
   }
 
-  /** 부위별 핵심 연마 효과. 서포터 귀걸이는 무공% 하나다(일로아와 같음). */
+  /** 부위별 핵심 연마 효과. 서포터 귀걸이는 무공% 하나다(비교 기준값과 같음). */
   public static List<PolishOption> options(Role role, Slot slot) {
     return switch (role) {
       case DEALER ->
@@ -158,6 +169,19 @@ public final class AuctionCatalog {
             case EARRING -> List.of(PolishOption.WEAPON_ATTACK_PERCENT);
             case RING -> List.of(PolishOption.ALLY_DAMAGE, PolishOption.ALLY_ATTACK);
           };
+    };
+  }
+
+  /**
+   * 연마 효과가 그 부위에 붙을 수 있는지. 공식 `/auctions/options` 연마 효과의 Categorys(2026-10-12 확인): 목걸이 41~44, 귀걸이
+   * 45~48, 반지 49~52.
+   */
+  public static boolean fits(Slot slot, PolishOption option) {
+    int code = option.code();
+    return switch (slot) {
+      case NECKLACE -> code >= 41 && code <= 44;
+      case EARRING -> code >= 45 && code <= 48;
+      case RING -> code >= 49 && code <= 52;
     };
   }
 

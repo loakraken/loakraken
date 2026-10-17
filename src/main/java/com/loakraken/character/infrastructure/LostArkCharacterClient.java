@@ -5,6 +5,7 @@ import com.loakraken.character.application.CharacterErrorCode;
 import com.loakraken.character.application.CharacterException;
 import com.loakraken.character.application.FetchedCharacter;
 import com.loakraken.character.domain.CharacterDetails;
+import com.loakraken.character.domain.CharacterProfile;
 import com.loakraken.character.domain.CharacterSibling;
 import com.loakraken.common.api.BusinessException;
 import com.loakraken.common.lostark.LostArkErrorCode;
@@ -86,6 +87,26 @@ class LostArkCharacterClient implements CharacterDetailsPort {
     return result;
   }
 
+  @Override
+  public CharacterProfile fetchProfile(String characterName, int reserve) {
+    // 공식 /armories/characters/{name}/profiles(약 7KB)에 CombatPower가 있다(2026-10-12 확인). 전체 armory보다
+    // 가볍다.
+    var payload =
+        // 사용자가 누른 불러오기라 사용자 몫을 남기면서 그 클라이언트의 공식 호출 한도에도 매긴다.
+        gate.withUserReserve(
+            reserve,
+            () ->
+                request(
+                    Endpoint.PROFILE,
+                    "/armories/characters/{name}/profiles",
+                    characterName,
+                    LostArkProfileResponse.class,
+                    CharacterErrorCode.CHARACTER_NOT_FOUND));
+    if (payload.value() == null)
+      throw new CharacterException(CharacterErrorCode.CHARACTER_NOT_FOUND);
+    return LostArkProfileMapper.from(payload.value());
+  }
+
   private Payload<LostArkArmoryResponse> armory(String characterName) {
     var payload =
         request(
@@ -133,7 +154,7 @@ class LostArkCharacterClient implements CharacterDetailsPort {
     if (properties.apiKey().isBlank())
       throw new CharacterException(CharacterErrorCode.LOST_ARK_NOT_CONFIGURED);
     try {
-      gate.acquire();
+      gate.acquire(endpoint);
     } catch (BusinessException exception) {
       // 게이트 저장소 장애는 호출 한도가 아니라 503이다(#107).
       // 클라이언트 한도(#108)도 공유 한도와 구분해 그대로 돌려준다.

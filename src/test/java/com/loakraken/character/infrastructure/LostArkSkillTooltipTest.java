@@ -33,6 +33,31 @@ class LostArkSkillTooltipTest {
             new CharacterLoadout.SkillGemEffect("[블레이드] 기타 효과", null));
   }
 
+  /** 공식 combat-skills Tooltip(2026-10-11 표본 형식): 제목 줄과 현재 레벨 정보 줄만, 다음 레벨·트라이포드·룬·보석은 뺀다(#299). */
+  @Test
+  void 제목_줄과_현재_레벨_정보_줄을_원문_순서로_준다() {
+    var parsed =
+        LostArkSkillTooltip.parse(
+            """
+            {"Element_000":{"type":"NameTagBox","value":"<FONT COLOR='#FFD200'>테스트 커터</FONT>"},
+             "Element_001":{"type":"CommonSkillTitle","value":{"leftText":"<FONT SIZE='12'>재사용 대기시간 12초</FONT>","level":"<FONT SIZE='12'><FONT COLOR='#008000'>[일반 스킬]</FONT></FONT>","middleText":"","name":"<FONT SIZE='12'>콤보</FONT>","slotData":{"iconGrade":0}}},
+             "Element_002":{"type":"MultiTextBox","value":"|<FONT COLOR='#3C78FF'>PvE</FONT>"},
+             "Element_003":{"type":"SingleTextBox","value":"스킬 레벨 10"},
+             "Element_004":{"type":"MultiTextBox","value":"<FONT COLOR='#FFFFFF'>마나 349 소모</FONT>|"},
+             "Element_005":{"type":"SingleTextBox","value":"<FONT SIZE='11'></FONT><BR><FONT COLOR='#EEA839'>무력화 : 하</FONT><BR><FONT COLOR='#EEA839'>공격 타입 : 백 어택</FONT><BR><FONT COLOR='#EEA839'>슈퍼아머 : 경직 면역</FONT>"},
+             "Element_006":{"type":"TripodSkillCustom","value":{"Element_000":{"desc":"트라이포드 효과","lock":false,"name":"약점 포착"}}},
+             "Element_007":{"type":"ItemPartBox","value":{"Element_000":"보석 효과","Element_001":"[블레이드] 테스트 커터 피해 24.00% 증가"}},
+             "Element_008":{"type":"BlinkLineStart","value":true},
+             "Element_009":{"type":"SingleTextBox","value":"다음 스킬 레벨 11"},
+             "Element_010":{"type":"MultiTextBox","value":"|필요 레벨 55"},
+             "Element_011":{"type":"BlinkLineEnd","value":true}}
+            """);
+    assertThat(parsed.titleLines()).containsExactly("콤보", "재사용 대기시간 12초", "[일반 스킬]");
+    assertThat(parsed.infoLines())
+        .containsExactly("PvE", "스킬 레벨 10", "마나 349 소모", "무력화 : 하", "공격 타입 : 백 어택", "슈퍼아머 : 경직 면역");
+    assertThat(LostArkSkillTooltip.parse(null).titleLines()).isEmpty();
+  }
+
   /** 공식 combat-skills Tooltip 제목(2026-10-10 디스트로이어 표본 형식). */
   @Test
   void 스킬_분류는_제목의_대괄호_값이고_없으면_null이다() {
@@ -112,7 +137,7 @@ class LostArkSkillTooltipTest {
         .isEqualTo(CharacterLoadout.AttackType.BACK_ATTACK);
   }
 
-  /** 공식 스킬 Tooltip의 SingleTextBox 형식(언새늘 블레이드 2026-10-09 응답의 줄 구성. 원문 전체가 아닌 해당 줄만). */
+  /** 공식 스킬 Tooltip의 SingleTextBox 형식(기준 캐릭터 2026-10-09 응답의 줄 구성. 원문 전체가 아닌 해당 줄만). */
   @ParameterizedTest
   @CsvSource(
       delimiter = '|',

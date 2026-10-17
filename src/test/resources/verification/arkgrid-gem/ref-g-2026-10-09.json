@@ -1,0 +1,89 @@
+{
+  "model": "arkgrid-gem-processing",
+  "observedAt": "2026-10-09 KST 10~11시",
+  "rules": {
+    "source": "OFFICIAL_DISPLAY: 확률 정보 공개 「젬 가공, 젬 융합」(최근 수정일 2025-08-20), 게임 가이드 「전투 > 아크 그리드」(2026-06-24)",
+    "possibilities": [
+      { "kind": "OPTION_PLUS_1", "weightPct": 11.65, "excludedWhen": "해당 옵션 = 5", "perOption": true },
+      { "kind": "OPTION_PLUS_2", "weightPct": 4.40, "excludedWhen": "해당 옵션 ≥ 4", "perOption": true },
+      { "kind": "OPTION_PLUS_3", "weightPct": 1.75, "excludedWhen": "해당 옵션 ≥ 3", "perOption": true },
+      { "kind": "OPTION_PLUS_4", "weightPct": 0.45, "excludedWhen": "해당 옵션 ≥ 2", "perOption": true },
+      { "kind": "OPTION_MINUS_1", "weightPct": 3.00, "excludedWhen": "해당 옵션 = 1", "perOption": true },
+      { "kind": "EFFECT1_CHANGE", "weightPct": 3.25 },
+      { "kind": "EFFECT2_CHANGE", "weightPct": 3.25 },
+      { "kind": "COST_PLUS_100", "weightPct": 1.75, "excludedWhen": "추가 비율 +100% 도달 또는 남은 가공 1" },
+      { "kind": "COST_MINUS_100", "weightPct": 1.75, "excludedWhen": "추가 비율 −100% 도달 또는 남은 가공 1" },
+      { "kind": "KEEP", "weightPct": 1.75 },
+      { "kind": "REROLL_PLUS_1", "weightPct": 2.50, "excludedWhen": "남은 가공 1" },
+      { "kind": "REROLL_PLUS_2", "weightPct": 0.75, "excludedWhen": "남은 가공 1" }
+    ],
+    "options": ["의지력 효율", "질서/혼돈 포인트", "첫번째 효과", "두번째 효과"],
+    "draw": "매 차수 4개를 중복 없이 비복원 가중 추출, 그중 1개가 25%로 적용",
+    "rerollByGrade": { "고급": 0, "희귀": 1, "영웅": 2 },
+    "gradeByTotal": { "전설": "4~15", "유물": "16~18", "고대": "19 이상" }
+  },
+  "refParameters": {
+    "source": "REF: 로아또 젬파고 수동 입력(공식 수치 없음)",
+    "attemptsByGrade": { "고급": 5, "희귀": 7, "영웅": 9 },
+    "baseCostGold": 900,
+    "costSteps": [0, 900, 1800],
+    "note": "비교 기준 A는 가공비를 골드 대신 페온·블루크리스탈 시세로 환산한다. 사이트 간 표현이 다르다"
+  },
+  "policy": "목표 포인트 합 달성 확률 최대, 다른 항목 보기·완료 최적 선택, 초기화 미사용(비교 기준 G와 같은 가정)",
+  "cases": [
+    {
+      "id": "fresh-hero",
+      "state": { "willpower": 1, "point": 1, "effect1": 1, "effect2": 1, "attemptsLeft": 9, "rerolls": 2, "processed": false },
+      "shown": ["의지력 효율 +1", "질서 포인트 +1", "효과1 +1", "효과2 +1"],
+      "expected": [
+        { "target": 16, "successPct": 22, "costPerSuccessGold": 34000, "source": "REF", "rounding": "정수 %, 비용 1천 G 단위" },
+        { "target": 19, "successPct": 2, "costPerSuccessGold": 385000, "source": "REF" }
+      ],
+      "computed": [
+        { "target": 16, "successPct": 22.27, "costPerSuccessGold": 33059 },
+        { "target": 19, "successPct": 1.69, "costPerSuccessGold": 386167 }
+      ]
+    },
+    {
+      "id": "case1",
+      "state": { "willpower": 3, "point": 3, "effect1": 3, "effect2": 3, "attemptsLeft": 5, "rerolls": 1, "processed": true },
+      "shown": ["의지력 효율 +1", "질서 포인트 +1", "효과1 +1", "효과2 +1"],
+      "expected": [
+        { "target": 16, "successPct": 66, "costPerSuccessGold": 5969, "source": "REF" },
+        { "target": 19, "successPct": 3, "costPerSuccessGold": 95000, "source": "REF" }
+      ],
+      "computed": [
+        { "target": 16, "successPct": 65.78, "costPerSuccessGold": 5678 },
+        { "target": 19, "successPct": 3.23, "costPerSuccessGold": 90645 }
+      ]
+    },
+    {
+      "id": "case2",
+      "state": { "willpower": 4, "point": 3, "effect1": 4, "effect2": 3, "attemptsLeft": 4, "rerolls": 0, "processed": true },
+      "shown": ["질서 포인트 +2", "효과2 +2", "의지력 효율 −1", "가공 상태 유지"],
+      "expected": [
+        { "target": 16, "successPct": 76, "costPerSuccessGold": 2666, "source": "REF" },
+        { "target": 19, "successPct": 9, "costPerSuccessGold": 29000, "source": "REF" }
+      ],
+      "computed": [
+        { "target": 16, "successPct": 76.34, "costPerSuccessGold": 2531 },
+        { "target": 19, "successPct": 8.78, "costPerSuccessGold": 26164 }
+      ]
+    },
+    {
+      "id": "case4",
+      "state": { "willpower": 4, "point": 4, "effect1": 3, "effect2": 4, "attemptsLeft": 2, "rerolls": 1, "processed": true },
+      "shown": ["질서 포인트 +1", "효과2 +1", "의지력 효율 −1", "효과1 −1"],
+      "expected": [
+        { "target": 16, "successPct": 78, "costPerSuccessGold": 1616, "recommended": "다른 항목 보기", "source": "REF" }
+      ],
+      "computed": [
+        { "target": 16, "successPct": 78.18, "costPerSuccessGold": 1473 }
+      ]
+    }
+  ],
+  "verdict": {
+    "successProbability": "MATCH: 7/7이 반올림 범위(±0.5%p) 안, 최대 차 0.34%p",
+    "expectedCost": "APPROXIMATE: −9.8%~+0.3%. 비교 기준 G 동률·보조 기준 미상. 미검증"
+  }
+}

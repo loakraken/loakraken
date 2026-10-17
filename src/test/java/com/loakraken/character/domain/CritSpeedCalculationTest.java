@@ -14,7 +14,7 @@ import java.util.Map;
 import org.junit.jupiter.api.Test;
 
 class CritSpeedCalculationTest {
-  // 2026-10-05 공식 원문 문구(언새늘·랭킹 캐릭터)에서 발췌한 효과 문장
+  // 2026-10-05 공식 원문 문구(기준 캐릭터·랭킹 캐릭터)에서 발췌한 효과 문장
   private static final String ADRENALINE =
       "이동기 및 기본공격을 제외한 스킬 사용 후 6초 동안 공격력이 1.73% 증가하며 (최대 6중첩) 해당 효과가 최대 중첩 도달 시 치명타 적중률이 추가로 18.50% 증가한다.";
   private static final String KEEN = "치명타 적중률이 8.0% 증가하고, 진화형 피해가 10.0% 증가합니다.";
@@ -27,7 +27,7 @@ class CritSpeedCalculationTest {
       "공격 적중 시, 공격 속도 및 이동 속도 증가량의 10.0% 만큼 진화형 피해가 증가합니다. 공격 및 이동 속도가 모두 상한을 초과했다면, 진화형 피해가 추가로 8.0% 증가하며, 상한을 초과한 속도 증가량의 30.0%만큼 적중 시 진화형 피해가 증가합니다. 이 노드에 의한 진화형 피해는 최대 24.0%까지 적용됩니다.";
 
   @Test
-  void 언새늘_세팅은_로아랩과_같은_치적과_음돌_적정_신속을_낸다() {
+  void 기준_캐릭터_세팅은_비교_기준_A와_같은_치적과_음돌_적정_신속을_낸다() {
     var result =
         CritSpeedCalculation.calculate(
             profile("576", "77"),
@@ -148,7 +148,7 @@ class CritSpeedCalculationTest {
     assertThat(supersonic.requiredAdditionalSwiftness()).isZero();
   }
 
-  /** 계산 검증 표본(10-09) 노드 문구 형식. 로펙·일로아 기준 포함 여부와 같아야 한다. */
+  /** 계산 검증 표본(10-09) 노드 문구 형식. 비교 기준 B·C의 포함 여부와 같아야 한다. */
   @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.CsvSource(
       delimiter = '|',
@@ -203,7 +203,7 @@ class CritSpeedCalculationTest {
         .containsExactly("5");
   }
 
-  /** #198 승갈통(2026-10-10 공식 팔찌 문구): 두 사이트는 중첩형 공이속을 최대 중첩(×6)으로 본다. */
+  /** #198 승갈통(2026-10-10 공식 팔찌 문구): 비교 기준 두 곳은 중첩형 공이속을 최대 중첩(×6)으로 본다. */
   @Test
   void 팔찌_중첩형_공이속은_최대_중첩으로_더한다() {
     var bracelet =
@@ -237,7 +237,7 @@ class CritSpeedCalculationTest {
     assertThat(result.speed().attack().total()).isEqualByComparingTo("11.32");
   }
 
-  /** #198 Tii·분신싸개(리퍼 달의 소리): 두 사이트는 "페르소나 상태로 전환 시" 공격 속도 +10을 넣지 않는다. */
+  /** #198 Tii·분신싸개(리퍼 달의 소리): 비교 기준 두 곳은 "페르소나 상태로 전환 시" 공격 속도 +10을 넣지 않는다. */
   @Test
   void 공이속_노드는_표로_판정하고_상황_조건은_기본_끔_표에_없으면_넣지_않는다() {
     var nodes =
@@ -324,7 +324,8 @@ class CritSpeedCalculationTest {
 
   @Test
   void 치명타_피해는_기본_200에_일반_문구만_더하고_스킬_한정과_받는_피해는_뺀다() {
-    // 계산 검증(2026-10-09): 언새늘 208.40% = 기본 200 + 팔찌 8.40, 일격의 방향성 공격 스킬 한정 +32%는 제외(일로아·로펙과 같음)
+    // 계산 검증(2026-10-09): 기준 캐릭터 208.40% = 기본 200 + 팔찌 8.40, 일격의 방향성 공격 스킬 한정 +32%는 제외(비교 기준 B·C와
+    // 같음)
     var bracelet =
         new CharacterLoadout.Equipment(
             "팔찌",
@@ -367,7 +368,7 @@ class CritSpeedCalculationTest {
     assertThat(result.limitations()).anyMatch(text -> text.contains("치명타 피해는 기본 200%"));
   }
 
-  /** 직업 상태 가정(#189): 리퍼 갈증 피냄새 Lv.3 공식 문구. 목표 사이트처럼 혼돈 상태를 가정해 +23을 더한다. */
+  /** 직업 상태 가정(#189): 리퍼 갈증 피냄새 Lv.3 공식 문구. 비교 기준처럼 혼돈 상태를 가정해 +23을 더한다. */
   @Test
   void 피냄새_혼돈_상태_가정은_기본으로_더하고_끄면_뺀다() {
     String bloodScent = "혼돈 게이지가 가득차면 혼돈 효과가 강화되어 치명타 적중률이 23.0% 로 변경된다.";
@@ -403,7 +404,7 @@ class CritSpeedCalculationTest {
 
   private static CharacterProfile profile(String crit, String swiftness) {
     return new CharacterProfile(
-        "언새늘",
+        "기준캐릭터",
         "카단",
         "블레이드",
         70,

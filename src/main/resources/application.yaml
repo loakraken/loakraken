@@ -1,7 +1,7 @@
 server:
   # 신뢰 프록시(사설망·루프백)가 보낸 X-Forwarded-For만 원격 주소로 쓴다(Tomcat RemoteIpValve). 외부에서 직접 보낸 헤더는 무시한다.
   forward-headers-strategy: native
-  # JSON 응답을 gzip으로 보낸다. 홈 일정은 400KB → 8KB 수준이다(#118 P2, docs/home.md).
+  # JSON 응답을 gzip으로 보낸다. 홈 일정은 400KB → 8KB 수준이다(#118 P2).
   compression:
     enabled: true
     mime-types: application/json
@@ -45,7 +45,7 @@ lostark:
     # 비우면 API 키 SHA-256 앞 12자. 운영·스테이징은 명시합니다.
     key-id: ${LOSTARK_GATE_KEY_ID:}
     command-timeout: ${LOSTARK_GATE_COMMAND_TIMEOUT:100ms}
-  # 클라이언트별 분당 한도(#108). official은 요청이 실제로 일으킨 공식 호출 수입니다. docs/backend-operations.md 참고.
+  # 클라이언트별 분당 한도(#108). official은 요청이 실제로 일으킨 공식 호출 수입니다.
   client-limit:
     enabled: ${CLIENT_LIMIT_ENABLED:true}
     official-per-minute: ${CLIENT_LIMIT_OFFICIAL:20}
@@ -53,6 +53,14 @@ lostark:
     general-per-minute: ${CLIENT_LIMIT_GENERAL:240}
     bot-per-minute: ${CLIENT_LIMIT_BOT:120}
     exempt-internal: ${CLIENT_LIMIT_EXEMPT_INTERNAL:true}
+    # 원정대 전투력 불러오기(L19): 클라이언트당 분당 요청 수
+    roster-refresh-per-minute: ${CLIENT_LIMIT_ROSTER_REFRESH:2}
+    # 악세 경매 검색기(N13): 클라이언트당 분당 공식 호출(페이지) 수
+    auction-search-per-minute: ${CLIENT_LIMIT_AUCTION_SEARCH:5}
+    # 모든 검색봇 표시 요청이 함께 일으킬 수 있는 분당 공식 호출 수(봇 주소별 한도와 별도)
+    bot-official-per-minute: ${CLIENT_LIMIT_BOT_OFFICIAL:20}
+    # 검색봇 표시 요청 한 주소의 분당 공식 호출 수(전체 상한보다 작게)
+    bot-address-official-per-minute: ${CLIENT_LIMIT_BOT_ADDRESS_OFFICIAL:5}
 
 character:
   snapshots:
@@ -73,8 +81,29 @@ market:
     interval: ${MARKET_WARMUP_INTERVAL:9m}
     # 홈 요약·시세 기본 탭(board?tab=REFINING) 강제 갱신 주기. 가격 캐시 TTL과 같게 둡니다(#154).
     board-interval: ${MARKET_WARMUP_BOARD_INTERVAL:30s}
-    # 예열 전체(이력·보드)의 분당 공식 호출 상한입니다.
+    # 예열 전체(이력·보드·각인서)의 분당 공식 호출 상한입니다.
     max-calls-per-minute: ${MARKET_WARMUP_MAX_CALLS_PER_MINUTE:15}
+    # 유물 각인서 시세(L30, 스펙업 각인서 비용). 캐시 TTL은 주기 × 3입니다.
+    relic-books:
+      enabled: ${MARKET_WARMUP_RELIC_BOOKS_ENABLED:false}
+      interval: ${MARKET_WARMUP_RELIC_BOOKS_INTERVAL:30m}
+      max-pages: ${MARKET_WARMUP_RELIC_BOOKS_MAX_PAGES:10}
+    # T4 재련 재료·추가 재료 시세(L30 후속, 스펙업 재련 비용). 캐시 TTL은 주기 × 3입니다.
+    refining-materials:
+      enabled: ${MARKET_WARMUP_REFINING_MATERIALS_ENABLED:false}
+      interval: ${MARKET_WARMUP_REFINING_MATERIALS_INTERVAL:10m}
+      max-pages-per-tab: ${MARKET_WARMUP_REFINING_MATERIALS_MAX_PAGES:5}
+  # 악세 경매 검색기(N13). 기능 몫은 모든 사용자 합 분당 공식 호출 수, reserve는 사용자 경로 몫(docs/accessory-auction-search.md).
+  auction-search:
+    quota-per-minute: ${MARKET_AUCTION_SEARCH_QUOTA:20}
+    reserve: ${MARKET_AUCTION_SEARCH_RESERVE:30}
+    max-scan-pages: ${MARKET_AUCTION_SEARCH_MAX_SCAN_PAGES:3}
+    cache-ttl: ${MARKET_AUCTION_SEARCH_CACHE_TTL:120s}
+
+loakraken:
+  features:
+    # 악세 경매 검색기(N13) 경로. 끄면 404이고 OpenAPI에도 없습니다.
+    auction-search: ${FEATURE_AUCTION_SEARCH:false}
 
 stats:
   collector:
@@ -86,6 +115,22 @@ stats:
     enabled: ${STATS_SEED_ENABLED:false}
     names: ${STATS_SEED_NAMES:}
     file: ${STATS_SEED_FILE:}
+
+# 수집품(내실) 랭킹(#295): 웹 화면이 준비될 때까지 기본 꺼짐
+ranking:
+  collectibles:
+    enabled: ${RANKING_COLLECTIBLES_ENABLED:false}
+    # 수집품 보유율 예열(#305): 랭킹이 켜져 있을 때만 돈다. 테스트·로컬은 꺼 둔다.
+    warmup-enabled: ${RANKING_COLLECTIBLES_WARMUP_ENABLED:false}
+  rosters:
+    # 원정대 랭킹(#297): 웹 화면이 준비될 때까지 꺼짐.
+    enabled: ${RANKING_ROSTERS_ENABLED:false}
+  titles:
+    # 칭호 장착 확인 비율(#311): 웹 화면이 준비될 때까지 꺼짐.
+    enabled: ${RANKING_TITLES_ENABLED:false}
+  guilds:
+    # 길드 랭킹(#301): 웹 화면이 준비될 때까지 꺼짐.
+    enabled: ${RANKING_GUILDS_ENABLED:false}
 
 # 원정대 영수증(#174)은 계산 일치 원칙(사용자 지시 10-09) 검증 전까지 공개하지 않는다. 검증 서버에서만 켠다.
 receipt:
@@ -102,6 +147,10 @@ crit-speed:
 # 전투력 시뮬레이터 API: 계산식(실측 대조) 확정 전까지 기본 꺼짐
 combat-power-sim:
   enabled: ${COMBAT_POWER_SIM_ENABLED:false}
+
+# 스펙업 가이드(#315): 꺼져 있으면 SPEC_UP_DISABLED(404). 시뮬레이터 계산식 검증 뒤 켠다.
+spec-up:
+  enabled: ${SPEC_UP_ENABLED:false}
 
 home:
   cache:

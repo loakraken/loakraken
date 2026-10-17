@@ -11,7 +11,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
 
-// 첫 운영 릴리스에서는 웹이 쓰지 않고 비용이 로아또와 아직 맞지 않아 기본 꺼짐(gem.enabled, PM-백엔드 10-10 09:00).
+// 첫 운영 릴리스에서는 웹이 쓰지 않고 비용이 비교 기준값과 아직 맞지 않아 기본 꺼짐(gem.enabled, PM-백엔드 10-10 09:00).
 @ConditionalOnProperty(prefix = "gem", name = "enabled", havingValue = "true")
 @RestController
 @RequestMapping(value = "/api/v1/gems", produces = MediaType.APPLICATION_JSON_VALUE)

@@ -30,8 +30,11 @@ final class LostArkSkillTooltip {
       Boolean counter,
       List<CharacterLoadout.SkillGemEffect> gemEffects,
       CharacterLoadout.AttackType attackType,
-      String category) {
-    static final Parsed UNKNOWN = new Parsed(null, null, List.of(), null, null);
+      String category,
+      List<String> titleLines,
+      List<String> infoLines) {
+    static final Parsed UNKNOWN =
+        new Parsed(null, null, List.of(), null, null, List.of(), List.of());
   }
 
   static Parsed parse(String tooltip) {
@@ -49,9 +52,21 @@ final class LostArkSkillTooltip {
     boolean attackLabel = false;
     var gems = new ArrayList<CharacterLoadout.SkillGemEffect>();
     String category = null;
+    var titleLines = new ArrayList<String>();
+    var infoLines = new ArrayList<String>();
+    // 공식 Tooltip은 현재 레벨 정보 뒤 BlinkLineStart부터 다음 레벨 정보를 둔다. 정보 줄은 그 앞의 글 상자만 원문 순서로 모은다.
+    boolean currentLevel = true;
     for (var element : root.values()) {
       var value = element.path("value");
-      if ("CommonSkillTitle".equals(text(element.path("type")))) {
+      var type = text(element.path("type"));
+      if ("BlinkLineStart".equals(type)) currentLevel = false;
+      if (currentLevel && ("SingleTextBox".equals(type) || "MultiTextBox".equals(type)))
+        infoLines.addAll(lines(text(value)));
+      if ("CommonSkillTitle".equals(type) && titleLines.isEmpty())
+        // 아이콘 옆 줄: 스킬 종류(일반·콤보·차지 등), 재사용 대기시간, 가운데 글, 분류("[일반 스킬]") 순서.
+        for (var field : List.of("name", "leftText", "middleText", "level"))
+          titleLines.addAll(lines(text(value.path(field))));
+      if ("CommonSkillTitle".equals(type)) {
         // 스킬 분류: "[해방 스킬]", "[둔갑 스킬]", "[일반 스킬]"(공식 Tooltip 제목, 10-10 확인)
         var level = CATEGORY.matcher(LostArkText.plain(text(value.path("level"))));
         if (category == null && level.matches()) category = level.group(1).strip();
@@ -77,7 +92,23 @@ final class LostArkSkillTooltip {
       }
     }
     if (attackType == null && !attackLabel) attackType = CharacterLoadout.AttackType.NONE;
-    return new Parsed(partBreak, counter, gems, attackType, category);
+    return new Parsed(
+        partBreak,
+        counter,
+        gems,
+        attackType,
+        category,
+        List.copyOf(titleLines),
+        List.copyOf(infoLines));
+  }
+
+  /** 태그를 지운 원문을 줄(BR)과 좌우 칸(|)으로 나눠 빈 줄을 뺀다. */
+  private static List<String> lines(String raw) {
+    var result = new ArrayList<String>();
+    if (raw == null || raw.isBlank()) return result;
+    for (var line : LostArkText.plain(raw).lines().toList())
+      for (var cell : line.split("\\|")) if (!cell.isBlank()) result.add(cell.strip());
+    return result;
   }
 
   /** 아크 패시브 노드 Tooltip의 MultiTextBox 효과 문구를 이어 붙인다. 없거나 해석할 수 없으면 null. */

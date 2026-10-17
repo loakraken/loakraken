@@ -37,7 +37,8 @@ class GrowthCostTest {
         RefiningPlan.calculate(
             track, RefiningRules.Grade.UPHWA, options(10, 15, true, true), growth);
 
-    // 업화 방어구 11~15 성장 파편: 12,000 + 13,000 + 19,000 + 22,000 + 25,000 = 91,000(일로아 10→11 12,000과 같음)
+    // 업화 방어구 11~15 성장 파편: 12,000 + 13,000 + 19,000 + 22,000 + 25,000 = 91,000(비교 기준 C 10→11 12,000과
+    // 같음)
     assertThat(shard(off).subtract(shard(none))).isEqualByComparingTo("91000");
     // 영지 연구: 11~14단계 × 0.8 → 9,600 + 10,400 + 15,200 + 17,600 + 25,000 = 77,800
     assertThat(shard(on).subtract(shard(none))).isEqualByComparingTo("77800");

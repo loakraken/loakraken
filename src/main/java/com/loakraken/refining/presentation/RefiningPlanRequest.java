@@ -21,11 +21,12 @@ public record RefiningPlanRequest(
     @NotNull @Min(11) @Max(25) @Schema(description = "목표 재련 단계", example = "20") Integer toStage,
     @Schema(description = "매 시도 숨결을 최대 개수로 사용", defaultValue = "false") Boolean useBreath,
     @Schema(
-            description = "책(재봉술·야금술)을 사용할 수 있는 단계에서 사용. 업화 11~20단계·전율 12~19단계(책 증가 = 그 단계 기본 성공률)",
-            defaultValue = "false")
+            description =
+                "책(재봉술·야금술)을 사용할 수 있는 단계에서 사용. 업화 11~20단계·전율 12~19단계(책 증가 = 그 단계 기본 성공률). 생략하면 true(책 포함, 2026-10-11 결정)",
+            defaultValue = "true")
         Boolean useBook,
     @Schema(
-            description = "업화 목표 18단계 이하 재련 골드 20% 감소(공식 성장 지원). 상시 효과라 생략하면 켬(계산 검증 10-10 7절)",
+            description = "업화 목표 18단계 이하 재련 골드 20% 감소(공식 성장 지원). 상시 효과라 생략하면 켬",
             defaultValue = "true")
         Boolean growthSupport,
     @DecimalMin("0")
@@ -37,7 +38,7 @@ public record RefiningPlanRequest(
         Integer currentFailedAttempts,
     @Schema(
             description =
-                "장비 성장(경험치) 비용(단계당 1회 운명의 파편, #200)을 더함. 웹이 토글·표시를 넣고 true를 보낼 때까지 공개 합계가 바뀌지 않게 생략하면 끔(PM-백엔드 10-10 09:10)",
+                "장비 성장(경험치) 비용(단계당 1회 운명의 파편)을 더함. 웹이 토글·표시를 넣고 true를 보낼 때까지 공개 합계가 바뀌지 않게 생략하면 끔",
             defaultValue = "false")
         Boolean growthCost,
     @Schema(
@@ -57,7 +58,7 @@ public record RefiningPlanRequest(
         fromStage,
         toStage,
         Boolean.TRUE.equals(useBreath),
-        Boolean.TRUE.equals(useBook),
+        !Boolean.FALSE.equals(useBook),
         growthSupport == null || growthSupport,
         currentArtisanEnergy == null ? 0 : currentArtisanEnergy.movePointRight(2).intValueExact(),
         currentFailedAttempts == null ? 0 : currentFailedAttempts,

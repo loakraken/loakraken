@@ -30,4 +30,25 @@ public interface MarketCache {
   Optional<MarketBoardScan> findBoardScan(MarketTab tab, Integer tier);
 
   void saveBoardScan(MarketBoardScan scan);
+
+  /** 유물 각인서 시세 스캔(L30). 키 TTL이 지났으면 없다. */
+  default Optional<RelicBookScan> findRelicBooks() {
+    return Optional.empty();
+  }
+
+  default void saveRelicBooks(RelicBookScan scan, java.time.Duration ttl) {}
+
+  /** T4 재련 재료 시세 스캔(L30 후속). 키 TTL이 지났으면 없다. */
+  default Optional<RefiningMaterialScan> findRefiningMaterials() {
+    return Optional.empty();
+  }
+
+  default void saveRefiningMaterials(RefiningMaterialScan scan, java.time.Duration ttl) {}
+
+  /** 생활 분류 전체 시세 스캔(재료 시세 예열). 키 TTL이 지났으면 없다. */
+  default Optional<LifeMaterialScan> findLifeMaterials(int category) {
+    return Optional.empty();
+  }
+
+  default void saveLifeMaterials(int category, LifeMaterialScan scan, java.time.Duration ttl) {}
 }

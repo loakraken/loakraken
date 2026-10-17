@@ -4,7 +4,7 @@
 #
 #   deploy/backup/restore-check.sh backups/daily/loakraken-20261010T193000Z.dump
 #
-# 외부 저장소의 백업을 확인하려면 먼저 rclone으로 내려받는다(docs/ops/backup.md).
+# 외부 저장소의 백업을 확인하려면 먼저 rclone으로 내려받는다(운영 문서 backup).
 set -euo pipefail
 
 DUMP="${1:?덤프 파일 경로가 필요합니다}"

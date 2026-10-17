@@ -56,9 +56,16 @@ class MarketAuctionServiceTest {
   }
 
   @Test
-  void 보석_표는_20칸을_채우고_캐시된_칸은_다시_부르지_않으며_전일_대비를_준다() {
+  void 보석_표는_요청마다_5칸씩_채우고_캐시된_칸은_다시_부르지_않으며_전일_대비를_준다() {
     var tenFire = MarketAuctionService.gemQuery("겁화", 10, 1).key();
     port.previous.put(tenFire, 2_000_000L);
+    // 첫 요청: 5칸만 채우고 나머지 15칸은 PENDING(#526).
+    var firstVisit = service.gems();
+    assertThat(port.searches).isEqualTo(5);
+    assertThat(
+            firstVisit.stream().filter(cell -> cell.status() == MarketAuctionService.Status.READY))
+        .hasSize(5);
+    for (int visit = 2; visit <= 4; visit++) service.gems();
     var cells = service.gems();
     assertThat(cells).hasSize(20);
     assertThat(cells.get(0).itemName()).isEqualTo("10레벨 겁화의 보석");
@@ -97,19 +104,22 @@ class MarketAuctionServiceTest {
   }
 
   @Test
-  void 장신구_표는_한_요청에_최대_24칸만_채운다() {
+  void 장신구_표는_한_요청에_최대_5칸만_채운다() {
     var slots = service.accessories(Grade.ANCIENT, Role.DEALER, 70);
     assertThat(slots).hasSize(3);
     assertThat(slots.get(0).cells()).hasSize(8);
     assertThat(slots.get(0).cells().get(0).label()).isEqualTo("상상");
     assertThat(slots.get(0).cells().get(5).optionLabels()).containsExactly("적주피 하", "추피 상");
+    assertThat(port.searches).isEqualTo(5);
+    // 딜러 표 24칸은 5번째 요청에서 다 찬다(5 × 4 + 4).
+    for (int visit = 2; visit <= 5; visit++) service.accessories(Grade.ANCIENT, Role.DEALER, 70);
     assertThat(port.searches).isEqualTo(24);
-    // 서포터는 귀걸이가 무공% 단일 3칸이라 19칸이다.
+    // 서포터는 귀걸이가 무공% 단일 3칸이라 19칸이다(요청마다 5칸).
     var support = service.accessories(Grade.ANCIENT, Role.SUPPORT, 70);
     assertThat(support.get(1).cells())
         .extracting(MarketAuctionService.AccessoryCell::label)
         .containsExactly("상", "중", "하");
-    assertThat(port.searches).isEqualTo(24 + 19);
+    assertThat(port.searches).isEqualTo(24 + 5);
   }
 
   @Test

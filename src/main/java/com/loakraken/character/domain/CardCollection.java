@@ -13,8 +13,8 @@ import java.util.regex.Pattern;
 /**
  * 원정대 카드 기록(F-6, card-record-v1).
  *
- * <p>공식 API에는 카드 도감이 없다. 일로아·로아와·클로아처럼 원정대 캐릭터가 검색될 때 장착한 카드를 기록하고, 카드별 최고 각성으로 원정대가 보유한 카드를 추정한다.
- * 카드와 각성은 원정대가 공유하므로 기록은 실제 보유의 하한이다. 세트 구성원과 효과 문구는 공식 응답의 CardSlots에서 학습한다.
+ * <p>공식 API에는 카드 도감이 없다. 외부 서비스처럼 원정대 캐릭터가 검색될 때 장착한 카드를 기록하고, 카드별 최고 각성으로 원정대가 보유한 카드를 추정한다. 카드와
+ * 각성은 원정대가 공유하므로 기록은 실제 보유의 하한이다. 세트 구성원과 효과 문구는 공식 응답의 CardSlots에서 학습한다.
  */
 public final class CardCollection {
   public static final String RULE_VERSION = "card-record-v1";
@@ -33,7 +33,7 @@ public final class CardCollection {
     FIRE
   }
 
-  /** 일로아 원정대 카드 기록의 속성 6칸. 순서는 성·암·뇌·토·수·화. */
+  /** 원정대 카드 기록의 속성 6칸. 순서는 성·암·뇌·토·수·화. */
   public static final List<ElementSet> DEALER_SETS =
       List.of(
           new ElementSet(Element.LIGHT, "세상을 구하는 빛"),

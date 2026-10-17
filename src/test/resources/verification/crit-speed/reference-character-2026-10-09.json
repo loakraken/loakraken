@@ -1,0 +1,50 @@
+{
+  "model": "crit-speed",
+  "ruleVersion": "crit-speed-v2",
+  "character": "기준 캐릭터",
+  "className": "블레이드",
+  "observed": {
+    "refs": "2026-10-09 01:00~03:00 KST (레퍼런스팀, 볼트 40 레퍼런스/계산 교차 확인 값.md)",
+    "kraken": "2026-10-09T01:10:09+09:00 (crit-speed 응답 fetchedAt, 공식 armory 캐시)"
+  },
+  "assumptions": {},
+  "expected": [
+    {
+      "field": "crit.totalRate",
+      "value": 77.21,
+      "unit": "%",
+      "source": "REF",
+      "sites": ["비교 기준 C 스펙 계산", "비교 기준 B 효율표"],
+      "agreement": "두 비교 기준 같은 값",
+      "kraken": 77.21,
+      "status": "MATCH"
+    },
+    {
+      "field": "critDamage",
+      "value": 208.40,
+      "unit": "%",
+      "source": "REF",
+      "sites": ["비교 기준 C", "비교 기준 B"],
+      "agreement": "두 비교 기준 같은 값",
+      "derivation": "기본 200% + 팔찌 '치명타 피해 +8.40%'. 일격 Lv.2의 '방향성 공격 스킬의 치명타 피해 +32%'는 스킬 한정이라 제외",
+      "kraken": null,
+      "status": "NOT_PROVIDED"
+    },
+    {
+      "field": "attack",
+      "value": { "base": 187350, "bonus": 10507, "total": 197857 },
+      "source": "OFFICIAL_DISPLAY",
+      "sites": ["비교 기준 D", "비교 기준 C"],
+      "note": "공식 공격력 Tooltip 값. crit-speed 응답 필드는 아니며 전투력 모델 표본과 같은 원천이다"
+    }
+  ],
+  "krakenCritSources": [
+    { "category": "STAT", "name": "치명 576", "value": 20.61 },
+    { "category": "ENGRAVING", "name": "아드레날린", "value": 18.50 },
+    { "category": "ARK_PASSIVE", "name": "예리한 감각 Lv.2", "value": 8.0 },
+    { "category": "ARK_PASSIVE", "name": "일격 Lv.2", "value": 20.0 },
+    { "category": "ARK_PASSIVE", "name": "달인 Lv.1", "value": 7.0 },
+    { "category": "ACCESSORY", "name": "반지", "value": 1.55 },
+    { "category": "ACCESSORY", "name": "반지", "value": 1.55 }
+  ]
+}

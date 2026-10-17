@@ -15,6 +15,7 @@ public class CharacterQueryService {
   private final CharacterMetrics metrics;
   private final CharacterHistoryService history;
   private final CharacterCardService cards;
+  private final CharacterStopList stopList;
   private final SingleFlight<CharacterResult> searches = new SingleFlight<>();
   private final SingleFlight<CharacterSiblingsResult> siblingQueries = new SingleFlight<>();
 
@@ -25,7 +26,8 @@ public class CharacterQueryService {
       CharacterSnapshotCommandService snapshots,
       CharacterMetrics metrics,
       CharacterHistoryService history,
-      CharacterCardService cards) {
+      CharacterCardService cards,
+      CharacterStopList stopList) {
     this.detailsPort = detailsPort;
     this.cache = cache;
     this.clock = clock;
@@ -33,6 +35,7 @@ public class CharacterQueryService {
     this.metrics = metrics;
     this.history = history;
     this.cards = cards;
+    this.stopList = stopList;
   }
 
   public CharacterResult search(SearchCharacterCommand command) {
@@ -83,8 +86,13 @@ public class CharacterQueryService {
                     () -> {
                       var fetched = remembering(name, () -> detailsPort.fetch(name));
                       var fetchedAt = Instant.now(clock);
+                      var profile = fetched.details().profile();
+                      // 처리정지 목록의 캐릭터는 응답만 주고 기록하지 않는다(#351).
+                      boolean recordable;
                       try {
-                        snapshots.save(fetched, fetchedAt);
+                        recordable =
+                            !stopList.contains(profile.characterName(), profile.serverName());
+                        if (recordable) snapshots.save(fetched, fetchedAt);
                       } catch (DataAccessException | TransactionException exception) {
                         throw new CharacterException(
                             CharacterErrorCode.CHARACTER_STORAGE_UNAVAILABLE);
@@ -93,8 +101,10 @@ public class CharacterQueryService {
                           new CharacterResult(
                               fetched.details(), fetchedAt, Instant.now(clock).plus(cache.ttl()));
                       cache.save(name, result);
-                      history.record(fetched.details().profile(), fetchedAt);
-                      cards.record(fetched.details(), fetchedAt);
+                      if (recordable) {
+                        history.record(profile, fetchedAt);
+                        cards.record(fetched.details(), fetchedAt);
+                      }
                       return result;
                     }));
   }
@@ -115,8 +125,11 @@ public class CharacterQueryService {
                       var result =
                           new CharacterResult(fetched.details(), now, now.plus(cache.ttl()));
                       cache.saveArmory(name, result);
-                      history.record(fetched.details().profile(), now);
-                      cards.record(fetched.details(), now);
+                      var profile = fetched.details().profile();
+                      if (stopList.recordable(profile.characterName(), profile.serverName())) {
+                        history.record(profile, now);
+                        cards.record(fetched.details(), now);
+                      }
                       return result;
                     }));
   }

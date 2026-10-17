@@ -20,6 +20,12 @@ import org.springframework.stereotype.Component;
 @Component
 public class LostArkRequestGate {
   private static final ThreadLocal<Integer> RESERVE = new ThreadLocal<>();
+  private static final ThreadLocal<Boolean> CHARGE_CLIENT = new ThreadLocal<>();
+
+  /** 공식 호출 로그 로거 이름. 로컬 프로필(application-local)에서만 DEBUG다. */
+  public static final String CALL_LOGGER = "loakraken.official-calls";
+
+  private static final org.slf4j.Logger CALLS = org.slf4j.LoggerFactory.getLogger(CALL_LOGGER);
   private final Clock clock;
   private final int budget;
   private final Semaphore permits;
@@ -54,10 +60,44 @@ public class LostArkRequestGate {
 
   /**
    * 공식 호출 하나를 허가한다. 사용자 요청이면 먼저 그 클라이언트의 분당 공식 호출 한도(#108)를 센다. 넘으면 CLIENT_RATE_LIMITED이고 공유 예산은 쓰지
-   * 않는다. {@link #withReserve} 안의 호출(경매 칸 채우기 등)은 사용자 몫을 남기는 쪽으로 이미 제한되므로 클라이언트 한도에 매기지 않는다.
+   * 않는다. {@link #withReserve} 안의 호출(수집기·예열 등 백그라운드)은 사용자 몫을 남기는 쪽으로 이미 제한되므로 클라이언트 한도에 매기지 않는다. 사용자
+   * 요청 중의 reserve 호출(경매 칸 채우기·N13 검색·L19 불러오기)은 {@link #withUserReserve}로 감싸 매긴다.
    */
   public void acquire() {
-    if (currentReserve() == 0) clients.chargeOfficial();
+    acquire(null);
+  }
+
+  /**
+   * {@link #acquire()}와 같고, 허가되면 공식 호출 로그(로거 {@value #CALL_LOGGER}, DEBUG)에 한 줄 남긴다. 로컬 프로필만 DEBUG로
+   * 켜고 운영은 꺼져 있다. 줄에는 호출 종류와 경로(백그라운드·사용자)만 있고 캐릭터 이름·주소·키는 없다.
+   */
+  public void acquire(LostArkMetrics.Endpoint endpoint) {
+    acquire(endpoint, null);
+  }
+
+  /**
+   * {@link #acquire(LostArkMetrics.Endpoint)}에 호출 대상(거래소 분류·품목 이름처럼 게임 데이터만, 캐릭터 이름은 넣지 않음)을 덧붙인다.
+   * 시세 화면 한 번 열기의 호출 수를 품목·분류별로 나누려는 것이다.
+   */
+  public void acquire(LostArkMetrics.Endpoint endpoint, String target) {
+    admit();
+    if (CALLS.isDebugEnabled())
+      CALLS.debug(
+          "official-call endpoint={} origin={} reserve={}{}",
+          endpoint == null ? "UNKNOWN" : endpoint.name(),
+          origin(),
+          currentReserve(),
+          target == null ? "" : " " + target);
+  }
+
+  /** BACKGROUND: 예열·수집기(reserve, 클라이언트 한도 안 셈), USER_RESERVE: 사용자 요청 중 reserve 호출, USER: 사용자 요청. */
+  private static String origin() {
+    if (currentReserve() == 0) return "USER";
+    return Boolean.TRUE.equals(CHARGE_CLIENT.get()) ? "USER_RESERVE" : "BACKGROUND";
+  }
+
+  private void admit() {
+    if (currentReserve() == 0 || Boolean.TRUE.equals(CHARGE_CLIENT.get())) clients.chargeOfficial();
     if (!permits.tryAcquire()) reject(GateEvent.CONCURRENCY_REJECT);
     GateStore.Admission admission;
     try {
@@ -105,6 +145,27 @@ public class LostArkRequestGate {
     }
   }
 
+  /**
+   * 사용자 요청 하나가 공식 호출을 여러 번 일으키는 경로(원정대 전투력 불러오기 L19 등). {@link #withReserve}처럼 공유 예산에 사용자 몫
+   * reserve를 남기면서, 그 요청 클라이언트의 분당 공식 호출 한도(OFFICIAL)에도 호출마다 매긴다(보안 감사 10-12: reserve 안 호출이 클라이언트
+   * 한도를 벗어나던 문제). 같은 스레드 전용이다.
+   */
+  public <T> T withUserReserve(int reserve, Supplier<T> work) {
+    Boolean previous = CHARGE_CLIENT.get();
+    CHARGE_CLIENT.set(Boolean.TRUE);
+    try {
+      return withReserve(reserve, work);
+    } finally {
+      if (previous == null) CHARGE_CLIENT.remove();
+      else CHARGE_CLIENT.set(previous);
+    }
+  }
+
+  /** 지금 요청 클라이언트를 버킷에 한 번 센다(N13 캐시 미스 검색 등). 넘으면 CLIENT_RATE_LIMITED + Retry-After. */
+  public void chargeClient(ClientLimiter.Bucket bucket) {
+    clients.charge(bucket);
+  }
+
   public void release() {
     permits.release();
   }
@@ -134,6 +195,11 @@ public class LostArkRequestGate {
 
   private void reject(GateEvent reason) {
     metrics.gate(reason);
-    throw new BusinessException(LostArkErrorCode.LOST_ARK_RATE_LIMITED);
+    throw new LostArkRateLimitedException(
+        switch (reason) {
+          case UPSTREAM_BACKOFF_REJECT -> LostArkRateLimitedException.Cause.GATE_BACKOFF;
+          case CONCURRENCY_REJECT -> LostArkRateLimitedException.Cause.GATE_CONCURRENCY;
+          default -> LostArkRateLimitedException.Cause.GATE_BUDGET;
+        });
   }
 }

@@ -21,7 +21,8 @@ class CharacterPopularServiceTest {
               Duration.ofMinutes(10),
               Duration.ofDays(8)),
           new CharacterMetrics(new SimpleMeterRegistry()),
-          Clock.systemUTC());
+          Clock.systemUTC(),
+          openStopList());
 
   @Test
   void 클라이언트_키는_같은_날_같은_입력이면_같고_날이_바뀌면_달라지며_원문을_담지_않는다() {
@@ -30,7 +31,8 @@ class CharacterPopularServiceTest {
     assertThat(service.clientKey(day, "203.0.113.7", "루페온", "모험가")).isEqualTo(first);
     assertThat(service.clientKey(day, "203.0.113.8", "루페온", "모험가")).isNotEqualTo(first);
     assertThat(service.clientKey(day, "203.0.113.7", "루페온", "다른캐")).isNotEqualTo(first);
-    assertThat(first).hasSize(32).doesNotContain("203", "모험가");
+    // 키는 무작위 비밀값이 섞인 해시라 "203" 같은 짧은 숫자는 우연히 들어갈 수 있다. 원문(IP 전체·이름)이 없는지만 본다.
+    assertThat(first).hasSize(32).doesNotContain("203.0.113.7", "모험가", "루페온");
     // 같은 /64의 IPv6는 같은 클라이언트, IPv4-mapped는 IPv4와 같다(PM-백엔드 #112 P1-1).
     assertThat(service.clientKey(day, "2001:db8:1:2::10", "루페온", "모험가"))
         .isEqualTo(service.clientKey(day, "2001:db8:1:2:ffff::1", "루페온", "모험가"))
@@ -51,5 +53,10 @@ class CharacterPopularServiceTest {
         .isEqualTo(CharacterPopularService.Period.LAST_7_DAYS);
     assertThatThrownBy(() -> CharacterPopularService.Period.of("1d"))
         .isInstanceOf(IllegalArgumentException.class);
+  }
+
+  /** 처리정지 목록이 비어 있음(#351). */
+  static CharacterStopList openStopList() {
+    return new CharacterStopList(org.mockito.Mockito.mock(CharacterPublicSummaryPort.class));
   }
 }

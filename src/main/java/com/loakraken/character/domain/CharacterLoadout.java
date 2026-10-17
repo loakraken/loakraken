@@ -73,10 +73,79 @@ public record CharacterLoadout(
       Rune rune,
       List<SkillGemEffect> gemEffects,
       AttackType attackType,
-      String category) {
+      String category,
+      List<String> titleLines,
+      List<String> infoLines,
+      List<TripodOption> tripodOptions) {
+    /**
+     * titleLines: 공식 Tooltip 제목 줄(스킬 종류·재사용 대기시간·분류, #299). infoLines: 현재 레벨 정보 줄(PvE·스킬 레벨·마나·부위
+     * 파괴·무력화·공격 타입·슈퍼아머 등 원문 순서). 이전 캐시면 빈 목록.
+     */
     public Skill {
       tripods = tripods == null ? List.of() : List.copyOf(tripods);
       gemEffects = gemEffects == null ? List.of() : List.copyOf(gemEffects);
+      titleLines = titleLines == null ? List.of() : List.copyOf(titleLines);
+      infoLines = infoLines == null ? List.of() : List.copyOf(infoLines);
+      tripodOptions = tripodOptions == null ? List.of() : List.copyOf(tripodOptions);
+    }
+
+    public Skill(
+        String name,
+        String icon,
+        Integer level,
+        String type,
+        Integer partBreakLevel,
+        Boolean counter,
+        List<Tripod> tripods,
+        Rune rune,
+        List<SkillGemEffect> gemEffects,
+        AttackType attackType,
+        String category,
+        List<String> titleLines,
+        List<String> infoLines) {
+      this(
+          name,
+          icon,
+          level,
+          type,
+          partBreakLevel,
+          counter,
+          tripods,
+          rune,
+          gemEffects,
+          attackType,
+          category,
+          titleLines,
+          infoLines,
+          List.of());
+    }
+
+    public Skill(
+        String name,
+        String icon,
+        Integer level,
+        String type,
+        Integer partBreakLevel,
+        Boolean counter,
+        List<Tripod> tripods,
+        Rune rune,
+        List<SkillGemEffect> gemEffects,
+        AttackType attackType,
+        String category) {
+      this(
+          name,
+          icon,
+          level,
+          type,
+          partBreakLevel,
+          counter,
+          tripods,
+          rune,
+          gemEffects,
+          attackType,
+          category,
+          List.of(),
+          List.of());
     }
 
     public Skill(
@@ -118,12 +187,16 @@ public record CharacterLoadout(
     }
   }
 
-  /** 스킬 Tooltip의 "공격 타입". 백 어택은 치명타 적중률 +10%p(클로아 스킬별 치명 확률과 같은 규칙). */
+  /** 스킬 Tooltip의 "공격 타입". 백 어택은 치명타 적중률 +10%p(비교 기준의 스킬별 치명 확률과 같은 규칙). */
   public enum AttackType {
     BACK_ATTACK,
     HEAD_ATTACK,
     NONE
   }
+
+  /** 트라이포드 선택지 하나(#307): 공식 Tripods 전체(선택 여부 포함, 공식 순서). 효과 문장은 tripods[]의 선택된 것만 둔다. */
+  public record TripodOption(
+      Integer tier, Integer slot, String name, String icon, boolean selected) {}
 
   /** effect: 공식 트라이포드 Tooltip 효과 문구(태그 제거). 갱신 전 캐시나 해석할 수 없으면 null(#168). */
   public record Tripod(Integer tier, Integer slot, String name, String icon, String effect) {
@@ -168,8 +241,43 @@ public record CharacterLoadout(
       List<String> tradeLines,
       RefineExp refineExp,
       List<String> extraLines,
-      Integer advancedRefineLevel) {
-    public static final String PARSER_VERSION = "equipment-tooltip-v5";
+      Integer advancedRefineLevel,
+      List<String> extraLineSections) {
+    public static final String PARSER_VERSION = "equipment-tooltip-v6";
+
+    /** 나머지 줄의 앞 섹션 없이(v5 이전 값). */
+    public EquipmentDetail(
+        Integer refineLevel,
+        Integer quality,
+        Integer itemLevel,
+        Integer tier,
+        PointBonus arkPassivePoint,
+        List<EffectGroup> effects,
+        List<StoneEngraving> stoneEngravings,
+        List<PolishEffect> polishEffects,
+        List<BraceletEffect> braceletEffects,
+        String titleLine,
+        List<String> tradeLines,
+        RefineExp refineExp,
+        List<String> extraLines,
+        Integer advancedRefineLevel) {
+      this(
+          refineLevel,
+          quality,
+          itemLevel,
+          tier,
+          arkPassivePoint,
+          effects,
+          stoneEngravings,
+          polishEffects,
+          braceletEffects,
+          titleLine,
+          tradeLines,
+          refineExp,
+          extraLines,
+          advancedRefineLevel,
+          List.of());
+    }
 
     /** 상급 재련 단계 없이(v4 이전 값). */
     public EquipmentDetail(
@@ -206,6 +314,7 @@ public record CharacterLoadout(
     public EquipmentDetail {
       tradeLines = tradeLines == null ? List.of() : List.copyOf(tradeLines);
       extraLines = extraLines == null ? List.of() : List.copyOf(extraLines);
+      extraLineSections = extraLineSections == null ? List.of() : List.copyOf(extraLineSections);
       effects = effects == null ? List.of() : List.copyOf(effects);
       stoneEngravings = stoneEngravings == null ? List.of() : List.copyOf(stoneEngravings);
       polishEffects = polishEffects == null ? List.of() : List.copyOf(polishEffects);
@@ -289,15 +398,31 @@ public record CharacterLoadout(
   }
 
   /** extraLines: 공식 Tooltip의 효과 외 줄(보석 레벨·조율·분해불가·획득처 등). */
+  /** titleLine·itemLevel·tier·tradeLines는 공식 보석 Tooltip(#285, 툴팁 표시용). 없으면 null·빈 목록. */
   public record Gem(
       Integer slot,
       String name,
       String icon,
       Integer level,
       String grade,
-      List<String> extraLines) {
+      List<String> extraLines,
+      String titleLine,
+      Integer itemLevel,
+      Integer tier,
+      List<String> tradeLines) {
     public Gem {
       extraLines = extraLines == null ? List.of() : List.copyOf(extraLines);
+      tradeLines = tradeLines == null ? List.of() : List.copyOf(tradeLines);
+    }
+
+    public Gem(
+        Integer slot,
+        String name,
+        String icon,
+        Integer level,
+        String grade,
+        List<String> extraLines) {
+      this(slot, name, icon, level, grade, extraLines, null, null, null, List.of());
     }
 
     public Gem(Integer slot, String name, String icon, Integer level, String grade) {
@@ -383,6 +508,7 @@ public record CharacterLoadout(
   }
 
   /** core: 코어 Tooltip 해석(arkgrid-tooltip-v1). 해석할 수 없으면 null. */
+  /** lines: 공식 코어 Tooltip의 등급 줄·귀속·거래·나머지 줄(#288, item-tooltips 전용). */
   public record GridSlot(
       Integer index,
       String icon,
@@ -390,9 +516,21 @@ public record CharacterLoadout(
       Integer point,
       String grade,
       List<GridGem> gems,
-      CoreDetail core) {
+      CoreDetail core,
+      TooltipLines lines) {
     public GridSlot {
       gems = gems == null ? List.of() : List.copyOf(gems);
+    }
+
+    public GridSlot(
+        Integer index,
+        String icon,
+        String name,
+        Integer point,
+        String grade,
+        List<GridGem> gems,
+        CoreDetail core) {
+      this(index, icon, name, point, grade, gems, core, null);
     }
 
     public GridSlot(
@@ -419,9 +557,26 @@ public record CharacterLoadout(
     }
   }
 
-  /** detail: 젬 Tooltip 해석. 해석할 수 없으면 null. */
+  /** 툴팁 표시용 공식 Tooltip 줄(#288). titleLine은 등급 줄, tradeLines는 귀속·거래, extraLines는 나머지 줄을 원문 순서로. */
+  public record TooltipLines(String titleLine, List<String> tradeLines, List<String> extraLines) {
+    public TooltipLines {
+      tradeLines = tradeLines == null ? List.of() : List.copyOf(tradeLines);
+      extraLines = extraLines == null ? List.of() : List.copyOf(extraLines);
+    }
+  }
+
+  /** detail: 젬 Tooltip 해석. 해석할 수 없으면 null. lines: 툴팁 표시용 줄(#288, item-tooltips 전용). */
   public record GridGem(
-      Integer index, String icon, Boolean active, String grade, GemDetail detail) {
+      Integer index,
+      String icon,
+      Boolean active,
+      String grade,
+      GemDetail detail,
+      TooltipLines lines) {
+    public GridGem(Integer index, String icon, Boolean active, String grade, GemDetail detail) {
+      this(index, icon, active, grade, detail, null);
+    }
+
     public GridGem(Integer index, String icon, Boolean active, String grade) {
       this(index, icon, active, grade, null);
     }

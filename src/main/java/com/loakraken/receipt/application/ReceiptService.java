@@ -14,6 +14,7 @@ import com.loakraken.market.application.MaterialUnitPriceService;
 import com.loakraken.market.domain.MaterialPriceBasis;
 import com.loakraken.receipt.domain.EquipmentReceipt;
 import com.loakraken.receipt.domain.GemReceipt;
+import com.loakraken.receipt.domain.OptimalStageCache;
 import com.loakraken.refining.application.RefiningPlanService;
 import java.math.BigDecimal;
 import java.time.Clock;
@@ -40,6 +41,7 @@ public class ReceiptService {
   private final RefiningPlanService refining;
   private final MaterialUnitPriceService materials;
   private final MarketAuctionService auctions;
+  private final OptimalStageCache optimalCache;
   private final Clock clock;
 
   public ReceiptService(
@@ -48,12 +50,14 @@ public class ReceiptService {
       RefiningPlanService refining,
       MaterialUnitPriceService materials,
       MarketAuctionService auctions,
+      OptimalStageCache optimalCache,
       Clock clock) {
     this.characters = characters;
     this.cache = cache;
     this.refining = refining;
     this.materials = materials;
     this.auctions = auctions;
+    this.optimalCache = optimalCache;
     this.clock = clock;
   }
 
@@ -91,10 +95,10 @@ public class ReceiptService {
   }
 
   public Receipt receipt(String characterName) {
-    return receipt(characterName, false);
+    return receipt(characterName, true);
   }
 
-  /** assumeBook: 책(재봉술·야금술) 효과 항상 적용 가정. 기본 false(책 제외). */
+  /** assumeBook: 책(재봉술·야금술) 효과 적용 가정. API 기본 true(책 포함, 2026-10-11 결정), false면 책 제외. */
   public Receipt receipt(String characterName, boolean assumeBook) {
     var command = new SearchCharacterCommand(characterName);
     var siblings = characters.siblings(command).siblings();
@@ -155,6 +159,9 @@ public class ReceiptService {
     int arkGridGems = 0;
     int bracelets = 0;
     int accessories = 0;
+    // 같은 시세·트랙·단계는 원정대 전체에서 한 번만 계산한다(#284 회차별 최적 계산 비용).
+    var stageCache =
+        new java.util.HashMap<String, java.util.Optional<EquipmentReceipt.StageCost>>();
     for (var sibling : roster) {
       var loadout = loadouts.get(sibling.characterName());
       if (loadout == null) {
@@ -169,7 +176,13 @@ public class ReceiptService {
       }
       var equipment =
           EquipmentReceipt.calculate(
-              rules, loadout.equipment(), unitPrices, assumeBook, refining.growthCosts());
+              rules,
+              loadout.equipment(),
+              unitPrices,
+              assumeBook,
+              refining.growthCosts(),
+              stageCache,
+              optimalCache);
       equipmentGold = equipmentGold.add(equipment.gold());
       characterReceipts.add(
           new CharacterReceipt(
@@ -260,8 +273,8 @@ public class ReceiptService {
   public static List<String> assumptions(boolean assumeBook) {
     return List.of(
         assumeBook
-            ? "장비는 업화 +10·전율 +11부터 현재 단계까지 단계마다 숨결·책 사용 조합 중 가장 싼 쪽의 기대 비용을 더합니다. 책 효과는 항상 적용된다고 가정합니다."
-            : "장비는 업화 +10·전율 +11부터 현재 단계까지 단계마다 숨결 사용 여부 중 더 싼 쪽의 기대 비용을 더합니다. 책(재봉술·야금술)은 게임 문구 '특수 재료 별 효과는 확률에 따라 적용되지 않을 수 있습니다'의 확률이 공개되지 않아 넣지 않습니다.",
+            ? "장비는 업화 +10·전율 +11부터 현재 단계까지 시도(회차)마다 숨결·책 사용 여부를 골라 기대 비용이 가장 작아지는 전략의 비용을 더합니다. 책 효과는 항상 적용된다고 가정합니다."
+            : "장비는 업화 +10·전율 +11부터 현재 단계까지 시도(회차)마다 숨결 사용 여부를 골라 기대 비용이 가장 작아지는 전략의 비용을 더합니다. 책(재봉술·야금술)은 게임 문구 '특수 재료 별 효과는 확률에 따라 적용되지 않을 수 있습니다'의 확률이 공개되지 않아 넣지 않습니다.",
         "업화 18단계 이하는 성장 지원을 적용합니다.",
         "장비 성장(경험치) 비용은 단계마다 한 번 드는 운명의 파편을 더합니다(2026-10-10 확인). 업화 목표 11~14단계는 영지 연구 '티어 4 Lv.1590 장비 11~14단계 재련 필요 경험치 20% 감소'를 적용합니다. 실링은 넣지 않습니다.",
         "재료는 현재 최저가 1개당 시세로 환산합니다.",

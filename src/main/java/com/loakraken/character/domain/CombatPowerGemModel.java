@@ -83,6 +83,30 @@ public final class CombatPowerGemModel {
       return product.multiply(BigDecimal.ONE.add(baseAttack.divide(HUNDRED)), MATH);
     }
 
+    /** 칸별 레벨(levels, 없는 칸은 지금 레벨)로 바꾼 상태의 기본 공격력 %(백분율). 계산할 수 없으면 null(#341). */
+    public BigDecimal baseAttackPct(Map<Integer, Integer> levels) {
+      if (unsupportedReason != null) return null;
+      var total = otherBaseAttackPct;
+      for (var slot : slots.values()) {
+        var level = slot.tier().level(levels.getOrDefault(slot.slot(), slot.level()));
+        if (level == null || level.baseAttackPct() == null) return null;
+        total = total.add(level.baseAttackPct());
+      }
+      return total;
+    }
+
+    /** 지금 세팅의 기본 공격력 %(보석 + 스톤 레벨 보너스 + 팔 보호구, 백분율). 계산할 수 없으면 null(재련 모델 #319가 같은 값을 쓴다). */
+    public BigDecimal currentBaseAttackPct() {
+      if (unsupportedReason != null) return null;
+      var total = otherBaseAttackPct;
+      for (var slot : slots.values()) {
+        var level = slot.tier().level(slot.level());
+        if (level == null || level.baseAttackPct() == null) return null;
+        total = total.add(level.baseAttackPct());
+      }
+      return total;
+    }
+
     /** 칸 slot을 level로 바꿀 수 있는지. 안 되면 이유 문장, 되면 null. */
     public String cannotSet(int slot, int level) {
       if (unsupportedReason != null) return unsupportedReason;
@@ -151,6 +175,19 @@ public final class CombatPowerGemModel {
       return new Model(
           slots, other, "확인하지 않은 기본 공격력 % 출처(「" + unknown.getFirst() + "」)가 있어 보석 변화는 계산하지 않습니다.");
     return new Model(slots, other, null);
+  }
+
+  /** 어빌리티 스톤 "[레벨 보너스] 기본 공격력 +n%"(공식 문구) 합. 없으면 0(#344). */
+  public static BigDecimal stoneBonusPct(CharacterLoadout loadout) {
+    var total = BigDecimal.ZERO;
+    for (var item : loadout.equipment()) {
+      if (item == null || item.detail() == null || !STONE.equals(item.type())) continue;
+      for (var line : lines(item.detail())) {
+        var value = decimal(STONE_BONUS, line);
+        if (value != null) total = total.add(value);
+      }
+    }
+    return total;
   }
 
   private static List<String> lines(CharacterLoadout.EquipmentDetail detail) {

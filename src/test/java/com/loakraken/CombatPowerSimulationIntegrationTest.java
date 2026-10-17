@@ -86,36 +86,86 @@ class CombatPowerSimulationIntegrationTest {
     assertThat(response.statusCode()).isEqualTo(200);
     ApiContractFixture.write("character-combat-power-simulate.json", response.body());
     // 다른 사이트 이름·간접 표현 금지(#261).
-    assertThat(response.body()).doesNotContain(SiteNames.FORBIDDEN);
+    SiteNames.assertAbsent(response.body());
     var data = mapper.readTree(response.body()).path("data");
-    assertThat(data.path("ruleVersion").asText()).isEqualTo("combat-power-sim-v1");
+    assertThat(data.path("ruleVersion").asText()).isEqualTo("combat-power-sim-v8");
     // 시뮬레이션이 읽은 캐시가 검색 응답과 같은지 웹이 비교한다(PM-프론트 18:31).
     assertThat(data.path("fetchedAt").asText())
         .isEqualTo(mapper.readTree(search.body()).at("/data/fetchedAt").asText());
     // 보석 8 → 10(뒤의 변경이 이김): 3000 × (1.0704/1.0576) × (1 + 3.70%)/(1 + 3.30%) = 3048.07.
+    // 이어서 무기 품질 90 → 100(추가 피해 10 + 20 × (q/100)²): × 1.30/1.262 = 3139.85.
     // 기본 공격력 % = 보석 0.80 → 1.20 + 스톤 레벨 보너스 1.50 + 완갑 추가 효과 1.00.
+    // 이어서 목걸이 연마 추가 피해 +1.60% → +2.60%(#325, c = x/1.3): × 1.02/(1 + 0.016/1.3) = 3163.70.
     assertThat(response.body())
         .contains(
-            "\"before\":3000.00", "\"after\":3048.07", "\"delta\":48.07", "\"deltaPercent\":1.602");
+            "\"before\":3000.00",
+            "\"after\":3163.70",
+            "\"delta\":163.70",
+            "\"deltaPercent\":5.457");
     assertThat(data.path("modelBefore").isNull()).isTrue();
     assertThat(data.path("partial").asBoolean()).isTrue();
     // 같은 보석 slot은 뒤의 변경(10)이 이기고 자리는 처음 나온 곳을 지킨다.
     var contributions = data.path("contributions");
     assertThat(contributions.size()).isEqualTo(9);
-    assertThat(data.path("unsupportedCount").asInt()).isEqualTo(8);
+    assertThat(data.path("unsupportedCount").asInt()).isEqualTo(6);
     assertThat(contributions.at("/0/kind").asText()).isEqualTo("GEM_LEVEL");
     assertThat(contributions.at("/0/from").asText()).isEqualTo("8");
     assertThat(contributions.at("/0/to").asText()).isEqualTo("10");
     assertThat(contributions.at("/0/status").asText()).isEqualTo("OK");
     assertThat(contributions.at("/0/delta").decimalValue()).isEqualByComparingTo("48.07");
     assertThat(contributions.at("/1/from").asText()).isEqualTo("20");
+    assertThat(contributions.at("/2/status").asText()).isEqualTo("OK");
+    assertThat(contributions.at("/2/delta").decimalValue()).isEqualByComparingTo("91.78");
+    // 연마 줄 교체(L31-b): 공식 수치표의 상 등급 값으로 바꾼다.
+    assertThat(contributions.at("/3/kind").asText()).isEqualTo("POLISH");
+    assertThat(contributions.at("/3/status").asText()).isEqualTo("OK");
+    assertThat(contributions.at("/3/from").asText()).isEqualTo("추가 피해 +1.60%");
+    assertThat(contributions.at("/3/to").asText()).isEqualTo("추가 피해 +2.60%");
+    assertThat(contributions.at("/3/delta").decimalValue()).isEqualByComparingTo("23.85");
     for (int i = 1; i < contributions.size(); i++) {
+      if (i == 2 || i == 3) continue;
       assertThat(contributions.get(i).path("status").asText()).isEqualTo("UNSUPPORTED");
       assertThat(contributions.get(i).path("delta").isNull()).isTrue();
     }
     for (var item : contributions)
       assertThat(item.path("basis").asText()).doesNotContain("로아", "lo4", "아이스펭");
     verify(detailsPort, times(1)).fetch(anyString());
+  }
+
+  @Test
+  void 무기_품질과_각인을_순서대로_계산한다() throws Exception {
+    // #275: 계산 검증 표본 c02(공식 전투력 11,157.79)와 같은 세팅. 무기 100→90 = 10,831.64, 이어서 원한 4→3.
+    // #344: 예리한 둔기 4→3(표 17.36 → 16.62%)도 계산한다: 10,764.50 × 1.1662/1.1736 = 10,696.63.
+    when(detailsPort.fetch(anyString()))
+        .thenAnswer(invocation -> fetchedEquipment(invocation.getArgument(0)));
+    assertThat(get("/api/v1/characters/search?characterName=" + encode("시뮬장비")).statusCode())
+        .isEqualTo(200);
+    var response =
+        simulate(
+            "시뮬장비",
+            """
+            [
+              {"kind": "EQUIPMENT_QUALITY", "index": 0, "quality": 90},
+              {"kind": "ENGRAVING_LEVEL", "name": "원한", "level": 3},
+              {"kind": "EQUIPMENT_QUALITY", "index": 1, "quality": 90},
+              {"kind": "ENGRAVING_LEVEL", "name": "예리한 둔기", "level": 3}
+            ]
+            """);
+    assertThat(response.statusCode()).isEqualTo(200);
+    var data = mapper.readTree(response.body()).path("data");
+    assertThat(response.body()).contains("\"before\":11157.79", "\"after\":10696.63");
+    var contributions = data.path("contributions");
+    assertThat(contributions.at("/0/status").asText()).isEqualTo("OK");
+    assertThat(contributions.at("/0/delta").decimalValue()).isEqualByComparingTo("-326.15");
+    assertThat(contributions.at("/1/status").asText()).isEqualTo("OK");
+    assertThat(contributions.at("/1/delta").decimalValue()).isEqualByComparingTo("-67.14");
+    // 방어구 품질은 배수 1이라 OK·0.
+    assertThat(contributions.at("/2/status").asText()).isEqualTo("OK");
+    assertThat(contributions.at("/2/delta").decimalValue()).isEqualByComparingTo("0");
+    assertThat(contributions.at("/3/status").asText()).isEqualTo("OK");
+    assertThat(contributions.at("/3/delta").decimalValue()).isEqualByComparingTo("-67.87");
+    assertThat(data.path("unsupportedCount").asInt()).isZero();
+    SiteNames.assertAbsent(response.body());
   }
 
   @Test
@@ -148,7 +198,7 @@ class CombatPowerSimulationIntegrationTest {
   }
 
   @Test
-  void 공개_제외_이름은_캐시가_있어도_404다() throws Exception {
+  void 처리정지_목록이어도_캐시가_있으면_일반_캐릭터와_같게_계산한다() throws Exception {
     when(detailsPort.fetch(anyString()))
         .thenAnswer(invocation -> fetched(invocation.getArgument(0)));
     assertThat(get("/api/v1/characters/search?characterName=" + encode("시뮬제외")).statusCode())
@@ -156,9 +206,10 @@ class CombatPowerSimulationIntegrationTest {
     jdbc.sql(
             "INSERT INTO public_exclusion (character_name, server_name, reason_code) VALUES ('시뮬제외', NULL, 'USER_REQUEST')")
         .update();
+    // #363: 404로 처리정지 여부를 드러내지 않는다. 저장하지 않는 메모리 계산이다.
     var response = simulate("시뮬제외", "[]");
-    assertThat(response.statusCode()).isEqualTo(404);
-    assertThat(response.body()).contains("CHARACTER_NOT_CACHED").doesNotContain("시뮬서버");
+    assertThat(response.statusCode()).isEqualTo(200);
+    assertThat(response.body()).doesNotContain("CHARACTER_NOT_CACHED");
   }
 
   @Test
@@ -170,6 +221,28 @@ class CombatPowerSimulationIntegrationTest {
     assertThat(data.path("verified").asBoolean()).isFalse();
     assertThat(data.path("gemLevels").size()).isEqualTo(11);
     assertThat(data.path("refineMax").asInt()).isEqualTo(25);
+    // 연마 수치(#251): 공식 툴팁 표기 그대로, 부위는 공식 연마 확률 정보.
+    var polish = data.at("/polishValues/options");
+    assertThat(data.at("/polishValues/accessoryGrade").asText()).isEqualTo("고대");
+    assertThat(polish.at("/0/option").asText()).isEqualTo("추가 피해");
+    assertThat(polish.at("/0/high").asText()).isEqualTo("+2.60%");
+    var allyDamage =
+        polish
+            .valueStream()
+            .filter(item -> item.path("option").asText().equals("아군 피해량 강화 효과"))
+            .findFirst()
+            .orElseThrow();
+    // 빈 칸 3개는 추가 표본에서 등급 색으로 확인했다(polish-values-v2).
+    assertThat(allyDamage.path("mid").asText()).isEqualTo("+4.50%");
+    assertThat(data.at("/polishValues/itemLevel").asInt()).isEqualTo(1680);
+    assertThat(polish.at("/0/parts/0").asText()).isEqualTo("목걸이");
+    assertThat(
+            polish
+                .valueStream()
+                .filter(item -> item.path("option").asText().equals("공격력"))
+                .map(item -> item.path("percent").asBoolean())
+                .toList())
+        .containsExactly(true, false);
     verifyNoInteractions(detailsPort);
   }
 
@@ -292,6 +365,331 @@ class CombatPowerSimulationIntegrationTest {
             List.of());
     return new FetchedCharacter(
         CharacterTestFixture.details(profile, loadout, List.of()), "{}", "[]");
+  }
+
+  private FetchedCharacter fetchedEquipment(String name) {
+    var profile =
+        new CharacterProfile(
+            name,
+            SERVER,
+            "슬레이어",
+            70,
+            new BigDecimal("1760"),
+            new BigDecimal("11157.79"),
+            null,
+            null,
+            null,
+            null,
+            List.of());
+    var weapon =
+        new CharacterLoadout.Equipment(
+            "무기",
+            "+10 테스트 에스더 무기",
+            null,
+            "에스더",
+            new CharacterLoadout.EquipmentDetail(
+                10,
+                100,
+                null,
+                4,
+                null,
+                List.of(new CharacterLoadout.EffectGroup("추가 효과", List.of("추가 피해 +30.00%"))),
+                List.of(),
+                List.of(),
+                List.of()));
+    var helmet =
+        new CharacterLoadout.Equipment(
+            "투구",
+            "+25 테스트 투구",
+            null,
+            "고대",
+            new CharacterLoadout.EquipmentDetail(
+                25, 100, null, 4, null, List.of(), List.of(), List.of(), List.of()));
+    var engravings =
+        new CharacterLoadout.Engravings(
+            List.of(),
+            List.of(),
+            List.of(
+                new CharacterLoadout.PassiveEngraving(
+                    null, "유물", 4, "원한", "보스 및 레이드 몬스터에게 주는 피해가 21.00% 증가하지만, 받는 피해가 20.00% 증가한다."),
+                new CharacterLoadout.PassiveEngraving(
+                    null, "유물", 4, "예리한 둔기", "치명타 피해가 52.00% 증가한다.")));
+    var loadout =
+        new CharacterLoadout(
+            List.of(weapon, helmet), engravings, null, null, null, null, List.of());
+    return new FetchedCharacter(
+        CharacterTestFixture.details(profile, loadout, List.of()), "{}", "[]");
+  }
+
+  @Test
+  void 팔찌_줄을_빼거나_바꾸고_팔찌_전투력_기여를_준다() throws Exception {
+    // #327: 기준 캐릭터와 같은 팔찌(전투 특성 합 2,469, 도약 70) → 기여 12.60%, 추가 피해 +3.50% 빼기 3,345.24 → 3,257.54.
+    when(detailsPort.fetch(anyString()))
+        .thenAnswer(invocation -> fetchedBracelet(invocation.getArgument(0)));
+    var search = get("/api/v1/characters/search?characterName=" + encode("시뮬팔찌"));
+    assertThat(search.statusCode()).isEqualTo(200);
+    // 검색 응답 팔찌 효율(#345): 지금 ÷ 팔찌 뺀 전투력 − 1(기여 12.60%와 같은 모델 → 1/0.874 − 1 = 14.42%).
+    // 줄별은 그 줄만 뺐을 때, 팔찌 도약은 마지막 한 줄. 시뮬레이터 플래그와 무관.
+    ApiContractFixture.write("character-search-bracelet-efficiency.json", search.body());
+    var efficiency = mapper.readTree(search.body()).at("/data/braceletEfficiency");
+    assertThat(efficiency.path("status").asText()).isEqualTo("OK");
+    assertThat(efficiency.path("percent").decimalValue()).isEqualByComparingTo("14.42");
+    assertThat(efficiency.path("reasonCode").isNull()).isTrue();
+    assertThat(efficiency.at("/lines/0/text").asText()).isEqualTo("특화 +81");
+    assertThat(efficiency.at("/lines/0/percent").decimalValue()).isEqualByComparingTo("1.42");
+    assertThat(efficiency.at("/lines/1/percent").decimalValue()).isEqualByComparingTo("0.00");
+    // 추가 피해 +3.50% = 1.026922 − 1 = 2.69%.
+    assertThat(efficiency.at("/lines/3/percent").decimalValue()).isEqualByComparingTo("2.69");
+    // 팔찌 도약 18(도약 합 70) = 1.14 / 1.104 − 1 = 3.26%.
+    var leapLine = efficiency.path("lines").get(efficiency.path("lines").size() - 1);
+    assertThat(leapLine.path("text").asText()).isEqualTo("팔찌 도약 +18");
+    assertThat(leapLine.path("percent").decimalValue()).isEqualByComparingTo("3.26");
+    assertThat(leapLine.path("status").asText()).isEqualTo("OK");
+    assertThat(efficiency.path("ruleVersion").asText()).startsWith("combat-power-sim-");
+    var response =
+        simulate("시뮬팔찌", "[{\"kind\": \"BRACELET_EFFECT\", \"line\": 3, \"name\": \"없음\"}]");
+    assertThat(response.statusCode()).isEqualTo(200);
+    var data = mapper.readTree(response.body()).path("data");
+    assertThat(data.at("/contributions/0/status").asText()).isEqualTo("OK");
+    assertThat(data.path("after").decimalValue()).isEqualByComparingTo("3257.54");
+    var upgrade =
+        mapper
+            .readTree(
+                simulate(
+                        "시뮬팔찌",
+                        "[{\"kind\": \"BRACELET_EFFECT\", \"line\": 3, \"name\": \"추가 피해\", \"grade\": \"HIGH\"}]")
+                    .body())
+            .path("data");
+    assertThat(upgrade.at("/contributions/0/to").asText()).isEqualTo("추가 피해 HIGH");
+    assertThat(upgrade.path("after").decimalValue()).isEqualByComparingTo("3357.77");
+    var contributions =
+        get("/api/v1/characters/combat-power/contributions?characterName=" + encode("시뮬팔찌"));
+    assertThat(contributions.statusCode()).isEqualTo(200);
+    ApiContractFixture.write("character-combat-power-contributions.json", contributions.body());
+    var items = mapper.readTree(contributions.body()).at("/data/items");
+    assertThat(items.at("/0/kind").asText()).isEqualTo("BRACELET");
+    assertThat(items.at("/0/status").asText()).isEqualTo("OK");
+    assertThat(items.at("/0/contributionPct").decimalValue()).isEqualByComparingTo("12.60");
+    SiteNames.assertAbsent(contributions.body());
+    var options =
+        mapper.readTree(get("/api/v1/characters/combat-power/options").body()).path("data");
+    assertThat(options.at("/braceletOptions").size()).isEqualTo(13);
+    assertThat(options.toString()).contains("추가 피해 +3.50%");
+  }
+
+  @Test
+  void 서포터와_판정_불가_캐릭터는_딜러_식을_쓰지_않는다() throws Exception {
+    // PM-백엔드 P0(10-11 20:23): 서포터 전투력은 케어 + 버프라 식이 다르다. 깨달음 노드로 딜러일 때만 계산한다.
+    when(detailsPort.fetch(anyString()))
+        .thenAnswer(
+            invocation -> {
+              String name = invocation.getArgument(0);
+              return fetchedRole(name, name.endsWith("서폿") ? "깨달음 1티어 절실한 구원 Lv.1" : null);
+            });
+    for (var name : List.of("시뮬바드서폿", "시뮬바드모름"))
+      assertThat(get("/api/v1/characters/search?characterName=" + encode(name)).statusCode())
+          .isEqualTo(200);
+    // 검색 응답 팔찌 효율도 같은 상수로 UNSUPPORTED(#345).
+    var supportSearch =
+        mapper
+            .readTree(get("/api/v1/characters/search?characterName=" + encode("시뮬바드서폿")).body())
+            .at("/data/braceletEfficiency");
+    assertThat(supportSearch.path("status").asText()).isEqualTo("UNSUPPORTED");
+    assertThat(supportSearch.path("reasonCode").asText()).isEqualTo("SUPPORTER_MODEL_PENDING");
+    assertThat(supportSearch.at("/lines/0/reasonCode").asText())
+        .isEqualTo("SUPPORTER_MODEL_PENDING");
+    assertThat(supportSearch.path("percent").isNull()).isTrue();
+    var support =
+        mapper
+            .readTree(
+                simulate(
+                        "시뮬바드서폿",
+                        "[{\"kind\": \"BRACELET_EFFECT\", \"line\": 3, \"name\": \"없음\"}]")
+                    .body())
+            .path("data");
+    assertThat(support.at("/contributions/0/status").asText()).isEqualTo("UNSUPPORTED");
+    assertThat(support.at("/contributions/0/basis").asText())
+        .isEqualTo("서포터 전투력 계산식은 아직 적용하지 않았습니다.");
+    assertThat(support.path("after").decimalValue()).isEqualByComparingTo("3345.24");
+    var unknown =
+        mapper
+            .readTree(
+                simulate(
+                        "시뮬바드모름",
+                        "[{\"kind\": \"BRACELET_EFFECT\", \"line\": 3, \"name\": \"없음\"}]")
+                    .body())
+            .path("data");
+    assertThat(unknown.at("/contributions/0/basis").asText())
+        .isEqualTo("딜러·서포터를 판정하지 못해 계산하지 않았습니다.");
+    var contributions =
+        mapper
+            .readTree(
+                get("/api/v1/characters/combat-power/contributions?characterName="
+                        + encode("시뮬바드서폿"))
+                    .body())
+            .at("/data/items/0");
+    assertThat(contributions.path("status").asText()).isEqualTo("UNSUPPORTED");
+    assertThat(contributions.path("contributionPct").isNull()).isTrue();
+  }
+
+  private FetchedCharacter fetchedRole(String name, String node) {
+    var base = fetchedBracelet(name);
+    var profile = base.details().profile();
+    var supportProfile =
+        new CharacterProfile(
+            name,
+            SERVER,
+            "바드",
+            70,
+            profile.itemLevel(),
+            profile.combatPower(),
+            null,
+            null,
+            null,
+            null,
+            profile.stats());
+    var loadout = base.details().loadout();
+    var effects =
+        node == null
+            ? List.<CharacterLoadout.PassiveEffect>of()
+            : List.of(new CharacterLoadout.PassiveEffect("깨달음", node, null));
+    var arkPassive =
+        new CharacterLoadout.ArkPassive("깨달음", true, loadout.arkPassive().points(), effects);
+    var next =
+        new CharacterLoadout(loadout.equipment(), null, null, null, arkPassive, null, List.of());
+    return new FetchedCharacter(
+        CharacterTestFixture.details(supportProfile, next, List.of()), "{}", "[]");
+  }
+
+  private FetchedCharacter fetchedBracelet(String name) {
+    var profile =
+        new CharacterProfile(
+            name,
+            SERVER,
+            "버서커",
+            70,
+            new BigDecimal("1700"),
+            new BigDecimal("3345.24"),
+            null,
+            null,
+            null,
+            null,
+            List.of(
+                new CharacterProfile.Stat("치명", "669", List.of()),
+                new CharacterProfile.Stat("특화", "1700", List.of()),
+                new CharacterProfile.Stat("신속", "100", List.of())));
+    var bracelet =
+        new CharacterLoadout.Equipment(
+            "팔찌",
+            "테스트 팔찌",
+            null,
+            "고대",
+            new CharacterLoadout.EquipmentDetail(
+                null,
+                null,
+                null,
+                4,
+                new CharacterLoadout.PointBonus("도약", 18),
+                List.of(),
+                List.of(),
+                List.of(),
+                List.of(
+                    new CharacterLoadout.BraceletEffect("특화 +81", EffectGrade.MID),
+                    new CharacterLoadout.BraceletEffect("전투자원 자연 회복량 +8.00%", EffectGrade.MID),
+                    new CharacterLoadout.BraceletEffect("치명타 피해 +8.40%", EffectGrade.MID),
+                    new CharacterLoadout.BraceletEffect("추가 피해 +3.50%", EffectGrade.MID),
+                    new CharacterLoadout.BraceletEffect(
+                        "추가 피해가 2.5% 증가한다.\n악마 및 대악마 계열 피해량이 2.5% 증가한다.", EffectGrade.LOW))));
+    var arkPassive =
+        new CharacterLoadout.ArkPassive(
+            "진화", true, List.of(new CharacterLoadout.PassivePoint("도약", 70, "")), List.of());
+    var loadout =
+        new CharacterLoadout(List.of(bracelet), null, null, null, arkPassive, null, List.of());
+    return new FetchedCharacter(
+        CharacterTestFixture.details(profile, loadout, List.of()), "{}", "[]");
+  }
+
+  @Test
+  void 검색_응답에_아크_그리드_효율을_준다() throws Exception {
+    // 계산 검증 #368 표본 기준 캐릭터와 같은 코어 6개·젬 옵션: 아크 그리드 38.64%, 코어 합 32.96%, 젬 4.27%.
+    when(detailsPort.fetch(anyString()))
+        .thenAnswer(
+            invocation -> {
+              var base = fetchedBracelet(invocation.getArgument(0));
+              var details = base.details();
+              var old = details.loadout();
+              var grid =
+                  new CharacterLoadout.ArkGrid(
+                      List.of(
+                          gridSlot(0, "질서의 해 코어 : 직업 스킬", 17, "고대"),
+                          gridSlot(1, "질서의 별 코어 : 직업 스킬", 18, "유물"),
+                          gridSlot(2, "질서의 달 코어 : 직업 스킬", 18, "유물"),
+                          gridSlot(3, "혼돈의 달 코어 : 불타는 일격", 17, "고대"),
+                          gridSlot(4, "혼돈의 해 코어 : 현란한 공격", 17, "유물"),
+                          gridSlot(5, "혼돈의 별 코어 : 공격", 17, "유물")),
+                      List.of(
+                          new CharacterLoadout.GridEffect("공격력", 28),
+                          new CharacterLoadout.GridEffect("추가 피해", 51),
+                          new CharacterLoadout.GridEffect("보스 피해", 4)));
+              var loadout =
+                  new CharacterLoadout(
+                      old.equipment(),
+                      old.engravings(),
+                      old.gems(),
+                      old.cards(),
+                      old.arkPassive(),
+                      grid,
+                      old.skills());
+              return new FetchedCharacter(
+                  CharacterTestFixture.details(details.profile(), loadout, List.of()), "{}", "[]");
+            });
+    var search = get("/api/v1/characters/search?characterName=" + encode("시뮬아크"));
+    assertThat(search.statusCode()).isEqualTo(200);
+    ApiContractFixture.write("character-search-ark-grid-efficiency.json", search.body());
+    var efficiency = mapper.readTree(search.body()).at("/data/arkGridEfficiency");
+    assertThat(efficiency.path("status").asText()).isEqualTo("OK");
+    assertThat(efficiency.path("percent").decimalValue()).isEqualByComparingTo("38.64");
+    assertThat(efficiency.path("coresPercent").decimalValue()).isEqualByComparingTo("32.96");
+    assertThat(efficiency.path("reasonCode").isNull()).isTrue();
+    assertThat(efficiency.path("lines").size()).isEqualTo(7);
+    assertThat(efficiency.at("/lines/0/slotIndex").asInt()).isZero();
+    assertThat(efficiency.at("/lines/0/text").asText()).isEqualTo("질서의 해 코어 : 직업 스킬 고대 17P");
+    assertThat(efficiency.at("/lines/0/percent").decimalValue()).isEqualByComparingTo("8.50");
+    assertThat(efficiency.at("/lines/6/slotIndex").isNull()).isTrue();
+    assertThat(efficiency.at("/lines/6/percent").decimalValue()).isEqualByComparingTo("4.27");
+    assertThat(efficiency.path("ruleVersion").asText()).isEqualTo("ark-grid-efficiency-v1");
+
+    // L38·L39 랭킹용 저장: armory 관측 기록(비동기)이 팔찌 효율과 젬 옵션 합계 줄을 규칙 버전과 함께 남긴다.
+    java.util.Map<String, Object> row = java.util.Map.of();
+    for (int i = 0; i < 100; i++) {
+      row =
+          jdbc
+              .sql(
+                  """
+              SELECT bracelet_efficiency_pct, bracelet_rule_version, ark_grid_gem_pct,
+                ark_grid_rule_version, efficiency_observed_at
+              FROM characters WHERE server_name = :s AND character_name = :n
+              """)
+              .param("s", SERVER)
+              .param("n", "시뮬아크")
+              .query()
+              .listOfRows()
+              .stream()
+              .findFirst()
+              .orElse(java.util.Map.of());
+      if (row.get("ark_grid_gem_pct") != null) break;
+      Thread.sleep(50);
+    }
+    assertThat((BigDecimal) row.get("bracelet_efficiency_pct")).isEqualByComparingTo("14.42");
+    assertThat(row.get("bracelet_rule_version")).isEqualTo("combat-power-sim-v8");
+    assertThat((BigDecimal) row.get("ark_grid_gem_pct")).isEqualByComparingTo("4.27");
+    assertThat(row.get("ark_grid_rule_version")).isEqualTo("ark-grid-efficiency-v1");
+    assertThat(row.get("efficiency_observed_at")).isNotNull();
+  }
+
+  private static CharacterLoadout.GridSlot gridSlot(
+      int index, String name, int point, String grade) {
+    return new CharacterLoadout.GridSlot(index, null, name, point, grade, List.of());
   }
 
   private HttpResponse<String> simulate(String name, String changes) throws Exception {

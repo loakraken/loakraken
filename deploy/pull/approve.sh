@@ -102,6 +102,14 @@ echo "APPROVED"
 
 unit="loakraken-pull-deploy@${ENV_NAME}.service"
 if systemctl cat "$unit" >/dev/null 2>&1; then
+  # 유닛 파일이 디스크에서 바뀌었으면(설치 파일을 다시 복사한 경우 등) 시작 전에 다시 읽는다. 사용자가 따로 daemon-reload를 하지 않아도 된다.
+  for u in "$unit" "loakraken-pull-deploy@${ENV_NAME}.timer"; do
+    if [[ "$(systemctl show -p NeedDaemonReload --value "$u" 2>/dev/null)" == yes ]]; then
+      systemctl daemon-reload
+      echo "Reloaded systemd unit files (they changed on disk)."
+      break
+    fi
+  done
   echo "Deploying now (this can take a few minutes)..."
   systemctl start "$unit" || true
   if [[ "$want" == "$(cat .deployed 2>/dev/null || true)" ]]; then

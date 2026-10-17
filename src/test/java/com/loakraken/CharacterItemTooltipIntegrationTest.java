@@ -67,6 +67,15 @@ class CharacterItemTooltipIntegrationTest {
     assertThat(loadout.at("/equipment/1/detail/titleLine").asText()).isEqualTo("고대 귀걸이");
     assertThat(loadout.at("/equipment/1/detail/tradeLines/0").asText()).isEqualTo("캐릭터 귀속됨");
     assertThat(search.body()).doesNotContain("extraLines", "내구도");
+    // 보석 반영 쿨타임(#377): 5초 × (1 − 24%) = 3.80초.
+    assertThat(loadout.at("/skills/0/cooldown/cooldownSec").decimalValue())
+        .isEqualByComparingTo("5");
+    assertThat(loadout.at("/skills/0/cooldown/gemCooldownReductionPct").decimalValue())
+        .isEqualByComparingTo("24");
+    assertThat(loadout.at("/skills/0/cooldown/cooldownWithGemsSec").decimalValue())
+        .isEqualByComparingTo("3.80");
+    assertThat(loadout.at("/skills/0/cooldown/basis").asText()).contains("공식 재사용 대기시간");
+    ApiContractFixture.write("character-search-skill-cooldown.json", search.body());
 
     var response = get("/api/v1/characters/item-tooltips", "툴팁캐시");
     assertThat(response.statusCode()).isEqualTo(200);
@@ -86,20 +95,32 @@ class CharacterItemTooltipIntegrationTest {
     assertThat(data.at("/cards/0/extraLines/0").asText()).isEqualTo("카드 설명");
     assertThat(data.at("/skills/0/name").asText()).isEqualTo("테스트 스킬");
     assertThat(data.at("/skills/0/runeExtraLines/0").asText()).isEqualTo("룬 설명");
+    assertThat(data.at("/skills/0/titleLines/1").asText()).isEqualTo("재사용 대기시간 5초");
+    assertThat(data.at("/skills/0/infoLines/2").asText()).isEqualTo("마나 211 소모");
+    assertThat(data.at("/skills/0/tripodOptions").size()).isEqualTo(2);
+    assertThat(data.at("/skills/0/tripodOptions/1/name").asText()).isEqualTo("급소 타격");
+    assertThat(data.at("/skills/0/tripodOptions/1/selected").asBoolean()).isFalse();
+    assertThat(data.at("/skills/0/tripodOptions/0/selected").asBoolean()).isTrue();
+    // 아크 그리드 코어·젬 툴팁 줄(#288): 검색 응답 slots[].index·gems[].index로 잇는다.
+    assertThat(data.at("/arkGrid/0/index").asInt()).isEqualTo(0);
+    assertThat(data.at("/arkGrid/0/titleLine").asText()).isEqualTo("유물 아크 그리드 코어");
+    assertThat(data.at("/arkGrid/0/extraLines/1").asText()).isEqualTo("분해불가");
+    assertThat(data.at("/arkGrid/0/gems/0/tradeLines/0").asText()).isEqualTo("가공 완료");
+    assertThat(search.body()).doesNotContain("가공 완료");
     verify(detailsPort, times(1)).fetch(anyString());
   }
 
   @Test
-  void 공개_제외_이름은_캐시가_없어도_숨김_응답이다() throws Exception {
+  void 처리정지_목록_이름도_캐시가_없으면_일반_이름과_같은_404다() throws Exception {
+    // #363: 처리정지 여부를 응답으로 드러내지 않는다(예전 hidden=true 응답 없음).
     jdbc.sql(
             "INSERT INTO public_exclusion (character_name, server_name, reason_code) VALUES ('툴팁제외', NULL, 'USER_REQUEST')")
         .update();
-    var response = get("/api/v1/characters/item-tooltips", "툴팁제외");
-    assertThat(response.statusCode()).isEqualTo(200);
-    var data = mapper.readTree(response.body()).path("data");
-    assertThat(data.path("hidden").asBoolean()).isTrue();
-    assertThat(data.path("equipment").size()).isZero();
-    assertThat(data.path("fetchedAt").isNull()).isTrue();
+    var stopped = get("/api/v1/characters/item-tooltips", "툴팁제외");
+    var unknown = get("/api/v1/characters/item-tooltips", "툴팁없는이름");
+    assertThat(stopped.statusCode()).isEqualTo(404).isEqualTo(unknown.statusCode());
+    assertThat(mapper.readTree(stopped.body()).path("code").asText())
+        .isEqualTo(mapper.readTree(unknown.body()).path("code").asText());
     verifyNoInteractions(detailsPort);
   }
 
@@ -156,11 +177,41 @@ class CharacterItemTooltipIntegrationTest {
             null,
             List.of(),
             new CharacterLoadout.Rune("속행", null, "전설", "효과", List.of("룬 설명")),
-            List.of(),
-            null);
+            List.of(
+                new CharacterLoadout.SkillGemEffect(
+                    "[테스트] 테스트 스킬 재사용 대기시간 24.00% 감소", CharacterLoadout.GemEffectKind.COOLDOWN)),
+            null,
+            null,
+            List.of("일반", "재사용 대기시간 5초", "[일반 스킬]"),
+            List.of("PvE", "스킬 레벨 12", "마나 211 소모"),
+            List.of(
+                new CharacterLoadout.TripodOption(0, 1, "약점 노출", null, true),
+                new CharacterLoadout.TripodOption(0, 2, "급소 타격", null, false)));
+    var arkGrid =
+        new CharacterLoadout.ArkGrid(
+            List.of(
+                new CharacterLoadout.GridSlot(
+                    0,
+                    null,
+                    "질서의 해 코어",
+                    17,
+                    "유물",
+                    List.of(
+                        new CharacterLoadout.GridGem(
+                            0,
+                            null,
+                            true,
+                            "전설",
+                            null,
+                            new CharacterLoadout.TooltipLines(
+                                "전설 아크 그리드 젬", List.of("가공 완료", "거래 불가"), List.of()))),
+                    null,
+                    new CharacterLoadout.TooltipLines(
+                        "유물 아크 그리드 코어", List.of(), List.of("거래 불가", "분해불가")))),
+            List.of());
     var loadout =
         new CharacterLoadout(
-            List.of(weapon, earring), null, gems, cards, null, null, List.of(skill));
+            List.of(weapon, earring), null, gems, cards, null, arkGrid, List.of(skill));
     return new FetchedCharacter(
         CharacterTestFixture.details(profile, loadout, List.of()), "{}", "[]");
   }

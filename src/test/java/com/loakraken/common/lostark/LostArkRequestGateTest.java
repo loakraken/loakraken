@@ -32,6 +32,57 @@ class LostArkRequestGateTest {
   }
 
   @Test
+  void 공식_호출_로그는_DEBUG일_때만_허가된_호출마다_종류와_경로를_한_줄씩_남긴다() {
+    var logger =
+        (ch.qos.logback.classic.Logger)
+            org.slf4j.LoggerFactory.getLogger(LostArkRequestGate.CALL_LOGGER);
+    var appender =
+        new ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent>();
+    appender.start();
+    logger.addAppender(appender);
+    var previous = logger.getLevel();
+    try {
+      var gate = gate(new MutableClock(), 90, 10);
+      // 운영처럼 INFO면 남기지 않는다.
+      logger.setLevel(ch.qos.logback.classic.Level.INFO);
+      gate.acquire(LostArkMetrics.Endpoint.PROFILE);
+      assertThat(appender.list).isEmpty();
+
+      logger.setLevel(ch.qos.logback.classic.Level.DEBUG);
+      gate.acquire(LostArkMetrics.Endpoint.PROFILE);
+      gate.withReserve(
+          40,
+          () -> {
+            gate.acquire(LostArkMetrics.Endpoint.MARKET_ITEMS, "category=90000 item=\"들꽃\" page=2");
+            return null;
+          });
+      gate.withUserReserve(
+          30,
+          () -> {
+            gate.acquire(LostArkMetrics.Endpoint.ARMORY);
+            return null;
+          });
+      assertThat(appender.list)
+          .extracting(ch.qos.logback.classic.spi.ILoggingEvent::getFormattedMessage)
+          .containsExactly(
+              "official-call endpoint=PROFILE origin=USER reserve=0",
+              "official-call endpoint=MARKET_ITEMS origin=BACKGROUND reserve=40 category=90000 item=\"들꽃\" page=2",
+              "official-call endpoint=ARMORY origin=USER_RESERVE reserve=30");
+
+      // 거절된 호출(예산 초과)은 공식 호출이 아니므로 남기지 않는다.
+      appender.list.clear();
+      var tight = gate(new MutableClock(), 1, 10);
+      tight.acquire(LostArkMetrics.Endpoint.PROFILE);
+      assertThatThrownBy(() -> tight.acquire(LostArkMetrics.Endpoint.PROFILE))
+          .isInstanceOf(BusinessException.class);
+      assertThat(appender.list).hasSize(1);
+    } finally {
+      logger.setLevel(previous);
+      logger.detachAppender(appender);
+    }
+  }
+
+  @Test
   void 최근_1분의_호출_예산을_넘지_않는다() {
     var clock = new MutableClock();
     var gate = gate(clock, 1, 1);
@@ -88,6 +139,70 @@ class LostArkRequestGateTest {
     headers.set("X-RateLimit-Reset", Long.toString(clock.now.plusSeconds(30).getEpochSecond()));
     gate.observe(headers, false);
     assertThat(gate.backgroundAvailable(0)).isFalse();
+  }
+
+  @Test
+  void 사용자_몫_호출은_클라이언트_공식_한도에도_매기고_백그라운드는_매기지_않는다() {
+    // 보안 감사 10-12: reserve 안 호출이 클라이언트 OFFICIAL 한도를 벗어나 원정대 불러오기가 분당 24회까지 가능했다.
+    var clock = new MutableClock();
+    var limiter =
+        new ClientLimiter(
+            new ClientLimitProperties(true, 2, 10, 10, 10, true, 2, 6, 20, 5, 5),
+            new ClientLimitStore.Memory(),
+            clock,
+            registry,
+            "key");
+    var gate =
+        new LostArkRequestGate(
+            clock,
+            new LostArkProperties(
+                URI.create("https://example.com"),
+                "test",
+                Duration.ofSeconds(3),
+                Duration.ofSeconds(5),
+                90,
+                4,
+                Duration.ofMinutes(5)),
+            metrics,
+            new MemoryGateStore(clock),
+            limiter);
+    limiter.enter("client-a");
+    try {
+      Runnable call =
+          () -> {
+            gate.acquire();
+            gate.release();
+          };
+      // 백그라운드형(withReserve)은 클라이언트 한도에 매기지 않는다.
+      for (int i = 0; i < 3; i++)
+        gate.withReserve(
+            30,
+            () -> {
+              call.run();
+              return null;
+            });
+      // 사용자 몫형(withUserReserve)은 분당 2회까지, 세 번째는 CLIENT_RATE_LIMITED.
+      for (int i = 0; i < 2; i++)
+        gate.withUserReserve(
+            30,
+            () -> {
+              call.run();
+              return null;
+            });
+      assertThatThrownBy(
+              () ->
+                  gate.withUserReserve(
+                      30,
+                      () -> {
+                        call.run();
+                        return null;
+                      }))
+          .isInstanceOf(BusinessException.class)
+          .extracting(exception -> ((BusinessException) exception).errorCode())
+          .isEqualTo(LostArkErrorCode.CLIENT_RATE_LIMITED);
+    } finally {
+      limiter.exit();
+    }
   }
 
   private LostArkRequestGate gate(Clock clock, int budget, int concurrency) {

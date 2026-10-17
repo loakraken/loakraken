@@ -16,10 +16,12 @@ class StatsOpenApiConfiguration {
           List.of(
               StatsResponses.StatsSummaryResponse.class,
               StatsResponses.StatsClassesResponse.class,
+              StatsResponses.StatsBestCombatPowerResponse.class,
               StatsResponses.StatsServersResponse.class,
               StatsResponses.StatsDistributionResponse.class,
               StatsResponses.StatsSnapshotsResponse.class,
               StatsResponses.StatsRankingResponse.class,
+              StatsResponses.StatsEfficiencyRankingResponse.class,
               StatsResponses.StatsCharacterRankResponse.class))
         ResponseContracts.apply(type, schemas);
     };

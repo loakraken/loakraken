@@ -1,6 +1,7 @@
 package com.loakraken.character.infrastructure;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -15,7 +16,7 @@ import java.time.ZoneOffset;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
+import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.context.annotation.Profile;
 
 /** 로컬 전용 공식 원문 저장(#540). */
@@ -24,7 +25,7 @@ class ArmoryRawDumpTest {
   private final CharacterStopList stopList = mock(CharacterStopList.class);
 
   private ArmoryRawDump dump(Path dir) {
-    return new ArmoryRawDump(dir.toString(), clock, stopList);
+    return new ArmoryRawDump(dir, clock, stopList);
   }
 
   private static CharacterProfile profile(String name) {
@@ -62,10 +63,93 @@ class ArmoryRawDumpTest {
   }
 
   @Test
-  void local_프로필에서_설정이_있을_때만_만들어진다() {
-    assertThat(ArmoryRawDump.class.getAnnotation(Profile.class).value()).containsExactly("local");
+  void local_프로필이고_prod가_아니며_설정이_있을_때만_만들어진다() {
+    assertThat(ArmoryRawDump.class.getAnnotation(Profile.class).value())
+        .containsExactly("local & !prod");
     // 환경 변수 ARMORY_RAW_DUMP_DIR가 비어 있지 않을 때만(빈 값이면 현재 폴더에 쓰지 않게).
-    assertThat(ArmoryRawDump.class.getAnnotation(ConditionalOnExpression.class).value())
-        .isEqualTo("!'${ARMORY_RAW_DUMP_DIR:}'.isBlank()");
+    new ApplicationContextRunner()
+        .withPropertyValues("ARMORY_RAW_DUMP_DIR= ")
+        .withUserConfiguration(ArmoryRawDump.class)
+        .withInitializer(context -> context.getEnvironment().setActiveProfiles("local"))
+        .run(context -> assertThat(context).hasNotFailed().doesNotHaveBean(ArmoryRawDump.class));
+  }
+
+  @Test
+  void 같은_밀리초에_두_번_저장해도_덮어쓰지_않는다(@TempDir Path dir) throws Exception {
+    dump(dir).write("가", "{\"n\":1}");
+    dump(dir).write("가", "{\"n\":2}");
+    assertThat(Files.readString(dir.resolve("가_20261018T030405678Z.json"))).isEqualTo("{\"n\":1}");
+    assertThat(Files.readString(dir.resolve("가_20261018T030405678Z-1.json"))).isEqualTo("{\"n\":2}");
+  }
+
+  @Test
+  void 경로에_따옴표가_있어도_조건_식이_깨지지_않는다() {
+    // 값이 식에 들어가지 않으므로, 운영 프로필에서는 식 오류가 아니라 의도한 시작 실패가 난다.
+    new ApplicationContextRunner()
+        .withPropertyValues("ARMORY_RAW_DUMP_DIR=/raw'dump")
+        .withUserConfiguration(ArmoryRawDump.ProdGuard.class)
+        .withInitializer(context -> context.getEnvironment().setActiveProfiles("prod"))
+        .run(
+            context ->
+                assertThat(context)
+                    .getFailure()
+                    .rootCause()
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessageContaining("운영 프로필"));
+  }
+
+  @Test
+  void prod_프로필에_설정이_있으면_local과_함께여도_시작이_실패한다() {
+    var guard =
+        new ApplicationContextRunner()
+            .withPropertyValues("ARMORY_RAW_DUMP_DIR=/raw-dump")
+            .withUserConfiguration(ArmoryRawDump.ProdGuard.class);
+    guard
+        .withInitializer(context -> context.getEnvironment().setActiveProfiles("local", "prod"))
+        .run(context -> assertThat(context).hasFailed());
+    guard
+        .withInitializer(context -> context.getEnvironment().setActiveProfiles("prod"))
+        .run(context -> assertThat(context).hasFailed());
+    guard
+        .withInitializer(context -> context.getEnvironment().setActiveProfiles("local"))
+        .run(context -> assertThat(context).hasNotFailed());
+    // 설정이 없으면 운영에서도 막지 않는다.
+    new ApplicationContextRunner()
+        .withUserConfiguration(ArmoryRawDump.ProdGuard.class)
+        .withInitializer(context -> context.getEnvironment().setActiveProfiles("prod"))
+        .run(context -> assertThat(context).hasNotFailed());
+    // local과 prod가 함께 켜지면 저장 부품 자체가 만들어지지 않는다.
+    new ApplicationContextRunner()
+        .withPropertyValues("ARMORY_RAW_DUMP_DIR=/raw-dump")
+        .withUserConfiguration(ArmoryRawDump.class)
+        .withInitializer(context -> context.getEnvironment().setActiveProfiles("local", "prod"))
+        .run(context -> assertThat(context).hasNotFailed().doesNotHaveBean(ArmoryRawDump.class));
+  }
+
+  @Test
+  void 저장_경로가_상대_경로이거나_git_저장소_안이면_시작이_실패한다(@TempDir Path temp) throws Exception {
+    var dir = temp.toRealPath();
+    assertThatThrownBy(() -> new ArmoryRawDump("raw", clock, stopList))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("절대 경로");
+    var repo = dir.resolve("repo");
+    Files.createDirectories(repo.resolve(".git"));
+    // 아직 없는 하위 폴더도, ..로 돌아 들어가는 경로도 거부한다.
+    assertThatThrownBy(() -> ArmoryRawDump.outsideRepository(repo.resolve("tmp").resolve("raw"), dir))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("저장소 밖");
+    assertThatThrownBy(
+            () ->
+                ArmoryRawDump.outsideRepository(
+                    dir.resolve("out").resolve("..").resolve("repo").resolve("raw"), dir))
+        .isInstanceOf(IllegalStateException.class);
+    // git 작업 트리(.git 파일)도 저장소다.
+    var worktree = dir.resolve("wt");
+    Files.createDirectories(worktree);
+    Files.writeString(worktree.resolve(".git"), "gitdir: elsewhere");
+    assertThatThrownBy(() -> ArmoryRawDump.outsideRepository(worktree.resolve("raw"), dir))
+        .isInstanceOf(IllegalStateException.class);
+    assertThat(ArmoryRawDump.outsideRepository(dir.resolve("outside").resolve("raw"), dir))
+        .isEqualTo(dir.resolve("outside").resolve("raw"));
   }
 }

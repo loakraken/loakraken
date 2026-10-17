@@ -76,7 +76,7 @@ class RosterRankingIntegrationTest {
     member(SERVER, big, "원정바", 1650);
     member(SERVER, big, "원정사", 1600);
     exclude("원정제외");
-    // 두 명 원정대: 있는 인원으로 평균하고 usedCharacters=2.
+    // 두 명 원정대: 6명보다 적어도 6으로 나누고(식스맨 평균 규칙) usedCharacters=2.
     var small = UUID.randomUUID();
     member(SERVER, small, "원정작은", 1720);
     member(SERVER, small, "원정작은둘", 1700);
@@ -96,16 +96,17 @@ class RosterRankingIntegrationTest {
     assertThat(data.path("excludedRosters").asLong()).isZero();
     var rows = data.path("rows");
     assertThat(rows.size()).isEqualTo(2);
-    assertThat(rows.at("/0/characterName").asText()).isEqualTo("원정작은");
-    assertThat(rows.at("/0/value").decimalValue()).isEqualByComparingTo("1710.00");
-    assertThat(rows.at("/0/usedCharacters").asLong()).isEqualTo(2);
-    assertThat(rows.at("/0/characterCount").asLong()).isEqualTo(2);
-    assertThat(rows.at("/1/characterName").asText()).isEqualTo("원정가");
-    assertThat(rows.at("/1/value").decimalValue()).isEqualByComparingTo("1675.00");
-    assertThat(rows.at("/1/usedCharacters").asLong()).isEqualTo(6);
-    assertThat(rows.at("/1/characterCount").asLong()).isEqualTo(7);
-    assertThat(names(rows.at("/1/composition")))
+    // 일곱 명: 상위 6명 합 10050 ÷ 6 = 1675. 두 명: (1720 + 1700) ÷ 6 = 570.
+    assertThat(rows.at("/0/characterName").asText()).isEqualTo("원정가");
+    assertThat(rows.at("/0/value").decimalValue()).isEqualByComparingTo("1675.00");
+    assertThat(rows.at("/0/usedCharacters").asLong()).isEqualTo(6);
+    assertThat(rows.at("/0/characterCount").asLong()).isEqualTo(7);
+    assertThat(names(rows.at("/0/composition")))
         .containsExactly("원정가", "원정나", "원정다", "원정라", "원정마", "원정바");
+    assertThat(rows.at("/1/characterName").asText()).isEqualTo("원정작은");
+    assertThat(rows.at("/1/value").decimalValue()).isEqualByComparingTo("570.00");
+    assertThat(rows.at("/1/usedCharacters").asLong()).isEqualTo(2);
+    assertThat(rows.at("/1/characterCount").asLong()).isEqualTo(2);
     assertThat(response.body()).doesNotContain("원정제외").doesNotContain("원정오래");
     SiteNames.assertAbsent(response.body());
 
@@ -142,9 +143,27 @@ class RosterRankingIntegrationTest {
     assertThat(data.at("/rows/1/characterName").asText()).isEqualTo("원정스냅숏");
     assertThat(data.at("/rows/0/characterName").asText()).isEqualTo("원정전투가");
     assertThat(data.at("/rows/0/combatPower").decimalValue()).isEqualByComparingTo("3000.50");
-    assertThat(data.at("/rows/0/value").decimalValue()).isEqualByComparingTo("2750.25");
+    // 아이템 레벨 상위 6명(1700·1660·1600) 중 전투력 있는 둘의 합 5500.50 ÷ 6 = 916.75
+    assertThat(data.at("/rows/0/value").decimalValue()).isEqualByComparingTo("916.75");
     assertThat(data.at("/rows/0/usedCharacters").asLong()).isEqualTo(2);
     assertThat(names(data.at("/rows/0/composition"))).containsExactly("원정전투가", "원정전투나");
+  }
+
+  @Test
+  void 식스맨은_값이_아니라_아이템_레벨_상위_6명으로_고른다() throws Exception {
+    // 전투력 기준: 전투력이 가장 높은 1600 캐릭터는 아이템 레벨 7위라 식스맨에 들지 않는다.
+    var key = UUID.randomUUID();
+    for (int i = 0; i < 6; i++)
+      member(SERVER, key, "원정상위" + i, 1700 - i, "2000.00", null, Instant.now());
+    member(SERVER, key, "원정강한부캐", 1600, "9000.00", null, Instant.now());
+    var data =
+        data(
+            get(
+                "/api/v1/rankings/rosters?basis=COMBAT_POWER&aggregate=TOP6_SUM&server="
+                    + encode(SERVER)));
+    assertThat(data.at("/rows/0/value").decimalValue()).isEqualByComparingTo("12000.00");
+    assertThat(data.at("/rows/0/usedCharacters").asLong()).isEqualTo(6);
+    assertThat(data.at("/rows/0/composition").toString()).doesNotContain("원정강한부캐");
   }
 
   @Test

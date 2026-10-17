@@ -324,18 +324,20 @@ class PostgresStatsRepository implements StatsPort {
       valued AS (
         SELECT m.*, %VALUE% AS value,
           ROW_NUMBER() OVER (PARTITION BY m.roster_key
-            ORDER BY %VALUE% DESC NULLS LAST, m.item_level DESC NULLS LAST, m.character_name) AS vrn,
-          ROW_NUMBER() OVER (PARTITION BY m.roster_key
             ORDER BY m.item_level DESC NULLS LAST, m.character_name) AS irn
         FROM members m)
       """;
 
+  /**
+   * 식스맨(TOP6)은 아이템 레벨 상위 6명(irn ≤ 6)이고, 평균은 6명보다 적어도 늘 6으로 나눈다(비교 기준과 같은 규칙, PM 판정 10-15).
+   * used_top6은 그 6명 중 값이 있는 수다.
+   */
   private static final String ROSTER_RANKED =
       """
       , rosters AS (
         SELECT roster_key, COUNT(*) AS member_count,
-          COUNT(value) FILTER (WHERE vrn <= 6) AS used_top6, COUNT(value) AS used_all,
-          AVG(value) FILTER (WHERE vrn <= 6) AS top6_avg, SUM(value) FILTER (WHERE vrn <= 6) AS top6_sum,
+          COUNT(value) FILTER (WHERE irn <= 6) AS used_top6, COUNT(value) AS used_all,
+          SUM(value) FILTER (WHERE irn <= 6) / 6 AS top6_avg, SUM(value) FILTER (WHERE irn <= 6) AS top6_sum,
           AVG(value) AS all_avg, MAX(expedition_level) AS roster_level, COUNT(expedition_level) AS used_level,
           BOOL_OR(item_level >= 1640 AND NOT cp_observed) AS cp_missing
         FROM valued GROUP BY roster_key),
@@ -444,7 +446,7 @@ class PostgresStatsRepository implements StatsPort {
                     .replace("%KEYS%", "AND c.roster_key IN (:keys)")
                     .replace("%VALUE%", rosterValue(basis))
                 + "SELECT roster_key, character_name, class_name, value FROM valued"
-                + " WHERE vrn <= 6 AND value IS NOT NULL ORDER BY roster_key, vrn")
+                + " WHERE irn <= 6 AND value IS NOT NULL ORDER BY roster_key, irn")
         .param("since", since.atOffset(ZoneOffset.UTC))
         .param("server", server)
         .param("keys", rosterKeys)

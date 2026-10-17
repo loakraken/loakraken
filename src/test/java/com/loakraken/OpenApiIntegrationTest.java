@@ -72,6 +72,21 @@ class OpenApiIntegrationTest {
                 .asText())
         .isEqualTo("null");
     assertThat(document.at("/components/schemas/GemsResponse/type").asText()).isEqualTo("object");
+    // 보석별 기본 공격력 %(#543): 두 필드 모두 required이고 null을 허용하며, 근거 값은 enum이 아닌 문자열이다(값이 늘 수 있음).
+    assertThat(document.at("/components/schemas/GemResponse/required").toString())
+        .contains("baseAttackPct", "baseAttackPctSource");
+    for (var field : List.of("baseAttackPct", "baseAttackPctSource"))
+      assertThat(
+              document
+                  .at("/components/schemas/GemResponse/properties/" + field + "/anyOf/1/type")
+                  .asText())
+          .as(field)
+          .isEqualTo("null");
+    assertThat(
+            document
+                .at("/components/schemas/GemResponse/properties/baseAttackPctSource/anyOf/0/enum")
+                .isMissingNode())
+        .isTrue();
     assertThat(
             document
                 .at("/components/schemas/EquipmentResponse/properties/detail/anyOf/1/type")

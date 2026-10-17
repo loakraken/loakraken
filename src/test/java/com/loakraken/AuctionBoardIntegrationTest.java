@@ -43,6 +43,7 @@ class AuctionBoardIntegrationTest {
   @Autowired JdbcClient jdbc;
   @MockitoBean AuctionSearchPort search;
   @Autowired com.loakraken.common.lostark.LostArkRequestGate gate;
+  @Autowired io.micrometer.core.instrument.MeterRegistry meters;
   private final JsonMapper mapper = new JsonMapper();
 
   @BeforeEach
@@ -235,6 +236,8 @@ class AuctionBoardIntegrationTest {
   @Test
   void 필터_전용_분당_몫을_넘으면_캐시만_주고_캐시가_없으면_503이다() throws Exception {
     when(search.search(any())).thenAnswer(invocation -> page(invocation.getArgument(0)));
+    double hitsBefore = gemFilter("cache_hit");
+    double rejectsBefore = gemFilter("quota_reject");
     String cachedPath =
         "/api/v1/markets/auctions/gems/listings?kind="
             + encode("겁화")
@@ -259,6 +262,14 @@ class AuctionBoardIntegrationTest {
     assertThat(busy.headers().firstValue("Retry-After")).isPresent();
     data("/api/v1/markets/auctions/gems/listings?kind=" + encode("겁화") + "&level=9");
     verify(search, times(2)).search(any());
+    // 운영에서 몫 거절과 캐시 응답을 셀 수 있다.
+    assertThat(gemFilter("cache_hit") - hitsBefore).isGreaterThanOrEqualTo(1);
+    assertThat(gemFilter("quota_reject") - rejectsBefore).isEqualTo(1);
+  }
+
+  private double gemFilter(String event) {
+    var counter = meters.find("loakraken.market.gem_filter").tag("event", event).counter();
+    return counter == null ? 0 : counter.count();
   }
 
   @Test
@@ -277,6 +288,7 @@ class AuctionBoardIntegrationTest {
             + "&level=7&className="
             + encode("데모닉")
             + "&skill=27960";
+    double callsBefore = gemFilter("official_call");
     try (var pool = java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor()) {
       var calls = new ArrayList<java.util.concurrent.Future<HttpResponse<String>>>();
       calls.add(pool.submit(() -> get(path)));
@@ -285,6 +297,7 @@ class AuctionBoardIntegrationTest {
       for (var call : calls) assertThat(call.get().statusCode()).isEqualTo(200);
     }
     verify(search, times(1)).search(any());
+    assertThat(gemFilter("official_call") - callsBefore).isEqualTo(1);
   }
 
   /** 데모닉 스킬 가운데 겁화(피해 증가)만 있는 스킬 코드(리소스에서 찾는다). */

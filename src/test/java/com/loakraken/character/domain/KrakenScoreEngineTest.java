@@ -86,6 +86,57 @@ class KrakenScoreEngineTest {
         .isEqualTo(expected.path("score").asDouble());
   }
 
+  @ParameterizedTest
+  @ValueSource(strings = {"g01", "g02", "g03", "g05", "g06", "g07"})
+  void 딜러_젬_실효율이_전체와_질서_혼돈_계열까지_원본_값과_같다(String id) throws IOException {
+    var doc = fixture(id);
+    var input = doc.path("input");
+    var expected = doc.path("expected").path("gemEfficiency");
+    java.util.function.ToDoubleFunction<JsonNode> score = e -> KrakenScoreEngine.dealerScore(e, TABLES);
+    assertEfficiency(expected.path("전체"), KrakenScoreGems.total(input, TABLES, score));
+    var series = KrakenScoreGems.bySeries(input, TABLES, score);
+    assertEfficiency(expected.path("질서"), series.get("질서"));
+    assertEfficiency(expected.path("혼돈"), series.get("혼돈"));
+  }
+
+  @Test
+  void 서폿_점수와_버프력과_젬_실효율이_원본_값과_같다() throws IOException {
+    // g04 서폿: 점수는 PR(총 버프력^4.24 × 질서 코어 × 120), 젬 효율 점수 함수는 GT — 둘을 섞지 않는다.
+    var doc = fixture("g04");
+    assertThat(doc.path("role").asString("")).isEqualTo("SUPPORT");
+    var input = doc.path("input");
+    var support = doc.path("expected").path("support");
+    var buff = KrakenScoreSupport.buff(KrakenScoreSupport.factors(input, TABLES));
+    var pr = support.path("PR");
+    assertThat(buff.allTime()).isEqualTo(pr.path("allTimeBuffPower").asDouble());
+    assertThat(buff.doubleBuff()).isEqualTo(pr.path("doubleBuffPower").asDouble());
+    assertThat(buff.total()).isEqualTo(pr.path("totalBuffPower").asDouble());
+    assertThat(buff.score()).isEqualTo(pr.path("supportSpecPoint").asDouble());
+    assertThat(KrakenScoreSupport.score(input, TABLES)).isEqualTo(doc.path("expected").path("score").asDouble());
+    assertThat(KrakenScoreSupport.gemScore(input, TABLES)).isEqualTo(support.path("GT").asDouble());
+    var expected = doc.path("expected").path("gemEfficiency");
+    java.util.function.ToDoubleFunction<JsonNode> score = e -> KrakenScoreSupport.gemScore(e, TABLES);
+    assertEfficiency(expected.path("전체"), KrakenScoreGems.total(input, TABLES, score));
+    var series = KrakenScoreGems.bySeries(input, TABLES, score);
+    assertEfficiency(expected.path("질서"), series.get("질서"));
+    assertEfficiency(expected.path("혼돈"), series.get("혼돈"));
+  }
+
+  private static void assertEfficiency(JsonNode expected, KrakenScoreGems.Efficiency actual) {
+    assertThat(actual).isNotNull();
+    assertThat(actual.efficiency()).isEqualTo(expected.path("efficiency").asDouble());
+    assertThat(actual.optionEfficiency()).isEqualTo(expected.path("optionEfficiency").asDouble());
+    assertThat(actual.pointEfficiency()).isEqualTo(expected.path("pointEfficiency").asDouble());
+    var lines = expected.path("lines");
+    assertThat(actual.lines()).hasSize(lines.size());
+    for (int i = 0; i < lines.size(); i++) {
+      var line = actual.lines().get(i);
+      assertThat(line.name()).isEqualTo(lines.get(i).path("name").asString(""));
+      assertThat(line.level()).isEqualTo(lines.get(i).path("level").asDouble());
+      assertThat(line.efficiency()).as(line.name()).isEqualTo(lines.get(i).path("efficiency").asDouble());
+    }
+  }
+
   @Test
   void 프리셋이_없으면_피해_보석을_균등하게_나누고_보석딜증에_0_7을_곱한다() throws IOException {
     // g05: 직업 각인·코어 이름을 표에 없게 바꾼 합성 입력. 피해 보석 4개 → 0.25씩, 보석딜증 (1.28 − 1) × 0.7 + 1 = 1.196.

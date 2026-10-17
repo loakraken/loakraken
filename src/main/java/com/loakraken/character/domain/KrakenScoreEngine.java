@@ -24,7 +24,7 @@ public final class KrakenScoreEngine {
       for (var key :
           List.of(
               "RK", "P_", "s0", "af", "MU", "Um", "j1", "WR", "xV", "we", "Uk", "kC", "o9", "ur", "i_", "HZ",
-              "W", "braceletAddonAttack"))
+              "W", "braceletAddonAttack", "gemEffectLevels"))
         if (tables.path(key).isMissingNode())
           throw new IllegalArgumentException("크라켄 점수 표가 없습니다: " + key);
     }
@@ -705,8 +705,11 @@ public final class KrakenScoreEngine {
     return Math.floor(x + 0.5);
   }
 
-  /** JS x ** y. V8과 끝자리를 맞추려고 fdlibm(StrictMath)을 쓴다 — 고정 테스트가 확인한다. */
+  /**
+   * JS x ** y. 기준값 7명에서 StrictMath(fdlibm)는 서폿 점수 끝자리 1 ulp가 달랐고 Math.pow는 모두 같았다(2026-10-18 대조). JVM마다
+   * 끝자리가 달라질 수 있어 고정 테스트가 확인한다.
+   */
   static double pow(double x, double y) {
-    return StrictMath.pow(x, y);
+    return Math.pow(x, y);
   }
 }

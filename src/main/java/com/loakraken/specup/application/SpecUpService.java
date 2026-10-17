@@ -118,7 +118,11 @@ public class SpecUpService {
 
   public Guide guide(String characterName, Sort sort, int limit) {
     if (!enabled) throw new BusinessException(SpecUpErrorCode.SPEC_UP_DISABLED);
-    var snapshot = simulator.snapshot(characterName);
+    return guide(simulator.snapshot(characterName), sort, limit);
+  }
+
+  /** 이미 읽은 캐릭터 캐시로 목록을 만든다(줄 상세 #544가 같은 세팅으로 후보를 다시 찾을 때). */
+  Guide guide(CharacterResult snapshot, Sort sort, int limit) {
     var profile = snapshot.details().profile();
     var loadout = snapshot.details().loadout();
     var prices = new HashMap<String, MarketAuctionService.GemCell>();
@@ -532,8 +536,33 @@ public class SpecUpService {
       int refine,
       java.util.Optional<RefiningMaterialPriceService.Prices> prices,
       Instant[] pricesAt) {
+    var breakdown = refineBreakdown(item, refine, prices);
+    if ("OK".equals(breakdown.cost().status())
+        && (pricesAt[0] == null || breakdown.prices().observedAt().isBefore(pricesAt[0])))
+      pricesAt[0] = breakdown.prices().observedAt();
+    return breakdown.cost();
+  }
+
+  /**
+   * 일반 재련 +1 비용 내역(줄 상세 #544). plan은 비용에 쓴 계획(숨결 없음과 최대 사용 중 기대 비용이 작은 쪽, 시세가 없으면 숨결 없음)이고 계획이 없는
+   * 항목이면 null이다. prices는 쓴 재료 시세(없으면 null).
+   */
+  public record RefineBreakdown(
+      RefiningPlan plan,
+      boolean breath,
+      RefiningMaterialPriceService.Prices prices,
+      SpecUpCost cost) {}
+
+  /**
+   * 일반 재련 +1 기대 비용. 계열(업화·전율)은 장비 이름으로 정한다. 숨결 없음과 최대 사용을 모두 계산해 작은 쪽을 고른다. 필요한 재료 시세가 하나라도 없으면
+   * PENDING이다.
+   */
+  RefineBreakdown refineBreakdown(
+      CharacterLoadout.Equipment item,
+      int refine,
+      java.util.Optional<RefiningMaterialPriceService.Prices> prices) {
     var grade = refineGrade(item.name());
-    if (grade == null) return SpecUpCost.REFINE_COST_UNCONFIRMED;
+    if (grade == null) return new RefineBreakdown(null, false, null, SpecUpCost.REFINE_COST_UNCONFIRMED);
     var type =
         "무기".equals(item.type())
             ? RefiningRules.EquipmentType.WEAPON
@@ -542,31 +571,42 @@ public class SpecUpService {
     try {
       track = plans.rules().track(grade, type);
     } catch (IllegalArgumentException exception) {
-      return SpecUpCost.REFINE_COST_UNCONFIRMED;
+      return new RefineBreakdown(null, false, null, SpecUpCost.REFINE_COST_UNCONFIRMED);
     }
     int target = refine + 1;
     if (target < track.minTargetStage() || target > track.maxTargetStage())
-      return SpecUpCost.REFINE_COST_UNCONFIRMED;
-    if (prices.isEmpty()) return SpecUpCost.REFINE_PRICE_PENDING;
+      return new RefineBreakdown(null, false, null, SpecUpCost.REFINE_COST_UNCONFIRMED);
+    var withoutBreath =
+        plans.plan(grade, type, new RefiningPlan.Options(refine, target, false, false, true, 0, 0));
+    if (prices.isEmpty())
+      return new RefineBreakdown(withoutBreath, false, null, SpecUpCost.REFINE_PRICE_PENDING);
     var unitPrices = prices.get();
+    RefiningPlan bestPlan = null;
+    boolean bestBreath = false;
     Long best = null;
     for (boolean breath : new boolean[] {false, true}) {
       var plan =
-          plans.plan(
-              grade, type, new RefiningPlan.Options(refine, target, breath, false, true, 0, 0));
+          breath
+              ? plans.plan(
+                  grade, type, new RefiningPlan.Options(refine, target, true, false, true, 0, 0))
+              : withoutBreath;
       var total = plan.expectedGold();
       for (var quantity : plan.expectedMaterials()) {
         if (quantity.amount().signum() == 0) continue;
         var unit = unitPrices.unit(quantity.name()).orElse(null);
-        if (unit == null) return SpecUpCost.REFINE_PRICE_PENDING;
+        if (unit == null)
+          return new RefineBreakdown(
+              withoutBreath, false, unitPrices, SpecUpCost.REFINE_PRICE_PENDING);
         total = total.add(quantity.amount().multiply(unit));
       }
       long amount = total.setScale(0, RoundingMode.CEILING).longValue();
-      if (best == null || amount < best) best = amount;
+      if (best == null || amount < best) {
+        best = amount;
+        bestPlan = plan;
+        bestBreath = breath;
+      }
     }
-    if (pricesAt[0] == null || unitPrices.observedAt().isBefore(pricesAt[0]))
-      pricesAt[0] = unitPrices.observedAt();
-    return SpecUpCost.refineExpected(best);
+    return new RefineBreakdown(bestPlan, bestBreath, unitPrices, SpecUpCost.refineExpected(best));
   }
 
   static RefiningRules.Grade refineGrade(String name) {

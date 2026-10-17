@@ -76,12 +76,7 @@ class LostArkCharacterClient implements CharacterDetailsPort {
     var armory = armoryPayload.value();
     var profile = LostArkProfileMapper.from(armory.profile());
     rawDump.ifAvailable(dump -> dump.write(profile, armoryPayload.json()));
-    var details =
-        new CharacterDetails(
-            profile,
-            armory.toLoadout(),
-            null,
-            armory.coverage(null));
+    var details = new CharacterDetails(profile, armory.toLoadout(), null, armory.coverage(null));
     return new FetchedCharacter(details, armoryPayload.json(), null);
   }
 

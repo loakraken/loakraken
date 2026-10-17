@@ -21,7 +21,8 @@ import org.springframework.context.annotation.Profile;
 
 /** 로컬 전용 공식 원문 저장(#540). */
 class ArmoryRawDumpTest {
-  private final Clock clock = Clock.fixed(Instant.parse("2026-10-18T03:04:05.678Z"), ZoneOffset.UTC);
+  private final Clock clock =
+      Clock.fixed(Instant.parse("2026-10-18T03:04:05.678Z"), ZoneOffset.UTC);
   private final CharacterStopList stopList = mock(CharacterStopList.class);
 
   private ArmoryRawDump dump(Path dir) {
@@ -90,7 +91,8 @@ class ArmoryRawDumpTest {
     dump(dir).write("가", "{\"n\":1}");
     dump(dir).write("가", "{\"n\":2}");
     assertThat(Files.readString(dir.resolve("가_20261018T030405678Z.json"))).isEqualTo("{\"n\":1}");
-    assertThat(Files.readString(dir.resolve("가_20261018T030405678Z-1.json"))).isEqualTo("{\"n\":2}");
+    assertThat(Files.readString(dir.resolve("가_20261018T030405678Z-1.json")))
+        .isEqualTo("{\"n\":2}");
   }
 
   @Test
@@ -146,7 +148,8 @@ class ArmoryRawDumpTest {
     var repo = dir.resolve("repo");
     Files.createDirectories(repo.resolve(".git"));
     // 아직 없는 하위 폴더도, ..로 돌아 들어가는 경로도 거부한다.
-    assertThatThrownBy(() -> ArmoryRawDump.outsideRepository(repo.resolve("tmp").resolve("raw"), dir))
+    assertThatThrownBy(
+            () -> ArmoryRawDump.outsideRepository(repo.resolve("tmp").resolve("raw"), dir))
         .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining("저장소 밖");
     assertThatThrownBy(

@@ -23,11 +23,10 @@ import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
 /**
- * 로컬 대조 전용(#540): 캐릭터 조회 때 받은 공식 armories 응답 본문을 {@code ARMORY_RAW_DUMP_DIR}에 파일로 남긴다. {@code local}
- * 프로필만 켜져 있고({@code staging}·{@code prod} 없음) 설정이 있을 때만 부품이 만들어진다. 운영·스테이징 프로필에 설정이 있으면
- * {@link ProdGuard}가 시작을 막는다. 저장 경로는
- * 절대 경로이고 git 저장소 밖이어야 한다(아니면 시작 실패, 원문이 커밋되지 않게). 처리정지 목록 캐릭터(확인 실패 포함)는 쓰지 않는다(B5). 본문만 쓰고
- * API 키·요청 헤더는 다루지 않는다. 저장 실패는 조회를 막지 않으며, 로그에는 캐릭터 이름을 남기지 않는다.
+ * 로컬 대조 전용(#540): 캐릭터 조회 때 받은 공식 armories 응답 본문을 {@code ARMORY_RAW_DUMP_DIR}에 파일로 남긴다. {@code
+ * local} 프로필만 켜져 있고({@code staging}·{@code prod} 없음) 설정이 있을 때만 부품이 만들어진다. 운영·스테이징 프로필에 설정이 있으면
+ * {@link ProdGuard}가 시작을 막는다. 저장 경로는 절대 경로이고 git 저장소 밖이어야 한다(아니면 시작 실패, 원문이 커밋되지 않게). 처리정지 목록
+ * 캐릭터(확인 실패 포함)는 쓰지 않는다(B5). 본문만 쓰고 API 키·요청 헤더는 다루지 않는다. 저장 실패는 조회를 막지 않으며, 로그에는 캐릭터 이름을 남기지 않는다.
  */
 @Component
 @Profile("local & !staging & !prod")
@@ -35,7 +34,8 @@ import org.springframework.util.StringUtils;
 class ArmoryRawDump {
   static final String PROPERTY = "ARMORY_RAW_DUMP_DIR";
   private static final Logger log = LoggerFactory.getLogger(ArmoryRawDump.class);
-  private static final DateTimeFormatter STAMP = DateTimeFormatter.ofPattern("yyyyMMdd'T'HHmmssSSS'Z'");
+  private static final DateTimeFormatter STAMP =
+      DateTimeFormatter.ofPattern("yyyyMMdd'T'HHmmssSSS'Z'");
   private static final int MAX_SUFFIX = 100;
   private final Path dir;
   private final Clock clock;
@@ -77,7 +77,11 @@ class ArmoryRawDump {
         var file = dir.resolve(base + (i == 0 ? "" : "-" + i) + ".json");
         try {
           Files.writeString(
-              file, body, StandardCharsets.UTF_8, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
+              file,
+              body,
+              StandardCharsets.UTF_8,
+              StandardOpenOption.CREATE_NEW,
+              StandardOpenOption.WRITE);
           log.info("event=armory_raw_dumped bytes={}", body.length());
           return;
         } catch (FileAlreadyExistsException exists) {
@@ -91,8 +95,8 @@ class ArmoryRawDump {
   }
 
   /**
-   * 절대 경로이고, 그 위(링크를 따라간 실제 경로 포함) 어느 폴더에도 .git이 없어야 한다. {@code stopAt}이 있으면 그 폴더까지만 올라간다(테스트,
-   * 운영 코드는 null).
+   * 절대 경로이고, 그 위(링크를 따라간 실제 경로 포함) 어느 폴더에도 .git이 없어야 한다. {@code stopAt}이 있으면 그 폴더까지만 올라간다(테스트, 운영
+   * 코드는 null).
    */
   static Path outsideRepository(Path dir, Path stopAt) {
     if (!dir.isAbsolute()) throw new IllegalStateException(PROPERTY + "는 절대 경로여야 합니다.");

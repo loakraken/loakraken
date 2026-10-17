@@ -51,6 +51,7 @@ class GemBaseAttackTest {
   }
 
   private static CharacterLoadout.Gem gem(String name, int level, Integer tier) {
-    return new CharacterLoadout.Gem(0, name, null, level, "고대", List.of(), null, null, tier, List.of());
+    return new CharacterLoadout.Gem(
+        0, name, null, level, "고대", List.of(), null, null, tier, List.of());
   }
 }

@@ -230,7 +230,8 @@ public record CharacterLoadoutResponse(
           @NullableResponse
           BigDecimal baseAttackPct,
       @Schema(
-              description = "baseAttackPct 근거(문자열, 값이 늘 수 있음): TOOLTIP(공식 문구) 또는 LEVEL_TABLE(레벨 표). 값이 없으면 null",
+              description =
+                  "baseAttackPct 근거(문자열, 값이 늘 수 있음): TOOLTIP(공식 문구) 또는 LEVEL_TABLE(레벨 표). 값이 없으면 null",
               example = "TOOLTIP")
           @NullableResponse
           String baseAttackPctSource) {

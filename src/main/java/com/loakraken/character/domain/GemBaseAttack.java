@@ -6,8 +6,8 @@ import java.util.regex.Pattern;
 
 /**
  * 보석 하나의 '기본 공격력 n% 증가'(4티어 보석 추가 효과). 공식 보석 효과 문구(armory Effects.Skills의 Option)를 먼저 읽고, 문구가 없을 때만
- * 레벨 표로 채운다. 표는 공식 보석 툴팁에서 확인한 6~10레벨 값이고 combat-power/gem-coefficients.json의 baseAttackPct와 같다(테스트로
- * 고정). 1~5레벨과 3티어는 근거가 없어 null이다.
+ * 레벨 표로 채운다. 표는 공식 보석 툴팁에서 확인한 6~10레벨 값이고 combat-power/gem-coefficients.json의 baseAttackPct와
+ * 같다(테스트로 고정). 1~5레벨과 3티어는 근거가 없어 null이다.
  */
 public final class GemBaseAttack {
   public static final String TOOLTIP = "TOOLTIP";

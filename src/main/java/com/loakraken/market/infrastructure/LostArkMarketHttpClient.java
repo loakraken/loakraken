@@ -63,15 +63,22 @@ class LostArkMarketHttpClient {
     return payload;
   }
 
-  /** 공식 호출 로그(로컬 DEBUG)의 호출 대상. 거래소 분류·품목 이름(게임 데이터)과 쪽 번호만. */
+  /**
+   * 공식 호출 로그(로컬 DEBUG)의 호출 대상. 거래소 분류·품목 이름(게임 데이터)과 쪽 번호만. 품목 이름은 사용자 입력이 섞일 수 있어 제어 문자는 지우고
+   * 역슬래시·따옴표는 이스케이프한다(로그 한 줄이 깨지거나 가짜 줄이 생기지 않게).
+   */
   static String target(int categoryCode, String itemName, int pageNo) {
+    var item = itemName == null ? "" : CONTROL.matcher(itemName).replaceAll("");
     return "category="
         + categoryCode
         + " item="
-        + (itemName == null || itemName.isBlank() ? "-" : "\"" + itemName + "\"")
+        + (item.isBlank() ? "-" : "\"" + item.replace("\\", "\\\\").replace("\"", "\\\"") + "\"")
         + " page="
         + pageNo;
   }
+
+  private static final java.util.regex.Pattern CONTROL =
+      java.util.regex.Pattern.compile("[\\p{Cntrl}\\p{Zl}\\p{Zp}]");
 
   /** 경매장 검색. 즉시 구매가 오름차순이다. */
   <T> T requestAuction(AuctionPort.AuctionQuery query, Class<T> responseType) {

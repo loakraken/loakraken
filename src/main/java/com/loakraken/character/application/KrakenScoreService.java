@@ -10,8 +10,9 @@ import org.springframework.stereotype.Service;
 /**
  * 크라켄 점수(비교 기준 B의 점수식, #522). 공식 전투력과 별개의 점수·티어다.
  *
- * <p>단계적으로 붙인다: 이 단계는 응답 모양·티어·켜기 설정만 있고, 요소(공격력·진피·…·팔찌) 계산은 다음 단계다. 설정 {@code kraken-score.enabled}가
- * 꺼져 있으면(기본) status DISABLED, 켜져 있어도 요소를 아직 계산하지 않으면 UNSUPPORTED다. 근사값은 내지 않는다. 공식 호출이 없다.
+ * <p>단계적으로 붙인다: 이 단계는 응답 모양·티어·켜기 설정만 있고, 요소(공격력·진피·…·팔찌) 계산은 다음 단계다. 설정 {@code
+ * kraken-score.enabled}가 꺼져 있으면(기본) status DISABLED, 켜져 있어도 요소를 아직 계산하지 않으면 UNSUPPORTED다. 근사값은 내지
+ * 않는다. 공식 호출이 없다.
  */
 @Service
 public class KrakenScoreService {
@@ -71,7 +72,8 @@ public class KrakenScoreService {
 
   public KrakenScore score(CharacterResult result) {
     if (!enabled)
-      return new KrakenScore(Status.DISABLED, null, null, null, null, List.of(), tiers.ruleVersion());
+      return new KrakenScore(
+          Status.DISABLED, null, null, null, null, List.of(), tiers.ruleVersion());
     var roleReason = CombatPowerSimulationService.roleReason(result);
     Role role = null;
     if (roleReason == null) role = Role.DEALER;
@@ -100,6 +102,7 @@ public class KrakenScoreService {
   private KrakenScore unsupported(Role role, Reason reason) {
     // 공개 뒤 '점수 안 나옴'이 얼마나 되는지 보려고 이유별로 센다(observability).
     registry.counter("loakraken.kraken_score.unsupported", "reason", reason.name()).increment();
-    return new KrakenScore(Status.UNSUPPORTED, reason, role, null, null, List.of(), tiers.ruleVersion());
+    return new KrakenScore(
+        Status.UNSUPPORTED, reason, role, null, null, List.of(), tiers.ruleVersion());
   }
 }

@@ -282,12 +282,18 @@ class OpenApiIntegrationTest {
     assertThat(document.at("/components/schemas/KrakenScoreResponse/required").toString())
         .contains(
             "status", "reasonCode", "reason", "role", "score", "tier", "factors", "ruleVersion");
-    assertThat(document.at("/components/schemas/KrakenScoreResponse/properties/status/enum").toString())
+    assertThat(
+            document
+                .at("/components/schemas/KrakenScoreResponse/properties/status/enum")
+                .toString())
         .contains("OK", "UNSUPPORTED", "DISABLED");
     for (var field : List.of("reasonCode", "reason", "role", "score", "tier", "ruleVersion"))
       assertThat(
               document
-                  .at("/components/schemas/KrakenScoreResponse/properties/" + field + "/anyOf/1/type")
+                  .at(
+                      "/components/schemas/KrakenScoreResponse/properties/"
+                          + field
+                          + "/anyOf/1/type")
                   .asText())
           .as(field)
           .isEqualTo("null");

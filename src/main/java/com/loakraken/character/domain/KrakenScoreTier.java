@@ -35,7 +35,8 @@ public final class KrakenScoreTier {
 
   /**
    * 점수(반올림 전 double)의 티어. 원본처럼 double로 계산한다: 남은 점수는 (다음 컷 − 점수)를 double로 뺀 뒤 그 값을 정확한 십진수로 바꿔 둘째 자리
-   * 반올림(toFixed(2)와 같음), 진행률은 ⌊(점수 − 현재 컷) ÷ (다음 컷 − 현재 컷) × 100⌋. 음수·NaN·무한대는 티어가 없다(호출하는 쪽이 먼저 거름).
+   * 반올림(toFixed(2)와 같음), 진행률은 ⌊(점수 − 현재 컷) ÷ (다음 컷 − 현재 컷) × 100⌋. 음수·NaN·무한대는 티어가 없다(호출하는 쪽이 먼저
+   * 거름).
    */
   public static Tier of(Table table, double score) {
     if (!Double.isFinite(score) || score < 0)

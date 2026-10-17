@@ -59,7 +59,8 @@ public class CharacterController {
   }
 
   /** 크라켄 점수(#522). 메모리 계산이고 실패해도 검색 응답은 막지 않는다(DISABLED 모양). */
-  private com.loakraken.character.application.KrakenScoreService.KrakenScore krakenScore(CharacterResult result) {
+  private com.loakraken.character.application.KrakenScoreService.KrakenScore krakenScore(
+      CharacterResult result) {
     try {
       return scores.score(result);
     } catch (RuntimeException exception) {

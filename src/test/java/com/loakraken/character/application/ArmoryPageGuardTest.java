@@ -45,7 +45,8 @@ class ArmoryPageGuardTest {
         Duration.ofMinutes(1),
         Duration.ofMinutes(30),
         5,
-        3);
+        3,
+        new ArmoryPagePolicy.SkillCode(true));
   }
 
   @Test
@@ -119,6 +120,31 @@ class ArmoryPageGuardTest {
     for (int i = 0; i < 5; i++) guard.failure(Kind.HTTP_ERROR);
     clock.advance(Duration.ofHours(1));
     assertThat(guard.acquire()).isEqualTo(Decision.STOPPED);
+  }
+
+  @Test
+  void 스킬_코드_거절과_형식_변경은_스킬_코드만_멈추고_페이지는_계속_읽는다() {
+    guard.skillCodeFailure(Kind.ACCESS_DENIED);
+    assertThat(guard.skillCodeStopped()).isTrue();
+    assertThat(guard.stopped()).isFalse();
+    assertThat(guard.acquire()).isEqualTo(Decision.ALLOWED);
+    assertThat(registry.get("loakraken.armory_page.skill_code.stopped").gauge().value())
+        .isEqualTo(1.0);
+
+    var other =
+        new ArmoryPageGuard(policy(), clock, new SimpleMeterRegistry(), duration -> clock.advance(duration));
+    other.skillCodeFailure(Kind.PARSE_ERROR);
+    other.skillCodeFailure(Kind.PARSE_ERROR);
+    other.skillCodeSuccess();
+    other.skillCodeFailure(Kind.PARSE_ERROR);
+    other.skillCodeFailure(Kind.PARSE_ERROR);
+    assertThat(other.skillCodeStopped()).isFalse();
+    other.skillCodeFailure(Kind.PARSE_ERROR);
+    assertThat(other.skillCodeStopped()).isTrue();
+    assertThat(other.stopped()).isFalse();
+    // 공식 쪽 응답 문제는 페이지와 같은 쉬기를 쓴다.
+    other.skillCodeFailure(Kind.HTTP_ERROR);
+    assertThat(other.acquire()).isEqualTo(Decision.BACKOFF);
   }
 
   private static final class MutableClock extends Clock {

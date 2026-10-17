@@ -37,6 +37,7 @@ public class ArmoryPageService {
   private final MeterRegistry registry;
   private final Clock clock;
   private final SingleFlight<ArmoryPageStorePort.Entry> flights = new SingleFlight<>();
+  private final SingleFlight<ArmoryPageStorePort.CodeEntry> codeFlights = new SingleFlight<>();
 
   public ArmoryPageService(
       ArmoryPagePolicy policy,
@@ -57,26 +58,18 @@ public class ArmoryPageService {
     this.clock = clock;
   }
 
+  /** 스킬 코드 응답 값(#532). enabled가 false면 나머지는 null, 읽지 못했으면 enabled true에 나머지 null. */
+  public record CodeView(String characterName, boolean enabled, Instant fetchedAt, String skillCode) {}
+
   public View page(String characterName) {
     var name = new SearchCharacterCommand(characterName).characterName();
     if (!policy.enabled()) {
       skipped("disabled");
       return new View(name, false, null, null, null);
     }
-    CharacterResult result;
-    try {
-      result = cache.find(name).or(() -> cache.findArmory(name)).orElse(null);
-    } catch (CharacterException exception) {
-      throw new CharacterException(CharacterErrorCode.CHARACTER_CACHE_UNAVAILABLE);
-    }
-    if (result == null) {
-      skipped("not_cached");
-      throw new CharacterException(CharacterErrorCode.CHARACTER_NOT_CACHED);
-    }
-    var profile = result.details().profile();
-    var official = profile.characterName();
-    // 처리정지 목록이거나 확인하지 못하면 요청하지 않는다. 응답은 읽기 실패와 같다(B5).
-    if (!stopList.recordable(official, profile.serverName())) {
+    var target = target(name);
+    var official = target.official();
+    if (!target.recordable()) {
       skipped("suspended");
       return failed(official);
     }
@@ -94,6 +87,123 @@ public class ArmoryPageService {
         : new View(official, true, SOURCE, entry.fetchedAt(), entry.lifeSkills());
   }
 
+  /**
+   * 스킬 코드(#532). 웹이 스킬 탭에 들어갈 때 부른다. 캐시가 없으면 페이지 GET(식별 값·생활 스킬)과 코드 POST로 공식 요청이 2번 들고, 그 페이지로
+   * 생활 스킬 캐시도 함께 갱신한다. 식별 값은 이 메서드 안 메모리에서만 쓴다. 스위치·멈춤은 페이지 정보와 따로다.
+   */
+  public CodeView skillCode(String characterName) {
+    var name = new SearchCharacterCommand(characterName).characterName();
+    if (!policy.enabled() || !policy.skillCode().enabled()) {
+      codeSkipped("disabled");
+      return new CodeView(name, false, null, null);
+    }
+    var target = target(name);
+    var official = target.official();
+    if (!target.recordable()) {
+      codeSkipped("suspended");
+      return new CodeView(official, true, null, null);
+    }
+    ArmoryPageStorePort.CodeEntry entry;
+    try {
+      entry = store.findCode(official).orElse(null);
+    } catch (CharacterException exception) {
+      codeSkipped("cache_unavailable");
+      return new CodeView(official, true, null, null);
+    }
+    if (entry == null) entry = codeFlights.run(official, () -> loadCode(official));
+    return entry.failure()
+        ? new CodeView(official, true, null, null)
+        : new CodeView(official, true, entry.fetchedAt(), entry.skillCode());
+  }
+
+  private ArmoryPageStorePort.CodeEntry loadCode(String official) {
+    if (guard.skillCodeStopped()) {
+      codeSkipped("stopped");
+      return ArmoryPageStorePort.CodeEntry.failed();
+    }
+    var decision = guard.acquire();
+    if (decision != ArmoryPageGuard.Decision.ALLOWED) {
+      codeSkipped(decision.name().toLowerCase(java.util.Locale.ROOT));
+      return ArmoryPageStorePort.CodeEntry.failed();
+    }
+    ArmoryPagePort.Page page;
+    var pageSample = Timer.start(registry);
+    try {
+      page = pages.fetch(official);
+      guard.success();
+      fetched("page", "ok", pageSample);
+      store.save(
+          official,
+          new ArmoryPageStorePort.Entry(clock.instant(), page.lifeSkills()),
+          policy.cacheTtl());
+    } catch (ArmoryPageFetchException exception) {
+      guard.failure(exception.kind());
+      fetched("page", exception.kind().label(), pageSample);
+      return codeFailed(official, "page", exception);
+    }
+    if (page.identity() == null) {
+      // 식별 값이 페이지에 없으면 코드 요청을 할 수 없다(구조 변경으로 센다).
+      var missing =
+          new ArmoryPageFetchException(ArmoryPageFetchException.Kind.PARSE_ERROR, null);
+      guard.skillCodeFailure(missing.kind());
+      registry
+          .counter("loakraken.armory_page.fetch", "phase", "code", "result", "parse_error")
+          .increment();
+      return codeFailed(official, "code", missing);
+    }
+    decision = guard.acquire();
+    if (decision != ArmoryPageGuard.Decision.ALLOWED) {
+      codeSkipped(decision.name().toLowerCase(java.util.Locale.ROOT));
+      return ArmoryPageStorePort.CodeEntry.failed();
+    }
+    var codeSample = Timer.start(registry);
+    try {
+      var code = pages.skillCode(page.identity());
+      guard.skillCodeSuccess();
+      fetched("code", "ok", codeSample);
+      var entry = new ArmoryPageStorePort.CodeEntry(clock.instant(), code);
+      store.saveCode(official, entry, policy.cacheTtl());
+      return entry;
+    } catch (ArmoryPageFetchException exception) {
+      guard.skillCodeFailure(exception.kind());
+      fetched("code", exception.kind().label(), codeSample);
+      return codeFailed(official, "code", exception);
+    }
+  }
+
+  private ArmoryPageStorePort.CodeEntry codeFailed(
+      String official, String phase, ArmoryPageFetchException exception) {
+    log.warn(
+        "event=armory_page_fetch_failed phase={} result={} status={}",
+        phase,
+        exception.kind().label(),
+        exception.status());
+    var failed = ArmoryPageStorePort.CodeEntry.failed();
+    store.saveCode(official, failed, policy.failureTtl());
+    return failed;
+  }
+
+  /** 우리 캐릭터 캐시에서 공식 이름·처리정지 여부를 찾는다. 캐시에 없으면 404, 캐시 장애면 503. */
+  private Target target(String name) {
+    CharacterResult result;
+    try {
+      result = cache.find(name).or(() -> cache.findArmory(name)).orElse(null);
+    } catch (CharacterException exception) {
+      throw new CharacterException(CharacterErrorCode.CHARACTER_CACHE_UNAVAILABLE);
+    }
+    if (result == null) {
+      skipped("not_cached");
+      throw new CharacterException(CharacterErrorCode.CHARACTER_NOT_CACHED);
+    }
+    var profile = result.details().profile();
+    // 처리정지 목록이거나 확인하지 못하면 요청하지 않는다. 응답은 읽기 실패와 같다(B5).
+    return new Target(
+        profile.characterName(),
+        stopList.recordable(profile.characterName(), profile.serverName()));
+  }
+
+  private record Target(String official, boolean recordable) {}
+
   private ArmoryPageStorePort.Entry load(String official) {
     var decision = guard.acquire();
     if (decision != ArmoryPageGuard.Decision.ALLOWED) {
@@ -105,13 +215,13 @@ public class ArmoryPageService {
     try {
       var page = pages.fetch(official);
       guard.success();
-      fetched("ok", sample);
+      fetched("page", "ok", sample);
       var entry = new ArmoryPageStorePort.Entry(clock.instant(), page.lifeSkills());
       store.save(official, entry, policy.cacheTtl());
       return entry;
     } catch (ArmoryPageFetchException exception) {
       guard.failure(exception.kind());
-      fetched(exception.kind().label(), sample);
+      fetched("page", exception.kind().label(), sample);
       log.warn(
           "event=armory_page_fetch_failed phase=page result={} status={}",
           exception.kind().label(),
@@ -126,16 +236,20 @@ public class ArmoryPageService {
     return new View(official, true, null, null, null);
   }
 
-  private void fetched(String result, Timer.Sample sample) {
-    registry.counter("loakraken.armory_page.fetch", "phase", "page", "result", result).increment();
+  private void fetched(String phase, String result, Timer.Sample sample) {
+    registry.counter("loakraken.armory_page.fetch", "phase", phase, "result", result).increment();
     sample.stop(
         Timer.builder("loakraken.armory_page.fetch.duration")
-            .tag("phase", "page")
+            .tag("phase", phase)
             .publishPercentileHistogram()
             .register(registry));
   }
 
   private void skipped(String reason) {
     registry.counter("loakraken.armory_page.skipped", "reason", reason).increment();
+  }
+
+  private void codeSkipped(String reason) {
+    registry.counter("loakraken.armory_page.skill_code.skipped", "reason", reason).increment();
   }
 }

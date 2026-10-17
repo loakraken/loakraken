@@ -47,6 +47,8 @@ public class ArmoryPageGuard {
   private int parseFailures;
   private boolean stopped;
   private Instant resumeAt;
+  private int codeParseFailures;
+  private boolean codeStopped;
 
   @Autowired
   public ArmoryPageGuard(ArmoryPagePolicy policy, Clock clock, MeterRegistry registry) {
@@ -59,6 +61,10 @@ public class ArmoryPageGuard {
     this.sleeper = sleeper;
     Gauge.builder("loakraken.armory_page.stopped", this, guard -> guard.stopped() ? 1 : 0)
         .description("전투정보실 페이지 요청이 멈춰 있으면 1")
+        .register(registry);
+    Gauge.builder(
+            "loakraken.armory_page.skill_code.stopped", this, guard -> guard.skillCodeStopped() ? 1 : 0)
+        .description("스킬 코드 요청만 멈춰 있으면 1(거절·형식 변경)")
         .register(registry);
   }
 
@@ -117,6 +123,36 @@ public class ArmoryPageGuard {
         if (failures >= policy.stopAfterFailures()) stop("failures", now.plus(policy.backoffMax()));
       }
     }
+  }
+
+  /**
+   * 스킬 코드 요청 실패(#532). 거절(401·403·응답 code≠0)이면 우회하지 않고 스킬 코드만 재시작 전까지 멈춘다. 형식 불일치가 연속
+   * {@code stopAfterParseFailures}번이면 스킬 코드만 멈춘다. 공식 쪽 응답 문제(429·5xx·시간 초과)는 페이지와 같은 쉬기·멈춤을 쓴다.
+   */
+  public synchronized void skillCodeFailure(ArmoryPageFetchException.Kind kind) {
+    switch (kind) {
+      case ACCESS_DENIED -> stopSkillCode("access_denied");
+      case PARSE_ERROR, TOO_LARGE -> {
+        codeParseFailures++;
+        if (codeParseFailures >= policy.stopAfterParseFailures()) stopSkillCode("structure");
+      }
+      default -> failure(kind);
+    }
+  }
+
+  public synchronized void skillCodeSuccess() {
+    codeParseFailures = 0;
+    success();
+  }
+
+  public synchronized boolean skillCodeStopped() {
+    return codeStopped;
+  }
+
+  private void stopSkillCode(String reason) {
+    if (codeStopped) return;
+    codeStopped = true;
+    log.warn("event=armory_page_skill_code_stopped reason={} autoResume=none", reason);
   }
 
   public synchronized boolean stopped() {

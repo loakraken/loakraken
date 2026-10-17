@@ -35,11 +35,14 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import tools.jackson.databind.json.JsonMapper;
 
-/** 전투정보실 페이지 정보(#531): 검색한 캐릭터만, 값만 캐시, 처리정지는 실패와 같은 응답, 로그에 이름 없음. 실제 공식 요청 0. */
+/**
+ * 전투정보실 페이지 정보(#531)·스킬 코드(#532): 검색한 캐릭터만, 값만 캐시, 처리정지는 실패와 같은 응답, 로그에 이름 없음, 식별 값은 어디에도
+ * 남지 않음. 실제 공식 요청 0.
+ */
 @Import(TestcontainersConfiguration.class)
 @SpringBootTest(
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-    properties = "armory-page.enabled=true")
+    properties = {"armory-page.enabled=true", "armory-page.skill-code.enabled=true"})
 @ExtendWith(OutputCaptureExtension.class)
 class ArmoryPageIntegrationTest {
   private static final String SERVER = "전투페서버";
@@ -152,6 +155,62 @@ class ArmoryPageIntegrationTest {
     // 이름만 다르고 나머지 글자는 같다(B5 — 목록에 있는지 드러내지 않음).
     assertThat(stopped.body().replace("전투페정지", "X")).isEqualTo(failed.body().replace("전투페실패", "X"));
     verify(pages, never()).fetch(eq("전투페정지"));
+  }
+
+  @Test
+  void 스킬_코드는_페이지와_코드_요청으로_받고_식별_값은_어디에도_남지_않는다(CapturedOutput output)
+      throws Exception {
+    when(detailsPort.fetch(anyString())).thenAnswer(invocation -> fetched(invocation.getArgument(0)));
+    var identity = new ArmoryPagePort.Identity("IDMEMBERSECRET1", "IDWORLDSECRET2", "IDPCSECRET3");
+    when(pages.fetch("전투페코드"))
+        .thenReturn(
+            new ArmoryPagePort.Page(List.of(new ArmoryPagePort.LifeSkill("낚시", 23)), identity));
+    var code = "0F".repeat(64);
+    when(pages.skillCode(identity)).thenReturn(code);
+    get("/api/v1/characters/search", "전투페코드");
+
+    var first = get(PATH + "/skill-code", "전투페코드");
+    assertThat(first.statusCode()).as(first.body()).isEqualTo(200);
+    ApiContractFixture.write("character-skill-code.json", first.body());
+    var root = mapper.readTree(first.body());
+    assertThat(root.path("code").asText()).isEqualTo("CHARACTER_SKILL_CODE_SUCCESS");
+    assertThat(root.at("/data/enabled").asBoolean()).isTrue();
+    assertThat(root.at("/data/skillCode").asText()).isEqualTo(code);
+    assertThat(root.at("/data/fetchedAt").isTextual()).isTrue();
+    // 같은 페이지로 생활 스킬 캐시도 채웠다(페이지 정보 요청에 공식 요청이 더 들지 않음).
+    var life = get(PATH, "전투페코드");
+    assertThat(mapper.readTree(life.body()).at("/data/lifeSkills/0/level").asInt()).isEqualTo(23);
+    get(PATH + "/skill-code", "전투페코드");
+    verify(pages, times(1)).fetch("전투페코드");
+    verify(pages, times(1)).skillCode(identity);
+
+    // 식별 값은 응답·캐시·로그 어디에도 없다.
+    var cached = new ArrayList<String>();
+    for (var key : redis.keys("armory-page:v1:*")) cached.add(redis.opsForValue().get(key));
+    for (var secret : List.of("IDMEMBERSECRET1", "IDWORLDSECRET2", "IDPCSECRET3")) {
+      assertThat(first.body()).doesNotContain(secret);
+      assertThat(String.join("\n", cached)).doesNotContain(secret);
+      assertThat(output.getAll()).doesNotContain(secret);
+    }
+    assertThat(armoryLines(output)).doesNotContain("전투페코드");
+  }
+
+  @Test
+  void 스킬_코드를_받지_못하면_값이_null이고_페이지에_식별_값이_없으면_코드_요청을_하지_않는다()
+      throws Exception {
+    when(detailsPort.fetch(anyString())).thenAnswer(invocation -> fetched(invocation.getArgument(0)));
+    when(pages.fetch("전투페코드없음"))
+        .thenReturn(new ArmoryPagePort.Page(List.of(new ArmoryPagePort.LifeSkill("낚시", 1))));
+    get("/api/v1/characters/search", "전투페코드없음");
+    var response = get(PATH + "/skill-code", "전투페코드없음");
+    assertThat(response.statusCode()).isEqualTo(200);
+    var data = mapper.readTree(response.body()).path("data");
+    assertThat(data.path("enabled").asBoolean()).isTrue();
+    assertThat(data.path("skillCode").isNull()).isTrue();
+    assertThat(data.path("fetchedAt").isNull()).isTrue();
+    verify(pages, never()).skillCode(org.mockito.ArgumentMatchers.any());
+    // 검색하지 않은 캐릭터는 404.
+    assertThat(get(PATH + "/skill-code", "전투페검색안함").statusCode()).isEqualTo(404);
   }
 
   /** 이 기능이 쓴 로그 줄만(검색 경로 로그는 범위 밖). */

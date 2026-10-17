@@ -23,7 +23,7 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestClient;
 
-/** 공식 전투정보실 페이지 클라이언트(#531): 실제 요청 없이 MockRestServiceServer로. */
+/** 공식 전투정보실 페이지 클라이언트(#531·#532): 실제 요청 없이 MockRestServiceServer로. */
 class OfficialArmoryPageClientTest {
   private static final String URL = "https://lostark.game.onstove.com/Profile/Character/";
 
@@ -43,7 +43,8 @@ class OfficialArmoryPageClientTest {
         Duration.ofMinutes(1),
         Duration.ofMinutes(30),
         5,
-        3);
+        3,
+        new ArmoryPagePolicy.SkillCode(true));
   }
 
   private static String fixture() throws IOException {
@@ -67,6 +68,84 @@ class OfficialArmoryPageClientTest {
         .extracting(skill -> skill.name() + "=" + skill.level())
         .containsExactly("식물 채집=14", "벌목=23", "채광=7", "수렵=14", "낚시=23", "고고학=70");
     server.verify();
+  }
+
+  @Test
+  void 페이지_식별_값을_읽되_문자열로_드러내지_않는다() throws Exception {
+    var page = ArmoryPageParser.parse(fixture());
+    assertThat(page.identity()).isNotNull();
+    assertThat(page.identity().memberNo()).startsWith("TESTMEMBER");
+    assertThat(page.identity().worldNo()).startsWith("TESTWORLD");
+    assertThat(page.identity().pcId()).startsWith("TESTPCID");
+    // 로그·예외 메시지로 새지 않게 toString은 값을 숨긴다(#532).
+    assertThat(page.toString()).doesNotContain("TESTMEMBER", "TESTWORLD", "TESTPCID");
+    assertThat(page.identity().toString()).doesNotContain("TESTMEMBER");
+    // 스크립트 변수가 없으면 식별 값만 null(생활 스킬은 그대로).
+    var noScript =
+        ArmoryPageParser.parse(
+            "<ul class='profile-skill-life__list'><li><strong>낚시</strong><span>Lv.3</span></li></ul>");
+    assertThat(noScript.identity()).isNull();
+    assertThat(noScript.lifeSkills()).hasSize(1);
+  }
+
+  @Test
+  void 스킬_코드는_폼으로_요청하고_128자_16진수만_꺼낸다() throws Exception {
+    var code = "a1".repeat(64);
+    var builder = RestClient.builder();
+    var server = MockRestServiceServer.bindTo(builder).build();
+    server
+        .expect(requestTo("https://lostark.game.onstove.com/Profile/SkillRecommend"))
+        .andExpect(method(HttpMethod.POST))
+        .andExpect(header("User-Agent", "LOAKraken"))
+        .andExpect(header("Content-Type", org.hamcrest.Matchers.startsWith("application/x-www-form-urlencoded")))
+        .andExpect(
+            org.springframework.test.web.client.match.MockRestRequestMatchers.content()
+                .string("memberNo=M1&worldNo=W1&pcId=P1"))
+        .andRespond(
+            withSuccess(
+                "{\"code\":0,\"title\":\"스킬 코드\",\"content\":\"<p>다음 코드를 복사하세요</p><input value='"
+                    + code
+                    + "'>\",\"button\":\"코드 복사하기\"}",
+                MediaType.APPLICATION_JSON));
+    var result =
+        new OfficialArmoryPageClient(policy(3_000_000, ""), builder)
+            .skillCode(new com.loakraken.character.application.ArmoryPagePort.Identity("M1", "W1", "P1"));
+    assertThat(result).isEqualTo(code.toUpperCase());
+    server.verify();
+  }
+
+  @Test
+  void 스킬_코드_거절은_우회하지_않고_접근_거부로_형식이_다르면_구조_변경으로_센다() {
+    // 응답 code≠0(로그인 필요 안내 등)·401·403은 접근 거부.
+    assertThatThrownBy(() -> OfficialArmoryPageClient.code("{\"code\":1,\"message\":\"로그인이 필요합니다\"}"))
+        .isInstanceOfSatisfying(
+            ArmoryPageFetchException.class,
+            e -> assertThat(e.kind()).isEqualTo(Kind.ACCESS_DENIED));
+    for (var status : java.util.List.of(HttpStatus.FORBIDDEN, HttpStatus.UNAUTHORIZED)) {
+      var builder = RestClient.builder();
+      var server = MockRestServiceServer.bindTo(builder).build();
+      server.expect(requestTo("https://lostark.game.onstove.com/Profile/SkillRecommend")).andRespond(withStatus(status));
+      assertThatThrownBy(
+              () ->
+                  new OfficialArmoryPageClient(policy(3_000_000, ""), builder)
+                      .skillCode(
+                          new com.loakraken.character.application.ArmoryPagePort.Identity("M", "W", "P")))
+          .isInstanceOfSatisfying(
+              ArmoryPageFetchException.class,
+              e -> assertThat(e.kind()).isEqualTo(Kind.ACCESS_DENIED));
+    }
+    // JSON이 아니거나(안내 HTML), 코드가 없거나, 129자면 구조 변경.
+    for (var body :
+        java.util.List.of(
+            "<html>로그인</html>",
+            "{\"code\":0,\"content\":\"코드 없음\"}",
+            "{\"code\":0,\"content\":\"" + "A".repeat(129) + "\"}",
+            "{\"content\":\"" + "A".repeat(128) + "\"}"))
+      assertThatThrownBy(() -> OfficialArmoryPageClient.code(body))
+          .as(body)
+          .isInstanceOfSatisfying(
+              ArmoryPageFetchException.class,
+              e -> assertThat(e.kind()).isEqualTo(Kind.PARSE_ERROR));
   }
 
   @Test
@@ -146,7 +225,8 @@ class OfficialArmoryPageClientTest {
                     Duration.ofMinutes(1),
                     Duration.ofMinutes(30),
                     5,
-                    3))
+                    3,
+        new ArmoryPagePolicy.SkillCode(true)))
         .isInstanceOf(IllegalArgumentException.class);
     assertThatThrownBy(
             () ->
@@ -165,7 +245,8 @@ class OfficialArmoryPageClientTest {
                     Duration.ofMinutes(1),
                     Duration.ofMinutes(30),
                     5,
-                    3))
+                    3,
+        new ArmoryPagePolicy.SkillCode(true)))
         .isInstanceOf(IllegalArgumentException.class);
   }
 

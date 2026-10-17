@@ -10,6 +10,7 @@ import com.loakraken.market.application.RefiningMaterialPriceService;
 import com.loakraken.market.application.RelicBookPriceService;
 import com.loakraken.specup.application.SpecUpService.Candidate;
 import com.loakraken.specup.domain.SpecUpCost;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Instant;
@@ -31,18 +32,21 @@ public class SpecUpDetailService {
   private final MarketAuctionService auctions;
   private final RelicBookPriceService books;
   private final RefiningMaterialPriceService materials;
+  private final MeterRegistry meters;
 
   public SpecUpDetailService(
       SpecUpService specUp,
       CombatPowerSimulationService simulator,
       MarketAuctionService auctions,
       RelicBookPriceService books,
-      RefiningMaterialPriceService materials) {
+      RefiningMaterialPriceService materials,
+      MeterRegistry meters) {
     this.specUp = specUp;
     this.simulator = simulator;
     this.auctions = auctions;
     this.books = books;
     this.materials = materials;
+    this.meters = meters;
   }
 
   /** 바뀌는 스탯 하나. 근거가 있는 것만 낸다. */
@@ -99,11 +103,24 @@ public class SpecUpDetailService {
     var snapshot = simulator.snapshot(characterName);
     var built = build(snapshot, candidateId);
     // 목록을 만든 뒤 내역을 읽는 사이에 시세 캐시가 갱신되면 금액이 어긋난다. 한 번만 다시 만든다.
-    if (!built.consistent()) built = build(snapshot, candidateId);
+    if (!built.consistent()) {
+      mismatch("retry");
+      built = build(snapshot, candidateId);
+      // 두 번째도 어긋나면 틀린 금액을 내보내지 않는다(#554). 시세가 바뀌어 목록의 그 후보도 바뀐 것이라 같은 404로 목록을 다시 부르게 한다.
+      if (!built.consistent()) {
+        mismatch("rejected");
+        throw new BusinessException(SpecUpErrorCode.SPEC_UP_CANDIDATE_NOT_FOUND);
+      }
+    }
     return built.detail();
   }
 
   private record Built(Detail detail, boolean consistent) {}
+
+  /** 목록 비용과 내역 금액이 어긋난 횟수. outcome: retry(다시 만듦)·rejected(두 번 어긋나 404). */
+  private void mismatch(String outcome) {
+    meters.counter("loakraken.spec_up.detail_mismatch", "outcome", outcome).increment();
+  }
 
   private Built build(CharacterResult snapshot, String candidateId) {
     var guide = specUp.guide(snapshot, SpecUpService.Sort.DELTA, Integer.MAX_VALUE);

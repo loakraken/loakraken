@@ -20,6 +20,7 @@ class CombatPowerCoefficientsConfiguration {
   static final String REFINE_RESOURCE = "combat-power/refine-coefficients.json";
   static final String BRACELET_RESOURCE = "combat-power/bracelet-coefficients.json";
   static final String ARK_GRID_RESOURCE = "combat-power/ark-grid-coefficients.json";
+  static final String SCORE_A_TIERS_RESOURCE = "score-a/tiers.json";
 
   /** 전투력 시뮬레이터 보석 계수(#243). 근거·확인 날짜는 리소스 source에 있다. 읽을 수 없으면 애플리케이션이 시작하지 않는다. */
   @Bean
@@ -63,6 +64,15 @@ class CombatPowerCoefficientsConfiguration {
       throws IOException {
     try (var input = new ClassPathResource(ARK_GRID_RESOURCE).getInputStream()) {
       return mapper.readValue(input, CombatPowerArkGridModel.Coefficients.class);
+    }
+  }
+
+  /** 크라켄 점수 티어 컷(#522). 읽을 수 없으면 애플리케이션이 시작하지 않는다(조용한 UNSUPPORTED 금지). */
+  @Bean
+  com.loakraken.character.domain.ScoreATier.Table scoreATierTable(JsonMapper mapper)
+      throws IOException {
+    try (var input = new ClassPathResource(SCORE_A_TIERS_RESOURCE).getInputStream()) {
+      return mapper.readValue(input, com.loakraken.character.domain.ScoreATier.Table.class);
     }
   }
 

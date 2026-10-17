@@ -48,21 +48,36 @@ public record CharacterResponse(
                 "아크 그리드 효율(전투력 기준): 지금 전투력이 아크 그리드 코어와 젬 옵션을 모두 뺀 전투력보다 몇 % 높은지(지금 ÷ 뺀 전투력 − 1), 코어만의 합(coresPercent), 줄별 값(코어마다 그 코어만 뺐을 때, 마지막 줄은 젬 옵션 합계). 줄별 값은 그 줄만 뺐을 때의 값이라 곱 구조상 줄별 합은 전체 값과 같지 않습니다. 아크 그리드가 없으면 null")
         @NullableResponse
         ArkGridEfficiencyResponse arkGridEfficiency,
+    @Schema(
+            description =
+                "크라켄 점수와 크라켄 점수 티어(공식 전투력과 별개의 점수). 늘 들어 있고, 아직 공개 전이면 status DISABLED(값 null)")
+        ScoreAResponse scoreA,
     @Schema(description = "외부 API에서 실제 수집한 UTC 시각. 캐시 조회에서도 유지됩니다.") Instant fetchedAt,
     @Schema(
             description =
                 "캐시 만료 예정 UTC 시각. 이 시각 이전 요청은 캐시를 반환해 fetchedAt이 바뀌지 않습니다. 캐시 적중에서도 유지되며 실제 만료는 1초 미만 늦을 수 있습니다. 알 수 없으면 null입니다.")
         @NullableResponse
         Instant refreshAvailableAt) {
+  /** 효율·점수 없이(직렬화 테스트용). 점수는 DISABLED 모양. */
   public static CharacterResponse from(CharacterResult result) {
-    return from(result, null, null);
+    return from(result, null, null, ScoreAResponse.DISABLED_WITHOUT_VERSION);
   }
 
   public static CharacterResponse from(
       CharacterResult result,
       com.loakraken.character.application.CombatPowerSimulationService.BraceletEfficiency
           efficiency,
-      com.loakraken.character.application.ArkGridEfficiencyService.ArkGridEfficiency arkGrid) {
+      com.loakraken.character.application.ArkGridEfficiencyService.ArkGridEfficiency arkGrid,
+      com.loakraken.character.application.ScoreAService.ScoreA scoreA) {
+    return from(result, efficiency, arkGrid, ScoreAResponse.from(scoreA));
+  }
+
+  private static CharacterResponse from(
+      CharacterResult result,
+      com.loakraken.character.application.CombatPowerSimulationService.BraceletEfficiency
+          efficiency,
+      com.loakraken.character.application.ArkGridEfficiencyService.ArkGridEfficiency arkGrid,
+      ScoreAResponse scoreA) {
     var profile = result.details().profile();
     var inner = profile.inner();
     return new CharacterResponse(
@@ -127,9 +142,105 @@ public record CharacterResponse(
         CharacterAnalysisResponse.from(result.analysis(), result.details().coverage()),
         BraceletEfficiencyResponse.from(efficiency),
         ArkGridEfficiencyResponse.from(arkGrid),
+        scoreA,
         result.fetchedAt(),
         result.refreshAvailableAt());
   }
+
+  @Schema(
+      description =
+          "크라켄 점수. status: OK(값 있음)·UNSUPPORTED(계산 못 함, reasonCode)·DISABLED(아직 공개 전, 값 null·factors 빈 배열)")
+  public record ScoreAResponse(
+      @Schema(
+              description = "OK·UNSUPPORTED·DISABLED",
+              allowableValues = {"OK", "UNSUPPORTED", "DISABLED"},
+              example = "OK")
+          String status,
+      @Schema(description = "UNSUPPORTED 이유 코드(화면은 이 코드로 그림). 그 밖에는 null", example = "ROLE_UNKNOWN")
+          @NullableResponse
+          String reasonCode,
+      @Schema(description = "이유 문장(로그·디버그용, 화면 문구로 쓰지 않음). OK·DISABLED면 null") @NullableResponse
+          String reason,
+      @Schema(
+              description = "DEALER·SUPPORT. 판정하지 못했거나 DISABLED면 null",
+              allowableValues = {"DEALER", "SUPPORT"})
+          @NullableResponse
+          String role,
+      @Schema(description = "크라켄 점수(소수 둘째 자리). OK가 아니면 null", example = "5658.62") @NullableResponse
+          BigDecimal score,
+      @Schema(description = "크라켄 점수 티어. OK가 아니면 null") @NullableResponse ScoreATierResponse tier,
+      @Schema(
+              description =
+                  "점수 요소(공격력·진화·깨달음·도약·적에게 주는 피해·추가 피해·보주·보석·특성·에스더·팔찌 등). DISABLED면 빈 배열")
+          List<ScoreAFactorResponse> factors,
+      @Schema(description = "계산 규칙 버전(표 갱신 때 올라감)", example = "score-a-v1") @NullableResponse
+          String ruleVersion) {
+    static final ScoreAResponse DISABLED_WITHOUT_VERSION =
+        new ScoreAResponse("DISABLED", null, null, null, null, null, List.of(), null);
+
+    static ScoreAResponse from(com.loakraken.character.application.ScoreAService.ScoreA value) {
+      if (value == null) return DISABLED_WITHOUT_VERSION;
+      var tier = value.tier();
+      return new ScoreAResponse(
+          value.status().name(),
+          value.reason() == null ? null : value.reason().name(),
+          value.reason() == null ? null : value.reason().text(),
+          value.role() == null ? null : value.role().name(),
+          value.score(),
+          tier == null
+              ? null
+              : new ScoreATierResponse(
+                  tier.code(),
+                  tier.min(),
+                  tier.nextCode(),
+                  tier.nextMin(),
+                  tier.remaining(),
+                  tier.progressPercent()),
+          value.factors().stream()
+              .map(
+                  factor ->
+                      new ScoreAFactorResponse(
+                          factor.code(),
+                          factor.value(),
+                          factor.status().name(),
+                          factor.reason() == null ? null : factor.reason().name()))
+              .toList(),
+          value.ruleVersion());
+    }
+  }
+
+  public record ScoreATierResponse(
+      @Schema(
+              description = "티어 코드",
+              allowableValues = {
+                "BRONZE",
+                "SILVER",
+                "GOLD",
+                "DIAMOND",
+                "MASTER",
+                "GRANDMASTER",
+                "ESTHER"
+              },
+              example = "DIAMOND")
+          String code,
+      @Schema(description = "이 티어의 최소 점수", example = "5000") BigDecimal min,
+      @Schema(description = "다음 티어 코드. 최상위면 null", example = "MASTER") @NullableResponse
+          String nextCode,
+      @Schema(description = "다음 티어 최소 점수. 최상위면 null", example = "6700") @NullableResponse
+          BigDecimal nextMin,
+      @Schema(description = "다음 티어까지 남은 점수(소수 둘째 자리). 최상위면 null", example = "1041.38")
+          @NullableResponse
+          BigDecimal remaining,
+      @Schema(description = "이 티어 안 진행률(정수, 내림). 최상위면 100", example = "38") int progressPercent) {}
+
+  public record ScoreAFactorResponse(
+      @Schema(description = "요소 코드(열린 값 — 단계마다 늘어남, 모르는 코드는 그 줄만 따로 표시)", example = "ATTACK")
+          String code,
+      @Schema(description = "요소 배수. 계산 못 했으면 null", example = "1.0523") @NullableResponse
+          BigDecimal value,
+      @Schema(description = "OK·UNSUPPORTED", example = "OK") String status,
+      @Schema(description = "UNSUPPORTED 이유 코드", example = "FACTOR_PENDING") @NullableResponse
+          String reasonCode) {}
 
   public record TendencyResponse(
       @NullableResponse String type,

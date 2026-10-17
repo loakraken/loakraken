@@ -647,12 +647,12 @@ class CombatPowerSimulationIntegrationTest {
     assertThat(search.statusCode()).isEqualTo(200);
     ApiContractFixture.write("character-search-ark-grid-efficiency.json", search.body());
     // 크라켄 점수(#522): 공개 전이라 늘 DISABLED 모양(값 null, 요소 빈 배열, 이름은 비교 기준 이름 없이).
-    var scoreA = mapper.readTree(search.body()).at("/data/scoreA");
-    assertThat(scoreA.path("status").asText()).isEqualTo("DISABLED");
-    assertThat(scoreA.path("score").isNull()).isTrue();
-    assertThat(scoreA.path("tier").isNull()).isTrue();
-    assertThat(scoreA.path("factors").size()).isZero();
-    assertThat(scoreA.path("ruleVersion").asText()).isEqualTo("score-a-v1");
+    var krakenScore = mapper.readTree(search.body()).at("/data/krakenScore");
+    assertThat(krakenScore.path("status").asText()).isEqualTo("DISABLED");
+    assertThat(krakenScore.path("score").isNull()).isTrue();
+    assertThat(krakenScore.path("tier").isNull()).isTrue();
+    assertThat(krakenScore.path("factors").size()).isZero();
+    assertThat(krakenScore.path("ruleVersion").asText()).isEqualTo("kraken-score-v1");
     SiteNames.assertAbsent(search.body());
     var efficiency = mapper.readTree(search.body()).at("/data/arkGridEfficiency");
     assertThat(efficiency.path("status").asText()).isEqualTo("OK");

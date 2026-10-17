@@ -8,12 +8,12 @@ import java.util.List;
  * 크라켄 점수(비교 기준 B의 점수식) 티어(#522). 점수 컷 이상이면 그 티어다. 판정은 반올림 전 점수로 하고, 남은 점수는 소수 둘째 자리, 진행률은 정수 내림이다.
  * 최상위 티어는 다음 티어 값이 null이고 진행률 100이다.
  */
-public final class ScoreATier {
+public final class KrakenScoreTier {
   private static final BigDecimal HUNDRED = BigDecimal.valueOf(100);
 
-  private ScoreATier() {}
+  private KrakenScoreTier() {}
 
-  /** 데이터 파일(score-a/tiers.json). tiers는 min 오름차순, 첫 컷은 0. */
+  /** 데이터 파일(kraken-score/tiers.json). tiers는 min 오름차순, 첫 컷은 0. */
   public record Table(String ruleVersion, String source, List<Cut> tiers) {
     public Table {
       if (tiers == null || tiers.isEmpty()) throw new IllegalArgumentException("티어 표가 비었습니다");

@@ -51,7 +51,7 @@ public record CharacterResponse(
     @Schema(
             description =
                 "크라켄 점수와 크라켄 점수 티어(공식 전투력과 별개의 점수). 늘 들어 있고, 아직 공개 전이면 status DISABLED(값 null)")
-        ScoreAResponse scoreA,
+        KrakenScoreResponse krakenScore,
     @Schema(description = "외부 API에서 실제 수집한 UTC 시각. 캐시 조회에서도 유지됩니다.") Instant fetchedAt,
     @Schema(
             description =
@@ -60,7 +60,7 @@ public record CharacterResponse(
         Instant refreshAvailableAt) {
   /** 효율·점수 없이(직렬화 테스트용). 점수는 DISABLED 모양. */
   public static CharacterResponse from(CharacterResult result) {
-    return from(result, null, null, ScoreAResponse.DISABLED_WITHOUT_VERSION);
+    return from(result, null, null, KrakenScoreResponse.DISABLED_WITHOUT_VERSION);
   }
 
   public static CharacterResponse from(
@@ -68,8 +68,8 @@ public record CharacterResponse(
       com.loakraken.character.application.CombatPowerSimulationService.BraceletEfficiency
           efficiency,
       com.loakraken.character.application.ArkGridEfficiencyService.ArkGridEfficiency arkGrid,
-      com.loakraken.character.application.ScoreAService.ScoreA scoreA) {
-    return from(result, efficiency, arkGrid, ScoreAResponse.from(scoreA));
+      com.loakraken.character.application.KrakenScoreService.KrakenScore krakenScore) {
+    return from(result, efficiency, arkGrid, KrakenScoreResponse.from(krakenScore));
   }
 
   private static CharacterResponse from(
@@ -77,7 +77,7 @@ public record CharacterResponse(
       com.loakraken.character.application.CombatPowerSimulationService.BraceletEfficiency
           efficiency,
       com.loakraken.character.application.ArkGridEfficiencyService.ArkGridEfficiency arkGrid,
-      ScoreAResponse scoreA) {
+      KrakenScoreResponse krakenScore) {
     var profile = result.details().profile();
     var inner = profile.inner();
     return new CharacterResponse(
@@ -142,7 +142,7 @@ public record CharacterResponse(
         CharacterAnalysisResponse.from(result.analysis(), result.details().coverage()),
         BraceletEfficiencyResponse.from(efficiency),
         ArkGridEfficiencyResponse.from(arkGrid),
-        scoreA,
+        krakenScore,
         result.fetchedAt(),
         result.refreshAvailableAt());
   }
@@ -150,7 +150,7 @@ public record CharacterResponse(
   @Schema(
       description =
           "크라켄 점수. status: OK(값 있음)·UNSUPPORTED(계산 못 함, reasonCode)·DISABLED(아직 공개 전, 값 null·factors 빈 배열)")
-  public record ScoreAResponse(
+  public record KrakenScoreResponse(
       @Schema(
               description = "OK·UNSUPPORTED·DISABLED",
               allowableValues = {"OK", "UNSUPPORTED", "DISABLED"},
@@ -168,20 +168,20 @@ public record CharacterResponse(
           String role,
       @Schema(description = "크라켄 점수(소수 둘째 자리). OK가 아니면 null", example = "5658.62") @NullableResponse
           BigDecimal score,
-      @Schema(description = "크라켄 점수 티어. OK가 아니면 null") @NullableResponse ScoreATierResponse tier,
+      @Schema(description = "크라켄 점수 티어. OK가 아니면 null") @NullableResponse KrakenScoreTierResponse tier,
       @Schema(
               description =
                   "점수 요소(공격력·진화·깨달음·도약·적에게 주는 피해·추가 피해·보주·보석·특성·에스더·팔찌 등). DISABLED면 빈 배열")
-          List<ScoreAFactorResponse> factors,
-      @Schema(description = "계산 규칙 버전(표 갱신 때 올라감)", example = "score-a-v1") @NullableResponse
+          List<KrakenScoreFactorResponse> factors,
+      @Schema(description = "계산 규칙 버전(표 갱신 때 올라감)", example = "kraken-score-v1") @NullableResponse
           String ruleVersion) {
-    static final ScoreAResponse DISABLED_WITHOUT_VERSION =
-        new ScoreAResponse("DISABLED", null, null, null, null, null, List.of(), null);
+    static final KrakenScoreResponse DISABLED_WITHOUT_VERSION =
+        new KrakenScoreResponse("DISABLED", null, null, null, null, null, List.of(), null);
 
-    static ScoreAResponse from(com.loakraken.character.application.ScoreAService.ScoreA value) {
+    static KrakenScoreResponse from(com.loakraken.character.application.KrakenScoreService.KrakenScore value) {
       if (value == null) return DISABLED_WITHOUT_VERSION;
       var tier = value.tier();
-      return new ScoreAResponse(
+      return new KrakenScoreResponse(
           value.status().name(),
           value.reason() == null ? null : value.reason().name(),
           value.reason() == null ? null : value.reason().text(),
@@ -189,7 +189,7 @@ public record CharacterResponse(
           value.score(),
           tier == null
               ? null
-              : new ScoreATierResponse(
+              : new KrakenScoreTierResponse(
                   tier.code(),
                   tier.min(),
                   tier.nextCode(),
@@ -199,7 +199,7 @@ public record CharacterResponse(
           value.factors().stream()
               .map(
                   factor ->
-                      new ScoreAFactorResponse(
+                      new KrakenScoreFactorResponse(
                           factor.code(),
                           factor.value(),
                           factor.status().name(),
@@ -209,7 +209,7 @@ public record CharacterResponse(
     }
   }
 
-  public record ScoreATierResponse(
+  public record KrakenScoreTierResponse(
       @Schema(
               description = "티어 코드",
               allowableValues = {
@@ -233,7 +233,7 @@ public record CharacterResponse(
           BigDecimal remaining,
       @Schema(description = "이 티어 안 진행률(정수, 내림). 최상위면 100", example = "38") int progressPercent) {}
 
-  public record ScoreAFactorResponse(
+  public record KrakenScoreFactorResponse(
       @Schema(description = "요소 코드(열린 값 — 단계마다 늘어남, 모르는 코드는 그 줄만 따로 표시)", example = "ATTACK")
           String code,
       @Schema(description = "요소 배수. 계산 못 했으면 null", example = "1.0523") @NullableResponse

@@ -24,12 +24,13 @@ import org.springframework.util.StringUtils;
 
 /**
  * 로컬 대조 전용(#540): 캐릭터 조회 때 받은 공식 armories 응답 본문을 {@code ARMORY_RAW_DUMP_DIR}에 파일로 남긴다. {@code local}
- * 프로필이고 {@code prod}가 아니며 설정이 있을 때만 부품이 만들어진다. 운영 프로필에 설정이 있으면 {@link ProdGuard}가 시작을 막는다. 저장 경로는
+ * 프로필만 켜져 있고({@code staging}·{@code prod} 없음) 설정이 있을 때만 부품이 만들어진다. 운영·스테이징 프로필에 설정이 있으면
+ * {@link ProdGuard}가 시작을 막는다. 저장 경로는
  * 절대 경로이고 git 저장소 밖이어야 한다(아니면 시작 실패, 원문이 커밋되지 않게). 처리정지 목록 캐릭터(확인 실패 포함)는 쓰지 않는다(B5). 본문만 쓰고
  * API 키·요청 헤더는 다루지 않는다. 저장 실패는 조회를 막지 않으며, 로그에는 캐릭터 이름을 남기지 않는다.
  */
 @Component
-@Profile("local & !prod")
+@Profile("local & !staging & !prod")
 @Conditional(ArmoryRawDump.DirConfigured.class)
 class ArmoryRawDump {
   static final String PROPERTY = "ARMORY_RAW_DUMP_DIR";
@@ -124,13 +125,13 @@ class ArmoryRawDump {
     }
   }
 
-  /** 운영 프로필에 저장 경로가 설정되면 시작을 막는다(local과 prod가 함께 켜진 경우 포함). */
+  /** 운영·스테이징 프로필에 저장 경로가 설정되면 시작을 막는다(local과 함께 켜진 경우 포함). */
   @Component
-  @Profile("prod")
+  @Profile({"prod", "staging"})
   @Conditional(DirConfigured.class)
   static class ProdGuard {
     ProdGuard() {
-      throw new IllegalStateException(PROPERTY + "는 운영 프로필에서 쓸 수 없습니다.");
+      throw new IllegalStateException(PROPERTY + "는 운영 프로필(prod·staging)에서 쓸 수 없습니다.");
     }
   }
 }

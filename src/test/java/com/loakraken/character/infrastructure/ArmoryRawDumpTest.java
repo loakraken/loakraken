@@ -63,9 +63,20 @@ class ArmoryRawDumpTest {
   }
 
   @Test
-  void local_프로필이고_prod가_아니며_설정이_있을_때만_만들어진다() {
+  void local_프로필만이고_설정이_있을_때만_만들어진다() {
     assertThat(ArmoryRawDump.class.getAnnotation(Profile.class).value())
-        .containsExactly("local & !prod");
+        .containsExactly("local & !staging & !prod");
+    // local과 staging이 함께 켜지면 저장 부품이 없고, 설정이 있으면 시작이 실패한다.
+    new ApplicationContextRunner()
+        .withPropertyValues("ARMORY_RAW_DUMP_DIR=/raw-dump")
+        .withUserConfiguration(ArmoryRawDump.class)
+        .withInitializer(context -> context.getEnvironment().setActiveProfiles("local", "staging"))
+        .run(context -> assertThat(context).hasNotFailed().doesNotHaveBean(ArmoryRawDump.class));
+    new ApplicationContextRunner()
+        .withPropertyValues("ARMORY_RAW_DUMP_DIR=/raw-dump")
+        .withUserConfiguration(ArmoryRawDump.ProdGuard.class)
+        .withInitializer(context -> context.getEnvironment().setActiveProfiles("local", "staging"))
+        .run(context -> assertThat(context).hasFailed());
     // 환경 변수 ARMORY_RAW_DUMP_DIR가 비어 있지 않을 때만(빈 값이면 현재 폴더에 쓰지 않게).
     new ApplicationContextRunner()
         .withPropertyValues("ARMORY_RAW_DUMP_DIR= ")
@@ -129,7 +140,7 @@ class ArmoryRawDumpTest {
   @Test
   void 저장_경로가_상대_경로이거나_git_저장소_안이면_시작이_실패한다(@TempDir Path temp) throws Exception {
     var dir = temp.toRealPath();
-    assertThatThrownBy(() -> new ArmoryRawDump("raw", clock, stopList))
+    assertThatThrownBy(() -> ArmoryRawDump.outsideRepository(Path.of("raw"), null))
         .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining("절대 경로");
     var repo = dir.resolve("repo");

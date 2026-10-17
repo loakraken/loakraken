@@ -99,7 +99,10 @@ public class CharacterQueryService {
                       }
                       var result =
                           new CharacterResult(
-                              fetched.details(), fetchedAt, Instant.now(clock).plus(cache.ttl()));
+                              fetched.details(),
+                              fetchedAt,
+                              Instant.now(clock).plus(cache.ttl()),
+                              fetched.krakenScoreInput());
                       cache.save(name, result);
                       if (recordable) {
                         history.record(profile, fetchedAt);
@@ -123,7 +126,11 @@ public class CharacterQueryService {
                       var fetched = remembering(name, () -> detailsPort.fetchArmory(name));
                       var now = Instant.now(clock);
                       var result =
-                          new CharacterResult(fetched.details(), now, now.plus(cache.ttl()));
+                          new CharacterResult(
+                              fetched.details(),
+                              now,
+                              now.plus(cache.ttl()),
+                              fetched.krakenScoreInput());
                       cache.saveArmory(name, result);
                       var profile = fetched.details().profile();
                       if (stopList.recordable(profile.characterName(), profile.serverName())) {

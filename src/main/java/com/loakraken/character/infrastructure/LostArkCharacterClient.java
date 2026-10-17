@@ -28,6 +28,8 @@ import tools.jackson.databind.json.JsonMapper;
 
 @Component
 class LostArkCharacterClient implements CharacterDetailsPort {
+  private static final org.slf4j.Logger log =
+      org.slf4j.LoggerFactory.getLogger(LostArkCharacterClient.class);
   private static final String FILTERS =
       "profiles+equipment+engravings+gems+cards+arkpassive+arkgrid+combat-skills+avatars+collectibles";
   private final RestClient client;
@@ -67,7 +69,8 @@ class LostArkCharacterClient implements CharacterDetailsPort {
             armory.toLoadout(),
             toDomain(siblings),
             armory.coverage(Arrays.asList(siblings)));
-    return new FetchedCharacter(details, armoryPayload.json(), siblingsPayload.json());
+    return new FetchedCharacter(
+        details, armoryPayload.json(), siblingsPayload.json(), krakenScoreInput(armoryPayload.json()));
   }
 
   @Override
@@ -77,7 +80,21 @@ class LostArkCharacterClient implements CharacterDetailsPort {
     var profile = LostArkProfileMapper.from(armory.profile());
     rawDump.ifAvailable(dump -> dump.write(profile, armoryPayload.json()));
     var details = new CharacterDetails(profile, armory.toLoadout(), null, armory.coverage(null));
-    return new FetchedCharacter(details, armoryPayload.json(), null);
+    return new FetchedCharacter(
+        details, armoryPayload.json(), null, krakenScoreInput(armoryPayload.json()));
+  }
+
+  /**
+   * 크라켄 점수 엔진 입력(#559). 원문에서 엔진이 읽는 값만 뽑는다(원문은 남기지 않음). 만들지 못해도 조회는 그대로 성공하고 점수만 계산하지 않는다(로그에 캐릭터
+   * 이름 없음).
+   */
+  private tools.jackson.databind.JsonNode krakenScoreInput(String armoryJson) {
+    try {
+      return com.loakraken.character.domain.KrakenScoreInputMapper.from(mapper.readTree(armoryJson));
+    } catch (RuntimeException exception) {
+      log.warn("event=kraken_score_input_failed type={}", exception.getClass().getSimpleName());
+      return null;
+    }
   }
 
   @Override

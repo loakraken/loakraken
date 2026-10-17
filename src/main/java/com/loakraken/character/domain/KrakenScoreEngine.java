@@ -21,7 +21,10 @@ public final class KrakenScoreEngine {
   public record Tables(String savedAt, JsonNode tables) {
     public Tables {
       Objects.requireNonNull(tables, "tables");
-      for (var key : List.of("RK", "P_", "s0", "af", "MU", "Um", "j1", "WR", "xV", "we"))
+      for (var key :
+          List.of(
+              "RK", "P_", "s0", "af", "MU", "Um", "j1", "WR", "xV", "we", "Uk", "kC", "o9", "ur", "i_", "HZ",
+              "W", "braceletAddonAttack"))
         if (tables.path(key).isMissingNode())
           throw new IllegalArgumentException("크라켄 점수 표가 없습니다: " + key);
     }
@@ -258,6 +261,10 @@ public final class KrakenScoreEngine {
 
   /** 추피: (무기 품질 + 목걸이 첫 '추가 피해' 줄 + 젬 추가 피해 + 혼돈의 해 코어 : 안정적인 공격) ÷ 100 + 1. */
   private static double additionalDamage(JsonNode e) {
+    return additionalDamageRaw(e) / 100 + 1;
+  }
+
+  private static double additionalDamageRaw(JsonNode e) {
     double quality = 0;
     var q = e.path("armory").path("equipment").path("weapon").path("quality");
     if (truthy(q)) quality = 10 + .002 * Math.pow(q.asDouble(), 2);
@@ -284,7 +291,7 @@ public final class KrakenScoreEngine {
       boolean ancient = "고대".equals(stable.path("grade").asString(""));
       core = STABLE_ATTACK.get(key)[ancient ? 1 : 0];
     }
-    return (quality + necklace + gem + core) / 100 + 1;
+    return quality + necklace + gem + core;
   }
 
   private static final Map<String, double[]> STABLE_ATTACK =
@@ -606,6 +613,33 @@ public final class KrakenScoreEngine {
     return result;
   }
 
+  // ---------------------------------------------------------------- 팔찌 계산이 함께 쓰는 값(같은 원본 식)
+
+  /** 모듈 92194 값(팔찌 옵션 무기 공격력). */
+  static double braceletWeaponForBracelet(JsonNode e, Tables tables) {
+    return braceletWeapon(e, tables);
+  }
+
+  /** 모듈 50080·65224의 코어 보너스 [flat, percent](포인트가 없거나 표에 없으면 0). */
+  static double[] coreBonus(JsonNode e, Tables tables, String coreName, String flatKey, String percentKey) {
+    var core = findCore(e, coreName);
+    if (core == null || core.path("point").asDouble() == 0) return new double[] {0, 0};
+    var row = coreRow(tables, core);
+    if (row == null) return new double[] {0, 0};
+    return new double[] {row.path(flatKey).asDouble(0), row.path(percentKey).asDouble(0)};
+  }
+
+  /** 모듈 45748 값 [weaponAtkFlat, baseAtkFlat, baseAtkPercent]. */
+  static double[] vambraceValues(JsonNode e) {
+    var v = vambrace(e);
+    return new double[] {v.weaponAtkFlat, v.baseAtkFlat, v.baseAtkPercent};
+  }
+
+  /** 추피 합(÷100 + 1 하기 전): 무기 품질 + 목걸이 + 젬 + 혼돈의 해 코어 : 안정적인 공격. 모듈 28245와 70015가 같은 식이다. */
+  static double additionalDamageSum(JsonNode e) {
+    return additionalDamageRaw(e);
+  }
+
   // ---------------------------------------------------------------- 공통
 
   private static JsonNode findCore(JsonNode e, String name) {
@@ -631,7 +665,7 @@ public final class KrakenScoreEngine {
   }
 
   /** JS ""+값 — 정수 값은 소수점 없이. */
-  private static String jsString(JsonNode node) {
+  static String jsString(JsonNode node) {
     if (node.isNumber()) {
       double d = node.asDouble();
       if (d == Math.rint(d) && !Double.isInfinite(d)) return Long.toString((long) d);
@@ -640,6 +674,32 @@ public final class KrakenScoreEngine {
     return node.asString("");
   }
 
+  /** JS String(수) — 정수는 소수점 없이. */
+  static String jsNumber(double d) {
+    if (d == Math.rint(d) && !Double.isInfinite(d)) return Long.toString((long) d);
+    return Double.toString(d);
+  }
+
+  /**
+   * 딜러 점수(원본 32142 xV = i(l(e), d6(e))): 요소 11개 × (팔찌 총배율 × 1.021) ÷ 1930. 곱하는 순서도 원본 그대로다.
+   */
+  public static double dealerScore(JsonNode e, Tables tables) {
+    var f = factors(e, tables);
+    double t = KrakenScoreBracelet.total(e, tables);
+    return f.attack()
+        * f.evolution()
+        * f.enlightenment()
+        * f.leap()
+        * f.enemyDamage()
+        * f.additionalDamage()
+        * f.orb()
+        * f.gemDamage()
+        * f.gemCooldown()
+        * f.stats()
+        * f.esther()
+        * (t * KrakenScoreBracelet.SCORE_CONSTANT)
+        / 1930;
+  }
   /** JS Math.round(양수 입력): floor(x + 0.5). */
   static double jsRound(double x) {
     return Math.floor(x + 0.5);

@@ -16,7 +16,7 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * 크라켄 점수 엔진(#539) 고정 테스트: 같은 시각에 캡처한 딜러 6명(g01~g03, g05~g07)의 비교 기준 B 입력에 엔진을 돌려 원본 함수 값과 끝자리까지(double
+ * 크라켄 점수 엔진(#539) 고정 테스트: 같은 시각에 캡처한 딜러 6명(g01~g03, g05~g07)의 비교 기준 B 입력에 엔진을 돌려 요소·공격력·프리셋·팔찌 총배율·점수가 원본 함수 값과 끝자리까지(double
  * 그대로) 같은지 본다. g05는 프리셋 없음(균등 분배 × 0.7) 사례를 만든 합성 입력이다. 픽스처에는 식별 정보가 없다.
  */
 class KrakenScoreEngineTest {
@@ -76,6 +76,14 @@ class KrakenScoreEngineTest {
     var preset = KrakenScoreEngine.preset(input, TABLES);
     assertThat(preset.tag()).isEqualTo(expected.path("presetTag").asString(""));
     assertThat(preset.fallback()).isEqualTo(expected.path("presetFallback").asBoolean());
+
+    // 팔찌 총배율과 점수(요소 × 팔찌 총배율 × 1.021 ÷ 1930)도 끝자리까지.
+    assertThat(KrakenScoreBracelet.total(input, TABLES))
+        .as("팔찌 총배율")
+        .isEqualTo(expected.path("braceletTotal").asDouble());
+    assertThat(KrakenScoreEngine.dealerScore(input, TABLES))
+        .as("점수")
+        .isEqualTo(expected.path("score").asDouble());
   }
 
   @Test
@@ -92,7 +100,10 @@ class KrakenScoreEngineTest {
   @Test
   void 표가_빠지면_만들지_않는다() {
     var node = MAPPER.createObjectNode();
-    for (var key : List.of("RK", "P_", "s0", "af", "MU", "Um", "j1", "WR", "xV")) node.putObject(key);
+    for (var key :
+        List.of("RK", "P_", "s0", "af", "MU", "Um", "j1", "WR", "xV", "Uk", "kC", "o9", "ur", "i_", "HZ", "W"))
+      node.putObject(key);
+    node.putObject("braceletAddonAttack");
     assertThatThrownBy(() -> new KrakenScoreEngine.Tables("x", node))
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining("we");

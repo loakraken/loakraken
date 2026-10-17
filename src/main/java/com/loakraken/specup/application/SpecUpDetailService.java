@@ -111,8 +111,7 @@ public class SpecUpDetailService {
         guide.candidates().stream()
             .filter(item -> item.id().equals(candidateId))
             .findFirst()
-            .orElseThrow(
-                () -> new BusinessException(SpecUpErrorCode.SPEC_UP_CANDIDATE_NOT_FOUND));
+            .orElseThrow(() -> new BusinessException(SpecUpErrorCode.SPEC_UP_CANDIDATE_NOT_FOUND));
     var before = guide.combatPower();
     var after =
         before == null || candidate.deltaCombatPower() == null
@@ -129,7 +128,8 @@ public class SpecUpDetailService {
     switch (candidate.kind()) {
       case "GEM_LEVEL" -> {
         stats = gemStats(candidate);
-        market = gemMarket(loadout, Integer.parseInt(parts[1]), Integer.parseInt(parts[2]), candidate);
+        market =
+            gemMarket(loadout, Integer.parseInt(parts[1]), Integer.parseInt(parts[2]), candidate);
         consistent = matches(candidate.cost(), gemTotal(market));
       }
       case "ENGRAVING_LEVEL" -> {
@@ -189,8 +189,8 @@ public class SpecUpDetailService {
   }
 
   /**
-   * 보석 시세 줄: 목표 레벨 칸(BUY), 비용에서 지금 보석 판매 기대가를 뺀 경우(GEM_UPGRADE) 지금 레벨 칸(SELL). 시세 종류는 목록 비용과 같다(광휘는 그 칸
-   * 효과의 종류, 빈 칸은 겁화). 칸을 아직 받지 못했으면 그 줄은 넣지 않는다.
+   * 보석 시세 줄: 목표 레벨 칸(BUY), 비용에서 지금 보석 판매 기대가를 뺀 경우(GEM_UPGRADE) 지금 레벨 칸(SELL). 시세 종류는 목록 비용과 같다(광휘는
+   * 그 칸 효과의 종류, 빈 칸은 겁화). 칸을 아직 받지 못했으면 그 줄은 넣지 않는다.
    */
   List<Market> gemMarket(CharacterLoadout loadout, int slot, int next, Candidate candidate) {
     String kind = CombatPowerGemModel.EMPTY_SLOT_KIND;
@@ -289,8 +289,7 @@ public class SpecUpDetailService {
    * 값의 합 + 골드를 올림한 값이다.
    */
   static List<Material> materialRows(
-      com.loakraken.refining.domain.RefiningPlan plan,
-      RefiningMaterialPriceService.Prices prices) {
+      com.loakraken.refining.domain.RefiningPlan plan, RefiningMaterialPriceService.Prices prices) {
     var rows = new ArrayList<Material>();
     for (var quantity : plan.expectedMaterials()) {
       if (quantity.amount().signum() == 0) continue;

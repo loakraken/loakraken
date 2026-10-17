@@ -47,7 +47,7 @@ public class SpecUpDetailController {
       description =
           "스펙업 가이드 목록의 후보 하나를 자세히 줍니다. 목록과 같은 캐릭터 캐시·시세 캐시로 목록을 다시 만들어 찾으므로 candidate는 목록의 같은 id 줄과 같습니다. "
               + "보석·각인서 후보는 market(사는 품목 BUY, 지금 보석 판매 기대가를 비용에서 뺐으면 SELL 줄도), 일반 재련 후보는 refine·materials·goldFee를 줍니다. "
-              + "재련 비용(cost.amount)은 materials의 반올림 전 금액 합 + goldFee를 올림한 값이라 표시 값의 합과 1골드 안쪽으로 다를 수 있습니다. "
+              + "재련 비용(cost.amount)은 materials의 반올림 전 금액 합 + goldFee를 올림한 값입니다. 표시 값(소수 둘째 자리)의 합을 올림한 값과 cost.amount의 차이는 1골드 이하입니다. "
               + "stats는 근거가 확인된 스탯만 담고(지금은 보석 기본 공격력 %), 없으면 빈 목록입니다. 해당 없는 칸은 null입니다. "
               + "요청이 많으면 429 CLIENT_RATE_LIMITED와 Retry-After(초)를 줍니다. "
               + "role·priceStatus·priceBasis·breath는 문자열이며 값이 늘 수 있습니다.")
@@ -175,7 +175,8 @@ public class SpecUpDetailController {
           BigDecimal gold,
       @Schema(description = "OK 또는 PENDING(문자열, 값이 늘 수 있음)", example = "OK") String priceStatus,
       @Schema(
-              description = "단가 근거 코드(문자열, 값이 늘 수 있음). MARKET_MIN_UNIT = 거래소 즉시 구매 최저가 ÷ 묶음 개수. 시세가 없으면 null",
+              description =
+                  "단가 근거 코드(문자열, 값이 늘 수 있음). MARKET_MIN_UNIT = 거래소 즉시 구매 최저가 ÷ 묶음 개수. 시세가 없으면 null",
               example = "MARKET_MIN_UNIT")
           @NullableResponse
           String priceBasis) {
@@ -192,7 +193,9 @@ public class SpecUpDetailController {
   }
 
   public record SpecUpMarketResponse(
-      @Schema(description = "BUY(사는 품목) 또는 SELL(지금 보석, 판매 기대가를 비용에서 뺌). 문자열, 값이 늘 수 있음", example = "BUY")
+      @Schema(
+              description = "BUY(사는 품목) 또는 SELL(지금 보석, 판매 기대가를 비용에서 뺌). 문자열, 값이 늘 수 있음",
+              example = "BUY")
           String role,
       @Schema(description = "공식 경매장·거래소 품목 이름", example = "8레벨 겁화의 보석") String itemName,
       @Schema(description = "품목 이미지 URL(각인서는 시세 캐시의 공식 아이콘, 보석은 null)") @NullableResponse
@@ -221,7 +224,9 @@ public class SpecUpDetailController {
   public record SpecUpRefineResponse(
       @Schema(example = "19") int fromStage,
       @Schema(example = "20") int toStage,
-      @Schema(description = "비용에 쓴 숨결 사용: NONE 또는 MAX(문자열, 값이 늘 수 있음). 재련 계획이 다루지 않으면 null", example = "NONE")
+      @Schema(
+              description = "비용에 쓴 숨결 사용: NONE 또는 MAX(문자열, 값이 늘 수 있음). 재련 계획이 다루지 않으면 null",
+              example = "NONE")
           @NullableResponse
           String breath,
       @Schema(description = "기대 시도 횟수(소수 둘째 자리)", example = "7.42") @NullableResponse

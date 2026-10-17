@@ -826,8 +826,7 @@ class SpecUpIntegrationTest {
     assertThat(empty.at("/stats/0/after").decimalValue()).isEqualByComparingTo("1.20");
 
     // 근거가 없는 후보(품질)는 stats 빈 목록, 나머지 null.
-    var quality =
-        mapper.readTree(detail("EQUIPMENT_QUALITY:0:100", "스펙캐시").body()).path("data");
+    var quality = mapper.readTree(detail("EQUIPMENT_QUALITY:0:100", "스펙캐시").body()).path("data");
     assertThat(quality.path("stats")).isEmpty();
     assertThat(quality.path("market").isNull()).isTrue();
     assertThat(quality.path("refine").isNull()).isTrue();
@@ -925,8 +924,7 @@ class SpecUpIntegrationTest {
   }
 
   @Test
-  void 줄_상세는_없는_후보면_404이고_id_형식이_틀리면_400이고_캐시가_없으면_CHARACTER_NOT_CACHED다()
-      throws Exception {
+  void 줄_상세는_없는_후보면_404이고_id_형식이_틀리면_400이고_캐시가_없으면_CHARACTER_NOT_CACHED다() throws Exception {
     when(auctions.cachedGems()).thenReturn(gemCells(true));
     search("스펙캐시");
     var missing = detail("GEM_LEVEL:9:9", "스펙캐시");

@@ -562,7 +562,8 @@ public class SpecUpService {
       int refine,
       java.util.Optional<RefiningMaterialPriceService.Prices> prices) {
     var grade = refineGrade(item.name());
-    if (grade == null) return new RefineBreakdown(null, false, null, SpecUpCost.REFINE_COST_UNCONFIRMED);
+    if (grade == null)
+      return new RefineBreakdown(null, false, null, SpecUpCost.REFINE_COST_UNCONFIRMED);
     var type =
         "무기".equals(item.type())
             ? RefiningRules.EquipmentType.WEAPON

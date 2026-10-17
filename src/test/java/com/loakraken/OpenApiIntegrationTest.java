@@ -247,7 +247,14 @@ class OpenApiIntegrationTest {
     assertThat(document.at("/components/schemas/SpecUpDetailResponse/required").toString())
         .contains("candidate", "stats", "materials", "goldFee", "market", "refine");
     for (var field :
-        List.of("pricesAt", "combatPowerBefore", "combatPowerAfter", "materials", "goldFee", "market", "refine"))
+        List.of(
+            "pricesAt",
+            "combatPowerBefore",
+            "combatPowerAfter",
+            "materials",
+            "goldFee",
+            "market",
+            "refine"))
       assertThat(
               document
                   .at(

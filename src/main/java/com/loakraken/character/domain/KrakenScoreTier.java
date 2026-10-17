@@ -9,8 +9,6 @@ import java.util.List;
  * 최상위 티어는 다음 티어 값이 null이고 진행률 100이다.
  */
 public final class KrakenScoreTier {
-  private static final BigDecimal HUNDRED = BigDecimal.valueOf(100);
-
   private KrakenScoreTier() {}
 
   /** 데이터 파일(kraken-score/tiers.json). tiers는 min 오름차순, 첫 컷은 0. */
@@ -35,26 +33,29 @@ public final class KrakenScoreTier {
       BigDecimal remaining,
       int progressPercent) {}
 
-  public static Tier of(Table table, BigDecimal score) {
+  /**
+   * 점수(반올림 전 double)의 티어. 원본처럼 double로 계산한다: 남은 점수는 (다음 컷 − 점수)를 double로 뺀 뒤 그 값을 정확한 십진수로 바꿔 둘째 자리
+   * 반올림(toFixed(2)와 같음), 진행률은 ⌊(점수 − 현재 컷) ÷ (다음 컷 − 현재 컷) × 100⌋. 음수·NaN·무한대는 티어가 없다(호출하는 쪽이 먼저 거름).
+   */
+  public static Tier of(Table table, double score) {
+    if (!Double.isFinite(score) || score < 0)
+      throw new IllegalArgumentException("티어를 정할 수 없는 점수입니다");
     var tiers = table.tiers();
     int index = 0;
-    for (int i = 0; i < tiers.size(); i++) if (score.compareTo(tiers.get(i).min()) >= 0) index = i;
+    for (int i = 0; i < tiers.size(); i++) if (score >= tiers.get(i).min().doubleValue()) index = i;
     var current = tiers.get(index);
     if (index == tiers.size() - 1)
       return new Tier(current.code(), current.min(), null, null, null, 100);
     var next = tiers.get(index + 1);
-    int progress =
-        score
-            .subtract(current.min())
-            .multiply(HUNDRED)
-            .divide(next.min().subtract(current.min()), 0, RoundingMode.FLOOR)
-            .intValue();
+    double from = current.min().doubleValue();
+    double to = next.min().doubleValue();
+    int progress = (int) Math.floor((score - from) / (to - from) * 100);
     return new Tier(
         current.code(),
         current.min(),
         next.code(),
         next.min(),
-        next.min().subtract(score).setScale(2, RoundingMode.HALF_UP),
+        new BigDecimal(to - score).setScale(2, RoundingMode.HALF_UP),
         Math.max(0, Math.min(progress, 100)));
   }
 }

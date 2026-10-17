@@ -29,7 +29,8 @@ public class KrakenScoreService {
   /** 이유 코드. reason 문장은 로그·디버그용이고 화면은 code로 그린다. */
   public enum Reason {
     ROLE_UNKNOWN("딜러·서포터를 판정하지 못해 계산하지 않았습니다."),
-    FACTOR_PENDING("점수 요소를 아직 계산하지 않는 단계입니다.");
+    FACTOR_PENDING("점수 요소를 아직 계산하지 않는 단계입니다."),
+    SCORE_UNAVAILABLE("계산한 점수가 음수이거나 수가 아니어서 표시하지 않습니다.");
 
     private final String text;
 
@@ -79,13 +80,18 @@ public class KrakenScoreService {
     return unsupported(role, reason);
   }
 
-  /** 점수(반올림 전)로 응답을 만든다. 다음 단계에서 요소 계산이 이 경로를 쓴다. */
-  KrakenScore ok(Role role, BigDecimal rawScore, List<Factor> factors) {
+  /**
+   * 점수(반올림 전 double)로 응답을 만든다. 다음 단계에서 요소 계산이 이 경로를 쓴다. 표시 점수는 원본 toFixed(2)처럼 double의 정확한 십진값을 둘째
+   * 자리 반올림하고, 티어는 반올림 전 값으로 정한다. 음수·NaN·무한대는 점수·티어 없이 SCORE_UNAVAILABLE('-')이다.
+   */
+  KrakenScore ok(Role role, double rawScore, List<Factor> factors) {
+    if (!Double.isFinite(rawScore) || rawScore < 0)
+      return unsupported(role, Reason.SCORE_UNAVAILABLE);
     return new KrakenScore(
         Status.OK,
         null,
         role,
-        rawScore.setScale(2, java.math.RoundingMode.HALF_UP),
+        new BigDecimal(rawScore).setScale(2, java.math.RoundingMode.HALF_UP),
         KrakenScoreTier.of(tiers, rawScore),
         List.copyOf(factors),
         tiers.ruleVersion());

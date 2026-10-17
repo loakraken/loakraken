@@ -162,6 +162,10 @@ services:
       FEATURE_AUCTION_SEARCH: ${FEATURE_AUCTION_SEARCH:-false}
       # 시세 알림 웹 푸시. 켜도 VAPID 키가 없으면 경로가 404다(키 전달은 켜기로 정할 때 따로).
       ALERTS_PUSH_ENABLED: ${ALERTS_PUSH_ENABLED:-false}
+      # 전투정보실 페이지 정보(생활 스킬). 웹 ARMORY_PAGE와 같이 켠다. 켜면 검색한 캐릭터마다 공식 전투정보실 페이지를 읽는다(간격 1초·캐시 6시간).
+      ARMORY_PAGE_ENABLED: ${ARMORY_PAGE_ENABLED:-false}
+      # 공식 페이지 요청의 User-Agent에 밝히는 서비스 연락 주소(서비스 안내 페이지 또는 서비스 전용 메일). 비우면 서비스 이름만.
+      ARMORY_PAGE_CONTACT: "${ARMORY_PAGE_CONTACT:-}"
       # 시세 예열 세부(MARKET_WARMUP_ENABLED가 켜진 인스턴스에서만 돈다). 재련 재료·유물 각인서는 켜면 공식 호출이 늘어 수집기와 게이트를 나눈다.
       MARKET_WARMUP_REFINING_MATERIALS_ENABLED: ${MARKET_WARMUP_REFINING_MATERIALS_ENABLED:-false}
       MARKET_WARMUP_RELIC_BOOKS_ENABLED: ${MARKET_WARMUP_RELIC_BOOKS_ENABLED:-false}

@@ -275,7 +275,40 @@ class OpenApiIntegrationTest {
         .contains("braceletEfficiency", "arkGridEfficiency");
     assertThat(document.at("/components/schemas/ArkGridEfficiencyResponse/required").toString())
         .contains(
-            "percent", "coresPercent", "status", "reasonCode", "reason", "lines", "ruleVersion");
+            "percent",
+            "coresPercent",
+            "status",
+            "reasonCode",
+            "reason",
+            "lines",
+            "ruleVersion",
+            "real");
+    // 젬 옵션 실 효율(#520, 필드 추가만).
+    assertThat(document.at("/components/schemas/ArkGridRealEfficiencyResponse/required").toString())
+        .contains(
+            "status",
+            "reasonCode",
+            "reason",
+            "optionsPercent",
+            "attackPool",
+            "addDamagePool",
+            "options",
+            "series",
+            "ruleVersion");
+    for (var field : List.of("optionsPercent", "attackPool", "addDamagePool", "reasonCode"))
+      assertThat(
+              document
+                  .at(
+                      "/components/schemas/ArkGridRealEfficiencyResponse/properties/"
+                          + field
+                          + "/anyOf/1/type")
+                  .asText())
+          .as(field)
+          .isEqualTo("null");
+    assertThat(document.at("/components/schemas/ArkGridRealOptionResponse/required").toString())
+        .contains("name", "level", "inGamePercent", "percent");
+    assertThat(document.at("/components/schemas/ArkGridRealSeriesResponse/required").toString())
+        .contains("series", "optionsPercent", "options");
     for (var field : List.of("percent", "coresPercent", "reasonCode"))
       assertThat(
               document

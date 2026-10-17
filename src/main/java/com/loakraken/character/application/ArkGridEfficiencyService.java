@@ -1,6 +1,7 @@
 package com.loakraken.character.application;
 
 import com.loakraken.character.application.CombatPowerSimulationService.Status;
+import com.loakraken.character.domain.ArkGridRealEfficiency;
 import com.loakraken.character.domain.CombatPowerArkGridModel;
 import com.loakraken.character.domain.CombatPowerReasons;
 import java.math.BigDecimal;
@@ -28,27 +29,80 @@ public class ArkGridEfficiencyService {
       CombatPowerReasons.NO_OFFICIAL_COMBAT_POWER.text();
   static final String OK_REASON = "아크 그리드 코어와 젬 옵션을 모두 뺀 전투력보다 지금 전투력이 몇 % 높은지입니다.";
   private final CombatPowerArkGridModel.Coefficients coefficients;
+  private final ArkGridRealEfficiency.Table realTable;
 
-  public ArkGridEfficiencyService(CombatPowerArkGridModel.Coefficients coefficients) {
+  public ArkGridEfficiencyService(
+      CombatPowerArkGridModel.Coefficients coefficients, ArkGridRealEfficiency.Table realTable) {
     // 저장·순위가 같은 버전을 쓰도록 계수 파일 버전이 공통 상수와 같아야 한다(L38·L39).
     if (!com.loakraken.common.api.EfficiencyRuleVersions.ARK_GRID.equals(
         coefficients.ruleVersion()))
       throw new IllegalStateException(
           "아크 그리드 계수 버전이 EfficiencyRuleVersions.ARK_GRID와 다릅니다: " + coefficients.ruleVersion());
     this.coefficients = coefficients;
+    this.realTable = realTable;
   }
 
+  /**
+   * percent·coresPercent·lines는 전투력 계수 기준(전투력 기여)이다. real은 젬 옵션 실 효율(비교 기준 A 모델, #520)이고 아크 그리드가 있으면
+   * 늘 있다(계산하지 못하면 status UNSUPPORTED).
+   */
   public record ArkGridEfficiency(
       BigDecimal percent,
       BigDecimal coresPercent,
       Status status,
       String reason,
       List<ArkGridLineEfficiency> lines,
+      String ruleVersion,
+      RealEfficiency real) {
+    public String reasonCode() {
+      return status == Status.OK ? null : CombatPowerReasons.classify(reason).code();
+    }
+
+    ArkGridEfficiency withReal(RealEfficiency value) {
+      return new ArkGridEfficiency(percent, coresPercent, status, reason, lines, ruleVersion, value);
+    }
+  }
+
+  /** 젬 옵션 실 효율. status가 OK가 아니면 값은 null·빈 목록이다. */
+  public record RealEfficiency(
+      Status status,
+      String reason,
+      BigDecimal optionsPercent,
+      BigDecimal attackPool,
+      BigDecimal addDamagePool,
+      List<ArkGridRealEfficiency.Option> options,
+      List<ArkGridRealEfficiency.Series> series,
       String ruleVersion) {
     public String reasonCode() {
       return status == Status.OK ? null : CombatPowerReasons.classify(reason).code();
     }
   }
+
+  /** 아크 그리드 효율(전투력 기여) + 젬 옵션 실 효율. 아크 그리드가 없으면 null. */
+  public ArkGridEfficiency efficiency(CharacterResult result) {
+    var base = contribution(result);
+    return base == null ? null : base.withReal(real(result));
+  }
+
+  private RealEfficiency real(CharacterResult result) {
+    // 딜러만 계산한다(전투력 기여와 같은 규칙). 공식 전투력은 쓰지 않는다.
+    var blocked = CombatPowerSimulationService.roleReason(result);
+    if (blocked != null)
+      return new RealEfficiency(
+          Status.UNSUPPORTED, blocked, null, null, null, List.of(), List.of(), realTable.ruleVersion());
+    var value = ArkGridRealEfficiency.compute(realTable, result.details().loadout());
+    return new RealEfficiency(
+        value.reason() == null ? Status.OK : Status.UNSUPPORTED,
+        value.reason() == null ? REAL_OK_REASON : value.reason(),
+        value.optionsPercent(),
+        value.attackPool(),
+        value.addDamagePool(),
+        value.options(),
+        value.series(),
+        realTable.ruleVersion());
+  }
+
+  static final String REAL_OK_REASON = "젬 옵션을 뺐을 때보다 지금 몇 % 높은지입니다(공격력·추가 피해는 다른 같은 종류 효과와 더해지는 구조를 반영).";
 
   /**
    * @param slotIndex 코어 줄이면 공식 ArkGrid.Slots의 Index, 젬 합계 줄이면 null
@@ -60,7 +114,7 @@ public class ArkGridEfficiencyService {
     }
   }
 
-  public ArkGridEfficiency efficiency(CharacterResult result) {
+  private ArkGridEfficiency contribution(CharacterResult result) {
     var grid = result.details().loadout().arkGrid();
     if (grid == null || grid.slots().isEmpty()) return null;
     String blocked = CombatPowerSimulationService.roleReason(result);
@@ -111,7 +165,8 @@ public class ArkGridEfficiencyService {
         Status.OK,
         OK_REASON,
         List.copyOf(lines),
-        coefficients.ruleVersion());
+        coefficients.ruleVersion(),
+        null);
   }
 
   private ArkGridEfficiency unsupported(
@@ -122,7 +177,8 @@ public class ArkGridEfficiencyService {
         Status.UNSUPPORTED,
         reason,
         List.copyOf(lines),
-        coefficients.ruleVersion());
+        coefficients.ruleVersion(),
+        null);
   }
 
   private static String text(com.loakraken.character.domain.CharacterLoadout.GridSlot slot) {

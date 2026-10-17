@@ -20,7 +20,18 @@ import tools.jackson.databind.json.JsonMapper;
 
 class ArkGridEfficiencyServiceTest {
   private static final JsonMapper MAPPER = JsonMapper.builder().build();
-  private final ArkGridEfficiencyService service = new ArkGridEfficiencyService(coefficients());
+  private final ArkGridEfficiencyService service =
+      new ArkGridEfficiencyService(coefficients(), realTable());
+
+  static com.loakraken.character.domain.ArkGridRealEfficiency.Table realTable() {
+    try (InputStream in =
+        new ClassPathResource("combat-power/ark-grid-real-table.json").getInputStream()) {
+      return MAPPER.readValue(
+          in, com.loakraken.character.domain.ArkGridRealEfficiency.Table.class);
+    } catch (java.io.IOException exception) {
+      throw new IllegalStateException(exception);
+    }
+  }
 
   private static CombatPowerArkGridModel.Coefficients coefficients() {
     try (InputStream in =
@@ -211,9 +222,17 @@ class ArkGridEfficiencyServiceTest {
     assertThat(unknown.status()).isEqualTo(Status.UNSUPPORTED);
     assertThat(unknown.reasonCode()).isEqualTo("ROLE_UNKNOWN");
     assertThat(unknown.lines()).allMatch(line -> line.status() == Status.UNSUPPORTED);
+    // 젬 옵션 실 효율도 딜러·서포터를 모르면 계산하지 않는다(같은 이유 코드, 값 null·빈 목록).
+    assertThat(unknown.real().status()).isEqualTo(Status.UNSUPPORTED);
+    assertThat(unknown.real().reasonCode()).isEqualTo("ROLE_UNKNOWN");
+    assertThat(unknown.real().optionsPercent()).isNull();
+    assertThat(unknown.real().options()).isEmpty();
+    assertThat(unknown.real().ruleVersion()).isEqualTo("ark-grid-real-v1");
     var noPower = service.efficiency(result("블레이드", null, grid));
     assertThat(noPower.reasonCode()).isEqualTo("NO_OFFICIAL_COMBAT_POWER");
     assertThat(noPower.coresPercent()).isNull();
+    // 실 효율은 공식 전투력을 쓰지 않아 전투력이 없어도 막히지 않는다(여기서는 젬 효과가 없어 UNSUPPORTED).
+    assertThat(noPower.real().reason()).doesNotContain("공식 전투력");
   }
 
   private static CharacterLoadout.GridSlot slot(int index, String name, int point, String grade) {

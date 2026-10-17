@@ -20,6 +20,7 @@ class CombatPowerCoefficientsConfiguration {
   static final String REFINE_RESOURCE = "combat-power/refine-coefficients.json";
   static final String BRACELET_RESOURCE = "combat-power/bracelet-coefficients.json";
   static final String ARK_GRID_RESOURCE = "combat-power/ark-grid-coefficients.json";
+  static final String ARK_GRID_REAL_RESOURCE = "combat-power/ark-grid-real-table.json";
 
   /** 전투력 시뮬레이터 보석 계수(#243). 근거·확인 날짜는 리소스 source에 있다. 읽을 수 없으면 애플리케이션이 시작하지 않는다. */
   @Bean
@@ -63,6 +64,16 @@ class CombatPowerCoefficientsConfiguration {
       throws IOException {
     try (var input = new ClassPathResource(ARK_GRID_RESOURCE).getInputStream()) {
       return mapper.readValue(input, CombatPowerArkGridModel.Coefficients.class);
+    }
+  }
+
+  /** 아크 그리드 젬 옵션 실 효율 표(#520): 레벨 식 계수·혼돈 코어 표. 근거는 리소스 source에 있다. */
+  @Bean
+  com.loakraken.character.domain.ArkGridRealEfficiency.Table arkGridRealTable(JsonMapper mapper)
+      throws IOException {
+    try (var input = new ClassPathResource(ARK_GRID_REAL_RESOURCE).getInputStream()) {
+      return mapper.readValue(
+          input, com.loakraken.character.domain.ArkGridRealEfficiency.Table.class);
     }
   }
 

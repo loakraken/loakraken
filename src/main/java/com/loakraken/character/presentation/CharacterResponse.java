@@ -45,7 +45,7 @@ public record CharacterResponse(
         BraceletEfficiencyResponse braceletEfficiency,
     @Schema(
             description =
-                "아크 그리드 효율(전투력 기준): 지금 전투력이 아크 그리드 코어와 젬 옵션을 모두 뺀 전투력보다 몇 % 높은지(지금 ÷ 뺀 전투력 − 1), 코어만의 합(coresPercent), 줄별 값(코어마다 그 코어만 뺐을 때, 마지막 줄은 젬 옵션 합계). 줄별 값은 그 줄만 뺐을 때의 값이라 곱 구조상 줄별 합은 전체 값과 같지 않습니다. 아크 그리드가 없으면 null")
+                "아크 그리드 효율. percent·coresPercent·lines는 '전투력 기여'(공식 전투력 계수 기준), real은 젬 옵션 '실 효율'(다른 정의). 전투력 기여: 지금 전투력이 아크 그리드 코어와 젬 옵션을 모두 뺀 전투력보다 몇 % 높은지(지금 ÷ 뺀 전투력 − 1), 코어만의 합(coresPercent), 줄별 값(코어마다 그 코어만 뺐을 때, 마지막 줄은 젬 옵션 합계). 줄별 값은 그 줄만 뺐을 때의 값이라 곱 구조상 줄별 합은 전체 값과 같지 않습니다. 아크 그리드가 없으면 null")
         @NullableResponse
         ArkGridEfficiencyResponse arkGridEfficiency,
     @Schema(description = "외부 API에서 실제 수집한 UTC 시각. 캐시 조회에서도 유지됩니다.") Instant fetchedAt,
@@ -223,7 +223,7 @@ public record CharacterResponse(
 
   public record ArkGridEfficiencyResponse(
       @Schema(
-              description = "아크 그리드 전체 효율 %(코어 × 젬 옵션, 소수 둘째 자리). UNSUPPORTED면 null",
+              description = "전투력 기여: 아크 그리드 전체 %(코어 × 젬 옵션, 소수 둘째 자리). UNSUPPORTED면 null",
               example = "38.64")
           @NullableResponse
           BigDecimal percent,
@@ -238,10 +238,15 @@ public record CharacterResponse(
       @Schema(description = "근거 문장 또는 계산하지 않은 이유") String reason,
       @Schema(description = "코어마다 한 줄(공식 슬롯 순서), 마지막에 젬 옵션 합계 한 줄")
           List<ArkGridLineEfficiencyResponse> lines,
-      @Schema(description = "계산 규칙 버전") String ruleVersion) {
+      @Schema(description = "계산 규칙 버전") String ruleVersion,
+      @Schema(
+              description =
+                  "젬 옵션 실 효율(위 percent·lines의 '전투력 기여'와 다른 정의). 공격력·추가 피해는 같은 종류의 다른 효과와 더해지는 구조를 반영해 그 옵션을 뺐을 때보다 몇 % 높은지, 0.01 단위 내림")
+          ArkGridRealEfficiencyResponse real) {
     static ArkGridEfficiencyResponse from(
         com.loakraken.character.application.ArkGridEfficiencyService.ArkGridEfficiency value) {
       if (value == null) return null;
+      var real = value.real();
       return new ArkGridEfficiencyResponse(
           value.percent(),
           value.coresPercent(),
@@ -259,9 +264,78 @@ public record CharacterResponse(
                           line.reasonCode(),
                           line.reason()))
               .toList(),
-          value.ruleVersion());
+          value.ruleVersion(),
+          new ArkGridRealEfficiencyResponse(
+              real.status().name(),
+              real.reasonCode(),
+              real.reason(),
+              real.optionsPercent(),
+              real.attackPool(),
+              real.addDamagePool(),
+              real.options().stream().map(ArkGridRealOptionResponse::from).toList(),
+              real.series().stream()
+                  .map(
+                      series ->
+                          new ArkGridRealSeriesResponse(
+                              "질서".equals(series.series()) ? "ORDER" : "CHAOS",
+                              series.optionsPercent(),
+                              series.options().stream()
+                                  .map(ArkGridRealOptionResponse::from)
+                                  .toList()))
+                  .toList(),
+              real.ruleVersion()));
     }
   }
+
+  @Schema(description = "젬 옵션 실 효율. status가 UNSUPPORTED면 값은 null, 목록은 빈 배열")
+  public record ArkGridRealEfficiencyResponse(
+      @Schema(description = "OK 또는 UNSUPPORTED(문자열)", example = "OK") String status,
+      @Schema(description = "UNSUPPORTED 이유 코드. OK면 null") @NullableResponse String reasonCode,
+      @Schema(description = "근거 문장 또는 계산하지 않은 이유") String reason,
+      @Schema(description = "젬 옵션을 모두 뺐을 때보다 몇 % 높은지(0.01 내림)", example = "4.33")
+          @NullableResponse
+          BigDecimal optionsPercent,
+      @Schema(
+              description = "공격력 % 풀(100 + 장신구 공격력 % + 혼돈의 별 : 공격 코어 + 젬 공격력). 근거 표시용",
+              example = "104.02")
+          @NullableResponse
+          BigDecimal attackPool,
+      @Schema(
+              description =
+                  "추가 피해 % 풀(100 + 무기 품질 + 목걸이 추가 피해 + 혼돈의 해 : 안정적인 공격 코어 + 팔찌 + 젬 추가 피해). 근거 표시용",
+              example = "142.72")
+          @NullableResponse
+          BigDecimal addDamagePool,
+      @Schema(description = "젬 효과 옵션마다 한 줄(공식 효과 순서)") List<ArkGridRealOptionResponse> options,
+      @Schema(description = "질서(ORDER)·혼돈(CHAOS) 계열마다 한 줄, 이 순서(그 계열 젬이 없으면 줄 없음)")
+          List<ArkGridRealSeriesResponse> series,
+      @Schema(description = "계산 규칙 버전", example = "ark-grid-real-v1") String ruleVersion) {}
+
+  public record ArkGridRealOptionResponse(
+      @Schema(description = "젬 효과 이름(공식 표기)", example = "공격력") String name,
+      @Schema(description = "효과 레벨(계열 줄이면 그 계열 젬의 레벨 합)", example = "28") int level,
+      @Schema(description = "그 레벨의 인게임 %", example = "1.02") BigDecimal inGamePercent,
+      @Schema(
+              description = "그 레벨만 뺐을 때보다 몇 % 높은지(0.01 내림). 낙인력·아군 효과는 딜러 기준 0",
+              example = "0.99")
+          BigDecimal percent) {
+    static ArkGridRealOptionResponse from(
+        com.loakraken.character.domain.ArkGridRealEfficiency.Option option) {
+      return new ArkGridRealOptionResponse(
+          option.name(), option.level(), option.inGamePercent(), option.percent());
+    }
+  }
+
+  public record ArkGridRealSeriesResponse(
+      @Schema(
+              description = "계열 코드: ORDER(질서)·CHAOS(혼돈). 문자열이며 값이 늘 수 있음(모르는 값은 그 줄만 따로 표시)",
+              example = "ORDER")
+          String series,
+      @Schema(
+              description = "그 계열 젬 옵션을 모두 뺐을 때보다 몇 % 높은지(0.01 내림). 코어 포인트 효율은 아직 들어가지 않음",
+              example = "2.33")
+          BigDecimal optionsPercent,
+      @Schema(description = "그 계열이 가진 옵션마다 그 계열 레벨만 뺐을 때") List<ArkGridRealOptionResponse> options) {}
 
   public record ArkGridLineEfficiencyResponse(
       @Schema(

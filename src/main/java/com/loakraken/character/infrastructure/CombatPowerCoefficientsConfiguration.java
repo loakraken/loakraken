@@ -77,19 +77,28 @@ class CombatPowerCoefficientsConfiguration {
     }
   }
 
-  /**
-   * 크라켄 점수 엔진 표(#539): 비교 기준 B 원본 표 중 엔진이 읽는 것만. 읽을 수 없거나 표가 빠지면 애플리케이션이 시작하지 않는다(조용한 근사
-   * 금지).
-   */
+  /** 크라켄 점수 엔진 표(#539): 비교 기준 B 원본 표 중 엔진이 읽는 것만. 읽을 수 없거나 표가 빠지면 애플리케이션이 시작하지 않는다(조용한 근사 금지). */
   @Bean
   com.loakraken.character.domain.KrakenScoreEngine.Tables krakenScoreTables(JsonMapper mapper)
       throws IOException {
-    try (var input = new ClassPathResource(KRAKEN_SCORE_TABLES_RESOURCE).getInputStream()) {
-      var doc = mapper.readTree(input);
-      return new com.loakraken.character.domain.KrakenScoreEngine.Tables(
-          doc.path("savedAt").asString(""), doc.path("tables"));
+    // 바뀌지 않는 자원 표(노드 약 1만 7천 개)라 JVM에 한 벌만 둔다 — 테스트처럼 스프링 컨텍스트가 여럿 떠도 컨텍스트마다 다시 읽지 않는다.
+    var tables = sharedKrakenScoreTables;
+    if (tables != null) return tables;
+    synchronized (CombatPowerCoefficientsConfiguration.class) {
+      if (sharedKrakenScoreTables == null) {
+        try (var input = new ClassPathResource(KRAKEN_SCORE_TABLES_RESOURCE).getInputStream()) {
+          var doc = mapper.readTree(input);
+          sharedKrakenScoreTables =
+              new com.loakraken.character.domain.KrakenScoreEngine.Tables(
+                  doc.path("savedAt").asString(""), doc.path("tables"));
+        }
+      }
+      return sharedKrakenScoreTables;
     }
   }
+
+  private static volatile com.loakraken.character.domain.KrakenScoreEngine.Tables
+      sharedKrakenScoreTables;
 
   /** 연마 옵션별 하·중·상 수치(#251). 근거는 리소스 source에 있다. */
   @Bean

@@ -334,9 +334,7 @@ public class SpecUpController {
                   "보석 후보만: 빈 보석 칸에 새로 끼우는 후보면 true, 장착한 보석을 올리는 후보면 false. 그 밖의 후보는 null. 빈 칸은 어느 칸이든 값이 같아 가장 앞 빈 칸 하나로 6~10레벨을 낸다(from = 빈 칸, 겁화 기준 — 4티어 겁화·작열은 전투력 값이 같고 비용은 겁화 시세)")
           @NullableResponse
           Boolean emptySlot,
-      @Schema(
-              description = "보석 후보만: 바꾸기 전 그 칸 보석의 기본 공격력 %(빈 칸은 0). 모르면 null",
-              example = "0.60")
+      @Schema(description = "보석 후보만: 바꾸기 전 그 칸 보석의 기본 공격력 %(빈 칸은 0). 모르면 null", example = "0.60")
           @NullableResponse
           BigDecimal baseAttackPctFrom,
       @Schema(

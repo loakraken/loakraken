@@ -468,7 +468,8 @@ class SpecUpIntegrationTest {
     SiteNames.assertAbsent(response.body());
     var candidates = mapper.readTree(response.body()).at("/data/candidates");
     // 보석 칸 11개가 모두 비었다: 0번 칸 하나로 6~10레벨. 기본 공격력 % 합은 스톤 1.50 + 완갑 1.00 = 2.50.
-    // 6레벨: 3000 × 1.0448 × (1 + 2.95%)/(1 + 2.50%) = 3148.16, 10레벨: 3000 × 1.0704 × 1.037/1.025 = 3248.79.
+    // 6레벨: 3000 × 1.0448 × (1 + 2.95%)/(1 + 2.50%) = 3148.16, 10레벨: 3000 × 1.0704 × 1.037/1.025 =
+    // 3248.79.
     var expected =
         java.util.Map.of(
             6, new String[] {"148.16", "60000", "24.69", "0.45"},
@@ -500,8 +501,7 @@ class SpecUpIntegrationTest {
     search("스펙빈칸대기");
     var candidates =
         mapper
-            .readTree(
-                get("/api/v1/characters/spec-up?characterName=" + encode("스펙빈칸대기")).body())
+            .readTree(get("/api/v1/characters/spec-up?characterName=" + encode("스펙빈칸대기")).body())
             .at("/data/candidates");
     var empty = find(candidates, "GEM_LEVEL:0:8");
     assertThat(empty.path("status").asText()).isEqualTo("OK");
@@ -918,21 +918,21 @@ class SpecUpIntegrationTest {
         name.contains("빈칸")
             ? new CharacterLoadout.Gems(List.of(), new CharacterLoadout.GemEffects("", List.of()))
             : new CharacterLoadout.Gems(
-            List.of(
-                new CharacterLoadout.Gem(
-                    0,
-                    // 광휘 보석(효과는 피해 증가), 이름에 "귀속"이 있으면 귀속 광휘.
-                    name.contains("광휘")
-                        ? name.contains("귀속") ? "8레벨 광휘의 보석 (귀속)" : "8레벨 광휘의 보석"
-                        : "8레벨 겁화의 보석",
-                    null,
-                    8,
-                    "고대")),
-            new CharacterLoadout.GemEffects(
-                "기본 공격력 총합 : 0.80%",
                 List.of(
-                    new CharacterLoadout.GemSkill(
-                        0, "테스트 스킬", List.of("피해 32.00% 증가"), "기본 공격력 0.80% 증가", null))));
+                    new CharacterLoadout.Gem(
+                        0,
+                        // 광휘 보석(효과는 피해 증가), 이름에 "귀속"이 있으면 귀속 광휘.
+                        name.contains("광휘")
+                            ? name.contains("귀속") ? "8레벨 광휘의 보석 (귀속)" : "8레벨 광휘의 보석"
+                            : "8레벨 겁화의 보석",
+                        null,
+                        8,
+                        "고대")),
+                new CharacterLoadout.GemEffects(
+                    "기본 공격력 총합 : 0.80%",
+                    List.of(
+                        new CharacterLoadout.GemSkill(
+                            0, "테스트 스킬", List.of("피해 32.00% 증가"), "기본 공격력 0.80% 증가", null))));
     var arkPassive =
         new CharacterLoadout.ArkPassive(
             "진화", true, List.of(new CharacterLoadout.PassivePoint("진화", 100, "")), List.of());

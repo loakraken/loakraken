@@ -191,7 +191,9 @@ class CombatPowerSimulationIntegrationTest {
     // 빈 보석 칸(#541)은 409가 아니라 그 칸에 끼우는 계산이다(값은 보석 모델 단위 테스트가 '빼기의 역'으로 고정).
     var emptySlot = simulate("시뮬검증", "[{\"kind\": \"GEM_LEVEL\", \"slot\": 7, \"level\": 9}]");
     assertThat(emptySlot.statusCode()).isEqualTo(200);
-    assertThat(emptySlot.body()).contains("\"status\":\"OK\"").doesNotContain("CHANGE_TARGET_NOT_FOUND");
+    assertThat(emptySlot.body())
+        .contains("\"status\":\"OK\"")
+        .doesNotContain("CHANGE_TARGET_NOT_FOUND");
 
     var notRefinable =
         simulate("시뮬검증", "[{\"kind\": \"EQUIPMENT_REFINE\", \"index\": 1, \"refine\": 20}]");

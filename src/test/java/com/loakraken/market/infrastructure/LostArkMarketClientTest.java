@@ -360,6 +360,19 @@ class LostArkMarketClientTest {
         .isEqualTo("category=60000 item=- page=1");
   }
 
+  @Test
+  void 호출_대상의_품목_이름은_제어_문자를_지우고_따옴표와_역슬래시를_이스케이프한다() {
+    assertThat(
+            LostArkMarketHttpClient.target(
+                50000, "가짜\" page=9\nofficial-call endpoint=PROFILE\\", 1))
+        .isEqualTo("category=50000 item=\"가짜\\\" page=9official-call endpoint=PROFILE\\\\\" page=1")
+        .doesNotContain("\n");
+    assertThat(LostArkMarketHttpClient.target(50000, "\r\n\t", 1))
+        .isEqualTo("category=50000 item=- page=1");
+    assertThat(LostArkMarketHttpClient.target(50000, "들꽃 ", 2))
+        .isEqualTo("category=50000 item=\"들꽃\" page=2");
+  }
+
   private LostArkMarketHttpClient httpClient(String key, Duration timeout) {
     var properties =
         new LostArkProperties(

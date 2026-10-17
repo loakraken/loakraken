@@ -105,6 +105,10 @@ market:
     quota-per-minute: ${MARKET_GEM_FILTER_QUOTA:10}
     reserve: ${MARKET_GEM_FILTER_RESERVE:40}
 
+# 크라켄 점수(#522·#559): 캐릭터 응답의 krakenScore. 꺼져 있으면 DISABLED(공식 호출 변화 없음, 켜도 이미 받은 원문으로만 계산).
+kraken-score:
+  enabled: ${KRAKEN_SCORE_ENABLED:false}
+
 # 공식 전투정보실 페이지 정보(#531). 꺼져 있으면 200에 값 null이고 공식 페이지를 부르지 않는다.
 # 검색한 캐릭터만, 뽑은 값만 캐시, 인스턴스 전체 요청 간격 1초, 실패하면 쉬고 계속되면 멈춘다.
 armory-page:

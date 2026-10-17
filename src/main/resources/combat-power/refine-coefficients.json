@@ -1,6 +1,6 @@
 {
   "ruleVersion": "combat-power-refine-v3",
-  "source": "계산 검증 2026-10-11 18:05 모델 확정(대조 사이트 서버 계산 대조 통과, 표본 src/test/resources/verification/combat-power/ref-a-refine-model-2026-10-11.json). 단계표는 공식 장비 Tooltip 31칸과 같다.",
+  "source": "계산 검증 2026-10-11 18:05 모델 확정(비교 기준 A 서버 계산 대조 통과, 표본 src/test/resources/verification/combat-power/ref-a-refine-model-2026-10-11.json). 단계표는 공식 장비 Tooltip 31칸과 같다.",
   "petStatPct": 0.01,
   "petAssumption": "펫 효과(힘민지 +1%)는 공식 응답에 없어 있다고 가정한다(두 출처가 같은 가정, PM-백엔드 16:57).",
   "avatarStatPctByGrade": {

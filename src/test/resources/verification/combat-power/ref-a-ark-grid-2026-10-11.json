@@ -1,6 +1,6 @@
 {
  "checkedAt": "2026-10-11",
- "source": "로아랩 캐릭터 시뮬레이터 서버 계산(언새늘, 코어 등급·포인트·이름과 젬 옵션 레벨을 하나씩 바꿈) + Airplaner lostark-arkgrid-gem-locator-v2(MIT, docs/algorithm.md·src/lib/models/arkGridCores.ts) + 공식 armory ArkGrid.Effects",
+ "source": "비교 기준 A 캐릭터 시뮬레이터 서버 계산(기준 캐릭터, 코어 등급·포인트·이름과 젬 옵션 레벨을 하나씩 바꿈) + Airplaner lostark-arkgrid-gem-locator-v2(MIT, docs/algorithm.md·src/lib/models/arkGridCores.ts) + 공식 armory ArkGrid.Effects",
  "status": "CONFIRMED_DEALER_ALL_GRADES",
  "model": {
   "combine": "아크 그리드 전투력 배수 = Π 코어 계수 C(P) × 젬 옵션 3개 배수. 다른 항목과 곱",

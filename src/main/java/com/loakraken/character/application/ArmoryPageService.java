@@ -3,17 +3,20 @@ package com.loakraken.character.application;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.Locale;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 /**
- * 공식 전투정보실 페이지 정보(#531): 생활 스킬 레벨. 공식 Open API에 없는 값만 공식 전투정보실 캐릭터 페이지에서 읽는다.
+ * 공식 전투정보실 페이지 정보(#531·#532): 생활 스킬 레벨과 스킬 코드. 공식 Open API에 없는 값만 공식 전투정보실 캐릭터 페이지에서 읽는다.
  *
  * <p>사용자가 검색한 캐릭터(우리 캐릭터 캐시에 있음)만 읽고, 뽑은 값만 캐시한다. 처리정지 목록 캐릭터는 요청하지 않고 읽기 실패와 같은 응답을 준다(목록에 있는지
- * 드러내지 않음). 요청 간격·쉬기·멈춤은 {@link ArmoryPageGuard}가 맡는다. 로그·지표에 캐릭터 이름을 남기지 않는다.
+ * 드러내지 않음). 요청 간격·쉬기·멈춤은 {@link ArmoryPageGuard} 하나가 페이지·코드 모두 맡는다. 같은 캐릭터의 페이지 GET은 생활 스킬과 스킬 코드
+ * 요청이 함께 기다린다(single-flight 하나). 로그·지표에 캐릭터 이름을 남기지 않는다.
  */
 @Service
 public class ArmoryPageService {
@@ -28,6 +31,12 @@ public class ArmoryPageService {
       Instant fetchedAt,
       List<ArmoryPagePort.LifeSkill> lifeSkills) {}
 
+  /** 스킬 코드 응답 값(#532). enabled가 false면 나머지는 null, 읽지 못했으면 enabled true에 나머지 null. */
+  public record CodeView(String characterName, boolean enabled, Instant fetchedAt, String skillCode) {}
+
+  /** 페이지 GET 한 번의 결과. page가 null이면 요청하지 않았거나(skipped) 실패. 식별 값은 메모리에서만 쓴다. */
+  private record PageFetch(ArmoryPagePort.Page page, ArmoryPageStorePort.Entry entry, String skipped) {}
+
   private final ArmoryPagePolicy policy;
   private final CharacterCache cache;
   private final CharacterStopList stopList;
@@ -38,6 +47,7 @@ public class ArmoryPageService {
   private final Clock clock;
   private final SingleFlight<ArmoryPageStorePort.Entry> flights = new SingleFlight<>();
   private final SingleFlight<ArmoryPageStorePort.CodeEntry> codeFlights = new SingleFlight<>();
+  private final SingleFlight<PageFetch> pageFetches = new SingleFlight<>();
 
   public ArmoryPageService(
       ArmoryPagePolicy policy,
@@ -57,9 +67,6 @@ public class ArmoryPageService {
     this.registry = registry;
     this.clock = clock;
   }
-
-  /** 스킬 코드 응답 값(#532). enabled가 false면 나머지는 null, 읽지 못했으면 enabled true에 나머지 null. */
-  public record CodeView(String characterName, boolean enabled, Instant fetchedAt, String skillCode) {}
 
   public View page(String characterName) {
     var name = new SearchCharacterCommand(characterName).characterName();
@@ -88,8 +95,8 @@ public class ArmoryPageService {
   }
 
   /**
-   * 스킬 코드(#532). 웹이 스킬 탭에 들어갈 때 부른다. 캐시가 없으면 페이지 GET(식별 값·생활 스킬)과 코드 POST로 공식 요청이 2번 들고, 그 페이지로
-   * 생활 스킬 캐시도 함께 갱신한다. 식별 값은 이 메서드 안 메모리에서만 쓴다. 스위치·멈춤은 페이지 정보와 따로다.
+   * 스킬 코드(#532). 웹이 스킬 탭에 들어갈 때 부른다. 캐시가 없으면 페이지 GET(식별 값·생활 스킬)과 코드 POST로 공식 요청이 2번 들고, 그 페이지로 생활
+   * 스킬 캐시도 함께 갱신한다. 식별 값은 캐시하지 않는다(PM 결정: 캐릭터당 6시간에 GET 1번 더). 스위치는 페이지 정보와 따로, 간격·쉬기·멈춤은 같은 장치다.
    */
   public CodeView skillCode(String characterName) {
     var name = new SearchCharacterCommand(characterName).characterName();
@@ -116,71 +123,126 @@ public class ArmoryPageService {
         : new CodeView(official, true, entry.fetchedAt(), entry.skillCode());
   }
 
+  private ArmoryPageStorePort.Entry load(String official) {
+    // 같은 이름을 먼저 받은 요청이 방금 캐시했을 수 있다(single-flight 안에서 다시 확인).
+    try {
+      var cached = store.find(official);
+      if (cached.isPresent()) return cached.get();
+    } catch (CharacterException exception) {
+      skipped("cache_unavailable");
+      return ArmoryPageStorePort.Entry.failed();
+    }
+    var fetch = fetchPage(official);
+    if (fetch.skipped() != null) skipped(fetch.skipped());
+    return fetch.entry();
+  }
+
   private ArmoryPageStorePort.CodeEntry loadCode(String official) {
+    try {
+      var cached = store.findCode(official);
+      if (cached.isPresent()) return cached.get();
+    } catch (CharacterException exception) {
+      codeSkipped("cache_unavailable");
+      return ArmoryPageStorePort.CodeEntry.failed();
+    }
+    // 코드만 멈췄으면 페이지 GET도 하지 않는다(식별 값을 쓸 데가 없음).
     if (guard.skillCodeStopped()) {
       codeSkipped("stopped");
       return ArmoryPageStorePort.CodeEntry.failed();
     }
-    var decision = guard.acquire();
-    if (decision != ArmoryPageGuard.Decision.ALLOWED) {
-      codeSkipped(decision.name().toLowerCase(java.util.Locale.ROOT));
+    var fetch = fetchPage(official);
+    if (fetch.skipped() != null) {
+      // 요청하지 않은 것은 캐시하지 않는다(장치가 풀리면 바로 읽음).
+      codeSkipped(fetch.skipped());
       return ArmoryPageStorePort.CodeEntry.failed();
     }
-    ArmoryPagePort.Page page;
-    var pageSample = Timer.start(registry);
-    try {
-      page = pages.fetch(official);
-      guard.success();
-      fetched("page", "ok", pageSample);
-      store.save(
-          official,
-          new ArmoryPageStorePort.Entry(clock.instant(), page.lifeSkills()),
-          policy.cacheTtl());
-    } catch (ArmoryPageFetchException exception) {
-      guard.failure(exception.kind());
-      fetched("page", exception.kind().label(), pageSample);
-      return codeFailed(official, "page", exception);
-    }
-    if (page.identity() == null) {
-      // 식별 값이 페이지에 없으면 코드 요청을 할 수 없다(구조 변경으로 센다).
-      var missing =
-          new ArmoryPageFetchException(ArmoryPageFetchException.Kind.PARSE_ERROR, null);
-      guard.skillCodeFailure(missing.kind());
+    if (fetch.page() == null) return codeFailed(official);
+    var identity = fetch.page().identity();
+    if (identity == null) {
+      // 식별 값이 페이지에 없으면 코드 요청을 할 수 없다(코드 쪽 구조 변경으로 센다).
+      guard.structureFailure(ArmoryPageGuard.Phase.CODE);
       registry
           .counter("loakraken.armory_page.fetch", "phase", "code", "result", "parse_error")
           .increment();
-      return codeFailed(official, "code", missing);
+      log.warn("event=armory_page_fetch_failed phase=code result=parse_error status=null");
+      return codeFailed(official);
     }
-    decision = guard.acquire();
-    if (decision != ArmoryPageGuard.Decision.ALLOWED) {
-      codeSkipped(decision.name().toLowerCase(java.util.Locale.ROOT));
+    var permit = guard.acquire(ArmoryPageGuard.Phase.CODE);
+    if (!permit.allowed()) {
+      codeSkipped(permit.decision().name().toLowerCase(Locale.ROOT));
       return ArmoryPageStorePort.CodeEntry.failed();
     }
-    var codeSample = Timer.start(registry);
+    var sample = Timer.start(registry);
+    String code;
     try {
-      var code = pages.skillCode(page.identity());
-      guard.skillCodeSuccess();
-      fetched("code", "ok", codeSample);
-      var entry = new ArmoryPageStorePort.CodeEntry(clock.instant(), code);
-      store.saveCode(official, entry, policy.cacheTtl());
-      return entry;
+      code = pages.skillCode(identity);
     } catch (ArmoryPageFetchException exception) {
-      guard.skillCodeFailure(exception.kind());
-      fetched("code", exception.kind().label(), codeSample);
-      return codeFailed(official, "code", exception);
+      guard.failure(permit, exception.kind());
+      fetched("code", exception.kind().label(), sample);
+      log.warn(
+          "event=armory_page_fetch_failed phase=code result={} status={}",
+          exception.kind().label(),
+          exception.status());
+      return codeFailed(official);
     }
+    guard.success(permit);
+    fetched("code", "ok", sample);
+    var entry = new ArmoryPageStorePort.CodeEntry(clock.instant(), code);
+    if (!store.saveCode(official, entry, policy.cacheTtl())) cacheWriteFailed();
+    return entry;
   }
 
-  private ArmoryPageStorePort.CodeEntry codeFailed(
-      String official, String phase, ArmoryPageFetchException exception) {
-    log.warn(
-        "event=armory_page_fetch_failed phase={} result={} status={}",
-        phase,
-        exception.kind().label(),
-        exception.status());
+  /**
+   * 페이지 GET 한 번. 같은 캐릭터를 생활 스킬·스킬 코드가 동시에 원하면 한 번만 부른다. 결과는 생활 스킬 캐시에 저장한다(실패는 실패 캐시 시간).
+   * 직전에 캐시된 값이 있어도 스킬 코드는 식별 값이 필요해 다시 부른다.
+   */
+  private PageFetch fetchPage(String official) {
+    return pageFetches.run(
+        official,
+        () -> {
+          var permit = guard.acquire(ArmoryPageGuard.Phase.PAGE);
+          if (!permit.allowed()) {
+            return new PageFetch(
+                null,
+                ArmoryPageStorePort.Entry.failed(),
+                permit.decision().name().toLowerCase(Locale.ROOT));
+          }
+          var sample = Timer.start(registry);
+          ArmoryPagePort.Page page;
+          try {
+            page = pages.fetch(official);
+          } catch (ArmoryPageFetchException exception) {
+            guard.failure(permit, exception.kind());
+            fetched("page", exception.kind().label(), sample);
+            log.warn(
+                "event=armory_page_fetch_failed phase=page result={} status={}",
+                exception.kind().label(),
+                exception.status());
+            var failed = ArmoryPageStorePort.Entry.failed();
+            save(official, failed, policy.failureTtl());
+            return new PageFetch(null, failed, null);
+          }
+          guard.success(permit);
+          fetched("page", "ok", sample);
+          var entry = new ArmoryPageStorePort.Entry(clock.instant(), page.lifeSkills());
+          save(official, entry, policy.cacheTtl());
+          return new PageFetch(page, entry, null);
+        });
+  }
+
+  private ArmoryPageStorePort.CodeEntry codeFailed(String official) {
     var failed = ArmoryPageStorePort.CodeEntry.failed();
-    store.saveCode(official, failed, policy.failureTtl());
+    if (!store.saveCode(official, failed, policy.failureTtl())) cacheWriteFailed();
     return failed;
+  }
+
+  /** 캐시를 쓰지 못하면 실패 캐시 시간만큼 모든 요청을 쉰다(보호 캐시 없이 같은 캐릭터를 거듭 부르지 않게). */
+  private void save(String official, ArmoryPageStorePort.Entry entry, Duration ttl) {
+    if (!store.save(official, entry, ttl)) cacheWriteFailed();
+  }
+
+  private void cacheWriteFailed() {
+    guard.pause(policy.failureTtl(), "cache_write");
   }
 
   /** 우리 캐릭터 캐시에서 공식 이름·처리정지 여부를 찾는다. 캐시에 없으면 404, 캐시 장애면 503. */
@@ -203,34 +265,6 @@ public class ArmoryPageService {
   }
 
   private record Target(String official, boolean recordable) {}
-
-  private ArmoryPageStorePort.Entry load(String official) {
-    var decision = guard.acquire();
-    if (decision != ArmoryPageGuard.Decision.ALLOWED) {
-      // 요청하지 않은 것은 캐시하지 않는다(장치가 풀리면 바로 읽음).
-      skipped(decision.name().toLowerCase(java.util.Locale.ROOT));
-      return ArmoryPageStorePort.Entry.failed();
-    }
-    var sample = Timer.start(registry);
-    try {
-      var page = pages.fetch(official);
-      guard.success();
-      fetched("page", "ok", sample);
-      var entry = new ArmoryPageStorePort.Entry(clock.instant(), page.lifeSkills());
-      store.save(official, entry, policy.cacheTtl());
-      return entry;
-    } catch (ArmoryPageFetchException exception) {
-      guard.failure(exception.kind());
-      fetched("page", exception.kind().label(), sample);
-      log.warn(
-          "event=armory_page_fetch_failed phase=page result={} status={}",
-          exception.kind().label(),
-          exception.status());
-      var failed = ArmoryPageStorePort.Entry.failed();
-      store.save(official, failed, policy.failureTtl());
-      return failed;
-    }
-  }
 
   private View failed(String official) {
     return new View(official, true, null, null, null);

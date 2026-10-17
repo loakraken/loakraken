@@ -28,9 +28,9 @@ import tools.jackson.databind.json.JsonMapper;
  */
 @Component
 class OfficialArmoryPageClient implements ArmoryPagePort {
-  /** 128자 16진수(앞뒤가 16진수가 아님). */
+  /** 영숫자 한 덩어리 전체가 128자 16진수(앞뒤가 영숫자가 아님 — 더 긴 값의 일부를 잘라 쓰지 않음). */
   private static final Pattern CODE =
-      Pattern.compile("(?<![0-9A-Fa-f])[0-9A-Fa-f]{128}(?![0-9A-Fa-f])");
+      Pattern.compile("(?<![0-9A-Za-z])[0-9A-Fa-f]{128}(?![0-9A-Za-z])");
 
   private static final JsonMapper JSON = JsonMapper.builder().build();
   private final RestClient client;
@@ -126,13 +126,19 @@ class OfficialArmoryPageClient implements ArmoryPagePort {
       // JSON이 아니면(로그인 안내 HTML 등) 구조가 바뀐 것으로 센다.
       throw new ArmoryPageFetchException(Kind.PARSE_ERROR, 200);
     }
-    if (!root.path("code").isNumber())
-      throw new ArmoryPageFetchException(Kind.PARSE_ERROR, 200);
-    if (root.path("code").asInt() != 0)
+    // code는 정수여야 한다(0.5·"0"은 형식 변경으로 셈). 정수인데 0이 아니면 거절.
+    var result = root.path("code");
+    if (!result.isIntegralNumber()) throw new ArmoryPageFetchException(Kind.PARSE_ERROR, 200);
+    if (result.bigIntegerValue().signum() != 0)
       throw new ArmoryPageFetchException(Kind.ACCESS_DENIED, 200);
     var matcher = CODE.matcher(root.path("content").asString(""));
     if (!matcher.find()) throw new ArmoryPageFetchException(Kind.PARSE_ERROR, 200);
-    return matcher.group().toUpperCase(java.util.Locale.ROOT);
+    var code = matcher.group().toUpperCase(java.util.Locale.ROOT);
+    // 서로 다른 값이 둘 이상이면 어느 것인지 알 수 없다.
+    while (matcher.find())
+      if (!matcher.group().equalsIgnoreCase(code))
+        throw new ArmoryPageFetchException(Kind.PARSE_ERROR, 200);
+    return code;
   }
 
   private String read(InputStream body) throws IOException {

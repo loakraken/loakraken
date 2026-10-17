@@ -32,53 +32,48 @@ class ValkeyArmoryPageStore implements ArmoryPageStorePort {
 
   @Override
   public Optional<Entry> find(String characterName) {
+    return read(PREFIX + characterName, Entry.class);
+  }
+
+  @Override
+  public boolean save(String characterName, Entry entry, Duration ttl) {
+    return write(PREFIX + characterName, entry, ttl);
+  }
+
+  @Override
+  public Optional<CodeEntry> findCode(String characterName) {
+    return read(CODE_PREFIX + characterName, CodeEntry.class);
+  }
+
+  @Override
+  public boolean saveCode(String characterName, CodeEntry entry, Duration ttl) {
+    return write(CODE_PREFIX + characterName, entry, ttl);
+  }
+
+  private <T> Optional<T> read(String key, Class<T> type) {
     String json;
     try {
-      json = redis.opsForValue().get(PREFIX + characterName);
+      json = redis.opsForValue().get(key);
     } catch (DataAccessException exception) {
       throw new CharacterException(CharacterErrorCode.CHARACTER_CACHE_UNAVAILABLE);
     }
     if (json == null) return Optional.empty();
     try {
-      return Optional.of(mapper.readValue(json, Entry.class));
+      return Optional.of(mapper.readValue(json, type));
     } catch (JacksonException exception) {
       // 읽지 못하는 옛 값은 없는 것으로 본다.
       return Optional.empty();
     }
   }
 
-  @Override
-  public void save(String characterName, Entry entry, Duration ttl) {
-    write(PREFIX + characterName, entry, ttl);
-  }
-
-  @Override
-  public Optional<CodeEntry> findCode(String characterName) {
-    String json;
-    try {
-      json = redis.opsForValue().get(CODE_PREFIX + characterName);
-    } catch (DataAccessException exception) {
-      throw new CharacterException(CharacterErrorCode.CHARACTER_CACHE_UNAVAILABLE);
-    }
-    if (json == null) return Optional.empty();
-    try {
-      return Optional.of(mapper.readValue(json, CodeEntry.class));
-    } catch (JacksonException exception) {
-      return Optional.empty();
-    }
-  }
-
-  @Override
-  public void saveCode(String characterName, CodeEntry entry, Duration ttl) {
-    write(CODE_PREFIX + characterName, entry, ttl);
-  }
-
-  private void write(String key, Object value, Duration ttl) {
+  private boolean write(String key, Object value, Duration ttl) {
     try {
       redis.opsForValue().set(key, mapper.writeValueAsString(value), ttl);
+      return true;
     } catch (DataAccessException | JacksonException exception) {
       log.warn(
           "event=armory_page_cache_write_failed type={}", exception.getClass().getSimpleName());
+      return false;
     }
   }
 }

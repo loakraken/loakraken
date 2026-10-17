@@ -134,18 +134,30 @@ class OfficialArmoryPageClientTest {
               ArmoryPageFetchException.class,
               e -> assertThat(e.kind()).isEqualTo(Kind.ACCESS_DENIED));
     }
-    // JSON이 아니거나(안내 HTML), 코드가 없거나, 129자면 구조 변경.
+    // JSON이 아니거나(안내 HTML), 코드가 없거나, 129자이거나, 영숫자 덩어리의 일부만 16진수이거나(G + 128자),
+    // 서로 다른 값이 둘이거나, code가 정수 0이 아니면(0.5·"0"·없음) 구조 변경.
+    var hex = "A".repeat(128);
     for (var body :
         java.util.List.of(
             "<html>로그인</html>",
             "{\"code\":0,\"content\":\"코드 없음\"}",
             "{\"code\":0,\"content\":\"" + "A".repeat(129) + "\"}",
-            "{\"content\":\"" + "A".repeat(128) + "\"}"))
+            "{\"code\":0,\"content\":\"G" + hex + "\"}",
+            "{\"code\":0,\"content\":\"" + hex + "g\"}",
+            "{\"code\":0,\"content\":\"" + hex + " " + "B".repeat(128) + "\"}",
+            "{\"code\":0.5,\"content\":\"" + hex + "\"}",
+            "{\"code\":\"0\",\"content\":\"" + hex + "\"}",
+            "{\"content\":\"" + hex + "\"}"))
       assertThatThrownBy(() -> OfficialArmoryPageClient.code(body))
           .as(body)
           .isInstanceOfSatisfying(
               ArmoryPageFetchException.class,
               e -> assertThat(e.kind()).isEqualTo(Kind.PARSE_ERROR));
+    // 같은 값이 두 번 나오는 것은 괜찮다(복사 버튼 등).
+    assertThat(
+            OfficialArmoryPageClient.code(
+                "{\"code\":0,\"content\":\"<input value='" + hex.toLowerCase() + "'><b>" + hex + "</b>\"}"))
+        .isEqualTo(hex);
   }
 
   @Test

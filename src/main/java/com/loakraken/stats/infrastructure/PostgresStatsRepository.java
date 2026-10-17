@@ -323,7 +323,7 @@ class PostgresStatsRepository implements StatsPort {
           %KEYS%),
       home AS (
         SELECT DISTINCT ON (roster_key) roster_key, server_name AS home_server
-        FROM members ORDER BY roster_key, item_level DESC NULLS LAST, character_name),
+        FROM members ORDER BY roster_key, item_level DESC NULLS LAST, character_name, server_name),
       levels AS (
         SELECT c.roster_key, MAX(c.expedition_level) AS roster_level, COUNT(c.expedition_level) AS used_level
         FROM characters c

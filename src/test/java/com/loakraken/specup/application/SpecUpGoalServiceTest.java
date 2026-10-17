@@ -58,6 +58,21 @@ class SpecUpGoalServiceTest {
     assertThat(store.saved).isEmpty();
   }
 
+  @Test
+  void 각인서_시세_시각이_바뀌면_캐시_키가_달라져_다시_계산하고_그대로면_캐시를_쓴다() {
+    var service = service(System::nanoTime);
+    when(books.observedAt()).thenReturn(Optional.of(Instant.parse("2026-10-17T09:00:00Z")));
+    service.goal("목표테스트", new BigDecimal("6000"));
+    service.goal("목표테스트", new BigDecimal("6000"));
+    assertThat(store.saved).hasSize(1);
+
+    when(books.observedAt()).thenReturn(Optional.of(Instant.parse("2026-10-17T09:01:00Z")));
+    service.goal("목표테스트", new BigDecimal("6000"));
+    assertThat(store.saved).hasSize(2);
+  }
+
+  private final RelicBookPriceService books = mock(RelicBookPriceService.class);
+
   private SpecUpGoalService service(LongSupplier nanoTime) {
     when(specUp.enabled()).thenReturn(true);
     when(auctions.cachedGems()).thenReturn(List.of());
@@ -114,8 +129,7 @@ class SpecUpGoalServiceTest {
                   0,
                   List.of());
             });
-    return new SpecUpGoalService(
-        specUp, simulator, auctions, mock(RelicBookPriceService.class), materials, store, nanoTime);
+    return new SpecUpGoalService(specUp, simulator, auctions, books, materials, store, nanoTime);
   }
 
   private static final class MemoryStore implements SpecUpGoalStorePort {

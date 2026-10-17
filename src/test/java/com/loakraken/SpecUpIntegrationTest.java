@@ -107,7 +107,7 @@ class SpecUpIntegrationTest {
     var empty10 = find(candidates, "GEM_LEVEL:1:10");
     assertThat(empty10.path("kind").asText()).isEqualTo("GEM_LEVEL");
     assertThat(empty10.path("emptySlot").asBoolean()).isTrue();
-    assertThat(empty10.path("target").asText()).isEqualTo("빈 보석 칸 (10칸 비어 있음)");
+    assertThat(empty10.path("target").asText()).isEqualTo("빈 보석 칸 10개");
     assertThat(empty10.path("from").asText()).isEqualTo("빈 칸");
     assertThat(empty10.path("to").asText()).isEqualTo("10레벨 겁화");
     assertThat(empty10.path("deltaCombatPower").decimalValue()).isEqualByComparingTo("248.50");
@@ -481,7 +481,7 @@ class SpecUpIntegrationTest {
       var values = entry.getValue();
       assertThat(candidate.path("status").asText()).isEqualTo("OK");
       assertThat(candidate.path("emptySlot").asBoolean()).isTrue();
-      assertThat(candidate.path("target").asText()).isEqualTo("빈 보석 칸 (11칸 비어 있음)");
+      assertThat(candidate.path("target").asText()).isEqualTo("빈 보석 칸 11개");
       assertThat(candidate.path("deltaCombatPower").decimalValue()).isEqualByComparingTo(values[0]);
       assertThat(candidate.at("/cost/code").asText()).isEqualTo("GEM_BUY");
       assertThat(candidate.at("/cost/amount").asLong()).isEqualTo(Long.parseLong(values[1]));

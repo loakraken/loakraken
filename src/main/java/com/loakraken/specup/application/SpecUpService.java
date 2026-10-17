@@ -284,7 +284,7 @@ public class SpecUpService {
     if (empty.isEmpty()) return;
     var tier = coefficients.tierOf(CombatPowerGemModel.EMPTY_SLOT_KIND);
     int slot = empty.getFirst();
-    String target = "빈 보석 칸 (" + empty.size() + "칸 비어 있음)";
+    String target = "빈 보석 칸 " + empty.size() + "개";
     for (int next = EMPTY_SLOT_MIN_LEVEL; next <= 10; next++)
       planned.add(
           new Planned(

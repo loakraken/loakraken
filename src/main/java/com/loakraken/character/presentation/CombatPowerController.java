@@ -182,7 +182,10 @@ public class CombatPowerController {
   @Schema(description = "바꾼 항목 하나. kind마다 쓰는 필드가 다르다")
   public record ChangeRequest(
       @NotNull CombatPowerSimulationService.Kind kind,
-      @Schema(description = "보석 slot(GEM_LEVEL)") Integer slot,
+      @Schema(
+              description =
+                  "보석 slot(GEM_LEVEL, 0~10). 보석이 없는 빈 칸이면 그 칸에 4티어 보석을 새로 끼우는 변화로 계산한다(before = 0)")
+          Integer slot,
       @Schema(description = "검색 응답 loadout.equipment 순번(EQUIPMENT_*·POLISH)") Integer index,
       @Schema(description = "연마·팔찌 효과 줄 번호(0부터)") Integer line,
       @Schema(description = "보석 레벨(0은 보석 빼기)·상급 재련 단계·각인·스톤 레벨") Integer level,

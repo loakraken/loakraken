@@ -155,6 +155,10 @@ class OfficialArmoryPageClientTest {
             "{\"code\":0,\"content\":\"_" + hex + "\"}",
             "{\"code\":0,\"content\":\"" + hex + "-1\"}",
             "{\"code\":0,\"content\":\"가" + hex + "\"}",
+            "{\"code\":0,\"content\":\"!" + hex + "\"}",
+            "{\"code\":0,\"content\":\"<b>" + hex + "!</b>\"}",
+            "{\"code\":0,\"content\":\"=" + hex + "\"}",
+            "{\"code\":0,\"content\":1}",
             "{\"code\":0,\"content\":\"" + hex + " " + "B".repeat(128) + "\"}",
             "{\"code\":0.5,\"content\":\"" + hex + "\"}",
             "{\"code\":\"0\",\"content\":\"" + hex + "\"}",
@@ -164,7 +168,9 @@ class OfficialArmoryPageClientTest {
           .isInstanceOfSatisfying(
               ArmoryPageFetchException.class,
               e -> assertThat(e.kind()).isEqualTo(Kind.PARSE_ERROR));
-    // 같은 값이 두 번 나오는 것은 괜찮다(복사 버튼 등).
+    // 값만 오거나(앞뒤 공백), 같은 값이 두 번 나오는 것은 괜찮다(복사 버튼 등).
+    assertThat(OfficialArmoryPageClient.code("{\"code\":0,\"content\":\" " + hex + "\\n\"}"))
+        .isEqualTo(hex);
     assertThat(
             OfficialArmoryPageClient.code(
                 "{\"code\":0,\"content\":\"<input value='"

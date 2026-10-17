@@ -29,11 +29,11 @@ import tools.jackson.databind.json.JsonMapper;
 @Component
 class OfficialArmoryPageClient implements ArmoryPagePort {
   /**
-   * 값 한 덩어리 전체가 128자 16진수. 앞뒤에 글자·숫자·밑줄·하이픈이 붙어 있으면(더 긴 값의 일부) 잘라 쓰지 않고 실패로 본다. 값 경계는 따옴표·공백·꺾쇠 같은
-   * 구분 문자다.
+   * 128자 16진수 값. 앞뒤 경계는 허용 목록(시작·끝, 공백, 따옴표, 꺾쇠)만 — 다른 글자가 붙어 있으면(더 긴 값의 일부이거나 '!' 같은 글자) 잘라 쓰지 않고
+   * 실패로 본다.
    */
   private static final Pattern CODE =
-      Pattern.compile("(?<![\\p{L}\\p{N}_-])[0-9A-Fa-f]{128}(?![\\p{L}\\p{N}_-])");
+      Pattern.compile("(?<![^>\\s'\"])[0-9A-Fa-f]{128}(?![^<\\s'\"])");
 
   private static final JsonMapper JSON = JsonMapper.builder().build();
   private final RestClient client;
@@ -90,8 +90,8 @@ class OfficialArmoryPageClient implements ArmoryPagePort {
 
   /**
    * 페이지의 스킬 코드 버튼과 같은 요청({@code POST /Profile/SkillRecommend}, 폼 본문 memberNo·worldNo·pcId). 응답
-   * JSON의 code가 0이 아니면 거절로 보고 ACCESS_DENIED(우회하지 않음 — 쿠키·로그인·토큰을 흉내 내지 않는다). content 안의 128자 16진수만
-   * 꺼낸다.
+   * JSON의 code가 0이 아니면 거절로 보고 ACCESS_DENIED(우회하지 않음 — 쿠키·로그인·토큰을 흉내 내지 않는다). content(모달 HTML) 안에서
+   * 태그·따옴표·공백으로 경계 지어진 128자 16진수 하나만 받는다.
    */
   @Override
   public String skillCode(Identity identity) {
@@ -135,7 +135,10 @@ class OfficialArmoryPageClient implements ArmoryPagePort {
     if (!result.isIntegralNumber()) throw new ArmoryPageFetchException(Kind.PARSE_ERROR, 200);
     if (result.bigIntegerValue().signum() != 0)
       throw new ArmoryPageFetchException(Kind.ACCESS_DENIED, 200);
-    var matcher = CODE.matcher(root.path("content").asString(""));
+    // content는 공식 페이지가 모달 본문(HTML)으로 그대로 넣는 값이라 코드 앞뒤에 태그·따옴표가 있다.
+    var content = root.path("content");
+    if (!content.isString()) throw new ArmoryPageFetchException(Kind.PARSE_ERROR, 200);
+    var matcher = CODE.matcher(content.asString());
     if (!matcher.find()) throw new ArmoryPageFetchException(Kind.PARSE_ERROR, 200);
     var code = matcher.group().toUpperCase(java.util.Locale.ROOT);
     // 서로 다른 값이 둘 이상이면 어느 것인지 알 수 없다.

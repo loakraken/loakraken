@@ -199,15 +199,24 @@ public record CharacterLoadoutResponse(
       List<GemResponse> items, @NullableResponse GemEffectsResponse effects) {
     static GemsResponse from(CharacterLoadout.Gems value) {
       if (value == null) return null;
-      // 칸 번호 → 공식 보석 효과 Option("기본 공격력 n% 증가").
-      var options = new java.util.HashMap<Integer, String>();
+      // 칸 번호 → 공식 보석 효과 문구 전부("기본 공격력 n% 증가"를 찾는다). 같은 칸이 여러 줄이면 모두 본다(#555).
+      var options = new java.util.HashMap<Integer, java.util.List<String>>();
       if (value.effects() != null)
         for (var skill : value.effects().skills())
-          if (skill != null && skill.gemSlot() != null)
-            options.putIfAbsent(skill.gemSlot(), skill.option());
+          if (skill != null && skill.gemSlot() != null) {
+            var lines = options.computeIfAbsent(skill.gemSlot(), slot -> new java.util.ArrayList<>());
+            lines.add(skill.option());
+            lines.addAll(skill.description());
+          }
       return new GemsResponse(
           value.items().stream()
-              .map(gem -> GemResponse.from(gem, gem == null ? null : options.get(gem.slot())))
+              .map(
+                  gem ->
+                      GemResponse.from(
+                          gem,
+                          gem == null
+                              ? java.util.List.of()
+                              : options.getOrDefault(gem.slot(), java.util.List.of())))
               .toList(),
           GemEffectsResponse.from(value.effects()));
     }
@@ -235,9 +244,9 @@ public record CharacterLoadoutResponse(
               example = "TOOLTIP")
           @NullableResponse
           String baseAttackPctSource) {
-    static GemResponse from(CharacterLoadout.Gem value, String option) {
+    static GemResponse from(CharacterLoadout.Gem value, java.util.List<String> options) {
       if (value == null) return null;
-      var baseAttack = GemBaseAttack.of(value, option);
+      var baseAttack = GemBaseAttack.of(value, options);
       return new GemResponse(
           value.slot(),
           value.name(),

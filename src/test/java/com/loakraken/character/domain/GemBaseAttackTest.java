@@ -18,15 +18,33 @@ class GemBaseAttackTest {
 
   @Test
   void 문구가_없으면_4티어_6에서_10레벨만_레벨_표로_채운다() {
-    var table = GemBaseAttack.of(gem("10레벨 광휘의 보석 (귀속)", 10, null), null);
+    var table = GemBaseAttack.of(gem("10레벨 광휘의 보석 (귀속)", 10, null), (String) null);
     assertThat(table.pct()).isEqualByComparingTo("1.20");
     assertThat(table.source()).isEqualTo(GemBaseAttack.LEVEL_TABLE);
     assertThat(GemBaseAttack.of(gem("7레벨 작열의 보석", 7, 4), "다른 문구").pct())
         .isEqualByComparingTo("0.60");
     // 근거 없는 레벨·3티어는 비운다.
-    assertThat(GemBaseAttack.of(gem("5레벨 겁화의 보석", 5, 4), null)).isNull();
-    assertThat(GemBaseAttack.of(gem("10레벨 멸화의 보석", 10, 3), null)).isNull();
+    assertThat(GemBaseAttack.of(gem("5레벨 겁화의 보석", 5, 4), (String) null)).isNull();
+    assertThat(GemBaseAttack.of(gem("10레벨 멸화의 보석", 10, 3), (String) null)).isNull();
     assertThat(GemBaseAttack.of(null, "기본 공격력 0.80% 증가")).isNull();
+  }
+
+  @Test
+  void 같은_칸_여러_줄과_공백_차이에도_공식_문구를_읽는다() {
+    // #555: 첫 줄이 다른 효과여도 그 칸의 다른 줄에서 찾는다.
+    var lines =
+        GemBaseAttack.of(
+            gem("9레벨 겁화의 보석", 9, 4), List.of("피해 40.00% 증가", "기본 공격력 1.00% 증가"));
+    assertThat(lines.pct()).isEqualByComparingTo("1.00");
+    assertThat(lines.source()).isEqualTo(GemBaseAttack.TOOLTIP);
+    // 공백이 여러 칸이거나 숫자와 % 사이에 공백이 있어도 읽는다.
+    assertThat(GemBaseAttack.of(gem("6레벨 작열의 보석", 6, 4), "기본  공격력 0.45 % 증가").source())
+        .isEqualTo(GemBaseAttack.TOOLTIP);
+    // 줄이 비었거나 null 줄만 있으면 표 값으로.
+    var empty = new java.util.ArrayList<String>();
+    empty.add(null);
+    assertThat(GemBaseAttack.of(gem("10레벨 겁화의 보석", 10, 4), empty).source())
+        .isEqualTo(GemBaseAttack.LEVEL_TABLE);
   }
 
   @Test

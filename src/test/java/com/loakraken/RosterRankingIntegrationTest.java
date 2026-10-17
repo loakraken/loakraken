@@ -76,7 +76,7 @@ class RosterRankingIntegrationTest {
     member(SERVER, big, "원정바", 1650);
     member(SERVER, big, "원정사", 1600);
     exclude("원정제외");
-    // 두 명 원정대: 있는 인원으로 평균하고 usedCharacters=2.
+    // 두 명 원정대: 6명보다 적어도 6으로 나누고(식스맨 평균 규칙) usedCharacters=2.
     var small = UUID.randomUUID();
     member(SERVER, small, "원정작은", 1720);
     member(SERVER, small, "원정작은둘", 1700);
@@ -96,16 +96,17 @@ class RosterRankingIntegrationTest {
     assertThat(data.path("excludedRosters").asLong()).isZero();
     var rows = data.path("rows");
     assertThat(rows.size()).isEqualTo(2);
-    assertThat(rows.at("/0/characterName").asText()).isEqualTo("원정작은");
-    assertThat(rows.at("/0/value").decimalValue()).isEqualByComparingTo("1710.00");
-    assertThat(rows.at("/0/usedCharacters").asLong()).isEqualTo(2);
-    assertThat(rows.at("/0/characterCount").asLong()).isEqualTo(2);
-    assertThat(rows.at("/1/characterName").asText()).isEqualTo("원정가");
-    assertThat(rows.at("/1/value").decimalValue()).isEqualByComparingTo("1675.00");
-    assertThat(rows.at("/1/usedCharacters").asLong()).isEqualTo(6);
-    assertThat(rows.at("/1/characterCount").asLong()).isEqualTo(7);
-    assertThat(names(rows.at("/1/composition")))
+    // 일곱 명: 상위 6명 합 10050 ÷ 6 = 1675. 두 명: (1720 + 1700) ÷ 6 = 570.
+    assertThat(rows.at("/0/characterName").asText()).isEqualTo("원정가");
+    assertThat(rows.at("/0/value").decimalValue()).isEqualByComparingTo("1675.00");
+    assertThat(rows.at("/0/usedCharacters").asLong()).isEqualTo(6);
+    assertThat(rows.at("/0/characterCount").asLong()).isEqualTo(7);
+    assertThat(names(rows.at("/0/composition")))
         .containsExactly("원정가", "원정나", "원정다", "원정라", "원정마", "원정바");
+    assertThat(rows.at("/1/characterName").asText()).isEqualTo("원정작은");
+    assertThat(rows.at("/1/value").decimalValue()).isEqualByComparingTo("570.00");
+    assertThat(rows.at("/1/usedCharacters").asLong()).isEqualTo(2);
+    assertThat(rows.at("/1/characterCount").asLong()).isEqualTo(2);
     assertThat(response.body()).doesNotContain("원정제외").doesNotContain("원정오래");
     SiteNames.assertAbsent(response.body());
 
@@ -142,9 +143,79 @@ class RosterRankingIntegrationTest {
     assertThat(data.at("/rows/1/characterName").asText()).isEqualTo("원정스냅숏");
     assertThat(data.at("/rows/0/characterName").asText()).isEqualTo("원정전투가");
     assertThat(data.at("/rows/0/combatPower").decimalValue()).isEqualByComparingTo("3000.50");
-    assertThat(data.at("/rows/0/value").decimalValue()).isEqualByComparingTo("2750.25");
+    // 아이템 레벨 상위 6명(1700·1660·1600) 중 전투력 있는 둘의 합 5500.50 ÷ 6 = 916.75
+    assertThat(data.at("/rows/0/value").decimalValue()).isEqualByComparingTo("916.75");
     assertThat(data.at("/rows/0/usedCharacters").asLong()).isEqualTo(2);
     assertThat(names(data.at("/rows/0/composition"))).containsExactly("원정전투가", "원정전투나");
+  }
+
+  @Test
+  void 서버_조건이_없으면_대표_캐릭터_서버만으로_모든_값을_센다() throws Exception {
+    // 한 원정대가 두 서버에 걸쳐 있다: 대표(1950)는 SERVER(전투력 관측), 더 많은 고레벨 캐릭터는 TIE_SERVER(전투력 미관측).
+    var key = UUID.randomUUID();
+    member(SERVER, key, "원정섞임대표", 1950, "3000.00", null, Instant.now());
+    member(SERVER, key, "원정섞임가", 1940, "2900.00", null, Instant.now());
+    member(SERVER, key, "원정섞임나", 1930, "2800.00", null, Instant.now());
+    // 원정대 레벨은 다른 서버 캐릭터 하나에만 있다(대표 서버 캐릭터는 미수집 null).
+    for (int i = 0; i < 4; i++)
+      member(TIE_SERVER, key, "원정섞임다른" + i, 1945 - i, null, i == 0 ? 300 : null, Instant.now());
+
+    // 서버 조건 없음: 대표 서버(SERVER) 3명만 — (1950 + 1940 + 1930) ÷ 6 = 970. 예전처럼 서버를 섞으면 1944였다.
+    var all = data(get("/api/v1/rankings/rosters?basis=ITEM_LEVEL&aggregate=TOP6_AVG&size=100"));
+    var row = rowOf(all, "원정섞임대표");
+    assertThat(row.path("value").decimalValue()).isEqualByComparingTo("970.00");
+    assertThat(row.path("usedCharacters").asLong()).isEqualTo(3);
+    assertThat(row.path("characterCount").asLong()).isEqualTo(3);
+    assertThat(row.path("composition").toString()).doesNotContain("원정섞임다른");
+
+    // 전체 평균도 같은 3명: (1950 + 1940 + 1930) ÷ 3 = 1940.
+    var avg = data(get("/api/v1/rankings/rosters?basis=ITEM_LEVEL&aggregate=ALL_AVG&size=100"));
+    assertThat(rowOf(avg, "원정섞임대표").path("value").decimalValue()).isEqualByComparingTo("1940.00");
+
+    // 전투력: 다른 서버의 미관측 고레벨 캐릭터 때문에 빠지지 않는다 — (3000 + 2900 + 2800) ÷ 6 = 1450.
+    var cp = data(get("/api/v1/rankings/rosters?basis=COMBAT_POWER&aggregate=TOP6_AVG&size=100"));
+    assertThat(rowOf(cp, "원정섞임대표").path("value").decimalValue()).isEqualByComparingTo("1450.00");
+
+    // 원정대 레벨은 계정 공통 값: 대표 서버 캐릭터가 모두 null이어도 원정대 전체 최댓값 300. 서버 조건이 있어도 같다.
+    var levelPath = "/api/v1/rankings/rosters?basis=ROSTER_LEVEL&size=100";
+    for (var path : List.of(levelPath, levelPath + "&server=" + encode(SERVER))) {
+      var value = rowOf(data(get(path)), "원정섞임대표").path("value").decimalValue();
+      assertThat(value).as(path).isEqualByComparingTo("300");
+    }
+
+    // 서버 조건이 있으면 그 서버 캐릭터만: TIE_SERVER 4명 (1945 + 1944 + 1943 + 1942) ÷ 6 = 1295.67.
+    var tie =
+        data(
+            get(
+                "/api/v1/rankings/rosters?basis=ITEM_LEVEL&aggregate=TOP6_AVG&server="
+                    + encode(TIE_SERVER)));
+    var tieRow = rowOf(tie, "원정섞임다른0");
+    assertThat(tieRow.path("value").decimalValue()).isEqualByComparingTo("1295.67");
+    assertThat(tieRow.path("usedCharacters").asLong()).isEqualTo(4);
+  }
+
+  private static tools.jackson.databind.JsonNode rowOf(
+      tools.jackson.databind.JsonNode data, String representative) {
+    for (var row : data.path("rows"))
+      if (row.path("characterName").asText().equals(representative)) return row;
+    throw new AssertionError("대표 캐릭터 행이 없습니다: " + representative);
+  }
+
+  @Test
+  void 식스맨은_값이_아니라_아이템_레벨_상위_6명으로_고른다() throws Exception {
+    // 전투력 기준: 전투력이 가장 높은 1600 캐릭터는 아이템 레벨 7위라 식스맨에 들지 않는다.
+    var key = UUID.randomUUID();
+    for (int i = 0; i < 6; i++)
+      member(SERVER, key, "원정상위" + i, 1700 - i, "2000.00", null, Instant.now());
+    member(SERVER, key, "원정강한부캐", 1600, "9000.00", null, Instant.now());
+    var data =
+        data(
+            get(
+                "/api/v1/rankings/rosters?basis=COMBAT_POWER&aggregate=TOP6_SUM&server="
+                    + encode(SERVER)));
+    assertThat(data.at("/rows/0/value").decimalValue()).isEqualByComparingTo("12000.00");
+    assertThat(data.at("/rows/0/usedCharacters").asLong()).isEqualTo(6);
+    assertThat(data.at("/rows/0/composition").toString()).doesNotContain("원정강한부캐");
   }
 
   @Test

@@ -549,7 +549,8 @@ public class StatsQueryService {
     if (offset > MAX_RANKING_OFFSET)
       throw new BusinessException(StatsErrorCode.STATS_INVALID_RANGE);
     return cached(
-        "rosters:" + basis + ":" + aggregate + ":" + page + ":" + size + ":" + key(conditions),
+        // v2: 식스맨 규칙(대표 서버·÷6, #519)이 바뀌어 옛 규칙 값이 캐시에 남지 않게 키를 바꾼다.
+        "rosters:v2:" + basis + ":" + aggregate + ":" + page + ":" + size + ":" + key(conditions),
         RosterRankingResult.class,
         () -> {
           var now = clock.instant();

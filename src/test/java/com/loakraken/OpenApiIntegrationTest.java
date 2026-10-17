@@ -932,8 +932,17 @@ class OpenApiIntegrationTest {
             "aggregatedAt",
             "ruleVersion");
     assertThat(schemas.at("/GuildDetailSummary/required").toString())
-        .contains("itemLevelAvg", "combatPowerAvg", "combatPowerMedian", "combatPowerCount");
-    for (var field : List.of("combatPowerAvg", "combatPowerMedian"))
+        .contains(
+            "itemLevelAvg",
+            "combatPowerAvg",
+            "combatPowerMedian",
+            "combatPowerCount",
+            "combatPowerAvgTop",
+            "combatPowerTopItemLevelMin",
+            "combatPowerTopCount",
+            "combatPowerTotal");
+    for (var field :
+        List.of("combatPowerAvg", "combatPowerMedian", "combatPowerAvgTop", "combatPowerTotal"))
       assertThat(schemas.at("/GuildDetailSummary/properties/" + field + "/anyOf/1/type").asText())
           .as(field)
           .isEqualTo("null");

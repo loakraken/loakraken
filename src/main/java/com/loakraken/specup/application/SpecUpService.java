@@ -304,8 +304,8 @@ public class SpecUpService {
   }
 
   /**
-   * 보석 하나의 기본 공격력 %(보석 계수표 combat-power/gem-coefficients.json: 6·10레벨은 공식 보석 효과 확인값, 7~9레벨은 공개 분석 값 — 비교 기준
-   * 5명 대조 일치). 6~10레벨 0.45·0.60·0.80·1.00·1.20, 1~5레벨은 근거가 없어 null.
+   * 보석 하나의 기본 공격력 %(보석 계수표 combat-power/gem-coefficients.json: 6·10레벨은 공식 보석 효과 확인값, 7~9레벨은 공개 분석 값
+   * — 비교 기준 5명 대조 일치). 6~10레벨 0.45·0.60·0.80·1.00·1.20, 1~5레벨은 근거가 없어 null.
    */
   static BigDecimal baseAttackPct(CombatPowerGemModel.Tier tier, int level) {
     if (tier == null || !tier.supported()) return null;

@@ -178,8 +178,8 @@ public final class CombatPowerGemModel {
 
   /**
    * 보석 정보를 받았는가. 공식 응답은 보석이 하나도 없는 캐릭터에게 ArmoryGem을 {Gems: null, Effects: {Description: "", Skills:
-   * []}}로 준다(기준 캐릭터 원본 2026-10-18 확인) — 이것은 '보석 0개'다. ArmoryGem 자체가 없거나 보석도 효과도 없으면 받지 못한 것으로 보고 모든 칸
-   * 0레벨로 계산하지 않는다(보석 기여가 0인 틀린 숫자를 내지 않기 위해).
+   * []}}로 준다(기준 캐릭터 원본 2026-10-18 확인) — 이것은 '보석 0개'다. ArmoryGem 자체가 없거나 보석도 효과도 없으면 받지 못한 것으로 보고 모든
+   * 칸 0레벨로 계산하지 않는다(보석 기여가 0인 틀린 숫자를 내지 않기 위해).
    */
   public static boolean observed(CharacterLoadout.Gems gems) {
     return gems != null && (!gems.items().isEmpty() || gems.effects() != null);

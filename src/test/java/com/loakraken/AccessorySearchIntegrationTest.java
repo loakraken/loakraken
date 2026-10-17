@@ -44,7 +44,9 @@ class AccessorySearchIntegrationTest {
   @AfterEach
   void 정리() {
     var keys = new ArrayList<String>();
-    for (var pattern : List.of("market:v1:auction-search*", "lostark:client-limit:*")) {
+    for (var pattern :
+        List.of(
+            "market:v1:auction-search*", "market:v2:auction-search*", "lostark:client-limit:*")) {
       var found = redis.keys(pattern);
       if (found != null) keys.addAll(found);
     }
@@ -78,6 +80,14 @@ class AccessorySearchIntegrationTest {
     assertThat(item.at("/polish/0/shortName").asText()).isEqualTo("추피");
     assertThat(item.at("/polish/0/level").asText()).isEqualTo("MID");
     assertThat(item.at("/polish/1/option").isNull()).isTrue();
+    // 매물 이미지·기본 효과(STAT 줄만, 공식 순서, 값 있는 줄만).
+    assertThat(item.path("icon").asText()).isEqualTo("https://cdn.example/acc_necklace.png");
+    var effects = item.path("baseEffects");
+    assertThat(effects.size()).isEqualTo(4);
+    assertThat(effects.at("/0/name").asText()).isEqualTo("힘");
+    assertThat(effects.at("/3/name").asText()).isEqualTo("체력");
+    assertThat(effects.at("/3/value").decimalValue()).isEqualByComparingTo("4200");
+    assertThat(effects.toString()).doesNotContain("치명", "깨달음", "추가 피해");
 
     var second = post(body, "203.0.113.11");
     assertThat(mapper.readTree(second.body()).at("/data/cached").asBoolean()).isTrue();
@@ -187,7 +197,11 @@ class AccessorySearchIntegrationTest {
             new ListingOption("ACCESSORY_UPGRADE", "무기 공격력 ", new BigDecimal("195.0"), false, null),
             new ListingOption("STAT", "힘", BigDecimal.valueOf(mainStat), false, null),
             new ListingOption("STAT", "민첩", BigDecimal.valueOf(mainStat), false, null),
-            new ListingOption("STAT", "지능", BigDecimal.valueOf(mainStat), false, null)));
+            new ListingOption("STAT", "지능", BigDecimal.valueOf(mainStat), false, null),
+            new ListingOption("STAT", "체력", new BigDecimal("4200.0"), false, null),
+            // 값이 없는 STAT 줄은 기본 효과에 넣지 않는다.
+            new ListingOption("STAT", "치명", null, false, null)),
+        "https://cdn.example/acc_necklace.png");
   }
 
   private HttpResponse<String> post(String body, String clientAddress) throws Exception {

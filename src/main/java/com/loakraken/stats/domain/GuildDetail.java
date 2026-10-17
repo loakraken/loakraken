@@ -42,7 +42,16 @@ public final class GuildDetail {
       Instant observedAt,
       Integer rosterGroup) {}
 
-  /** 평균·중앙값은 소수 둘째 자리. 전투력 값은 전투력을 관측한 길드원(combatPowerCount)만으로 낸다. */
+  /** 상위권 평균의 아이템 레벨 기준(길드 탭 비교 기준과 같은 1750). */
+  public static final BigDecimal TOP_ITEM_LEVEL = new BigDecimal("1750");
+
+  /**
+   * 평균·중앙값·총합은 소수 둘째 자리. 전투력 값은 전투력을 관측한 길드원(combatPowerCount)만으로 낸다.
+   *
+   * @param combatPowerAvgTop 아이템 레벨 {@link #TOP_ITEM_LEVEL} 이상이면서 전투력을 관측한 길드원의 전투력 평균(없으면 null)
+   * @param combatPowerTopCount 그 인원
+   * @param combatPowerTotal 전투력을 관측한 길드원 전체의 전투력 합(없으면 null)
+   */
   public record Summary(
       BigDecimal itemLevelAvg,
       BigDecimal itemLevelMedian,
@@ -50,7 +59,10 @@ public final class GuildDetail {
       BigDecimal itemLevelMin,
       BigDecimal combatPowerAvg,
       BigDecimal combatPowerMedian,
-      long combatPowerCount) {}
+      long combatPowerCount,
+      BigDecimal combatPowerAvgTop,
+      long combatPowerTopCount,
+      BigDecimal combatPowerTotal) {}
 
   public record ClassCount(String className, long count, BigDecimal share) {}
 
@@ -100,6 +112,15 @@ public final class GuildDetail {
     var itemLevels = sorted.stream().map(Member::itemLevel).toList();
     var combatPowers =
         sorted.stream().map(Member::combatPower).filter(value -> value != null).toList();
+    var topCombatPowers =
+        sorted.stream()
+            .filter(
+                member ->
+                    member.combatPower() != null
+                        && member.itemLevel() != null
+                        && member.itemLevel().compareTo(TOP_ITEM_LEVEL) >= 0)
+            .map(Member::combatPower)
+            .toList();
     long count = sorted.size();
     return new Result(
         count,
@@ -111,7 +132,12 @@ public final class GuildDetail {
             round(itemLevels.stream().min(Comparator.naturalOrder()).orElse(null)),
             round(mean(combatPowers)),
             round(median(combatPowers)),
-            combatPowers.size()),
+            combatPowers.size(),
+            round(mean(topCombatPowers)),
+            topCombatPowers.size(),
+            combatPowers.isEmpty()
+                ? null
+                : round(combatPowers.stream().reduce(BigDecimal.ZERO, BigDecimal::add))),
         classes(sorted, count),
         bins(itemLevels, ITEM_LEVEL_WIDTH),
         bins(combatPowers, COMBAT_POWER_WIDTH),

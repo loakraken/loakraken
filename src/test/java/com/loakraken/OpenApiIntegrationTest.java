@@ -315,6 +315,14 @@ class OpenApiIntegrationTest {
                 .at("/components/schemas/AccessorySearchResponse/properties/nextPage/anyOf/1/type")
                 .asText())
         .isEqualTo("null");
+    // 매물 이미지·기본 효과(#524): api는 둘 다 늘 준다(icon은 nullable, baseEffects는 빈 배열).
+    assertThat(document.at("/components/schemas/AccessorySearchItemResponse/required").toString())
+        .contains("icon", "baseEffects");
+    assertThat(
+            document
+                .at("/components/schemas/AccessorySearchBaseEffectResponse/required")
+                .toString())
+        .contains("name", "value");
     for (var field :
         List.of(
             "grade",
@@ -325,7 +333,8 @@ class OpenApiIntegrationTest {
             "tradeAllowCount",
             "buyPrice",
             "bidStartPrice",
-            "endDate"))
+            "endDate",
+            "icon"))
       assertThat(
               document
                   .at(
@@ -923,8 +932,17 @@ class OpenApiIntegrationTest {
             "aggregatedAt",
             "ruleVersion");
     assertThat(schemas.at("/GuildDetailSummary/required").toString())
-        .contains("itemLevelAvg", "combatPowerAvg", "combatPowerMedian", "combatPowerCount");
-    for (var field : List.of("combatPowerAvg", "combatPowerMedian"))
+        .contains(
+            "itemLevelAvg",
+            "combatPowerAvg",
+            "combatPowerMedian",
+            "combatPowerCount",
+            "combatPowerAvgTop",
+            "combatPowerTopItemLevelMin",
+            "combatPowerTopCount",
+            "combatPowerTotal");
+    for (var field :
+        List.of("combatPowerAvg", "combatPowerMedian", "combatPowerAvgTop", "combatPowerTotal"))
       assertThat(schemas.at("/GuildDetailSummary/properties/" + field + "/anyOf/1/type").asText())
           .as(field)
           .isEqualTo("null");

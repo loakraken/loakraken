@@ -111,6 +111,9 @@ armory-page:
   enabled: ${ARMORY_PAGE_ENABLED:false}
   # User-Agent에 서비스 이름과 함께 밝히는 연락 주소(서비스 안내 페이지 또는 서비스 전용 메일). 운영 설정에서 넣는다.
   contact: ${ARMORY_PAGE_CONTACT:}
+  # 스킬 코드(#532): 페이지 정보가 켜져 있고 이것도 켜야 동작한다. 캐릭터당 공식 웹 요청 2번(페이지 + 코드).
+  skill-code:
+    enabled: ${ARMORY_PAGE_SKILL_CODE_ENABLED:false}
 
 loakraken:
   features:

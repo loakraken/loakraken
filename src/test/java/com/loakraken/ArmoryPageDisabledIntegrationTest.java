@@ -46,6 +46,26 @@ class ArmoryPageDisabledIntegrationTest {
     assertThat(data.path("source").isNull()).isTrue();
     assertThat(data.path("fetchedAt").isNull()).isTrue();
     assertThat(data.path("lifeSkills").isNull()).isTrue();
+
+    // 스킬 코드(#532)도 꺼짐: 200에 값 null.
+    var code =
+        HttpClient.newHttpClient()
+            .send(
+                HttpRequest.newBuilder(
+                        URI.create(
+                            "http://localhost:"
+                                + port
+                                + "/api/v1/characters/armory-page/skill-code?characterName="
+                                + URLEncoder.encode("꺼짐캐릭", StandardCharsets.UTF_8)))
+                    .GET()
+                    .build(),
+                HttpResponse.BodyHandlers.ofString());
+    assertThat(code.statusCode()).isEqualTo(200);
+    ApiContractFixture.write("character-skill-code-disabled.json", code.body());
+    var codeData = new JsonMapper().readTree(code.body()).path("data");
+    assertThat(codeData.path("enabled").asBoolean()).isFalse();
+    assertThat(codeData.path("skillCode").isNull()).isTrue();
+    assertThat(codeData.path("fetchedAt").isNull()).isTrue();
     verifyNoInteractions(pages);
   }
 }

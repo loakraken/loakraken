@@ -59,6 +59,51 @@ public class CharacterArmoryPageController {
         CharacterArmoryPageResponse.from(pages.page(request.characterName())));
   }
 
+  @GetMapping(
+      value = "/api/v1/characters/armory-page/skill-code",
+      produces = MediaType.APPLICATION_JSON_VALUE)
+  @Operation(
+      summary = "스킬 코드(게임에 붙여 넣는 128자 코드)",
+      description =
+          "공식 전투정보실 캐릭터 페이지의 스킬 코드를 줍니다. 웹은 스킬 탭에 들어갈 때 부릅니다. "
+              + "사용자가 검색한 캐릭터(캐릭터 캐시에 있음)만 읽고, 캐시가 없으면 404 CHARACTER_NOT_CACHED입니다. "
+              + "기능이 꺼져 있으면 200에 enabled=false이고 나머지 값은 null입니다. "
+              + "켜져 있어도 읽지 못하면 enabled=true에 나머지 값이 null이며, 웹은 복사 단추를 숨깁니다. "
+              + "읽은 코드는 6시간 동안 다시 읽지 않습니다.")
+  @ApiResponses({
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(
+        responseCode = "200",
+        description = "CHARACTER_SKILL_CODE_SUCCESS"),
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(
+        responseCode = "400",
+        description = "INVALID_REQUEST",
+        content = @Content(schema = @Schema(ref = "#/components/schemas/ErrorResponse"))),
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(
+        responseCode = "404",
+        description = "CHARACTER_NOT_CACHED: 검색한 적 없는 캐릭터(공식 요청 없음)",
+        content = @Content(schema = @Schema(ref = "#/components/schemas/ErrorResponse"))),
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(
+        responseCode = "503",
+        description = "CHARACTER_CACHE_UNAVAILABLE",
+        content = @Content(schema = @Schema(ref = "#/components/schemas/ErrorResponse")))
+  })
+  public ApiResponse<CharacterSkillCodeResponse> skillCode(
+      @Valid @ModelAttribute @ParameterObject CharacterSiblingsRequest request) {
+    var view = pages.skillCode(request.characterName());
+    return ApiResponse.of(
+        CharacterSuccessCode.CHARACTER_SKILL_CODE_SUCCESS,
+        new CharacterSkillCodeResponse(
+            view.characterName(), view.enabled(), view.fetchedAt(), view.skillCode()));
+  }
+
+  @Schema(description = "스킬 코드")
+  public record CharacterSkillCodeResponse(
+      String characterName,
+      @Schema(description = "기능이 켜져 있으면 true. false면 나머지 값은 모두 null") boolean enabled,
+      @Schema(description = "공식 페이지에서 코드를 받은 시각(받지 못했으면 null)") @NullableResponse Instant fetchedAt,
+      @Schema(description = "128자 16진수 스킬 코드(대문자). 받지 못했으면 null") @NullableResponse
+          String skillCode) {}
+
   @Schema(description = "전투정보실 페이지 정보")
   public record CharacterArmoryPageResponse(
       String characterName,

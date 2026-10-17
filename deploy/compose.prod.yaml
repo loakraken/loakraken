@@ -168,6 +168,8 @@ services:
       ARMORY_PAGE_ENABLED: ${ARMORY_PAGE_ENABLED:-false}
       # 공식 페이지 요청의 User-Agent에 밝히는 서비스 연락 주소(서비스 안내 페이지 또는 서비스 전용 메일). 비우면 서비스 이름만.
       ARMORY_PAGE_CONTACT: "${ARMORY_PAGE_CONTACT:-}"
+      # 스킬 코드(페이지 정보가 켜져 있어야 동작). 켜면 스킬 탭을 연 캐릭터마다 공식 요청이 2번(페이지 + 코드) 든다.
+      ARMORY_PAGE_SKILL_CODE_ENABLED: ${ARMORY_PAGE_SKILL_CODE_ENABLED:-false}
       # 시세 예열 세부(MARKET_WARMUP_ENABLED가 켜진 인스턴스에서만 돈다). 재련 재료·유물 각인서는 켜면 공식 호출이 늘어 수집기와 게이트를 나눈다.
       MARKET_WARMUP_REFINING_MATERIALS_ENABLED: ${MARKET_WARMUP_REFINING_MATERIALS_ENABLED:-false}
       MARKET_WARMUP_RELIC_BOOKS_ENABLED: ${MARKET_WARMUP_RELIC_BOOKS_ENABLED:-false}

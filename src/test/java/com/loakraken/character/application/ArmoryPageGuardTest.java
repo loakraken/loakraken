@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.loakraken.character.application.ArmoryPageFetchException.Kind;
 import com.loakraken.character.application.ArmoryPageGuard.Decision;
+import com.loakraken.character.application.ArmoryPageGuard.Phase;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.net.URI;
 import java.time.Clock;
@@ -53,7 +54,8 @@ class ArmoryPageGuardTest {
         Duration.ofMinutes(1),
         Duration.ofMinutes(30),
         5,
-        3);
+        3,
+        new ArmoryPagePolicy.SkillCode(true));
   }
 
   @Test
@@ -176,7 +178,8 @@ class ArmoryPageGuardTest {
     guard.failure(guard.acquire(), Kind.TOO_LARGE);
     clock.advance(Duration.ofSeconds(2));
     assertThat(guard.acquire().allowed()).isTrue();
-    guard.failure(new ArmoryPageGuard.Permit(Decision.ALLOWED, 0, false), Kind.PARSE_ERROR);
+    guard.failure(
+        new ArmoryPageGuard.Permit(Decision.ALLOWED, Phase.PAGE, 0, false), Kind.PARSE_ERROR);
     clock.advance(Duration.ofDays(1));
     assertThat(guard.acquire().decision()).isEqualTo(Decision.STOPPED);
 
@@ -184,7 +187,8 @@ class ArmoryPageGuardTest {
     other.failure(other.acquire(), Kind.NOT_FOUND);
     clock.advance(Duration.ofSeconds(2));
     assertThat(other.acquire().allowed()).isTrue();
-    other.failure(new ArmoryPageGuard.Permit(Decision.ALLOWED, 0, false), Kind.ACCESS_DENIED);
+    other.failure(
+        new ArmoryPageGuard.Permit(Decision.ALLOWED, Phase.PAGE, 0, false), Kind.ACCESS_DENIED);
     clock.advance(Duration.ofDays(1));
     assertThat(other.acquire().decision()).isEqualTo(Decision.STOPPED);
   }
@@ -198,6 +202,63 @@ class ArmoryPageGuardTest {
     assertThat(guard.acquire().decision()).isEqualTo(Decision.BACKOFF);
     clock.advance(Duration.ofMinutes(6));
     assertThat(guard.acquire().allowed()).isTrue();
+  }
+
+  @Test
+  void 스킬_코드_거절과_형식_변경은_스킬_코드만_멈추고_페이지는_계속_읽는다() {
+    guard.failure(guard.acquire(Phase.CODE), Kind.ACCESS_DENIED);
+    assertThat(guard.skillCodeStopped()).isTrue();
+    assertThat(guard.stopped()).isFalse();
+    assertThat(guard.acquire(Phase.CODE).decision()).isEqualTo(Decision.STOPPED);
+    assertThat(guard.acquire().allowed()).isTrue();
+    assertThat(registry.get("loakraken.armory_page.skill_code.stopped").gauge().value())
+        .isEqualTo(1.0);
+
+    // 형식 변경: 코드 성공으로만 센 수가 지워지고, 연속 3번이면 코드만 멈춘다.
+    var other = new ArmoryPageGuard(policy(), clock, new SimpleMeterRegistry(), clock::advance);
+    other.structureFailure(Phase.CODE);
+    other.structureFailure(Phase.CODE);
+    other.success(other.acquire(Phase.CODE));
+    other.structureFailure(Phase.CODE);
+    other.structureFailure(Phase.CODE);
+    other.success(other.acquire(Phase.PAGE)); // 페이지 성공은 코드 형식 실패 수를 지우지 않는다
+    assertThat(other.skillCodeStopped()).isFalse();
+    other.failure(other.acquire(Phase.CODE), Kind.PARSE_ERROR);
+    assertThat(other.skillCodeStopped()).isTrue();
+    assertThat(other.stopped()).isFalse();
+  }
+
+  @Test
+  void 페이지_성공이_코드_요청의_연속_실패_수를_지우지_않아_5번이면_멈춘다() {
+    // 페이지 GET 성공 → 코드 POST 500을 쉬기가 끝날 때마다 되풀이.
+    for (int i = 0; i < 5; i++) {
+      clock.advance(Duration.ofMinutes(31));
+      guard.success(guard.acquire(Phase.PAGE));
+      guard.failure(guard.acquire(Phase.CODE), Kind.HTTP_ERROR);
+    }
+    assertThat(guard.stopped()).isTrue();
+    assertThat(guard.acquire().decision()).isEqualTo(Decision.STOPPED);
+  }
+
+  @Test
+  void 코드_요청이_기다리는_사이_다른_코드_요청이_거절되면_나가지_않는다() {
+    var a = guard.acquire(Phase.CODE);
+    assertThat(a.allowed()).isTrue();
+    duringSleep.set(() -> guard.failure(a, Kind.ACCESS_DENIED));
+    assertThat(guard.acquire(Phase.CODE).decision()).isEqualTo(Decision.STOPPED);
+    // 페이지 요청은 계속 나간다.
+    clock.advance(Duration.ofSeconds(2));
+    assertThat(guard.acquire(Phase.PAGE).allowed()).isTrue();
+  }
+
+  @Test
+  void 페이지와_코드는_같은_간격과_쉬기를_쓴다() {
+    assertThat(guard.acquire(Phase.PAGE).allowed()).isTrue();
+    assertThat(guard.acquire(Phase.CODE).allowed()).isTrue();
+    assertThat(sleeps).containsExactly(Duration.ofSeconds(1));
+    var code = guard.acquire(Phase.CODE);
+    guard.failure(code, Kind.TIMEOUT);
+    assertThat(guard.acquire(Phase.PAGE).decision()).isEqualTo(Decision.BACKOFF);
   }
 
   private static final class MutableClock extends Clock {

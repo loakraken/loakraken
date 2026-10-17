@@ -27,6 +27,12 @@ public final class CombatPowerGemModel {
   private static final String STONE = "어빌리티 스톤";
   private static final String ARM_GUARD = "완갑";
 
+  /** 공식 armory 보석 칸 수(Gems[].Slot 0~10, 2026-10-18 공식 응답 확인). 빈 칸은 0레벨(보석 없음)로 본다. */
+  public static final int SLOT_COUNT = 11;
+
+  /** 빈 칸에 새로 끼우는 보석의 기준 종류. 4티어 겁화·작열·광휘는 전투력 계수가 같다(계수표). */
+  public static final String EMPTY_SLOT_KIND = "겁화";
+
   /** 리소스 combat-power/gem-coefficients.json. */
   public record Coefficients(String ruleVersion, Map<String, String> source, List<Tier> tiers) {
     public Coefficients {
@@ -34,7 +40,7 @@ public final class CombatPowerGemModel {
       tiers = tiers == null ? List.of() : List.copyOf(tiers);
     }
 
-    Tier tierOf(String kind) {
+    public Tier tierOf(String kind) {
       for (var tier : tiers) if (tier.kinds().contains(kind)) return tier;
       return null;
     }
@@ -63,16 +69,61 @@ public final class CombatPowerGemModel {
    * 밖의 기본 공격력 %(스톤 레벨 보너스 + 완갑 추가 효과)다.
    */
   public record Model(
-      Map<Integer, Slot> slots, BigDecimal otherBaseAttackPct, String unsupportedReason) {
+      Map<Integer, Slot> slots,
+      BigDecimal otherBaseAttackPct,
+      String unsupportedReason,
+      Tier emptyTier) {
     public Model {
       slots = slots == null ? Map.of() : java.util.Collections.unmodifiableMap(slots);
+    }
+
+    Model(Map<Integer, Slot> slots, BigDecimal otherBaseAttackPct, String unsupportedReason) {
+      this(slots, otherBaseAttackPct, unsupportedReason, null);
+    }
+
+    /** 칸 slot이 빈 칸(보석 없음, 0~10 안)인가. */
+    public boolean empty(int slot) {
+      return slot >= 0 && slot < SLOT_COUNT && !slots.containsKey(slot);
+    }
+
+    /** 빈 칸 번호(오름차순). */
+    public List<Integer> emptySlots() {
+      var empty = new ArrayList<Integer>();
+      for (int slot = 0; slot < SLOT_COUNT; slot++) if (!slots.containsKey(slot)) empty.add(slot);
+      return empty;
+    }
+
+    /** 칸 하나의 기본 공격력 %(level 기준, 빈 칸은 새로 끼우는 4티어 기준). 모르면 null. */
+    public BigDecimal slotBaseAttackPct(int slot, int level) {
+      var current = slots.get(slot);
+      var tier = current != null ? current.tier() : empty(slot) ? emptyTier : null;
+      var value = tier == null ? null : tier.level(level);
+      return value == null ? null : value.baseAttackPct();
+    }
+
+    /** levels 가운데 빈 칸에 끼운 것들의 (배수 곱, 기본 공격력 합). 계산할 수 없으면 null. */
+    private BigDecimal[] added(Map<Integer, Integer> levels) {
+      var product = BigDecimal.ONE;
+      var baseAttack = BigDecimal.ZERO;
+      for (var entry : levels.entrySet()) {
+        if (slots.containsKey(entry.getKey())) continue;
+        if (!empty(entry.getKey()) || emptyTier == null) return null;
+        var level = emptyTier.level(entry.getValue());
+        if (level == null || level.damagePct() == null || level.baseAttackPct() == null)
+          return null;
+        product = product.multiply(BigDecimal.ONE.add(level.damagePct().divide(HUNDRED)), MATH);
+        baseAttack = baseAttack.add(level.baseAttackPct());
+      }
+      return new BigDecimal[] {product, baseAttack};
     }
 
     /** 칸별 레벨(levels)로 바꾼 상태의 전투력 비. 계산할 수 없는 칸이 있으면 null. */
     public BigDecimal ratio(Map<Integer, Integer> levels) {
       if (unsupportedReason != null) return null;
-      var product = BigDecimal.ONE;
-      var baseAttack = otherBaseAttackPct;
+      var added = added(levels);
+      if (added == null) return null;
+      var product = added[0];
+      var baseAttack = otherBaseAttackPct.add(added[1]);
       for (var slot : slots.values()) {
         var level = slot.tier().level(levels.getOrDefault(slot.slot(), slot.level()));
         if (level == null || level.damagePct() == null || level.baseAttackPct() == null)
@@ -86,7 +137,9 @@ public final class CombatPowerGemModel {
     /** 칸별 레벨(levels, 없는 칸은 지금 레벨)로 바꾼 상태의 기본 공격력 %(백분율). 계산할 수 없으면 null(#341). */
     public BigDecimal baseAttackPct(Map<Integer, Integer> levels) {
       if (unsupportedReason != null) return null;
-      var total = otherBaseAttackPct;
+      var added = added(levels);
+      if (added == null) return null;
+      var total = otherBaseAttackPct.add(added[1]);
       for (var slot : slots.values()) {
         var level = slot.tier().level(levels.getOrDefault(slot.slot(), slot.level()));
         if (level == null || level.baseAttackPct() == null) return null;
@@ -111,8 +164,10 @@ public final class CombatPowerGemModel {
     public String cannotSet(int slot, int level) {
       if (unsupportedReason != null) return unsupportedReason;
       var current = slots.get(slot);
-      if (current == null) return null;
-      var target = current.tier().level(level);
+      if (current == null && !empty(slot)) return "보석 " + slot + "번 칸은 없습니다.";
+      var tier = current != null ? current.tier() : emptyTier;
+      if (tier == null) return "빈 칸에 끼울 보석 계수를 찾지 못했습니다.";
+      var target = tier.level(level);
       if (target == null || target.baseAttackPct() == null)
         return level + "레벨 보석의 기본 공격력 수치를 아직 확인하지 않았습니다.";
       return null;
@@ -124,13 +179,13 @@ public final class CombatPowerGemModel {
   public static Model of(Coefficients coefficients, CharacterLoadout loadout) {
     var slots = new LinkedHashMap<Integer, Slot>();
     var gems = loadout.gems();
-    if (gems == null || gems.items().isEmpty())
-      return new Model(slots, BigDecimal.ZERO, "장착한 보석이 없습니다.");
+    // 보석이 하나도 없어도 모델을 만든다: 모든 칸이 0레벨(보석 없음)이고 빈 칸에 끼우는 변화를 계산할 수 있다(스펙업 빈 칸 후보).
+    var emptyTier = coefficients.tierOf(EMPTY_SLOT_KIND);
     var options = new LinkedHashMap<Integer, String>();
-    if (gems.effects() != null)
+    if (gems != null && gems.effects() != null)
       for (var skill : gems.effects().skills())
         if (skill != null && skill.gemSlot() != null) options.put(skill.gemSlot(), skill.option());
-    for (var gem : gems.items()) {
+    for (var gem : gems == null ? List.<CharacterLoadout.Gem>of() : gems.items()) {
       if (gem == null || gem.slot() == null || gem.level() == null) continue;
       var kind = match(GEM_KIND, gem.name());
       var tier = kind == null ? null : coefficients.tierOf(kind);
@@ -174,7 +229,7 @@ public final class CombatPowerGemModel {
     if (!unknown.isEmpty())
       return new Model(
           slots, other, "확인하지 않은 기본 공격력 % 출처(「" + unknown.getFirst() + "」)가 있어 보석 변화는 계산하지 않습니다.");
-    return new Model(slots, other, null);
+    return new Model(slots, other, null, emptyTier);
   }
 
   /** 어빌리티 스톤 "[레벨 보너스] 기본 공격력 +n%"(공식 문구) 합. 없으면 0(#344). */

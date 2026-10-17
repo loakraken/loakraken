@@ -119,6 +119,62 @@ class CombatPowerGemModelTest {
   }
 
   @Test
+  void 보석이_없어도_모델을_만들고_빈_칸_11개에_끼울_수_있다() {
+    var loadout =
+        new CharacterLoadout(
+            extraLines(),
+            null,
+            new CharacterLoadout.Gems(List.of(), new CharacterLoadout.GemEffects("", List.of())),
+            null,
+            null,
+            null,
+            List.of());
+    var model = CombatPowerGemModel.of(COEFFICIENTS, loadout);
+    assertThat(model.unsupportedReason()).isNull();
+    assertThat(model.slots()).isEmpty();
+    assertThat(model.emptySlots()).hasSize(11).startsWith(0).endsWith(10);
+    assertThat(model.otherBaseAttackPct()).isEqualByComparingTo("2.50");
+    assertThat(model.currentBaseAttackPct()).isEqualByComparingTo("2.50");
+    // 10레벨 하나: 1.0704 × (1 + 3.70%)/(1 + 2.50%).
+    assertThat(value(model, Map.of(0, 10)))
+        .isEqualByComparingTo(
+            BEFORE
+                .multiply(new BigDecimal("1.0704"))
+                .multiply(new BigDecimal("1.037"))
+                .divide(new BigDecimal("1.025"), MathContext.DECIMAL64)
+                .setScale(2, RoundingMode.HALF_UP));
+    assertThat(model.baseAttackPct(Map.of(0, 10, 4, 6))).isEqualByComparingTo("4.15");
+    assertThat(model.slotBaseAttackPct(3, 8)).isEqualByComparingTo("0.80");
+    assertThat(model.cannotSet(0, 5)).isEqualTo("5레벨 보석의 기본 공격력 수치를 아직 확인하지 않았습니다.");
+    assertThat(model.cannotSet(11, 6)).isEqualTo("보석 11번 칸은 없습니다.");
+    assertThat(model.ratio(Map.of(11, 6))).isNull();
+  }
+
+  @Test
+  void 빈_칸에_끼우는_값은_같은_보석을_빼는_값의_역이다() {
+    // 11칸 모두 7레벨인 캐릭터에서 0번을 빼고(검증된 0레벨 경로), 0번이 빈 10칸 캐릭터에서 0번에 7레벨을 끼우면 원래 전투력으로 돌아온다.
+    var full = CombatPowerGemModel.of(COEFFICIENTS, loadout(7, "0.60", extraLines()));
+    var removed = value(full, Map.of(0, 0));
+    var tenSlots = loadout(7, "0.60", extraLines());
+    var items = new ArrayList<>(tenSlots.gems().items());
+    items.removeIf(gem -> gem.slot() == 0);
+    var withoutFirst =
+        new CharacterLoadout(
+            tenSlots.equipment(),
+            null,
+            new CharacterLoadout.Gems(items, tenSlots.gems().effects()),
+            null,
+            null,
+            null,
+            List.of());
+    var model = CombatPowerGemModel.of(COEFFICIENTS, withoutFirst);
+    assertThat(model.unsupportedReason()).isNull();
+    assertThat(model.emptySlots()).containsExactly(0);
+    assertThat(value(model, Map.of(0, 7), removed))
+        .isCloseTo(BEFORE, org.assertj.core.api.Assertions.within(new BigDecimal("0.01")));
+  }
+
+  @Test
   void 삼티어_보석은_아직_계산하지_않는다() {
     var gems =
         new CharacterLoadout.Gems(

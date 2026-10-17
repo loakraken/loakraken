@@ -99,6 +99,11 @@ market:
     reserve: ${MARKET_AUCTION_SEARCH_RESERVE:30}
     max-scan-pages: ${MARKET_AUCTION_SEARCH_MAX_SCAN_PAGES:3}
     cache-ttl: ${MARKET_AUCTION_SEARCH_CACHE_TTL:120s}
+  # 보석 매물 직업·스킬 필터(#542). 끄면 목록·조건 붙은 매물이 404(공식 호출 0). 몫은 조건 붙은 매물 전체(모든 사용자 합)의 분당 공식 호출 수.
+  gem-filter:
+    enabled: ${MARKET_GEM_FILTER_ENABLED:true}
+    quota-per-minute: ${MARKET_GEM_FILTER_QUOTA:10}
+    reserve: ${MARKET_GEM_FILTER_RESERVE:40}
 
 loakraken:
   features:

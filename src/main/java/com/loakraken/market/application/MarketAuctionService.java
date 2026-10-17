@@ -22,7 +22,6 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.concurrent.locks.ReentrantLock;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -178,16 +177,6 @@ public class MarketAuctionService {
     return listings(gemQuery(kind, level, page));
   }
 
-  /**
-   * 직업·스킬로 거른 보석 매물(사용자 요청 10-16). 공식 검색 1회·1분 캐시·같은 게이트는 조건 없는 매물과 같고, 캐시 키에 조건이 들어간다. 걸러진 최저가는
-   * 전체 최저가가 아니므로 시세판 칸·일별 기록에 저장하지 않는다. 시세판 칸 채우기(요청당 5칸)와는 따로다.
-   */
-  public AuctionPage gemListings(
-      String kind, int level, int page, Optional<GemSkillCatalog.Filter> filter) {
-    if (filter.isEmpty()) return gemListings(kind, level, page);
-    return listings(gemQuery(kind, level, page, filter.get()));
-  }
-
   public AuctionPage accessoryListings(
       Grade grade, Role role, Slot slot, List<Level> levels, Integer minQuality, int page) {
     var options = AuctionCatalog.options(role, slot);
@@ -203,6 +192,7 @@ public class MarketAuctionService {
     if (cached.isPresent()) return cached.get();
     var page = search.search(query);
     auctions.saveListings(key, page);
+    // 조건 붙은 검색(#542)은 GemSkillFilterService가 따로 하지만, 걸러진 최저가가 칸에 들어가지 않게 여기서도 막는다.
     if (query.pageNo() == 1 && !query.filtered()) remember(query.key(), toCell(page));
     return page;
   }

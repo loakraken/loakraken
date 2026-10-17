@@ -232,6 +232,61 @@ class AuctionBoardIntegrationTest {
     verifyNoInteractions(search);
   }
 
+  @Test
+  void 필터_전용_분당_몫을_넘으면_캐시만_주고_캐시가_없으면_503이다() throws Exception {
+    when(search.search(any())).thenAnswer(invocation -> page(invocation.getArgument(0)));
+    String cachedPath =
+        "/api/v1/markets/auctions/gems/listings?kind="
+            + encode("겁화")
+            + "&level=10&className="
+            + encode("데모닉");
+    data(cachedPath);
+    // 이번 분 몫(기본 10)을 다 쓴 상태로 만든다(모든 사용자·인스턴스 공유 카운터).
+    var minute = System.currentTimeMillis() / 60_000;
+    for (long value = minute - 1; value <= minute + 1; value++)
+      redis.opsForValue().set("market:v1:auction-gem-filter-quota:" + value, "10");
+    // 캐시된 조건은 그대로 준다.
+    assertThat(data(cachedPath).at("/filter/className").asText()).isEqualTo("데모닉");
+    // 새 조건은 공식 호출 없이 503 + Retry-After. 조건 없는 매물은 이 몫과 따로다.
+    var busy =
+        get(
+            "/api/v1/markets/auctions/gems/listings?kind="
+                + encode("겁화")
+                + "&level=9&className="
+                + encode("데모닉"));
+    assertThat(busy.statusCode()).isEqualTo(503);
+    assertThat(busy.body()).contains("MARKET_SEARCH_BUSY");
+    assertThat(busy.headers().firstValue("Retry-After")).isPresent();
+    data("/api/v1/markets/auctions/gems/listings?kind=" + encode("겁화") + "&level=9");
+    verify(search, times(2)).search(any());
+  }
+
+  @Test
+  void 같은_조건_동시_요청은_공식_검색_하나로_묶는다() throws Exception {
+    var started = new java.util.concurrent.CountDownLatch(1);
+    when(search.search(any()))
+        .thenAnswer(
+            invocation -> {
+              started.countDown();
+              Thread.sleep(500);
+              return page(invocation.getArgument(0));
+            });
+    String path =
+        "/api/v1/markets/auctions/gems/listings?kind="
+            + encode("겁화")
+            + "&level=7&className="
+            + encode("데모닉")
+            + "&skill=27960";
+    try (var pool = java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor()) {
+      var calls = new ArrayList<java.util.concurrent.Future<HttpResponse<String>>>();
+      calls.add(pool.submit(() -> get(path)));
+      started.await(5, java.util.concurrent.TimeUnit.SECONDS);
+      for (int i = 0; i < 4; i++) calls.add(pool.submit(() -> get(path)));
+      for (var call : calls) assertThat(call.get().statusCode()).isEqualTo(200);
+    }
+    verify(search, times(1)).search(any());
+  }
+
   /** 데모닉 스킬 가운데 겁화(피해 증가)만 있는 스킬 코드(리소스에서 찾는다). */
   private int demonicDamageOnly() throws Exception {
     var data = data("/api/v1/markets/auctions/gems/skills");

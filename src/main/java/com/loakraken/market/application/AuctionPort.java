@@ -27,6 +27,9 @@ public interface AuctionPort {
   /** 각 칸의 전날 마지막 최저가. */
   Map<String, Long> previousDay(List<String> keys, LocalDate day);
 
+  /** 보석 매물 직업·스킬 필터(#542)의 이번 분 기능 몫에서 공식 호출 하나를 가져온다. 넘었거나 저장소 장애면 false(공식 예산 보호). */
+  boolean tryAcquireGemFilterQuota(int limit);
+
   /**
    * @param etcOptions 연마 효과 필터. min·max는 공식 값(×100 정수)
    * @param characterClass 공식 직업 이름(보석 매물 직업 필터). 없으면 null

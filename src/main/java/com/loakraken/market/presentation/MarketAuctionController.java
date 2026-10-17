@@ -42,7 +42,7 @@ public class MarketAuctionController {
   @Operation(
       summary = "보석 매물 직업·스킬 목록",
       description =
-          "보석 매물을 거를 직업과 스킬(공식 경매장 검색 옵션 가운데 보석에 붙는 스킬). 공식 호출 없음. 매물 조회의 className·skill에 이 값을 그대로 쓴다.")
+          "보석 매물을 거를 직업과 스킬(공식 경매장 검색 옵션 가운데 보석에 붙는 스킬). 공식 호출 없음. 매물 조회의 className·skill에 이 값을 그대로 쓴다. 기능이 꺼져 있으면 404 GEM_FILTER_DISABLED(화면은 필터를 숨김).")
   @StandardErrors
   public ApiResponse<AuctionResponses.AuctionGemSkillsResponse> gemSkills() {
     return ApiResponse.of(
@@ -65,7 +65,7 @@ public class MarketAuctionController {
   @Operation(
       summary = "T4 보석 매물",
       description =
-          "즉시 구매가 오름차순 10개(1분 캐시). 공식 호출 최대 1회. className(직업)·skill(스킬 코드, 직업 필요)로 거를 수 있고 값은 /gems/skills 목록을 쓴다. 목록에 없는 조건은 400 INVALID_GEM_FILTER.")
+          "즉시 구매가 오름차순 10개(1분 캐시). 공식 호출 최대 1회. className(직업)·skill(스킬 코드, 직업 필요)로 거를 수 있고 값은 /gems/skills 목록을 쓴다. 목록에 없는 조건은 400 INVALID_GEM_FILTER, 필터가 꺼져 있으면 404 GEM_FILTER_DISABLED. 조건 붙은 검색은 기능 전용 분당 몫(모든 사용자 합)을 넘으면 캐시만 주고 캐시가 없으면 503 MARKET_SEARCH_BUSY + Retry-After, 같은 조건 동시 요청은 공식 검색 하나로 묶는다.")
   @StandardErrors
   public ApiResponse<AuctionResponses.AuctionListingsResponse> gemListings(
       @Parameter(description = "겁화 또는 작열") @RequestParam @Pattern(regexp = "겁화|작열") String kind,
@@ -81,11 +81,11 @@ public class MarketAuctionController {
           @Min(1)
           Integer skill) {
     int pageNo = page == null ? 1 : page;
-    var filter = gemSkills.filter(kind, className, skill);
+    var listings = gemSkills.listings(kind, level, pageNo, className, skill);
     return ApiResponse.of(
         MarketSuccessCode.AUCTION_LISTINGS_SUCCESS,
         AuctionResponses.AuctionListingsResponse.from(
-            auctions.gemListings(kind, level, pageNo, filter), pageNo, filter.orElse(null)));
+            listings.page(), pageNo, listings.filter()));
   }
 
   @GetMapping("/accessories")

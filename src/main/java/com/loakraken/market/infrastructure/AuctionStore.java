@@ -27,6 +27,7 @@ import tools.jackson.databind.json.JsonMapper;
 class AuctionStore implements AuctionPort {
   static final String CELL_PREFIX = "market:v1:auction-cell:";
   static final String LISTINGS_PREFIX = "market:v1:auction-listings:";
+  static final String GEM_FILTER_QUOTA_PREFIX = "market:v1:auction-gem-filter-quota:";
   static final Duration CELL_TTL = Duration.ofMinutes(3);
   static final Duration LISTINGS_TTL = Duration.ofMinutes(1);
   private static final Logger log = LoggerFactory.getLogger(AuctionStore.class);
@@ -50,6 +51,20 @@ class AuctionStore implements AuctionPort {
   @Override
   public void saveCell(String key, AuctionCell cell) {
     write(CELL_PREFIX + key, cell, CELL_TTL);
+  }
+
+  @Override
+  public boolean tryAcquireGemFilterQuota(int limit) {
+    String key = GEM_FILTER_QUOTA_PREFIX + clock.millis() / 60_000;
+    try {
+      Long count = redis.opsForValue().increment(key);
+      if (count == null) return false;
+      if (count == 1) redis.expire(key, Duration.ofSeconds(61));
+      return count <= limit;
+    } catch (DataAccessException exception) {
+      log.warn("보석 필터 몫 카운터를 쓰지 못했습니다. 예외 유형={}", exception.getClass().getSimpleName());
+      return false;
+    }
   }
 
   @Override

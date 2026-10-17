@@ -12,8 +12,8 @@ import tools.jackson.databind.json.JsonMapper;
 import tools.jackson.databind.node.ObjectNode;
 
 /**
- * 크라켄 점수 팔찌 총배율(#539, 원본 모듈 12921과 의존 85041·28245·32674·20084·17468·78512·35231·71552·34006·35724). 점수의 마지막
- * 곱이다. 원본 연산 순서를 그대로 옮긴다(double).
+ * 크라켄 점수 팔찌 총배율(#539, 원본 모듈 12921과 의존 85041·28245·32674·20084·17468·78512·35231·71552·34006·35724).
+ * 점수의 마지막 곱이다. 원본 연산 순서를 그대로 옮긴다(double).
  */
 public final class KrakenScoreBracelet {
   private KrakenScoreBracelet() {}
@@ -47,7 +47,8 @@ public final class KrakenScoreBracelet {
 
   // ---------------------------------------------------------------- 공격력 비(85041 ZQ·Gg·kj)
 
-  private static double attackRatio(JsonNode e, KrakenScoreEngine.Tables tables, List<String> options, JsonNode tier) {
+  private static double attackRatio(
+      JsonNode e, KrakenScoreEngine.Tables tables, List<String> options, JsonNode tier) {
     boolean any = false;
     for (var option : options) if (isAttackOption(tables, tier, option)) any = true;
     if (!any) return 1;
@@ -102,7 +103,8 @@ public final class KrakenScoreBracelet {
     var v = weaponOptions(e);
     double p = .1 * e.path("arkPassive").path("enlightenment").path("karmalevel").asDouble(0);
     double k = KrakenScoreEngine.braceletWeaponForBracelet(e, tables);
-    var s = KrakenScoreEngine.coreBonus(e, tables, "혼돈의 별 코어 : 무기", "weaponAtkPlus", "weaponAtkPer");
+    var s =
+        KrakenScoreEngine.coreBonus(e, tables, "혼돈의 별 코어 : 무기", "weaponAtkPlus", "weaponAtkPer");
     var y = KrakenScoreEngine.vambraceValues(e);
     double bonus =
         (e.path("armory").path("abilityStone").path("attackbonus").asDouble(0)
@@ -156,11 +158,14 @@ public final class KrakenScoreBracelet {
 
   /** 85041 Gg: (무기 공격력 기본합 + t) × 배율 내림. */
   private static double weaponWithBonus(FinalAttack d, double t) {
-    return d.weaponBase != 0 && d.weaponRatio != 0 ? Math.floor((d.weaponBase + t) * d.weaponRatio) : 0;
+    return d.weaponBase != 0 && d.weaponRatio != 0
+        ? Math.floor((d.weaponBase + t) * d.weaponRatio)
+        : 0;
   }
 
   /** 85041 kj: 힘민지·무기 공격력을 바꾼 최종 공격력. */
-  private static double attackWith(JsonNode e, FinalAttack t, double powerStatBonus, Double weaponAtk) {
+  private static double attackWith(
+      JsonNode e, FinalAttack t, double powerStatBonus, Double weaponAtk) {
     if (t.finalAttack == 0) return 0;
     double f = weaponAtk != null ? weaponAtk : t.weaponWithBracelet;
     double s = t.attackBonus;
@@ -188,17 +193,27 @@ public final class KrakenScoreBracelet {
       if (grade == null) continue;
       var level = KrakenScoreEngine.jsString(item.path("level"));
       if (name.equals("아드레날린")) {
-        adrenaline = stone(s0Value(tables, raw, name, grade, level, "atkPer"), item.path("stone"), ADRENALINE_STONE);
+        adrenaline =
+            stone(
+                s0Value(tables, raw, name, grade, level, "atkPer"),
+                item.path("stone"),
+                ADRENALINE_STONE);
         continue;
       }
       if (name.equals("에테르포식자"))
-        ether = stone(s0Value(tables, raw, name, grade, level, "atkPer"), item.path("stone"), ETHER_STONE);
+        ether =
+            stone(
+                s0Value(tables, raw, name, grade, level, "atkPer"),
+                item.path("stone"),
+                ETHER_STONE);
     }
     return (adrenaline != null ? adrenaline : 0) + (ether != null ? ether : 0);
   }
 
-  private static final Map<String, Double> ADRENALINE_STONE = Map.of("1", 2.88, "2", 3.6, "3", 4.98, "4", 5.7);
-  private static final Map<String, Double> ETHER_STONE = Map.of("1", 2.7, "2", 3.51, "3", 4.86, "4", 5.4);
+  private static final Map<String, Double> ADRENALINE_STONE =
+      Map.of("1", 2.88, "2", 3.6, "3", 4.98, "4", 5.7);
+  private static final Map<String, Double> ETHER_STONE =
+      Map.of("1", 2.7, "2", 3.51, "3", 4.86, "4", 5.4);
 
   // ---------------------------------------------------------------- 추가 피해 비(28245)
 
@@ -213,7 +228,8 @@ public final class KrakenScoreBracelet {
       var row = tables.get("we").path(KrakenScoreEngine.jsString(tier));
       for (var line : option) {
         var entry = row.path(line.asString(""));
-        if (truthy(entry) && truthy(entry.path("addDmg"))) bangleAdd += entry.path("addDmg").asDouble();
+        if (truthy(entry) && truthy(entry.path("addDmg")))
+          bangleAdd += entry.path("addDmg").asDouble();
       }
     }
     double with = (t + bangleAdd) / 100 + 1;
@@ -238,7 +254,8 @@ public final class KrakenScoreBracelet {
     return e / 100 * 4.1 / 100 + 1.3;
   }
 
-  private static final Pattern OPTION_STAT = Pattern.compile("(치명|특화|신속|제압|인내|숙련)\\s*\\+([\\d,]+(?:\\.\\d+)?)");
+  private static final Pattern OPTION_STAT =
+      Pattern.compile("(치명|특화|신속|제압|인내|숙련)\\s*\\+([\\d,]+(?:\\.\\d+)?)");
 
   /** 35724 r: 팔찌 특성 [치명, 특화, 신속]. */
   private static double[] optionStats(JsonNode bangle) {
@@ -261,7 +278,8 @@ public final class KrakenScoreBracelet {
 
   // ---------------------------------------------------------------- 치명 비(32674·20084·17468)
 
-  private static double critRatio(JsonNode e, KrakenScoreEngine.Tables tables, List<JsonNode> entries) {
+  private static double critRatio(
+      JsonNode e, KrakenScoreEngine.Tables tables, List<JsonNode> entries) {
     double o = sum(entries, "critRate");
     double c = sum(entries, "critDmg");
     double s = 1;
@@ -301,7 +319,9 @@ public final class KrakenScoreBracelet {
   private static double critValue(double e, double t, double r, double n) {
     double i = Math.min(e, 100) / 100;
     return (1 - i + t / 100 * i * r)
-        * (n > 0 ? 1 + (n == 1 ? linear(e, 7.5, 1.25, 52.5) : n >= 2 ? linear(e, 15, 1.5, 75) : 0) / 100 : 1);
+        * (n > 0
+            ? 1 + (n == 1 ? linear(e, 7.5, 1.25, 52.5) : n >= 2 ? linear(e, 15, 1.5, 75) : 0) / 100
+            : 1);
   }
 
   private static double linear(double e, double t, double r, double n) {
@@ -341,7 +361,8 @@ public final class KrakenScoreBracelet {
         case "퀵 드로우" -> enlightenment += level;
         case "교감 강화" -> enlightenment += 1.4 * level;
         case "단련" -> {
-          if (!"이슬비".equals(e.path("profile").path("secondClass").asString(""))) enlightenment += level;
+          if (!"이슬비".equals(e.path("profile").path("secondClass").asString("")))
+            enlightenment += level;
         }
         case "자연체" -> {
           boolean fist = false;
@@ -407,14 +428,16 @@ public final class KrakenScoreBracelet {
     return false;
   }
 
-  private static double classCritRate(JsonNode e, KrakenScoreEngine.Tables tables, double move, double special) {
+  private static double classCritRate(
+      JsonNode e, KrakenScoreEngine.Tables tables, double move, double special) {
     if (incompleteCombustion(e)) return 0;
     var secondClass = e.path("profile").path("secondClass").asString("");
     var c = tables.get("W").path(secondClass).path("critRate");
     double m = c.isNumber() ? c.asDouble() : 0;
     if (secondClass.equals("광전사의 비기"))
       return Math.floor(m * (1 + Math.floor(special / .0699 * .26) / 1e4) * 100) / 100;
-    if (secondClass.equals("질풍노도")) return m + Math.floor(.3 * Math.min(Math.max(move, 0), 40) * 100) / 100;
+    if (secondClass.equals("질풍노도"))
+      return m + Math.floor(.3 * Math.min(Math.max(move, 0), 40) * 100) / 100;
     return m;
   }
 
@@ -433,8 +456,7 @@ public final class KrakenScoreBracelet {
         case "단련" -> {
           if ("이슬비".equals(e.path("profile").path("secondClass").asString(""))) c += 4 * level;
         }
-        case "할버드의 대가" ->
-            c += 4 + 4 * Math.floor(level / 2) - ((level % 2 == 0) ? 1 : 0);
+        case "할버드의 대가" -> c += 4 + 4 * Math.floor(level / 2) - ((level % 2 == 0) ? 1 : 0);
         default -> {}
       }
     }
@@ -446,7 +468,10 @@ public final class KrakenScoreBracelet {
       double base = l.isNumber() ? l.asDouble() : 0;
       m =
           secondClass.equals("질풍노도")
-              ? base + Math.floor(1.2 * Math.min(Math.max(speeds(e, tables).withBraceletMove, 0), 40) * 100) / 100
+              ? base
+                  + Math.floor(
+                          1.2 * Math.min(Math.max(speeds(e, tables).withBraceletMove, 0), 40) * 100)
+                      / 100
               : base;
     }
     double g = ringSum(e, RING_CRIT_DMG);
@@ -512,7 +537,8 @@ public final class KrakenScoreBracelet {
 
   // ---------------------------------------------------------------- 속도 비(78512)
 
-  private static double speedRatio(JsonNode e, KrakenScoreEngine.Tables tables, List<JsonNode> entries) {
+  private static double speedRatio(
+      JsonNode e, KrakenScoreEngine.Tables tables, List<JsonNode> entries) {
     double r = sum(entries, "atkSpeed");
     if (r == 0) return 1;
     double n = speeds(e, tables).withoutBraceletAttack;
@@ -544,7 +570,8 @@ public final class KrakenScoreBracelet {
       }
     double evolutionAtk = 0;
     for (var node : e.path("arkPassive").path("evolution").path("nodes"))
-      if ("파괴 전차".equals(node.path("name").asString(""))) evolutionAtk += 4 * node.path("level").asDouble();
+      if ("파괴 전차".equals(node.path("name").asString("")))
+        evolutionAtk += 4 * node.path("level").asDouble();
     double stoneMove = 0;
     double stoneAtk = 0;
     for (var option : strings(e.path("armory").path("abilityStone").path("option"))) {
@@ -605,12 +632,30 @@ public final class KrakenScoreBracelet {
     if (truthy(bangle.path("option")) && truthy(bangle.path("tier"))) {
       var row = tables.get("we").path(KrakenScoreEngine.jsString(bangle.path("tier")));
       if (truthy(row))
-        for (var option : strings(bangle.path("option"))) bangleMove += row.path(option).path("moveSpeed").asDouble(0);
+        for (var option : strings(bangle.path("option")))
+          bangleMove += row.path(option).path("moveSpeed").asDouble(0);
     }
     double attackWithout =
-        14 + speedStat(haste) + atkClass + skillAtk + enlightenmentAtk + evolutionAtk + engravingAtk + coreAtk - stoneAtk + 0;
+        14
+            + speedStat(haste)
+            + atkClass
+            + skillAtk
+            + enlightenmentAtk
+            + evolutionAtk
+            + engravingAtk
+            + coreAtk
+            - stoneAtk
+            + 0;
     double moveWith =
-        14 + speedStat(haste + p) + moveClassWith + skillMove + enlightenmentMove + bangleMove + coreMove - stoneMove + 0;
+        14
+            + speedStat(haste + p)
+            + moveClassWith
+            + skillMove
+            + enlightenmentMove
+            + bangleMove
+            + coreMove
+            - stoneMove
+            + 0;
     return new Speeds(Math.floor(100 * attackWithout) / 100, Math.floor(100 * moveWith) / 100);
   }
 
@@ -621,7 +666,8 @@ public final class KrakenScoreBracelet {
     return Math.floor(e / .5821) / 100;
   }
 
-  private static double classSpeed(KrakenScoreEngine.Tables tables, String secondClass, String key, double special) {
+  private static double classSpeed(
+      KrakenScoreEngine.Tables tables, String secondClass, String key, double special) {
     var l = tables.get("W").path(secondClass).path(key);
     double n = l.isNumber() ? l.asDouble() : 0;
     return secondClass.equals("광전사의 비기")
@@ -663,7 +709,11 @@ public final class KrakenScoreBracelet {
   private static final Pattern SUB_STAT = Pattern.compile("(?:치명|특화|신속)\\s*\\+[\\d,]+");
 
   private static double fallbackRatio(
-      JsonNode e, KrakenScoreEngine.Tables tables, List<String> options, List<JsonNode> entries, JsonNode tier) {
+      JsonNode e,
+      KrakenScoreEngine.Tables tables,
+      List<String> options,
+      List<JsonNode> entries,
+      JsonNode tier) {
     var names = new ArrayList<String>();
     for (var item : e.path("engraving")) names.add(item.path("name").asString(""));
     String style =
@@ -739,14 +789,16 @@ public final class KrakenScoreBracelet {
   }
 
   /** 원본 h: 힘민지 줄이거나 무기 공격력 옵션. */
-  private static boolean isAttackOption(KrakenScoreEngine.Tables tables, JsonNode tier, String option) {
+  private static boolean isAttackOption(
+      KrakenScoreEngine.Tables tables, JsonNode tier, String option) {
     if (MAIN_STAT.matcher(option).find()) return true;
     var entry = entry(tables, tier, option);
     return entry != null && entry.has("weaponAtkPlus");
   }
 
   /** 원본 _: 팔찌 옵션을 거른 입력(남는 옵션이 없으면 팔찌 null). keep이면 h인 옵션만, 아니면 h가 아닌 옵션만. */
-  private static JsonNode withBangleOptions(JsonNode e, KrakenScoreEngine.Tables tables, boolean keep) {
+  private static JsonNode withBangleOptions(
+      JsonNode e, KrakenScoreEngine.Tables tables, boolean keep) {
     var bangle = bangle(e);
     if (bangle == null || !truthy(bangle.path("option"))) return e;
     var tier = bangle.path("tier");
@@ -832,7 +884,12 @@ public final class KrakenScoreBracelet {
 
   /** s0[원래 이름 또는 공백 뺀 이름][등급][레벨][키], 숫자가 아니면 null. */
   private static Double s0Value(
-      KrakenScoreEngine.Tables tables, String raw, String compact, String grade, String level, String key) {
+      KrakenScoreEngine.Tables tables,
+      String raw,
+      String compact,
+      String grade,
+      String level,
+      String key) {
     var a = tables.get("s0").path(raw).path(grade).path(level).path(key);
     var b = tables.get("s0").path(compact).path(grade).path(level).path(key);
     var d = !a.isMissingNode() && !a.isNull() ? a : b;
@@ -851,13 +908,15 @@ public final class KrakenScoreBracelet {
 
   private static double sum(List<JsonNode> entries, String key) {
     double s = 0;
-    for (var entry : entries) s += entry != null && present(entry, key) ? entry.get(key).asDouble() : 0;
+    for (var entry : entries)
+      s += entry != null && present(entry, key) ? entry.get(key).asDouble() : 0;
     return s;
   }
 
   private static double product(List<JsonNode> entries, String key) {
     double p = 1;
-    for (var entry : entries) p *= entry != null && present(entry, key) ? entry.get(key).asDouble() : 1;
+    for (var entry : entries)
+      p *= entry != null && present(entry, key) ? entry.get(key).asDouble() : 1;
     return p;
   }
 

@@ -168,7 +168,8 @@ public record CharacterResponse(
           String role,
       @Schema(description = "크라켄 점수(소수 둘째 자리). OK가 아니면 null", example = "5658.62") @NullableResponse
           BigDecimal score,
-      @Schema(description = "크라켄 점수 티어. OK가 아니면 null") @NullableResponse KrakenScoreTierResponse tier,
+      @Schema(description = "크라켄 점수 티어. OK가 아니면 null") @NullableResponse
+          KrakenScoreTierResponse tier,
       @Schema(
               description =
                   "점수 요소(공격력·진화·깨달음·도약·적에게 주는 피해·추가 피해·보주·보석·특성·에스더·팔찌 등). DISABLED면 빈 배열")
@@ -178,7 +179,8 @@ public record CharacterResponse(
     static final KrakenScoreResponse DISABLED_WITHOUT_VERSION =
         new KrakenScoreResponse("DISABLED", null, null, null, null, null, List.of(), null);
 
-    static KrakenScoreResponse from(com.loakraken.character.application.KrakenScoreService.KrakenScore value) {
+    static KrakenScoreResponse from(
+        com.loakraken.character.application.KrakenScoreService.KrakenScore value) {
       if (value == null) return DISABLED_WITHOUT_VERSION;
       var tier = value.tier();
       return new KrakenScoreResponse(

@@ -9,16 +9,17 @@ import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
-import org.junit.jupiter.api.Test;
 import org.springframework.core.io.ClassPathResource;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * 크라켄 점수 엔진(#539) 고정 테스트: 같은 시각에 캡처한 딜러 6명(g01~g03, g05~g07)의 비교 기준 B 입력에 엔진을 돌려 요소·공격력·프리셋·팔찌 총배율·점수가 원본 함수 값과 끝자리까지(double
- * 그대로) 같은지 본다. g05는 프리셋 없음(균등 분배 × 0.7) 사례를 만든 합성 입력이다. 픽스처에는 식별 정보가 없다.
+ * 크라켄 점수 엔진(#539) 고정 테스트: 같은 시각에 캡처한 딜러 6명(g01~g03, g05~g07)의 비교 기준 B 입력에 엔진을 돌려 요소·공격력·프리셋·팔찌
+ * 총배율·점수가 원본 함수 값과 끝자리까지(double 그대로) 같은지 본다. g05는 프리셋 없음(균등 분배 × 0.7) 사례를 만든 합성 입력이다. 픽스처에는 식별 정보가
+ * 없다.
  */
 class KrakenScoreEngineTest {
   private static final JsonMapper MAPPER = JsonMapper.builder().build();
@@ -38,7 +39,8 @@ class KrakenScoreEngineTest {
 
   private static JsonNode fixture(String id) throws IOException {
     return MAPPER.readTree(
-        new ClassPathResource("kraken-score/" + id + ".json").getContentAsString(StandardCharsets.UTF_8));
+        new ClassPathResource("kraken-score/" + id + ".json")
+            .getContentAsString(StandardCharsets.UTF_8));
   }
 
   @ParameterizedTest
@@ -72,7 +74,9 @@ class KrakenScoreEngineTest {
     got.put("보주", f.orb());
     var factors = expected.path("factors");
     for (var entry : got.entrySet())
-      assertThat(entry.getValue()).as(entry.getKey()).isEqualTo(factors.path(entry.getKey()).asDouble());
+      assertThat(entry.getValue())
+          .as(entry.getKey())
+          .isEqualTo(factors.path(entry.getKey()).asDouble());
 
     var preset = KrakenScoreEngine.preset(input, TABLES);
     assertThat(preset.tag()).isEqualTo(expected.path("presetTag").asString(""));
@@ -93,7 +97,8 @@ class KrakenScoreEngineTest {
     var doc = fixture(id);
     var input = doc.path("input");
     var expected = doc.path("expected").path("gemEfficiency");
-    java.util.function.ToDoubleFunction<JsonNode> score = e -> KrakenScoreEngine.dealerScore(e, TABLES);
+    java.util.function.ToDoubleFunction<JsonNode> score =
+        e -> KrakenScoreEngine.dealerScore(e, TABLES);
     assertEfficiency(expected.path("전체"), KrakenScoreGems.total(input, TABLES, score));
     var series = KrakenScoreGems.bySeries(input, TABLES, score);
     assertEfficiency(expected.path("질서"), series.get("질서"));
@@ -103,7 +108,8 @@ class KrakenScoreEngineTest {
   @Test
   void 아크_그리드가_없거나_객체가_아니면_젬_효율은_빈_값이고_예외가_없다() throws IOException {
     var base = (tools.jackson.databind.node.ObjectNode) fixture("g01").path("input");
-    java.util.function.ToDoubleFunction<JsonNode> score = e -> KrakenScoreEngine.dealerScore(e, TABLES);
+    java.util.function.ToDoubleFunction<JsonNode> score =
+        e -> KrakenScoreEngine.dealerScore(e, TABLES);
     var nullGrid = base.deepCopy();
     nullGrid.putNull("arkGrid");
     var missing = base.deepCopy();
@@ -114,15 +120,22 @@ class KrakenScoreEngineTest {
     ((tools.jackson.databind.node.ObjectNode) brokenCore.get("arkGrid"))
         .set("core", MAPPER.createArrayNode().addNull().add(1));
     for (JsonNode input :
-        List.<JsonNode>of(nullGrid, missing, text, tools.jackson.databind.node.JsonNodeFactory.instance.nullNode())) {
-      assertThat(KrakenScoreGems.total(input, TABLES, score)).isEqualTo(KrakenScoreGems.UNAVAILABLE);
+        List.<JsonNode>of(
+            nullGrid,
+            missing,
+            text,
+            tools.jackson.databind.node.JsonNodeFactory.instance.nullNode())) {
+      assertThat(KrakenScoreGems.total(input, TABLES, score))
+          .isEqualTo(KrakenScoreGems.UNAVAILABLE);
       assertThat(KrakenScoreGems.bySeries(input, TABLES, score))
           .containsOnlyKeys("질서", "혼돈")
           .allSatisfy((series, efficiency) -> assertThat(efficiency).isNull());
     }
     // 코어 칸이 객체가 아니어도 500(ClassCastException) 없이 계산한다.
-    assertThatCode(() -> KrakenScoreGems.total(brokenCore, TABLES, score)).doesNotThrowAnyException();
-    assertThatCode(() -> KrakenScoreGems.bySeries(brokenCore, TABLES, score)).doesNotThrowAnyException();
+    assertThatCode(() -> KrakenScoreGems.total(brokenCore, TABLES, score))
+        .doesNotThrowAnyException();
+    assertThatCode(() -> KrakenScoreGems.bySeries(brokenCore, TABLES, score))
+        .doesNotThrowAnyException();
   }
 
   @Test
@@ -138,10 +151,12 @@ class KrakenScoreEngineTest {
     assertThat(buff.doubleBuff()).isEqualTo(pr.path("doubleBuffPower").asDouble());
     assertThat(buff.total()).isEqualTo(pr.path("totalBuffPower").asDouble());
     assertThat(buff.score()).isEqualTo(pr.path("supportSpecPoint").asDouble());
-    assertThat(KrakenScoreSupport.score(input, TABLES)).isEqualTo(doc.path("expected").path("score").asDouble());
+    assertThat(KrakenScoreSupport.score(input, TABLES))
+        .isEqualTo(doc.path("expected").path("score").asDouble());
     assertThat(KrakenScoreSupport.gemScore(input, TABLES)).isEqualTo(support.path("GT").asDouble());
     var expected = doc.path("expected").path("gemEfficiency");
-    java.util.function.ToDoubleFunction<JsonNode> score = e -> KrakenScoreSupport.gemScore(e, TABLES);
+    java.util.function.ToDoubleFunction<JsonNode> score =
+        e -> KrakenScoreSupport.gemScore(e, TABLES);
     assertEfficiency(expected.path("전체"), KrakenScoreGems.total(input, TABLES, score));
     var series = KrakenScoreGems.bySeries(input, TABLES, score);
     assertEfficiency(expected.path("질서"), series.get("질서"));
@@ -159,7 +174,9 @@ class KrakenScoreEngineTest {
       var line = actual.lines().get(i);
       assertThat(line.name()).isEqualTo(lines.get(i).path("name").asString(""));
       assertThat(line.level()).isEqualTo(lines.get(i).path("level").asDouble());
-      assertThat(line.efficiency()).as(line.name()).isEqualTo(lines.get(i).path("efficiency").asDouble());
+      assertThat(line.efficiency())
+          .as(line.name())
+          .isEqualTo(lines.get(i).path("efficiency").asDouble());
     }
   }
 
@@ -178,8 +195,9 @@ class KrakenScoreEngineTest {
   void 표가_빠지면_만들지_않는다() {
     var node = MAPPER.createObjectNode();
     for (var key :
-        List.of("RK", "P_", "s0", "af", "MU", "Um", "j1", "WR", "xV", "Uk", "kC", "o9", "ur", "i_", "HZ", "W"))
-      node.putObject(key);
+        List.of(
+            "RK", "P_", "s0", "af", "MU", "Um", "j1", "WR", "xV", "Uk", "kC", "o9", "ur", "i_",
+            "HZ", "W")) node.putObject(key);
     node.putObject("braceletAddonAttack");
     assertThatThrownBy(() -> new KrakenScoreEngine.Tables("x", node))
         .isInstanceOf(IllegalArgumentException.class)

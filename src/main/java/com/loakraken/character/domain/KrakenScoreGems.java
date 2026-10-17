@@ -25,7 +25,8 @@ public final class KrakenScoreGems {
   public record Line(String name, double level, Double efficiency) {}
 
   /** 전체 또는 한 계열(질서·혼돈)의 효율. 계산할 수 없으면 값 null. */
-  public record Efficiency(Double efficiency, Double optionEfficiency, Double pointEfficiency, List<Line> lines) {}
+  public record Efficiency(
+      Double efficiency, Double optionEfficiency, Double pointEfficiency, List<Line> lines) {}
 
   /** 계산할 수 없을 때(아크 그리드 없음). */
   public static final Efficiency UNAVAILABLE = new Efficiency(null, null, null, List.of());
@@ -35,7 +36,8 @@ public final class KrakenScoreGems {
   }
 
   /** 원본 o(e, t): 젬 전체(옵션 + 포인트). 아크 그리드가 없으면 {@link #UNAVAILABLE}. */
-  public static Efficiency total(JsonNode e, KrakenScoreEngine.Tables tables, ToDoubleFunction<JsonNode> score) {
+  public static Efficiency total(
+      JsonNode e, KrakenScoreEngine.Tables tables, ToDoubleFunction<JsonNode> score) {
     // 아크 그리드가 없거나 객체가 아니면 젬 효율을 계산하지 않는다(값 null, 500 아님).
     if (!hasArkGrid(e)) return UNAVAILABLE;
     double c = score.applyAsDouble(e);
@@ -56,7 +58,8 @@ public final class KrakenScoreGems {
         for (int t = 0; t < effects.size(); t++) if (t != i) others.add(effects.get(t));
         double l = score.applyAsDouble(withGemEffects(e, others.isEmpty() ? null : others));
         var a = effects.get(i);
-        lines.add(new Line(a.path("name").asString(""), a.path("level").asDouble(), efficiency(c, l)));
+        lines.add(
+            new Line(a.path("name").asString(""), a.path("level").asDouble(), efficiency(c, l)));
       }
     return new Efficiency(efficiency(c, g), efficiency(c, m), efficiency(m, g), lines);
   }
@@ -117,7 +120,9 @@ public final class KrakenScoreGems {
         double o = score.applyAsDouble(withGemEffects(e, replaced));
         lines.add(new Line(a.path("name").asString(""), level, efficiency(s, o)));
       }
-      result.put(series, new Efficiency(efficiency(s, sScore), efficiency(s, k), efficiency(k, sScore), lines));
+      result.put(
+          series,
+          new Efficiency(efficiency(s, sScore), efficiency(s, k), efficiency(k, sScore), lines));
     }
     return result;
   }
@@ -134,11 +139,13 @@ public final class KrakenScoreGems {
       if (series == null || !core.path("point").isNumber()) return null;
       for (var gem : core.path("gem")) {
         var point = gem.path("orderChaosPoint");
-        if (gem.path("effects").size() == 0 || !point.isNumber() || point.asDouble() <= 0) return null;
+        if (gem.path("effects").size() == 0 || !point.isNumber() || point.asDouble() <= 0)
+          return null;
         for (var effect : gem.path("effects")) {
           var key = names.get(normalize(effect.path("name").asString("")));
           var level = effect.path("level");
-          if (key == null || !level.canConvertToExactIntegral() || level.asDouble() <= 0) return null;
+          if (key == null || !level.canConvertToExactIntegral() || level.asDouble() <= 0)
+            return null;
           n.get(series).merge(key, level.asDouble(), Double::sum);
         }
       }
@@ -216,5 +223,4 @@ public final class KrakenScoreGems {
     if (!Double.isFinite(before) || !Double.isFinite(after) || after <= 0) return null;
     return Math.floor((before / after - 1) * 1e4) / 100;
   }
-
 }

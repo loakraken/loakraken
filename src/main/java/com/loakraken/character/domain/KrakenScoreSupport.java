@@ -63,7 +63,11 @@ public final class KrakenScoreSupport {
             .22 * e.attack() * a * (e.atkBuffA() / 100 + 1)
                 + .22 * e.attack() * (1 - a) * (e.atkBuffB() / 100 + 1));
     double r =
-        (1 / ((1 - e.engravingAwakenCooldown()) * t * (1 - e.engravingCooldown())) * (1 - e.coreCooldown()) - 1) * .15
+        (1
+                        / ((1 - e.engravingAwakenCooldown()) * t * (1 - e.engravingCooldown()))
+                        * (1 - e.coreCooldown())
+                    - 1)
+                * .15
             + 1;
     double l = e.specialization() / 30.2 / 100 + 1;
     double n =
@@ -72,13 +76,15 @@ public final class KrakenScoreSupport {
             * (1 - e.engravingCooldown())
             * (1 - e.arkPassiveCooldown())
             * (1 - e.coreCooldown());
-    double c = (1 - e.arkPassiveCooldown()) * (1 - e.engravingCooldown()) * (1 - e.coreCooldown()) * t;
+    double c =
+        (1 - e.arkPassiveCooldown()) * (1 - e.engravingCooldown()) * (1 - e.coreCooldown()) * t;
     double m = Math.min(1, 20.05 * ((e.identityAccessory() + e.identityCore()) * l) * r / n / 100);
     double g = Math.min(1, 24.45 / c / 100);
     double o = (17e4 + i * e.buffUptime()) / 17e4;
     double u = e.damageBuff() / 100 + 1;
     double p = e.finalDamageBuff();
-    double f = o * (e.stigma() / 100 + 1) * ((1.45 + e.evolutionBuff()) / 1.45) * e.constantBuff() * p;
+    double f =
+        o * (e.stigma() / 100 + 1) * ((1.45 + e.evolutionBuff()) / 1.45) * e.constantBuff() * p;
     double s = 13 * e.enlightenment() * u * e.specializationDamage() / 100 + p;
     double d = (10 * (e.damageBuffAwakenOnly() / 100 + 1) / 100 + 1) * p;
     double doubleBuff = f / p * (s / p) * (d / p) * p;
@@ -93,8 +99,10 @@ public final class KrakenScoreSupport {
 
   // ---------------------------------------------------------------- 요소(원본 21818 Y)
 
-  private static final List<String> ARMOR = List.of("armor", "gloves", "helmet", "pants", "shoulder");
-  private static final List<String> JEWELRY = List.of("earing1", "earing2", "necklace", "ring1", "ring2");
+  private static final List<String> ARMOR =
+      List.of("armor", "gloves", "helmet", "pants", "shoulder");
+  private static final List<String> JEWELRY =
+      List.of("earing1", "earing2", "necklace", "ring1", "ring2");
   private static final Pattern BANGLE_MAIN = Pattern.compile("^(힘|민첩|지능)\\+(\\d+)$");
   private static final Pattern WEAPON_FLAT = Pattern.compile("^무기공격력\\+(\\d+)(?!%)$");
   private static final Pattern WEAPON_PERCENT = Pattern.compile("^무기공격력\\+(\\d+(?:\\.\\d+)?)%$");
@@ -119,14 +127,17 @@ public final class KrakenScoreSupport {
       var grade = item.path("grade").asString("");
       var level = KrakenScoreEngine.jsString(item.path("level"));
       if (name.equals("마나의 흐름"))
-        cooldown = tables.get("s0").path(name).path(grade).path(level).path("cdrPercent").asDouble(0);
+        cooldown =
+            tables.get("s0").path(name).path(grade).path(level).path("cdrPercent").asDouble(0);
       else if (name.equals("각성")) {
         double stone =
             truthy(item.path("stone"))
                 ? Map.of("1", .06, "2", .075, "3", .105, "4", .12)
                     .getOrDefault(KrakenScoreEngine.jsString(item.path("stone")), 0.0)
                 : 0;
-        awaken = tables.get("s0").path(name).path(grade).path(level).path("awakenCdrPercent").asDouble(0) + stone;
+        awaken =
+            tables.get("s0").path(name).path(grade).path(level).path("awakenCdrPercent").asDouble(0)
+                + stone;
       }
     }
     boolean pioneer = false;
@@ -137,7 +148,8 @@ public final class KrakenScoreSupport {
     var flowing = core(e, "혼돈의 해 코어 : 흐르는 마나");
     if (flowing != null) {
       int key = 10;
-      for (int step : new int[] {10, 14, 17, 18, 19, 20}) if (flowing.path("point").asDouble() >= step) key = step;
+      for (int step : new int[] {10, 14, 17, 18, 19, 20})
+        if (flowing.path("point").asDouble() >= step) key = step;
       boolean ancient = "고대".equals(flowing.path("grade").asString(""));
       core = FLOWING.get(key)[ancient ? 1 : 0];
     }
@@ -145,12 +157,11 @@ public final class KrakenScoreSupport {
     double gemB = 0;
     var cooldownGems = new ArrayList<JsonNode>();
     for (var gem : e.path("gem").path("gems"))
-      if ("cooldown".equals(gem.path("type").asString("")) && gem.path("valid").asBoolean(false)) cooldownGems.add(gem);
+      if ("cooldown".equals(gem.path("type").asString("")) && gem.path("valid").asBoolean(false))
+        cooldownGems.add(gem);
     if (e.path("gem").path("gems").isArray()) {
-      var a =
-          first(cooldownGems, List.of("천상의 연주", "신의 분노", "묵법 : 해그리기", "숭고한 맹세"));
-      var b =
-          first(cooldownGems, List.of("음파 진동", "천상의 축복", "묵법 : 해우물", "숭고한 도약"));
+      var a = first(cooldownGems, List.of("천상의 연주", "신의 분노", "묵법 : 해그리기", "숭고한 맹세"));
+      var b = first(cooldownGems, List.of("음파 진동", "천상의 축복", "묵법 : 해우물", "숭고한 도약"));
       if (a != null) gemA = gemCooldown(a);
       if (b != null) gemB = gemCooldown(b);
     }
@@ -234,12 +245,18 @@ public final class KrakenScoreSupport {
     var faith = core(e, "혼돈의 해 코어 : 신념의 강화");
     if (faith != null) coreDmg = afValue(tables, faith, "damageBuff", 0);
     double damage =
-        rd + ld + bangleDmg + maxDamageGem(e, List.of("신앙 스킬", "세레나데 스킬", "음양 스킬")) + gemDmg + coreDmg;
+        rd
+            + ld
+            + bangleDmg
+            + maxDamageGem(e, List.of("신앙 스킬", "세레나데 스킬", "음양 스킬"))
+            + gemDmg
+            + coreDmg;
     double damageAwaken = rd + ld + bangleDmg + gemDmg + coreDmg;
     // 진화 버프
     double evolutionBuff = 0;
     for (var node : e.path("arkPassive").path("evolution").path("nodes"))
-      if (node.path("name").asString("").contains("정열의 춤사위")) evolutionBuff += 7 * node.path("level").asDouble();
+      if (node.path("name").asString("").contains("정열의 춤사위"))
+        evolutionBuff += 7 * node.path("level").asDouble();
     evolutionBuff = evolutionBuff / 100;
     // 낙인력
     double necklace = 0;
@@ -259,9 +276,11 @@ public final class KrakenScoreSupport {
     var karmaRank = e.path("arkPassive").path("evolution").path("karmaRank");
     double karma = truthy(karmaRank) ? karmaRank.asDouble() : 0;
     double enlightenmentStigma = 0;
-    var list = List.of("빠른 구원", "빛의 흔적", "포용의 세레나데", "낙인의 세레나데", "오누이", "낙인 강화", "해방자의 흔적", "빛의 검기");
+    var list =
+        List.of("빠른 구원", "빛의 흔적", "포용의 세레나데", "낙인의 세레나데", "오누이", "낙인 강화", "해방자의 흔적", "빛의 검기");
     for (var node : e.path("arkPassive").path("enlightenment").path("nodes"))
-      if (list.contains(node.path("name").asString(""))) enlightenmentStigma += node.path("level").asDouble() - 1;
+      if (list.contains(node.path("name").asString("")))
+        enlightenmentStigma += node.path("level").asDouble() - 1;
     double coreStigma = 0;
     var mark = core(e, "혼돈의 달 코어 : 낙인의 흔적");
     if (mark != null) {
@@ -269,7 +288,10 @@ public final class KrakenScoreSupport {
       coreStigma = truthy(v) ? v.asDouble() : 0;
     }
     double stigma =
-        10 * ((necklace + evolutionStigma + gemStigma + karma + enlightenmentStigma + coreStigma) / 100 + 1);
+        10
+            * ((necklace + evolutionStigma + gemStigma + karma + enlightenmentStigma + coreStigma)
+                    / 100
+                + 1);
     // 아덴
     double identityAccessory = 1;
     for (var line : e.path("armory").path("accessory").path("necklace").path("option")) {
@@ -285,7 +307,10 @@ public final class KrakenScoreSupport {
     // 뎀증
     double constant = 1;
     var bangle = e.path("armory").path("accessory").path("bangle");
-    if (truthy(bangle) && truthy(bangle.path("option")) && truthy(bangle.path("grade")) && truthy(bangle.path("tier"))) {
+    if (truthy(bangle)
+        && truthy(bangle.path("option"))
+        && truthy(bangle.path("grade"))
+        && truthy(bangle.path("tier"))) {
       var row = tables.get("we").path(KrakenScoreEngine.jsString(bangle.path("tier")));
       for (var line : bangle.path("option")) {
         var v = row.path(line.asString("")).path("atkBuffPlus");
@@ -316,8 +341,28 @@ public final class KrakenScoreSupport {
         break;
       }
     return new Factors(
-        attack, haste, special, specialDamage, cooldown, awaken, arkPassive, core, average, uptime, uptimeA, atkA, atkB,
-        damage, damageAwaken, evolutionBuff, stigma, identityAccessory, identityCore, constant, finalBuff, orderCore,
+        attack,
+        haste,
+        special,
+        specialDamage,
+        cooldown,
+        awaken,
+        arkPassive,
+        core,
+        average,
+        uptime,
+        uptimeA,
+        atkA,
+        atkB,
+        damage,
+        damageAwaken,
+        evolutionBuff,
+        stigma,
+        identityAccessory,
+        identityCore,
+        constant,
+        finalBuff,
+        orderCore,
         enlightenment);
   }
 
@@ -360,7 +405,8 @@ public final class KrakenScoreSupport {
       bangleMain += m.find() ? Double.parseDouble(m.group(2)) : 0;
     }
     double avatar = e.path("avatar").path("avatarStats").asDouble() / 100 + 1;
-    double vambraceStat = e.path("armory").path("equipment").path("vambrace").path("stat").asDouble(0);
+    double vambraceStat =
+        e.path("armory").path("equipment").path("vambrace").path("stat").asDouble(0);
     double stats = (armor + jewelry + bangleMain + vambraceStat) * avatar;
     double weapon = e.path("armory").path("equipment").path("weapon").path("stat").asDouble(0);
     double flat = 0;
@@ -403,7 +449,8 @@ public final class KrakenScoreSupport {
       }
     }
     double weaponTotal =
-        (weapon + flat + bangleWeapon + coreFlat + v[0]) * (1 + (karma + percent / 100 + corePercent / 100));
+        (weapon + flat + bangleWeapon + coreFlat + v[0])
+            * (1 + (karma + percent / 100 + corePercent / 100));
     return (KrakenScoreEngine.pow(stats * weaponTotal / 6, .5) + v[1]) * bonus;
   }
 
@@ -435,10 +482,12 @@ public final class KrakenScoreSupport {
     return new double[] {critical, special, haste};
   }
 
-  private static final Pattern OPTION_STAT = Pattern.compile("(치명|특화|신속|제압|인내|숙련)\\s*\\+([\\d,]+(?:\\.\\d+)?)");
+  private static final Pattern OPTION_STAT =
+      Pattern.compile("(치명|특화|신속|제압|인내|숙련)\\s*\\+([\\d,]+(?:\\.\\d+)?)");
 
   private static JsonNode core(JsonNode e, String name) {
-    for (var core : e.path("arkGrid").path("core")) if (name.equals(core.path("name").asString(""))) return core;
+    for (var core : e.path("arkGrid").path("core"))
+      if (name.equals(core.path("name").asString(""))) return core;
     return null;
   }
 
@@ -451,7 +500,8 @@ public final class KrakenScoreSupport {
         .path(grade);
   }
 
-  private static double afValue(KrakenScoreEngine.Tables tables, JsonNode core, String key, double fallback) {
+  private static double afValue(
+      KrakenScoreEngine.Tables tables, JsonNode core, String key, double fallback) {
     var v = afNode(tables, core).path(key);
     return v.isMissingNode() || v.isNull() ? fallback : v.asDouble();
   }
@@ -467,13 +517,15 @@ public final class KrakenScoreSupport {
   }
 
   private static boolean hasSkill(JsonNode e, String name) {
-    for (var skill : e.path("skills")) if (name.equals(skill.path("name").asString(""))) return true;
+    for (var skill : e.path("skills"))
+      if (name.equals(skill.path("name").asString(""))) return true;
     return false;
   }
 
   private static boolean hasTripod(JsonNode e, String name) {
     for (var skill : e.path("skills"))
-      for (var tripod : skill.path("tripods")) if (name.equals(tripod.path("name").asString(""))) return true;
+      for (var tripod : skill.path("tripods"))
+        if (name.equals(tripod.path("name").asString(""))) return true;
     return false;
   }
 
@@ -488,7 +540,9 @@ public final class KrakenScoreSupport {
 
   private static double bangleSum(JsonNode e, KrakenScoreEngine.Tables tables, String key) {
     var bangle = e.path("armory").path("accessory").path("bangle");
-    if (!truthy(bangle.path("option")) || !truthy(bangle.path("grade")) || !truthy(bangle.path("tier"))) return 0;
+    if (!truthy(bangle.path("option"))
+        || !truthy(bangle.path("grade"))
+        || !truthy(bangle.path("tier"))) return 0;
     var row = tables.get("we").path(KrakenScoreEngine.jsString(bangle.path("tier")));
     double sum = 0;
     for (var line : bangle.path("option")) {
@@ -500,7 +554,8 @@ public final class KrakenScoreSupport {
 
   private static double gemEffect(JsonNode e, String name) {
     for (var effect : e.path("arkGrid").path("gemEffects"))
-      if (name.equals(effect.path("name").asString(""))) return effect.path("effect").isNumber() ? effect.path("effect").asDouble() : 0;
+      if (name.equals(effect.path("name").asString("")))
+        return effect.path("effect").isNumber() ? effect.path("effect").asDouble() : 0;
     return 0;
   }
 
@@ -509,7 +564,8 @@ public final class KrakenScoreSupport {
     for (var gem : e.path("gem").path("gems"))
       if ("damage".equals(gem.path("type").asString(""))
           && gem.path("valid").asBoolean(false)
-          && skills.contains(gem.path("skill").asString(""))) max = Math.max(max, gem.path("level").asDouble());
+          && skills.contains(gem.path("skill").asString("")))
+        max = Math.max(max, gem.path("level").asDouble());
     return max;
   }
 
@@ -528,7 +584,9 @@ public final class KrakenScoreSupport {
       var name = c.path("name").asString("").trim();
       if (!name.isEmpty() && allowed.contains(name)) present.add(name);
     }
-    boolean both = present.stream().anyMatch(x -> x.startsWith("질서의 해")) && present.stream().anyMatch(x -> x.startsWith("질서의 달"));
+    boolean both =
+        present.stream().anyMatch(x -> x.startsWith("질서의 해"))
+            && present.stream().anyMatch(x -> x.startsWith("질서의 달"));
     double o = 1;
     for (var c : cores) {
       if (!truthy(c.path("name"))) continue;

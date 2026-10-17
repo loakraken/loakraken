@@ -23,8 +23,25 @@ public final class KrakenScoreEngine {
       Objects.requireNonNull(tables, "tables");
       for (var key :
           List.of(
-              "RK", "P_", "s0", "af", "MU", "Um", "j1", "WR", "xV", "we", "Uk", "kC", "o9", "ur", "i_", "HZ",
-              "W", "braceletAddonAttack", "gemEffectLevels"))
+              "RK",
+              "P_",
+              "s0",
+              "af",
+              "MU",
+              "Um",
+              "j1",
+              "WR",
+              "xV",
+              "we",
+              "Uk",
+              "kC",
+              "o9",
+              "ur",
+              "i_",
+              "HZ",
+              "W",
+              "braceletAddonAttack",
+              "gemEffectLevels"))
         if (tables.path(key).isMissingNode())
           throw new IllegalArgumentException("크라켄 점수 표가 없습니다: " + key);
     }
@@ -36,7 +53,11 @@ public final class KrakenScoreEngine {
 
   /** 공격력 중간값(원본 이름: 기본_공격력·공격력·기본_공격력_전투력·공격력_전투력·공격력_팔찌제외). */
   public record Attack(
-      double base, double attack, double baseCombat, double attackCombat, double attackNoBracelet) {}
+      double base,
+      double attack,
+      double baseCombat,
+      double attackCombat,
+      double attackNoBracelet) {}
 
   /** 딜 지분 프리셋. value는 스킬 이름 → 지분(원본 순서). */
   public record Preset(String tag, Map<String, Double> value, boolean fallback) {}
@@ -90,12 +111,15 @@ public final class KrakenScoreEngine {
     var t = e.path("armory").path("equipment").path("vambrace");
     if (!t.isObject()) return new Vambrace(0, 0, 0);
     return new Vambrace(
-        t.path("weaponAtkFlat").asDouble(), t.path("baseAtkFlat").asDouble(), t.path("baseAtkPercent").asDouble());
+        t.path("weaponAtkFlat").asDouble(),
+        t.path("baseAtkFlat").asDouble(),
+        t.path("baseAtkPercent").asDouble());
   }
 
   private static final Pattern ATK_PERCENT = Pattern.compile("공격력\\s*\\+(\\d+(\\.\\d+)?)%");
   private static final Pattern ATK_FLAT = Pattern.compile("공격력\\s*\\+(\\d+(\\.\\d+)?)");
-  private static final Pattern WEAPON_ATK_PERCENT = Pattern.compile("무기 공격력\\s*\\+(\\d+(\\.\\d+)?)%");
+  private static final Pattern WEAPON_ATK_PERCENT =
+      Pattern.compile("무기 공격력\\s*\\+(\\d+(\\.\\d+)?)%");
   private static final Pattern WEAPON_ATK_FLAT = Pattern.compile("무기 공격력\\s*\\+(\\d+(\\.\\d+)?)");
 
   private static Bonus attackBonus(JsonNode e, Tables tables, Vambrace t) {
@@ -147,12 +171,14 @@ public final class KrakenScoreEngine {
       if (!entry.getKey().equals("weapon")) equipment += entry.getValue().path("stat").asDouble(0);
     double accessories = 0;
     for (var entry : e.path("armory").path("accessory").properties())
-      if (!entry.getKey().equals("bangle")) accessories += entry.getValue().path("stat").asDouble(0);
+      if (!entry.getKey().equals("bangle"))
+        accessories += entry.getValue().path("stat").asDouble(0);
     double bracelet = withBracelet ? braceletStats(e) : 0;
     double index = combat ? e.path("stats").path("powerIndex_combat").asDouble() : 0;
     double pet = combat ? e.path("baseEffect").path("petStat").asDouble() : 1;
     double avatar = e.path("avatar").path("avatarStats").asDouble();
-    return Math.floor((equipment + accessories + bracelet + index) * (1 + avatar / 100 + pet / 100));
+    return Math.floor(
+        (equipment + accessories + bracelet + index) * (1 + avatar / 100 + pet / 100));
   }
 
   private static final Pattern BRACELET_STAT = Pattern.compile("(?:힘|민첩|지능)\\s*\\+([\\d,]+)");
@@ -331,7 +357,13 @@ public final class KrakenScoreEngine {
         var name = item.path("name").asString("");
         var grade = item.path("grade").asString("");
         if (!List.of("영웅", "전설", "유물", "고대").contains(grade)) continue;
-        var c = tables.get("s0").path(name).path(grade).path(jsString(item.path("level"))).path("finalDmg");
+        var c =
+            tables
+                .get("s0")
+                .path(name)
+                .path(grade)
+                .path(jsString(item.path("level")))
+                .path("finalDmg");
         if (excluded.contains(name) || !truthy(c)) continue;
         if (truthy(item.path("stone")))
           r *= (c.asDouble() + STONE_ADD.get(jsString(item.path("stone")))) / 100 + 1;
@@ -492,7 +524,8 @@ public final class KrakenScoreEngine {
   private static double cooldownAverage(JsonNode gems) {
     var list = new ArrayList<JsonNode>();
     for (var g : gems)
-      if ("cooldown".equals(g.path("type").asString("")) && g.path("valid").asBoolean(false)) list.add(g);
+      if ("cooldown".equals(g.path("type").asString("")) && g.path("valid").asBoolean(false))
+        list.add(g);
     if (list.isEmpty()) return 0;
     double weights = 0;
     double sum = 0;
@@ -500,7 +533,10 @@ public final class KrakenScoreEngine {
       int level = g.path("level").asInt();
       double n = Math.pow(2, level - 1);
       weights += n;
-      sum += truthy(g.path("attackBonus")) ? GEM_COOLDOWN_T4[level - 1] * n : GEM_COOLDOWN[level - 1] * n;
+      sum +=
+          truthy(g.path("attackBonus"))
+              ? GEM_COOLDOWN_T4[level - 1] * n
+              : GEM_COOLDOWN[level - 1] * n;
     }
     return sum / weights;
   }
@@ -563,7 +599,8 @@ public final class KrakenScoreEngine {
           boolean found = false;
           for (var gem : gems)
             if (entry.getKey().equals(gem.path("skill").asString(null))
-                && entry.getValue().asString("").equals(gem.path("type").asString(null))) found = true;
+                && entry.getValue().asString("").equals(gem.path("type").asString(null)))
+              found = true;
           if (!found) gemsMatch = false;
         }
         boolean matches =
@@ -571,7 +608,10 @@ public final class KrakenScoreEngine {
                 || hasCores && !hasGems && coresMatch
                 || !hasCores && hasGems && gemsMatch;
         var tag = preset.path("tag").asString("");
-        boolean tagOk = tag.equals("333 전탄") ? quickReady(skills) : !tag.equals("333 전탄B") || !quickReady(skills);
+        boolean tagOk =
+            tag.equals("333 전탄")
+                ? quickReady(skills)
+                : !tag.equals("333 전탄B") || !quickReady(skills);
         if (matches && tagOk) return new Preset(tag, shares(preset.path("value")), false);
       }
     }
@@ -608,8 +648,10 @@ public final class KrakenScoreEngine {
   private static Map<String, Double> shares(JsonNode value) {
     var result = new LinkedHashMap<String, Double>();
     if (value.isArray())
-      for (var item : value) for (var entry : item.properties()) result.put(entry.getKey(), entry.getValue().asDouble());
-    else for (var entry : value.properties()) result.put(entry.getKey(), entry.getValue().asDouble());
+      for (var item : value)
+        for (var entry : item.properties()) result.put(entry.getKey(), entry.getValue().asDouble());
+    else
+      for (var entry : value.properties()) result.put(entry.getKey(), entry.getValue().asDouble());
     return result;
   }
 
@@ -621,7 +663,8 @@ public final class KrakenScoreEngine {
   }
 
   /** 모듈 50080·65224의 코어 보너스 [flat, percent](포인트가 없거나 표에 없으면 0). */
-  static double[] coreBonus(JsonNode e, Tables tables, String coreName, String flatKey, String percentKey) {
+  static double[] coreBonus(
+      JsonNode e, Tables tables, String coreName, String flatKey, String percentKey) {
     var core = findCore(e, coreName);
     if (core == null || core.path("point").asDouble() == 0) return new double[] {0, 0};
     var row = coreRow(tables, core);
@@ -643,13 +686,15 @@ public final class KrakenScoreEngine {
   // ---------------------------------------------------------------- 공통
 
   private static JsonNode findCore(JsonNode e, String name) {
-    for (var core : e.path("arkGrid").path("core")) if (name.equals(core.path("name").asString(""))) return core;
+    for (var core : e.path("arkGrid").path("core"))
+      if (name.equals(core.path("name").asString(""))) return core;
     return null;
   }
 
   /** 코어 표 af[이름][포인트][고대|유물](없으면 그 포인트 칸 자체). */
   private static JsonNode coreRow(Tables tables, JsonNode core) {
-    var byPoint = tables.get("af").path(core.path("name").asString("")).path(jsString(core.path("point")));
+    var byPoint =
+        tables.get("af").path(core.path("name").asString("")).path(jsString(core.path("point")));
     if (!truthy(byPoint)) return null;
     var row = byPoint.path("고대".equals(core.path("grade").asString("")) ? "고대" : "유물");
     return truthy(row) ? row : byPoint;
@@ -680,9 +725,7 @@ public final class KrakenScoreEngine {
     return Double.toString(d);
   }
 
-  /**
-   * 딜러 점수(원본 32142 xV = i(l(e), d6(e))): 요소 11개 × (팔찌 총배율 × 1.021) ÷ 1930. 곱하는 순서도 원본 그대로다.
-   */
+  /** 딜러 점수(원본 32142 xV = i(l(e), d6(e))): 요소 11개 × (팔찌 총배율 × 1.021) ÷ 1930. 곱하는 순서도 원본 그대로다. */
   public static double dealerScore(JsonNode e, Tables tables) {
     var f = factors(e, tables);
     double t = KrakenScoreBracelet.total(e, tables);
@@ -700,14 +743,15 @@ public final class KrakenScoreEngine {
         * (t * KrakenScoreBracelet.SCORE_CONSTANT)
         / 1930;
   }
+
   /** JS Math.round(양수 입력): floor(x + 0.5). */
   static double jsRound(double x) {
     return Math.floor(x + 0.5);
   }
 
   /**
-   * JS x ** y. 기준값 7명에서 StrictMath(fdlibm)는 서폿 점수 끝자리 1 ulp가 달랐고 Math.pow는 모두 같았다(2026-10-18 대조). JVM마다
-   * 끝자리가 달라질 수 있어 고정 테스트가 확인한다.
+   * JS x ** y. 기준값 7명에서 StrictMath(fdlibm)는 서폿 점수 끝자리 1 ulp가 달랐고 Math.pow는 모두 같았다(2026-10-18 대조).
+   * JVM마다 끝자리가 달라질 수 있어 고정 테스트가 확인한다.
    */
   static double pow(double x, double y) {
     return Math.pow(x, y);

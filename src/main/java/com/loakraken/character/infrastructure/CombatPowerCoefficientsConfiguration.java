@@ -21,6 +21,7 @@ class CombatPowerCoefficientsConfiguration {
   static final String BRACELET_RESOURCE = "combat-power/bracelet-coefficients.json";
   static final String ARK_GRID_RESOURCE = "combat-power/ark-grid-coefficients.json";
   static final String KRAKEN_SCORE_TIERS_RESOURCE = "kraken-score/tiers.json";
+  static final String KRAKEN_SCORE_TABLES_RESOURCE = "kraken-score/reference-tables.json";
 
   /** 전투력 시뮬레이터 보석 계수(#243). 근거·확인 날짜는 리소스 source에 있다. 읽을 수 없으면 애플리케이션이 시작하지 않는다. */
   @Bean
@@ -73,6 +74,20 @@ class CombatPowerCoefficientsConfiguration {
       throws IOException {
     try (var input = new ClassPathResource(KRAKEN_SCORE_TIERS_RESOURCE).getInputStream()) {
       return mapper.readValue(input, com.loakraken.character.domain.KrakenScoreTier.Table.class);
+    }
+  }
+
+  /**
+   * 크라켄 점수 엔진 표(#539): 비교 기준 B 원본 표 중 엔진이 읽는 것만. 읽을 수 없거나 표가 빠지면 애플리케이션이 시작하지 않는다(조용한 근사
+   * 금지).
+   */
+  @Bean
+  com.loakraken.character.domain.KrakenScoreEngine.Tables krakenScoreTables(JsonMapper mapper)
+      throws IOException {
+    try (var input = new ClassPathResource(KRAKEN_SCORE_TABLES_RESOURCE).getInputStream()) {
+      var doc = mapper.readTree(input);
+      return new com.loakraken.character.domain.KrakenScoreEngine.Tables(
+          doc.path("savedAt").asString(""), doc.path("tables"));
     }
   }
 

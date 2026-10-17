@@ -1,6 +1,6 @@
 {
  "checkedAt": "2026-10-11",
- "source": "공식 armory 장비 Tooltip(완갑, 380명: 표본 80 + 관측 DB 300) + 로아랩 서버 계산 대조 7건(언새늘)",
+ "source": "공식 armory 장비 Tooltip(완갑, 380명: 표본 80 + 관측 DB 300) + 비교 기준 A 서버 계산 대조 7건(기준 캐릭터)",
  "status": "CONFIRMED",
  "model": {
   "levelTable": "완갑 단계 L → 무기 공격력 W, 주스탯 S, 기본 공격력 +N(F)",

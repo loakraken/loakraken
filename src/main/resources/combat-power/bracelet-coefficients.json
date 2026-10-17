@@ -1,6 +1,6 @@
 {
   "ruleVersion": "combat-power-bracelet-v1",
-  "source": "계산 검증 2026-10-11 21:00 모델 확정(대조 사이트 서버 계산 99개 + 인벤 '딜러 전투력 로직 분석' 표 + 로펙 시뮬레이터 추가 피해 +3.50% 일치). 표본 src/test/resources/verification/combat-power/ref-a-bracelet-2026-10-11.json. 옵션은 공식 문구 속 숫자로 판단한다('3%'와 '3.0%'는 같은 옵션).",
+  "source": "계산 검증 2026-10-11 21:00 모델 확정(대조 사이트 서버 계산 99개 + 공개 분석 글 '딜러 전투력 로직 분석' 표 + 비교 기준 B 시뮬레이터 추가 피해 +3.50% 일치). 표본 src/test/resources/verification/combat-power/ref-a-bracelet-2026-10-11.json. 옵션은 공식 문구 속 숫자로 판단한다('3%'와 '3.0%'는 같은 옵션).",
   "combatStatPerPoint": 0.0003,
   "combatStats": ["치명", "특화", "신속"],
   "leapPerPoint": 0.002,

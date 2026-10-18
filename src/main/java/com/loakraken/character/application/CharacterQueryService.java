@@ -16,9 +16,11 @@ public class CharacterQueryService {
   private final CharacterHistoryService history;
   private final CharacterCardService cards;
   private final CharacterStopList stopList;
+  private final ArkGridRealService arkGridReal;
   private final SingleFlight<CharacterResult> searches = new SingleFlight<>();
   private final SingleFlight<CharacterSiblingsResult> siblingQueries = new SingleFlight<>();
 
+  /** 아크 그리드 실 효율 계산 없이(단위 테스트). */
   public CharacterQueryService(
       CharacterDetailsPort detailsPort,
       CharacterCache cache,
@@ -28,6 +30,21 @@ public class CharacterQueryService {
       CharacterHistoryService history,
       CharacterCardService cards,
       CharacterStopList stopList) {
+    this(detailsPort, cache, clock, snapshots, metrics, history, cards, stopList, null);
+  }
+
+  @org.springframework.beans.factory.annotation.Autowired
+  public CharacterQueryService(
+      CharacterDetailsPort detailsPort,
+      CharacterCache cache,
+      Clock clock,
+      CharacterSnapshotCommandService snapshots,
+      CharacterMetrics metrics,
+      CharacterHistoryService history,
+      CharacterCardService cards,
+      CharacterStopList stopList,
+      ArkGridRealService arkGridReal) {
+    this.arkGridReal = arkGridReal;
     this.detailsPort = detailsPort;
     this.cache = cache;
     this.clock = clock;
@@ -102,7 +119,8 @@ public class CharacterQueryService {
                               fetched.details(),
                               fetchedAt,
                               Instant.now(clock).plus(cache.ttl()),
-                              fetched.krakenScoreInput());
+                              fetched.krakenScoreInput(),
+                              arkGridReal(fetched));
                       cache.save(name, result);
                       if (recordable) {
                         history.record(profile, fetchedAt);
@@ -130,7 +148,8 @@ public class CharacterQueryService {
                               fetched.details(),
                               now,
                               now.plus(cache.ttl()),
-                              fetched.krakenScoreInput());
+                              fetched.krakenScoreInput(),
+                              arkGridReal(fetched));
                       cache.saveArmory(name, result);
                       var profile = fetched.details().profile();
                       if (stopList.recordable(profile.characterName(), profile.serverName())) {
@@ -139,6 +158,16 @@ public class CharacterQueryService {
                       }
                       return result;
                     }));
+  }
+
+  /** 아크 그리드 실 효율(#520): 조회 때 한 번 계산(응답 때는 계산하지 않음). 실패해도 조회는 그대로 성공한다. */
+  private ArkGridRealEfficiency arkGridReal(FetchedCharacter fetched) {
+    if (arkGridReal == null) return null;
+    try {
+      return arkGridReal.compute(fetched.details(), fetched.krakenScoreInput());
+    } catch (RuntimeException exception) {
+      return ArkGridRealEfficiency.unsupported(ArkGridRealService.UNAVAILABLE, "실 효율을 계산하지 못했습니다.");
+    }
   }
 
   /** 최근 공식 API가 없다고 답한 이름은 공식 호출 없이 바로 404다(#108). */

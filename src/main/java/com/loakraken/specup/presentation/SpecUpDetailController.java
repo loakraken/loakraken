@@ -83,10 +83,15 @@ public class SpecUpDetailController {
           @RequestParam
           @Size(min = 1, max = 16)
           @Pattern(regexp = "\\s*[\\p{L}\\p{N}]+\\s*")
-          String characterName) {
+          String characterName,
+      @Parameter(
+              description =
+                  "목록과 같은 작열(쿨) 보석 포함 여부. false면 작열 후보는 404(목록 cooldownGemsIncluded가 false였다면 false로). 주지 않으면 모든 후보에서 찾음")
+          @RequestParam(required = false)
+          Boolean includeCooldownGems) {
     return ApiResponse.of(
         SpecUpDetailSuccessCode.SPEC_UP_DETAIL_SUCCESS,
-        SpecUpDetailResponse.from(details.detail(characterName, candidateId)));
+        SpecUpDetailResponse.from(details.detail(characterName, candidateId, includeCooldownGems)));
   }
 
   enum SpecUpDetailSuccessCode implements SuccessCode {

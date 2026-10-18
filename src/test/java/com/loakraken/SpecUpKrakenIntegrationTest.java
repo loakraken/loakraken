@@ -126,6 +126,18 @@ class SpecUpKrakenIntegrationTest {
     assertThat(efficiency.path("sort").asText()).isEqualTo("EFFICIENCY");
     assertThat(efficiency.path("cooldownGemsIncluded").asBoolean()).isTrue();
     assertThat(hasCooldown(efficiency.path("candidates"))).isTrue();
+    // 상세도 목록과 같은 포함 옵션: 빼면 작열 후보는 404, 넣거나 주지 않으면 200.
+    String cooldownId = null;
+    for (var candidate : included.path("candidates"))
+      if ("COOLDOWN".equals(candidate.path("gemType").asText(""))) {
+        cooldownId = candidate.path("id").asText();
+        break;
+      }
+    var detailPath =
+        "/api/v1/characters/spec-up/candidates/" + cooldownId + "?characterName=" + encode(NAME);
+    assertThat(get(detailPath + "&includeCooldownGems=false").statusCode()).isEqualTo(404);
+    assertThat(get(detailPath + "&includeCooldownGems=true").statusCode()).isEqualTo(200);
+    assertThat(get(detailPath).statusCode()).isEqualTo(200);
     // 효율 순에도 Δ크라켄 점수는 같이 온다(같은 후보면 같은 값).
     assertThat(
             byTarget(efficiency.path("candidates"), "블레이드 버스트", "7레벨")

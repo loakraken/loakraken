@@ -310,12 +310,18 @@ public interface StatsPort {
       String characterName, String server, Instant since, boolean characterUnit);
 
   /** 길드 랭킹 정렬(#301). 요청 값만 이 enum이고 응답에는 문자열로 나간다. */
+  /** AVG·SUM: 아이템 레벨 평균·합. CP_AVG: 아이템 레벨 1750 이상 길드원 전투력 평균. CP_SUM: 전투력 총합(전원). */
   enum GuildSort {
     AVG,
-    SUM
+    SUM,
+    CP_AVG,
+    CP_SUM
   }
 
-  /** 길드 랭킹 행(#301). 평균·합은 관측한 공개 길드원의 아이템 레벨(반올림 전). */
+  /**
+   * 길드 랭킹 행(#301). 평균·합은 관측한 공개 길드원의 아이템 레벨(반올림 전). 전투력은 관측한 길드원만: combatPowerAvg는 전원 평균,
+   * combatPowerAvgTop은 아이템 레벨 1750 이상 평균(#580, 길드 탭과 같은 정의), combatPowerTotal은 전원 합.
+   */
   record GuildRow(
       long rank,
       String serverName,
@@ -324,7 +330,10 @@ public interface StatsPort {
       BigDecimal itemLevelAvg,
       BigDecimal itemLevelSum,
       BigDecimal combatPowerAvg,
-      long combatPowerCount) {}
+      long combatPowerCount,
+      BigDecimal combatPowerAvgTop,
+      long combatPowerTopCount,
+      BigDecimal combatPowerTotal) {}
 
   /** excluded: 관측 길드원이 최소 인원 미만이라 뺀 길드 수. */
   /**

@@ -640,7 +640,7 @@ public class StatsQueryService {
     if (offset > MAX_RANKING_OFFSET)
       throw new BusinessException(StatsErrorCode.STATS_INVALID_RANGE);
     return cached(
-        "guilds:"
+        "guilds:v2:"
             + sort
             + ":"
             + page
@@ -684,7 +684,14 @@ public class StatsQueryService {
                               row.combatPowerAvg() == null
                                   ? null
                                   : row.combatPowerAvg().setScale(2, RoundingMode.HALF_UP),
-                              row.combatPowerCount()))
+                              row.combatPowerCount(),
+                              row.combatPowerAvgTop() == null
+                                  ? null
+                                  : row.combatPowerAvgTop().setScale(2, RoundingMode.HALF_UP),
+                              row.combatPowerTopCount(),
+                              row.combatPowerTotal() == null
+                                  ? null
+                                  : row.combatPowerTotal().setScale(2, RoundingMode.HALF_UP)))
                   .toList());
         });
   }
@@ -1261,7 +1268,10 @@ public class StatsQueryService {
       BigDecimal itemLevelAvg,
       BigDecimal itemLevelSum,
       BigDecimal combatPowerAvg,
-      long combatPowerCount) {}
+      long combatPowerCount,
+      BigDecimal combatPowerAvgTop,
+      long combatPowerTopCount,
+      BigDecimal combatPowerTotal) {}
 
   /** 수집품 항목별 보유율 결과(#305). type이 null이면 전체 종류. */
   public record CollectibleOwnershipResult(Meta meta, String type, List<OwnedItem> items) {}

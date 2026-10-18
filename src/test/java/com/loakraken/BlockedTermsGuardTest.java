@@ -43,9 +43,20 @@ class BlockedTermsGuardTest {
           .isNotEqualTo("true");
       return;
     }
+    // Windows PowerShell 5.1로 파이프해 넣으면 한글이 '?'로 바뀌고 줄이 합쳐진다 — 그런 이름은 아무것도 못 잡는다(#576).
+    var broken = new ArrayList<Integer>();
+    for (int i = 0; i < SiteNames.BLOCKED.size(); i++)
+      if (SiteNames.BLOCKED.get(i).matches(".*[?\\uFFFD].*")) broken.add(i);
+    assertThat(broken).as("인코딩이 깨진 금지 이름(목록 번호) — 목록을 UTF-8 그대로 다시 넣어야 합니다").isEmpty();
     assertThat(SiteNames.BLOCKED.size())
-        .as("금지 이름 목록이 기대보다 적습니다 — CI 비밀값이나 로컬 목록이 오래됐는지 확인")
+        .as("금지 이름 목록이 기대보다 적습니다 — CI 비밀값이나 로컬 목록이 오래됐거나 줄이 합쳐졌는지 확인")
         .isGreaterThanOrEqualTo(EXPECTED_NAMES);
+  }
+
+  @Test
+  void 목록은_CRLF와_BOM과_분류_표시를_떼고_읽는다() {
+    var text = "\uFEFFsite: alpha\r\ncharacter: 가나다\r\n# 주석\r\n\r\n  beta  \n";
+    assertThat(SiteNames.parse(text)).containsExactly("alpha", "가나다", "beta");
   }
 
   @Test

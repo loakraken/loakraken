@@ -52,9 +52,16 @@ public final class SiteNames {
         return List.of();
       }
     }
+    return parse(text);
+  }
+
+  /**
+   * 목록 글(줄바꿈 구분)을 이름 목록으로. 줄 끝 CRLF·앞뒤 공백·맨 앞 BOM(Windows 도구가 붙임)을 떼고, 줄 앞의 분류 표시(예: "site: ",
+   * "character: ")도 뗀다. '#'으로 시작하는 줄과 빈 줄은 건너뛴다.
+   */
+  static List<String> parse(String text) {
     var names = new ArrayList<String>();
-    for (var line : text.split("\\R")) {
-      // 줄 앞의 분류 표시(예: "site: ", "character: ")는 떼고 이름만 쓴다.
+    for (var line : text.replace("\uFEFF", "").split("\\R")) {
       var name = line.strip().replaceFirst("^[a-z]+:\\s+", "");
       if (!name.isEmpty() && !name.startsWith("#")) names.add(name);
     }

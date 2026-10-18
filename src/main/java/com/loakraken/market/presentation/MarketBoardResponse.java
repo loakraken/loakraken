@@ -26,8 +26,7 @@ public record MarketBoardResponse(
     @Schema(description = "공식 검색의 탭 전체 품목 수. q(이름 검색)가 있으면 찾은 품목 수") int totalItems,
     @Schema(description = "정렬에 사용한 품목 수. rise/fall과 q 검색은 스캔 품목 수, 그 외는 이 페이지 품목 수")
         int scannedItems,
-    @Schema(description = "rise/fall·q 검색이 탭 전체를 스캔했는지. 스캔 상한(10페이지)을 넘으면 false")
-        boolean complete,
+    @Schema(description = "rise/fall·q 검색이 탭 전체를 스캔했는지. 스캔 상한(10페이지)을 넘으면 false") boolean complete,
     List<MarketBoardItemResponse> items) {
 
   static MarketBoardResponse from(MarketBoard board) {

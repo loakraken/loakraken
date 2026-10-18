@@ -149,8 +149,7 @@ class MarketBoardServiceTest {
             named(4, "Abydos Item", null),
             named(5, "아비도스 융화 재료", "70"));
     when(cache.findBoardScan(MarketTab.REFINING, 4))
-        .thenReturn(
-            Optional.of(new MarketBoardScan(MarketTab.REFINING, 4, OBSERVED, 150, items)));
+        .thenReturn(Optional.of(new MarketBoardScan(MarketTab.REFINING, 4, OBSERVED, 150, items)));
     var board = service.board(MarketTab.REFINING, null, MarketBoardRules.Sort.DEFAULT, 1, "파괴");
     // 캐시가 있으면 공식 호출 0, 기본 정렬은 스캔 순서.
     verifyNoInteractions(markets);
@@ -159,14 +158,10 @@ class MarketBoardServiceTest {
     assertThat(board.scannedItems()).isEqualTo(5);
     assertThat(board.complete()).isFalse();
     assertThat(board.observedAt()).isEqualTo(OBSERVED);
-    assertThat(
-            service
-                .board(MarketTab.REFINING, null, MarketBoardRules.Sort.HIGH, 1, "파괴")
-                .rows())
+    assertThat(service.board(MarketTab.REFINING, null, MarketBoardRules.Sort.HIGH, 1, "파괴").rows())
         .extracting(row -> row.price().id())
         .containsExactly(3L, 1L);
-    assertThat(
-            service.board(MarketTab.REFINING, null, MarketBoardRules.Sort.LOW, 1, "ㅍㄱ").rows())
+    assertThat(service.board(MarketTab.REFINING, null, MarketBoardRules.Sort.LOW, 1, "ㅍㄱ").rows())
         .extracting(row -> row.price().id())
         .containsExactly(1L, 3L);
     // 초성은 앞이 아니어도 일치, 영문은 대소문자·공백 무시, 가격 없는 품목은 고가·저가에서 맨 뒤.
@@ -178,8 +173,7 @@ class MarketBoardServiceTest {
             service.board(MarketTab.REFINING, null, MarketBoardRules.Sort.LOW, 1, "abydosi").rows())
         .extracting(row -> row.price().id())
         .containsExactly(4L);
-    assertThat(
-            service.board(MarketTab.REFINING, null, MarketBoardRules.Sort.HIGH, 1, "ㅇ").rows())
+    assertThat(service.board(MarketTab.REFINING, null, MarketBoardRules.Sort.HIGH, 1, "ㅇ").rows())
         .extracting(row -> row.price().id())
         .containsExactly(5L, 1L, 2L);
     // 없는 이름은 빈 페이지, 범위를 넘는 페이지도 빈 페이지.
@@ -195,8 +189,7 @@ class MarketBoardServiceTest {
   @Test
   void 이름_검색은_스캔이_없으면_등락_정렬과_같은_키로_한_번_스캔하고_저장한다() {
     stubPages(MarketTab.ENGRAVING_BOOK, null, 23);
-    var board =
-        service.board(MarketTab.ENGRAVING_BOOK, null, MarketBoardRules.Sort.RISE, 1, "품목2");
+    var board = service.board(MarketTab.ENGRAVING_BOOK, null, MarketBoardRules.Sort.RISE, 1, "품목2");
     verify(markets, times(3)).search(eq(MarketSource.ACTIVE_LISTING), any());
     // 품목2·품목20~23, 등락률 큰 순.
     assertThat(board.rows())

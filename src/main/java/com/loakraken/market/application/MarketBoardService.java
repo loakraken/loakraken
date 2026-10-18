@@ -45,8 +45,8 @@ public class MarketBoardService {
   }
 
   /**
-   * query(정리·검증한 검색어)가 있으면 상승·하락 정렬과 같은 탭 전체 스캔(같은 캐시·합치기·한 번에 하나)에서 이름·초성으로 거른 뒤 정렬·페이지를 적용한다(#619).
-   * totalItems는 걸러진 품목 수, scannedItems는 스캔한 품목 수, complete는 스캔이 탭 전체를 덮었는지다.
+   * query(정리·검증한 검색어)가 있으면 상승·하락 정렬과 같은 탭 전체 스캔(같은 캐시·합치기·한 번에 하나)에서 이름·초성으로 거른 뒤 정렬·페이지를
+   * 적용한다(#619). totalItems는 걸러진 품목 수, scannedItems는 스캔한 품목 수, complete는 스캔이 탭 전체를 덮었는지다.
    */
   public MarketBoard board(
       MarketTab tab, Integer tier, MarketBoardRules.Sort sort, int page, String query) {
@@ -102,9 +102,7 @@ public class MarketBoardService {
         rows(sorted.subList(from, to)));
   }
 
-  /**
-   * 스캔한 품목의 정렬. 기본은 스캔 순서(공식 등급순 페이지 순서), 고가·저가는 현재 최저가(없으면 맨 뒤, 같으면 스캔 순서), 상승·하락은 등락률 정렬과 같다.
-   */
+  /** 스캔한 품목의 정렬. 기본은 스캔 순서(공식 등급순 페이지 순서), 고가·저가는 현재 최저가(없으면 맨 뒤, 같으면 스캔 순서), 상승·하락은 등락률 정렬과 같다. */
   static List<MarketPrice> sortScanned(List<MarketPrice> items, MarketBoardRules.Sort sort) {
     return switch (sort) {
       case DEFAULT -> items;

@@ -29,8 +29,7 @@ class MarketBoardRequestTest {
   }
 
   @ParameterizedTest
-  @ValueSource(
-      strings = {"가나다라마바사아자차카타파하가나다라마바사", "a<b", "파괴석!", "%", "파괴석/", "😀"})
+  @ValueSource(strings = {"가나다라마바사아자차카타파하가나다라마바사", "a<b", "파괴석!", "%", "파괴석/", "😀"})
   void 길이_초과나_허용_밖_문자는_거절한다(String q) {
     assertThat(request(q).isQueryAllowed()).as(q).isFalse();
   }

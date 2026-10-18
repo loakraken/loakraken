@@ -118,6 +118,30 @@ class SpecUpGoalGemCostTest {
     assertThat(SpecUpGoalService.marginal(refine, totals)).isEqualTo(300_000);
   }
 
+  @Test
+  void 더_드는_비용이_0_이하인_단계를_효율_있는_단계보다_먼저_고른다() {
+    var free = scored(option("GEM_LEVEL:0", SpecUpCost.gem(390_000, 400_000L, false)), "24", null);
+    var priced =
+        scored(option("GEM_LEVEL:1", SpecUpCost.gem(1_000_000, 400_000L, false)), "24", "0.40");
+    assertThat(SpecUpGoalService.free(0L)).isTrue();
+    assertThat(SpecUpGoalService.free(-50_000L)).isTrue();
+    assertThat(SpecUpGoalService.free(null)).isFalse();
+    assertThat(SpecUpGoalService.preferred(free, true, priced, false)).isTrue();
+    assertThat(SpecUpGoalService.preferred(priced, false, free, true)).isFalse();
+    // 0 단계끼리는 Δ 큰 순.
+    var bigger =
+        scored(option("GEM_LEVEL:2", SpecUpCost.gem(390_000, 400_000L, false)), "48", null);
+    assertThat(SpecUpGoalService.preferred(bigger, true, free, true)).isTrue();
+  }
+
+  private static SpecUpGoalService.Option scored(
+      SpecUpGoalService.Option option, String delta, String efficiency) {
+    return option.scored(
+        new java.math.BigDecimal(delta),
+        java.math.BigDecimal.valueOf(3000),
+        efficiency == null ? null : new java.math.BigDecimal(efficiency));
+  }
+
   private static SpecUpGoalService.Option option(String slot, SpecUpCost cost) {
     return new SpecUpGoalService.Option(
         slot,

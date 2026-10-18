@@ -213,6 +213,7 @@ public class SpecUpGoalService {
         break;
       }
       Option best = null;
+      boolean bestFree = false;
       for (var option : options(state, gems, refinePrices, pricesAt)) {
         var trial = new LinkedHashMap<>(applied);
         trial.put(option.slot(), option.change());
@@ -222,12 +223,14 @@ public class SpecUpGoalService {
         var delta = simulated.after().subtract(current);
         if (delta.signum() <= 0) continue;
         // 고르는 효율은 이 단계에 더 드는 비용(보석은 누적 차이)으로: 같은 칸을 이어서 올릴 때 이미 낸 비용을 다시 세지 않는다.
+        var marginal = marginal(option, gemTotals);
         var scored =
-            option.scored(
-                delta,
-                simulated.after(),
-                SpecUpCost.efficiency(delta, marginal(option, gemTotals)));
-        if (best == null || ORDER.compare(scored, best) < 0) best = scored;
+            option.scored(delta, simulated.after(), SpecUpCost.efficiency(delta, marginal));
+        boolean free = free(marginal);
+        if (best == null || preferred(scored, free, best, bestFree)) {
+          best = scored;
+          bestFree = free;
+        }
       }
       if (best == null) {
         stop = NO_CANDIDATE;
@@ -303,6 +306,24 @@ public class SpecUpGoalService {
     var paid =
         gemTotals.containsKey(option.slot()) ? gemTotals.get(option.slot()) : Long.valueOf(0);
     return paid == null ? null : amount - paid;
+  }
+
+  /** 더 드는 비용이 0 이하로 확인된 단계(거꾸로 시세의 보석 단계 등). 효율은 '-'(null)이지만 경로에는 먼저 넣는다. */
+  static boolean free(Long marginal) {
+    return marginal != null && marginal <= 0;
+  }
+
+  /**
+   * 다음 단계 고르기: 목표 경로는 '가장 싸게 목표까지 가는 계획'이라 더 드는 비용이 0 이하인 단계를 맨 앞에(Δ 큰 순) 넣어 단계 상한에 밀려 빠지지 않게 하고, 그
+   * 밖은 ORDER(효율 높은 순, 효율 없음은 뒤, 같으면 Δ·id). 목록 정렬(효율 없는 줄은 뒤)과는 다르다(PM 판정 10-18).
+   */
+  static boolean preferred(Option candidate, boolean candidateFree, Option best, boolean bestFree) {
+    if (candidateFree != bestFree) return candidateFree;
+    if (candidateFree) {
+      int byDelta = best.delta().compareTo(candidate.delta());
+      return byDelta != 0 ? byDelta < 0 : candidate.id().compareTo(best.id()) < 0;
+    }
+    return ORDER.compare(candidate, best) < 0;
   }
 
   /** 경로 합계(보석 칸마다 마지막 누적 + 그 밖 합). 모르는 값이 있으면 null. */

@@ -627,6 +627,31 @@ class SpecUpIntegrationTest {
   }
 
   @Test
+  void 거꾸로_시세에서_비용_0_보석_단계가_경로_맨_앞에_들어가고_합계가_그만큼_작다() throws Exception {
+    // 9레벨(390,000)이 지금 8레벨(400,000)보다 싸다: 8 → 9는 비용 0이라 효율은 '-'지만 목표 경로 맨 앞에 들어간다(PM 판정 10-18).
+    // 전에는 효율 없는 단계끼리 Δ 순이라 무기 품질(비용 미확인)이 먼저 와 경로가 품질 하나로 끝나고 합계를 몰랐다.
+    when(auctions.cachedGems()).thenReturn(gemCells(true, java.util.Map.of(9, 390_000L)));
+    search("스펙거꾸로");
+    var response =
+        get(
+            "/api/v1/characters/spec-up/goal?characterName="
+                + encode("스펙거꾸로")
+                + "&targetCombatPower=3048");
+    assertThat(response.statusCode()).as(response.body()).isEqualTo(200);
+    var data = mapper.readTree(response.body()).path("data");
+    var steps = data.path("steps");
+    assertThat(steps.size()).isEqualTo(2);
+    assertThat(steps.get(0).path("candidateId").asText()).isEqualTo("GEM_LEVEL:0:9");
+    assertThat(steps.get(0).at("/cost/amount").asLong()).isZero();
+    assertThat(steps.get(0).path("combatPowerPer10kGold").isNull()).isTrue();
+    assertThat(steps.get(1).path("candidateId").asText()).isEqualTo("GEM_LEVEL:0:10");
+    assertThat(steps.get(1).at("/cost/amount").asLong()).isEqualTo(3_000_000 - 400_000);
+    // 합계 = 지금(8레벨)에서 10레벨까지 직접 비용 2,600,000(0 단계는 더하지 않은 것과 같음).
+    assertThat(data.path("totalCost").asLong()).isEqualTo(2_600_000);
+    assertThat(data.path("reached").asBoolean()).isTrue();
+  }
+
+  @Test
   void 목표_경로는_같은_보석_칸을_이어서_올리고_시세_없는_단계부터_누적_비용이_null이다() throws Exception {
     // L31: 효율 순으로 보석 8→9(600,000), 9→10(증분 2,000,000), 그다음 비용을 모르는 무기 품질 90→100.
     when(auctions.cachedGems()).thenReturn(gemCells(true));
@@ -1035,14 +1060,21 @@ class SpecUpIntegrationTest {
   }
 
   private static List<GemCell> gemCells(boolean ready) {
+    return gemCells(ready, java.util.Map.of());
+  }
+
+  /** prices: 레벨별 시세 덮어쓰기(거꾸로 시세 등). */
+  private static List<GemCell> gemCells(boolean ready, java.util.Map<Integer, Long> prices) {
     var at = Instant.parse("2026-10-11T07:00:00Z");
     var cells = new ArrayList<GemCell>();
     for (var kind : List.of("겁화", "작열"))
       for (int level = 10; level >= 1; level--) {
         long price =
-            level == 10
-                ? 3_000_000
-                : level == 9 ? 1_000_000 : level == 8 ? 400_000 : 10_000L * level;
+            prices.getOrDefault(
+                level,
+                level == 10
+                    ? 3_000_000
+                    : level == 9 ? 1_000_000 : level == 8 ? 400_000 : 10_000L * level);
         var cell = ready ? new AuctionCell(price, 5, at) : null;
         cells.add(
             new GemCell(

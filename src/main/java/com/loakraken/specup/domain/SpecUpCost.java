@@ -114,12 +114,17 @@ public record SpecUpCost(String unit, Long amount, String status, String code, S
 
   /** 유물 각인 +1 비용 = 5권 × 유물 각인서 1권 즉시 구매 최저가. */
   public static SpecUpCost engravingBooks(long unitPrice) {
+    return engravingBooks(unitPrice, 1);
+  }
+
+  /** 유물 각인 +levels 비용 = 5권 × levels × 1권 즉시 구매 최저가(다단계 누적 줄). 같은 code는 같은 문장. */
+  public static SpecUpCost engravingBooks(long unitPrice, int levels) {
     return new SpecUpCost(
         "GOLD",
-        unitPrice * BOOKS_PER_LEVEL,
+        unitPrice * BOOKS_PER_LEVEL * levels,
         "OK",
         "ENGRAVING_BOOK_BUY",
-        "유물 각인서 5권(각인 레벨 1당 5권)의 즉시 구매 최저가 합입니다.");
+        "유물 각인서(각인 레벨 1당 5권, 올리는 레벨 수만큼)의 즉시 구매 최저가 합입니다.");
   }
 
   /** 1만 골드당 전투력(소수 둘째 자리). 비용이 없거나 0 이하면 null. */

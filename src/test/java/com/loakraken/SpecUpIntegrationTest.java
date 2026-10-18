@@ -995,6 +995,33 @@ class SpecUpIntegrationTest {
             + encode(name));
   }
 
+  @Test
+  void KRAKEN을_요청해도_점수를_낼_수_없으면_효율_순으로_되돌리고_이유를_준다() throws Exception {
+    // 이 테스트 컨텍스트는 크라켄 점수가 꺼져 있다(기본값).
+    when(auctions.cachedGems()).thenReturn(gemCells(true));
+    search("스펙캐시");
+    var data =
+        mapper
+            .readTree(
+                get("/api/v1/characters/spec-up?sort=KRAKEN&characterName=" + encode("스펙캐시"))
+                    .body())
+            .path("data");
+    assertThat(data.path("sort").asText()).isEqualTo("EFFICIENCY");
+    assertThat(data.path("krakenSortUnavailableReason").asText()).isEqualTo("DISABLED");
+    assertThat(data.path("krakenScore").isNull()).isTrue();
+    // 작열 포함 여부는 정렬과 따로: KRAKEN을 요청했으니 기본은 뺌, 실제 값을 돌려준다.
+    assertThat(data.path("cooldownGemsIncluded").asBoolean()).isFalse();
+    for (var candidate : data.path("candidates"))
+      assertThat(candidate.path("deltaKrakenScore").isNull()).isTrue();
+    var efficiency =
+        mapper
+            .readTree(get("/api/v1/characters/spec-up?characterName=" + encode("스펙캐시")).body())
+            .path("data");
+    assertThat(efficiency.path("cooldownGemsIncluded").asBoolean()).isTrue();
+    assertThat(find(efficiency.path("candidates"), "GEM_LEVEL:0:9").path("gemType").asText())
+        .isEqualTo("DAMAGE");
+  }
+
   private void search(String name) throws Exception {
     when(detailsPort.fetch(anyString()))
         .thenAnswer(invocation -> fetched(invocation.getArgument(0)));

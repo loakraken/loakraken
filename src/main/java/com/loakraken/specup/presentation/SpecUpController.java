@@ -57,7 +57,10 @@ public class SpecUpController {
               + "계산식이 확정되지 않은 후보도 status=UNSUPPORTED와 reasonCode·reason(같은 코드는 같은 문장)으로 남깁니다. "
               + "limit은 OK 후보에만 적용하고(total = 자르기 전 OK 후보 수), UNSUPPORTED는 모두 뒤에 붙습니다. "
               + "cost.status: OK(금액 있음)·PENDING(시세 칸을 아직 받지 못함)·UNKNOWN(비용 근거 없음). 보석 비용은 목표 레벨 즉시 구매 최저가 − 지금 보석 판매 기대가(거래소 수수료 5% 올림, 귀속이면 빼지 않음)입니다. "
-              + "kind·status·cost.status·reasonCode는 문자열이며 값이 늘 수 있습니다.")
+              + "sort=KRAKEN이면 후보마다 크라켄 점수 엔진으로 Δ크라켄 점수(적용 뒤 점수 − 지금 점수, 반올림 전 값의 차를 소수 둘째 자리로)를 내고 10만 골드당 점수 내림차순으로 정렬합니다(비용 모름은 Δ 순, 그 밖은 효율 순). "
+              + "점수를 낼 수 없으면(서포터·점수 꺼짐·입력 없음) 효율 순으로 정렬하고 krakenSortUnavailableReason에 이유를 줍니다. "
+              + "includeCooldownGems를 주지 않으면 KRAKEN은 작열(쿨) 보석 후보를 빼고 다른 정렬은 넣으며, 실제로 적용한 값은 cooldownGemsIncluded입니다. "
+              + "kind·status·cost.status·reasonCode·sort·gemType·krakenSortUnavailableReason은 문자열이며 값이 늘 수 있습니다.")
   @ApiResponses({
     @io.swagger.v3.oas.annotations.responses.ApiResponse(
         responseCode = "200",
@@ -82,20 +85,24 @@ public class SpecUpController {
           @Size(min = 1, max = 16)
           @Pattern(regexp = "\\s*[\\p{L}\\p{N}]+\\s*")
           String characterName,
-      @Parameter(description = "EFFICIENCY(기본, 1만 골드당 전투력) 또는 DELTA(Δ전투력)")
+      @Parameter(description = "EFFICIENCY(기본, 1만 골드당 전투력), DELTA(Δ전투력) 또는 KRAKEN(10만 골드당 Δ크라켄 점수)")
           @RequestParam(required = false)
-          @Pattern(regexp = "EFFICIENCY|DELTA")
+          @Pattern(regexp = "EFFICIENCY|DELTA|KRAKEN")
           String sort,
       @Parameter(description = "OK 후보 최대 개수(기본 20, 최대 50)")
           @RequestParam(required = false)
           @Min(1)
           @Max(50)
-          Integer limit) {
+          Integer limit,
+      @Parameter(description = "작열(쿨) 보석 후보를 넣을지. 주지 않으면 KRAKEN은 빼고 다른 정렬은 넣음")
+          @RequestParam(required = false)
+          Boolean includeCooldownGems) {
     var guide =
         specUp.guide(
             characterName,
             sort == null ? SpecUpService.Sort.EFFICIENCY : SpecUpService.Sort.valueOf(sort),
-            limit == null ? 20 : limit);
+            limit == null ? 20 : limit,
+            includeCooldownGems);
     return ApiResponse.of(SpecUpSuccessCode.SPEC_UP_SUCCESS, SpecUpResponse.from(guide));
   }
 
@@ -271,11 +278,27 @@ public class SpecUpController {
       @Schema(description = "캐릭터 캐시 수집 시각") Instant fetchedAt,
       @Schema(description = "비용에 쓴 시세 칸 가운데 가장 오래된 관측 시각(쓴 칸이 없으면 null)") @NullableResponse
           Instant pricesAt,
-      @Schema(description = "EFFICIENCY 또는 DELTA(문자열)", example = "EFFICIENCY") String sort,
+      @Schema(
+              description =
+                  "실제로 쓴 정렬(문자열, 값이 늘 수 있음): EFFICIENCY·DELTA·KRAKEN. KRAKEN을 요청해도 점수를 낼 수 없으면 EFFICIENCY",
+              example = "EFFICIENCY")
+          String sort,
       int limit,
-      @Schema(description = "limit으로 자르기 전 OK 후보 수") int total,
-      @Schema(description = "OK 후보(정렬·limit) 뒤에 UNSUPPORTED 후보 전체")
-          List<CandidateResponse> candidates) {
+      @Schema(description = "limit으로 자르기 전 순위 후보 수(KRAKEN은 Δ크라켄 점수가 있는 후보 포함)") int total,
+      @Schema(description = "순위 후보(정렬·limit) 뒤에 나머지 후보 전체") List<CandidateResponse> candidates,
+      @Schema(description = "지금 크라켄 점수(소수 둘째 자리). 낼 수 없으면 null") @NullableResponse
+          BigDecimal krakenScore,
+      @Schema(description = "Δ크라켄 점수 규칙(낼 수 없으면 null)", example = "spec-up-kraken-v1")
+          @NullableResponse
+          String krakenRuleVersion,
+      @Schema(description = "작열(쿨) 보석 후보를 넣었는지(요청 includeCooldownGems 또는 정렬 기본값)")
+          boolean cooldownGemsIncluded,
+      @Schema(
+              description =
+                  "Δ크라켄 점수를 낼 수 없는 이유(문자열, 값이 늘 수 있음): DISABLED·INPUT_PENDING·ROLE_UNKNOWN·SUPPORTER_PENDING·SCORE_UNAVAILABLE. 이때 KRAKEN도 효율 순. 낼 수 있으면 null",
+              example = "SUPPORTER_PENDING")
+          @NullableResponse
+          String krakenSortUnavailableReason) {
     static SpecUpResponse from(SpecUpService.Guide guide) {
       return new SpecUpResponse(
           guide.characterName(),
@@ -289,7 +312,11 @@ public class SpecUpController {
           guide.sort(),
           guide.limit(),
           guide.total(),
-          guide.candidates().stream().map(CandidateResponse::from).toList());
+          guide.candidates().stream().map(CandidateResponse::from).toList(),
+          guide.krakenScore(),
+          guide.krakenRuleVersion(),
+          guide.cooldownGemsIncluded(),
+          guide.krakenSortUnavailableReason());
     }
   }
 
@@ -319,7 +346,11 @@ public class SpecUpController {
           BigDecimal deltaCombatPower,
       @Schema(description = "Δ전투력 / 현재 전투력 × 100(소수 셋째 자리)") @NullableResponse
           BigDecimal deltaPercent,
-      @Schema(description = "비용. UNSUPPORTED면 null") @NullableResponse CostResponse cost,
+      @Schema(
+              description =
+                  "비용. status가 UNSUPPORTED(전투력을 계산하지 못함)면 null이다. 다만 deltaKrakenScore가 있으면(크라켄 점수 기능이 켜졌을 때) 정렬과 상관없이 비용을 준다 — 줄 상세 candidate와 같은 값을 유지하기 위해")
+          @NullableResponse
+          CostResponse cost,
       @Schema(description = "1만 골드당 전투력(소수 둘째 자리). 비용이 OK일 때만") @NullableResponse
           BigDecimal combatPowerPer10kGold,
       @Schema(description = "UNSUPPORTED 이유 코드(문자열, 값이 늘 수 있음)", example = "MODEL_UNCONFIRMED")
@@ -342,7 +373,22 @@ public class SpecUpController {
                   "보석 후보만: 바꾼 뒤 그 칸 보석의 기본 공격력 %(보석 계수표 6~10레벨 0.45·0.60·0.80·1.00·1.20 — 6·10레벨은 공식 보석 효과 확인값). 모르면 null",
               example = "0.80")
           @NullableResponse
-          BigDecimal baseAttackPctTo) {
+          BigDecimal baseAttackPctTo,
+      @Schema(
+              description =
+                  "Δ크라켄 점수 = 이 후보를 적용한 점수 − 지금 점수(반올림 전 값의 차를 소수 둘째 자리로 — 지금 점수 + Δ와 화면 최종 점수의 차이는 0.01 이하). 계산하지 못하면 null(빈 칸 보석·상급 재련·서포터 등)",
+              example = "98.81")
+          @NullableResponse
+          BigDecimal deltaKrakenScore,
+      @Schema(
+              description =
+                  "10만 골드당 Δ크라켄 점수 = deltaKrakenScore ÷ cost.amount × 100,000(소수 둘째 자리, KRAKEN 정렬 키). Δ > 0이고 비용이 OK일 때만. 1만 골드당은 ÷ 10",
+              example = "89.02")
+          @NullableResponse
+          BigDecimal krakenScorePer100kGold,
+      @Schema(description = "보석 후보만: DAMAGE(딜) 또는 COOLDOWN(쿨, 작열), 문자열·값이 늘 수 있음. 그 밖 null")
+          @NullableResponse
+          String gemType) {
     static CandidateResponse from(SpecUpService.Candidate candidate) {
       return new CandidateResponse(
           candidate.id(),
@@ -365,7 +411,10 @@ public class SpecUpController {
           candidate.reasonDetail(),
           candidate.emptySlot(),
           candidate.baseAttackPctFrom(),
-          candidate.baseAttackPctTo());
+          candidate.baseAttackPctTo(),
+          candidate.deltaKrakenScore(),
+          candidate.krakenScorePer100kGold(),
+          candidate.gemType());
     }
   }
 

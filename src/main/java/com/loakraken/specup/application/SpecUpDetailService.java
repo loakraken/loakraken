@@ -150,7 +150,7 @@ public class SpecUpDetailService {
         consistent = matches(candidate.cost(), gemTotal(market));
       }
       case "ENGRAVING_LEVEL" -> {
-        market = bookMarket(parts[1], candidate);
+        market = bookMarket(parts[1], candidate, bookLevels(loadout, parts[1], parts[2]));
         consistent = matches(candidate.cost(), bookTotal(market));
       }
       case "EQUIPMENT_REFINE" -> {
@@ -278,7 +278,21 @@ public class SpecUpDetailService {
   }
 
   /** 유물 각인서 1권 시세 × 5권(목록 비용과 같음). 유물이 아니거나 시세가 없으면 null. */
+  /** 올리는 레벨 수(다단계 누적 줄이면 2 이상). 지금 레벨을 모르면 1. */
+  static int bookLevels(CharacterLoadout loadout, String engravingName, String next) {
+    if (loadout.engravings() == null) return 1;
+    for (var engraving : loadout.engravings().arkPassiveEffects())
+      if (engraving != null && engravingName.equals(engraving.name()) && engraving.level() != null)
+        return Math.max(1, Integer.parseInt(next) - engraving.level());
+    return 1;
+  }
+
   List<Market> bookMarket(String engravingName, Candidate candidate) {
+    return bookMarket(engravingName, candidate, 1);
+  }
+
+  /** levels: 올리는 레벨 수 — 권수 = 5 × levels(목록 비용과 같음). */
+  List<Market> bookMarket(String engravingName, Candidate candidate, int levels) {
     if (!BOOK_GRADE.equals(candidate.grade())) return null;
     var price = books.price(engravingName).orElse(null);
     if (price == null) return null;
@@ -289,7 +303,7 @@ public class SpecUpDetailService {
             books.icon(engravingName).orElse(null),
             BOOK_GRADE,
             price.unitPrice(),
-            SpecUpCost.BOOKS_PER_LEVEL,
+            SpecUpCost.BOOKS_PER_LEVEL * levels,
             null,
             null,
             price.observedAt()));

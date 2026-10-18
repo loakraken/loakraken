@@ -103,6 +103,20 @@ class KrakenScoreInputMapperTest {
     assertThat(score).isEqualTo(doc.path("expectedScore").asDouble());
   }
 
+  /**
+   * 스톤 이동속도 감소 레벨의 점수 영향(원본 함수 값): m01~m03은 실제 질풍노도 원문과 그 감소 줄만 Lv.1·2로 바꾼 것 — 팔찌에 치명 관련 옵션이 없어 그
+   * 분기가 꺼져 세 점수가 같다. m04·m05는 질풍노도 + 팔찌 치명 옵션 + 이동속도 상한 아래 합성(감소 Lv.1·2)이라 점수가 바뀐다.
+   */
+  @ParameterizedTest
+  @ValueSource(strings = {"m01", "m02", "m03", "m04", "m05"})
+  void 스톤_이동속도_감소_레벨의_점수_영향이_원본과_끝자리까지_같다(String id) throws IOException {
+    var doc = read(id);
+    var input = KrakenScoreInputMapper.from(doc.path("raw"));
+    assertThat(KrakenScoreEngine.dealerScore(input, TABLES))
+        .as(id + " " + doc.path("note").asString(""))
+        .isEqualTo(doc.path("expectedScore").asDouble());
+  }
+
   @Test
   void 빈_원문이나_모르는_모양이어도_예외_없이_빈_입력을_만든다() throws IOException {
     for (var raw :
@@ -139,7 +153,7 @@ class KrakenScoreInputMapperTest {
   }
 
   @Test
-  void 어빌리티_스톤의_감소_각인_줄도_원문_순서대로_넣고_이동속도_감소가_점수에_반영된다() throws IOException {
+  void 어빌리티_스톤의_감소_각인_줄도_원문_순서대로_넣는다() throws IOException {
     // 합성: l05(딜러)의 스톤 무작위 각인에 '이동속도 감소 Lv.2'를 넣는다 — 질풍노도 등은 이 레벨을 읽는다.
     var doc = read("l05");
     var raw = doc.path("raw").deepCopy();

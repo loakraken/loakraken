@@ -40,7 +40,8 @@ class BraceletRealServiceTest {
 
   private static JsonNode read(String id) throws IOException {
     return MAPPER.readTree(
-        new ClassPathResource("kraken-score/" + id + ".json").getContentAsString(StandardCharsets.UTF_8));
+        new ClassPathResource("kraken-score/" + id + ".json")
+            .getContentAsString(StandardCharsets.UTF_8));
   }
 
   /** 고정 자료 원문의 직업·아크 패시브 효과 설명으로 캐릭터 결과를 만든다(역할 판정 근거). */
@@ -67,7 +68,12 @@ class BraceletRealServiceTest {
             List.of());
     var loadout =
         new CharacterLoadout(
-            List.of(), null, null, null, new CharacterLoadout.ArkPassive("", true, List.of(), effects), null);
+            List.of(),
+            null,
+            null,
+            null,
+            new CharacterLoadout.ArkPassive("", true, List.of(), effects),
+            null);
     return new CharacterResult(
         CharacterTestFixture.details(profile, loadout, List.of()), Instant.EPOCH, null, input);
   }
@@ -89,7 +95,9 @@ class BraceletRealServiceTest {
     assertThat(real.status()).as(id).isEqualTo(BraceletRealEfficiency.Status.OK);
     assertThat(real.role()).as(id).isEqualTo(role);
     assertThat(real.percent()).as(id).isEqualTo(new BigDecimal(expected));
-    assertThat(real.devilDamagePercent()).as(id + " 악마 피해").isEqualTo(devil == null ? null : new BigDecimal(devil));
+    assertThat(real.devilDamagePercent())
+        .as(id + " 악마 피해")
+        .isEqualTo(devil == null ? null : new BigDecimal(devil));
     assertThat(real.ruleVersion()).isEqualTo(BraceletRealEfficiency.RULE_VERSION);
   }
 
@@ -106,7 +114,17 @@ class BraceletRealServiceTest {
         new CharacterResult(
             CharacterTestFixture.details(
                 new CharacterProfile(
-                    "표본", "서버", "바드", 70, new BigDecimal("1700"), null, null, null, null, null, List.of()),
+                    "표본",
+                    "서버",
+                    "바드",
+                    70,
+                    new BigDecimal("1700"),
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    List.of()),
                 new CharacterLoadout(List.of(), null, null, null, null, null),
                 List.of()),
             Instant.EPOCH,

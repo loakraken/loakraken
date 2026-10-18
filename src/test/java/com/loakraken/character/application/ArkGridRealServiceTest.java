@@ -38,7 +38,8 @@ class ArkGridRealServiceTest {
 
   private static JsonNode read(String id) throws IOException {
     return MAPPER.readTree(
-        new ClassPathResource("kraken-score/" + id + ".json").getContentAsString(StandardCharsets.UTF_8));
+        new ClassPathResource("kraken-score/" + id + ".json")
+            .getContentAsString(StandardCharsets.UTF_8));
   }
 
   /** 고정 자료 원문의 직업·아크 패시브 효과 설명으로 캐릭터 정보를 만든다(역할 판정 근거). */
@@ -65,14 +66,23 @@ class ArkGridRealServiceTest {
             List.of());
     var loadout =
         new CharacterLoadout(
-            List.of(), null, null, null, new CharacterLoadout.ArkPassive("", true, List.of(), effects), null);
+            List.of(),
+            null,
+            null,
+            null,
+            new CharacterLoadout.ArkPassive("", true, List.of(), effects),
+            null);
     return CharacterTestFixture.details(profile, loadout, List.of());
   }
 
   private static void assertPercent(String what, JsonNode expected, BigDecimal actual) {
     if (expected == null || expected.isNull() || expected.isMissingNode())
       assertThat(actual).as(what).isNull();
-    else assertThat(actual).as(what).isNotNull().isEqualByComparingTo(BigDecimal.valueOf(expected.asDouble()));
+    else
+      assertThat(actual)
+          .as(what)
+          .isNotNull()
+          .isEqualByComparingTo(BigDecimal.valueOf(expected.asDouble()));
   }
 
   @ParameterizedTest
@@ -98,8 +108,14 @@ class ArkGridRealServiceTest {
     for (var series : real.series()) {
       var want = expected.path(series.series());
       assertPercent(id + " " + series.series(), want.path("efficiency"), series.percent());
-      assertPercent(id + " " + series.series() + " 옵션", want.path("optionEfficiency"), series.optionsPercent());
-      assertPercent(id + " " + series.series() + " 포인트", want.path("pointEfficiency"), series.pointsPercent());
+      assertPercent(
+          id + " " + series.series() + " 옵션",
+          want.path("optionEfficiency"),
+          series.optionsPercent());
+      assertPercent(
+          id + " " + series.series() + " 포인트",
+          want.path("pointEfficiency"),
+          series.pointsPercent());
       assertThat(series.options()).hasSize(want.path("lines").size());
       for (int i = 0; i < series.options().size(); i++)
         assertPercent(
@@ -126,7 +142,17 @@ class ArkGridRealServiceTest {
     var bard =
         CharacterTestFixture.details(
             new CharacterProfile(
-                "표본", "서버", "바드", 70, new BigDecimal("1700"), null, null, null, null, null, List.of()),
+                "표본",
+                "서버",
+                "바드",
+                70,
+                new BigDecimal("1700"),
+                null,
+                null,
+                null,
+                null,
+                null,
+                List.of()),
             new CharacterLoadout(List.of(), null, null, null, null, null),
             List.of());
     assertThat(SERVICE.compute(bard, KrakenScoreInputMapper.from(raw)).reasonCode())

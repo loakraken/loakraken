@@ -51,6 +51,14 @@ public record ArkGridRealEfficiency(
 
   public static ArkGridRealEfficiency unsupported(String reasonCode, String reason) {
     return new ArkGridRealEfficiency(
-        Status.UNSUPPORTED, reasonCode, reason, null, null, null, List.of(), List.of(), RULE_VERSION);
+        Status.UNSUPPORTED,
+        reasonCode,
+        reason,
+        null,
+        null,
+        null,
+        List.of(),
+        List.of(),
+        RULE_VERSION);
   }
 }

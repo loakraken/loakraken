@@ -12,8 +12,8 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.node.ObjectNode;
 
 /**
- * 팔찌 실 효율: 캐시된 크라켄 점수 입력(#559)으로 원본 정보 탭의 팔찌 % 함수를 돌린다. 딜러는 팔찌 총배율 하나, 서포터는 점수 두 번이라 1ms 안팎이어서 응답
- * 때 계산한다. 공식 호출이 없다. 원본 화면 설정 '악마 피해'(기본 꺼짐)를 켠 딜러 값도 함께 낸다.
+ * 팔찌 실 효율: 캐시된 크라켄 점수 입력(#559)으로 원본 정보 탭의 팔찌 % 함수를 돌린다. 딜러는 팔찌 총배율 하나, 서포터는 점수 두 번이라 1ms 안팎이어서 응답 때
+ * 계산한다. 공식 호출이 없다. 원본 화면 설정 '악마 피해'(기본 꺼짐)를 켠 딜러 값도 함께 낸다.
  */
 @Service
 public class BraceletRealService {

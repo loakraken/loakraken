@@ -31,8 +31,8 @@ public final class KrakenScoreBracelet {
   }
 
   /**
-   * 팔찌 총배율. devil = 원본 정보 탭 설정 '악마 피해'(12921 sh의 bangleDevilDamageEnabled → 35231 devilDamageEnabled): 켜면 진피 비에
-   * 팔찌 옵션의 악마 피해 배율을 더 곱한다. 점수(d6)는 늘 꺼진 값이다.
+   * 팔찌 총배율. devil = 원본 정보 탭 설정 '악마 피해'(12921 sh의 bangleDevilDamageEnabled → 35231
+   * devilDamageEnabled): 켜면 진피 비에 팔찌 옵션의 악마 피해 배율을 더 곱한다. 점수(d6)는 늘 꺼진 값이다.
    */
   public static double total(JsonNode e, KrakenScoreEngine.Tables tables, boolean devil) {
     var n = bangle(e);

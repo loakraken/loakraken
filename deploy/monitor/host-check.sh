@@ -76,6 +76,14 @@ if mkdir -p "$TEXTFILE_DIR" 2>/dev/null; then
     for svc in "${!svc_restarts[@]}"; do
       printf 'loakraken_container_restarts{service="%s"} %s\n' "$svc" "${svc_restarts[$svc]}"
     done | sort
+    # node-exporter는 호스트 / 를 붙이지 않으므로(파일 시스템 수집 끔) 루트 디스크 크기·여유를 여기서 넘긴다.
+    df -PB1 / | awk 'NR==2{
+      print "# HELP loakraken_root_disk_size_bytes 루트(/) 파일 시스템 크기(서버 점검 스크립트)"
+      print "# TYPE loakraken_root_disk_size_bytes gauge"
+      print "loakraken_root_disk_size_bytes " $2
+      print "# HELP loakraken_root_disk_avail_bytes 루트(/) 파일 시스템 남은 공간(서버 점검 스크립트)"
+      print "# TYPE loakraken_root_disk_avail_bytes gauge"
+      print "loakraken_root_disk_avail_bytes " $4 }'
   } > "$TEXTFILE_DIR/loakraken.prom.tmp" && mv "$TEXTFILE_DIR/loakraken.prom.tmp" "$TEXTFILE_DIR/loakraken.prom"
 fi
 

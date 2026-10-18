@@ -1240,7 +1240,7 @@
     {
       "type": "stat",
       "title": "디스크 사용(/)",
-      "description": "",
+      "description": "서버 점검 스크립트(5분)가 텍스트 파일로 넘긴 값.",
       "id": 27,
       "datasource": {
         "type": "prometheus",
@@ -1294,7 +1294,7 @@
             "type": "prometheus",
             "uid": "loakraken-prometheus"
           },
-          "expr": "1 - node_filesystem_avail_bytes{mountpoint=\"/\",fstype!=\"rootfs\"} / node_filesystem_size_bytes{mountpoint=\"/\",fstype!=\"rootfs\"}",
+          "expr": "1 - max(loakraken_root_disk_avail_bytes) / max(loakraken_root_disk_size_bytes)",
           "instant": true
         }
       ]

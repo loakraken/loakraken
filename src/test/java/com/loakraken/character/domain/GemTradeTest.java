@@ -13,8 +13,7 @@ class GemTradeTest {
     // 이름에 표시가 없어도 거래 줄이 귀속이면 귀속(이번 버그).
     assertThat(GemTrade.bound(gem("8레벨 겁화의 보석", List.of("캐릭터 귀속됨")))).isTrue();
     assertThat(GemTrade.bound(gem("8레벨 겁화의 보석", List.of("거래 불가")))).isTrue();
-    assertThat(GemTrade.bound(gem("8레벨 겁화의 보석", List.of("원정대 귀속됨", "거래 불가"))))
-        .isTrue();
+    assertThat(GemTrade.bound(gem("8레벨 겁화의 보석", List.of("원정대 귀속됨", "거래 불가")))).isTrue();
     assertThat(GemTrade.bound(gem("8레벨 겁화의 보석", List.of("거래불가")))).isTrue();
   }
 

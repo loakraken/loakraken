@@ -817,10 +817,7 @@ class SpecUpIntegrationTest {
     assertThat(gem.at("/cost/code").asText()).isEqualTo("GEM_BUY_BOUND");
     assertThat(gem.at("/cost/amount").asLong()).isEqualTo(1_000_000);
     // 줄 상세도 파는 줄 없이 사는 줄만.
-    var market =
-        mapper
-            .readTree(detail("GEM_LEVEL:0:9", "스펙거래줄귀속").body())
-            .at("/data/market");
+    var market = mapper.readTree(detail("GEM_LEVEL:0:9", "스펙거래줄귀속").body()).at("/data/market");
     assertThat(market).hasSize(1);
     assertThat(market.at("/0/role").asText()).isEqualTo("BUY");
   }

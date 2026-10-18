@@ -44,7 +44,8 @@ class SpecUpDetailMismatchTest {
 
   SpecUpDetailMismatchTest() {
     when(specUp.enabled()).thenReturn(true);
-    when(simulator.snapshot(anyString())).thenReturn(mock(CharacterResult.class, RETURNS_DEEP_STUBS));
+    when(simulator.snapshot(anyString()))
+        .thenReturn(mock(CharacterResult.class, RETURNS_DEEP_STUBS));
     // 목록: 빈 칸 10레벨 겁화, 비용 = 그때 즉시 구매 최저가 3,000,000.
     when(specUp.guide(any(CharacterResult.class), any(), anyInt()))
         .thenReturn(guide(SpecUpCost.gem(3_000_000, null, false)));

@@ -485,8 +485,8 @@ public class StatsQueryService {
   }
 
   /**
-   * 수집품(내실) 랭킹(#295, 볼트 「랭킹 확장 설계 초안」 v1). 조건 중 server·activeDays만 쓴다. 모집단은 원정대(또는 캐릭터 행) 수이고, 30
-   * 미만이면 sampleStatus=COLLECTING이지만 값·순위는 그대로 준다(참고값 원칙).
+   * 수집품(내실) 랭킹(#295). 조건 중 server·activeDays만 쓴다. 모집단은 원정대(또는 캐릭터 행) 수이고, 30 미만이면
+   * sampleStatus=COLLECTING이지만 값·순위는 그대로 준다(참고값 원칙).
    */
   public CollectibleRankingResult collectibleRanking(
       StatsConditions conditions, boolean characterUnit, int page, int size) {
@@ -536,7 +536,7 @@ public class StatsQueryService {
   }
 
   /**
-   * 원정대 랭킹(#297, 볼트 「랭킹 확장 설계 초안」 v1 2절). 조건 중 server·activeDays만 쓴다. 모집단은 순위에 든 원정대 수이고, 30 미만이면
+   * 원정대 랭킹(#297). 조건 중 server·activeDays만 쓴다. 모집단은 순위에 든 원정대 수이고, 30 미만이면
    * sampleStatus=COLLECTING이지만 값·순위는 그대로 준다(참고값 원칙). 값은 소수 둘째 자리(HALF_UP)다.
    */
   public RosterRankingResult rosterRanking(
@@ -589,8 +589,7 @@ public class StatsQueryService {
   }
 
   /**
-   * 캐릭터 기준 수집품 순위(#303, 볼트 「수집품 순위·보유율 설계 메모」 1절). 순위 모집단은 수집품 랭킹과 같다. 30 미만이면 topPercent는 null(기존
-   * 순위 조회와 같음)이고 rank는 그대로 준다.
+   * 캐릭터 기준 수집품 순위(#303). 순위 모집단은 수집품 랭킹과 같다. 30 미만이면 topPercent는 null(기존 순위 조회와 같음)이고 rank는 그대로 준다.
    */
   public CollectibleStandingResult collectibleStanding(
       StatsConditions conditions, String characterName, boolean characterUnit) {
@@ -632,8 +631,8 @@ public class StatsQueryService {
   public static final int GUILD_MIN_MEMBERS = 5;
 
   /**
-   * 길드 랭킹(#301, 볼트 「랭킹 확장 설계 초안」 v1 3절). 조건 중 server·activeDays만 쓴다. 모집단은 순위에 든 길드 수이고, 30 미만이면
-   * sampleStatus=COLLECTING이지만 값·순위는 그대로 준다(참고값 원칙). 값은 소수 둘째 자리(HALF_UP)다.
+   * 길드 랭킹(#301). 조건 중 server·activeDays만 쓴다. 모집단은 순위에 든 길드 수이고, 30 미만이면 sampleStatus=COLLECTING이지만
+   * 값·순위는 그대로 준다(참고값 원칙). 값은 소수 둘째 자리(HALF_UP)다.
    */
   public GuildRankingResult guildRanking(
       StatsConditions conditions, StatsPort.GuildSort sort, int page, int size, String guild) {
@@ -691,8 +690,8 @@ public class StatsQueryService {
   }
 
   /**
-   * 수집품 항목별 보유율(#305, 볼트 「수집품 순위·보유율 설계 메모」 2절). 조건 중 server·activeDays만 쓴다. 분모 N은 관측 원정대 수이고, 30
-   * 미만이면 sampleStatus=COLLECTING이지만 비율은 그대로 준다(참고값). N이 0이면 비율은 null.
+   * 수집품 항목별 보유율(#305). 조건 중 server·activeDays만 쓴다. 분모 N은 관측 원정대 수이고, 30 미만이면
+   * sampleStatus=COLLECTING이지만 비율은 그대로 준다(참고값). N이 0이면 비율은 null.
    *
    * <p>전체 종류 결과 하나를 조건별로 캐시하고, type은 그 결과에서 고른다(type마다 다시 집계하지 않음). 기본 조건은 예열 작업이 캐시가 끝나기 전에 다시
    * 채운다(원정대 1만 개에서 전체 집계 약 0.4초, PM-백엔드 300ms 조건).

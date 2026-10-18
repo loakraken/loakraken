@@ -27,8 +27,8 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * 수집품(내실) 랭킹(#295, 볼트 「랭킹 확장 설계 초안」 v1). 웹 화면이 준비될 때까지 기본 꺼짐(ranking.collectibles.enabled). 공식 API를
- * 부르지 않고 관측 DB에서 집계해 조건별로 10분 캐시한다.
+ * 수집품(내실) 랭킹(#295). 웹 화면이 준비될 때까지 기본 꺼짐(ranking.collectibles.enabled). 공식 API를 부르지 않고 관측 DB에서 집계해
+ * 조건별로 10분 캐시한다.
  */
 @ConditionalOnProperty(prefix = "ranking.collectibles", name = "enabled", havingValue = "true")
 @RestController

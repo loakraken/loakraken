@@ -16,7 +16,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.TransactionException;
 
 /**
- * 원정대 캐릭터별 전투력(L19, 볼트 「원정대 캐릭터별 전투력 설계 (L19)」).
+ * 원정대 캐릭터별 전투력(L19).
  *
  * <p>조회는 원정대 목록 캐시(/siblings와 같은 캐시, 없으면 공식 1회)와 우리 DB 기록만 쓴다. 불러오기는 사용자가 누를 때만, 기록이 없거나 오래된(기본
  * 24시간) 캐릭터를 아이템 레벨 높은 순으로 최대 12명 공식 프로필 API(전투력 포함, 2026-10-12 확인)로 부르고 검색과 같은 기록 경로로 저장한다. 같은

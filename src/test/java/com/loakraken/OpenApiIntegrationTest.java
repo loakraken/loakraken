@@ -226,6 +226,23 @@ class OpenApiIntegrationTest {
                   .asText())
           .as(field)
           .isEqualTo("null");
+    // 스펙업 Δ크라켄 점수(KRAKEN 정렬): 새 필드는 required이고 값이 없을 수 있는 것은 nullable(웹은 배포 전까지 optional).
+    for (var field : List.of("krakenScore", "krakenRuleVersion", "krakenSortUnavailableReason"))
+      assertThat(
+              document
+                  .at("/components/schemas/SpecUpResponse/properties/" + field + "/anyOf/1/type")
+                  .asText())
+          .as(field)
+          .isEqualTo("null");
+    for (var field : List.of("deltaKrakenScore", "krakenScorePer100kGold", "gemType"))
+      assertThat(
+              document
+                  .at("/components/schemas/CandidateResponse/properties/" + field + "/anyOf/1/type")
+                  .asText())
+          .as(field)
+          .isEqualTo("null");
+    assertThat(document.at("/components/schemas/SpecUpResponse/required").toString())
+        .contains("cooldownGemsIncluded");
     // 스펙업 목표 경로(L31): 새 경로, 모든 필드 required, 값이 없을 수 있는 필드만 nullable.
     assertThat(document.at("/paths/~1api~1v1~1characters~1spec-up~1goal/get").isMissingNode())
         .isFalse();

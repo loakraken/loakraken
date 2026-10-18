@@ -121,7 +121,10 @@ class SpecUpDetailMismatchTest {
             null,
             true,
             BigDecimal.ZERO,
-            new BigDecimal("1.20"));
+            new BigDecimal("1.20"),
+            null,
+            null,
+            "DAMAGE");
     return new SpecUpService.Guide(
         "캐릭터",
         "서버",
@@ -134,6 +137,10 @@ class SpecUpDetailMismatchTest {
         "DELTA",
         Integer.MAX_VALUE,
         1,
-        List.of(candidate));
+        List.of(candidate),
+        null,
+        null,
+        true,
+        "DISABLED");
   }
 }

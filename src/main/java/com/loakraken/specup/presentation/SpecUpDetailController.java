@@ -202,7 +202,7 @@ public class SpecUpDetailController {
           String icon,
       @Schema(description = "공식 등급 문자열(모르면 null)") @NullableResponse String grade,
       @Schema(description = "1개 즉시 구매 최저가(골드)", example = "412000") long price,
-      @Schema(description = "필요한 개수(보석 1, 유물 각인서 5)", example = "1") int quantity,
+      @Schema(description = "필요한 개수(보석 1, 유물 각인서 5 × 올리는 레벨 수)", example = "1") int quantity,
       @Schema(description = "SELL만: 판매 기대가 = 최저가 − 거래소 수수료 5%(1골드 미만 올림)") @NullableResponse
           Long expectedSalePrice,
       @Schema(description = "매물 수(보석만, 모르면 null)") @NullableResponse Long listedCount,

@@ -107,6 +107,9 @@ class AuctionBoardIntegrationTest {
     assertThat(listings.path("totalCount").asLong()).isEqualTo(25);
     assertThat(listings.at("/items/0/options/0/className").asText()).isEqualTo("건슬링어");
     assertThat(listings.at("/items/0/options/0/level").isNull()).isTrue();
+    // 공식 Icon이 매물 응답까지 온다(#609), 없으면 null.
+    assertThat(listings.at("/items/0/icon").asText()).isEqualTo(ICON);
+    assertThat(listings.at("/items/1/icon").isNull()).isTrue();
   }
 
   @Test
@@ -132,6 +135,7 @@ class AuctionBoardIntegrationTest {
 
     var listings =
         data("/api/v1/markets/auctions/accessories/listings?slot=NECKLACE&levels=HIGH,HIGH");
+    assertThat(listings.at("/items/0/icon").asText()).isEqualTo(ICON);
     var option = listings.at("/items/0/options/0");
     assertThat(option.path("name").asText()).isEqualTo("적에게 주는 피해 증가");
     assertThat(option.path("level").asText()).isEqualTo("HIGH");
@@ -265,6 +269,10 @@ class AuctionBoardIntegrationTest {
     // 운영에서 몫 거절과 캐시 응답을 셀 수 있다.
     assertThat(gemFilter("cache_hit") - hitsBefore).isGreaterThanOrEqualTo(1);
     assertThat(gemFilter("quota_reject") - rejectsBefore).isEqualTo(1);
+    // 보안 점검 10-18: 거절된 요청은 공용 몫 카운터를 올리지 않는다(10 그대로).
+    for (long value = minute - 1; value <= minute + 1; value++)
+      assertThat(redis.opsForValue().get("market:v1:auction-gem-filter-quota:" + value))
+          .isEqualTo("10");
   }
 
   private double gemFilter(String event) {
@@ -426,6 +434,8 @@ class AuctionBoardIntegrationTest {
     verifyNoInteractions(search);
   }
 
+  private static final String ICON = "https://cdn.example/auction_item.png";
+
   private static AuctionPage page(AuctionQuery query) {
     var now = Instant.now();
     var options =
@@ -440,8 +450,8 @@ class AuctionBoardIntegrationTest {
     return new AuctionPage(
         25,
         List.of(
-            new AuctionListing("매물", "고대", 73, 2_500_000L, 0L, 2_500_000L, now, 0, options),
-            new AuctionListing("매물", "고대", 80, 2_600_000L, 0L, 2_600_000L, now, 1, options)),
+            new AuctionListing("매물", "고대", 73, 2_500_000L, 0L, 2_500_000L, now, 0, options, ICON),
+            new AuctionListing("매물", "고대", 80, 2_600_000L, 0L, 2_600_000L, now, 1, options, null)),
         now);
   }
 

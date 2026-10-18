@@ -6,6 +6,10 @@ package com.loakraken.character.domain;
  * 불가'(귀속), '거래가능'·'거래 3회 가능'(거래 가능).
  */
 public final class GemTrade {
+  /** 공백을 모두 뺀 거래 줄 전체가 이 꼴이면 귀속. '귀속 시 거래 불가' 같은 조건 문구는 귀속이 아니다(코드 리뷰 P2). */
+  private static final java.util.regex.Pattern BOUND_LINE =
+      java.util.regex.Pattern.compile("(캐릭터|원정대)?귀속됨|거래불가");
+
   private GemTrade() {}
 
   public static boolean bound(CharacterLoadout.Gem gem) {
@@ -13,8 +17,9 @@ public final class GemTrade {
     if (gem.name() != null && gem.name().contains("(귀속)")) return true;
     for (var line : gem.tradeLines()) {
       if (line == null) continue;
-      var compact = line.replace(" ", "");
-      if (compact.contains("귀속됨") || compact.contains("거래불가")) return true;
+      // 탭·줄 바꿈 없는 공백(U+00A0)까지 뺀다.
+      var compact = line.replaceAll("[\\s\\u00A0]+", "");
+      if (BOUND_LINE.matcher(compact).matches()) return true;
     }
     return false;
   }

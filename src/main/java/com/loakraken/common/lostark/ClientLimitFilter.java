@@ -42,6 +42,17 @@ class ClientLimitFilter extends OncePerRequestFilter {
   protected void doFilterInternal(
       HttpServletRequest request, HttpServletResponse response, FilterChain chain)
       throws ServletException, IOException {
+    // 거절 로그용 경로 힌트(자원명까지만, #616). 요청이 끝나면 지운다.
+    limiter.enterRoute(request.getMethod(), path(request));
+    try {
+      limit(request, response, chain);
+    } finally {
+      limiter.exitRoute();
+    }
+  }
+
+  private void limit(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
+      throws ServletException, IOException {
     if ("1".equals(request.getHeader(BOT_HEADER))) {
       // 봇 표시는 User-Agent로 붙어 흉내 낼 수 있다. 그래서 봇 칸은 일반 칸보다 느슨하면 안 된다(PM-백엔드 #151 P1): 주소별 BOT
       // 한도(≤ GENERAL)에 통계 경로는 그 주소의 STATS도 센다. 주소별로 세므로 한 주소가 다른 봇 주소를 막지 못한다.

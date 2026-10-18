@@ -214,6 +214,7 @@ public record CharacterResponse(
                   tier.nextCode(),
                   tier.nextMin(),
                   tier.remaining(),
+                  tier.remainingRounded(),
                   tier.progressPercent()),
           value.factors().stream()
               .map(
@@ -250,6 +251,12 @@ public record CharacterResponse(
       @Schema(description = "다음 티어까지 남은 점수(소수 둘째 자리). 최상위면 null", example = "1041.38")
           @NullableResponse
           BigDecimal remaining,
+      @Schema(
+              description =
+                  "다음 티어까지 남은 점수를 정수로(화면용). 원본 화면과 같이 위 remaining(소수 둘째 자리)을 다시 .5는 위로 정수 반올림한 값(예: 242.497 → 242.50 → 243). 화면은 이 값을 그대로 쓴다. 최상위면 null",
+              example = "1041")
+          @NullableResponse
+          Integer remainingRounded,
       @Schema(description = "이 티어 안 진행률(정수, 내림). 최상위면 100", example = "38") int progressPercent) {}
 
   public record KrakenScoreFactorResponse(

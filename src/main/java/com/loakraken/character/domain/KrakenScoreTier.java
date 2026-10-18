@@ -24,19 +24,24 @@ public final class KrakenScoreTier {
 
   public record Cut(String code, BigDecimal min) {}
 
-  /** nextCode·nextMin·remaining은 최상위면 null. */
+  /**
+   * nextCode·nextMin·remaining·remainingRounded는 최상위면 null. remainingRounded는 화면이 보이는 정수 남은 점수로, 원본
+   * 화면처럼 둘째 자리로 반올림한 remaining을 다시 정수로 반올림한 값이다(원본 Number(x.toFixed(2)).toFixed(0) — 웹이 따로 반올림하지 않게
+   * 서버가 준다).
+   */
   public record Tier(
       String code,
       BigDecimal min,
       String nextCode,
       BigDecimal nextMin,
       BigDecimal remaining,
+      Integer remainingRounded,
       int progressPercent) {}
 
   /**
    * 점수(반올림 전 double)의 티어. 원본처럼 double로 계산한다: 남은 점수는 (다음 컷 − 점수)를 double로 뺀 뒤 그 값을 정확한 십진수로 바꿔 둘째 자리
-   * 반올림(toFixed(2)와 같음), 진행률은 ⌊(점수 − 현재 컷) ÷ (다음 컷 − 현재 컷) × 100⌋. 음수·NaN·무한대는 티어가 없다(호출하는 쪽이 먼저
-   * 거름).
+   * 반올림(toFixed(2)와 같음), 정수 남은 점수는 그 둘째 자리 값을 다시 .5는 위로 정수 반올림(원본 화면과 같은 두 번 반올림), 진행률은 ⌊(점수 − 현재
+   * 컷) ÷ (다음 컷 − 현재 컷) × 100⌋. 음수·NaN·무한대는 티어가 없다(호출하는 쪽이 먼저 거름).
    */
   public static Tier of(Table table, double score) {
     if (!Double.isFinite(score) || score < 0)
@@ -46,7 +51,7 @@ public final class KrakenScoreTier {
     for (int i = 0; i < tiers.size(); i++) if (score >= tiers.get(i).min().doubleValue()) index = i;
     var current = tiers.get(index);
     if (index == tiers.size() - 1)
-      return new Tier(current.code(), current.min(), null, null, null, 100);
+      return new Tier(current.code(), current.min(), null, null, null, null, 100);
     var next = tiers.get(index + 1);
     double from = current.min().doubleValue();
     double to = next.min().doubleValue();
@@ -56,7 +61,21 @@ public final class KrakenScoreTier {
         current.min(),
         next.code(),
         next.min(),
-        new BigDecimal(to - score).setScale(2, RoundingMode.HALF_UP),
+        remaining(to - score),
+        screenInteger(to - score),
         Math.max(0, Math.min(progress, 100)));
+  }
+
+  /**
+   * 남은 점수 둘째 자리: double의 정확한 십진 값을 반올림(JS toFixed(2)와 같음 — BigDecimal.valueOf는 짧은 표기라 1.005 같은 값에서
+   * 다름).
+   */
+  static BigDecimal remaining(double diff) {
+    return new BigDecimal(diff).setScale(2, RoundingMode.HALF_UP);
+  }
+
+  /** 화면 정수 남은 점수: 둘째 자리 값을 다시 정수로(원본 Number(diff.toFixed(2)).toFixed(0)). */
+  static int screenInteger(double diff) {
+    return remaining(diff).setScale(0, RoundingMode.HALF_UP).intValueExact();
   }
 }

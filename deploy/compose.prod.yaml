@@ -3,8 +3,9 @@
 #
 #   docker compose -f compose.prod.yaml --env-file stack.env up -d --wait
 #
-# 공개 포트는 edge(80/443)뿐이다. web·api·postgres·valkey는 호스트에 포트를 열지 않는다.
-# 망: public(edge↔web), internal(web↔api, 공식 API 호출을 위한 외부 통신 허용), data(api↔postgres·valkey, 외부 통신 차단).
+# 공개 포트는 edge(80/443)뿐이다. web·api·postgres·valkey는 호스트에 포트를 열지 않는다(모니터링 grafana만 호스트 127.0.0.1).
+# 망: public(edge↔web), internal(web↔api, 공식 API 호출을 위한 외부 통신 허용), data(api↔postgres·valkey, 외부 통신 차단),
+#     monitor(프로필 monitor: prometheus·node-exporter·grafana).
 # 비밀값은 compose secrets로 파일 마운트(/run/secrets/...)하며 환경변수·이미지·저장소에 두지 않는다.
 
 name: ${STACK_NAME:-loakraken}
@@ -241,6 +242,8 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-loakraken}
       POSTGRES_USER: ${POSTGRES_USER:-loakraken}
       POSTGRES_PASSWORD_FILE: /run/secrets/db_password
+    # shared_buffers는 메모리 한도의 약 25%(설계: 640m 한도 → 160MB). 비우면 postgres 기본값 128MB.
+    command: ["postgres", "-c", "shared_buffers=${POSTGRES_SHARED_BUFFERS:-128MB}"]
     secrets:
       - db_password
     volumes:
@@ -294,6 +297,108 @@ services:
     security_opt:
       - no-new-privileges:true
 
+  # ── 모니터링(프로필 monitor) ─────────────────────────────────────────────
+  # stack.env에 COMPOSE_PROFILES=monitor를 넣은 서버에서만 뜬다. 공개 포트 없음(grafana만 호스트 127.0.0.1에 묶는다).
+  # 설정 디렉터리(./monitor/…)는 배포 번들과 함께 바뀌므로 pull-deploy가 배포 뒤 prometheus·grafana를 다시 만든다.
+  prometheus:
+    image: prom/prometheus:v3.13.4
+    profiles: [monitor]
+    restart: unless-stopped
+    logging: *default-logging
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=${PROMETHEUS_RETENTION_TIME:-15d}
+      - --storage.tsdb.retention.size=${PROMETHEUS_RETENTION_SIZE:-1GB}
+    volumes:
+      - ./monitor/prometheus:/etc/prometheus:ro
+      - prometheus-data:/prometheus
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:9090/-/ready"]
+      interval: 15s
+      timeout: 5s
+      start_period: 20s
+      retries: 5
+    mem_limit: ${PROMETHEUS_MEM_LIMIT:-384m}
+    networks:
+      # internal: api 관리 포트(9090)에 닿기 위해. monitor: grafana·node-exporter와 이어진다.
+      - internal
+      - monitor
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+  node-exporter:
+    image: prom/node-exporter:v1.12.1
+    profiles: [monitor]
+    restart: unless-stopped
+    logging: *default-logging
+    command:
+      - --path.rootfs=/host
+      # 서버 점검 스크립트(host-check)가 컨테이너 재시작 수를 이 디렉터리에 텍스트 파일로 남긴다.
+      - --collector.textfile.directory=/host/var/lib/node_exporter/textfile
+    volumes:
+      # 루트 디스크 사용량과 텍스트 파일만 읽는다. 나중에 붙는 마운트까지 볼 일이 없어 rslave 없이 읽기 전용으로만 붙인다.
+      - /:/host:ro
+    mem_limit: ${NODE_EXPORTER_MEM_LIMIT:-48m}
+    networks:
+      - monitor
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+  grafana:
+    image: grafana/grafana:13.2.4
+    profiles: [monitor]
+    restart: unless-stopped
+    logging: *default-logging
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD__FILE: /run/secrets/grafana_admin_password
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_USERS_ALLOW_ORG_CREATE: "false"
+      GF_AUTH_BASIC_ENABLED: "false"
+      GF_SECURITY_COOKIE_SECURE: "${GRAFANA_COOKIE_SECURE:-false}"
+      GF_SECURITY_DISABLE_GRAVATAR: "true"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_ANALYTICS_CHECK_FOR_PLUGIN_UPDATES: "false"
+      GF_NEWS_NEWS_FEED_ENABLED: "false"
+      GF_PLUGINS_PREINSTALL_DISABLED: "true"
+      # 경보 메시지의 링크 주소. 접속 방법(SSH 터널 / 터널+Access)에 맞춰 stack.env에서 바꾼다.
+      GF_SERVER_ROOT_URL: "${GRAFANA_ROOT_URL:-http://localhost:3000}"
+    secrets:
+      - grafana_admin_password
+      - slack_webhook_alerts
+    volumes:
+      - ./monitor/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitor/grafana/dashboards/loakraken:/var/lib/grafana/dashboards/loakraken:ro
+      # 공개 대시보드(fetch-dashboards.sh가 받아 둔 것). 번들 밖 스택 디렉터리라 배포로 바뀌지 않는다.
+      - ./grafana-dashboards:/var/lib/grafana/dashboards/external:ro
+      - grafana-data:/var/lib/grafana
+    ports:
+      # 서버 안에서만(SSH 터널용). 인터넷에 열지 않는다.
+      - "127.0.0.1:${GRAFANA_HOST_PORT:-3000}:3000"
+    depends_on:
+      prometheus:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:3000/api/health"]
+      interval: 15s
+      timeout: 5s
+      start_period: 30s
+      retries: 5
+    mem_limit: ${GRAFANA_MEM_LIMIT:-384m}
+    networks:
+      # 경보를 Slack으로 보내야 해서 외부 통신이 되는 망.
+      - monitor
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
 secrets:
   db_password:
     file: ${SECRETS_DIR:?SECRETS_DIR가 필요합니다(스택별 경로, 예 /opt/loakraken/production/secrets)}/db_password
@@ -303,6 +408,11 @@ secrets:
     file: ${SECRETS_DIR:?SECRETS_DIR가 필요합니다}/lostark_api_key
   roster_marker_secret:
     file: ${SECRETS_DIR:?SECRETS_DIR가 필요합니다}/roster_marker_secret
+  # 모니터링(프로필 monitor)만 쓴다. 프로필을 켜지 않은 서버는 이 파일이 없어도 된다.
+  grafana_admin_password:
+    file: ${SECRETS_DIR:?SECRETS_DIR가 필요합니다}/grafana_admin_password
+  slack_webhook_alerts:
+    file: ${SECRETS_DIR:?SECRETS_DIR가 필요합니다}/slack_webhook_alerts
 
 networks:
   # edge ↔ web만 연결한다.
@@ -315,9 +425,13 @@ networks:
   # api↔postgres·valkey. 외부 통신이 없는 망(DB·캐시는 인터넷에 나가지 않는다).
   data:
     internal: true
+  # 모니터링(프로필 monitor): prometheus·node-exporter·grafana. grafana가 Slack으로 경보를 보내야 해서 외부 통신을 막지 않는다.
+  monitor:
 
 volumes:
   edge-data:
   edge-config:
   postgres-data:
   valkey-data:
+  prometheus-data:
+  grafana-data:

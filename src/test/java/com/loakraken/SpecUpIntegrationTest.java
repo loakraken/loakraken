@@ -640,7 +640,7 @@ class SpecUpIntegrationTest {
     ApiContractFixture.write("character-spec-up-goal.json", response.body());
     SiteNames.assertAbsent(response.body());
     var data = mapper.readTree(response.body()).path("data");
-    assertThat(data.path("ruleVersion").asText()).isEqualTo("spec-up-goal-v1");
+    assertThat(data.path("ruleVersion").asText()).isEqualTo("spec-up-goal-v2");
     assertThat(data.path("combatPower").decimalValue()).isEqualByComparingTo("3000.00");
     assertThat(data.path("targetCombatPower").decimalValue()).isEqualByComparingTo("3100.00");
     assertThat(data.path("stopReasonCode").asText()).isEqualTo("REACHED");
@@ -659,12 +659,14 @@ class SpecUpIntegrationTest {
     assertThat(first.path("cumulativeCost").asLong()).isEqualTo(600_000);
     assertThat(first.at("/change/kind").asText()).isEqualTo("GEM_LEVEL");
     assertThat(first.at("/change/level").asInt()).isEqualTo(9);
-    // 같은 칸 둘째 단계: 10레벨 3,000,000 − 9레벨 1,000,000. 합 2,600,000 = 10레벨 매입가 − 8레벨 최저가(400,000).
+    // 같은 칸 둘째 단계: 지금(8레벨 400,000)에서 10레벨까지 누적 3,000,000 − 400,000 = 2,600,000(목록 GEM_LEVEL:0:10과
+    // 같음).
+    // 경로 합계에는 그 칸의 마지막 누적만 들어간다(600,000 + 2,600,000이 아님).
     var second = steps.get(1);
     assertThat(second.path("candidateId").asText()).isEqualTo("GEM_LEVEL:0:10");
     assertThat(second.path("from").asText()).isEqualTo("9레벨");
-    assertThat(second.at("/cost/code").asText()).isEqualTo("GEM_STEP");
-    assertThat(second.at("/cost/amount").asLong()).isEqualTo(2_000_000);
+    assertThat(second.at("/cost/code").asText()).isEqualTo("GEM_UPGRADE");
+    assertThat(second.at("/cost/amount").asLong()).isEqualTo(2_600_000);
     assertThat(second.path("cumulativeCost").asLong()).isEqualTo(3_000_000 - 400_000);
     // 보석 8→10 한 번에 넣은 시뮬레이터 값(48.07)과 같다.
     assertThat(second.path("combatPowerAfter").decimalValue()).isEqualByComparingTo("3048.07");
@@ -788,7 +790,8 @@ class SpecUpIntegrationTest {
                     .body())
             .path("data");
     assertThat(goal.path("totalCost").asLong()).isEqualTo(3_000_000 - 400_000);
-    assertThat(goal.at("/steps/1/cost/code").asText()).isEqualTo("GEM_STEP");
+    assertThat(goal.at("/steps/1/cost/code").asText()).isEqualTo("GEM_UPGRADE");
+    assertThat(goal.at("/steps/1/cost/amount").asLong()).isEqualTo(3_000_000 - 400_000);
 
     search("스펙광휘귀속");
     var bound =

@@ -114,8 +114,8 @@ public class SpecUpController {
       description =
           "목표 전투력에 닿을 때까지 지금 상태에서 항목마다 다음 한 단계를 만들고, 효율 순(1만 골드당 전투력, 비용을 모르는 단계는 그 뒤에 Δ전투력 순)으로 가장 앞의 단계를 적용하기를 되풀이한 경로를 줍니다. "
               + "같은 항목을 여러 단계 올릴 수 있습니다. 모든 전투력은 전투력 시뮬레이터 결과입니다(steps[].change를 차례로 시뮬레이터에 넣은 값과 같음). "
-              + "금액(cost.amount·cumulativeCost·totalCost)은 모두 골드입니다. 시세가 없는 단계가 있으면 그 단계부터 cumulativeCost와 totalCost는 null입니다(0으로 더하지 않음). "
-              + "같은 보석 칸을 이어서 올리면 둘째 단계부터 비용은 이번 레벨 매입가 − 직전 레벨 매입가(GEM_STEP)라 단계 비용의 합은 마지막 레벨 매입가 − 처음 보석 최저가입니다. "
+              + "금액(cost.amount·cumulativeCost·totalCost)은 모두 골드입니다. 합계에 들어가는 값 가운데 모르는 것이 있으면 cumulativeCost와 totalCost는 null입니다(0으로 더하지 않음 — 같은 보석 칸의 다음 단계 비용을 알면 그 칸 값은 다음 단계 것으로 바뀌어 다시 값이 생길 수 있음). "
+              + "보석 단계의 cost는 지금에서 그 레벨까지의 누적 비용(스펙업 목록의 같은 목표 후보 비용과 같은 식, 음수 없음)이고, 같은 칸을 이어서 올리면 cumulativeCost·totalCost에는 그 칸의 마지막 단계 누적만 들어갑니다(단계 비용을 더하지 않음). 단계마다 따로 구해 그 레벨 시세가 없으면 그 단계만 비용을 모릅니다. "
               + "딜러가 아니거나 공식 전투력이 없으면 200, 빈 steps, stopReasonCode에 스펙업 가이드와 같은 이유 코드를 줍니다. "
               + "최대 30단계, 계산 시간 상한이 있습니다. 같은 캐릭터 수집 시각·시세 시각·목표는 10분 동안 캐시합니다(시간 상한으로 멈춘 결과는 캐시하지 않음). "
               + "요청이 많으면 429 CLIENT_RATE_LIMITED와 Retry-After(초)를 줍니다. 503은 저장소 장애이고 Retry-After가 없으니 잠시 뒤 다시 요청합니다. "
@@ -241,10 +241,16 @@ public class SpecUpController {
       @Schema(description = "전투력 시뮬레이터 요청의 changes[] 하나와 같은 모양") ChangeResponse change,
       @Schema(description = "이 단계로 늘어난 전투력(소수 둘째 자리)") BigDecimal deltaCombatPower,
       @Schema(description = "이 단계까지 적용한 전투력(시뮬레이터)") BigDecimal combatPowerAfter,
-      @Schema(description = "이 단계 비용(골드)") CostResponse cost,
-      @Schema(description = "이 단계까지 누적 비용(골드). 앞 단계 포함 시세 없는 단계가 있으면 null") @NullableResponse
+      @Schema(description = "이 단계 비용(골드). 보석 단계는 지금에서 그 레벨까지의 누적 비용(음수 없음)") CostResponse cost,
+      @Schema(
+              description =
+                  "이 단계까지 경로 합계(골드, 보석 칸은 그 칸의 마지막 단계 누적만). 합계에 들어가는 값 가운데 모르는 것이 있으면 null")
+          @NullableResponse
           Long cumulativeCost,
-      @Schema(description = "1만 골드당 전투력(소수 둘째 자리). 비용이 OK일 때만") @NullableResponse
+      @Schema(
+              description =
+                  "1만 골드당 전투력(소수 둘째 자리) = 이 단계 Δ ÷ 이 단계에 더 드는 비용(보석은 누적 차이). 더 드는 비용이 0 이하이거나 모르면 null")
+          @NullableResponse
           BigDecimal combatPowerPer10kGold) {
     static SpecUpGoalStepResponse from(SpecUpGoalService.Step step) {
       return new SpecUpGoalStepResponse(

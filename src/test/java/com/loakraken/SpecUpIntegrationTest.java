@@ -803,6 +803,26 @@ class SpecUpIntegrationTest {
   }
 
   @Test
+  void 이름에_귀속_표시가_없어도_툴팁_거래_줄이_귀속이면_판매가를_빼지_않는다() throws Exception {
+    // #560: 이름만 보면 팔 수 있다고 보고 판매 기대가(380,000)를 빼서 620,000으로 적게 보였다.
+    when(auctions.cachedGems()).thenReturn(gemCells(true));
+    search("스펙거래줄귀속");
+    var gem =
+        find(
+            mapper
+                .readTree(
+                    get("/api/v1/characters/spec-up?characterName=" + encode("스펙거래줄귀속")).body())
+                .at("/data/candidates"),
+            "GEM_LEVEL:0:9");
+    assertThat(gem.at("/cost/code").asText()).isEqualTo("GEM_BUY_BOUND");
+    assertThat(gem.at("/cost/amount").asLong()).isEqualTo(1_000_000);
+    // 줄 상세도 파는 줄 없이 사는 줄만.
+    var market = mapper.readTree(detail("GEM_LEVEL:0:9", "스펙거래줄귀속").body()).at("/data/market");
+    assertThat(market).hasSize(1);
+    assertThat(market.at("/0/role").asText()).isEqualTo("BUY");
+  }
+
+  @Test
   void 줄_상세는_목록과_같은_후보에_보석_시세와_기본_공격력을_붙인다() throws Exception {
     // #544: 같은 캐릭터 캐시·같은 시세로 목록을 다시 만들어 찾는다(공식 호출 없음).
     when(auctions.cachedGems()).thenReturn(gemCells(true));
@@ -1141,7 +1161,13 @@ class SpecUpIntegrationTest {
                                     : "8레벨 겁화의 보석",
                                 null,
                                 8,
-                                "고대")),
+                                "고대",
+                                List.of(),
+                                null,
+                                null,
+                                null,
+                                // 이름에 표시가 없어도 공식 툴팁 거래 줄이 귀속인 보석(#560).
+                                name.contains("거래줄귀속") ? List.of("캐릭터 귀속됨") : List.of("거래가능"))),
                         new CharacterLoadout.GemEffects(
                             "기본 공격력 총합 : 0.80%",
                             List.of(

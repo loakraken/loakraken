@@ -10,8 +10,8 @@ import java.util.Map;
 import java.util.regex.Pattern;
 
 /**
- * 보석(receipt-v1). 이름에 "(귀속)"이 있으면 귀속이라 개수만 센다. 거래 가능 보석은 경매장 시세 표의 최저 즉시 구매가로 환산한다. 표에 없는 종류(광휘 등)는
- * NO_PRICE, 칸이 아직 비면 PENDING이고 금액에 넣지 않는다.
+ * 보석(receipt-v1). 이름에 "(귀속)"이 있거나 공식 툴팁 거래 줄이 귀속이면 귀속이라 개수만 센다. 거래 가능 보석은 경매장 시세 표의 최저 즉시 구매가로
+ * 환산한다. 표에 없는 종류(광휘 등)는 NO_PRICE, 칸이 아직 비면 PENDING이고 금액에 넣지 않는다.
  */
 public final class GemReceipt {
   private static final Pattern GEM = Pattern.compile("(\\d+)레벨 (\\S+)의 보석");
@@ -87,8 +87,9 @@ public final class GemReceipt {
     return new Result(List.copyOf(items), tradable, priced, bound, unpriced, gold);
   }
 
+  /** 이름의 "(귀속)" 또는 공식 툴팁 거래 줄(스펙업과 같은 판정, #560). */
   static boolean bound(CharacterLoadout.Gem gem) {
-    return gem.name() != null && gem.name().contains("(귀속)");
+    return com.loakraken.character.domain.GemTrade.bound(gem);
   }
 
   static Key key(CharacterLoadout.Gem gem) {

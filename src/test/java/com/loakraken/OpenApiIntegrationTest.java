@@ -852,6 +852,7 @@ class OpenApiIntegrationTest {
           "/api/v1/stats/distribution",
           "/api/v1/stats/snapshots",
           "/api/v1/rankings",
+          "/api/v1/rankings/class-engravings",
           "/api/v1/characters/rank"
         })
       assertThat(document.at("/paths/" + path.replace("/", "~1") + "/get").isMissingNode())

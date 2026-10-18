@@ -2,6 +2,7 @@ package com.loakraken.stats.application;
 
 import com.loakraken.common.api.BusinessException;
 import com.loakraken.stats.domain.ClassBuilds;
+import com.loakraken.stats.domain.ClassEngravingCatalog;
 import com.loakraken.stats.domain.GuildDetail;
 import com.loakraken.stats.domain.StatsConditions;
 import com.loakraken.stats.domain.StatsRules;
@@ -789,17 +790,32 @@ public class StatsQueryService {
         full.titles().stream().filter(row -> title.equals(row.title())).toList());
   }
 
-  public RankingResult ranking(StatsConditions conditions, Metric metric, int page, int size) {
+  /**
+   * classEngraving은 직업 각인 목록의 표기(컨트롤러가 검증)다. 주면 마지막 장비 요약의 직업 각인이 그 값인 캐릭터만 순위·모집단에 넣고(#618), 같은 조건에서
+   * 직업 각인을 모르는 캐릭터 수를 함께 준다.
+   */
+  public RankingResult ranking(
+      StatsConditions conditions, Metric metric, int page, int size, String classEngraving) {
     int offset = (page - 1) * size;
     if (offset > MAX_RANKING_OFFSET)
       throw new BusinessException(StatsErrorCode.STATS_INVALID_RANGE);
     return cached(
-        "ranking:" + metric + ":" + page + ":" + size + ":" + key(conditions),
+        "ranking:"
+            + metric
+            + ":"
+            + page
+            + ":"
+            + size
+            + ":"
+            + key(conditions)
+            + (classEngraving == null ? "" : ":ce=" + ClassEngravingCatalog.compact(classEngraving)),
         RankingResult.class,
         () -> {
           var now = clock.instant();
-          var result = stats.ranking(conditions, conditions.since(now), metric, offset, size);
+          var result =
+              stats.ranking(conditions, conditions.since(now), metric, offset, size, classEngraving);
           var meta = meta(conditions, result.total(), now);
+          Long unknown = classEngraving == null ? null : classEngravingCounts(conditions).unknown();
           boolean ready = meta.sampleStatus() == SampleStatus.READY;
           return new RankingResult(
               meta,
@@ -824,7 +840,60 @@ public class StatsQueryService {
                             row.arkPassive(),
                             row.estherWeapon());
                       })
-                  .toList());
+                  .toList(),
+              classEngraving,
+              unknown);
+        });
+  }
+
+  /**
+   * 직업 각인 선택지(#618). 이름은 직업 각인 목록 파일 순서이고, count는 같은 조건 모집단에서 마지막 장비 요약의 직업 각인이 그 값(공백 무시)인 캐릭터 수다.
+   * 집계를 못 하면 이름만 주고 count는 null이다(선택지는 그대로 쓸 수 있게).
+   */
+  public ClassEngravingsResult classEngravings(StatsConditions conditions, List<String> names) {
+    key(conditions);
+    ClassEngravingCounts counts;
+    try {
+      counts = classEngravingCounts(conditions);
+    } catch (BusinessException exception) {
+      if (exception.errorCode() != StatsErrorCode.STATS_UNAVAILABLE) throw exception;
+      counts = null;
+    }
+    var rows = new ArrayList<ClassEngravingCount>();
+    for (var name : names) {
+      Long count = null;
+      if (counts != null) {
+        var target = ClassEngravingCatalog.compact(name);
+        count =
+            counts.titles().stream()
+                .filter(title -> ClassEngravingCatalog.compact(title.title()).equals(target))
+                .mapToLong(TitleCount::count)
+                .sum();
+      }
+      rows.add(new ClassEngravingCount(name, count));
+    }
+    return new ClassEngravingsResult(
+        conditions.className(),
+        rows,
+        counts == null ? null : counts.unknown(),
+        counts == null ? null : counts.aggregatedAt());
+  }
+
+  /** 모집단의 직업 각인(원문)별 수와 모르는 수. 조건마다 10분 캐시한다. */
+  private ClassEngravingCounts classEngravingCounts(StatsConditions conditions) {
+    return cached(
+        "class-engraving-counts:" + key(conditions),
+        ClassEngravingCounts.class,
+        () -> {
+          var now = clock.instant();
+          var counts = stats.classEngravingCounts(conditions, conditions.since(now));
+          var titles = new ArrayList<TitleCount>();
+          long unknown = 0;
+          for (var entry : counts.entrySet()) {
+            if (entry.getKey() == null) unknown += entry.getValue();
+            else titles.add(new TitleCount(entry.getKey(), entry.getValue()));
+          }
+          return new ClassEngravingCounts(titles, unknown, now);
         });
   }
 
@@ -1291,8 +1360,31 @@ public class StatsQueryService {
 
   public record EquippedTitle(String title, long equippedRosters, BigDecimal equippedPercent) {}
 
+  /**
+   * classEngraving은 요청한 직업 각인(없으면 null), classEngravingUnknown은 필터를 켰을 때 같은 조건에서 직업 각인을 모르는(마지막 장비 요약이
+   * 없는) 캐릭터 수(필터를 끄면 null)다(#618).
+   */
   public record RankingResult(
-      Meta meta, Metric metric, int page, int size, List<RankedCharacter> rows) {}
+      Meta meta,
+      Metric metric,
+      int page,
+      int size,
+      List<RankedCharacter> rows,
+      String classEngraving,
+      Long classEngravingUnknown) {}
+
+  public record TitleCount(String title, long count) {}
+
+  public record ClassEngravingCounts(List<TitleCount> titles, long unknown, Instant aggregatedAt) {
+    public ClassEngravingCounts {
+      titles = titles == null ? List.of() : List.copyOf(titles);
+    }
+  }
+
+  public record ClassEngravingCount(String name, Long count) {}
+
+  public record ClassEngravingsResult(
+      String className, List<ClassEngravingCount> classEngravings, Long unknown, Instant aggregatedAt) {}
 
   public record EfficiencyRankedCharacter(
       long rank,

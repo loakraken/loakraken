@@ -69,6 +69,55 @@ class SpecUpGoalGemCostTest {
     assertThat(SpecUpGoalService.total(50_000, true, totals)).isNull();
   }
 
+  @Test
+  void 누적이_줄면_더_드는_비용이_음수라_효율이_없고_여러_칸_경로_합계는_칸마다_마지막_누적이다() {
+    var totals = new HashMap<String, Long>();
+    // 0번 칸: 9레벨 누적 600,000 → 10레벨 누적 500,000(윗 레벨이 더 쌈) → 더 드는 비용 −100,000, 효율 null.
+    totals.put("GEM_LEVEL:0", 600_000L);
+    var cheaper = option("GEM_LEVEL:0", SpecUpCost.gem(900_000, 400_000L, false));
+    assertThat(SpecUpGoalService.marginal(cheaper, totals)).isEqualTo(-100_000);
+    assertThat(
+            SpecUpCost.efficiency(
+                java.math.BigDecimal.TEN, SpecUpGoalService.marginal(cheaper, totals)))
+        .isNull();
+    totals.put("GEM_LEVEL:0", 500_000L);
+    // 1번 칸: 두 단계를 올려 마지막 누적 2,600,000. 그 밖 단계(재련) 합 300,000.
+    totals.put("GEM_LEVEL:1", 2_600_000L);
+    assertThat(SpecUpGoalService.total(300_000, false, totals))
+        .isEqualTo(500_000 + 2_600_000 + 300_000);
+    // 보석 단계가 아닌 후보의 더 드는 비용은 그 단계 비용 그대로.
+    var refine =
+        new SpecUpGoalService.Option(
+            "EQUIPMENT_REFINE:0",
+            "EQUIPMENT_REFINE:0:21",
+            "무기",
+            null,
+            null,
+            null,
+            null,
+            null,
+            new Change(
+                Kind.EQUIPMENT_REFINE,
+                null,
+                0,
+                null,
+                null,
+                21,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null),
+            SpecUpCost.refineExpected(300_000),
+            null,
+            null,
+            null);
+    assertThat(SpecUpGoalService.marginal(refine, totals)).isEqualTo(300_000);
+  }
+
   private static SpecUpGoalService.Option option(String slot, SpecUpCost cost) {
     return new SpecUpGoalService.Option(
         slot,

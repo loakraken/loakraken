@@ -633,7 +633,7 @@ class PostgresStatsRepository implements StatsPort {
           .param("since", since.atOffset(ZoneOffset.UTC))
           .param("server", server)
           .param("minMembers", minMembers)
-            .param("topItemLevel", com.loakraken.stats.domain.GuildDetail.TOP_ITEM_LEVEL)
+          .param("topItemLevel", com.loakraken.stats.domain.GuildDetail.TOP_ITEM_LEVEL)
           .param("guild", guild)
           .query(
               (ResultSet row) -> {

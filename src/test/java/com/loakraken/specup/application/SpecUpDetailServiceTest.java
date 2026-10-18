@@ -43,6 +43,11 @@ class SpecUpDetailServiceTest {
                 List.of(market("BUY", 100, 1, null), market("SELL", 500, 1, 475L))))
         .isZero();
     assertThat(SpecUpDetailService.gemTotal(null)).isNull();
+    // 판매 수수료(sellFeeGold)는 합계에 넣지 않는다: 1,000,000 − 400,000 = 600,000(수수료 20,000과 무관).
+    var sellWithFee =
+        new SpecUpDetailService.Market(
+            "SELL", "보석", null, null, 400_000L, 1, 380_000L, 20_000L, null, AT);
+    assertThat(SpecUpDetailService.gemTotal(List.of(buy, sellWithFee))).isEqualTo(600_000);
     assertThat(SpecUpDetailService.gemTotal(List.of(sell))).isNull();
   }
 

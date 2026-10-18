@@ -17,6 +17,12 @@ interface ClientLimitStore {
     return 0;
   }
 
+  /**
+   * 키의 값이 0보다 크면 1 내린다(센 호출이 공식 호출 없이 거절됐을 때 되돌리기). 저장소 장애는 무시한다(최선 노력). 기본은 아무것도 하지 않는다(시험용 람다
+   * 저장소).
+   */
+  default void decrement(String key) {}
+
   final class Unavailable extends RuntimeException {
     Unavailable(Throwable cause) {
       super(cause);
@@ -31,6 +37,14 @@ interface ClientLimitStore {
             local count = redis.call('INCR', KEYS[1])
             if count == 1 then redis.call('PEXPIRE', KEYS[1], ARGV[1]) end
             return count
+            """,
+            Long.class);
+    private static final DefaultRedisScript<Long> DECREMENT =
+        new DefaultRedisScript<>(
+            """
+            local count = tonumber(redis.call('GET', KEYS[1]) or '0')
+            if count > 0 then return redis.call('DECR', KEYS[1]) end
+            return 0
             """,
             Long.class);
     private final StringRedisTemplate redis;
@@ -61,6 +75,15 @@ interface ClientLimitStore {
         throw new Unavailable(exception);
       }
     }
+
+    @Override
+    public void decrement(String key) {
+      try {
+        redis.execute(DECREMENT, java.util.List.of(key));
+      } catch (RuntimeException ignored) {
+        // 되돌리기는 최선 노력이다. 못 되돌린 1은 창(1분)이 끝나면 사라진다.
+      }
+    }
   }
 
   /** 단일 인스턴스(lostark.gate.store=memory). 창이 바뀌면 지난 창 키를 지운다. */
@@ -82,6 +105,12 @@ interface ClientLimitStore {
     public long current(String key) {
       var count = counts.get(key);
       return count == null ? 0 : count.get();
+    }
+
+    @Override
+    public void decrement(String key) {
+      var count = counts.get(key);
+      if (count != null) count.updateAndGet(value -> value > 0 ? value - 1 : 0);
     }
   }
 }

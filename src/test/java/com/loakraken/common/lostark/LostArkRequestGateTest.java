@@ -297,6 +297,97 @@ class LostArkRequestGateTest {
     }
   }
 
+  @Test
+  void 게이트가_바빠_공식_호출_전에_거절하면_재료_검색_버킷과_합계를_되돌린다() {
+    // 코드 리뷰 10-18: 거절된 호출까지 합계에 남으면 게이트가 바쁠 때 공식 호출 없이 합계 36이 바닥나 모든 방문자의 재료 검색이 막혔다.
+    var clock = new MutableClock();
+    var limiter = limiter(clock, 100, 15, 36);
+    var gate = materialGate(clock, limiter);
+    // 동시 호출 4개를 모두 잡아 둔다(다른 요청이 공식 호출 중).
+    for (int i = 0; i < 4; i++) gate.acquire();
+    for (var client : java.util.List.of("client-a", "client-b", "client-c")) {
+      limiter.enter(client);
+      try {
+        for (int i = 0; i < 20; i++)
+          assertThatThrownBy(() -> materialCall(gate))
+              .isInstanceOf(BusinessException.class)
+              .extracting(exception -> ((BusinessException) exception).errorCode())
+              .isEqualTo(LostArkErrorCode.LOST_ARK_RATE_LIMITED);
+      } finally {
+        limiter.exit();
+      }
+    }
+    for (int i = 0; i < 4; i++) gate.release();
+    // 거절된 60번은 아무것도 쓰지 않았다: 클라이언트마다 15, 합계 36까지 그대로 된다.
+    limiter.enter("client-a");
+    try {
+      for (int i = 0; i < 15; i++) materialCall(gate);
+    } finally {
+      limiter.exit();
+    }
+    limiter.enter("client-b");
+    try {
+      for (int i = 0; i < 15; i++) materialCall(gate);
+    } finally {
+      limiter.exit();
+    }
+    limiter.enter("client-c");
+    try {
+      for (int i = 0; i < 6; i++) materialCall(gate);
+      assertThatThrownBy(() -> materialCall(gate))
+          .isInstanceOf(BusinessException.class)
+          .extracting(exception -> ((BusinessException) exception).errorCode())
+          .isEqualTo(LostArkErrorCode.LOST_ARK_RATE_LIMITED);
+    } finally {
+      limiter.exit();
+    }
+  }
+
+  @Test
+  void 공유_예산에서_거절되면_클라이언트_버킷과_합계가_그대로이고_성공한_호출만_남는다() {
+    var clock = new MutableClock();
+    var store = new ClientLimitStore.Memory();
+    var limiter =
+        new ClientLimiter(
+            new ClientLimitProperties(
+                true, 100, 10, 1000, 120, true, 2, 6, 20, 5, 5, 10, 3, 15, 36),
+            store,
+            clock,
+            registry,
+            "key");
+    var gate = materialGate(clock, limiter);
+    limiter.enter("client-a");
+    try {
+      for (int i = 0; i < 5; i++) materialCall(gate);
+    } finally {
+      limiter.exit();
+    }
+    // 공유 예산을 60까지 채운다(재료 검색은 호출 뒤 60 이하일 때만).
+    for (int i = 0; i < 55; i++) userCall(gate);
+    limiter.enter("client-a");
+    try {
+      for (int i = 0; i < 10; i++)
+        assertThatThrownBy(() -> materialCall(gate))
+            .isInstanceOf(BusinessException.class)
+            .extracting(exception -> ((BusinessException) exception).errorCode())
+            .isEqualTo(LostArkErrorCode.LOST_ARK_RATE_LIMITED);
+    } finally {
+      limiter.exit();
+    }
+    // 성공한 5번만 남았다(거절된 10번은 버킷·합계 모두 되돌림).
+    long window = clock.millis() / 60_000;
+    assertThat(peek(store, "lostark:client-limit:material_search:client-a:" + window)).isEqualTo(5);
+    assertThat(peek(store, "lostark:client-limit:material_search_all:shared:" + window))
+        .isEqualTo(5);
+  }
+
+  /** Memory 저장소 카운터 값(올렸다가 바로 내려 본다). */
+  private static long peek(ClientLimitStore store, String key) {
+    long value = store.increment(key, Duration.ofMinutes(1)) - 1;
+    store.decrement(key);
+    return value;
+  }
+
   private ClientLimiter limiter(Clock clock, int official, int material, int materialAll) {
     return new ClientLimiter(
         new ClientLimitProperties(

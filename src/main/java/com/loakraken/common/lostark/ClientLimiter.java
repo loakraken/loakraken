@@ -187,12 +187,50 @@ public class ClientLimiter {
   }
 
   /**
-   * 모든 클라이언트가 함께 쓰는 기능 상한(예: 재료 검색 전체 분당 36)을 한 번 센다. 클라이언트가 없어도(내부 주소) 센다. 넘으면
-   * LOST_ARK_RATE_LIMITED (공유 예산이 막힌 것과 같은 거절 — 부르는 쪽은 지금 알 수 없음으로 처리).
+   * 지금 클라이언트를 버킷에 한 번 세고, 되돌릴 때 쓸 카운터 키를 돌려준다(세지 않았으면 null — 클라이언트 없음·제한 꺼짐·저장소 장애). 넘으면 센 것을 바로
+   * 되돌리고 CLIENT_RATE_LIMITED(카운터가 한도 위로 부풀지 않게).
    */
-  void chargeShared(Bucket bucket) {
-    if (!check(bucket, SHARED).allowed())
-      throw new BusinessException(LostArkErrorCode.LOST_ARK_RATE_LIMITED);
+  String chargeRefundable(Bucket bucket) {
+    var client = CLIENT.get();
+    if (client == null) return null;
+    return countRefundable(bucket, client, LostArkErrorCode.CLIENT_RATE_LIMITED);
+  }
+
+  /**
+   * 모든 클라이언트가 함께 쓰는 기능 상한(예: 재료 검색 전체 분당 36)을 한 번 세고 되돌리기용 키를 돌려준다. 클라이언트가 없어도(내부 주소) 센다. 넘으면 센 것을
+   * 되돌리고 LOST_ARK_RATE_LIMITED(공유 예산이 막힌 것과 같은 거절 — 부르는 쪽은 지금 알 수 없음으로 처리).
+   */
+  String chargeShared(Bucket bucket) {
+    return countRefundable(bucket, SHARED, LostArkErrorCode.LOST_ARK_RATE_LIMITED);
+  }
+
+  /**
+   * {@link #chargeRefundable}·{@link #chargeShared}로 센 것을 되돌린다(공식 호출 전에 게이트가 거절했을 때). null이면 아무것도
+   * 하지 않는다.
+   */
+  void refund(String counterKey) {
+    if (counterKey != null) store.decrement(counterKey);
+  }
+
+  private String countRefundable(Bucket bucket, String clientKey, LostArkErrorCode rejected) {
+    if (!properties.enabled()) return null;
+    long now = clock.millis();
+    long window = now / WINDOW.toMillis();
+    String key = storeKey(bucket, clientKey, window);
+    long count;
+    try {
+      count = store.increment(key, WINDOW.plusSeconds(1));
+    } catch (ClientLimitStore.Unavailable exception) {
+      count(bucket, "unavailable");
+      return null;
+    }
+    if (count <= properties.limit(bucket)) return key;
+    store.decrement(key);
+    count(bucket, "reject");
+    long remaining = (window + 1) * WINDOW.toMillis() - now;
+    throw rejected == LostArkErrorCode.CLIENT_RATE_LIMITED
+        ? new BusinessException(rejected, Duration.ofSeconds(Math.max(1, (remaining + 999) / 1000)))
+        : new BusinessException(rejected);
   }
 
   void count(Bucket bucket, String event) {

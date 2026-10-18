@@ -106,13 +106,35 @@ public class LostArkRequestGate {
   }
 
   private void admit() {
+    // 기능 버킷(재료 검색 등)은 공유 예산보다 먼저 세지만(한도에 걸린 호출이 예산을 쓰지 않게), 게이트가 공식 호출 전에 거절하면 센 것을 되돌린다
+    // (코드 리뷰 10-18: 게이트가 바쁠 때 공식 호출 없이 합계 상한이 바닥나지 않게).
+    String bucketKey = null;
+    String sharedKey = null;
     var bucket = CHARGE_BUCKET.get();
     if (bucket != null) {
-      clients.charge(bucket);
+      bucketKey = clients.chargeRefundable(bucket);
       var shared = SHARED_BUCKET.get();
-      if (shared != null) clients.chargeShared(shared);
+      if (shared != null) {
+        try {
+          sharedKey = clients.chargeShared(shared);
+        } catch (RuntimeException exception) {
+          clients.refund(bucketKey);
+          throw exception;
+        }
+      }
     } else if (currentReserve() == 0 || Boolean.TRUE.equals(CHARGE_CLIENT.get()))
       clients.chargeOfficial();
+    try {
+      enter();
+    } catch (RuntimeException exception) {
+      clients.refund(sharedKey);
+      clients.refund(bucketKey);
+      throw exception;
+    }
+  }
+
+  /** 동시 호출 허가와 공유 예산 판정. 거절이면 예외(허가를 잡았으면 돌려줌). */
+  private void enter() {
     if (!permits.tryAcquire()) reject(GateEvent.CONCURRENCY_REJECT);
     GateStore.Admission admission;
     try {

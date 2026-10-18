@@ -539,7 +539,10 @@ class PostgresStatsRepository implements StatsPort {
         SELECT c.server_name, c.guild_name, COUNT(*) AS member_count, AVG(c.item_level) AS il_avg,
           SUM(c.item_level) AS il_sum,
           AVG(c.combat_power) FILTER (WHERE c.combat_power IS NOT NULL) AS cp_avg,
-          COUNT(c.combat_power) AS cp_count
+          COUNT(c.combat_power) AS cp_count,
+          AVG(c.combat_power) FILTER (WHERE c.combat_power IS NOT NULL AND c.item_level >= :topItemLevel) AS cp_avg_top,
+          COUNT(c.combat_power) FILTER (WHERE c.item_level >= :topItemLevel) AS cp_top_count,
+          SUM(c.combat_power) AS cp_sum
         FROM characters c
         WHERE c.guild_name IS NOT NULL AND c.item_level IS NOT NULL
           AND c.profile_refreshed_at >= :since
@@ -549,7 +552,7 @@ class PostgresStatsRepository implements StatsPort {
             WHERE e.character_name = c.character_name AND (e.server_name IS NULL OR e.server_name = c.server_name))
         GROUP BY c.server_name, c.guild_name),
       ranked AS (
-        SELECT g.*, RANK() OVER (ORDER BY ROUND(%ORDER%, 2) DESC) AS rank
+        SELECT g.*, RANK() OVER (ORDER BY ROUND(%ORDER%, 2) DESC NULLS LAST) AS rank
         FROM guilds g WHERE g.member_count >= :minMembers)
       """;
 
@@ -569,7 +572,15 @@ class PostgresStatsRepository implements StatsPort {
       int offset,
       int limit,
       String guild) {
-    String base = GUILD_RANKED.replace("%ORDER%", sort == GuildSort.SUM ? "g.il_sum" : "g.il_avg");
+    String base =
+        GUILD_RANKED.replace(
+            "%ORDER%",
+            switch (sort) {
+              case AVG -> "g.il_avg";
+              case SUM -> "g.il_sum";
+              case CP_AVG -> "g.cp_avg_top";
+              case CP_SUM -> "g.cp_sum";
+            });
     var counts = new long[] {0, 0, 0, 0};
     var rows =
         jdbc.sql(
@@ -586,6 +597,7 @@ class PostgresStatsRepository implements StatsPort {
             .param("since", since.atOffset(ZoneOffset.UTC))
             .param("server", server)
             .param("minMembers", minMembers)
+            .param("topItemLevel", com.loakraken.stats.domain.GuildDetail.TOP_ITEM_LEVEL)
             .param("guild", guild)
             .param("limit", limit)
             .param("offset", offset)
@@ -603,7 +615,10 @@ class PostgresStatsRepository implements StatsPort {
                       row.getBigDecimal("il_avg"),
                       row.getBigDecimal("il_sum"),
                       row.getBigDecimal("cp_avg"),
-                      row.getLong("cp_count"));
+                      row.getLong("cp_count"),
+                      row.getBigDecimal("cp_avg_top"),
+                      row.getLong("cp_top_count"),
+                      row.getBigDecimal("cp_sum"));
                 })
             .list();
     if (rows.isEmpty())
@@ -618,6 +633,7 @@ class PostgresStatsRepository implements StatsPort {
           .param("since", since.atOffset(ZoneOffset.UTC))
           .param("server", server)
           .param("minMembers", minMembers)
+            .param("topItemLevel", com.loakraken.stats.domain.GuildDetail.TOP_ITEM_LEVEL)
           .param("guild", guild)
           .query(
               (ResultSet row) -> {

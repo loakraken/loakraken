@@ -121,6 +121,46 @@ class GuildRankingIntegrationTest {
   }
 
   @Test
+  void 전투력_평균은_1750_이상_길드원만_총합은_전원이고_둘로_정렬할_수_있다() throws Exception {
+    // #580: 평균은 아이템 레벨 1750 이상·전투력 관측 길드원만, 총합은 관측한 전원(부캐 포함). 길드 탭과 같은 정의.
+    var now = Instant.now();
+    // 가: 1750 이상 두 명(6000·5000) → 평균 5500, 부캐 2000·1000 포함 총합 14000(관측 4명, 한 명은 미관측).
+    member(SERVER, "전투가", "길드전가0", 1760, "6000.00", now);
+    member(SERVER, "전투가", "길드전가1", 1755, "5000.00", now);
+    member(SERVER, "전투가", "길드전가2", 1700, "2000.00", now);
+    member(SERVER, "전투가", "길드전가3", 1690, null, now);
+    member(SERVER, "전투가", "길드전가4", 1680, "1000.00", now);
+    // 나: 1750 한 명(4000) → 평균 4000, 총합 4000 + 3000×4 = 16000.
+    member(SERVER, "전투나", "길드전나0", 1750, "4000.00", now);
+    for (int i = 1; i <= 4; i++) member(SERVER, "전투나", "길드전나" + i, 1700, "3000.00", now);
+    // 다: 1750 이상이 없다 → 평균 null(정렬 맨 뒤), 총합 2500.
+    for (int i = 0; i < 5; i++) member(SERVER, "전투다", "길드전다" + i, 1650, "500.00", now);
+
+    var avg = data(get("/api/v1/rankings/guilds?sort=CP_AVG&server=" + encode(SERVER)));
+    assertThat(avg.path("sort").asText()).isEqualTo("CP_AVG");
+    var rows = avg.path("rows");
+    assertThat(rows.at("/0/guildName").asText()).isEqualTo("전투가");
+    assertThat(rows.at("/0/combatPowerAvgTop").decimalValue()).isEqualByComparingTo("5500.00");
+    assertThat(rows.at("/0/combatPowerTopCount").asLong()).isEqualTo(2);
+    assertThat(rows.at("/0/combatPowerTotal").decimalValue()).isEqualByComparingTo("14000.00");
+    // 기존 필드는 그대로(관측 전원 평균 3500, 4명).
+    assertThat(rows.at("/0/combatPowerAvg").decimalValue()).isEqualByComparingTo("3500.00");
+    assertThat(rows.at("/0/combatPowerCount").asLong()).isEqualTo(4);
+    assertThat(rows.at("/1/guildName").asText()).isEqualTo("전투나");
+    assertThat(rows.at("/1/combatPowerAvgTop").decimalValue()).isEqualByComparingTo("4000.00");
+    assertThat(rows.at("/2/guildName").asText()).isEqualTo("전투다");
+    assertThat(rows.at("/2/combatPowerAvgTop").isNull()).isTrue();
+    assertThat(rows.at("/2/combatPowerTopCount").asLong()).isZero();
+    assertThat(rows.at("/2/rank").asLong()).isEqualTo(3);
+
+    var sum = data(get("/api/v1/rankings/guilds?sort=CP_SUM&server=" + encode(SERVER)));
+    assertThat(sum.at("/rows/0/guildName").asText()).isEqualTo("전투나");
+    assertThat(sum.at("/rows/0/combatPowerTotal").decimalValue()).isEqualByComparingTo("16000.00");
+    assertThat(sum.at("/rows/1/guildName").asText()).isEqualTo("전투가");
+    assertThat(sum.at("/rows/2/guildName").asText()).isEqualTo("전투다");
+  }
+
+  @Test
   void 길드_이름_일부로_찾으면_전체_순위를_그대로_준다() throws Exception {
     // M21: 평균 순위 높은길드 1710(1위) · 큰길드 1680(2위) · AbcGuild 1650(3위), 작은길드는 네 명이라 빠진다.
     guild(SERVER, "높은길드", "길드높", 1720, 1715, 1710, 1705, 1700);

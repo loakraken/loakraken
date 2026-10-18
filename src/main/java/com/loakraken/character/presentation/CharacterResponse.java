@@ -60,7 +60,7 @@ public record CharacterResponse(
         Instant refreshAvailableAt) {
   /** 효율·점수 없이(직렬화 테스트용). 점수는 DISABLED 모양. */
   public static CharacterResponse from(CharacterResult result) {
-    return from(result, null, null, KrakenScoreResponse.DISABLED_WITHOUT_VERSION);
+    return from(result, null, null, null, KrakenScoreResponse.DISABLED_WITHOUT_VERSION);
   }
 
   public static CharacterResponse from(
@@ -69,13 +69,24 @@ public record CharacterResponse(
           efficiency,
       com.loakraken.character.application.ArkGridEfficiencyService.ArkGridEfficiency arkGrid,
       com.loakraken.character.application.KrakenScoreService.KrakenScore krakenScore) {
-    return from(result, efficiency, arkGrid, KrakenScoreResponse.from(krakenScore));
+    return from(result, efficiency, null, arkGrid, KrakenScoreResponse.from(krakenScore));
+  }
+
+  public static CharacterResponse from(
+      CharacterResult result,
+      com.loakraken.character.application.CombatPowerSimulationService.BraceletEfficiency
+          efficiency,
+      com.loakraken.character.application.BraceletRealEfficiency braceletReal,
+      com.loakraken.character.application.ArkGridEfficiencyService.ArkGridEfficiency arkGrid,
+      com.loakraken.character.application.KrakenScoreService.KrakenScore krakenScore) {
+    return from(result, efficiency, braceletReal, arkGrid, KrakenScoreResponse.from(krakenScore));
   }
 
   private static CharacterResponse from(
       CharacterResult result,
       com.loakraken.character.application.CombatPowerSimulationService.BraceletEfficiency
           efficiency,
+      com.loakraken.character.application.BraceletRealEfficiency braceletReal,
       com.loakraken.character.application.ArkGridEfficiencyService.ArkGridEfficiency arkGrid,
       KrakenScoreResponse krakenScore) {
     var profile = result.details().profile();
@@ -140,7 +151,7 @@ public record CharacterResponse(
             : SiblingResponse.from(result.details().siblings()),
         CharacterObservationCoverageResponse.from(result.details().coverage()),
         CharacterAnalysisResponse.from(result.analysis(), result.details().coverage()),
-        BraceletEfficiencyResponse.from(efficiency),
+        BraceletEfficiencyResponse.from(efficiency, braceletReal),
         ArkGridEfficiencyResponse.from(arkGrid, result.arkGridReal()),
         krakenScore,
         result.fetchedAt(),
@@ -317,9 +328,19 @@ public record CharacterResponse(
       @Schema(description = "근거 문장 또는 계산하지 않은 이유") String reason,
       @Schema(description = "팔찌 효과 줄마다 그 줄만 뺐을 때의 효율(공식 순서), 팔찌 도약 포인트가 있으면 마지막에 '팔찌 도약 +N' 한 줄")
           List<BraceletLineEfficiencyResponse> lines,
-      @Schema(description = "계산 규칙 버전(전투력 시뮬레이터와 같음)") String ruleVersion) {
+      @Schema(description = "계산 규칙 버전(전투력 시뮬레이터와 같음)") String ruleVersion,
+      @Schema(
+              description =
+                  "팔찌 실 효율. 위 percent·lines는 '전투력 기여'(공식 전투력 계수)이고, 이것은 원본 점수식의 팔찌 %라 정의가 다르다. 늘 들어 있다.")
+          BraceletRealResponse real) {
     static BraceletEfficiencyResponse from(
         com.loakraken.character.application.CombatPowerSimulationService.BraceletEfficiency value) {
+      return from(value, null);
+    }
+
+    static BraceletEfficiencyResponse from(
+        com.loakraken.character.application.CombatPowerSimulationService.BraceletEfficiency value,
+        com.loakraken.character.application.BraceletRealEfficiency real) {
       if (value == null) return null;
       return new BraceletEfficiencyResponse(
           value.percent(),
@@ -336,7 +357,62 @@ public record CharacterResponse(
                           line.reasonCode(),
                           line.reason()))
               .toList(),
-          value.ruleVersion());
+          value.ruleVersion(),
+          BraceletRealResponse.from(real));
+    }
+  }
+
+  @Schema(
+      description =
+          "팔찌 실 효율. status: OK·UNSUPPORTED. OK면 percent가 있고, UNSUPPORTED면 percent는 null(reasonCode에 이유)."
+              + " percent 자리수: 딜러는 원본이 이미 % 소수 둘째 자리 내림한 값, 서포터는 원본 값 그대로(반올림 안 함 — 예 13.47857142857143)."
+              + " 화면은 둘 다 소수 둘째 자리 반올림(toFixed(2))으로 그린다(딜러는 값 그대로, 서포터 13.48)")
+  public record BraceletRealResponse(
+      @Schema(
+              description = "OK·UNSUPPORTED",
+              allowableValues = {"OK", "UNSUPPORTED"},
+              example = "OK")
+          String status,
+      @Schema(
+              description =
+                  "UNSUPPORTED 이유 코드(열린 값, 모르는 코드는 '준비 중'으로 그림). 지금 값: INPUT_PENDING(점수 입력이 없는 이전 조회 결과 —"
+                      + " 다시 조회하면 계산)·ROLE_UNKNOWN(딜러·서포터 판정 못 함)·UNAVAILABLE(팔찌 옵션·무기·아크 패시브가 없거나 계산"
+                      + " 못 함). OK면 null",
+              example = "INPUT_PENDING")
+          @NullableResponse
+          String reasonCode,
+      @Schema(description = "이유 문장(로그·디버그용, 화면 문구로 쓰지 않음). OK면 null") @NullableResponse
+          String reason,
+      @Schema(
+              description = "계산 기준 역할(응답의 다른 position과 같은 값). INPUT_PENDING·ROLE_UNKNOWN이면 null",
+              allowableValues = {"DEALER", "SUPPORT"},
+              example = "DEALER")
+          @NullableResponse
+          String role,
+      @Schema(description = "팔찌 실 효율 %. UNSUPPORTED면 null", example = "11.3") @NullableResponse
+          BigDecimal percent,
+      @Schema(
+              description =
+                  "화면 설정 '악마 피해'(기본 꺼짐)를 켰을 때의 팔찌 실 효율 %(자리수는 딜러 percent와 같음). 딜러 OK일 때만 있고, 서포터·UNSUPPORTED면 null",
+              example = "14.08")
+          @NullableResponse
+          BigDecimal devilDamagePercent,
+      @Schema(description = "계산 규칙 버전", example = "bracelet-real-v1") String ruleVersion) {
+    static BraceletRealResponse from(
+        com.loakraken.character.application.BraceletRealEfficiency value) {
+      var real =
+          value != null
+              ? value
+              : com.loakraken.character.application.BraceletRealEfficiency.unsupported(
+                  "INPUT_PENDING", "점수 입력이 없는 이전 조회 결과라 계산하지 않았습니다(다시 조회하면 계산).", null);
+      return new BraceletRealResponse(
+          real.status().name(),
+          real.reasonCode(),
+          real.reason(),
+          real.role(),
+          real.percent(),
+          real.devilDamagePercent(),
+          real.ruleVersion());
     }
   }
 

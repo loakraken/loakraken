@@ -27,6 +27,14 @@ public final class KrakenScoreBracelet {
 
   /** 팔찌 총배율(원본 d6 = L(e).factors.totalMultiplier). */
   public static double total(JsonNode e, KrakenScoreEngine.Tables tables) {
+    return total(e, tables, false);
+  }
+
+  /**
+   * 팔찌 총배율. devil = 원본 정보 탭 설정 '악마 피해'(12921 sh의 bangleDevilDamageEnabled → 35231
+   * devilDamageEnabled): 켜면 진피 비에 팔찌 옵션의 악마 피해 배율을 더 곱한다. 점수(d6)는 늘 꺼진 값이다.
+   */
+  public static double total(JsonNode e, KrakenScoreEngine.Tables tables, boolean devil) {
     var n = bangle(e);
     var l = n == null ? List.<String>of() : strings(n.path("option"));
     if (n == null || !truthy(n.path("tier")) || l.isEmpty()) return 1;
@@ -39,7 +47,7 @@ public final class KrakenScoreBracelet {
     double r = statRatio(e, stats);
     double w = critRatio(e, tables, entries);
     double speed = speedRatio(e, tables, entries);
-    double i = finalDamage(e, tables);
+    double i = finalDamage(e, tables, devil);
     double staggered = 1 + (product(entries, "staggeredTargetDmg") - 1) * .25;
     double x = fallbackRatio(e, tables, l, entries, tier);
     return g * p * r * w * speed * i * staggered * x;
@@ -677,15 +685,17 @@ public final class KrakenScoreBracelet {
 
   // ---------------------------------------------------------------- 진피 비(35231)
 
-  private static double finalDamage(JsonNode e, KrakenScoreEngine.Tables tables) {
+  private static double finalDamage(JsonNode e, KrakenScoreEngine.Tables tables, boolean devil) {
     var bangle = e.path("armory").path("accessory").path("bangle");
     if (!truthy(bangle.path("option")) || !truthy(bangle.path("tier"))) return 1;
     var row = tables.get("we").path(KrakenScoreEngine.jsString(bangle.path("tier")));
     if (!truthy(row)) return 1;
     double finalDmg = 1;
+    double devilDmg = 1;
     for (var option : strings(bangle.path("option"))) {
       var i = row.path(option.replaceAll("\\s", ""));
       if (!truthy(i)) continue;
+      if (truthy(i.path("devilDmg"))) devilDmg *= i.path("devilDmg").asDouble();
       if (truthy(i.path("finalDmg"))
           && !i.has("critRate")
           && !i.has("critRateBuff")
@@ -700,7 +710,7 @@ public final class KrakenScoreBracelet {
         finalDmg *= t;
       }
     }
-    return finalDmg;
+    return devil ? finalDmg * devilDmg : finalDmg;
   }
 
   // ---------------------------------------------------------------- 대체 비(12921 x)

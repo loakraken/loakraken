@@ -95,17 +95,20 @@ public class MaterialQuoteService {
   }
 
   /**
-   * 같은 상품 ID 줄 중 부족 수량을 살 때 드는 골드가 가장 적은 줄. 같으면 거래 제한 없는 줄(null), 그다음 거래 가능 횟수가 많은 줄. 가격이 있는 줄이 없으면
-   * 0원 줄(ZERO_PRICE), 그것도 없으면 첫 줄(PRICE_UNAVAILABLE).
+   * 같은 상품 ID 줄 중 부족 수량을 살 때 드는 골드가 가장 적은 줄. 골드가 같으면 남는 수량이 적은 줄, 그다음 묶음이 작은 줄, 그다음 거래 제한 없는
+   * 줄(null), 그다음 거래 가능 횟수가 많은 줄 — 공식 응답의 줄 순서와 관계없이 같은 결과. 가격이 있는 줄이 없으면 0원 줄(ZERO_PRICE), 그것도 없으면
+   * 첫 줄(PRICE_UNAVAILABLE).
    */
   static MarketPrice cheapest(
       List<MarketPrice> matches, MaterialPriceBasis basis, long missingQuantity) {
+    java.util.function.Function<MarketPrice, MaterialPurchaseCost> cost =
+        price ->
+            MaterialPurchaseCost.calculate(
+                missingQuantity, price.bundleCount(), basis.select(price));
     Comparator<MarketPrice> order =
-        Comparator.comparing(
-                (MarketPrice price) ->
-                    MaterialPurchaseCost.calculate(
-                            missingQuantity, price.bundleCount(), basis.select(price))
-                        .costGold())
+        Comparator.comparing((MarketPrice price) -> cost.apply(price).costGold())
+            .thenComparingLong(price -> cost.apply(price).surplusQuantity())
+            .thenComparingInt(MarketPrice::bundleCount)
             .thenComparing(
                 MarketPrice::tradeRemainCount,
                 Comparator.nullsFirst(Comparator.<Integer>reverseOrder()));

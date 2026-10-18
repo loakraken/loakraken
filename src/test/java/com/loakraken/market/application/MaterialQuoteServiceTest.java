@@ -104,6 +104,37 @@ class MaterialQuoteServiceTest {
   }
 
   @Test
+  void 골드가_같으면_공식_줄_순서와_관계없이_남는_수량이_적은_줄을_쓴다() {
+    // 묶음 10개 10골드와 1개 10골드: 1개를 살 때 둘 다 10골드 — 남는 수량 0인 1개 묶음.
+    var bundleTen = row(206, "묶음 동률", 10, null, "10", "10", "10");
+    var bundleOne = row(206, "묶음 동률", 1, null, "10", "10", "10");
+    for (var rows : List.of(List.of(bundleTen, bundleOne), List.of(bundleOne, bundleTen))) {
+      when(markets.search(any(), any())).thenReturn(page(rows));
+      var line =
+          service
+              .quote(command(MaterialPriceBasis.CURRENT_MIN_PRICE, item(206, 1, 0)))
+              .items()
+              .getFirst();
+      assertThat(line.bundleCount()).isEqualTo(1);
+      assertThat(line.purchase().purchaseQuantity()).isEqualTo(1);
+      assertThat(line.purchase().surplusQuantity()).isZero();
+    }
+    // 골드·남는 수량이 같으면 작은 묶음: 4개를 2개 묶음 5골드 × 2 또는 4개 묶음 10골드 × 1 → 둘 다 10골드·남음 0.
+    var two = row(207, "묶음 동률", 2, null, "5", "5", "5");
+    var four = row(207, "묶음 동률", 4, null, "10", "10", "10");
+    for (var rows : List.of(List.of(four, two), List.of(two, four))) {
+      when(markets.search(any(), any())).thenReturn(page(rows));
+      var line =
+          service
+              .quote(command(MaterialPriceBasis.CURRENT_MIN_PRICE, item(207, 4, 0)))
+              .items()
+              .getFirst();
+      assertThat(line.bundleCount()).isEqualTo(2);
+      assertThat(line.purchase().costGold()).isEqualByComparingTo("10");
+    }
+  }
+
+  @Test
   void 같은_상품_여러_줄이면_선택한_가격_기준으로_가장_싸게_사는_줄을_쓴다() {
     when(markets.search(any(), any()))
         .thenReturn(

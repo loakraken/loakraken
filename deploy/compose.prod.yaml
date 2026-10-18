@@ -88,6 +88,8 @@ services:
       EFFICIENCY_RANKING: "${EFFICIENCY_RANKING:-}"
       GUILD_RANKING: "${GUILD_RANKING:-}"
       POPULAR_GUILDS: "${POPULAR_GUILDS:-}"
+      # 캐릭터 화면 길드 탭(web #924에서 GUILD_RANKING과 나뉨). 백엔드 짝은 RANKING_GUILDS_ENABLED.
+      GUILD_TAB: "${GUILD_TAB:-}"
       SPEC_UP_GUIDE: "${SPEC_UP_GUIDE:-}"
       TITLE_STATS: "${TITLE_STATS:-}"
       # 이 둘은 비우면 어디서나 꺼짐(on일 때만 켜짐): 검색엔진 색인, 시세 알림 화면.

@@ -322,7 +322,57 @@ class SpecUpIntegrationTest {
     // 가장 이른 시세 관측 시각이 보석 표 시각보다 이르면 그 시각이다.
     assertThat(Instant.parse(data.path("pricesAt").asText())).isBeforeOrEqualTo(observedAt);
     SiteNames.assertAbsent(response.body());
+    // #585: 다음 단계부터 재련 계획 최대 단계까지 줄마다 따로, 비용은 한 번의 계획(지금 → 목표) 누적.
+    int max =
+        plans
+            .rules()
+            .track(
+                com.loakraken.refining.domain.RefiningRules.Grade.UPHWA,
+                com.loakraken.refining.domain.RefiningRules.EquipmentType.WEAPON)
+            .maxTargetStage();
+    assertThat(max).isGreaterThan(21);
+    long previous = 0;
+    for (int target = 21; target <= Math.min(25, max); target++) {
+      var row = find(data.path("candidates"), "EQUIPMENT_REFINE:0:" + target);
+      assertThat(row.path("from").asText()).isEqualTo("+20");
+      assertThat(row.path("to").asText()).isEqualTo("+" + target);
+      assertThat(row.at("/change/refine").asInt()).isEqualTo(target);
+      long cost = refineExpected(units, 20, target);
+      assertThat(row.at("/cost/amount").asLong()).as("+" + target).isEqualTo(cost);
+      assertThat(cost).isGreaterThan(previous);
+      previous = cost;
+    }
+    // 줄 상세도 같은 범위·같은 금액(내역 합 = 목록 비용), 기대 시도는 단계마다의 합.
+    var detail = mapper.readTree(detail("EQUIPMENT_REFINE:0:23", "스펙업화").body()).path("data");
+    assertThat(detail.at("/refine/fromStage").asInt()).isEqualTo(20);
+    assertThat(detail.at("/refine/toStage").asInt()).isEqualTo(23);
+    assertThat(detail.at("/candidate/cost/amount").asLong())
+        .isEqualTo(refineExpected(units, 20, 23));
+    assertThat(detail.at("/refine/expectedAttempts").decimalValue())
+        .isGreaterThan(
+            mapper
+                .readTree(detail("EQUIPMENT_REFINE:0:21", "스펙업화").body())
+                .at("/data/refine/expectedAttempts")
+                .decimalValue());
     org.mockito.Mockito.reset(simulator);
+  }
+
+  /** 지금 from에서 to까지 업화 무기 재련 기대 비용(숨결 없음·최대 사용 중 작은 쪽, 목록 비용과 같은 식). */
+  private long refineExpected(java.util.Map<String, BigDecimal> units, int from, int to) {
+    long expected = Long.MAX_VALUE;
+    for (boolean breath : new boolean[] {false, true}) {
+      var plan =
+          plans.plan(
+              com.loakraken.refining.domain.RefiningRules.Grade.UPHWA,
+              com.loakraken.refining.domain.RefiningRules.EquipmentType.WEAPON,
+              new com.loakraken.refining.domain.RefiningPlan.Options(
+                  from, to, breath, false, true, 0, 0));
+      var total = plan.expectedGold();
+      for (var quantity : plan.expectedMaterials())
+        total = total.add(quantity.amount().multiply(units.get(quantity.name())));
+      expected = Math.min(expected, total.setScale(0, java.math.RoundingMode.CEILING).longValue());
+    }
+    return expected;
   }
 
   /** 재련 후보만 시뮬레이터가 OK(Δ+12.34)를 내게 한다. 나머지 후보는 실제 계산. 테스트 끝에 reset(simulator). */

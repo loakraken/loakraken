@@ -70,6 +70,9 @@ class BlockedTermsGuardTest {
     assertThat(INTERNAL_DOC.matcher(" * 랭킹(#301, 볼트 「설계 초안」 v1)").find()).isTrue();
     assertThat(INTERNAL_DOC.matcher("측정 방법은 볼트 검증 기록").find()).isTrue();
     assertThat(INTERNAL_DOC.matcher("(볼트 40 레퍼런스/값.md)").find()).isTrue();
+    // 앞말 없이 문서 이름만 남은 경우도 잡는다. 공식 가이드 이름은 잡지 않는다.
+    assertThat(INTERNAL_DOC.matcher(" * <p>「치명 규칙 재대조」).").find()).isTrue();
+    assertThat(INTERNAL_DOC.matcher("공식 아이템 사전 「재련 정보」").find()).isFalse();
     assertThat(INTERNAL_DOC.matcher("\"name\": \"라이트닝 볼트\"").find()).isFalse();
   }
 
@@ -81,8 +84,9 @@ class BlockedTermsGuardTest {
     assertThat(matches("{\"source\": \"비교 기준 A 대조\"}", patterns())).isEmpty();
   }
 
-  /** 내부 문서(볼트) 이름·경로를 가리키는 표현(#587). 스킬 이름 '라이트닝 볼트' 같은 말은 잡지 않는다. */
-  static final Pattern INTERNAL_DOC = Pattern.compile("볼트 [「0-9]|볼트 검증");
+  /** 내부 문서(볼트) 이름·경로를 가리키는 표현(#587). 스킬 이름 '라이트닝 볼트'나 공식 가이드 이름 같은 말은 잡지 않는다. */
+  static final Pattern INTERNAL_DOC =
+      Pattern.compile("볼트 [「0-9]|볼트 검증|「[^」]*(재대조|설계|초안|검증 기록|검증 준비|교차 확인)[^」]*」");
 
   /** 간접 표현·내부 문서 표현은 늘, 이름은 목록이 있을 때만. 번호는 실패 메시지용. */
   private static List<Pattern> patterns() {

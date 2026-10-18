@@ -28,7 +28,14 @@ public interface AuctionPort {
   Map<String, Long> previousDay(List<String> keys, LocalDate day);
 
   /** 보석 매물 직업·스킬 필터(#542)의 이번 분 기능 몫에서 공식 호출 하나를 가져온다. 넘었거나 저장소 장애면 false(공식 예산 보호). */
-  boolean tryAcquireGemFilterQuota(int limit);
+  /**
+   * 보석 필터 기능 몫 하나를 얻는다(#542, 모든 사용자·인스턴스 공유 분당 카운터). 얻으면 돌려줄 때 쓰는 그 분의 키, 몫을 다 썼거나 저장소를 쓰지 못하면 빈
+   * 값이다.
+   */
+  Optional<String> acquireGemFilterQuota(int limit);
+
+  /** 공식 호출 전에 거절된 요청의 몫을 돌려준다(#553). 0 아래로는 내리지 않는다. 실패해도 예외를 내지 않는다(그 분이 지나면 키가 사라짐). */
+  void releaseGemFilterQuota(String key);
 
   /**
    * @param etcOptions 연마 효과 필터. min·max는 공식 값(×100 정수)

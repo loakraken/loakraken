@@ -2,6 +2,7 @@ package com.loakraken.market.application;
 
 import com.loakraken.common.api.BusinessException;
 import com.loakraken.common.lostark.LostArkErrorCode;
+import com.loakraken.common.lostark.LostArkRateLimitedException;
 import com.loakraken.common.lostark.LostArkRequestGate;
 import com.loakraken.market.application.AuctionPort.AuctionPage;
 import com.loakraken.market.domain.GemSkillCatalog;
@@ -107,7 +108,8 @@ public class GemSkillFilterService {
   }
 
   private AuctionPage fetch(AuctionPort.AuctionQuery query, String key) {
-    if (!auctions.tryAcquireGemFilterQuota(policy.quotaPerMinute())) {
+    var quota = auctions.acquireGemFilterQuota(policy.quotaPerMinute()).orElse(null);
+    if (quota == null) {
       metrics.gemFilter("quota_reject");
       throw busy();
     }
@@ -115,6 +117,8 @@ public class GemSkillFilterService {
     try {
       page = gate.withUserReserve(policy.reserve(), () -> search.search(query));
     } catch (BusinessException exception) {
+      // 공식 호출 전에 거절됐으면 몫을 돌려준다(#553): 자기 한도를 다 쓴 클라이언트가 공식 호출 없이 모두의 몫을 바닥내지 않게.
+      if (beforeOfficialCall(exception)) auctions.releaseGemFilterQuota(quota);
       if (exception.errorCode() == LostArkErrorCode.LOST_ARK_RATE_LIMITED
           || exception.errorCode() == LostArkErrorCode.LOST_ARK_GATE_UNAVAILABLE) {
         metrics.gemFilter("gate_reject");
@@ -140,6 +144,17 @@ public class GemSkillFilterService {
       Thread.currentThread().interrupt();
       throw new BusinessException(MarketErrorCode.MARKET_SEARCH_BUSY, Duration.ofSeconds(5));
     }
+  }
+
+  /**
+   * 공식 서버에 요청을 보내기 전에 막힌 거절인가: 관문의 예산·대기·동시 상한, 관문 저장소 장애, 클라이언트 공식 호출 한도. 공식 서버가 429를 준 것은 이미 호출한
+   * 것이라 아니다.
+   */
+  static boolean beforeOfficialCall(BusinessException exception) {
+    if (exception instanceof LostArkRateLimitedException limited)
+      return limited.limitCause() != LostArkRateLimitedException.Cause.UPSTREAM_429;
+    return exception.errorCode() == LostArkErrorCode.LOST_ARK_GATE_UNAVAILABLE
+        || exception.errorCode() == LostArkErrorCode.CLIENT_RATE_LIMITED;
   }
 
   private void requireEnabled() {

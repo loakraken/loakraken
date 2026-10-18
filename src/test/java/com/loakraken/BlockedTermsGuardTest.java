@@ -25,6 +25,40 @@ class BlockedTermsGuardTest {
           "src/test/java/com/loakraken/SiteNames.java",
           "src/test/java/com/loakraken/BlockedTermsGuardTest.java");
 
+  /**
+   * 이름 목록에 있어야 하는 이름 수(숫자만 공개). 로컬 목록에 이름을 더하면 이 수와 CI 비밀값 {@code BLOCKED_TERMS}도 같이 고친다. CI 비밀값이
+   * 로컬보다 오래돼 테스트 주석의 이름을 놓친 일(#576) 뒤로, 목록이 이보다 적으면 실패한다.
+   */
+  static final int EXPECTED_NAMES = 34;
+
+  @Test
+  void 이름_목록은_비거나_모자라지_않다() {
+    // 이름은 출력하지 않고 개수만 보인다(CI 로그가 공개라서).
+    System.out.println(
+        "금지 이름 " + SiteNames.BLOCKED.size() + "개를 읽었습니다(기대 " + EXPECTED_NAMES + "개)");
+    if (SiteNames.BLOCKED.isEmpty()) {
+      // 저장소 안 PR·push에서는 CI가 BLOCKED_TERMS_REQUIRED=true를 준다. 포크 PR(비밀값 없음)과 목록 파일이 없는 로컬만 건너뛴다.
+      assertThat(System.getenv("BLOCKED_TERMS_REQUIRED"))
+          .as("이 실행에는 금지 이름 목록(BLOCKED_TERMS)이 있어야 합니다")
+          .isNotEqualTo("true");
+      return;
+    }
+    // Windows PowerShell 5.1로 파이프해 넣으면 한글이 '?'로 바뀌고 줄이 합쳐진다 — 그런 이름은 아무것도 못 잡는다(#576).
+    var broken = new ArrayList<Integer>();
+    for (int i = 0; i < SiteNames.BLOCKED.size(); i++)
+      if (SiteNames.BLOCKED.get(i).matches(".*[?\\uFFFD].*")) broken.add(i);
+    assertThat(broken).as("인코딩이 깨진 금지 이름(목록 번호) — 목록을 UTF-8 그대로 다시 넣어야 합니다").isEmpty();
+    assertThat(SiteNames.BLOCKED.size())
+        .as("금지 이름 목록이 기대보다 적습니다 — CI 비밀값이나 로컬 목록이 오래됐거나 줄이 합쳐졌는지 확인")
+        .isGreaterThanOrEqualTo(EXPECTED_NAMES);
+  }
+
+  @Test
+  void 목록은_CRLF와_BOM과_분류_표시를_떼고_읽는다() {
+    var text = "\uFEFFsite: alpha\r\ncharacter: 가나다\r\n# 주석\r\n\r\n  beta  \n";
+    assertThat(SiteNames.parse(text)).containsExactly("alpha", "가나다", "beta");
+  }
+
   @Test
   void 추적하는_모든_파일에_금지_이름과_간접_표현이_없다() throws Exception {
     var hits = scan(patterns());

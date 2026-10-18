@@ -273,6 +273,56 @@ class AuctionBoardIntegrationTest {
   }
 
   @Test
+  void 공식_호출_전에_거절되면_필터_몫을_돌려주고_공식이_429면_돌려주지_않는다() throws Exception {
+    // #553: 관문·클라이언트 한도로 공식 호출 없이 거절된 요청은 모두가 함께 쓰는 분당 몫을 쓰지 않는다.
+    String base =
+        "/api/v1/markets/auctions/gems/listings?kind="
+            + encode("작열")
+            + "&className="
+            + encode("데모닉")
+            + "&level=";
+    long before = gemFilterQuotaUsed();
+    org.mockito.Mockito.doThrow(
+            new com.loakraken.common.lostark.LostArkRateLimitedException(
+                com.loakraken.common.lostark.LostArkRateLimitedException.Cause.GATE_BUDGET))
+        .when(search)
+        .search(any());
+    var gate = get(base + "3");
+    assertThat(gate.statusCode()).isEqualTo(503);
+    assertThat(gate.body()).contains("MARKET_SEARCH_BUSY");
+    org.mockito.Mockito.doThrow(
+            new com.loakraken.common.api.BusinessException(
+                com.loakraken.common.lostark.LostArkErrorCode.CLIENT_RATE_LIMITED))
+        .when(search)
+        .search(any());
+    assertThat(get(base + "4").statusCode()).isEqualTo(429);
+    assertThat(gemFilterQuotaUsed()).isEqualTo(before);
+    // 공식 서버가 429를 준 것은 이미 호출한 것이라 몫을 쓴다.
+    org.mockito.Mockito.doThrow(
+            new com.loakraken.common.lostark.LostArkRateLimitedException(
+                com.loakraken.common.lostark.LostArkRateLimitedException.Cause.UPSTREAM_429))
+        .when(search)
+        .search(any());
+    assertThat(get(base + "5").statusCode()).isEqualTo(503);
+    assertThat(gemFilterQuotaUsed()).isEqualTo(before + 1);
+    // 몫 카운터 키에는 만료가 걸려 있다(올리기와 첫 만료가 한 번에).
+    var keys = redis.keys("market:v1:auction-gem-filter-quota:*");
+    assertThat(keys).isNotEmpty();
+    for (var key : keys) assertThat(redis.getExpire(key)).as(key).isPositive();
+  }
+
+  /** 이번 분 앞뒤 키의 몫 사용량 합(분 경계에 걸려도 같은 값을 보게). */
+  private long gemFilterQuotaUsed() {
+    long minute = System.currentTimeMillis() / 60_000;
+    long sum = 0;
+    for (long value = minute - 1; value <= minute + 1; value++) {
+      var count = redis.opsForValue().get("market:v1:auction-gem-filter-quota:" + value);
+      if (count != null) sum += Long.parseLong(count);
+    }
+    return sum;
+  }
+
+  @Test
   void 같은_조건_동시_요청은_공식_검색_하나로_묶는다() throws Exception {
     var started = new java.util.concurrent.CountDownLatch(1);
     when(search.search(any()))

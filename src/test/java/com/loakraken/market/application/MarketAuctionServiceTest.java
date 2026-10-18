@@ -175,8 +175,8 @@ class MarketAuctionServiceTest {
       gate.release();
       searches++;
       var items = new ArrayList<AuctionListing>();
-      items.add(new AuctionListing("매물", "고대", 80, 0L, 100L, 100L, NOW, 0, List.of()));
-      items.add(new AuctionListing("매물", "고대", 80, 2_500_000L, 0L, 0L, NOW, 0, List.of()));
+      items.add(new AuctionListing("매물", "고대", 80, 0L, 100L, 100L, NOW, 0, List.of(), null));
+      items.add(new AuctionListing("매물", "고대", 80, 2_500_000L, 0L, 0L, NOW, 0, List.of(), null));
       return new AuctionPage(25, items, NOW);
     }
 

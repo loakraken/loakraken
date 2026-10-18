@@ -1,6 +1,8 @@
 package com.loakraken.character.domain;
 
 import java.math.BigDecimal;
+import java.util.Collection;
+import java.util.List;
 import java.util.Map;
 import java.util.regex.Pattern;
 
@@ -19,7 +21,8 @@ public final class GemBaseAttack {
           8, new BigDecimal("0.80"),
           9, new BigDecimal("1.00"),
           10, new BigDecimal("1.20"));
-  private static final Pattern OPTION = Pattern.compile("기본 공격력 ([\\d.]+)% 증가");
+  // 공백 수가 달라도 읽는다(공식 문구의 공백·줄바꿈이 바뀌어도 표 값으로 떨어지지 않게, #555).
+  private static final Pattern OPTION = Pattern.compile("기본\\s*공격력\\s*([\\d.]+)\\s*%\\s*증가");
   private static final Pattern TIER4_KIND = Pattern.compile("(겁화|작열|광휘)의 보석");
 
   /** source는 TOOLTIP(공식 문구) 또는 LEVEL_TABLE(레벨 표). */
@@ -29,8 +32,14 @@ public final class GemBaseAttack {
 
   /** option: 그 칸의 공식 보석 효과 Option 문구(없으면 null). 근거가 없으면 null. */
   public static Value of(CharacterLoadout.Gem gem, String option) {
+    return of(gem, option == null ? List.of() : List.of(option));
+  }
+
+  /** options: 그 칸의 공식 보석 효과 문구 전부(같은 칸이 여러 줄이면 모두). 처음 읽히는 값을 쓴다. 근거가 없으면 null. */
+  public static Value of(CharacterLoadout.Gem gem, Collection<String> options) {
     if (gem == null) return null;
-    if (option != null) {
+    for (var option : options) {
+      if (option == null) continue;
       var matcher = OPTION.matcher(option);
       if (matcher.find()) return new Value(new BigDecimal(matcher.group(1)), TOOLTIP);
     }

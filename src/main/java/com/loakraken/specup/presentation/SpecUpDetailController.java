@@ -62,7 +62,7 @@ public class SpecUpDetailController {
     @io.swagger.v3.oas.annotations.responses.ApiResponse(
         responseCode = "404",
         description =
-            "SPEC_UP_CANDIDATE_NOT_FOUND: 지금 목록에 그 후보가 없음(세팅이 바뀜, 목록을 다시 부름) · SPEC_UP_DISABLED: 기능이 꺼져 있음 · CHARACTER_NOT_CACHED: 캐릭터를 먼저 검색해야 함",
+            "SPEC_UP_CANDIDATE_NOT_FOUND: 지금 목록에 그 후보가 없거나, 시세가 연달아 바뀌어 목록 비용과 내역 금액을 맞추지 못함(목록을 다시 부름) · SPEC_UP_DISABLED: 기능이 꺼져 있음 · CHARACTER_NOT_CACHED: 캐릭터를 먼저 검색해야 함",
         content = @Content(schema = @Schema(ref = "#/components/schemas/ErrorResponse"))),
     @io.swagger.v3.oas.annotations.responses.ApiResponse(
         responseCode = "429",

@@ -24,6 +24,9 @@ public class LostArkRequestGate {
   /** 설정되면 이 스레드의 공식 호출을 OFFICIAL 대신 이 버킷에 센다({@link #withClientBucket}). */
   private static final ThreadLocal<ClientLimiter.Bucket> CHARGE_BUCKET = new ThreadLocal<>();
 
+  /** 설정되면 이 스레드의 공식 호출을 모든 클라이언트가 함께 쓰는 이 기능 상한에도 센다. */
+  private static final ThreadLocal<ClientLimiter.Bucket> SHARED_BUCKET = new ThreadLocal<>();
+
   private static final ThreadLocal<Boolean> CHARGE_CLIENT = new ThreadLocal<>();
 
   /** 공식 호출 로그 로거 이름. 로컬 프로필(application-local)에서만 DEBUG다. */
@@ -104,8 +107,11 @@ public class LostArkRequestGate {
 
   private void admit() {
     var bucket = CHARGE_BUCKET.get();
-    if (bucket != null) clients.charge(bucket);
-    else if (currentReserve() == 0 || Boolean.TRUE.equals(CHARGE_CLIENT.get()))
+    if (bucket != null) {
+      clients.charge(bucket);
+      var shared = SHARED_BUCKET.get();
+      if (shared != null) clients.chargeShared(shared);
+    } else if (currentReserve() == 0 || Boolean.TRUE.equals(CHARGE_CLIENT.get()))
       clients.chargeOfficial();
     if (!permits.tryAcquire()) reject(GateEvent.CONCURRENCY_REJECT);
     GateStore.Admission admission;
@@ -172,16 +178,23 @@ public class LostArkRequestGate {
 
   /**
    * 사용자 요청 하나가 공식 호출을 여러 번 일으키는데 그 호출들을 OFFICIAL이 아니라 기능 전용 버킷에 셀 때(재료 시세 검색, 보안 점검 10-18). 공유 예산에는
-   * 사용자 몫 reserve를 남기고, 요청 클라이언트의 bucket에 공식 호출마다 매긴다(넘으면 CLIENT_RATE_LIMITED). 같은 스레드 전용이다.
+   * reserve를 남기고, 공식 호출마다 요청 클라이언트의 bucket(넘으면 CLIENT_RATE_LIMITED)과 모든 클라이언트가 함께 쓰는 shared 상한(넘으면
+   * LOST_ARK_RATE_LIMITED, null이면 세지 않음)에 매긴다. 같은 스레드 전용이다.
    */
-  public <T> T withClientBucket(int reserve, ClientLimiter.Bucket bucket, Supplier<T> work) {
+  public <T> T withClientBucket(
+      int reserve, ClientLimiter.Bucket bucket, ClientLimiter.Bucket shared, Supplier<T> work) {
     var previous = CHARGE_BUCKET.get();
+    var previousShared = SHARED_BUCKET.get();
     CHARGE_BUCKET.set(bucket);
+    if (shared == null) SHARED_BUCKET.remove();
+    else SHARED_BUCKET.set(shared);
     try {
       return withReserve(reserve, work);
     } finally {
       if (previous == null) CHARGE_BUCKET.remove();
       else CHARGE_BUCKET.set(previous);
+      if (previousShared == null) SHARED_BUCKET.remove();
+      else SHARED_BUCKET.set(previousShared);
     }
   }
 

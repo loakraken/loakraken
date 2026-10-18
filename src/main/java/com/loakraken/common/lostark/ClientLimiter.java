@@ -31,6 +31,7 @@ public class ClientLimiter {
   private static final Duration WINDOW = Duration.ofMinutes(1);
   private static final String BOT_PREFIX = "bot:";
   private static final String BOT_ALL = "all";
+  private static final String SHARED = "shared";
 
   /** 제한을 끈 상태. 단위 테스트용 게이트가 쓴다. */
   public static final ClientLimiter DISABLED =
@@ -72,7 +73,8 @@ public class ClientLimiter {
     ALERT_SUBSCRIBE,
     MATERIAL_PRICES,
     GEM_FILTER,
-    MATERIAL_SEARCH
+    MATERIAL_SEARCH,
+    MATERIAL_SEARCH_ALL
   }
 
   /** 판정 결과. 거절이면 retryAfterSeconds는 지금 창이 끝날 때까지 남은 초(1 이상)다. */
@@ -182,6 +184,15 @@ public class ClientLimiter {
     if (!decision.allowed())
       throw new BusinessException(
           LostArkErrorCode.CLIENT_RATE_LIMITED, Duration.ofSeconds(decision.retryAfterSeconds()));
+  }
+
+  /**
+   * 모든 클라이언트가 함께 쓰는 기능 상한(예: 재료 검색 전체 분당 36)을 한 번 센다. 클라이언트가 없어도(내부 주소) 센다. 넘으면
+   * LOST_ARK_RATE_LIMITED (공유 예산이 막힌 것과 같은 거절 — 부르는 쪽은 지금 알 수 없음으로 처리).
+   */
+  void chargeShared(Bucket bucket) {
+    if (!check(bucket, SHARED).allowed())
+      throw new BusinessException(LostArkErrorCode.LOST_ARK_RATE_LIMITED);
   }
 
   void count(Bucket bucket, String event) {

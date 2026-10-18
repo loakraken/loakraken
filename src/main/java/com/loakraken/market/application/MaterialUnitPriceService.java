@@ -70,10 +70,11 @@ public class MaterialUnitPriceService {
   static final int MAX_REQUEST_SEARCHES = 45;
 
   /**
-   * 재료 시세 API의 캐시 미스 검색이 공유 예산(분당 90)에 남길 몫. 54를 남기므로 재료 검색은 분당 전체 사용이 36(40%)이 될 때까지만 하고, 그 뒤에도
-   * 캐릭터 검색 등 사용자 호출 몫 54가 늘 남는다(보안 점검 10-18, PM 판정). 넘으면 그 이름부터 지금 알 수 없음.
+   * 재료 검색 중에도 캐릭터 검색 등 사용자 호출을 위해 공유 예산(분당 90)에 늘 남겨 두는 몫. 게이트는 '호출 뒤에도 이만큼 남는지'로 허가한다. 수집기·예열은 40을
+   * 남기고 멈추므로(분당 최대 50) 재료 검색은 그 위에서도 전체 70까지 쓸 수 있고, 그때도 20은 사용자 호출에 남는다. 재료 검색 자신의 상한(분당 36, 모든
+   * 클라이언트 합계)은 클라이언트 한도의 MATERIAL_SEARCH_ALL 버킷이 따로 센다(보안 점검 10-18, PM 판정).
    */
-  static final int REQUEST_RESERVE = 54;
+  static final int CHARACTER_SEARCH_RESERVE = 20;
 
   /** 분류 전체 예열 스캔의 검색 조건(이름 없음, 등급순). */
   public static MarketSearch categorySearch(int category, int page) {
@@ -107,6 +108,11 @@ public class MaterialUnitPriceService {
     this.clock = clock;
   }
 
+  /**
+   * unavailableReason: PRICE_UNAVAILABLE 가운데 '지금 조회하지 못한' 이유(열린 문자열). RATE_LIMITED = 재료 검색
+   * 한도(클라이언트·전체)나 공유 호출 예산에 걸려 부르지 않음(잠시 뒤 다시), SEARCH_LIMIT = 요청당 검색 상한, OFFICIAL_UNAVAILABLE = 공식
+   * 서버 장애. 시세를 읽었는데 가격이 없거나 0이면 null.
+   */
   public record UnitPrice(
       String name,
       Status status,
@@ -115,7 +121,29 @@ public class MaterialUnitPriceService {
       Integer bundleCount,
       BigDecimal bundlePrice,
       Integer contentsPerItem,
-      Instant observedAt) {
+      Instant observedAt,
+      String unavailableReason) {
+    public UnitPrice(
+        String name,
+        Status status,
+        BigDecimal unitPriceGold,
+        String sourceItemName,
+        Integer bundleCount,
+        BigDecimal bundlePrice,
+        Integer contentsPerItem,
+        Instant observedAt) {
+      this(
+          name,
+          status,
+          unitPriceGold,
+          sourceItemName,
+          bundleCount,
+          bundlePrice,
+          contentsPerItem,
+          observedAt,
+          null);
+    }
+
     public enum Status {
       PRICED,
       NOT_FOUND,
@@ -155,8 +183,8 @@ public class MaterialUnitPriceService {
   /**
    * 재료 시세 API. 예열 캐시에 있는 이름은 공식 호출 없이 답한다. 캐시에 없는 이름이 있으면 그 요청을 MATERIAL_PRICES 버킷에 <b>한 번</b> 매기고,
    * 검색은 요청당 MAX_REQUEST_SEARCHES번까지, 공식 호출마다 요청 클라이언트의 MATERIAL_SEARCH 버킷(분당 30, 공식 호출 한도 OFFICIAL과
-   * 따로)에 매기고, 공유 예산에는 REQUEST_RESERVE를 남긴다. 상한·클라이언트 버킷·공유 예산에 걸린 이름부터는 PRICE_UNAVAILABLE이다(429가
-   * 아님).
+   * 따로)에 매기고, 모든 클라이언트 합계 MATERIAL_SEARCH_ALL(분당 36)에도 매기며, 공유 예산에는 캐릭터 검색 몫
+   * CHARACTER_SEARCH_RESERVE(20)를 남긴다. 상한·클라이언트 버킷·공유 예산에 걸린 이름부터는 PRICE_UNAVAILABLE이다(429가 아님).
    */
   public List<UnitPrice> requestPrices(MaterialPriceBasis basis, List<String> names) {
     var scans = scans();
@@ -171,21 +199,22 @@ public class MaterialUnitPriceService {
       gate.chargeClient(ClientLimiter.Bucket.MATERIAL_PRICES);
       var budget = new int[] {MAX_REQUEST_SEARCHES};
       gate.withClientBucket(
-          REQUEST_RESERVE,
+          CHARACTER_SEARCH_RESERVE,
           ClientLimiter.Bucket.MATERIAL_SEARCH,
+          ClientLimiter.Bucket.MATERIAL_SEARCH_ALL,
           () -> {
-            boolean stopped = false;
+            String stopped = null;
             for (var name : misses) {
-              if (stopped) {
-                result.put(name, unavailable(name));
+              if (stopped != null) {
+                result.put(name, unavailable(name, stopped));
                 continue;
               }
               try {
                 result.put(name, lookup(basis, name, budget, scans));
               } catch (BusinessException exception) {
-                // 클라이언트 재료 검색 버킷·공유 예산·공식 장애: 이 이름부터 나머지는 지금 알 수 없음으로 둔다(캐시에서 답한 이름은 그대로).
-                stopped = true;
-                result.put(name, unavailable(name));
+                // 재료 검색 한도(클라이언트·전체)·공유 예산·공식 장애: 이 이름부터 나머지는 지금 알 수 없음으로 둔다(캐시에서 답한 이름은 그대로).
+                stopped = reason(exception);
+                result.put(name, unavailable(name, stopped));
               }
             }
             return null;
@@ -194,9 +223,30 @@ public class MaterialUnitPriceService {
     return List.copyOf(result.values());
   }
 
-  private UnitPrice unavailable(String name) {
+  static final String RATE_LIMITED = "RATE_LIMITED";
+  static final String SEARCH_LIMIT = "SEARCH_LIMIT";
+  static final String OFFICIAL_UNAVAILABLE = "OFFICIAL_UNAVAILABLE";
+
+  /** 부르지 못한 이유: 한도·예산이면 RATE_LIMITED, 그 밖(공식 장애·관문 저장소 장애)은 OFFICIAL_UNAVAILABLE. */
+  static String reason(BusinessException exception) {
+    var code = exception.errorCode();
+    return code == com.loakraken.common.lostark.LostArkErrorCode.CLIENT_RATE_LIMITED
+            || code == com.loakraken.common.lostark.LostArkErrorCode.LOST_ARK_RATE_LIMITED
+        ? RATE_LIMITED
+        : OFFICIAL_UNAVAILABLE;
+  }
+
+  private UnitPrice unavailable(String name, String reason) {
     return new UnitPrice(
-        name, UnitPrice.Status.PRICE_UNAVAILABLE, null, null, null, null, null, clock.instant());
+        name,
+        UnitPrice.Status.PRICE_UNAVAILABLE,
+        null,
+        null,
+        null,
+        null,
+        null,
+        clock.instant(),
+        reason);
   }
 
   /** 예열 스캔(재련 재료, 생활·전투 용품). 읽지 못하면 없는 것으로 둔다. */
@@ -250,13 +300,13 @@ public class MaterialUnitPriceService {
 
   private UnitPrice lookup(MaterialPriceBasis basis, String name, int[] budget, Scans scans) {
     if (SHARD.equals(name)) {
-      if (budget[0] <= 0) return unavailable(name);
+      if (budget[0] <= 0) return unavailable(name, SEARCH_LIMIT);
       budget[0]--;
       var page = search(MATERIAL_CATEGORY, SHARD_POUCH_SEARCH, 1);
       return shard(basis, page.page().items(), page.observedAt());
     }
     var found = exact(name, budget, scans.complete());
-    if (found == null) return unavailable(name);
+    if (found == null) return unavailable(name, SEARCH_LIMIT);
     var observedAt = found.observedAt() == null ? clock.instant() : found.observedAt();
     if (found.items().isEmpty()
         && (notFoundAt.size() < MAX_REMEMBERED || notFoundAt.containsKey(name)))

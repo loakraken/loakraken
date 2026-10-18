@@ -209,13 +209,7 @@ class LostArkRequestGateTest {
   void 재료_검색_버킷은_공식_호출마다_세고_31번째는_클라이언트_한도이며_공식_호출_한도는_쓰지_않는다() {
     // 보안 점검 10-18: 재료 시세 요청 안의 공식 검색이 클라이언트 한도 밖이라 한 클라이언트가 공유 예산을 다 쓸 수 있었다.
     var clock = new MutableClock();
-    var limiter =
-        new ClientLimiter(
-            new ClientLimitProperties(true, 2, 10, 240, 120, true, 2, 6, 20, 5, 5, 10, 3, 30),
-            new ClientLimitStore.Memory(),
-            clock,
-            registry,
-            "key");
+    var limiter = limiter(clock, 2, 30, 36);
     var gate = materialGate(clock, limiter);
     limiter.enter("client-a");
     try {
@@ -225,42 +219,75 @@ class LostArkRequestGateTest {
           .extracting(exception -> ((BusinessException) exception).errorCode())
           .isEqualTo(LostArkErrorCode.CLIENT_RATE_LIMITED);
       // 공식 호출 한도(OFFICIAL 2)는 재료 검색으로 쓰지 않았다: 캐릭터 검색 같은 사용자 호출 2번은 그대로 된다.
-      for (int i = 0; i < 2; i++) {
-        gate.acquire();
-        gate.release();
-      }
+      for (int i = 0; i < 2; i++) userCall(gate);
     } finally {
       limiter.exit();
     }
   }
 
   @Test
-  void 재료_검색은_전역_예산의_40퍼센트까지만_하고_그때도_캐릭터_검색은_된다() {
+  void 재료_검색은_모든_클라이언트_합계_36에서_막히고_공유_예산은_그만큼만_쓴다() {
     var clock = new MutableClock();
-    var limiter =
-        new ClientLimiter(
-            new ClientLimitProperties(true, 100, 10, 1000, 120, true, 2, 6, 20, 5, 5, 10, 3, 1000),
-            new ClientLimitStore.Memory(),
-            clock,
-            registry,
-            "key");
+    var limiter = limiter(clock, 100, 30, 36);
     var gate = materialGate(clock, limiter);
+    limiter.enter("client-a");
+    try {
+      for (int i = 0; i < 30; i++) materialCall(gate);
+    } finally {
+      limiter.exit();
+    }
     limiter.enter("client-b");
     try {
-      // 분당 예산 90, 재료 검색은 몫 54를 남기므로 전체 사용 36까지만(여러 클라이언트여도 같음).
-      for (int i = 0; i < 36; i++) materialCall(gate);
+      for (int i = 0; i < 6; i++) materialCall(gate);
+      // 37번째(클라이언트 B 7번째): B 자신은 30 안이지만 합계 상한 36 → 공유 예산이 막힌 것과 같은 거절.
       assertThatThrownBy(() -> materialCall(gate))
           .isInstanceOf(BusinessException.class)
           .extracting(exception -> ((BusinessException) exception).errorCode())
           .isEqualTo(LostArkErrorCode.LOST_ARK_RATE_LIMITED);
-      // 그때도 캐릭터 검색(사용자 호출, 몫 0)은 남은 54로 된다.
-      for (int i = 0; i < 54; i++) {
-        gate.acquire();
-        gate.release();
-      }
+      // 공유 예산은 36만 썼다: 남은 54 가운데 캐릭터 검색 몫까지 사용자 호출이 된다.
+      for (int i = 0; i < 54; i++) userCall(gate);
     } finally {
       limiter.exit();
     }
+  }
+
+  @Test
+  void 수집기가_분당_50을_쓰는_중에도_재료_검색이_되고_캐릭터_검색_몫_20은_남는다() {
+    // PM 판정 10-18: '전체 사용 ≤ 36'이면 수집기(몫 40을 남기고 분당 최대 50)만으로 재료 검색이 늘 막혔다.
+    var clock = new MutableClock();
+    var limiter = limiter(clock, 100, 30, 36);
+    var gate = materialGate(clock, limiter);
+    for (int i = 0; i < 50; i++)
+      gate.withReserve(
+          40,
+          () -> {
+            gate.acquire();
+            gate.release();
+            return null;
+          });
+    limiter.enter("client-c");
+    try {
+      // 재료 검색은 캐릭터 검색 몫 20을 남기는 데까지: 전체 70까지 20번.
+      for (int i = 0; i < 20; i++) materialCall(gate);
+      assertThatThrownBy(() -> materialCall(gate))
+          .isInstanceOf(BusinessException.class)
+          .extracting(exception -> ((BusinessException) exception).errorCode())
+          .isEqualTo(LostArkErrorCode.LOST_ARK_RATE_LIMITED);
+      // 남은 20은 캐릭터 검색 같은 사용자 호출(몫 0)이 쓴다.
+      for (int i = 0; i < 20; i++) userCall(gate);
+    } finally {
+      limiter.exit();
+    }
+  }
+
+  private ClientLimiter limiter(Clock clock, int official, int material, int materialAll) {
+    return new ClientLimiter(
+        new ClientLimitProperties(
+            true, official, 10, 1000, 120, true, 2, 6, 20, 5, 5, 10, 3, material, materialAll),
+        new ClientLimitStore.Memory(),
+        clock,
+        registry,
+        "key");
   }
 
   private LostArkRequestGate materialGate(Clock clock, ClientLimiter limiter) {
@@ -279,11 +306,17 @@ class LostArkRequestGateTest {
         limiter);
   }
 
+  private static void userCall(LostArkRequestGate gate) {
+    gate.acquire();
+    gate.release();
+  }
+
   private static void materialCall(LostArkRequestGate gate) {
-    // 54 = 재료 시세 REQUEST_RESERVE(MaterialUnitPriceServiceTest가 같은 값임을 확인).
+    // 20 = 재료 시세 CHARACTER_SEARCH_RESERVE(MaterialUnitPriceServiceTest가 같은 값임을 확인).
     gate.withClientBucket(
-        54,
+        20,
         ClientLimiter.Bucket.MATERIAL_SEARCH,
+        ClientLimiter.Bucket.MATERIAL_SEARCH_ALL,
         () -> {
           gate.acquire();
           gate.release();

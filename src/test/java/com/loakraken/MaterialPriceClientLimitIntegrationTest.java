@@ -147,12 +147,19 @@ class MaterialPriceClientLimitIntegrationTest {
     assertThat(status(first, "PRICE_UNAVAILABLE")).isPositive();
     assertThat(status(first, "PRICED") + status(first, "PRICE_UNAVAILABLE")).isEqualTo(20);
     assertThat(first.get(4).path("unitPriceGold").decimalValue()).isEqualByComparingTo("2.85");
+    // 한도로 부르지 못한 이름은 '시세 없음'과 구분되는 사유(RATE_LIMITED), 가격을 읽은 이름은 사유 null.
+    for (var item : first)
+      if ("PRICE_UNAVAILABLE".equals(item.path("status").asText()))
+        assertThat(item.path("unavailableReason").asText()).isEqualTo("RATE_LIMITED");
+      else assertThat(item.path("unavailableReason").isNull()).isTrue();
 
     // 같은 분 두 번째(검색 캐시 비움): 재료 검색 버킷을 다 써서 공식 검색 없이 모두 지금 알 수 없음, 429 아님.
     redis.delete(redis.keys("market:v1:*"));
     calls.set(0);
     var second = items(post(CRAFT, "203.0.113.40"));
     assertThat(status(second, "PRICE_UNAVAILABLE")).isEqualTo(20);
+    assertThat(second)
+        .allMatch(item -> "RATE_LIMITED".equals(item.path("unavailableReason").asText()));
     assertThat(calls).hasValue(0);
 
     // 생명의 기운 효율 25개(20 + 5): 세 번째 요청까지 재료 시세 한도(시험 3) 안.

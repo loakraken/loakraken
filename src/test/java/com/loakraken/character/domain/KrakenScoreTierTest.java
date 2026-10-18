@@ -62,13 +62,27 @@ class KrakenScoreTierTest {
   }
 
   @Test
-  void 정수_남은_점수는_반올림_전_값을_한_번만_반올림한다() {
-    // 남은 점수 242.497: 둘째 자리 remaining은 242.50이지만, 그것을 다시 반올림한 243이 아니라 242.
+  void 정수_남은_점수는_원본처럼_둘째_자리_뒤_정수로_두_번_반올림한다() {
+    // 원본 화면 Number(diff.toFixed(2)).toFixed(0): 242.497 → 242.50 → 243.
     var tier = KrakenScoreTier.of(TABLE, 5000 - 242.497);
     assertThat(tier.remaining()).isEqualByComparingTo("242.50");
-    assertThat(tier.remainingRounded()).isEqualTo(242);
-    // .5는 위로(화면 규칙과 같음).
-    assertThat(KrakenScoreTier.of(TABLE, 5000 - 100.5).remainingRounded()).isEqualTo(101);
+    assertThat(tier.remainingRounded()).isEqualTo(243);
+  }
+
+  /** 기대값은 원본 식을 node로 돌린 값(double의 정확한 십진 값 기준 — 1.005는 1.00499…라 1.00). */
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.CsvSource({
+    "242.497, 242.50, 243",
+    "1.005, 1.00, 1",
+    "2.675, 2.67, 3",
+    "10.495, 10.49, 10",
+    "10.505, 10.51, 11",
+    "100.5, 100.50, 101",
+    "0.495, 0.49, 0"
+  })
+  void 둘째_자리와_정수_반올림은_원본과_같다(double diff, String twoPlaces, int integer) {
+    assertThat(KrakenScoreTier.remaining(diff)).isEqualByComparingTo(twoPlaces);
+    assertThat(KrakenScoreTier.screenInteger(diff)).isEqualTo(integer);
   }
 
   @Test

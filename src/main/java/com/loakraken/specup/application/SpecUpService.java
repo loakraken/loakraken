@@ -492,7 +492,7 @@ public class SpecUpService {
     Long current = null;
     if (!bound && level >= 1) {
       var currentCell = prices.get(kind + ":" + level);
-      // 지금 레벨 매물 최저가가 없으면 판매 기대가를 몰라 PRICE_PENDING이다(PM-백엔드 10-12 05:01 P2).
+      // 지금 레벨 매물 최저가가 없으면 뺄 값을 몰라 PRICE_PENDING이다(PM-백엔드 10-12 05:01 P2).
       if (currentCell == null
           || currentCell.cell() == null
           || currentCell.cell().minBuyPrice() == null) return SpecUpCost.PRICE_PENDING;

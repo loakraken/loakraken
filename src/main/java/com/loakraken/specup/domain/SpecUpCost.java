@@ -104,9 +104,8 @@ public record SpecUpCost(String unit, Long amount, String status, String code, S
   public static final BigDecimal EXCHANGE_FEE = new BigDecimal("0.05");
 
   /**
-   * 보석 비용(PM-백엔드 10-11 판정 (a)): 목표 레벨 즉시 구매 최저가 − 지금 보석 판매 기대가(최저가 − 수수료 5% 올림, 약 × 0.95). 지금 보석이
-   * 귀속이면 팔 수 없어 빼지 않는다. 광휘 보석은 공식 경매장 보석 검색에 종류가 없어 그 칸 효과와 같은 종류(피해 → 겁화, 재사용 대기시간 → 작열)의 시세를
-   * 넘겨받는다 (SpecUpService.priceKind).
+   * 보석 비용(10-18 판정, 10-11 판정 (a) 대체): 목표 레벨 즉시 구매 최저가 − 지금 보석 즉시 구매 최저가(판매 수수료는 빼지 않음 — 수수료를 넣은 실제
+   * 부담은 줄 상세 SELL 줄의 sellFeeGold). 지금 보석이 귀속이면 팔 수 없어 빼지 않는다. 0보다 작으면 0.
    */
   public static SpecUpCost gem(long nextPrice, Long currentPrice, boolean currentBound) {
     if (currentBound)
@@ -118,26 +117,12 @@ public record SpecUpCost(String unit, Long amount, String status, String code, S
           "목표 레벨 보석의 즉시 구매 최저가입니다(지금 보석은 귀속이라 판매가를 빼지 않음).");
     if (currentPrice == null)
       return new SpecUpCost("GOLD", nextPrice, "OK", "GEM_BUY", "목표 레벨 보석의 즉시 구매 최저가입니다.");
-    long sale = currentPrice - exchangeSaleFee(currentPrice);
     return new SpecUpCost(
         "GOLD",
-        Math.max(0, nextPrice - sale),
+        Math.max(0, nextPrice - currentPrice),
         "OK",
         "GEM_UPGRADE",
-        "목표 레벨 보석 즉시 구매 최저가에서 지금 보석의 판매 기대가(최저가에서 거래소 수수료 5%를 뺀 값)를 뺐습니다.");
-  }
-
-  /**
-   * 같은 보석 칸을 이어서 올리는 둘째 단계부터의 비용(L31 목표 경로): 이번 레벨 즉시 구매 최저가 − 직전 레벨 즉시 구매 최저가. 중간 보석은 사고팔지 않으므로 단계
-   * 비용의 합은 마지막 레벨 매입가 − 처음 보석 판매 기대가와 같다.
-   */
-  public static SpecUpCost gemStep(long nextPrice, long previousPrice) {
-    return new SpecUpCost(
-        "GOLD",
-        nextPrice - previousPrice,
-        "OK",
-        "GEM_STEP",
-        "이번 레벨 보석 즉시 구매 최저가에서 바로 앞 단계 레벨 보석 즉시 구매 최저가를 뺐습니다(같은 칸을 이어서 올릴 때 중간 보석은 사고팔지 않음).");
+        "목표 레벨 보석 즉시 구매 최저가에서 지금 보석의 즉시 구매 최저가를 뺐습니다(판매 수수료는 빼지 않음).");
   }
 
   /** 유물 각인 레벨 1당 각인서 권수(공식 가이드 '각인', 검증 표본 spec-up/cost-rules-2026-10-12.json, L30). */

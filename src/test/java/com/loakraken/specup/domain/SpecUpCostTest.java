@@ -12,7 +12,10 @@ class SpecUpCostTest {
     assertThat(SpecUpCost.exchangeSaleFee(400_001)).isEqualTo(20_001);
     assertThat(SpecUpCost.exchangeSaleFee(19)).isEqualTo(1);
     assertThat(SpecUpCost.exchangeSaleFee(0)).isZero();
-    // 판매 기대가 = 최저가 − 수수료: 400,001 → 380,000.
-    assertThat(SpecUpCost.gem(1_000_000, 400_001L, false).amount()).isEqualTo(620_000);
+    // 보석 비용은 수수료를 빼지 않는다(10-18 판정): 1,000,000 − 400,001 = 599,999.
+    assertThat(SpecUpCost.gem(1_000_000, 400_001L, false).amount()).isEqualTo(599_999);
+    // 귀속이면 지금 보석 값을 빼지 않고, 지금 보석이 더 비싸면 0.
+    assertThat(SpecUpCost.gem(1_000_000, 400_001L, true).amount()).isEqualTo(1_000_000);
+    assertThat(SpecUpCost.gem(100, 500L, false).amount()).isZero();
   }
 }

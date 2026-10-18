@@ -124,8 +124,8 @@ final class SpecUpScoreCandidates {
   /**
    * 장신구 연마 교체: 부위마다 점수에 쓰이는 두 옵션(MAIN_OPTIONS)의 등급을 지금 이상으로 바꾼 조합(지금과 같은 조합 제외). 목표 장신구는 그 두 옵션만 있는
    * 매물로 본다 — 셋째 줄은 모르는 옵션이라 지금 장신구의 고정값 공격력·무기 공격력 줄도 점수에서 빠진다(비교 기준 B와 같음, 레퍼런스 대조로 확인). 두 옵션이 모두
-   * 상이면 셋째 줄에 고정값 공격력·무기 공격력의 더 높은 등급을 넣은 매물도 후보다. 줄 수가 3개가 아니거나 값이 연마 수치표(1680 고대)에 없는 부위는 건너뛴다.
-   * 하나도 계산할 수 없으면 null.
+   * 상이면 셋째 줄에 고정값 공격력·무기 공격력의 더 높은 등급을 넣은 매물도 후보다. 줄 수가 3개가 아니거나 두 옵션·고정값 줄 가운데 값이 연마 수치표(1680 고대)에
+   * 없는 줄이 있는 부위(다른 아이템 레벨 장신구)는 건너뛴다. 하나도 계산할 수 없으면 null.
    */
   static List<SpecUpService.Planned> polish(
       JsonNode input, CharacterLoadout loadout, CombatPowerPolishValues values) {
@@ -164,15 +164,17 @@ final class SpecUpScoreCandidates {
     var mains = MAIN_OPTIONS.get(part);
     int[] position = {-1, -1};
     int[] grade = {-1, -1};
-    int flat = -1;
+    // 고정값 공격력·무기 공격력 줄은 모두 점수에 쓰인다(줄마다 보존). 등급은 셋째 줄 후보에서만 쓴다(그때 고정값 줄은 하나뿐).
+    var flats = new ArrayList<Integer>();
     int flatGrade = -1;
     for (int i = 0; i < lines.size(); i++) {
       var m = LINE.matcher(lines.get(i));
       if (!m.matches()) continue;
       boolean percent = !m.group(3).isEmpty();
       if (!percent && FLAT_OPTIONS.contains(m.group(1))) {
-        flat = i;
         flatGrade = gradeOf(values, part, m.group(1), false, lines.get(i));
+        if (flatGrade < 0) return null; // 수치표에 없는 값(다른 아이템 레벨): 주옵션과 같이 그 부위를 건너뜀
+        flats.add(i);
         continue;
       }
       int k = percent ? mains.indexOf(m.group(1)) : -1;
@@ -185,7 +187,7 @@ final class SpecUpScoreCandidates {
     // 지금 장신구에서 점수에 쓰이는 줄(두 옵션 + 고정값 공격력·무기 공격력), 원래 줄 순서.
     var scoring = new ArrayList<String>();
     for (int i = 0; i < lines.size(); i++)
-      if (i == position[0] || i == position[1] || i == flat) scoring.add(lines.get(i));
+      if (i == position[0] || i == position[1] || flats.contains(i)) scoring.add(lines.get(i));
     var rows = new ArrayList<SpecUpService.Planned>();
     for (int a = grade[0]; a <= 2; a++)
       for (int b = grade[1]; b <= 2; b++) {
@@ -196,7 +198,7 @@ final class SpecUpScoreCandidates {
       }
     if (grade[0] == 2 && grade[1] == 2)
       for (var name : FLAT_OPTIONS)
-        for (int g = (flat >= 0 ? flatGrade : -1) + 1; g <= 2; g++) {
+        for (int g = (flats.isEmpty() ? -1 : flatGrade) + 1; g <= 2; g++) {
           var next = target(values, part, mains, position, grade);
           var text = text(values, part, name, false, g);
           if (next == null || text == null) continue;

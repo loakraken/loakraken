@@ -19,6 +19,7 @@ import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.core.io.ClassPathResource;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 /**
  * 스펙업 Δ크라켄 점수가 비교 기준 B 스펙업 추천 화면의 ▲점수와 같은지(레퍼런스 결과 표, 같은 시각 기준 캐릭터 원문 l01·l05). ▲ = 반올림 전 점수 차를 소수
@@ -246,6 +247,47 @@ class SpecUpKrakenScoreReferenceTest {
         .containsExactly(
             "ABILITY_STONE:4:2", "ABILITY_STONE:3:3", "ABILITY_STONE:4:3", "ABILITY_STONE:4:4");
     assertThat(SpecUpScoreCandidates.karma(l05.input())).isEmpty();
+  }
+
+  @Test
+  void 고정값_줄이_둘이면_둘_다_지금_줄로_보이고_목표에서_빠진다() throws Exception {
+    // 목걸이: 추가 피해 상 + 고정값 공격력 상 + 고정값 무기 공격력 상(주옵션 하나뿐).
+    var context = context("l01");
+    var input = (ObjectNode) context.input().deepCopy();
+    setOptions(input, "necklace", "추가 피해 +2.60%", "공격력 +390", "무기 공격력 +960");
+    var withTwoFlats =
+        new SpecUpKrakenScore.Context(input, KrakenScoreEngine.dealerScore(input, tables()), null);
+    var rows = SpecUpScoreCandidates.polish(input, loadout("l01"), polishValues());
+    var index = accessoryIndex(loadout("l01"), "목걸이1");
+    var row =
+        rows.stream()
+            .filter(planned -> planned.id().equals("POLISH:" + index + ":HL"))
+            .findFirst()
+            .orElseThrow();
+    assertThat(row.from()).isEqualTo("추가 피해 +2.60%(상) · 공격력 +390(상) · 무기 공격력 +960(상)");
+    assertThat(row.to()).isEqualTo("추가 피해 +2.60%(상) · 적에게 주는 피해 +0.55%(하)");
+    // Δ는 화면에 보인 그대로: 목표 = 두 옵션 줄만(고정값 두 줄이 모두 빠짐).
+    var expected = (ObjectNode) input.deepCopy();
+    setOptions(expected, "necklace", "추가 피해 +2.60%", "적에게 주는 피해 +0.55%");
+    assertThat(scorer().delta(withTwoFlats, row.kraken()))
+        .isEqualTo(KrakenScoreEngine.dealerScore(expected, tables()) - withTwoFlats.before());
+  }
+
+  @Test
+  void 수치표_밖_고정값이_있는_부위는_후보를_만들지_않는다() throws Exception {
+    // 다른 아이템 레벨 장신구의 고정값(공격력 +100은 1680 고대 표에 없음) → 그 부위 전체를 건너뜀(다른 부위는 그대로).
+    var input = (ObjectNode) context("l01").input().deepCopy();
+    setOptions(input, "necklace", "추가 피해 +2.60%", "공격력 +100", "낙인력 +2.15%");
+    var rows = SpecUpScoreCandidates.polish(input, loadout("l01"), polishValues());
+    var index = accessoryIndex(loadout("l01"), "목걸이1");
+    assertThat(rows).noneMatch(planned -> planned.id().startsWith("POLISH:" + index + ":"));
+    assertThat(rows).hasSize(16); // 귀걸이 5+5·반지 3+3
+  }
+
+  private static void setOptions(ObjectNode input, String slot, String... lines) {
+    var option =
+        ((ObjectNode) input.path("armory").path("accessory").path(slot)).putArray("option");
+    for (var line : lines) option.add(line);
   }
 
   private static SpecUpKrakenScore scorer() throws Exception {

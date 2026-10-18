@@ -204,7 +204,8 @@ public record CharacterLoadoutResponse(
       if (value.effects() != null)
         for (var skill : value.effects().skills())
           if (skill != null && skill.gemSlot() != null) {
-            var lines = options.computeIfAbsent(skill.gemSlot(), slot -> new java.util.ArrayList<>());
+            var lines =
+                options.computeIfAbsent(skill.gemSlot(), slot -> new java.util.ArrayList<>());
             lines.add(skill.option());
             lines.addAll(skill.description());
           }

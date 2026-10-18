@@ -33,8 +33,7 @@ class GemBaseAttackTest {
   void 같은_칸_여러_줄과_공백_차이에도_공식_문구를_읽는다() {
     // #555: 첫 줄이 다른 효과여도 그 칸의 다른 줄에서 찾는다.
     var lines =
-        GemBaseAttack.of(
-            gem("9레벨 겁화의 보석", 9, 4), List.of("피해 40.00% 증가", "기본 공격력 1.00% 증가"));
+        GemBaseAttack.of(gem("9레벨 겁화의 보석", 9, 4), List.of("피해 40.00% 증가", "기본 공격력 1.00% 증가"));
     assertThat(lines.pct()).isEqualByComparingTo("1.00");
     assertThat(lines.source()).isEqualTo(GemBaseAttack.TOOLTIP);
     // 공백이 여러 칸이거나 숫자와 % 사이에 공백이 있어도 읽는다.

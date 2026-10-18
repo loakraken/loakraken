@@ -123,12 +123,15 @@ class KrakenScoreServiceTest {
 
   @Test
   void 엔진_안에서_예외가_나도_점수_값_문제가_아니라_CALC_FAILED다() throws IOException {
-    // 표 모양이 어긋난 엔진(키는 있으나 값이 표가 아님) — 입력 확인은 지나고 엔진 계산에서 예외가 난다.
-    var broken = MAPPER.createObjectNode();
-    ENGINE.tables().propertyNames().forEach(key -> broken.put(key, "x"));
+    // 입력 확인은 지나고 엔진 계산에서 예상 못 한 예외가 난 경우.
     var registry = new SimpleMeterRegistry();
     var service =
-        new KrakenScoreService(TABLE, new KrakenScoreEngine.Tables("", broken), true, registry);
+        new KrakenScoreService(TABLE, ENGINE, true, registry) {
+          @Override
+          double rawScore(Role role, JsonNode input) {
+            throw new IllegalStateException("엔진 실패");
+          }
+        };
     var score = service.score(withInput(fixtureInput("l01")));
     assertThat(score.status()).isEqualTo(KrakenScoreService.Status.UNSUPPORTED);
     assertThat(score.reason()).isEqualTo(KrakenScoreService.Reason.CALC_FAILED);

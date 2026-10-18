@@ -42,7 +42,7 @@ import tools.jackson.databind.json.JsonMapper;
 @Import(TestcontainersConfiguration.class)
 @SpringBootTest(
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-    properties = "ranking.guilds.enabled=true")
+    properties = {"ranking.guilds.enabled=true", "ranking.guilds.list.enabled=true"})
 class StopListPathsIntegrationTest {
   private static final String SERVER = "정지경로서버";
   private static final String GUILD = "정지경로길드";

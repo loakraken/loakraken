@@ -24,6 +24,7 @@ import tools.jackson.databind.json.JsonMapper;
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
     properties = {
       "ranking.guilds.enabled=true",
+      "ranking.guilds.list.enabled=true",
       "ranking.collectibles.enabled=true",
       "ranking.rosters.enabled=true",
       "ranking.titles.enabled=true"

@@ -177,7 +177,8 @@ public class SpecUpDetailService {
           refine = new Refine(from, from + 1, null, null, null);
           break;
         }
-        var breakdown = specUp.refineBreakdown(item, from, materials.cached());
+        int to = Integer.parseInt(parts[2]);
+        var breakdown = specUp.refineBreakdown(item, from, to, materials.cached());
         var plan = breakdown.plan();
         if (plan != null) {
           materialRows = materialRows(plan, breakdown.prices());
@@ -185,12 +186,19 @@ public class SpecUpDetailService {
           consistent = matches(candidate.cost(), breakdown.cost().amount());
         }
         var stage = plan == null || plan.stages().isEmpty() ? null : plan.stages().getFirst();
+        // 여러 단계 줄이면 기대 시도는 단계마다의 합, 첫 시도 확률은 첫 단계(#585).
+        BigDecimal attempts = null;
+        if (plan != null && !plan.stages().isEmpty()) {
+          attempts = BigDecimal.ZERO;
+          for (var each : plan.stages()) attempts = attempts.add(each.expectedAttempts());
+          attempts = attempts.setScale(2, RoundingMode.HALF_UP);
+        }
         refine =
             new Refine(
                 from,
-                from + 1,
+                to,
                 plan == null ? null : breakdown.breath() ? "MAX" : "NONE",
-                stage == null ? null : stage.expectedAttempts().setScale(2, RoundingMode.HALF_UP),
+                attempts,
                 stage == null ? null : stage.firstAttemptSuccessRateBp());
       }
       default -> {}

@@ -28,8 +28,7 @@ public record CharacterPosition(Role role, String evidence) {
   }
 
   /**
-   * 아크 패시브 효과 설명 줄(태그 없는 "깨달음 N티어 노드 Lv.N")로 판정한다. 공식 원문에서 바로 판정할 때(크라켄 점수 입력 #559)도 이 규칙 하나만
-   * 쓴다.
+   * 아크 패시브 효과 설명 줄(태그 없는 "깨달음 N티어 노드 Lv.N")로 판정한다. 공식 원문에서 바로 판정할 때(크라켄 점수 입력 #559)도 이 규칙 하나만 쓴다.
    */
   public static CharacterPosition judgeDescriptions(
       String className, java.util.List<String> descriptions) {

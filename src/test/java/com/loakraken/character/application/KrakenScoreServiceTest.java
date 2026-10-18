@@ -103,15 +103,13 @@ class KrakenScoreServiceTest {
     return withInput(input, "블레이드", null);
   }
 
-  private static CharacterResult withInput(
-      JsonNode input, String className, String enlightenment) {
+  private static CharacterResult withInput(JsonNode input, String className, String enlightenment) {
     var base = result(className, enlightenment);
     return new CharacterResult(base.details(), base.fetchedAt(), null, input);
   }
 
   @Test
-  void 발키리는_해방자면_서포터_빛의_기사면_딜러이고_무기나_아크_패시브가_비면_계산하지_않는다()
-      throws IOException {
+  void 발키리는_해방자면_서포터_빛의_기사면_딜러이고_무기나_아크_패시브가_비면_계산하지_않는다() throws IOException {
     var service = new KrakenScoreService(TABLE, ENGINE, true, new SimpleMeterRegistry());
     var input = fixtureInput("l01");
     assertThat(service.score(withInput(input, "발키리", "해방자")).role())

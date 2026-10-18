@@ -4,7 +4,6 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import tools.jackson.core.JacksonException;
@@ -50,8 +49,9 @@ public final class KrakenScoreInputMapper {
   private static final Pattern ELLA = Pattern.compile("엘라 부여 (\\d+) 단계");
   private static final Pattern STONE_BONUS =
       Pattern.compile("\\[레벨 보너스\\] 기본 공격력 \\+(\\d+(?:\\.\\d+)?)%");
-  private static final Pattern STONE_ENGRAVING = Pattern.compile("^\\s*\\[([^\\]]+)\\]\\s*Lv\\.(\\d+)");
-  private static final Pattern ORB =Pattern.compile("달성 최대 낙원력 : (\\d+)");
+  private static final Pattern STONE_ENGRAVING =
+      Pattern.compile("^\\s*\\[([^\\]]+)\\]\\s*Lv\\.(\\d+)");
+  private static final Pattern ORB = Pattern.compile("달성 최대 낙원력 : (\\d+)");
   private static final Pattern BRACELET_ICON =
       Pattern.compile(
           "<img[^>]*emoticon_tooltip_bracelet[^>]*>(?:\\s*</img>)?", Pattern.CASE_INSENSITIVE);
@@ -308,7 +308,8 @@ public final class KrakenScoreInputMapper {
           if ("IndentStringGroup".equals(e.path("type").asString("")))
             for (var group : e.path("value"))
               for (var line : group.path("contentStr")) {
-                var engraving = STONE_ENGRAVING.matcher(strip(line.path("contentStr").asString("")));
+                var engraving =
+                    STONE_ENGRAVING.matcher(strip(line.path("contentStr").asString("")));
                 if (engraving.find()) option.add(engraving.group(1) + " Lv." + engraving.group(2));
               }
         stone.set("attackbonus", m.find() ? number(Double.parseDouble(m.group(1))) : F.nullNode());

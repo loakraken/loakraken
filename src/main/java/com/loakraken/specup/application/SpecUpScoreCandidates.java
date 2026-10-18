@@ -124,8 +124,8 @@ final class SpecUpScoreCandidates {
   /**
    * 장신구 연마 교체: 부위마다 점수에 쓰이는 두 옵션(MAIN_OPTIONS)의 등급을 지금 이상으로 바꾼 조합(지금과 같은 조합 제외). 목표 장신구는 그 두 옵션만 있는
    * 매물로 본다 — 셋째 줄은 모르는 옵션이라 지금 장신구의 고정값 공격력·무기 공격력 줄도 점수에서 빠진다(비교 기준 B와 같음, 레퍼런스 대조로 확인). 두 옵션이 모두
-   * 상이면 셋째 줄에 고정값 공격력·무기 공격력의 더 높은 등급을 넣은 매물도 후보다. 줄 수가 3개가 아니거나 두 옵션·고정값 줄 가운데 값이 연마 수치표(1680 고대)에
-   * 없는 줄이 있는 부위(다른 아이템 레벨 장신구)는 건너뛴다. 하나도 계산할 수 없으면 null.
+   * 상이면 셋째 줄에 고정값 공격력·무기 공격력을 넣은 매물도 후보다(지금 고정값 줄이 있으면 그보다 높은 등급 모두, 없으면 상만). 줄 수가 3개가 아니거나 두
+   * 옵션·고정값 줄 가운데 값이 연마 수치표(1680 고대)에 없는 줄이 있는 부위(다른 아이템 레벨 장신구)는 건너뛴다. 하나도 계산할 수 없으면 null.
    */
   static List<SpecUpService.Planned> polish(
       JsonNode input, CharacterLoadout loadout, CombatPowerPolishValues values) {
@@ -198,7 +198,8 @@ final class SpecUpScoreCandidates {
       }
     if (grade[0] == 2 && grade[1] == 2)
       for (var name : FLAT_OPTIONS)
-        for (int g = (flats.isEmpty() ? -1 : flatGrade) + 1; g <= 2; g++) {
+        // 고정값 줄이 있으면 지금보다 높은 등급 모두, 없으면 상만(비교 기준 B와 같음 — 셋째 줄이 모르는 옵션이면 상 매물만 본다).
+        for (int g = flats.isEmpty() ? 2 : flatGrade + 1; g <= 2; g++) {
           var next = target(values, part, mains, position, grade);
           var text = text(values, part, name, false, g);
           if (next == null || text == null) continue;

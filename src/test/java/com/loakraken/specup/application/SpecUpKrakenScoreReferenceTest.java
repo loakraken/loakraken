@@ -284,6 +284,28 @@ class SpecUpKrakenScoreReferenceTest {
     assertThat(rows).hasSize(16); // 귀걸이 5+5·반지 3+3
   }
 
+  @Test
+  void 두_옵션이_상이고_고정값_줄이_없으면_셋째_줄_후보는_상_두_줄뿐이다() throws Exception {
+    // 목걸이 추가 피해 상 + 적에게 주는 피해 상 + 고정값이 아닌 줄 → 셋째 줄 후보는 무기 공격력 상·공격력 상 두 줄.
+    var input = (ObjectNode) context("l01").input().deepCopy();
+    setOptions(input, "necklace", "추가 피해 +2.60%", "적에게 주는 피해 +2.00%", "낙인력 +2.15%");
+    var index = accessoryIndex(loadout("l01"), "목걸이1");
+    assertThat(SpecUpScoreCandidates.polish(input, loadout("l01"), polishValues()))
+        .extracting(SpecUpService.Planned::id)
+        .filteredOn(id -> id.startsWith("POLISH:" + index + ":"))
+        .containsExactly("POLISH:" + index + ":HHWH", "POLISH:" + index + ":HHAH");
+    // 고정값 줄(공격력 하)이 있으면 그보다 높은 등급 모두(중·상 × 두 옵션 = 4줄).
+    setOptions(input, "necklace", "추가 피해 +2.60%", "적에게 주는 피해 +2.00%", "공격력 +80");
+    assertThat(SpecUpScoreCandidates.polish(input, loadout("l01"), polishValues()))
+        .extracting(SpecUpService.Planned::id)
+        .filteredOn(id -> id.startsWith("POLISH:" + index + ":"))
+        .containsExactly(
+            "POLISH:" + index + ":HHWM",
+            "POLISH:" + index + ":HHWH",
+            "POLISH:" + index + ":HHAM",
+            "POLISH:" + index + ":HHAH");
+  }
+
   private static void setOptions(ObjectNode input, String slot, String... lines) {
     var option =
         ((ObjectNode) input.path("armory").path("accessory").path(slot)).putArray("option");

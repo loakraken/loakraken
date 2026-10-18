@@ -8,10 +8,12 @@ import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
-/** KRAKEN 정렬 묶음: ⓪ Δ > 0·0골드 → ① 10만 골드당 → ② Δ > 0·비용 모름 → ③ 나머지(PM 판정 10-18). */
+/**
+ * KRAKEN 정렬 묶음: ① 10만 골드당 → ② Δ > 0·0골드 → ③ Δ > 0·비용 모름 → ④ 나머지(비교 기준 B와 같음, PM 판정 10-18 15:18).
+ */
 class SpecUpKrakenOrderTest {
   @Test
-  void 비용_0골드_후보는_맨_위이고_비용_모름은_비용_있는_후보_뒤다() {
+  void 비용_0골드와_비용_모름은_비용_있는_후보_뒤에서_함께_Δ_큰_순이다() {
     var candidates =
         new ArrayList<>(
             List.of(
@@ -26,12 +28,12 @@ class SpecUpKrakenOrderTest {
     assertThat(candidates)
         .extracting(SpecUpService.Candidate::id)
         .containsExactly(
-            "free-big",
-            "free-small",
             "priced-high",
             "priced-low",
             "unknown-big",
+            "free-big",
             "unknown-small",
+            "free-small",
             "none");
   }
 

@@ -37,6 +37,8 @@
 
 	reverse_proxy web:3000 {
 		header_up X-Forwarded-For {client_ip}
+		# 신뢰 대역(Cloudflare)에서 온 X-Forwarded-Host는 Caddy가 그대로 넘긴다. web이 보는 값을 요청의 실제 Host로 고정한다.
+		header_up X-Forwarded-Host {host}
 		# 실제 IP는 위 한 줄로만 넘긴다. Cloudflare 밖에서 위조한 CF-Connecting-IP가 web까지 가지 않게 지운다.
 		header_up -CF-Connecting-IP
 	}

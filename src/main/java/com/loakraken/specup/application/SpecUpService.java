@@ -274,16 +274,15 @@ public class SpecUpService {
     Comparator<Candidate> tail = Comparator.comparing(Candidate::id);
     if (sort == Sort.DELTA) return byDelta.thenComparing(tail);
     if (sort == Sort.KRAKEN) {
-      // ① Δ > 0·비용 있음: 10만 골드당 내림차순 ② Δ > 0·비용 0골드: 10만 골드당 '-'라 비용 있는 후보 뒤(Δ 내림차순, 비교 기준 B와
-      // 같음 — PM 판정 10-18 15:18) ③ Δ > 0·비용 모름: Δ 내림차순 ④ 나머지: 효율 순. 같으면 id 순.
+      // ① Δ > 0·비용 있음: 10만 골드당 내림차순 ② Δ > 0·10만 골드당 없음(비용 0골드와 비용 모름을 나누지 않음): Δ 내림차순 ③ 나머지: 효율
+      // 순. 같으면 id 순(PM 확정 10-18 — 효율 없는 줄은 효율 있는 줄 뒤, 그 안에서는 Δ 큰 순).
       Comparator<Candidate> group =
           Comparator.comparingInt(
               candidate -> {
                 if (candidate.krakenScorePer100kGold() != null) return 0;
-                if (freeKraken(candidate)) return 1;
                 if (candidate.deltaKrakenScore() != null
-                    && candidate.deltaKrakenScore().signum() > 0) return 2;
-                return 3;
+                    && candidate.deltaKrakenScore().signum() > 0) return 1;
+                return 2;
               });
       return group
           .thenComparing(
@@ -298,15 +297,6 @@ public class SpecUpService {
             Candidate::combatPowerPer10kGold, Comparator.nullsLast(Comparator.reverseOrder()))
         .thenComparing(byDelta)
         .thenComparing(tail);
-  }
-
-  /** Δ크라켄 점수가 오르는데 비용이 0골드(OK)인 후보 — 10만 골드당을 낼 수 없어(0으로 나누지 않음) 비용 있는 후보 뒤, 비용 모름 앞에 둔다. */
-  private static boolean freeKraken(Candidate candidate) {
-    return candidate.deltaKrakenScore() != null
-        && candidate.deltaKrakenScore().signum() > 0
-        && candidate.cost() != null
-        && "OK".equals(candidate.cost().status())
-        && Long.valueOf(0).equals(candidate.cost().amount());
   }
 
   private Candidate evaluate(CharacterResult snapshot, Planned plan) {

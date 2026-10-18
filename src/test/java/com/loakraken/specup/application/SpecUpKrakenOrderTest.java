@@ -13,7 +13,7 @@ import org.junit.jupiter.api.Test;
  */
 class SpecUpKrakenOrderTest {
   @Test
-  void 비용_0골드_후보는_비용_있는_후보_뒤이고_비용_모름보다_앞이다() {
+  void 비용_0골드와_비용_모름은_비용_있는_후보_뒤에서_함께_Δ_큰_순이다() {
     var candidates =
         new ArrayList<>(
             List.of(
@@ -30,10 +30,10 @@ class SpecUpKrakenOrderTest {
         .containsExactly(
             "priced-high",
             "priced-low",
-            "free-big",
-            "free-small",
             "unknown-big",
+            "free-big",
             "unknown-small",
+            "free-small",
             "none");
   }
 

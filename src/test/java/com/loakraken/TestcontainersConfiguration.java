@@ -20,10 +20,19 @@ public class TestcontainersConfiguration {
   /** Valkey DB 번호 수(기본 16). 한 JVM이 만드는 컨텍스트 수(캐시에서 밀려 다시 만드는 것 포함)보다 넉넉하게. */
   private static final int VALKEY_DATABASES = 1024;
 
+  /**
+   * 컨텍스트 하나의 접속 풀 크기. 컨텍스트 캐시(기본 32개)가 같은 PostgreSQL을 함께 쓰므로 Hikari 기본(최대 10, 유휴 10)이면 320 접속까지
+   * 쌓인다. 풀을 작게, 유휴 접속은 빨리 닫고, 서버 한도도 넉넉히 둔다(32 × 4 = 128 ≤ 300).
+   */
+  private static final int POOL_SIZE = 4;
+
+  private static final int MAX_CONNECTIONS = 300;
+
   private static final AtomicInteger CONTEXTS = new AtomicInteger();
 
   private static final PostgreSQLContainer POSTGRES =
-      new PostgreSQLContainer(DockerImageName.parse("postgres:18.6"));
+      new PostgreSQLContainer(DockerImageName.parse("postgres:18.6"))
+          .withCommand("postgres", "-c", "fsync=off", "-c", "max_connections=" + MAX_CONNECTIONS);
 
   private static final GenericContainer<?> VALKEY =
       new GenericContainer<>(DockerImageName.parse("valkey/valkey:9.1.2"))
@@ -61,6 +70,9 @@ public class TestcontainersConfiguration {
       registry.add("spring.datasource.url", () -> url);
       registry.add("spring.datasource.username", POSTGRES::getUsername);
       registry.add("spring.datasource.password", POSTGRES::getPassword);
+      registry.add("spring.datasource.hikari.maximum-pool-size", () -> POOL_SIZE);
+      registry.add("spring.datasource.hikari.minimum-idle", () -> 0);
+      registry.add("spring.datasource.hikari.idle-timeout", () -> 10_000);
       registry.add("spring.data.redis.host", VALKEY::getHost);
       registry.add("spring.data.redis.port", () -> VALKEY.getMappedPort(6379));
       registry.add("spring.data.redis.database", () -> context);

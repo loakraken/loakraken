@@ -12,6 +12,11 @@ interface ClientLimitStore {
   /** 키의 값을 1 올리고 올린 뒤 값을 돌려준다. 처음 만든 키에는 ttl을 건다. 저장소 장애면 {@link Unavailable}. */
   long increment(String key, Duration ttl);
 
+  /** 키의 지금 값(없으면 0). 올리지 않는다. 저장소 장애면 {@link Unavailable}. 읽기를 못 하는 구현은 0(남은 칸 = 한도). */
+  default long current(String key) {
+    return 0;
+  }
+
   final class Unavailable extends RuntimeException {
     Unavailable(Throwable cause) {
       super(cause);
@@ -46,6 +51,16 @@ interface ClientLimitStore {
         throw new Unavailable(exception);
       }
     }
+
+    @Override
+    public long current(String key) {
+      try {
+        var value = redis.opsForValue().get(key);
+        return value == null ? 0 : Long.parseLong(value);
+      } catch (RuntimeException exception) {
+        throw new Unavailable(exception);
+      }
+    }
   }
 
   /** 단일 인스턴스(lostark.gate.store=memory). 창이 바뀌면 지난 창 키를 지운다. */
@@ -61,6 +76,12 @@ interface ClientLimitStore {
         counts.keySet().removeIf(existing -> !existing.endsWith(":" + current));
       }
       return counts.computeIfAbsent(key, ignored -> new AtomicLong()).incrementAndGet();
+    }
+
+    @Override
+    public long current(String key) {
+      var count = counts.get(key);
+      return count == null ? 0 : count.get();
     }
   }
 }

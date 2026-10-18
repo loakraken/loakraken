@@ -99,13 +99,21 @@ public class SpecUpDetailService {
       Refine refine) {}
 
   public Detail detail(String characterName, String candidateId) {
+    return detail(characterName, candidateId, null);
+  }
+
+  /**
+   * includeCooldownGems가 false면 목록과 같이 작열(쿨) 보석 후보를 빼고 찾는다(목록에서 빠진 후보는 상세도 404). null이면 모든 후보에서
+   * 찾는다.
+   */
+  public Detail detail(String characterName, String candidateId, Boolean includeCooldownGems) {
     if (!specUp.enabled()) throw new BusinessException(SpecUpErrorCode.SPEC_UP_DISABLED);
     var snapshot = simulator.snapshot(characterName);
-    var built = build(snapshot, candidateId);
+    var built = build(snapshot, candidateId, includeCooldownGems);
     // 목록을 만든 뒤 내역을 읽는 사이에 시세 캐시가 갱신되면 금액이 어긋난다. 한 번만 다시 만든다.
     if (!built.consistent()) {
       mismatch("retry");
-      built = build(snapshot, candidateId);
+      built = build(snapshot, candidateId, includeCooldownGems);
       // 두 번째도 어긋나면 틀린 금액을 내보내지 않는다(#554). 시세가 바뀌어 목록의 그 후보도 바뀐 것이라 같은 404로 목록을 다시 부르게 한다.
       if (!built.consistent()) {
         mismatch("rejected");
@@ -122,8 +130,13 @@ public class SpecUpDetailService {
     meters.counter("loakraken.spec_up.detail_mismatch", "outcome", outcome).increment();
   }
 
-  private Built build(CharacterResult snapshot, String candidateId) {
-    var guide = specUp.guide(snapshot, SpecUpService.Sort.DELTA, Integer.MAX_VALUE);
+  private Built build(CharacterResult snapshot, String candidateId, Boolean includeCooldownGems) {
+    var guide =
+        specUp.guide(
+            snapshot,
+            SpecUpService.Sort.DELTA,
+            Integer.MAX_VALUE,
+            includeCooldownGems == null ? Boolean.TRUE : includeCooldownGems);
     var candidate =
         guide.candidates().stream()
             .filter(item -> item.id().equals(candidateId))

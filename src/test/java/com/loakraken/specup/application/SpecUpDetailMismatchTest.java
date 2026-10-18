@@ -47,7 +47,7 @@ class SpecUpDetailMismatchTest {
     when(simulator.snapshot(anyString()))
         .thenReturn(mock(CharacterResult.class, RETURNS_DEEP_STUBS));
     // 목록: 빈 칸 10레벨 겁화, 비용 = 그때 즉시 구매 최저가 3,000,000.
-    when(specUp.guide(any(CharacterResult.class), any(), anyInt()))
+    when(specUp.guide(any(CharacterResult.class), any(), anyInt(), any()))
         .thenReturn(guide(SpecUpCost.gem(3_000_000, null, false)));
   }
 
@@ -59,7 +59,7 @@ class SpecUpDetailMismatchTest {
         .isInstanceOf(BusinessException.class)
         .extracting(exception -> ((BusinessException) exception).errorCode())
         .isEqualTo(SpecUpErrorCode.SPEC_UP_CANDIDATE_NOT_FOUND);
-    verify(specUp, times(2)).guide(any(CharacterResult.class), any(), anyInt());
+    verify(specUp, times(2)).guide(any(CharacterResult.class), any(), anyInt(), any());
     assertThat(count("retry")).isEqualTo(1);
     assertThat(count("rejected")).isEqualTo(1);
   }
@@ -77,7 +77,7 @@ class SpecUpDetailMismatchTest {
   void 처음부터_맞으면_다시_만들지_않는다() {
     when(auctions.cachedGems()).thenReturn(cells(3_000_000));
     details.detail("캐릭터", "GEM_LEVEL:0:10");
-    verify(specUp, times(1)).guide(any(CharacterResult.class), any(), anyInt());
+    verify(specUp, times(1)).guide(any(CharacterResult.class), any(), anyInt(), any());
     assertThat(count("retry")).isZero();
   }
 

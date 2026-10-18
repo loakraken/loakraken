@@ -267,17 +267,19 @@ public class SpecUpService {
   }
 
   /** 효율 순: 효율 있음(내림차순) → 비용 모름(Δ 내림차순). Δ 순: Δ 내림차순. 같으면 id 순. */
-  private static Comparator<Candidate> order(Sort sort) {
+  static Comparator<Candidate> order(Sort sort) {
     Comparator<Candidate> byDelta =
         Comparator.comparing(
             Candidate::deltaCombatPower, Comparator.nullsLast(Comparator.reverseOrder()));
     Comparator<Candidate> tail = Comparator.comparing(Candidate::id);
     if (sort == Sort.DELTA) return byDelta.thenComparing(tail);
     if (sort == Sort.KRAKEN) {
-      // ① Δ > 0·비용 있음: 10만 골드당 내림차순 ② Δ > 0·비용 모름: Δ 내림차순 ③ 나머지: 효율 순. 같으면 id 순.
+      // ⓪ Δ > 0·비용 0골드: 맨 위(Δ 내림차순, PM 판정 10-18) ① Δ > 0·비용 있음: 10만 골드당 내림차순 ② Δ > 0·비용 모름: Δ 내림차순
+      // ③ 나머지: 효율 순. 같으면 id 순.
       Comparator<Candidate> group =
           Comparator.comparingInt(
               candidate -> {
+                if (freeKraken(candidate)) return -1;
                 if (candidate.krakenScorePer100kGold() != null) return 0;
                 if (candidate.deltaKrakenScore() != null
                     && candidate.deltaKrakenScore().signum() > 0) return 1;
@@ -296,6 +298,15 @@ public class SpecUpService {
             Candidate::combatPowerPer10kGold, Comparator.nullsLast(Comparator.reverseOrder()))
         .thenComparing(byDelta)
         .thenComparing(tail);
+  }
+
+  /** Δ크라켄 점수가 오르는데 비용이 0골드(OK)인 후보 — 10만 골드당을 낼 수 없어 따로 맨 위에 둔다. */
+  private static boolean freeKraken(Candidate candidate) {
+    return candidate.deltaKrakenScore() != null
+        && candidate.deltaKrakenScore().signum() > 0
+        && candidate.cost() != null
+        && "OK".equals(candidate.cost().status())
+        && Long.valueOf(0).equals(candidate.cost().amount());
   }
 
   private Candidate evaluate(CharacterResult snapshot, Planned plan) {

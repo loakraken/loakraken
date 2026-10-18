@@ -6,8 +6,8 @@ import java.util.Map;
 import java.util.Optional;
 
 /**
- * 직업별 직업 각인(공식 아크 패시브 칭호 ArkPassive.Title) 목록(#618). 근거·확인 시각은 리소스 source에 있다. 랭킹 직업 각인 필터가 받을 수 있는 값과
- * 선택지 목록을 이 한 곳에서 정한다.
+ * 직업별 직업 각인(공식 아크 패시브 칭호 ArkPassive.Title) 목록(#618). 근거·확인 시각은 리소스 source에 있다. 랭킹 직업 각인 필터가 받을 수 있는
+ * 값과 선택지 목록을 이 한 곳에서 정한다.
  */
 public record ClassEngravingCatalog(Map<String, String> source, Map<String, List<String>> classes) {
   public ClassEngravingCatalog {

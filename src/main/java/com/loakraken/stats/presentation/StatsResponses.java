@@ -402,10 +402,8 @@ public final class StatsResponses {
       @Schema(allowableValues = {"COMBAT_POWER", "ITEM_LEVEL"}) String metric,
       int page,
       int size,
-      @Schema(description = "전체 순위 대상 수는 meta.population")
-          List<StatsRankedCharacterResponse> rows,
-      @NullableResponse
-          @Schema(description = "요청한 직업 각인(직업 각인 목록의 표기). 필터를 쓰지 않으면 null")
+      @Schema(description = "전체 순위 대상 수는 meta.population") List<StatsRankedCharacterResponse> rows,
+      @NullableResponse @Schema(description = "요청한 직업 각인(직업 각인 목록의 표기). 필터를 쓰지 않으면 null")
           String classEngraving,
       @NullableResponse
           @Schema(
@@ -458,8 +456,7 @@ public final class StatsResponses {
       String className,
       @Schema(description = "직업 각인 목록 순서. 랭킹 classEngraving에 그대로 넣을 수 있는 값")
           List<StatsClassEngravingResponse> classEngravings,
-      @NullableResponse
-          @Schema(description = "같은 조건에서 직업 각인을 모르는(장비를 관측하지 않은) 캐릭터 수. 세지 못하면 null")
+      @NullableResponse @Schema(description = "같은 조건에서 직업 각인을 모르는(장비를 관측하지 않은) 캐릭터 수. 세지 못하면 null")
           Long unknown,
       @NullableResponse @Schema(description = "수를 센 시각(10분 캐시). 세지 못하면 null")
           Instant aggregatedAt) {

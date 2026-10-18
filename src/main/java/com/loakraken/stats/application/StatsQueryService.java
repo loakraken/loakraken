@@ -791,8 +791,8 @@ public class StatsQueryService {
   }
 
   /**
-   * classEngraving은 직업 각인 목록의 표기(컨트롤러가 검증)다. 주면 마지막 장비 요약의 직업 각인이 그 값인 캐릭터만 순위·모집단에 넣고(#618), 같은 조건에서
-   * 직업 각인을 모르는 캐릭터 수를 함께 준다.
+   * classEngraving은 직업 각인 목록의 표기(컨트롤러가 검증)다. 주면 마지막 장비 요약의 직업 각인이 그 값인 캐릭터만 순위·모집단에 넣고(#618), 같은
+   * 조건에서 직업 각인을 모르는 캐릭터 수를 함께 준다.
    */
   public RankingResult ranking(
       StatsConditions conditions, Metric metric, int page, int size, String classEngraving) {
@@ -808,12 +808,15 @@ public class StatsQueryService {
             + size
             + ":"
             + key(conditions)
-            + (classEngraving == null ? "" : ":ce=" + ClassEngravingCatalog.compact(classEngraving)),
+            + (classEngraving == null
+                ? ""
+                : ":ce=" + ClassEngravingCatalog.compact(classEngraving)),
         RankingResult.class,
         () -> {
           var now = clock.instant();
           var result =
-              stats.ranking(conditions, conditions.since(now), metric, offset, size, classEngraving);
+              stats.ranking(
+                  conditions, conditions.since(now), metric, offset, size, classEngraving);
           var meta = meta(conditions, result.total(), now);
           Long unknown = classEngraving == null ? null : classEngravingCounts(conditions).unknown();
           boolean ready = meta.sampleStatus() == SampleStatus.READY;
@@ -1361,8 +1364,8 @@ public class StatsQueryService {
   public record EquippedTitle(String title, long equippedRosters, BigDecimal equippedPercent) {}
 
   /**
-   * classEngraving은 요청한 직업 각인(없으면 null), classEngravingUnknown은 필터를 켰을 때 같은 조건에서 직업 각인을 모르는(마지막 장비 요약이
-   * 없는) 캐릭터 수(필터를 끄면 null)다(#618).
+   * classEngraving은 요청한 직업 각인(없으면 null), classEngravingUnknown은 필터를 켰을 때 같은 조건에서 직업 각인을 모르는(마지막 장비
+   * 요약이 없는) 캐릭터 수(필터를 끄면 null)다(#618).
    */
   public record RankingResult(
       Meta meta,
@@ -1384,7 +1387,10 @@ public class StatsQueryService {
   public record ClassEngravingCount(String name, Long count) {}
 
   public record ClassEngravingsResult(
-      String className, List<ClassEngravingCount> classEngravings, Long unknown, Instant aggregatedAt) {}
+      String className,
+      List<ClassEngravingCount> classEngravings,
+      Long unknown,
+      Instant aggregatedAt) {}
 
   public record EfficiencyRankedCharacter(
       long rank,

@@ -197,8 +197,7 @@ public class StatsController {
     if (names.isEmpty()) throw new ResponseStatusException(HttpStatus.BAD_REQUEST);
     return ApiResponse.of(
         StatsSuccessCode.RANKING_SUCCESS,
-        StatsResponses.StatsClassEngravingsResponse.from(
-            stats.classEngravings(conditions, names)));
+        StatsResponses.StatsClassEngravingsResponse.from(stats.classEngravings(conditions, names)));
   }
 
   @GetMapping(value = "/api/v1/rankings/bracelets", produces = MediaType.APPLICATION_JSON_VALUE)

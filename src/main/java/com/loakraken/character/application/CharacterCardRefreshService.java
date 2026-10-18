@@ -41,13 +41,16 @@ public class CharacterCardRefreshService {
   private final CardRefreshCooldownPort cooldown;
   private final CharacterHistoryPolicy policy;
   private final Clock clock;
+  private final com.loakraken.common.lostark.LostArkRequestGate gate;
 
   public CharacterCardRefreshService(
       CharacterQueryService queries,
       CharacterCardPort cards,
       CardRefreshCooldownPort cooldown,
       CharacterHistoryPolicy policy,
-      Clock clock) {
+      Clock clock,
+      com.loakraken.common.lostark.LostArkRequestGate gate) {
+    this.gate = gate;
     this.queries = queries;
     this.cards = cards;
     this.cooldown = cooldown;
@@ -105,6 +108,11 @@ public class CharacterCardRefreshService {
     boolean stopped = false;
     for (var target : targets) {
       if (attempted == MAX_TARGETS) break;
+      // 방문자 한 명의 분당 공식 칸을 다 쓰지 않게, 남은 칸이 적으면 멈추고 나머지는 다음 기회로(#614).
+      if (!gate.bulkMayContinue()) {
+        stopped = true;
+        break;
+      }
       attempted++;
       try {
         queries.search(new SearchCharacterCommand(target.characterName(), false));

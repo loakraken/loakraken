@@ -153,32 +153,9 @@ public interface AuctionPort {
       Integer tradeAllowCount,
       List<ListingOption> options,
       String icon) {
+    // icon이 없는 생성자는 두지 않는다 — 공식 Icon을 읽고도 그 생성자를 불러 이미지가 빠진 적이 있다(#609).
     public AuctionListing {
       options = options == null ? List.of() : List.copyOf(options);
-    }
-
-    /** 이미지 없이(공식 Icon을 읽기 전 모양). */
-    public AuctionListing(
-        String name,
-        String grade,
-        Integer quality,
-        Long buyPrice,
-        Long bidPrice,
-        Long bidStartPrice,
-        Instant endDate,
-        Integer tradeAllowCount,
-        List<ListingOption> options) {
-      this(
-          name,
-          grade,
-          quality,
-          buyPrice,
-          bidPrice,
-          bidStartPrice,
-          endDate,
-          tradeAllowCount,
-          options,
-          null);
     }
   }
 

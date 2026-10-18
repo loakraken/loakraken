@@ -39,7 +39,7 @@ import org.springframework.stereotype.Service;
  */
 @Service
 public class SpecUpGoalService {
-  public static final String RULE_VERSION = "spec-up-goal-v1";
+  public static final String RULE_VERSION = "spec-up-goal-v2";
   static final int MAX_STEPS = 30;
   static final Duration TIME_LIMIT = Duration.ofSeconds(2);
   static final Duration CACHE_TTL = Duration.ofMinutes(10);
@@ -193,6 +193,10 @@ public class SpecUpGoalService {
     var current = before;
     Long cumulative = 0L;
     int unpriced = 0;
+    // 경로 합계: 보석 칸은 그 칸의 마지막 단계 누적 비용(칸마다 하나), 그 밖은 단계 비용의 합. 모르는 값이 있으면 합계도 모름.
+    var gemTotals = new HashMap<String, Long>();
+    long others = 0;
+    boolean othersUnknown = false;
     long started = nanoTime.getAsLong();
     String stop;
     while (true) {
@@ -209,6 +213,7 @@ public class SpecUpGoalService {
         break;
       }
       Option best = null;
+      boolean bestFree = false;
       for (var option : options(state, gems, refinePrices, pricesAt)) {
         var trial = new LinkedHashMap<>(applied);
         trial.put(option.slot(), option.change());
@@ -217,13 +222,15 @@ public class SpecUpGoalService {
         if (simulated.unsupportedCount() > 0 || simulated.after() == null) continue;
         var delta = simulated.after().subtract(current);
         if (delta.signum() <= 0) continue;
+        // 고르는 효율은 이 단계에 더 드는 비용(보석은 누적 차이)으로: 같은 칸을 이어서 올릴 때 이미 낸 비용을 다시 세지 않는다.
+        var marginal = marginal(option, gemTotals);
         var scored =
-            option.scored(
-                delta,
-                simulated.after(),
-                SpecUpCost.efficiency(
-                    delta, option.cost() == null ? null : option.cost().amount()));
-        if (best == null || ORDER.compare(scored, best) < 0) best = scored;
+            option.scored(delta, simulated.after(), SpecUpCost.efficiency(delta, marginal));
+        boolean free = free(marginal);
+        if (best == null || preferred(scored, free, best, bestFree)) {
+          best = scored;
+          bestFree = free;
+        }
       }
       if (best == null) {
         stop = NO_CANDIDATE;
@@ -233,10 +240,11 @@ public class SpecUpGoalService {
       state = state.after(best);
       current = best.after();
       var amount = best.cost() == null ? null : best.cost().amount();
-      if (amount == null) {
-        unpriced++;
-        cumulative = null;
-      } else if (cumulative != null) cumulative += amount;
+      if (amount == null) unpriced++;
+      if (best.change().kind() == Kind.GEM_LEVEL) gemTotals.put(best.slot(), amount);
+      else if (amount == null) othersUnknown = true;
+      else others += amount;
+      cumulative = total(others, othersUnknown, gemTotals);
       steps.add(
           new Step(
               steps.size() + 1,
@@ -291,6 +299,41 @@ public class SpecUpGoalService {
   }
 
   /** 효율 있음(내림차순) → 비용 모름(Δ 내림차순) → id 순. 스펙업 가이드의 효율 순과 같다. */
+  /** 이 단계에 더 드는 비용: 보석은 지금 누적 − 그 칸에서 이미 낸 누적(처음 단계는 0), 그 밖은 단계 비용. 모르면 null. */
+  static Long marginal(Option option, Map<String, Long> gemTotals) {
+    var amount = option.cost() == null ? null : option.cost().amount();
+    if (amount == null || option.change().kind() != Kind.GEM_LEVEL) return amount;
+    var paid =
+        gemTotals.containsKey(option.slot()) ? gemTotals.get(option.slot()) : Long.valueOf(0);
+    return paid == null ? null : amount - paid;
+  }
+
+  /** 더 드는 비용이 0 이하로 확인된 단계(거꾸로 시세의 보석 단계 등). 효율은 '-'(null)이지만 경로에는 먼저 넣는다. */
+  static boolean free(Long marginal) {
+    return marginal != null && marginal <= 0;
+  }
+
+  /**
+   * 다음 단계 고르기: 목표 경로는 '가장 싸게 목표까지 가는 계획'이라 더 드는 비용이 0 이하인 단계를 맨 앞에(Δ 큰 순) 넣어 단계 상한에 밀려 빠지지 않게 하고, 그
+   * 밖은 ORDER(효율 높은 순, 효율 없음은 뒤, 같으면 Δ·id). 목록 정렬(효율 없는 줄은 뒤)과는 다르다(PM 판정 10-18).
+   */
+  static boolean preferred(Option candidate, boolean candidateFree, Option best, boolean bestFree) {
+    if (candidateFree != bestFree) return candidateFree;
+    if (candidateFree) {
+      int byDelta = best.delta().compareTo(candidate.delta());
+      return byDelta != 0 ? byDelta < 0 : candidate.id().compareTo(best.id()) < 0;
+    }
+    return ORDER.compare(candidate, best) < 0;
+  }
+
+  /** 경로 합계(보석 칸마다 마지막 누적 + 그 밖 합). 모르는 값이 있으면 null. */
+  static Long total(long others, boolean othersUnknown, Map<String, Long> gemTotals) {
+    if (othersUnknown || gemTotals.containsValue(null)) return null;
+    long sum = others;
+    for (var value : gemTotals.values()) sum += value;
+    return sum;
+  }
+
   static final Comparator<Option> ORDER =
       Comparator.comparing((Option option) -> option.efficiency() == null ? 1 : 0)
           .thenComparing(Option::efficiency, Comparator.nullsLast(Comparator.reverseOrder()))
@@ -475,26 +518,13 @@ public class SpecUpGoalService {
   }
 
   /**
-   * 보석 한 단계 비용. 처음 단계는 스펙업 후보와 같다(다음 레벨 매입가 − 지금 보석 판매 기대가, 귀속이면 빼지 않음). 같은 칸 둘째 단계부터는 이번 레벨 매입가 −
-   * 직전 레벨 매입가다.
+   * 보석 단계 비용 = 지금에서 그 레벨까지의 누적 비용(목록 직접 비용과 같은 식: max(그 레벨 최저가 − 지금 보석 최저가, 0), 귀속·빈 칸이면 그 레벨 최저가).
+   * 단계마다 따로 구한다 — 그 레벨 시세가 없으면 그 단계만 모름, 지금 레벨 시세가 없으면 모든 단계가 모름(PM 판정 10-18 15:18·15:22).
    */
-  private static SpecUpCost gemCost(
+  static SpecUpCost gemCost(
       Map<String, MarketAuctionService.GemCell> gems, Instant[] pricesAt, GemSlot gem, int next) {
-    if (gem.level() == gem.original())
-      return SpecUpService.gemCost(gems, pricesAt, gem.priceKind(), gem.level(), next, gem.bound());
-    if (gem.priceKind() == null) return SpecUpCost.NO_PRICE_SOURCE;
-    if (gems.isEmpty()) return SpecUpCost.PRICE_PENDING;
-    if (!gems.containsKey(gem.priceKind() + ":" + next)) return SpecUpCost.NO_PRICE_SOURCE;
-    var nextCell = gems.get(gem.priceKind() + ":" + next);
-    var previousCell = gems.get(gem.priceKind() + ":" + gem.level());
-    if (nextCell.cell() == null
-        || nextCell.cell().minBuyPrice() == null
-        || previousCell == null
-        || previousCell.cell() == null
-        || previousCell.cell().minBuyPrice() == null) return SpecUpCost.PRICE_PENDING;
-    SpecUpService.observed(pricesAt, nextCell);
-    SpecUpService.observed(pricesAt, previousCell);
-    return SpecUpCost.gemStep(nextCell.cell().minBuyPrice(), previousCell.cell().minBuyPrice());
+    return SpecUpService.gemCost(
+        gems, pricesAt, gem.priceKind(), gem.original(), next, gem.bound());
   }
 
   private Map<String, MarketAuctionService.GemCell> gemPrices() {

@@ -166,6 +166,22 @@ public class LostArkRequestGate {
     clients.charge(bucket);
   }
 
+  /**
+   * 지금 요청 클라이언트가 이번 분에 공식 호출을 몇 번 더 할 수 있는지(읽기만, #614). 세지 않는 경로·저장소 장애는 {@link Integer#MAX_VALUE}.
+   * 일괄 불러오기가 방문자 칸을 다 쓰지 않도록 멈출 때 쓴다.
+   */
+  public int remainingClientOfficial() {
+    return clients.remainingOfficial();
+  }
+
+  /** 일괄 불러오기(원정대 전투력·카드 수집)가 방문자 칸에 남겨 두는 공식 호출 수 — 그 분 안의 다른 조회가 거절되지 않게(#614). */
+  public static final int BULK_KEEP_OFFICIAL = 6;
+
+  /** 일괄 불러오기가 이번 대상을 더 불러도 되는지(남은 칸이 {@link #BULK_KEEP_OFFICIAL}보다 많은지). */
+  public boolean bulkMayContinue() {
+    return remainingClientOfficial() > BULK_KEEP_OFFICIAL;
+  }
+
   public void release() {
     permits.release();
   }

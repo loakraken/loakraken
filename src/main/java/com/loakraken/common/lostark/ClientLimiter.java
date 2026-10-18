@@ -105,10 +105,7 @@ public class ClientLimiter {
     long window = now / WINDOW.toMillis();
     long count;
     try {
-      count =
-          store.increment(
-              PREFIX + bucket.name().toLowerCase(Locale.ROOT) + ":" + clientKey + ":" + window,
-              WINDOW.plusSeconds(1));
+      count = store.increment(storeKey(bucket, clientKey, window), WINDOW.plusSeconds(1));
     } catch (ClientLimitStore.Unavailable exception) {
       count(bucket, "unavailable");
       return Decision.ALLOW;
@@ -117,6 +114,28 @@ public class ClientLimiter {
     count(bucket, "reject");
     long remaining = (window + 1) * WINDOW.toMillis() - now;
     return new Decision(false, Math.max(1, (remaining + 999) / 1000));
+  }
+
+  private static String storeKey(Bucket bucket, String clientKey, long window) {
+    return PREFIX + bucket.name().toLowerCase(Locale.ROOT) + ":" + clientKey + ":" + window;
+  }
+
+  /**
+   * 지금 스레드의 클라이언트가 이번 창에서 공식 호출을 몇 번 더 할 수 있는지(올리지 않고 읽기만). 세지 않는 경로(한도 꺼짐·클라이언트 없음)와 저장소 장애는
+   * {@link Integer#MAX_VALUE} — 그때는 {@link #chargeOfficial}도 막지 않으므로 같게 둔다.
+   */
+  int remainingOfficial() {
+    if (!properties.enabled()) return Integer.MAX_VALUE;
+    var client = CLIENT.get();
+    if (client == null) return Integer.MAX_VALUE;
+    var bucket = bot(client) ? Bucket.BOT_ADDRESS_OFFICIAL : Bucket.OFFICIAL;
+    long window = clock.millis() / WINDOW.toMillis();
+    try {
+      long used = store.current(storeKey(bucket, client, window));
+      return (int) Math.max(0, properties.limit(bucket) - used);
+    } catch (ClientLimitStore.Unavailable exception) {
+      return Integer.MAX_VALUE;
+    }
   }
 
   /** 요청을 처리하는 동안 이 스레드의 공식 호출을 clientKey에 매긴다. */

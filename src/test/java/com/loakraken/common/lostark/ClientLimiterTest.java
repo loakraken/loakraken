@@ -126,6 +126,39 @@ class ClientLimiterTest {
   }
 
   @Test
+  void 남은_공식_칸을_올리지_않고_읽고_일괄_불러오기는_6을_남기고_멈춘다() {
+    // #614: 공식 칸 10. 세지 않는 경로(클라이언트 없음)는 막지 않으므로 '남은 칸'도 끝이 없다.
+    var limiter = limiter(new ClientLimitProperties(true, 10, 10, 10, 10, true, 2, 6, 20, 5, 5));
+    var gate =
+        new LostArkRequestGate(
+            clock, properties(), new LostArkMetrics(registry), new MemoryGateStore(clock), limiter);
+    assertThat(gate.remainingClientOfficial()).isEqualTo(Integer.MAX_VALUE);
+    assertThat(gate.bulkMayContinue()).isTrue();
+    limiter.enter("client-bulk");
+    try {
+      assertThat(gate.remainingClientOfficial()).isEqualTo(10);
+      for (int i = 0; i < 3; i++) {
+        gate.acquire();
+        gate.release();
+      }
+      // 읽기는 칸을 쓰지 않는다.
+      assertThat(gate.remainingClientOfficial()).isEqualTo(7);
+      assertThat(gate.remainingClientOfficial()).isEqualTo(7);
+      assertThat(gate.bulkMayContinue()).isTrue();
+      gate.acquire();
+      gate.release();
+      // 남은 6 = BULK_KEEP_OFFICIAL이면 더 부르지 않는다.
+      assertThat(gate.remainingClientOfficial()).isEqualTo(LostArkRequestGate.BULK_KEEP_OFFICIAL);
+      assertThat(gate.bulkMayContinue()).isFalse();
+      // 창이 바뀌면 다시 찬다.
+      clock.now = clock.now.plusSeconds(60);
+      assertThat(gate.remainingClientOfficial()).isEqualTo(10);
+    } finally {
+      limiter.exit();
+    }
+  }
+
+  @Test
   void 끄면_세지_않는다() {
     var limiter = limiter(new ClientLimitProperties(false, 0, 0, 0, 0, true, 2, 6, 20, 5, 5));
     assertThat(limiter.check(ClientLimiter.Bucket.GENERAL, "c").allowed()).isTrue();

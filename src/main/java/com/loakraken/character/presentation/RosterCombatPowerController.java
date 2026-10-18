@@ -129,7 +129,10 @@ public class RosterCombatPowerController {
   public record RosterCombatPowerRefreshResponse(
       @Schema(description = "불러온 뒤의 원정대 캐릭터별 전투력") List<RosterCombatPowerItemResponse> items,
       @Schema(description = "이번에 공식 프로필을 부른 캐릭터 수") int fetched,
-      @Schema(description = "아직 부르지 않은 대상 수(12명 상한·공식 호출 여유 부족). 0보다 크면 다시 불러오기") int remaining,
+      @Schema(
+              description =
+                  "아직 부르지 않은 대상 수(12명 상한, 공식 호출 여유 부족, 또는 이 방문자의 분당 공식 호출 칸을 6 남기려고 멈춤). 0보다 크면 1분 뒤 다시 불러오기")
+          int remaining,
       @Schema(description = "다시 불러올 수 있는 시각. 한 명도 못 불렀으면 null(바로 다시 가능)") @NullableResponse
           Instant refreshAvailableAt) {}
 

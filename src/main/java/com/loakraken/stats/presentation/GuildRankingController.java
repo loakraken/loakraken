@@ -27,10 +27,10 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * 길드 랭킹(#301, 볼트 「랭킹 확장 설계 초안」 v1 3절). 웹 화면이 준비될 때까지 기본 꺼짐(ranking.guilds.enabled). 공식 API를 부르지 않고
- * 관측 DB에서 집계해 조건별로 10분 캐시한다.
+ * 길드 랭킹(#301, 볼트 「랭킹 확장 설계 초안」 v1 3절). 길드 탭·인기 길드(ranking.guilds.enabled)와 따로 켠다 — 기본
+ * 꺼짐(ranking.guilds.list.enabled, #581). 공식 API를 부르지 않고 관측 DB에서 집계해 조건별로 10분 캐시한다.
  */
-@ConditionalOnProperty(prefix = "ranking.guilds", name = "enabled", havingValue = "true")
+@ConditionalOnProperty(prefix = "ranking.guilds.list", name = "enabled", havingValue = "true")
 @RestController
 @Validated
 @Tag(name = "통계·랭킹")
@@ -166,7 +166,7 @@ public class GuildRankingController {
           BigDecimal combatPowerTotal) {}
 
   @Configuration(proxyBeanMethods = false)
-  @ConditionalOnProperty(prefix = "ranking.guilds", name = "enabled", havingValue = "true")
+  @ConditionalOnProperty(prefix = "ranking.guilds.list", name = "enabled", havingValue = "true")
   static class GuildRankingOpenApiConfiguration {
     @Bean
     OpenApiCustomizer guildRankingResponseContract() {

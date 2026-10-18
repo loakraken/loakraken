@@ -54,11 +54,16 @@ class AuctionStore implements AuctionPort {
     write(CELL_PREFIX + key, cell, CELL_TTL);
   }
 
-  /** 올리기와 첫 만료 걸기를 한 번에(#553): 따로 하면 첫 올리기 뒤 만료 걸기가 실패했을 때 키가 만료 없이 남는다. */
+  /**
+   * 한도(ARGV[2]) 안일 때만 올리고 첫 만료를 한 번에 건다(#553). 이미 한도면 올리지 않고 -1(보안 점검 10-18: 거절된 요청까지 올리면 카운터가 부풀어,
+   * 공식 호출 전에 거절돼 몫을 돌려줘도 실제 자리가 비지 않았다).
+   */
   private static final DefaultRedisScript<Long> QUOTA_INCREMENT =
       new DefaultRedisScript<>(
           """
-          local count = redis.call('INCR', KEYS[1])
+          local count = tonumber(redis.call('GET', KEYS[1]) or '0')
+          if count >= tonumber(ARGV[2]) then return -1 end
+          count = redis.call('INCR', KEYS[1])
           if count == 1 then redis.call('PEXPIRE', KEYS[1], ARGV[1]) end
           return count
           """,
@@ -84,8 +89,9 @@ class AuctionStore implements AuctionPort {
           redis.execute(
               QUOTA_INCREMENT,
               java.util.List.of(key),
-              String.valueOf(GEM_FILTER_QUOTA_TTL.toMillis()));
-      return count != null && count <= limit ? Optional.of(key) : Optional.empty();
+              String.valueOf(GEM_FILTER_QUOTA_TTL.toMillis()),
+              String.valueOf(limit));
+      return count != null && count > 0 && count <= limit ? Optional.of(key) : Optional.empty();
     } catch (DataAccessException exception) {
       log.warn("보석 필터 몫 카운터를 쓰지 못했습니다. 예외 유형={}", exception.getClass().getSimpleName());
       return Optional.empty();

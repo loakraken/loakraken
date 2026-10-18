@@ -28,9 +28,11 @@ class MaterialUnitPriceServiceTest {
     when(cache.findRefiningMaterials()).thenReturn(java.util.Optional.empty());
     when(cache.findLifeMaterials(org.mockito.ArgumentMatchers.anyInt()))
         .thenReturn(java.util.Optional.empty());
-    when(gate.withReserve(
-            org.mockito.ArgumentMatchers.anyInt(), org.mockito.ArgumentMatchers.any()))
-        .thenAnswer(invocation -> invocation.<java.util.function.Supplier<?>>getArgument(1).get());
+    when(gate.withClientBucket(
+            org.mockito.ArgumentMatchers.anyInt(),
+            org.mockito.ArgumentMatchers.any(),
+            org.mockito.ArgumentMatchers.any()))
+        .thenAnswer(invocation -> invocation.<java.util.function.Supplier<?>>getArgument(2).get());
   }
 
   private final Instant observed = Instant.parse("2026-10-05T00:00:00Z");
@@ -129,7 +131,13 @@ class MaterialUnitPriceServiceTest {
     var result = service.requestPrices(MaterialPriceBasis.RECENT_PRICE, names);
     verify(gate, times(1))
         .chargeClient(com.loakraken.common.lostark.ClientLimiter.Bucket.MATERIAL_PRICES);
-    verify(gate).withReserve(eq(MaterialUnitPriceService.REQUEST_RESERVE), any());
+    // 공식 검색은 요청 클라이언트의 재료 검색 버킷에 매기고, 공유 예산에는 54(전체 90의 60%)를 남긴다 — 재료 검색은 전체 사용 36까지만.
+    verify(gate)
+        .withClientBucket(
+            eq(MaterialUnitPriceService.REQUEST_RESERVE),
+            eq(com.loakraken.common.lostark.ClientLimiter.Bucket.MATERIAL_SEARCH),
+            any());
+    assertThat(MaterialUnitPriceService.REQUEST_RESERVE).isEqualTo(54);
     verify(markets, times(MaterialUnitPriceService.MAX_REQUEST_SEARCHES)).search(any(), any());
     assertThat(result).hasSize(25);
     // 15개는 세 분류를 다 봐서 NOT_FOUND, 16번째부터는 상한이라 보지 못함.

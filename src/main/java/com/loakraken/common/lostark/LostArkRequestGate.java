@@ -20,6 +20,10 @@ import org.springframework.stereotype.Component;
 @Component
 public class LostArkRequestGate {
   private static final ThreadLocal<Integer> RESERVE = new ThreadLocal<>();
+
+  /** 설정되면 이 스레드의 공식 호출을 OFFICIAL 대신 이 버킷에 센다({@link #withClientBucket}). */
+  private static final ThreadLocal<ClientLimiter.Bucket> CHARGE_BUCKET = new ThreadLocal<>();
+
   private static final ThreadLocal<Boolean> CHARGE_CLIENT = new ThreadLocal<>();
 
   /** 공식 호출 로그 로거 이름. 로컬 프로필(application-local)에서만 DEBUG다. */
@@ -93,11 +97,16 @@ public class LostArkRequestGate {
   /** BACKGROUND: 예열·수집기(reserve, 클라이언트 한도 안 셈), USER_RESERVE: 사용자 요청 중 reserve 호출, USER: 사용자 요청. */
   private static String origin() {
     if (currentReserve() == 0) return "USER";
-    return Boolean.TRUE.equals(CHARGE_CLIENT.get()) ? "USER_RESERVE" : "BACKGROUND";
+    return Boolean.TRUE.equals(CHARGE_CLIENT.get()) || CHARGE_BUCKET.get() != null
+        ? "USER_RESERVE"
+        : "BACKGROUND";
   }
 
   private void admit() {
-    if (currentReserve() == 0 || Boolean.TRUE.equals(CHARGE_CLIENT.get())) clients.chargeOfficial();
+    var bucket = CHARGE_BUCKET.get();
+    if (bucket != null) clients.charge(bucket);
+    else if (currentReserve() == 0 || Boolean.TRUE.equals(CHARGE_CLIENT.get()))
+      clients.chargeOfficial();
     if (!permits.tryAcquire()) reject(GateEvent.CONCURRENCY_REJECT);
     GateStore.Admission admission;
     try {
@@ -158,6 +167,21 @@ public class LostArkRequestGate {
     } finally {
       if (previous == null) CHARGE_CLIENT.remove();
       else CHARGE_CLIENT.set(previous);
+    }
+  }
+
+  /**
+   * 사용자 요청 하나가 공식 호출을 여러 번 일으키는데 그 호출들을 OFFICIAL이 아니라 기능 전용 버킷에 셀 때(재료 시세 검색, 보안 점검 10-18). 공유 예산에는
+   * 사용자 몫 reserve를 남기고, 요청 클라이언트의 bucket에 공식 호출마다 매긴다(넘으면 CLIENT_RATE_LIMITED). 같은 스레드 전용이다.
+   */
+  public <T> T withClientBucket(int reserve, ClientLimiter.Bucket bucket, Supplier<T> work) {
+    var previous = CHARGE_BUCKET.get();
+    CHARGE_BUCKET.set(bucket);
+    try {
+      return withReserve(reserve, work);
+    } finally {
+      if (previous == null) CHARGE_BUCKET.remove();
+      else CHARGE_BUCKET.set(previous);
     }
   }
 

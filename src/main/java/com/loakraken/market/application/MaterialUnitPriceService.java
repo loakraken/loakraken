@@ -69,8 +69,11 @@ public class MaterialUnitPriceService {
    */
   static final int MAX_REQUEST_SEARCHES = 45;
 
-  /** 재료 시세 API의 캐시 미스 검색이 공유 예산에 남길 사용자 몫. */
-  static final int REQUEST_RESERVE = 30;
+  /**
+   * 재료 시세 API의 캐시 미스 검색이 공유 예산(분당 90)에 남길 몫. 54를 남기므로 재료 검색은 분당 전체 사용이 36(40%)이 될 때까지만 하고, 그 뒤에도
+   * 캐릭터 검색 등 사용자 호출 몫 54가 늘 남는다(보안 점검 10-18, PM 판정). 넘으면 그 이름부터 지금 알 수 없음.
+   */
+  static final int REQUEST_RESERVE = 54;
 
   /** 분류 전체 예열 스캔의 검색 조건(이름 없음, 등급순). */
   public static MarketSearch categorySearch(int category, int page) {
@@ -151,8 +154,9 @@ public class MaterialUnitPriceService {
 
   /**
    * 재료 시세 API. 예열 캐시에 있는 이름은 공식 호출 없이 답한다. 캐시에 없는 이름이 있으면 그 요청을 MATERIAL_PRICES 버킷에 <b>한 번</b> 매기고,
-   * 검색은 사용자 몫(REQUEST_RESERVE)을 남기는 쪽으로 요청당 MAX_REQUEST_SEARCHES번까지만 한다(이름마다 공식 호출 한도에 매기지 않는다).
-   * 상한이나 공유 예산에 걸린 이름은 PRICE_UNAVAILABLE이다.
+   * 검색은 요청당 MAX_REQUEST_SEARCHES번까지, 공식 호출마다 요청 클라이언트의 MATERIAL_SEARCH 버킷(분당 30, 공식 호출 한도 OFFICIAL과
+   * 따로)에 매기고, 공유 예산에는 REQUEST_RESERVE를 남긴다. 상한·클라이언트 버킷·공유 예산에 걸린 이름부터는 PRICE_UNAVAILABLE이다(429가
+   * 아님).
    */
   public List<UnitPrice> requestPrices(MaterialPriceBasis basis, List<String> names) {
     var scans = scans();
@@ -166,8 +170,9 @@ public class MaterialUnitPriceService {
     if (!misses.isEmpty()) {
       gate.chargeClient(ClientLimiter.Bucket.MATERIAL_PRICES);
       var budget = new int[] {MAX_REQUEST_SEARCHES};
-      gate.withReserve(
+      gate.withClientBucket(
           REQUEST_RESERVE,
+          ClientLimiter.Bucket.MATERIAL_SEARCH,
           () -> {
             boolean stopped = false;
             for (var name : misses) {
@@ -178,7 +183,7 @@ public class MaterialUnitPriceService {
               try {
                 result.put(name, lookup(basis, name, budget, scans));
               } catch (BusinessException exception) {
-                // 공유 예산·공식 장애: 이 이름부터 나머지는 지금 알 수 없음으로 둔다(캐시에서 답한 이름은 그대로).
+                // 클라이언트 재료 검색 버킷·공유 예산·공식 장애: 이 이름부터 나머지는 지금 알 수 없음으로 둔다(캐시에서 답한 이름은 그대로).
                 stopped = true;
                 result.put(name, unavailable(name));
               }

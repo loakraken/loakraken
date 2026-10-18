@@ -19,7 +19,11 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
  *     못하도록 botOfficialPerMinute보다 작아야 한다(사람 클라이언트의 officialPerMinute 대신 쓴다)
  * @param alertSubscribePerMinute 시세 알림 구독 만들기(POST /api/v1/alerts/subscriptions) 요청 수(M33)
  * @param materialPricesPerMinute 재료 시세(POST /api/v1/markets/material-prices) 가운데 예열 캐시에 없는 이름이 있어
- *     공식 조회를 일으킨 요청 수. 그 안의 공식 조회는 사용자 몫(reserve)을 남기는 쪽으로 요청당 상한까지만 하고 officialPerMinute에는 매기지 않는다
+ *     공식 조회를 일으킨 요청 수. 그 안의 공식 조회는 officialPerMinute가 아니라 materialSearchPerMinute에 매긴다
+ * @param gemFilterPerMinute 보석 매물 직업·스킬 필터에서 캐시에 없는 조건을 찾은 요청 수. 기능 전용 분당 몫(모두가 함께 씀)을 한 클라이언트가
+ *     독점하지 못하게 몫보다 작게 둔다
+ * @param materialSearchPerMinute 재료 시세 요청 안의 공식 검색 수(공식 호출마다 셈, officialPerMinute와 따로). 한 클라이언트가 공유
+ *     예산을 혼자 쓰지 못하게 한다. 넘으면 그 이름부터 지금 알 수 없음(429 아님)
  * @param exemptInternal 원격 주소가 루프백·사설망이면 세지 않는다. 운영에서는 웹이 실제 IP를 X-Forwarded-For로 넘기므로, 사설 주소는 헤더가
  *     빠진 내부 요청이다
  */
@@ -36,7 +40,9 @@ public record ClientLimitProperties(
     @DefaultValue("20") int botOfficialPerMinute,
     @DefaultValue("5") int botAddressOfficialPerMinute,
     @DefaultValue("5") int alertSubscribePerMinute,
-    @DefaultValue("10") int materialPricesPerMinute) {
+    @DefaultValue("10") int materialPricesPerMinute,
+    @DefaultValue("3") int gemFilterPerMinute,
+    @DefaultValue("30") int materialSearchPerMinute) {
   @org.springframework.boot.context.properties.bind.ConstructorBinding
   public ClientLimitProperties {
     if (enabled && botPerMinute > generalPerMinute)
@@ -45,7 +51,7 @@ public record ClientLimitProperties(
       throw new IllegalArgumentException("봇 주소별 공식 호출 한도는 모든 봇 합계 상한보다 작아야 합니다.");
   }
 
-  /** 재료 시세 한도를 기본값(10)으로 둔다(기존 호출·테스트 호환). */
+  /** 재료 시세·보석 필터·재료 검색 한도를 기본값(10·3·30)으로 둔다(기존 호출·테스트 호환). */
   public ClientLimitProperties(
       boolean enabled,
       int officialPerMinute,
@@ -70,7 +76,9 @@ public record ClientLimitProperties(
         botOfficialPerMinute,
         botAddressOfficialPerMinute,
         alertSubscribePerMinute,
-        10);
+        10,
+        3,
+        30);
   }
 
   public int limit(ClientLimiter.Bucket bucket) {
@@ -85,6 +93,8 @@ public record ClientLimitProperties(
       case BOT_ADDRESS_OFFICIAL -> botAddressOfficialPerMinute;
       case ALERT_SUBSCRIBE -> alertSubscribePerMinute;
       case MATERIAL_PRICES -> materialPricesPerMinute;
+      case GEM_FILTER -> gemFilterPerMinute;
+      case MATERIAL_SEARCH -> materialSearchPerMinute;
     };
   }
 }

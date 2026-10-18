@@ -346,7 +346,9 @@ public class SpecUpController {
           BigDecimal deltaCombatPower,
       @Schema(description = "Δ전투력 / 현재 전투력 × 100(소수 셋째 자리)") @NullableResponse
           BigDecimal deltaPercent,
-      @Schema(description = "비용. status가 UNSUPPORTED(전투력을 계산하지 못함)면 null이다. 다만 deltaKrakenScore가 있으면(크라켄 점수 기능이 켜졌을 때) 정렬과 상관없이 비용을 준다 — 줄 상세 candidate와 같은 값을 유지하기 위해")
+      @Schema(
+              description =
+                  "비용. status가 UNSUPPORTED(전투력을 계산하지 못함)면 null이다. 다만 deltaKrakenScore가 있으면(크라켄 점수 기능이 켜졌을 때) 정렬과 상관없이 비용을 준다 — 줄 상세 candidate와 같은 값을 유지하기 위해")
           @NullableResponse
           CostResponse cost,
       @Schema(description = "1만 골드당 전투력(소수 둘째 자리). 비용이 OK일 때만") @NullableResponse

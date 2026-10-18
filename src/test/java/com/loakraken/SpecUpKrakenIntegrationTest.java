@@ -116,6 +116,63 @@ class SpecUpKrakenIntegrationTest {
   }
 
   @Test
+  void 연마_스톤_카르마_완갑은_Δ크라켄_점수만_있는_줄로_나온다() throws Exception {
+    when(auctions.cachedGems()).thenReturn(gemCells());
+    search();
+    var candidates = guide("&sort=KRAKEN&limit=200").path("candidates");
+    // 레퍼런스 ▲(같은 시각): 귀걸이 1 무공%[중] 공%[하] → 공%[중] 19.38, 스톤 → 아드레날린 Lv.2 원한 Lv.3 0.91, 카르마 29 → 30
+    // 1.84,
+    // 완갑 14 → 15 37.02.
+    var polish = find(candidates, "POLISH:7:MM");
+    assertThat(polish.path("deltaKrakenScore").decimalValue()).isEqualByComparingTo("19.38");
+    assertThat(polish.path("from").asText())
+        .isEqualTo("무기 공격력 +1.80%(중) · 공격력 +80(하) · 공격력 +0.40%(하)");
+    assertThat(polish.path("to").asText()).isEqualTo("무기 공격력 +1.80%(중) · 공격력 +0.95%(중)");
+    assertThat(polish.path("change").isNull()).isTrue();
+    assertThat(polish.path("status").asText()).isEqualTo("UNSUPPORTED");
+    assertThat(polish.at("/cost/code").asText()).isEqualTo("POLISH_COST_UNCONFIRMED");
+    assertThat(polish.path("krakenScorePer100kGold").isNull()).isTrue();
+    var stone = find(candidates, "ABILITY_STONE:2:3");
+    assertThat(stone.path("deltaKrakenScore").decimalValue()).isEqualByComparingTo("0.91");
+    assertThat(stone.path("to").asText()).isEqualTo("97돌 아드레날린 Lv.2 · 원한 Lv.3");
+    assertThat(stone.at("/cost/code").asText()).isEqualTo("STONE_COST_UNCONFIRMED");
+    var karma = find(candidates, "KARMA_LEVEL:30");
+    assertThat(karma.path("deltaKrakenScore").decimalValue()).isEqualByComparingTo("1.84");
+    assertThat(karma.at("/cost/code").asText()).isEqualTo("KARMA_COST_UNCONFIRMED");
+    var armGuard = find(candidates, "EQUIPMENT_REFINE:16:15");
+    assertThat(armGuard.path("kind").asText()).isEqualTo("EQUIPMENT_REFINE");
+    assertThat(armGuard.path("deltaKrakenScore").decimalValue()).isEqualByComparingTo("37.02");
+    assertThat(armGuard.at("/change/kind").asText()).isEqualTo("ARM_GUARD");
+    assertThat(armGuard.at("/change/level").asInt()).isEqualTo(15);
+    assertThat(armGuard.at("/change/grade").asText()).isEqualTo("전설");
+    assertThat(armGuard.at("/cost/code").asText()).isEqualTo("ARM_GUARD_COST_UNCONFIRMED");
+    // 한 줄 알림은 계산 줄로 바뀐 종류만 빠진다.
+    for (var candidate : candidates)
+      assertThat(candidate.path("id").asText()).isNotIn("POLISH", "KARMA_LEVEL", "ABILITY_STONE");
+    // 비용 모름 묶음(② Δ > 0)은 10만 골드당 묶음(①) 뒤, Δ 내림차순.
+    int lastPriced = -1;
+    int firstUnpriced = Integer.MAX_VALUE;
+    for (int i = 0; i < candidates.size(); i++) {
+      if (!candidates.get(i).path("krakenScorePer100kGold").isNull()) lastPriced = i;
+      else if (firstUnpriced == Integer.MAX_VALUE) firstUnpriced = i;
+    }
+    assertThat(lastPriced).isLessThan(firstUnpriced);
+    // 줄 상세: 완갑은 재련 계획 밖이라 단계만, 연마는 내역 없이 후보만.
+    var detail =
+        get(
+            "/api/v1/characters/spec-up/candidates/EQUIPMENT_REFINE:16:15?characterName="
+                + encode(NAME));
+    assertThat(detail.statusCode()).as(detail.body()).isEqualTo(200);
+    var data = mapper.readTree(detail.body()).path("data");
+    assertThat(data.at("/refine/fromStage").asInt()).isEqualTo(14);
+    assertThat(data.at("/refine/toStage").asInt()).isEqualTo(15);
+    assertThat(data.path("materials").isNull()).isTrue();
+    var polishDetail =
+        get("/api/v1/characters/spec-up/candidates/POLISH:7:MM?characterName=" + encode(NAME));
+    assertThat(polishDetail.statusCode()).as(polishDetail.body()).isEqualTo(200);
+  }
+
+  @Test
   void 작열_포함은_정렬과_따로_고르고_다른_정렬은_기본으로_넣는다() throws Exception {
     when(auctions.cachedGems()).thenReturn(gemCells());
     search();
@@ -140,12 +197,15 @@ class SpecUpKrakenIntegrationTest {
     when(auctions.cachedGems()).thenReturn(gemCells());
     marketCache.saveRelicBooks(books(), Duration.ofMinutes(5));
     search();
-    guide("&sort=KRAKEN&limit=50"); // 데우기
+    guide("&sort=KRAKEN&limit=200"); // 데우기
     var millis = new ArrayList<Long>();
     for (int i = 0; i < 30; i++) {
       long start = System.nanoTime();
       var response =
-          get("/api/v1/characters/spec-up?characterName=" + encode(NAME) + "&sort=KRAKEN&limit=50");
+          get(
+              "/api/v1/characters/spec-up?characterName="
+                  + encode(NAME)
+                  + "&sort=KRAKEN&limit=200");
       millis.add((System.nanoTime() - start) / 1_000_000);
       assertThat(response.statusCode()).isEqualTo(200);
     }

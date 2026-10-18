@@ -38,6 +38,42 @@ public record SpecUpCost(String unit, Long amount, String status, String code, S
           "REFINE_COST_UNCONFIRMED",
           "재련 계획(업화·전율 일반 재련 11~25단계)이 다루지 않는 항목이라 비용을 계산하지 않았습니다.");
 
+  /** 장신구 연마 교체(#575): 연마 옵션을 바꾼 장신구의 매물 시세를 아직 쓰지 않는다. */
+  public static final SpecUpCost POLISH_COST_UNCONFIRMED =
+      new SpecUpCost(
+          "GOLD",
+          null,
+          "UNKNOWN",
+          "POLISH_COST_UNCONFIRMED",
+          "연마 옵션을 바꾼 장신구의 매물 시세를 아직 받지 않아 비용을 계산하지 않았습니다.");
+
+  /** 어빌리티 스톤(#575): 목표 조합까지의 기대 세공 비용을 아직 넣지 않았다. */
+  public static final SpecUpCost STONE_COST_UNCONFIRMED =
+      new SpecUpCost(
+          "GOLD",
+          null,
+          "UNKNOWN",
+          "STONE_COST_UNCONFIRMED",
+          "목표 조합 어빌리티 스톤을 만드는 기대 비용을 아직 확인하지 않아 비용을 계산하지 않았습니다.");
+
+  /** 깨달음 카르마 레벨(#575). */
+  public static final SpecUpCost KARMA_COST_UNCONFIRMED =
+      new SpecUpCost(
+          "GOLD",
+          null,
+          "UNKNOWN",
+          "KARMA_COST_UNCONFIRMED",
+          "깨달음 카르마 레벨을 올리는 비용(확률·골드)을 아직 확인하지 않아 비용을 계산하지 않았습니다.");
+
+  /** 팔 보호구(완갑) 재련(#575). */
+  public static final SpecUpCost ARM_GUARD_COST_UNCONFIRMED =
+      new SpecUpCost(
+          "GOLD",
+          null,
+          "UNKNOWN",
+          "ARM_GUARD_COST_UNCONFIRMED",
+          "팔 보호구 재련 비용(확률·재료)을 아직 확인하지 않아 비용을 계산하지 않았습니다.");
+
   /** 재련 재료 시세 예열 전이거나 필요한 재료 시세가 없을 때. code·status는 보석과 같은 PRICE_PENDING(새 값 없음). */
   public static final SpecUpCost REFINE_PRICE_PENDING =
       new SpecUpCost(

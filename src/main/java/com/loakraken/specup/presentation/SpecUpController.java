@@ -89,10 +89,10 @@ public class SpecUpController {
           @RequestParam(required = false)
           @Pattern(regexp = "EFFICIENCY|DELTA|KRAKEN")
           String sort,
-      @Parameter(description = "OK 후보 최대 개수(기본 20, 최대 50)")
+      @Parameter(description = "순위 후보 최대 개수(기본 20, 최대 200 — 연마·스톤·카르마 줄까지 모두 보려면 크게)")
           @RequestParam(required = false)
           @Min(1)
-          @Max(50)
+          @Max(200)
           Integer limit,
       @Parameter(description = "작열(쿨) 보석 후보를 넣을지. 주지 않으면 KRAKEN은 빼고 다른 정렬은 넣음")
           @RequestParam(required = false)
@@ -324,7 +324,7 @@ public class SpecUpController {
       @Schema(description = "같은 캐릭터·같은 후보면 늘 같은 값(목록 키)", example = "GEM_LEVEL:3:8") String id,
       @Schema(
               description =
-                  "후보 종류(문자열, 값이 늘 수 있음). 시뮬레이터 kind와 같고, 아직 계산하지 않는 종류(KARMA_LEVEL·ABILITY_STONE 등)는 한 줄 UNSUPPORTED로",
+                  "후보 종류(문자열, 값이 늘 수 있음). 시뮬레이터 kind와 같다. POLISH(장신구 연마 교체)·ABILITY_STONE(어빌리티 스톤)·KARMA_LEVEL(깨달음 카르마)은 크라켄 점수를 낼 수 있으면 후보마다 한 줄(change null·전투력 UNSUPPORTED·deltaKrakenScore 있음)이고, 그럴 수 없으면 종류마다 한 줄 UNSUPPORTED 알림",
               example = "GEM_LEVEL")
           String kind,
       @Schema(description = "화면에 그대로 쓰는 대상 이름", example = "블레이드 버스트 · 7레벨 겁화") String target,
@@ -339,7 +339,10 @@ public class SpecUpController {
       @Schema(description = "보석이 붙은 스킬 이름(보석 후보만)") @NullableResponse String skillName,
       @Schema(description = "권장 목표 단계(강화 후보용, to와 별개). 지금은 늘 null") @NullableResponse
           String suggestedTo,
-      @Schema(description = "전투력 시뮬레이터 요청의 changes[] 하나와 같은 모양. 한 줄 알림 종류는 null") @NullableResponse
+      @Schema(
+              description =
+                  "전투력 시뮬레이터 요청의 changes[] 하나와 같은 모양. 한 줄 알림 종류와 점수 입력에서 만든 후보(POLISH·ABILITY_STONE·KARMA_LEVEL)는 null")
+          @NullableResponse
           ChangeResponse change,
       @Schema(description = "OK 또는 UNSUPPORTED(문자열, 값이 늘 수 있음)", example = "OK") String status,
       @Schema(description = "Δ전투력(소수 둘째 자리). UNSUPPORTED면 null") @NullableResponse
@@ -376,7 +379,7 @@ public class SpecUpController {
           BigDecimal baseAttackPctTo,
       @Schema(
               description =
-                  "Δ크라켄 점수 = 이 후보를 적용한 점수 − 지금 점수(반올림 전 값의 차를 소수 둘째 자리로 — 지금 점수 + Δ와 화면 최종 점수의 차이는 0.01 이하). 계산하지 못하면 null(빈 칸 보석·상급 재련·서포터 등)",
+                  "Δ크라켄 점수 = 이 후보를 적용한 점수 − 지금 점수(반올림 전 값의 차를 소수 둘째 자리로 — 지금 점수 + Δ와 화면 최종 점수의 차이는 0.01 이하). 계산하지 못하면 null(빈 칸 보석·상급 재련·서포터 등). 장신구 연마 교체는 목표 장신구를 점수 옵션 두 줄(두 옵션이 모두 상이면 고정값 공격력·무기 공격력 셋째 줄 포함)만 있는 매물로 보고 계산한다",
               example = "98.81")
           @NullableResponse
           BigDecimal deltaKrakenScore,
@@ -439,7 +442,9 @@ public class SpecUpController {
       @NullableResponse Integer level,
       @NullableResponse Integer refine,
       @NullableResponse Integer quality,
-      @NullableResponse String name) {
+      @NullableResponse String name,
+      @Schema(description = "팔 보호구 등급(ARM_GUARD만, 영웅·전설·유물·고대). 그 밖에는 null") @NullableResponse
+          String grade) {
     static ChangeResponse from(CombatPowerSimulationService.Change change) {
       return change == null
           ? null
@@ -450,7 +455,8 @@ public class SpecUpController {
               change.level(),
               change.refine(),
               change.quality(),
-              change.name());
+              change.name(),
+              change.grade());
     }
   }
 

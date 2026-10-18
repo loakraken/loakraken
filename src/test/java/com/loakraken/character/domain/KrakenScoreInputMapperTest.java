@@ -114,6 +114,54 @@ class KrakenScoreInputMapperTest {
   }
 
   @Test
+  void 서포터_여부는_깨달음_노드로_정하고_발키리는_해방자가_서포터다() throws IOException {
+    for (var c : new String[][] {{"발키리", "해방자", "true"}, {"발키리", "빛의 기사", "false"}, {"도화가", "만개", "true"}, {"바드", "진실된 용맹", "false"}}) {
+      var raw =
+          MAPPER.readTree(
+              "{\"ArmoryProfile\":{\"CharacterClassName\":\""
+                  + c[0]
+                  + "\"},\"ArkPassive\":{\"Title\":\""
+                  + c[1]
+                  + "\",\"Effects\":[{\"Name\":\"깨달음\",\"Description\":\"<FONT color='#83E9FF'>깨달음</FONT> 1티어 <FONT color='#83E9FF'>"
+                  + c[1]
+                  + " Lv.1</FONT>\"}]}}");
+      var input = KrakenScoreInputMapper.from(raw);
+      assertThat(input.path("profile").path("supportCheck").asBoolean())
+          .as(c[0] + " " + c[1])
+          .isEqualTo(Boolean.parseBoolean(c[2]));
+    }
+  }
+
+  @Test
+  void 어빌리티_스톤의_감소_각인_줄도_원문_순서대로_넣고_이동속도_감소가_점수에_반영된다() throws IOException {
+    // 합성: l05(딜러)의 스톤 무작위 각인에 '이동속도 감소 Lv.2'를 넣는다 — 질풍노도 등은 이 레벨을 읽는다.
+    var doc = read("l05");
+    var raw = doc.path("raw").deepCopy();
+    for (var item : raw.path("ArmoryEquipment")) {
+      if (!"어빌리티 스톤".equals(item.path("Type").asString(""))) continue;
+      var tooltip = item.path("Tooltip").asString("");
+      var replaced = tooltip.replaceFirst("\\[<FONT COLOR='#FE2E2E'>[^<]+</FONT>\\]", "[<FONT COLOR='#FE2E2E'>이동속도 감소</FONT>]");
+      replaced = replaced.replaceFirst("(이동속도 감소</FONT>\\][^L]*)Lv\\.0", "$1Lv.2");
+      ((tools.jackson.databind.node.ObjectNode) item).put("Tooltip", replaced);
+    }
+    var base = KrakenScoreInputMapper.from(doc.path("raw"));
+    var input = KrakenScoreInputMapper.from(raw);
+    var options = new ArrayList<String>();
+    input.path("armory").path("abilityStone").path("option").forEach(o -> options.add(o.asString("")));
+    var baseOptions = new ArrayList<String>();
+    base.path("armory").path("abilityStone").path("option").forEach(o -> baseOptions.add(o.asString("")));
+    assertThat(baseOptions).hasSize(3).last().asString().endsWith("Lv.0");
+    assertThat(options).containsExactly(baseOptions.get(0), baseOptions.get(1), "이동속도 감소 Lv.2");
+    assertThat(input.path("armory").path("abilityStone").path("attackbonus").asDouble())
+        .isEqualTo(base.path("armory").path("abilityStone").path("attackbonus").asDouble());
+    // 질풍노도면 이동속도 감소 레벨이 속도 계산에 들어가 점수가 바뀐다(감소 줄이 빠지면 점수가 틀림).
+    ((tools.jackson.databind.node.ObjectNode) base.path("profile")).put("secondClass", "질풍노도");
+    ((tools.jackson.databind.node.ObjectNode) input.path("profile")).put("secondClass", "질풍노도");
+    assertThat(KrakenScoreEngine.dealerScore(input, TABLES))
+        .isNotEqualTo(KrakenScoreEngine.dealerScore(base, TABLES));
+  }
+
+  @Test
   void 응답_때_점수_계산은_한_번에_수_밀리초_안이다() throws IOException {
     // 연결 PR 조건: 응답 p95 증가 ≤ 5ms. 응답 때 하는 일은 캐시에 든 입력으로 점수 한 번 계산뿐이다(변환은 공식 조회 때 한 번).
     var inputs = new ArrayList<JsonNode>();

@@ -50,7 +50,8 @@ public final class KrakenScoreInputMapper {
   private static final Pattern ELLA = Pattern.compile("엘라 부여 (\\d+) 단계");
   private static final Pattern STONE_BONUS =
       Pattern.compile("\\[레벨 보너스\\] 기본 공격력 \\+(\\d+(?:\\.\\d+)?)%");
-  private static final Pattern ORB = Pattern.compile("달성 최대 낙원력 : (\\d+)");
+  private static final Pattern STONE_ENGRAVING = Pattern.compile("^\\s*\\[([^\\]]+)\\]\\s*Lv\\.(\\d+)");
+  private static final Pattern ORB =Pattern.compile("달성 최대 낙원력 : (\\d+)");
   private static final Pattern BRACELET_ICON =
       Pattern.compile(
           "<img[^>]*emoticon_tooltip_bracelet[^>]*>(?:\\s*</img>)?", Pattern.CASE_INSENSITIVE);
@@ -79,20 +80,27 @@ public final class KrakenScoreInputMapper {
   private static final Map<String, String> BRACELET_STATS =
       Map.of("치명", "critical", "특화", "special", "신속", "haste");
 
-  /** 서포터 각인 직업(공식 아크 패시브 제목). */
-  static final Set<String> SUPPORT_TITLES = Set.of("절실한 구원", "축복의 오라", "만개", "빛의 기사");
-
   private KrakenScoreInputMapper() {}
+
+  /** 공식 원문의 직업·아크 패시브 효과 설명으로 딜러·서포터 판정(CharacterPosition과 같은 규칙). 근거가 없으면 role null. */
+  public static CharacterPosition position(JsonNode raw, String className) {
+    var descriptions = new ArrayList<String>();
+    for (var e : raw.path("ArkPassive").path("Effects"))
+      descriptions.add(strip(e.path("Description").asString("")));
+    return CharacterPosition.judgeDescriptions(className, descriptions);
+  }
 
   /** 공식 armories 응답 본문(JSON 트리) → 엔진 입력. */
   public static ObjectNode from(JsonNode raw) {
     var out = F.objectNode();
     var armory = armory(raw);
     var secondClass = text(raw.path("ArkPassive").path("Title"));
+    var className = text(raw.path("ArmoryProfile").path("CharacterClassName"));
     var profile = out.putObject("profile");
     profile.set("class", textNode(raw.path("ArmoryProfile").path("CharacterClassName")));
     profile.put("secondClass", secondClass);
-    profile.put("supportCheck", secondClass != null && SUPPORT_TITLES.contains(secondClass));
+    // 딜러·서포터는 서비스 전체와 같은 규칙(CharacterPosition: 깨달음 노드)으로 판정한다.
+    profile.put("supportCheck", position(raw, className).role() == CharacterPosition.Role.SUPPORT);
     out.putObject("avatar").set("avatarStats", number(avatarStats(raw)));
     out.set("skills", skills(raw));
     // 점수·젬 효율에 쓰이지 않는 전투력 경로 값 — 엔진 기본값.
@@ -293,8 +301,17 @@ public final class KrakenScoreInputMapper {
         }
       } else if (type.equals("어빌리티 스톤")) {
         var m = STONE_BONUS.matcher(strip(write(tooltip)));
-        out.putObject("abilityStone")
-            .set("attackbonus", m.find() ? number(Double.parseDouble(m.group(1))) : F.nullNode());
+        var stone = out.putObject("abilityStone");
+        // 무작위 각인 효과 줄 '[이름] Lv.N'(감소 줄 포함, 원문 순서) → '이름 Lv.N'. 질풍노도 등은 이동·공격속도 감소 레벨을 읽는다.
+        var option = stone.putArray("option");
+        for (var e : elements(tooltip))
+          if ("IndentStringGroup".equals(e.path("type").asString("")))
+            for (var group : e.path("value"))
+              for (var line : group.path("contentStr")) {
+                var engraving = STONE_ENGRAVING.matcher(strip(line.path("contentStr").asString("")));
+                if (engraving.find()) option.add(engraving.group(1) + " Lv." + engraving.group(2));
+              }
+        stone.set("attackbonus", m.find() ? number(Double.parseDouble(m.group(1))) : F.nullNode());
       } else if (type.equals("보주")) {
         var m = ORB.matcher(strip(write(tooltip)));
         var orb = out.putObject("orb");
@@ -414,7 +431,7 @@ public final class KrakenScoreInputMapper {
 
   private static JsonNode mainStat(String html) {
     for (var line : lines(html, false)) {
-      var m = MAIN_STAT.matcher(line);
+      var m = MAIN_STAT.matcher(line.replace(",", ""));
       if (m.find()) return number(Long.parseLong(m.group(2)));
     }
     return F.nullNode();
@@ -422,7 +439,8 @@ public final class KrakenScoreInputMapper {
 
   private static JsonNode lineValue(String html, Pattern pattern) {
     for (var line : lines(html, true)) {
-      var m = pattern.matcher(line);
+      // 천 단위 쉼표가 있어도 수 전체를 읽는다(일부만 읽지 않게).
+      var m = pattern.matcher(line.replace(",", ""));
       if (m.find()) return number(Double.parseDouble(m.group(1)));
     }
     return F.nullNode();

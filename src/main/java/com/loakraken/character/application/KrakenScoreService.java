@@ -1,5 +1,6 @@
 package com.loakraken.character.application;
 
+import com.loakraken.character.domain.CharacterPosition;
 import com.loakraken.character.domain.KrakenScoreEngine;
 import com.loakraken.character.domain.KrakenScoreSupport;
 import com.loakraken.character.domain.KrakenScoreTier;
@@ -95,9 +96,16 @@ public class KrakenScoreService {
           Status.DISABLED, null, null, null, null, List.of(), tiers.ruleVersion());
     JsonNode input = result.krakenScoreInput();
     if (input == null || !input.isObject()) return unsupported(null, Reason.INPUT_PENDING);
-    var profile = input.path("profile");
-    if (profile.path("class").asString("").isEmpty()) return unsupported(null, Reason.ROLE_UNKNOWN);
-    var role = profile.path("supportCheck").asBoolean(false) ? Role.SUPPORT : Role.DEALER;
+    // 딜러·서포터는 서비스 전체와 같은 규칙(CharacterPosition: 깨달음 노드). 입력의 supportCheck도 같은 규칙으로 만들었다.
+    var details = result.details();
+    var position =
+        CharacterPosition.judge(details.profile().className(), details.loadout().arkPassive());
+    if (position.role() == null) return unsupported(null, Reason.ROLE_UNKNOWN);
+    var role = position.role() == CharacterPosition.Role.SUPPORT ? Role.SUPPORT : Role.DEALER;
+    // 무기·아크 패시브가 비어 있으면 엔진 기본값으로 0점이 나오므로 계산하지 않는다(근사 금지).
+    if (!input.path("armory").path("equipment").path("weapon").path("stat").isNumber()
+        || !input.path("arkPassive").path("evolution").isObject())
+      return unsupported(role, Reason.SCORE_UNAVAILABLE);
     double raw;
     var sample = Timer.start(registry);
     try {

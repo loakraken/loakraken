@@ -45,6 +45,11 @@ class KrakenScoreServiceTest {
               new KrakenScoreTier.Cut("ESTHER", new BigDecimal("8800"))));
 
   private static CharacterResult result(String className) {
+    return result(className, null);
+  }
+
+  /** enlightenment: 깨달음 노드 이름(서포터 가능 직업의 딜러·서포터 판정 근거). null이면 아크 패시브 없음. */
+  private static CharacterResult result(String className, String enlightenment) {
     var profile =
         new CharacterProfile(
             "점수표본",
@@ -61,7 +66,23 @@ class KrakenScoreServiceTest {
             null);
     return new CharacterResult(
         CharacterTestFixture.details(
-            profile, new CharacterLoadout(List.of(), null, null, null, null, null), List.of()),
+            profile,
+            new CharacterLoadout(
+                List.of(),
+                null,
+                null,
+                null,
+                enlightenment == null
+                    ? null
+                    : new CharacterLoadout.ArkPassive(
+                        enlightenment,
+                        true,
+                        List.of(),
+                        List.of(
+                            new CharacterLoadout.PassiveEffect(
+                                "깨달음", "깨달음 1티어 " + enlightenment + " Lv.1", null))),
+                null),
+            List.of()),
         Instant.EPOCH);
   }
 
@@ -79,8 +100,35 @@ class KrakenScoreServiceTest {
   }
 
   private static CharacterResult withInput(JsonNode input) {
-    var base = result("블레이드");
+    return withInput(input, "블레이드", null);
+  }
+
+  private static CharacterResult withInput(
+      JsonNode input, String className, String enlightenment) {
+    var base = result(className, enlightenment);
     return new CharacterResult(base.details(), base.fetchedAt(), null, input);
+  }
+
+  @Test
+  void 발키리는_해방자면_서포터_빛의_기사면_딜러이고_무기나_아크_패시브가_비면_계산하지_않는다()
+      throws IOException {
+    var service = new KrakenScoreService(TABLE, ENGINE, true, new SimpleMeterRegistry());
+    var input = fixtureInput("l01");
+    assertThat(service.score(withInput(input, "발키리", "해방자")).role())
+        .isEqualTo(KrakenScoreService.Role.SUPPORT);
+    assertThat(service.score(withInput(input, "발키리", "빛의 기사")).role())
+        .isEqualTo(KrakenScoreService.Role.DEALER);
+    // 직업만 있고 장비·아크 패시브가 빈 원문 → 0점(최하 티어) 대신 계산하지 않음.
+    var empty =
+        service.score(
+            withInput(
+                KrakenScoreInputMapper.from(
+                    MAPPER.readTree("{\"ArmoryProfile\":{\"CharacterClassName\":\"블레이드\"}}")),
+                "블레이드",
+                null));
+    assertThat(empty.status()).isEqualTo(KrakenScoreService.Status.UNSUPPORTED);
+    assertThat(empty.reason()).isEqualTo(KrakenScoreService.Reason.SCORE_UNAVAILABLE);
+    assertThat(empty.score()).isNull();
   }
 
   private static JsonNode fixtureInput(String id) throws IOException {
@@ -103,7 +151,8 @@ class KrakenScoreServiceTest {
       assertThat(score.reason()).isEqualTo(KrakenScoreService.Reason.INPUT_PENDING);
       assertThat(score.score()).isNull();
     }
-    var unknown = service.score(withInput(MAPPER.readTree("{\"profile\":{}}")));
+    // 서포터 가능 직업인데 깨달음 노드가 없으면 역할을 판정하지 못한다.
+    var unknown = service.score(withInput(MAPPER.readTree("{\"profile\":{}}"), "바드", null));
     assertThat(unknown.role()).isNull();
     assertThat(unknown.reason()).isEqualTo(KrakenScoreService.Reason.ROLE_UNKNOWN);
     assertThat(
@@ -136,7 +185,7 @@ class KrakenScoreServiceTest {
     assertThat(dealer.role()).isEqualTo(KrakenScoreService.Role.DEALER);
     assertThat(dealer.score()).isEqualByComparingTo("3977.02");
     assertThat(dealer.tier().code()).isEqualTo("GOLD");
-    var support = service.score(withInput(fixtureInput("l04")));
+    var support = service.score(withInput(fixtureInput("l04"), "도화가", "만개"));
     assertThat(support.role()).isEqualTo(KrakenScoreService.Role.SUPPORT);
     assertThat(support.score()).isEqualByComparingTo("5286.48");
     assertThat(support.tier().code()).isEqualTo("DIAMOND");

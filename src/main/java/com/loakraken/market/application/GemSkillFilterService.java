@@ -1,6 +1,7 @@
 package com.loakraken.market.application;
 
 import com.loakraken.common.api.BusinessException;
+import com.loakraken.common.lostark.ClientLimiter;
 import com.loakraken.common.lostark.LostArkErrorCode;
 import com.loakraken.common.lostark.LostArkRateLimitedException;
 import com.loakraken.common.lostark.LostArkRequestGate;
@@ -18,8 +19,9 @@ import org.springframework.stereotype.Service;
 
 /**
  * 보석 매물 직업·스킬 필터(#542). 직업·스킬 목록은 정적 데이터(공식 호출 0). 조건 붙은 매물은 공식 검색 1회를 1분 캐시하고, 기능 전용 분당 몫·같은 조건 동시
- * 요청 하나로 묶기(single-flight)·사용자 몫을 남기는 게이트를 지난다. 걸러진 최저가는 시세판 칸·일별 기록에 저장하지 않는다. 틀린 조건은 입력값을 되돌리지 않는
- * 고정 문장의 400이다.
+ * 요청 하나로 묶기(single-flight)·사용자 몫을 남기는 게이트를 지난다. 캐시에 없는 조건 요청은 먼저 요청 클라이언트의 GEM_FILTER 버킷에 한 번 센다(한
+ * 클라이언트가 기능 전용 몫을 독점하지 못하게, 묶인 요청도 셈). 걸러진 최저가는 시세판 칸·일별 기록에 저장하지 않는다. 틀린 조건은 입력값을 되돌리지 않는 고정 문장의
+ * 400이다.
  */
 @Service
 public class GemSkillFilterService {
@@ -87,6 +89,8 @@ public class GemSkillFilterService {
       metrics.gemFilter("cache_hit");
       return cached.get();
     }
+    // 넘으면 CLIENT_RATE_LIMITED + Retry-After(429). 기능 몫을 쓰기 전에 멈춘다.
+    gate.chargeClient(ClientLimiter.Bucket.GEM_FILTER);
     var mine = new CompletableFuture<AuctionPage>();
     var running = inFlight.putIfAbsent(key, mine);
     if (running != null) {

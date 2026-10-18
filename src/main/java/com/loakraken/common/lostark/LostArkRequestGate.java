@@ -20,6 +20,13 @@ import org.springframework.stereotype.Component;
 @Component
 public class LostArkRequestGate {
   private static final ThreadLocal<Integer> RESERVE = new ThreadLocal<>();
+
+  /** 설정되면 이 스레드의 공식 호출을 OFFICIAL 대신 이 버킷에 센다({@link #withClientBucket}). */
+  private static final ThreadLocal<ClientLimiter.Bucket> CHARGE_BUCKET = new ThreadLocal<>();
+
+  /** 설정되면 이 스레드의 공식 호출을 모든 클라이언트가 함께 쓰는 이 기능 상한에도 센다. */
+  private static final ThreadLocal<ClientLimiter.Bucket> SHARED_BUCKET = new ThreadLocal<>();
+
   private static final ThreadLocal<Boolean> CHARGE_CLIENT = new ThreadLocal<>();
 
   /** 공식 호출 로그 로거 이름. 로컬 프로필(application-local)에서만 DEBUG다. */
@@ -93,11 +100,41 @@ public class LostArkRequestGate {
   /** BACKGROUND: 예열·수집기(reserve, 클라이언트 한도 안 셈), USER_RESERVE: 사용자 요청 중 reserve 호출, USER: 사용자 요청. */
   private static String origin() {
     if (currentReserve() == 0) return "USER";
-    return Boolean.TRUE.equals(CHARGE_CLIENT.get()) ? "USER_RESERVE" : "BACKGROUND";
+    return Boolean.TRUE.equals(CHARGE_CLIENT.get()) || CHARGE_BUCKET.get() != null
+        ? "USER_RESERVE"
+        : "BACKGROUND";
   }
 
   private void admit() {
-    if (currentReserve() == 0 || Boolean.TRUE.equals(CHARGE_CLIENT.get())) clients.chargeOfficial();
+    // 기능 버킷(재료 검색 등)은 공유 예산보다 먼저 세지만(한도에 걸린 호출이 예산을 쓰지 않게), 게이트가 공식 호출 전에 거절하면 센 것을 되돌린다
+    // (코드 리뷰 10-18: 게이트가 바쁠 때 공식 호출 없이 합계 상한이 바닥나지 않게).
+    String bucketKey = null;
+    String sharedKey = null;
+    var bucket = CHARGE_BUCKET.get();
+    if (bucket != null) {
+      bucketKey = clients.chargeRefundable(bucket);
+      var shared = SHARED_BUCKET.get();
+      if (shared != null) {
+        try {
+          sharedKey = clients.chargeShared(shared);
+        } catch (RuntimeException exception) {
+          clients.refund(bucketKey);
+          throw exception;
+        }
+      }
+    } else if (currentReserve() == 0 || Boolean.TRUE.equals(CHARGE_CLIENT.get()))
+      clients.chargeOfficial();
+    try {
+      enter();
+    } catch (RuntimeException exception) {
+      clients.refund(sharedKey);
+      clients.refund(bucketKey);
+      throw exception;
+    }
+  }
+
+  /** 동시 호출 허가와 공유 예산 판정. 거절이면 예외(허가를 잡았으면 돌려줌). */
+  private void enter() {
     if (!permits.tryAcquire()) reject(GateEvent.CONCURRENCY_REJECT);
     GateStore.Admission admission;
     try {
@@ -158,6 +195,28 @@ public class LostArkRequestGate {
     } finally {
       if (previous == null) CHARGE_CLIENT.remove();
       else CHARGE_CLIENT.set(previous);
+    }
+  }
+
+  /**
+   * 사용자 요청 하나가 공식 호출을 여러 번 일으키는데 그 호출들을 OFFICIAL이 아니라 기능 전용 버킷에 셀 때(재료 시세 검색, 보안 점검 10-18). 공유 예산에는
+   * reserve를 남기고, 공식 호출마다 요청 클라이언트의 bucket(넘으면 CLIENT_RATE_LIMITED)과 모든 클라이언트가 함께 쓰는 shared 상한(넘으면
+   * LOST_ARK_RATE_LIMITED, null이면 세지 않음)에 매긴다. 같은 스레드 전용이다.
+   */
+  public <T> T withClientBucket(
+      int reserve, ClientLimiter.Bucket bucket, ClientLimiter.Bucket shared, Supplier<T> work) {
+    var previous = CHARGE_BUCKET.get();
+    var previousShared = SHARED_BUCKET.get();
+    CHARGE_BUCKET.set(bucket);
+    if (shared == null) SHARED_BUCKET.remove();
+    else SHARED_BUCKET.set(shared);
+    try {
+      return withReserve(reserve, work);
+    } finally {
+      if (previous == null) CHARGE_BUCKET.remove();
+      else CHARGE_BUCKET.set(previous);
+      if (previousShared == null) SHARED_BUCKET.remove();
+      else SHARED_BUCKET.set(previousShared);
     }
   }
 

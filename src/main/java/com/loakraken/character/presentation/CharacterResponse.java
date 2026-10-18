@@ -399,7 +399,10 @@ public record CharacterResponse(
           "아크 그리드 젬 실 효율. status: OK·UNSUPPORTED. UNSUPPORTED면 percent·optionsPercent·pointsPercent는 null, options·series는 빈 배열."
               + " 값은 % 소수 둘째 자리 내림")
   public record ArkGridRealResponse(
-      @Schema(description = "OK·UNSUPPORTED", allowableValues = {"OK", "UNSUPPORTED"}, example = "OK")
+      @Schema(
+              description = "OK·UNSUPPORTED",
+              allowableValues = {"OK", "UNSUPPORTED"},
+              example = "OK")
           String status,
       @Schema(
               description =
@@ -424,7 +427,8 @@ public record CharacterResponse(
       @Schema(description = "질서·혼돈 계열별(그 계열 젬만 뺀 비). 그 계열 젬이 없거나 젬 구성을 확인할 수 없으면 그 계열은 없음")
           List<ArkGridRealSeriesResponse> series,
       @Schema(description = "계산 규칙 버전", example = "ark-grid-real-v1") String ruleVersion) {
-    static ArkGridRealResponse from(com.loakraken.character.application.ArkGridRealEfficiency value) {
+    static ArkGridRealResponse from(
+        com.loakraken.character.application.ArkGridRealEfficiency value) {
       var real =
           value != null
               ? value
@@ -465,17 +469,21 @@ public record CharacterResponse(
   public record ArkGridRealOptionResponse(
       @Schema(description = "젬 옵션 이름(공식 표기)", example = "공격력") String name,
       @Schema(description = "옵션 레벨 합", example = "28") @NullableResponse Integer level,
-      @Schema(description = "공식 표기 %(아크 그리드 효과 툴팁). 읽지 못하면 null", example = "1.02") @NullableResponse
+      @Schema(description = "공식 표기 %(아크 그리드 효과 툴팁). 읽지 못하면 null", example = "1.02")
+          @NullableResponse
           BigDecimal inGamePercent,
       @Schema(description = "그 옵션 줄만의 실 효율 %. 계산하지 못한 줄은 null", example = "0.99") @NullableResponse
           BigDecimal percent) {}
 
   public record ArkGridRealSeriesResponse(
       @Schema(description = "질서 또는 혼돈", example = "질서") String series,
-      @Schema(description = "그 계열 젬의 옵션 + 포인트 실 효율 %. 계산하지 못하면 null", example = "2.66") @NullableResponse
+      @Schema(description = "그 계열 젬의 옵션 + 포인트 실 효율 %. 계산하지 못하면 null", example = "2.66")
+          @NullableResponse
           BigDecimal percent,
-      @Schema(description = "그 계열 젬 옵션만 %. 계산하지 못하면 null") @NullableResponse BigDecimal optionsPercent,
-      @Schema(description = "그 계열 젬 포인트만 %. 계산하지 못하면 null") @NullableResponse BigDecimal pointsPercent,
+      @Schema(description = "그 계열 젬 옵션만 %. 계산하지 못하면 null") @NullableResponse
+          BigDecimal optionsPercent,
+      @Schema(description = "그 계열 젬 포인트만 %. 계산하지 못하면 null") @NullableResponse
+          BigDecimal pointsPercent,
       @Schema(description = "그 계열 젬이 준 옵션 줄") List<ArkGridRealSeriesOptionResponse> options) {}
 
   public record ArkGridRealSeriesOptionResponse(

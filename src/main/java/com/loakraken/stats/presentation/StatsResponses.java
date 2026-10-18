@@ -408,7 +408,7 @@ public final class StatsResponses {
       @NullableResponse
           @Schema(
               description =
-                  "직업 각인 필터를 켰을 때, 같은 조건에서 직업 각인을 모르는(장비를 관측하지 않은) 캐릭터 수. 이 캐릭터들은 순위에 들어가지 않습니다. 필터를 쓰지 않거나 세지 못하면 null")
+                  "직업 각인 필터를 켰을 때, 같은 조건에서 직업 각인을 모르는(장비를 관측하지 않았거나 직업 각인이 없는(깨달음 노드 없음)) 캐릭터 수. 이 캐릭터들은 순위에 들어가지 않습니다. 필터를 쓰지 않거나 세지 못하면 null")
           Long classEngravingUnknown) {
     static StatsRankingResponse from(StatsQueryService.RankingResult result) {
       return new StatsRankingResponse(
@@ -456,7 +456,10 @@ public final class StatsResponses {
       String className,
       @Schema(description = "직업 각인 목록 순서. 랭킹 classEngraving에 그대로 넣을 수 있는 값")
           List<StatsClassEngravingResponse> classEngravings,
-      @NullableResponse @Schema(description = "같은 조건에서 직업 각인을 모르는(장비를 관측하지 않은) 캐릭터 수. 세지 못하면 null")
+      @NullableResponse
+          @Schema(
+              description =
+                  "같은 조건에서 직업 각인을 모르는(장비를 관측하지 않았거나 직업 각인이 없는(깨달음 노드 없음)) 캐릭터 수. 세지 못하면 null")
           Long unknown,
       @NullableResponse @Schema(description = "수를 센 시각(10분 캐시). 세지 못하면 null")
           Instant aggregatedAt) {

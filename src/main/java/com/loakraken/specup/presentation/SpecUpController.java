@@ -346,7 +346,9 @@ public class SpecUpController {
           BigDecimal deltaCombatPower,
       @Schema(description = "Δ전투력 / 현재 전투력 × 100(소수 셋째 자리)") @NullableResponse
           BigDecimal deltaPercent,
-      @Schema(description = "비용. UNSUPPORTED면 null") @NullableResponse CostResponse cost,
+      @Schema(description = "비용. UNSUPPORTED면 null이고, 그래도 deltaKrakenScore가 있으면 비용을 준다(KRAKEN 정렬용)")
+          @NullableResponse
+          CostResponse cost,
       @Schema(description = "1만 골드당 전투력(소수 둘째 자리). 비용이 OK일 때만") @NullableResponse
           BigDecimal combatPowerPer10kGold,
       @Schema(description = "UNSUPPORTED 이유 코드(문자열, 값이 늘 수 있음)", example = "MODEL_UNCONFIRMED")
@@ -372,7 +374,7 @@ public class SpecUpController {
           BigDecimal baseAttackPctTo,
       @Schema(
               description =
-                  "Δ크라켄 점수 = 이 후보를 적용한 점수 − 지금 점수(반올림 전 값의 차를 소수 둘째 자리로, 비교 기준 B 스펙업 ▲와 같은 정의 — 지금 점수 + Δ와 화면 최종 점수의 차이는 0.01 이하). 계산하지 못하면 null(빈 칸 보석·상급 재련·서포터 등)",
+                  "Δ크라켄 점수 = 이 후보를 적용한 점수 − 지금 점수(반올림 전 값의 차를 소수 둘째 자리로 — 지금 점수 + Δ와 화면 최종 점수의 차이는 0.01 이하). 계산하지 못하면 null(빈 칸 보석·상급 재련·서포터 등)",
               example = "98.81")
           @NullableResponse
           BigDecimal deltaKrakenScore,

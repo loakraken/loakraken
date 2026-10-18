@@ -105,8 +105,12 @@ public class SpecUpService {
       BigDecimal deltaKrakenScore,
       BigDecimal krakenScorePer100kGold,
       String gemType) {
-    /** Δ크라켄 점수(화면 점수 차)와 10만 골드당 점수를 붙인다. 10만 골드당은 같은 Δ에서 만든다(정렬 키 = 보이는 값). */
-    Candidate withKraken(BigDecimal delta) {
+    /**
+     * Δ크라켄 점수와 10만 골드당 점수를 붙인다. 10만 골드당은 같은 Δ에서 만든다(정렬 키 = 보이는 값). 전투력 계산이 UNSUPPORTED라 비용이 비었어도
+     * Δ크라켄 점수가 있으면 계획한 비용(planned)을 준다 — 그래야 KRAKEN 정렬에서 비용으로 나눌 수 있다.
+     */
+    Candidate withKraken(BigDecimal delta, SpecUpCost planned) {
+      var cost = this.cost == null && delta != null ? planned : this.cost;
       BigDecimal per100k = null;
       if (delta != null
           && delta.signum() > 0
@@ -218,7 +222,8 @@ public class SpecUpService {
                   CombatPowerReasons.classify(roleReason),
                   null)
               : evaluate(snapshot, plan);
-      candidate = candidate.withKraken(krakenDelta(krakenContext, loadout, plan.change()));
+      candidate =
+          candidate.withKraken(krakenDelta(krakenContext, loadout, plan.change()), plan.cost());
       // KRAKEN은 Δ크라켄 점수가 있으면 전투력 계산과 상관없이 순위에 넣는다.
       boolean ranked =
           "OK".equals(candidate.status())

@@ -109,7 +109,7 @@ class SpecUpKrakenIntegrationTest {
     var surprise4 = find(candidates, "ENGRAVING_LEVEL:기습의 대가:4");
     assertThat(surprise1.path("deltaKrakenScore").decimalValue()).isEqualByComparingTo("25.71");
     assertThat(surprise4.path("deltaKrakenScore").decimalValue()).isEqualByComparingTo("102.85");
-    assertThat(surprise1.at("/cost/amount").asLong()).isEqualTo(5 * 48_000L);
+    assertThat(surprise1.at("/cost/amount").asLong()).as(surprise1.toString()).isEqualTo(5 * 48_000L);
     assertThat(surprise4.at("/cost/amount").asLong()).isEqualTo(4 * 5 * 48_000L);
   }
 

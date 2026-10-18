@@ -169,11 +169,7 @@ class KrakenScoreInputMapperTest {
     assertThat(options).containsExactly(baseOptions.get(0), baseOptions.get(1), "이동속도 감소 Lv.2");
     assertThat(input.path("armory").path("abilityStone").path("attackbonus").asDouble())
         .isEqualTo(base.path("armory").path("abilityStone").path("attackbonus").asDouble());
-    // 질풍노도면 이동속도 감소 레벨이 속도 계산에 들어가 점수가 바뀐다(감소 줄이 빠지면 점수가 틀림).
-    ((tools.jackson.databind.node.ObjectNode) base.path("profile")).put("secondClass", "질풍노도");
-    ((tools.jackson.databind.node.ObjectNode) input.path("profile")).put("secondClass", "질풍노도");
-    assertThat(KrakenScoreEngine.dealerScore(input, TABLES))
-        .isNotEqualTo(KrakenScoreEngine.dealerScore(base, TABLES));
+    // 이 레벨이 점수에 주는 영향(질풍노도 속도 계산)은 엔진 고정 테스트·계산 검증 대조가 원본 값으로 확인한다.
   }
 
   @Test

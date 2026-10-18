@@ -121,6 +121,28 @@ class KrakenScoreServiceTest {
         .isEqualTo(KrakenScoreService.Reason.CALC_FAILED);
   }
 
+  @Test
+  void 엔진_안에서_예외가_나도_점수_값_문제가_아니라_CALC_FAILED다() throws IOException {
+    // 표 모양이 어긋난 엔진(키는 있으나 값이 표가 아님) — 입력 확인은 지나고 엔진 계산에서 예외가 난다.
+    var broken = MAPPER.createObjectNode();
+    ENGINE.tables().propertyNames().forEach(key -> broken.put(key, "x"));
+    var registry = new SimpleMeterRegistry();
+    var service =
+        new KrakenScoreService(TABLE, new KrakenScoreEngine.Tables("", broken), true, registry);
+    var score = service.score(withInput(fixtureInput("l01")));
+    assertThat(score.status()).isEqualTo(KrakenScoreService.Status.UNSUPPORTED);
+    assertThat(score.reason()).isEqualTo(KrakenScoreService.Reason.CALC_FAILED);
+    assertThat(score.role()).isEqualTo(KrakenScoreService.Role.DEALER);
+    assertThat(score.score()).isNull();
+    assertThat(
+            registry
+                .get("loakraken.kraken_score.unsupported")
+                .tag("reason", "CALC_FAILED")
+                .counter()
+                .count())
+        .isEqualTo(1);
+  }
+
   private static CharacterResult withInput(JsonNode input) {
     return withInput(input, "블레이드", null);
   }

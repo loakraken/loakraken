@@ -163,8 +163,8 @@ public class StatsController {
           String classEngraving) {
     var conditions = filter.toConditions();
     String engraving = null;
-    if (classEngraving != null && !classEngraving.isBlank())
-      // 직업이 없거나 그 직업의 직업 각인 목록 밖이면 400 INVALID_REQUEST(새 오류 코드 없음, #618).
+    if (classEngraving != null)
+      // 빈 값·공백뿐, 직업 없음, 그 직업의 직업 각인 목록 밖이면 400 INVALID_REQUEST(새 오류 코드 없음, #618).
       engraving =
           classEngravings
               .canonical(conditions.className(), classEngraving)

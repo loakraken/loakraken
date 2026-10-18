@@ -818,7 +818,7 @@ public class StatsQueryService {
               stats.ranking(
                   conditions, conditions.since(now), metric, offset, size, classEngraving);
           var meta = meta(conditions, result.total(), now);
-          Long unknown = classEngraving == null ? null : classEngravingCounts(conditions).unknown();
+          Long unknown = classEngraving == null ? null : unknownOrNull(conditions);
           boolean ready = meta.sampleStatus() == SampleStatus.READY;
           return new RankingResult(
               meta,
@@ -880,6 +880,16 @@ public class StatsQueryService {
         rows,
         counts == null ? null : counts.unknown(),
         counts == null ? null : counts.aggregatedAt());
+  }
+
+  /** 랭킹의 '직업 각인을 모르는 수'. 세지 못하면(집계 시간 초과 등) 랭킹 전체를 503으로 만들지 않고 null(#618 코덱스 P2). */
+  private Long unknownOrNull(StatsConditions conditions) {
+    try {
+      return classEngravingCounts(conditions).unknown();
+    } catch (BusinessException exception) {
+      if (exception.errorCode() != StatsErrorCode.STATS_UNAVAILABLE) throw exception;
+      return null;
+    }
   }
 
   /** 모집단의 직업 각인(원문)별 수와 모르는 수. 조건마다 10분 캐시한다. */

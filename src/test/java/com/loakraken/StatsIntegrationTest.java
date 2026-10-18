@@ -508,6 +508,8 @@ class StatsIntegrationTest {
         new String[] {
           "/api/v1/rankings?classEngraving=" + encode("버스트"),
           base + "&classEngraving=" + encode("광기"),
+          base + "&classEngraving=",
+          "/api/v1/rankings?classEngraving=%20",
           "/api/v1/rankings/class-engravings",
           "/api/v1/rankings/class-engravings?className=" + encode(MAIN_CLASS)
         }) {

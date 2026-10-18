@@ -3,7 +3,7 @@
 #
 # Deploy 워크플로(deploy.yml)가 GHCR 채널 태그(:production/:staging)를 옮기고, 이 스크립트가 그 태그를 따라간다:
 #   채널 태그 확인 → (운영) 서버에서 사용자가 approve.sh로 승인한 릴리스인지 확인 → 배포 번들 풀기 → DB 백업
-#   → 이미지를 digest로 고정 → up -d --wait
+#   → 이미지를 digest로 고정 → up -d --wait (edge 설정 파일이 바뀐 릴리스는 edge만 다시 만든다)
 #   → 실패하면 직전 이미지·번들로 되돌리고 그 릴리스는 다시 시도하지 않는다 → Slack 알림
 #
 # 스택 디렉터리(/opt/loakraken/<환경>)에서 root로 실행한다(docker 그룹 권한과 같음, 비밀 디렉터리의 웹훅 파일을 읽기 위해).
@@ -129,6 +129,16 @@ swap_in() {
     rm -rf "$f.old"
   done
 }
+
+# edge(Caddy)는 설정 파일을 파일 하나씩 bind mount한다. swap_in은 파일을 새로 만들어 바꾸므로, 실행 중인 edge는
+# 옛 파일을 계속 본다. 또 edge 자체의 compose 설정은 그대로라 up -d도 edge를 다시 만들지 않는다.
+# 그래서 edge 설정 파일이 바뀐 릴리스는 up 뒤에 edge만 따로 다시 만든다(admin off라 caddy reload는 못 쓴다).
+edge_files=(Caddyfile Caddyfile.cloudflare cloudflare/trusted-proxies.caddy)
+edge_changed=0
+for f in "${edge_files[@]}"; do
+  cmp -s ".bundle.new/$f" ".bundle.prev/$f" || edge_changed=1
+done
+
 swap_in .bundle.new
 
 # (운영) 번들의 systemd 유닛이 서버에 설치된 것과 다르면 바꿔 넣고 다시 읽는다. 이미 설치된 유닛만 바꾸고 새로 설치하지는 않는다.
@@ -153,6 +163,13 @@ sync_units() {
 env_files=(--env-file stack.env)
 compose() { docker compose -f compose.prod.yaml "${env_files[@]}" --env-file images.env "$@"; }
 
+# edge 설정 파일이 바뀐 릴리스에서만 edge를 다시 만든다(위 edge_changed). 다른 서비스는 건드리지 않는다.
+recreate_edge() {
+  ((edge_changed)) || return 0
+  log "edge 설정이 바뀌어 edge를 다시 만든다"
+  compose up -d --wait --wait-timeout 120 --no-deps --force-recreate edge
+}
+
 # 2. 배포 전 DB 백업(실행 중일 때만).
 mkdir -p backups
 if [[ -f images.env ]] && [[ -n "$(compose ps -q postgres 2>/dev/null)" ]]; then
@@ -167,7 +184,7 @@ fi
 [[ -f images.env ]] && cp images.env images.prev.env
 printf 'API_IMAGE=%s\nWEB_IMAGE=%s\n' "$api_digest" "$web_digest" > images.env
 
-if compose up -d --wait --wait-timeout 300 --remove-orphans; then
+if compose up -d --wait --wait-timeout 300 --remove-orphans && recreate_edge; then
   printf '%s\n' "$want" > .deployed
   rm -f .failed .pending
   printf '%s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$want" >> deploy-history.log
@@ -181,7 +198,8 @@ printf '%s\n' "$want" > .failed
 if [[ -f images.prev.env ]]; then
   cp images.prev.env images.env
   swap_in .bundle.prev
-  if compose up -d --wait --wait-timeout 300 --remove-orphans; then
+  # 새 설정으로 다시 만든 edge도 직전 설정으로 되돌린다(edge_changed일 때만).
+  if compose up -d --wait --wait-timeout 300 --remove-orphans && recreate_edge; then
     notify "배포 실패 → 직전 릴리스로 되돌림(헬스 확인 통과). 실패 릴리스는 다시 시도하지 않음"
   else
     notify "배포 실패, 되돌리기도 실패. 즉시 확인 필요(운영 문서 deploy 롤백)"

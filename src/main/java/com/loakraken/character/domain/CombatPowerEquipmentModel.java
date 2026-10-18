@@ -10,8 +10,7 @@ import java.util.regex.Pattern;
 
 /**
  * 전투력 시뮬레이터 무기·방어구 품질과 각인·스톤 항목(B단계, #275). 근거는 리소스
- * combat-power/equipment-engraving-coefficients.json과 내부 검증 기록 「장비·각인·스톤 변화량」. 모든 항목은 독립 배수라 전투력 비
- * = Π 항목 배수다.
+ * combat-power/equipment-engraving-coefficients.json과 내부 검증 기록. 모든 항목은 독립 배수라 전투력 비 = Π 항목 배수다.
  *
  * <ul>
  *   <li>무기 품질: (1 + 추가 피해(새)) / (1 + 추가 피해(현재)). 현재 값은 공식 무기 "추가 효과", 새 값은 확인된 품질만.

@@ -4,7 +4,7 @@
   "character": "기준 캐릭터",
   "className": "블레이드",
   "observed": {
-    "refs": "2026-10-09 01:00~03:00 KST (레퍼런스팀, 볼트 40 레퍼런스/계산 교차 확인 값.md)",
+    "refs": "2026-10-09 01:00~03:00 KST (레퍼런스팀, 내부 기록)",
     "kraken": "2026-10-09T01:10:09+09:00 (crit-speed 응답 fetchedAt, 공식 armory 캐시)"
   },
   "assumptions": {},

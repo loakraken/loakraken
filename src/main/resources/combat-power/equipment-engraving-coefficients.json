@@ -1,7 +1,7 @@
 {
   "ruleVersion": "combat-power-equip-engraving-v3",
   "source": {
-    "name": "계산 검증 #253·#259·#263(볼트 검증 기록 「장비·각인·스톤 변화량」). 각인 값은 공식 각인 설명값(ArkPassiveEffects Description), 무기 품질 값은 공식 무기 Tooltip \"추가 효과\"",
+    "name": "계산 검증 #253·#259·#263(내부 검증 기록). 각인 값은 공식 각인 설명값(ArkPassiveEffects Description), 무기 품질 값은 공식 무기 Tooltip \"추가 효과\"",
     "crossCheckedWith": "전투력 시뮬레이터 표본 5명 38건 중 27건 ±0.01 일치(src/test/resources/verification/combat-power/ref-a-equip-engraving-deltas-2026-10-10.json)",
     "verifiedOn": "2026-10-10"
   },

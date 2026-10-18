@@ -170,6 +170,11 @@ public class SpecUpDetailService {
         var index = Integer.parseInt(parts[1]);
         var item = loadout.equipment().get(index);
         int from = item.detail().refineLevel();
+        // 팔 보호구(완갑)는 재련 계획 밖이다(비용 UNKNOWN): 단계만 준다.
+        if ("완갑".equals(item.type())) {
+          refine = new Refine(from, from + 1, null, null, null);
+          break;
+        }
         var breakdown = specUp.refineBreakdown(item, from, materials.cached());
         var plan = breakdown.plan();
         if (plan != null) {

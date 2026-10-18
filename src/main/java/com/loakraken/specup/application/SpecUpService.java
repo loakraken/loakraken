@@ -6,6 +6,7 @@ import com.loakraken.character.application.CombatPowerSimulationService.Change;
 import com.loakraken.character.application.CombatPowerSimulationService.Kind;
 import com.loakraken.character.domain.CharacterLoadout;
 import com.loakraken.character.domain.CombatPowerGemModel;
+import com.loakraken.character.domain.CombatPowerPolishValues;
 import com.loakraken.character.domain.CombatPowerReasons;
 import com.loakraken.common.api.BusinessException;
 import com.loakraken.market.application.MarketAuctionService;
@@ -48,6 +49,7 @@ public class SpecUpService {
   private final RefiningMaterialPriceService materials;
   private final CombatPowerGemModel.Coefficients gemCoefficients;
   private final SpecUpKrakenScore kraken;
+  private final CombatPowerPolishValues polishValues;
   private final boolean enabled;
 
   /** 빈 칸 후보 레벨: 기본 공격력 %가 확인된 6~10레벨만(1~5레벨은 계수표에 근거가 없어 계산하지 않는다). */
@@ -61,6 +63,7 @@ public class SpecUpService {
       RefiningMaterialPriceService materials,
       CombatPowerGemModel.Coefficients gemCoefficients,
       SpecUpKrakenScore kraken,
+      CombatPowerPolishValues polishValues,
       @Value("${spec-up.enabled:false}") boolean enabled) {
     this.simulator = simulator;
     this.auctions = auctions;
@@ -69,6 +72,7 @@ public class SpecUpService {
     this.materials = materials;
     this.gemCoefficients = gemCoefficients;
     this.kraken = kraken;
+    this.polishValues = polishValues;
     this.enabled = enabled;
   }
 
@@ -198,9 +202,10 @@ public class SpecUpService {
     quality(loadout, planned);
     engravings(loadout, books::price, books::icon, pricesAt, planned);
     refines(loadout, materials.cached(), pricesAt, planned);
-    others(loadout, planned);
-
+    armGuard(loadout, planned);
     var krakenContext = kraken.context(snapshot);
+    others(loadout, planned, krakenContext);
+
     // 점수를 낼 수 없으면 KRAKEN도 효율 순으로 되돌리고 그 이유를 응답에 둔다.
     var sort = requested == Sort.KRAKEN && !krakenContext.available() ? Sort.EFFICIENCY : requested;
     boolean cooldownGemsIncluded =
@@ -222,8 +227,7 @@ public class SpecUpService {
                   CombatPowerReasons.classify(roleReason),
                   null)
               : evaluate(snapshot, plan);
-      candidate =
-          candidate.withKraken(krakenDelta(krakenContext, loadout, plan.change()), plan.cost());
+      candidate = candidate.withKraken(krakenDelta(krakenContext, loadout, plan), plan.cost());
       // KRAKEN은 Δ크라켄 점수가 있으면 전투력 계산과 상관없이 순위에 넣는다.
       boolean ranked =
           "OK".equals(candidate.status())
@@ -260,8 +264,11 @@ public class SpecUpService {
    * 값의 차, 레퍼런스 26줄 대조). 계산 못 하면 null.
    */
   private BigDecimal krakenDelta(
-      SpecUpKrakenScore.Context context, CharacterLoadout loadout, Change change) {
-    var raw = kraken.delta(context, loadout, change);
+      SpecUpKrakenScore.Context context, CharacterLoadout loadout, Planned plan) {
+    var raw =
+        plan.kraken() != null
+            ? kraken.delta(context, plan.kraken())
+            : kraken.delta(context, loadout, plan.change());
     if (raw == null) return null;
     return SpecUpKrakenScore.round2(raw);
   }
@@ -683,6 +690,45 @@ public class SpecUpService {
   }
 
   /**
+   * 팔 보호구(완갑) 재련 +1(#575): kind는 EQUIPMENT_REFINE(index = 완갑 장비), 시뮬레이터 입력은 ARM_GUARD(목표 단계, 목표 단계의
+   * 등급 — 지금 등급의 최대 단계를 넘으면 승급). 비용은 완갑 재련 규칙(확률·재료)을 아직 넣지 않아 UNKNOWN이다.
+   */
+  private void armGuard(CharacterLoadout loadout, List<Planned> planned) {
+    var item = SpecUpKrakenScore.armGuardItem(loadout);
+    if (item == null || item.detail() == null || item.detail().refineLevel() == null) return;
+    int refine = item.detail().refineLevel();
+    if (refine < 0 || refine >= 25) return;
+    var grade = kraken.armGuardGrade(item.grade(), refine + 1);
+    if (grade == null) return;
+    planned.add(
+        new Planned(
+            "EQUIPMENT_REFINE:" + loadout.equipment().indexOf(item) + ":" + (refine + 1),
+            Kind.EQUIPMENT_REFINE.name(),
+            item.name(),
+            "+" + refine,
+            "+" + (refine + 1) + (grade.equals(item.grade()) ? "" : " " + grade),
+            item.icon(),
+            item.grade(),
+            null,
+            new Change(
+                Kind.ARM_GUARD,
+                null,
+                null,
+                null,
+                refine + 1,
+                null,
+                null,
+                null,
+                grade,
+                null,
+                null,
+                null,
+                null,
+                null),
+            SpecUpCost.ARM_GUARD_COST_UNCONFIRMED));
+  }
+
+  /**
    * 일반 재련 +1 기대 비용. 계열(업화·전율)은 장비 이름으로 정한다. 숨결 없음과 최대 사용을 모두 계산해 작은 쪽을 고른다. 필요한 재료 시세가 하나라도 없으면
    * PENDING이다.
    */
@@ -772,8 +818,12 @@ public class SpecUpService {
     return null;
   }
 
-  /** 시뮬레이터 입력을 하나로 정할 수 없는 종류는 종류마다 한 줄로 알린다(지원 현황표: 계산식 미확정). */
-  private static void others(CharacterLoadout loadout, List<Planned> planned) {
+  /**
+   * 시뮬레이터 입력을 하나로 정할 수 없는 종류. 장신구 연마 교체·깨달음 카르마·어빌리티 스톤은 크라켄 점수를 낼 수 있으면 점수 입력에서 후보를 만들고(Δ크라켄 점수만,
+   * #575), 그럴 수 없으면 종류마다 한 줄로 알린다(지원 현황표: 계산식 미확정). 팔찌·아크 그리드·아크 패시브는 한 줄 그대로.
+   */
+  private void others(
+      CharacterLoadout loadout, List<Planned> planned, SpecUpKrakenScore.Context context) {
     boolean bracelet =
         loadout.equipment().stream()
             .anyMatch(
@@ -790,14 +840,22 @@ public class SpecUpService {
                         && item.detail() != null
                         && !item.detail().polishEffects().isEmpty());
     if (bracelet) planned.add(Planned.line(Kind.BRACELET_EFFECT, "팔찌 효과"));
-    if (polish) planned.add(Planned.line(Kind.POLISH, "장신구 연마 효과"));
+    var scored = context.available();
+    var polishRows =
+        scored ? SpecUpScoreCandidates.polish(context.input(), loadout, polishValues) : null;
+    if (polishRows != null) planned.addAll(polishRows);
+    else if (polish) planned.add(Planned.line(Kind.POLISH, "장신구 연마 효과"));
     if (loadout.arkGrid() != null && !loadout.arkGrid().slots().isEmpty())
       planned.add(Planned.line(Kind.ARK_GRID_CORE, "아크 그리드 코어"));
     if (loadout.arkPassive() != null && !loadout.arkPassive().points().isEmpty())
       planned.add(Planned.line(Kind.ARK_PASSIVE_POINT, "아크 패시브 포인트"));
     // 앞으로 계산할 종류는 지금 한 줄로만 알린다(PM-백엔드 16:37 ②, kind는 문자열이라 값이 늘어도 깨지지 않음).
-    planned.add(Planned.line("KARMA_LEVEL", "카르마 레벨"));
-    planned.add(Planned.line("ABILITY_STONE", "어빌리티 스톤 교체"));
+    var karmaRows = scored ? SpecUpScoreCandidates.karma(context.input()) : null;
+    if (karmaRows != null) planned.addAll(karmaRows);
+    else planned.add(Planned.line("KARMA_LEVEL", "카르마 레벨"));
+    var stoneRows = scored ? SpecUpScoreCandidates.stone(kraken, context, loadout) : null;
+    if (stoneRows != null) planned.addAll(stoneRows);
+    else planned.add(Planned.line("ABILITY_STONE", "어빌리티 스톤 교체"));
   }
 
   private static Change change(
@@ -820,7 +878,41 @@ public class SpecUpService {
       Boolean emptySlot,
       BigDecimal baseAttackPctFrom,
       BigDecimal baseAttackPctTo,
-      String gemType) {
+      String gemType,
+      SpecUpKrakenScore.Edit kraken) {
+    Planned(
+        String id,
+        String kind,
+        String target,
+        String from,
+        String to,
+        String icon,
+        String grade,
+        String skillName,
+        Change change,
+        SpecUpCost cost,
+        Boolean emptySlot,
+        BigDecimal baseAttackPctFrom,
+        BigDecimal baseAttackPctTo,
+        String gemType) {
+      this(
+          id,
+          kind,
+          target,
+          from,
+          to,
+          icon,
+          grade,
+          skillName,
+          change,
+          cost,
+          emptySlot,
+          baseAttackPctFrom,
+          baseAttackPctTo,
+          gemType,
+          null);
+    }
+
     Planned(
         String id,
         String kind,
@@ -865,6 +957,22 @@ public class SpecUpService {
         SpecUpCost cost) {
       this(
           id, kind, target, from, to, icon, grade, skillName, change, cost, null, null, null, null);
+    }
+
+    /** 점수 입력에서 만든 후보(시뮬레이터 입력 없음, Δ크라켄 점수만). */
+    static Planned scored(
+        String id,
+        String kind,
+        String target,
+        String from,
+        String to,
+        String icon,
+        String grade,
+        SpecUpCost cost,
+        SpecUpKrakenScore.Edit kraken) {
+      return new Planned(
+          id, kind, target, from, to, icon, grade, null, null, cost, null, null, null, null,
+          kraken);
     }
 
     static Planned line(Kind kind, String target) {

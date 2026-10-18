@@ -182,7 +182,7 @@ public class MaterialUnitPriceService {
 
   /**
    * 재료 시세 API. 예열 캐시에 있는 이름은 공식 호출 없이 답한다. 캐시에 없는 이름이 있으면 그 요청을 MATERIAL_PRICES 버킷에 <b>한 번</b> 매기고,
-   * 검색은 요청당 MAX_REQUEST_SEARCHES번까지, 공식 호출마다 요청 클라이언트의 MATERIAL_SEARCH 버킷(분당 30, 공식 호출 한도 OFFICIAL과
+   * 검색은 요청당 MAX_REQUEST_SEARCHES번까지, 공식 호출마다 요청 클라이언트의 MATERIAL_SEARCH 버킷(분당 15, 공식 호출 한도 OFFICIAL과
    * 따로)에 매기고, 모든 클라이언트 합계 MATERIAL_SEARCH_ALL(분당 36)에도 매기며, 공유 예산에는 캐릭터 검색 몫
    * CHARACTER_SEARCH_RESERVE(20)를 남긴다. 상한·클라이언트 버킷·공유 예산에 걸린 이름부터는 PRICE_UNAVAILABLE이다(429가 아님).
    */

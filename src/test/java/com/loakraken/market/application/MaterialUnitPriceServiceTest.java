@@ -132,7 +132,7 @@ class MaterialUnitPriceServiceTest {
     var result = service.requestPrices(MaterialPriceBasis.RECENT_PRICE, names);
     verify(gate, times(1))
         .chargeClient(com.loakraken.common.lostark.ClientLimiter.Bucket.MATERIAL_PRICES);
-    // 공식 검색은 요청 클라이언트의 재료 검색 버킷(30)과 모든 클라이언트 합계 버킷(36)에 매기고, 공유 예산에는 캐릭터 검색 몫 20을 남긴다.
+    // 공식 검색은 요청 클라이언트의 재료 검색 버킷(15)과 모든 클라이언트 합계 버킷(36)에 매기고, 공유 예산에는 캐릭터 검색 몫 20을 남긴다.
     verify(gate)
         .withClientBucket(
             eq(MaterialUnitPriceService.CHARACTER_SEARCH_RESERVE),

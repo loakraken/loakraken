@@ -44,7 +44,7 @@ public record ClientLimitProperties(
     @DefaultValue("5") int alertSubscribePerMinute,
     @DefaultValue("10") int materialPricesPerMinute,
     @DefaultValue("3") int gemFilterPerMinute,
-    @DefaultValue("30") int materialSearchPerMinute,
+    @DefaultValue("15") int materialSearchPerMinute,
     @DefaultValue("36") int materialSearchAllPerMinute) {
   @org.springframework.boot.context.properties.bind.ConstructorBinding
   public ClientLimitProperties {
@@ -54,7 +54,7 @@ public record ClientLimitProperties(
       throw new IllegalArgumentException("봇 주소별 공식 호출 한도는 모든 봇 합계 상한보다 작아야 합니다.");
   }
 
-  /** 재료 시세·보석 필터·재료 검색·재료 검색 전체 한도를 기본값(10·3·30·36)으로 둔다(기존 호출·테스트 호환). */
+  /** 재료 시세·보석 필터·재료 검색·재료 검색 전체 한도를 기본값(10·3·15·36)으로 둔다(기존 호출·테스트 호환). */
   public ClientLimitProperties(
       boolean enabled,
       int officialPerMinute,
@@ -81,7 +81,7 @@ public record ClientLimitProperties(
         alertSubscribePerMinute,
         10,
         3,
-        30,
+        15,
         36);
   }
 

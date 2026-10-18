@@ -60,7 +60,7 @@ lostark:
     # 보석 매물 직업·스킬 필터: 캐시에 없는 조건 요청 수(기능 전용 분당 몫 10을 한 클라이언트가 다 쓰지 못하게)
     gem-filter-per-minute: ${CLIENT_LIMIT_GEM_FILTER:3}
     # 재료 시세 요청 안의 공식 검색: 클라이언트당 분당 공식 호출 수(공식 호출 한도 official과 따로)
-    material-search-per-minute: ${CLIENT_LIMIT_MATERIAL_SEARCH:30}
+    material-search-per-minute: ${CLIENT_LIMIT_MATERIAL_SEARCH:15}
     # 재료 시세 검색: 모든 클라이언트 합계 분당 공식 호출 수(공유 예산 90의 40%, 수집기·예열 사용과 따로 셈)
     material-search-all-per-minute: ${CLIENT_LIMIT_MATERIAL_SEARCH_ALL:36}
     # 모든 검색봇 표시 요청이 함께 일으킬 수 있는 분당 공식 호출 수(봇 주소별 한도와 별도)

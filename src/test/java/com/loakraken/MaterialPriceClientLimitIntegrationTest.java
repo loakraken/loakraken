@@ -34,7 +34,7 @@ import tools.jackson.databind.json.JsonMapper;
 
 /**
  * 재료 시세는 사람 클라이언트(내부 주소 면제 끔)도 429 없이 답한다. 예열 캐시에 있으면 공식 호출 0이고, 없으면 요청 1번을 재료 시세 버킷에 세고 안쪽 검색은 공식
- * 호출마다 클라이언트 재료 검색 버킷(분당 30, 공식 호출 한도 20과 따로)에 센다 — 넘은 이름부터 지금 알 수 없음(보안 점검 10-18). 공식 API는 가짜
+ * 호출마다 클라이언트 재료 검색 버킷(분당 15, 공식 호출 한도 20과 따로)에 센다 — 넘은 이름부터 지금 알 수 없음(보안 점검 10-18). 공식 API는 가짜
  * 서버(분류 안 이름 부분 일치·10개씩)다.
  */
 @Import(TestcontainersConfiguration.class)
@@ -139,10 +139,15 @@ class MaterialPriceClientLimitIntegrationTest {
   void 예열_전에는_공식_검색을_클라이언트_재료_검색_버킷에_세고_넘은_이름부터_지금_알_수_없음이며_429가_없다() throws Exception {
     // 한도는 실제 시각 기준 1분 고정 창이다. 네 요청이 한 창 안에 들어야 네 번째가 429다(분 경계를 넘으면 새 창에서 허용).
     awaitMinuteWithAtLeast(Duration.ofSeconds(40));
-    // 첫 요청: 생활 18개 × 분류 2 + 2 ≈ 38번 검색이 필요하지만 재료 검색 버킷(분당 30)까지만 공식 검색, 그 뒤 이름은 지금 알 수 없음(429 아님).
-    var first = items(post(CRAFT, "203.0.113.40"));
+    // 첫 요청: 생활 18개 × 분류 2 + 2 ≈ 38번 검색이 필요하지만 재료 검색 버킷(분당 15)까지만 공식 검색, 그 뒤 이름은 지금 알 수 없음(429 아님).
+    var firstResponse = post(CRAFT, "203.0.113.40");
+    // 보안 재확인 ④: 응답에 내부 키·클라이언트 키(HMAC)·주소가 들어가지 않는다.
+    assertThat(firstResponse.body())
+        .doesNotContain("203.0.113.40", "lostark:", "client-limit", "shared", "material_search")
+        .doesNotContainPattern("[0-9a-f]{32}");
+    var first = items(firstResponse);
     assertThat(first).hasSize(20);
-    assertThat(calls).hasValue(30);
+    assertThat(calls).hasValue(15);
     assertThat(status(first, "PRICED")).isPositive();
     assertThat(status(first, "PRICE_UNAVAILABLE")).isPositive();
     assertThat(status(first, "PRICED") + status(first, "PRICE_UNAVAILABLE")).isEqualTo(20);

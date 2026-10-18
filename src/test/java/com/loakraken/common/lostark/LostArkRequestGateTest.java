@@ -206,45 +206,62 @@ class LostArkRequestGateTest {
   }
 
   @Test
-  void 재료_검색_버킷은_공식_호출마다_세고_31번째는_클라이언트_한도이며_공식_호출_한도는_쓰지_않는다() {
+  void 재료_검색_버킷은_공식_호출마다_세고_16번째는_클라이언트_한도이며_공유_예산과_공식_호출_한도는_쓰지_않는다() {
     // 보안 점검 10-18: 재료 시세 요청 안의 공식 검색이 클라이언트 한도 밖이라 한 클라이언트가 공유 예산을 다 쓸 수 있었다.
     var clock = new MutableClock();
-    var limiter = limiter(clock, 2, 30, 36);
+    var limiter = limiter(clock, 2, 15, 36);
     var gate = materialGate(clock, limiter);
     limiter.enter("client-a");
     try {
-      for (int i = 0; i < 30; i++) materialCall(gate);
+      for (int i = 0; i < 15; i++) materialCall(gate);
       assertThatThrownBy(() -> materialCall(gate))
           .isInstanceOf(BusinessException.class)
           .extracting(exception -> ((BusinessException) exception).errorCode())
           .isEqualTo(LostArkErrorCode.CLIENT_RATE_LIMITED);
-      // 공식 호출 한도(OFFICIAL 2)는 재료 검색으로 쓰지 않았다: 캐릭터 검색 같은 사용자 호출 2번은 그대로 된다.
-      for (int i = 0; i < 2; i++) userCall(gate);
+    } finally {
+      limiter.exit();
+    }
+    // 보안 재확인 ①: 클라이언트 버킷은 공유 예산을 잡기 전에 센다 — 걸린 16번째는 공유 예산을 쓰지 않아, 90 − 15 = 75번이 남는다.
+    for (int i = 0; i < 75; i++) userCall(gate);
+    assertThatThrownBy(() -> userCall(gate)).isInstanceOf(BusinessException.class);
+    // 공식 호출 한도(OFFICIAL 2)도 재료 검색으로 쓰지 않았다.
+    var other = materialGate(clock, limiter);
+    limiter.enter("client-a");
+    try {
+      for (int i = 0; i < 2; i++) userCall(other);
     } finally {
       limiter.exit();
     }
   }
 
   @Test
-  void 재료_검색은_모든_클라이언트_합계_36에서_막히고_공유_예산은_그만큼만_쓴다() {
+  void 재료_검색은_모든_클라이언트_합계_36에서_막히고_클라이언트_한도에_걸린_호출은_합계에_들어가지_않는다() {
     var clock = new MutableClock();
-    var limiter = limiter(clock, 100, 30, 36);
+    var limiter = limiter(clock, 100, 15, 36);
     var gate = materialGate(clock, limiter);
     limiter.enter("client-a");
     try {
-      for (int i = 0; i < 30; i++) materialCall(gate);
+      for (int i = 0; i < 15; i++) materialCall(gate);
+      // 16번째는 클라이언트 한도에 걸려 합계(36)에도 세지 않는다.
+      assertThatThrownBy(() -> materialCall(gate)).isInstanceOf(BusinessException.class);
     } finally {
       limiter.exit();
     }
     limiter.enter("client-b");
     try {
+      for (int i = 0; i < 15; i++) materialCall(gate);
+    } finally {
+      limiter.exit();
+    }
+    limiter.enter("client-c");
+    try {
       for (int i = 0; i < 6; i++) materialCall(gate);
-      // 37번째(클라이언트 B 7번째): B 자신은 30 안이지만 합계 상한 36 → 공유 예산이 막힌 것과 같은 거절.
+      // 합계 37번째(클라이언트 C 7번째): C 자신은 15 안이지만 합계 상한 36 → 공유 예산이 막힌 것과 같은 거절.
       assertThatThrownBy(() -> materialCall(gate))
           .isInstanceOf(BusinessException.class)
           .extracting(exception -> ((BusinessException) exception).errorCode())
           .isEqualTo(LostArkErrorCode.LOST_ARK_RATE_LIMITED);
-      // 공유 예산은 36만 썼다: 남은 54 가운데 캐릭터 검색 몫까지 사용자 호출이 된다.
+      // 공유 예산은 36만 썼다: 남은 54는 캐릭터 검색 같은 사용자 호출이 쓴다.
       for (int i = 0; i < 54; i++) userCall(gate);
     } finally {
       limiter.exit();
@@ -255,7 +272,7 @@ class LostArkRequestGateTest {
   void 수집기가_분당_50을_쓰는_중에도_재료_검색이_되고_캐릭터_검색_몫_20은_남는다() {
     // PM 판정 10-18: '전체 사용 ≤ 36'이면 수집기(몫 40을 남기고 분당 최대 50)만으로 재료 검색이 늘 막혔다.
     var clock = new MutableClock();
-    var limiter = limiter(clock, 100, 30, 36);
+    var limiter = limiter(clock, 100, 100, 36);
     var gate = materialGate(clock, limiter);
     for (int i = 0; i < 50; i++)
       gate.withReserve(

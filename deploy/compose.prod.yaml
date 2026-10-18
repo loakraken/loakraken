@@ -399,6 +399,36 @@ services:
     cap_drop:
       - ALL
 
+  # Grafana 원격 접속: Cloudflare Tunnel(서버 안에서 Cloudflare로 나가는 연결만, 들어오는 포트 없음) + Access(허용 이메일만).
+  # 터널·공개 주소·Access 정책은 Cloudflare 대시보드에서 만들고, 여기는 토큰 파일로 터널에 붙기만 한다.
+  cloudflared:
+    image: cloudflare/cloudflared:2026.9.3
+    profiles: [monitor]
+    restart: unless-stopped
+    logging: *default-logging
+    # 이미지 진입점이 이미 --no-autoupdate다. 토큰은 파일로만 받는다(2025.4.0 이상 --token-file).
+    command: ["tunnel", "--metrics", "127.0.0.1:20241", "run", "--token-file", "/run/secrets/cloudflared_token"]
+    secrets:
+      - cloudflared_token
+    read_only: true
+    depends_on:
+      grafana:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "cloudflared", "tunnel", "--metrics", "127.0.0.1:20241", "ready"]
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
+    mem_limit: ${CLOUDFLARED_MEM_LIMIT:-64m}
+    networks:
+      # grafana:3000에만 닿으면 된다(api·DB 망에는 붙지 않는다).
+      - monitor
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
 secrets:
   db_password:
     file: ${SECRETS_DIR:?SECRETS_DIR가 필요합니다(스택별 경로, 예 /opt/loakraken/production/secrets)}/db_password
@@ -413,6 +443,8 @@ secrets:
     file: ${SECRETS_DIR:?SECRETS_DIR가 필요합니다}/grafana_admin_password
   slack_webhook_alerts:
     file: ${SECRETS_DIR:?SECRETS_DIR가 필요합니다}/slack_webhook_alerts
+  cloudflared_token:
+    file: ${SECRETS_DIR:?SECRETS_DIR가 필요합니다}/cloudflared_token
 
 networks:
   # edge ↔ web만 연결한다.

@@ -269,6 +269,10 @@ class AuctionBoardIntegrationTest {
     // 운영에서 몫 거절과 캐시 응답을 셀 수 있다.
     assertThat(gemFilter("cache_hit") - hitsBefore).isGreaterThanOrEqualTo(1);
     assertThat(gemFilter("quota_reject") - rejectsBefore).isEqualTo(1);
+    // 보안 점검 10-18: 거절된 요청은 공용 몫 카운터를 올리지 않는다(10 그대로).
+    for (long value = minute - 1; value <= minute + 1; value++)
+      assertThat(redis.opsForValue().get("market:v1:auction-gem-filter-quota:" + value))
+          .isEqualTo("10");
   }
 
   private double gemFilter(String event) {

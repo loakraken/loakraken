@@ -229,6 +229,8 @@ services:
     networks:
       - internal
       - data
+      # 모니터링 수집용(prometheus만 함께 있는 망). 프로필을 끈 서버에서도 망만 있고 다른 컨테이너는 없다.
+      - metrics
     security_opt:
       - no-new-privileges:true
     cap_drop:
@@ -321,8 +323,8 @@ services:
       retries: 5
     mem_limit: ${PROMETHEUS_MEM_LIMIT:-384m}
     networks:
-      # internal: api 관리 포트(9090)에 닿기 위해. monitor: grafana·node-exporter와 이어진다.
-      - internal
+      # metrics: api와 prometheus만 있는 망(api 관리 포트 9090 수집용, web·DB에는 닿지 않는다). monitor: grafana·node-exporter.
+      - metrics
       - monitor
     security_opt:
       - no-new-privileges:true
@@ -335,12 +337,17 @@ services:
     restart: unless-stopped
     logging: *default-logging
     command:
-      - --path.rootfs=/host
-      # 서버 점검 스크립트(host-check)가 컨테이너 재시작 수를 이 디렉터리에 텍스트 파일로 남긴다.
-      - --collector.textfile.directory=/host/var/lib/node_exporter/textfile
+      - --path.procfs=/host/proc
+      - --path.sysfs=/host/sys
+      # 디스크 사용량은 서버 점검 스크립트(host-check)가 텍스트 파일로 넘기므로, 호스트 / 전체를 붙이지 않고 파일 시스템 수집을 끈다.
+      - --no-collector.filesystem
+      # host-check가 컨테이너 재시작 수·디스크 사용량을 이 디렉터리에 텍스트 파일로 남긴다.
+      - --collector.textfile.directory=/textfile
     volumes:
-      # 루트 디스크 사용량과 텍스트 파일만 읽는다. 나중에 붙는 마운트까지 볼 일이 없어 rslave 없이 읽기 전용으로만 붙인다.
-      - /:/host:ro
+      # 필요한 것만 읽기 전용으로: 메모리·CPU·스왑(/proc·/sys), host-check 텍스트 파일 디렉터리.
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /var/lib/node_exporter/textfile:/textfile:ro
     mem_limit: ${NODE_EXPORTER_MEM_LIMIT:-48m}
     networks:
       - monitor
@@ -354,13 +361,24 @@ services:
     profiles: [monitor]
     restart: unless-stopped
     logging: *default-logging
+    # 비밀 파일을 못 읽으면 grafana는 그래도 뜨고 기본 관리자 비밀번호가 남는다(10-19 재현). 그래서 시작 전에 확인하고,
+    # 비밀번호 파일을 못 읽거나 12자 미만·admin이거나 Slack 웹훅 파일을 못 읽으면 시작하지 않는다(cloudflared도 grafana가 healthy일 때만 뜬다).
+    entrypoint:
+      - sh
+      - -c
+      - >-
+        p=/run/secrets/grafana_admin_password; h=/run/secrets/slack_webhook_alerts; pw="";
+        if [ -r "$$p" ]; then IFS= read -r pw < "$$p" || true; fi;
+        if [ "$${#pw}" -lt 12 ] || [ "$$pw" = admin ] || [ ! -r "$$h" ] || [ ! -s "$$h" ]; then
+        echo "GRAFANA_SECRET_CHECK_FAILED: 비밀 파일(관리자 비밀번호 12자 이상·Slack 웹훅)을 읽을 수 없음. 서버에서 444 권한·내용 확인" >&2; exit 1; fi;
+        exec /run.sh
     environment:
       GF_SECURITY_ADMIN_PASSWORD__FILE: /run/secrets/grafana_admin_password
       GF_AUTH_ANONYMOUS_ENABLED: "false"
       GF_USERS_ALLOW_SIGN_UP: "false"
       GF_USERS_ALLOW_ORG_CREATE: "false"
       GF_AUTH_BASIC_ENABLED: "false"
-      GF_SECURITY_COOKIE_SECURE: "${GRAFANA_COOKIE_SECURE:-false}"
+      GF_SECURITY_COOKIE_SECURE: "${GRAFANA_COOKIE_SECURE:-true}"
       GF_SECURITY_DISABLE_GRAVATAR: "true"
       GF_ANALYTICS_REPORTING_ENABLED: "false"
       GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
@@ -368,7 +386,7 @@ services:
       GF_NEWS_NEWS_FEED_ENABLED: "false"
       GF_PLUGINS_PREINSTALL_DISABLED: "true"
       # 경보 메시지의 링크 주소. 접속 방법(SSH 터널 / 터널+Access)에 맞춰 stack.env에서 바꾼다.
-      GF_SERVER_ROOT_URL: "${GRAFANA_ROOT_URL:-http://localhost:3000}"
+      GF_SERVER_ROOT_URL: "${GRAFANA_ROOT_URL:-https://grafana.loakraken.gg}"
     secrets:
       - grafana_admin_password
       - slack_webhook_alerts
@@ -399,6 +417,36 @@ services:
     cap_drop:
       - ALL
 
+  # Grafana 원격 접속: Cloudflare Tunnel(서버 안에서 Cloudflare로 나가는 연결만, 들어오는 포트 없음) + Access(허용 이메일만).
+  # 터널·공개 주소·Access 정책은 Cloudflare 대시보드에서 만들고, 여기는 토큰 파일로 터널에 붙기만 한다.
+  cloudflared:
+    image: cloudflare/cloudflared:2026.9.3
+    profiles: [monitor]
+    restart: unless-stopped
+    logging: *default-logging
+    # 이미지 진입점이 이미 --no-autoupdate다. 토큰은 파일로만 받는다(2025.4.0 이상 --token-file).
+    command: ["tunnel", "--metrics", "127.0.0.1:20241", "run", "--token-file", "/run/secrets/cloudflared_token"]
+    secrets:
+      - cloudflared_token
+    read_only: true
+    depends_on:
+      grafana:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "cloudflared", "tunnel", "--metrics", "127.0.0.1:20241", "ready"]
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
+    mem_limit: ${CLOUDFLARED_MEM_LIMIT:-64m}
+    networks:
+      # grafana:3000에만 닿으면 된다(api·DB 망에는 붙지 않는다).
+      - monitor
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
 secrets:
   db_password:
     file: ${SECRETS_DIR:?SECRETS_DIR가 필요합니다(스택별 경로, 예 /opt/loakraken/production/secrets)}/db_password
@@ -413,6 +461,8 @@ secrets:
     file: ${SECRETS_DIR:?SECRETS_DIR가 필요합니다}/grafana_admin_password
   slack_webhook_alerts:
     file: ${SECRETS_DIR:?SECRETS_DIR가 필요합니다}/slack_webhook_alerts
+  cloudflared_token:
+    file: ${SECRETS_DIR:?SECRETS_DIR가 필요합니다}/cloudflared_token
 
 networks:
   # edge ↔ web만 연결한다.
@@ -425,8 +475,11 @@ networks:
   # api↔postgres·valkey. 외부 통신이 없는 망(DB·캐시는 인터넷에 나가지 않는다).
   data:
     internal: true
-  # 모니터링(프로필 monitor): prometheus·node-exporter·grafana. grafana가 Slack으로 경보를 보내야 해서 외부 통신을 막지 않는다.
+  # 모니터링(프로필 monitor): prometheus·node-exporter·grafana·cloudflared. grafana가 Slack, cloudflared가 Cloudflare로 나가야 해서 외부 통신을 막지 않는다.
   monitor:
+  # api↔prometheus만(관리 포트 9090 수집). 외부 통신 없음. grafana·cloudflared는 이 망에 없어 api에 닿지 않는다.
+  metrics:
+    internal: true
 
 volumes:
   edge-data:

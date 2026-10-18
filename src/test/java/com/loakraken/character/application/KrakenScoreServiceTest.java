@@ -99,6 +99,28 @@ class KrakenScoreServiceTest {
     assertThat(registry.find("loakraken.kraken_score.unsupported").counter()).isNull();
   }
 
+  @Test
+  void 켜진_상태에서_엔진_밖_예외가_나면_꺼짐이_아니라_CALC_FAILED다() {
+    // 캐릭터 정보가 없는 결과: 입력 확인은 지나고 역할 판정에서 예외 — 전에는 컨트롤러가 null을 받아 DISABLED로 보였다.
+    var broken =
+        new CharacterResult(null, java.time.Instant.EPOCH, null, MAPPER.createObjectNode());
+    var registry = new SimpleMeterRegistry();
+    var score = new KrakenScoreService(TABLE, ENGINE, true, registry).score(broken);
+    assertThat(score.status()).isEqualTo(KrakenScoreService.Status.UNSUPPORTED);
+    assertThat(score.reason()).isEqualTo(KrakenScoreService.Reason.CALC_FAILED);
+    assertThat(score.score()).isNull();
+    assertThat(score.tier()).isNull();
+    // 꺼져 있으면 같은 결과도 지금처럼 DISABLED(계산하지 않음).
+    assertThat(
+            new KrakenScoreService(TABLE, ENGINE, false, new SimpleMeterRegistry())
+                .score(broken)
+                .status())
+        .isEqualTo(KrakenScoreService.Status.DISABLED);
+    // 컨트롤러의 마지막 안전망도 같은 값.
+    assertThat(new KrakenScoreService(TABLE, ENGINE, true, registry).failed().reason())
+        .isEqualTo(KrakenScoreService.Reason.CALC_FAILED);
+  }
+
   private static CharacterResult withInput(JsonNode input) {
     return withInput(input, "블레이드", null);
   }

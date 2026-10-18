@@ -42,7 +42,8 @@ public class KrakenScoreService {
     ROLE_UNKNOWN("딜러·서포터를 판정하지 못해 계산하지 않았습니다."),
     FACTOR_PENDING("점수 요소를 아직 계산하지 않는 단계입니다."),
     SCORE_UNAVAILABLE("계산한 점수가 음수이거나 수가 아니어서 표시하지 않습니다."),
-    INPUT_PENDING("점수 입력이 없는 이전 조회 결과라 계산하지 않았습니다(다시 조회하면 계산).");
+    INPUT_PENDING("점수 입력이 없는 이전 조회 결과라 계산하지 않았습니다(다시 조회하면 계산)."),
+    CALC_FAILED("점수를 계산하지 못했습니다.");
 
     private final String text;
 
@@ -94,6 +95,22 @@ public class KrakenScoreService {
     if (!enabled)
       return new KrakenScore(
           Status.DISABLED, null, null, null, null, List.of(), tiers.ruleVersion());
+    try {
+      return compute(result);
+    } catch (RuntimeException exception) {
+      // 엔진 밖(역할 판정·티어 등)에서 난 예상 못 한 예외 — 켜진 기능이 '꺼짐'처럼 보이지 않게 실패로 낸다(로그에 캐릭터 이름 없음).
+      log.warn(
+          "event=kraken_score_failed stage=outside type={}", exception.getClass().getSimpleName());
+      return failed();
+    }
+  }
+
+  /** 켜진 상태에서 계산하지 못했을 때의 응답(UNSUPPORTED, CALC_FAILED). 컨트롤러의 마지막 안전망도 이 값을 쓴다. */
+  public KrakenScore failed() {
+    return unsupported(null, Reason.CALC_FAILED);
+  }
+
+  private KrakenScore compute(CharacterResult result) {
     JsonNode input = result.krakenScoreInput();
     if (input == null || !input.isObject()) return unsupported(null, Reason.INPUT_PENDING);
     // 딜러·서포터는 서비스 전체와 같은 규칙(CharacterPosition: 깨달음 노드). 입력의 supportCheck도 같은 규칙으로 만들었다.

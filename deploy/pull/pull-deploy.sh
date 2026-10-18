@@ -162,7 +162,9 @@ compose_app() { COMPOSE_PROFILES='' docker compose -f compose.prod.yaml "${env_f
 # 모니터링이 실패해도 서비스 배포는 되돌리지 않는다(알림만).
 recreate_monitor() {
   [[ ",$(env_value COMPOSE_PROFILES)," == *",monitor,"* ]] || return 0
-  if compose up -d --wait --wait-timeout 180 --no-deps --force-recreate prometheus node-exporter grafana; then
+  # cloudflared는 번들 파일을 붙이지 않아 다시 만들 필요가 없고, 없을 때만 올린다.
+  if compose up -d --wait --wait-timeout 180 --no-deps --force-recreate prometheus node-exporter grafana \
+    && compose up -d --wait --wait-timeout 120 --no-deps cloudflared; then
     log "모니터링(prometheus·node-exporter·grafana)을 새 설정으로 다시 만들었다"
   else
     notify "모니터링 다시 만들기 실패(서비스 배포는 끝남). 서버에서 compose ps로 prometheus·grafana 확인"

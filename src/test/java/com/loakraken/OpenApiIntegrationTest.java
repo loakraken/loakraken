@@ -343,8 +343,15 @@ class OpenApiIntegrationTest {
           .as(field)
           .isEqualTo("null");
     assertThat(document.at("/components/schemas/KrakenScoreTierResponse/required").toString())
-        .contains("code", "min", "nextCode", "nextMin", "remaining", "progressPercent");
-    for (var field : List.of("nextCode", "nextMin", "remaining"))
+        .contains(
+            "code",
+            "min",
+            "nextCode",
+            "nextMin",
+            "remaining",
+            "remainingRounded",
+            "progressPercent");
+    for (var field : List.of("nextCode", "nextMin", "remaining", "remainingRounded"))
       assertThat(
               document
                   .at(

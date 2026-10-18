@@ -71,6 +71,8 @@ class AccessorySearchIntegrationTest {
     assertThat(data.path("scannedPages").asInt()).isEqualTo(1);
     assertThat(data.path("nextPage").asInt()).isEqualTo(2);
     var item = data.at("/items/0");
+    // 공식 Icon이 검색 결과까지 온다(#609).
+    assertThat(item.path("icon").asText()).isEqualTo("https://cdn.example/acc_necklace.png");
     assertThat(item.path("enlightenment").asInt()).isEqualTo(13);
     assertThat(item.path("mainStat").asInt()).isEqualTo(17000);
     // (17000 − 15178) ÷ 2679 = 68.01%, 연마 3단계.

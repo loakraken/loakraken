@@ -149,7 +149,8 @@ public record CharacterResponse(
 
   @Schema(
       description =
-          "크라켄 점수. status: OK(값 있음)·UNSUPPORTED(계산 못 함, reasonCode)·DISABLED(아직 공개 전, 값 null·factors 빈 배열)")
+          "크라켄 점수. status: OK(값 있음)·UNSUPPORTED(계산 못 함, reasonCode)·DISABLED(아직 공개 전, 값 null·factors 빈 배열)."
+              + " 점수는 딜러 점수 또는 서포터 점수(서포터 각인 직업), 이번 단계에서 factors는 빈 배열")
   public record KrakenScoreResponse(
       @Schema(
               description = "OK·UNSUPPORTED·DISABLED",
@@ -158,10 +159,10 @@ public record CharacterResponse(
           String status,
       @Schema(
               description =
-                  "UNSUPPORTED 이유 코드(화면은 이 코드로 그림). 그 밖에는 null. 지금 값: ROLE_UNKNOWN(딜러·서포터 판정 못 함)·"
-                      + "FACTOR_PENDING(요소 계산 전 단계)·SCORE_UNAVAILABLE(점수가 음수·수 아님). 열린 값이라 단계마다 늘 수 있음 — "
-                      + "모르는 코드는 '-'로 그림",
-              example = "ROLE_UNKNOWN")
+                  "UNSUPPORTED 이유 코드(화면은 이 코드로 그림). 그 밖에는 null. 지금 값: INPUT_PENDING(점수 입력이 없는 이전 조회"
+                      + " 결과 — 다시 조회하면 계산)·ROLE_UNKNOWN(딜러·서포터 판정 못 함)·SCORE_UNAVAILABLE(점수가 음수·수 아님). 열린"
+                      + " 값이라 단계마다 늘 수 있음 — 모르는 코드는 '-'로 그림",
+              example = "INPUT_PENDING")
           @NullableResponse
           String reasonCode,
       @Schema(description = "이유 문장(로그·디버그용, 화면 문구로 쓰지 않음). OK·DISABLED면 null") @NullableResponse

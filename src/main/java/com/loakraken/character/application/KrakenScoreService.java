@@ -1,21 +1,31 @@
 package com.loakraken.character.application;
 
+import com.loakraken.character.domain.CharacterPosition;
+import com.loakraken.character.domain.KrakenScoreEngine;
+import com.loakraken.character.domain.KrakenScoreSupport;
 import com.loakraken.character.domain.KrakenScoreTier;
 import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
 import java.math.BigDecimal;
 import java.util.List;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import tools.jackson.databind.JsonNode;
 
 /**
- * 크라켄 점수(비교 기준 B의 점수식, #522). 공식 전투력과 별개의 점수·티어다.
+ * 크라켄 점수(비교 기준 B의 점수식, #522·#539·#559). 공식 전투력과 별개의 점수·티어다.
  *
- * <p>단계적으로 붙인다: 이 단계는 응답 모양·티어·켜기 설정만 있고, 요소(공격력·진피·…·팔찌) 계산은 다음 단계다. 설정 {@code
- * kraken-score.enabled}가 꺼져 있으면(기본) status DISABLED, 켜져 있어도 요소를 아직 계산하지 않으면 UNSUPPORTED다. 근사값은 내지
- * 않는다. 공식 호출이 없다.
+ * <p>공식 armories를 받을 때 만든 엔진 입력(캐릭터 결과에 함께 캐시)으로 응답 때 계산한다 — 공식 호출이 없다. 설정 {@code
+ * kraken-score.enabled}가 꺼져 있으면(기본) status DISABLED. 입력이 없는 이전 조회 결과는 UNSUPPORTED(INPUT_PENDING, 다시
+ * 조회하면 계산), 계산할 수 없는 값(음수·NaN·예외)은 UNSUPPORTED(SCORE_UNAVAILABLE)이고 근사값은 내지 않는다. 딜러는 딜러 점수, 서포터(서포터
+ * 각인 직업)는 서포터 점수식이다.
  */
 @Service
 public class KrakenScoreService {
+  private static final Logger log = LoggerFactory.getLogger(KrakenScoreService.class);
+
   public enum Status {
     OK,
     UNSUPPORTED,
@@ -31,7 +41,8 @@ public class KrakenScoreService {
   public enum Reason {
     ROLE_UNKNOWN("딜러·서포터를 판정하지 못해 계산하지 않았습니다."),
     FACTOR_PENDING("점수 요소를 아직 계산하지 않는 단계입니다."),
-    SCORE_UNAVAILABLE("계산한 점수가 음수이거나 수가 아니어서 표시하지 않습니다.");
+    SCORE_UNAVAILABLE("계산한 점수가 음수이거나 수가 아니어서 표시하지 않습니다."),
+    INPUT_PENDING("점수 입력이 없는 이전 조회 결과라 계산하지 않았습니다(다시 조회하면 계산).");
 
     private final String text;
 
@@ -58,33 +69,63 @@ public class KrakenScoreService {
       String ruleVersion) {}
 
   private final KrakenScoreTier.Table tiers;
+  private final KrakenScoreEngine.Tables tables;
   private final boolean enabled;
   private final MeterRegistry registry;
+  private final Timer duration;
 
   public KrakenScoreService(
       KrakenScoreTier.Table tiers,
+      KrakenScoreEngine.Tables tables,
       @Value("${kraken-score.enabled:false}") boolean enabled,
       MeterRegistry registry) {
     this.tiers = tiers;
+    this.tables = tables;
     this.enabled = enabled;
     this.registry = registry;
+    this.duration =
+        Timer.builder("loakraken.kraken_score.duration")
+            .description("응답 때 크라켄 점수 계산 시간")
+            .publishPercentileHistogram()
+            .register(registry);
   }
 
   public KrakenScore score(CharacterResult result) {
     if (!enabled)
       return new KrakenScore(
           Status.DISABLED, null, null, null, null, List.of(), tiers.ruleVersion());
-    var roleReason = CombatPowerSimulationService.roleReason(result);
-    Role role = null;
-    if (roleReason == null) role = Role.DEALER;
-    else if (CombatPowerSimulationService.SUPPORTER_BASIS.equals(roleReason)) role = Role.SUPPORT;
-    var reason = role == null ? Reason.ROLE_UNKNOWN : Reason.FACTOR_PENDING;
-    return unsupported(role, reason);
+    JsonNode input = result.krakenScoreInput();
+    if (input == null || !input.isObject()) return unsupported(null, Reason.INPUT_PENDING);
+    // 딜러·서포터는 서비스 전체와 같은 규칙(CharacterPosition: 깨달음 노드). 입력의 supportCheck도 같은 규칙으로 만들었다.
+    var details = result.details();
+    var position =
+        CharacterPosition.judge(details.profile().className(), details.loadout().arkPassive());
+    if (position.role() == null) return unsupported(null, Reason.ROLE_UNKNOWN);
+    var role = position.role() == CharacterPosition.Role.SUPPORT ? Role.SUPPORT : Role.DEALER;
+    // 무기·아크 패시브가 비어 있으면 엔진 기본값으로 0점이 나오므로 계산하지 않는다(근사 금지).
+    if (!input.path("armory").path("equipment").path("weapon").path("stat").isNumber()
+        || !input.path("arkPassive").path("evolution").isObject())
+      return unsupported(role, Reason.SCORE_UNAVAILABLE);
+    double raw;
+    var sample = Timer.start(registry);
+    try {
+      raw =
+          role == Role.SUPPORT
+              ? KrakenScoreSupport.score(input, tables)
+              : KrakenScoreEngine.dealerScore(input, tables);
+    } catch (RuntimeException exception) {
+      // 예상 못 한 입력 모양 — 500 대신 점수만 비운다(로그에 캐릭터 이름 없음).
+      log.warn("event=kraken_score_failed type={}", exception.getClass().getSimpleName());
+      return unsupported(role, Reason.SCORE_UNAVAILABLE);
+    } finally {
+      sample.stop(duration);
+    }
+    return ok(role, raw, List.of());
   }
 
   /**
-   * 점수(반올림 전 double)로 응답을 만든다. 다음 단계에서 요소 계산이 이 경로를 쓴다. 표시 점수는 원본 toFixed(2)처럼 double의 정확한 십진값을 둘째
-   * 자리 반올림하고, 티어는 반올림 전 값으로 정한다. 음수·NaN·무한대는 점수·티어 없이 SCORE_UNAVAILABLE('-')이다.
+   * 점수(반올림 전 double)로 응답을 만든다. 표시 점수는 원본 toFixed(2)처럼 double의 정확한 십진값을 둘째 자리 반올림하고, 티어는 반올림 전 값으로
+   * 정한다. 음수·NaN·무한대는 점수·티어 없이 SCORE_UNAVAILABLE('-')이다.
    */
   KrakenScore ok(Role role, double rawScore, List<Factor> factors) {
     if (!Double.isFinite(rawScore) || rawScore < 0)

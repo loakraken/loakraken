@@ -13,6 +13,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataAccessException;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
 import tools.jackson.core.JacksonException;
@@ -53,17 +54,51 @@ class AuctionStore implements AuctionPort {
     write(CELL_PREFIX + key, cell, CELL_TTL);
   }
 
+  /** 올리기와 첫 만료 걸기를 한 번에(#553): 따로 하면 첫 올리기 뒤 만료 걸기가 실패했을 때 키가 만료 없이 남는다. */
+  private static final DefaultRedisScript<Long> QUOTA_INCREMENT =
+      new DefaultRedisScript<>(
+          """
+          local count = redis.call('INCR', KEYS[1])
+          if count == 1 then redis.call('PEXPIRE', KEYS[1], ARGV[1]) end
+          return count
+          """,
+          Long.class);
+
+  /** 0보다 클 때만 1 내린다(키가 이미 사라졌으면 아무것도 하지 않음). */
+  private static final DefaultRedisScript<Long> QUOTA_RELEASE =
+      new DefaultRedisScript<>(
+          """
+          local count = tonumber(redis.call('GET', KEYS[1]) or '0')
+          if count > 0 then return redis.call('DECR', KEYS[1]) end
+          return 0
+          """,
+          Long.class);
+
+  static final Duration GEM_FILTER_QUOTA_TTL = Duration.ofSeconds(61);
+
   @Override
-  public boolean tryAcquireGemFilterQuota(int limit) {
+  public Optional<String> acquireGemFilterQuota(int limit) {
     String key = GEM_FILTER_QUOTA_PREFIX + clock.millis() / 60_000;
     try {
-      Long count = redis.opsForValue().increment(key);
-      if (count == null) return false;
-      if (count == 1) redis.expire(key, Duration.ofSeconds(61));
-      return count <= limit;
+      Long count =
+          redis.execute(
+              QUOTA_INCREMENT,
+              java.util.List.of(key),
+              String.valueOf(GEM_FILTER_QUOTA_TTL.toMillis()));
+      return count != null && count <= limit ? Optional.of(key) : Optional.empty();
     } catch (DataAccessException exception) {
       log.warn("보석 필터 몫 카운터를 쓰지 못했습니다. 예외 유형={}", exception.getClass().getSimpleName());
-      return false;
+      return Optional.empty();
+    }
+  }
+
+  @Override
+  public void releaseGemFilterQuota(String key) {
+    if (key == null || !key.startsWith(GEM_FILTER_QUOTA_PREFIX)) return;
+    try {
+      redis.execute(QUOTA_RELEASE, java.util.List.of(key));
+    } catch (DataAccessException exception) {
+      log.warn("보석 필터 몫을 돌려주지 못했습니다. 예외 유형={}", exception.getClass().getSimpleName());
     }
   }
 

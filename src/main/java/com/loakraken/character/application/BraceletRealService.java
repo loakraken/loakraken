@@ -13,7 +13,7 @@ import tools.jackson.databind.node.ObjectNode;
 
 /**
  * 팔찌 실 효율: 캐시된 크라켄 점수 입력(#559)으로 원본 정보 탭의 팔찌 % 함수를 돌린다. 딜러는 팔찌 총배율 하나, 서포터는 점수 두 번이라 1ms 안팎이어서 응답
- * 때 계산한다. 공식 호출이 없다. 원본 화면 설정 '악마 피해'는 기본(꺼짐) 값만 낸다.
+ * 때 계산한다. 공식 호출이 없다. 원본 화면 설정 '악마 피해'(기본 꺼짐)를 켠 딜러 값도 함께 낸다.
  */
 @Service
 public class BraceletRealService {
@@ -47,9 +47,11 @@ public class BraceletRealService {
         || !input.path("arkPassive").path("evolution").isObject())
       return BraceletRealEfficiency.unsupported(UNAVAILABLE, "무기나 아크 패시브 정보가 없어 계산하지 않았습니다.", role);
     try {
-      double value =
-          position.role() == CharacterPosition.Role.SUPPORT ? support(input) : dealer(input);
-      if (!Double.isFinite(value))
+      boolean supporter = position.role() == CharacterPosition.Role.SUPPORT;
+      double value = supporter ? support(input) : dealer(input, false);
+      // '악마 피해' 설정은 원본에서 딜러만 받는다(서포터 팔찌 %는 설정과 무관).
+      Double devil = supporter ? null : dealer(input, true);
+      if (!Double.isFinite(value) || (devil != null && !Double.isFinite(devil)))
         return BraceletRealEfficiency.unsupported(UNAVAILABLE, "팔찌 효율을 계산하지 못했습니다.", role);
       return new BraceletRealEfficiency(
           BraceletRealEfficiency.Status.OK,
@@ -57,6 +59,7 @@ public class BraceletRealService {
           null,
           role,
           BigDecimal.valueOf(value),
+          devil == null ? null : BigDecimal.valueOf(devil),
           BraceletRealEfficiency.RULE_VERSION);
     } catch (RuntimeException exception) {
       // 예상 못 한 입력 모양 — 응답은 막지 않고 이 값만 비운다(로그에 캐릭터 이름 없음).
@@ -65,9 +68,9 @@ public class BraceletRealService {
     }
   }
 
-  /** 원본 딜러 팔찌 %: 팔찌 총배율 × 점수 상수 − 1을 % 둘째 자리 내림. */
-  private double dealer(JsonNode input) {
-    double total = KrakenScoreBracelet.total(input, tables);
+  /** 원본 딜러 팔찌 %(12921 sh): 팔찌 총배율 × 점수 상수 − 1을 % 둘째 자리 내림. devil = 설정 '악마 피해'. */
+  private double dealer(JsonNode input, boolean devil) {
+    double total = KrakenScoreBracelet.total(input, tables, devil);
     return Math.floor(100 * ((total * KrakenScoreBracelet.SCORE_CONSTANT - 1) * 100)) / 100;
   }
 

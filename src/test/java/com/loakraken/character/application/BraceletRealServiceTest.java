@@ -23,7 +23,7 @@ import tools.jackson.databind.node.ObjectNode;
 
 /**
  * 팔찌 실 효율: 고정 자료 l01~l07(공식 원문에서 만든 입력)의 팔찌 %가 같은 시각 비교 기준 B 정보 탭의 팔찌 %(원본 함수 값)와 끝자리까지 같은지 본다(딜러
- * 5명, 서포터 2명 — 서포터는 반올림하지 않은 원본 값).
+ * 5명, 서포터 2명 — 서포터는 반올림하지 않은 원본 값). 딜러는 화면 설정 '악마 피해'를 켠 값도 같이 본다(서포터는 그 설정이 없어 null).
  */
 class BraceletRealServiceTest {
   private static final JsonMapper MAPPER = JsonMapper.builder().build();
@@ -74,21 +74,22 @@ class BraceletRealServiceTest {
 
   @ParameterizedTest
   @CsvSource({
-    "l01, DEALER, 11.3",
-    "l02, DEALER, 17.88",
-    "l03, DEALER, 16.6",
-    "l04, SUPPORT, 13.47857142857143",
-    "l05, DEALER, 13.4",
-    "l06, DEALER, 16.41",
-    "l07, SUPPORT, 18.107142857142858"
+    "l01, DEALER, 11.3, 14.08",
+    "l02, DEALER, 17.88, 17.88",
+    "l03, DEALER, 16.6, 16.6",
+    "l04, SUPPORT, 13.47857142857143,",
+    "l05, DEALER, 13.4, 13.4",
+    "l06, DEALER, 16.41, 19.32",
+    "l07, SUPPORT, 18.107142857142858,"
   })
-  void 팔찌_실_효율이_비교_기준과_끝자리까지_같다(String id, String role, String expected)
+  void 팔찌_실_효율이_비교_기준과_끝자리까지_같다(String id, String role, String expected, String devil)
       throws IOException {
     var raw = read(id).path("raw");
     var real = SERVICE.compute(result(raw, KrakenScoreInputMapper.from(raw)));
     assertThat(real.status()).as(id).isEqualTo(BraceletRealEfficiency.Status.OK);
     assertThat(real.role()).as(id).isEqualTo(role);
     assertThat(real.percent()).as(id).isEqualTo(new BigDecimal(expected));
+    assertThat(real.devilDamagePercent()).as(id + " 악마 피해").isEqualTo(devil == null ? null : new BigDecimal(devil));
     assertThat(real.ruleVersion()).isEqualTo(BraceletRealEfficiency.RULE_VERSION);
   }
 
@@ -121,6 +122,7 @@ class BraceletRealServiceTest {
       assertThat(none.reasonCode()).as(id).isEqualTo("UNAVAILABLE");
       assertThat(none.role()).as(id).isNotNull();
       assertThat(none.percent()).as(id).isNull();
+      assertThat(none.devilDamagePercent()).as(id).isNull();
     }
     // 무기·아크 패시브가 없는 빈 입력도 계산하지 않는다.
     var empty = KrakenScoreInputMapper.from(MAPPER.readTree("{}"));

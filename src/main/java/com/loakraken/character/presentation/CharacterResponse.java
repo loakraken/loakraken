@@ -388,6 +388,12 @@ public record CharacterResponse(
           String role,
       @Schema(description = "팔찌 실 효율 %. UNSUPPORTED면 null", example = "11.3") @NullableResponse
           BigDecimal percent,
+      @Schema(
+              description =
+                  "화면 설정 '악마 피해'(기본 꺼짐)를 켰을 때의 팔찌 실 효율 %(자리수는 딜러 percent와 같음). 딜러 OK일 때만 있고, 서포터·UNSUPPORTED면 null",
+              example = "14.08")
+          @NullableResponse
+          BigDecimal devilDamagePercent,
       @Schema(description = "계산 규칙 버전", example = "bracelet-real-v1") String ruleVersion) {
     static BraceletRealResponse from(com.loakraken.character.application.BraceletRealEfficiency value) {
       var real =
@@ -401,6 +407,7 @@ public record CharacterResponse(
           real.reason(),
           real.role(),
           real.percent(),
+          real.devilDamagePercent(),
           real.ruleVersion());
     }
   }

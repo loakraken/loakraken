@@ -275,26 +275,34 @@ class AuctionBoardIntegrationTest {
   @Test
   void 공식_호출_전에_거절되면_필터_몫을_돌려주고_공식이_429면_돌려주지_않는다() throws Exception {
     // #553: 관문·클라이언트 한도로 공식 호출 없이 거절된 요청은 모두가 함께 쓰는 분당 몫을 쓰지 않는다.
-    String base = "/api/v1/markets/auctions/gems/listings?kind=" + encode("작열") + "&className=" + encode("데모닉") + "&level=";
+    String base =
+        "/api/v1/markets/auctions/gems/listings?kind="
+            + encode("작열")
+            + "&className="
+            + encode("데모닉")
+            + "&level=";
     long before = gemFilterQuotaUsed();
-    when(search.search(any()))
-        .thenThrow(
+    org.mockito.Mockito.doThrow(
             new com.loakraken.common.lostark.LostArkRateLimitedException(
-                com.loakraken.common.lostark.LostArkRateLimitedException.Cause.GATE_BUDGET));
+                com.loakraken.common.lostark.LostArkRateLimitedException.Cause.GATE_BUDGET))
+        .when(search)
+        .search(any());
     var gate = get(base + "3");
     assertThat(gate.statusCode()).isEqualTo(503);
     assertThat(gate.body()).contains("MARKET_SEARCH_BUSY");
-    when(search.search(any()))
-        .thenThrow(
+    org.mockito.Mockito.doThrow(
             new com.loakraken.common.api.BusinessException(
-                com.loakraken.common.lostark.LostArkErrorCode.CLIENT_RATE_LIMITED));
+                com.loakraken.common.lostark.LostArkErrorCode.CLIENT_RATE_LIMITED))
+        .when(search)
+        .search(any());
     assertThat(get(base + "4").statusCode()).isEqualTo(429);
     assertThat(gemFilterQuotaUsed()).isEqualTo(before);
     // 공식 서버가 429를 준 것은 이미 호출한 것이라 몫을 쓴다.
-    when(search.search(any()))
-        .thenThrow(
+    org.mockito.Mockito.doThrow(
             new com.loakraken.common.lostark.LostArkRateLimitedException(
-                com.loakraken.common.lostark.LostArkRateLimitedException.Cause.UPSTREAM_429));
+                com.loakraken.common.lostark.LostArkRateLimitedException.Cause.UPSTREAM_429))
+        .when(search)
+        .search(any());
     assertThat(get(base + "5").statusCode()).isEqualTo(503);
     assertThat(gemFilterQuotaUsed()).isEqualTo(before + 1);
     // 몫 카운터 키에는 만료가 걸려 있다(올리기와 첫 만료가 한 번에).

@@ -93,6 +93,9 @@ services:
       # 이 둘은 비우면 어디서나 꺼짐(on일 때만 켜짐): 검색엔진 색인, 시세 알림 화면.
       CHARACTER_INDEXING: "${CHARACTER_INDEXING:-}"
       PRICE_ALERTS: "${PRICE_ALERTS:-}"
+      # 검색 엔진 소유 확인 태그(web 확인 태그 PR). 비우면 태그를 넣지 않는다. 값은 각 검색 엔진 화면에서 받은 확인 코드(비밀값 아님 — 페이지에 공개됨).
+      GOOGLE_SITE_VERIFICATION: "${GOOGLE_SITE_VERIFICATION:-}"
+      NAVER_SITE_VERIFICATION: "${NAVER_SITE_VERIFICATION:-}"
       # Node 힙 상한. 컨테이너 한도(WEB_MEM_LIMIT)보다 작게 둬 한도에 닿기 전에 GC가 돈다(2GB 서버 기준, 운영 문서 deploy "메모리 예산").
       NODE_OPTIONS: "${WEB_NODE_OPTIONS:---max-old-space-size=256}"
     depends_on:

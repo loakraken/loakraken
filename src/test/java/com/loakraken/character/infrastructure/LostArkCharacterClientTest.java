@@ -30,6 +30,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.springframework.beans.factory.support.StaticListableBeanFactory;
 import tools.jackson.databind.json.JsonMapper;
 
 class LostArkCharacterClientTest {
@@ -137,6 +138,10 @@ class LostArkCharacterClientTest {
     var fetched = client("test", Duration.ofSeconds(2)).fetch("모험가");
     var details = fetched.details();
     assertThat(fetched.armoryJson()).contains("unparsed-secret-tooltip", "FutureField");
+    // 크라켄 점수 입력(#559)도 같은 원문에서 만든다 — 캐릭터 이름은 담지 않는다.
+    var scoreInput = fetched.krakenScoreInput();
+    assertThat(scoreInput.path("profile").path("class").asString("")).isEqualTo("바드");
+    assertThat(scoreInput.toString()).doesNotContain("모험가");
     var loadout = details.loadout();
     assertThat(loadout.equipment().getFirst().name()).isEqualTo("테스트 무기");
     assertThat(loadout.equipment().getFirst().detail()).isNull();
@@ -480,7 +485,8 @@ class LostArkCharacterClientTest {
         properties,
         new LostArkRequestGate(Clock.systemUTC(), properties, metrics),
         new JsonMapper(),
-        metrics);
+        metrics,
+        new StaticListableBeanFactory().getBeanProvider(ArmoryRawDump.class));
   }
 
   private void assertError(LostArkCharacterClient client, CharacterErrorCode code) {

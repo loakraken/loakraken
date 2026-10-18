@@ -1,0 +1,13 @@
+{
+  "ruleVersion": "kraken-score-v1",
+  "source": "비교 기준 B의 티어 컷(점수 이상이면 그 티어, 딜러·서폿 같은 표). 2026-10-17 확인.",
+  "tiers": [
+    { "code": "BRONZE", "min": 0 },
+    { "code": "SILVER", "min": 2500 },
+    { "code": "GOLD", "min": 3800 },
+    { "code": "DIAMOND", "min": 5000 },
+    { "code": "MASTER", "min": 6700 },
+    { "code": "GRANDMASTER", "min": 7800 },
+    { "code": "ESTHER", "min": 8800 }
+  ]
+}

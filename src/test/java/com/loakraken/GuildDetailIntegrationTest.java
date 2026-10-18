@@ -35,7 +35,7 @@ import tools.jackson.databind.json.JsonMapper;
 @Import(TestcontainersConfiguration.class)
 @SpringBootTest(
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-    properties = "ranking.guilds.enabled=true")
+    properties = {"ranking.guilds.enabled=true", "ranking.guilds.list.enabled=true"})
 class GuildDetailIntegrationTest {
   private static final String SERVER = "탭서버";
   private static final String OTHER = "탭다른서버";
@@ -102,6 +102,10 @@ class GuildDetailIntegrationTest {
     assertThat(summary.path("combatPowerAvg").decimalValue()).isEqualByComparingTo("3116.83");
     assertThat(summary.path("combatPowerMedian").decimalValue()).isEqualByComparingTo("3100");
     assertThat(summary.path("combatPowerCount").asLong()).isEqualTo(3);
+    // 1750 이상 관측 길드원이 없다(1800 처리정지는 빠짐). 총합은 관측 3명 합.
+    assertThat(summary.path("combatPowerAvgTop").isNull()).isTrue();
+    assertThat(summary.path("combatPowerTopCount").asLong()).isZero();
+    assertThat(summary.path("combatPowerTotal").decimalValue()).isEqualByComparingTo("9350.50");
 
     var classes = data.path("classes");
     assertThat(classes.at("/0/className").asText()).isEqualTo("블레이드");
@@ -159,7 +163,25 @@ class GuildDetailIntegrationTest {
     assertThat(data.at("/summary/combatPowerAvg").isNull()).isTrue();
     assertThat(data.at("/summary/combatPowerMedian").isNull()).isTrue();
     assertThat(data.at("/summary/combatPowerCount").asLong()).isZero();
+    assertThat(data.at("/summary/combatPowerTotal").isNull()).isTrue();
     assertThat(data.path("combatPowerBins").size()).isZero();
+  }
+
+  @Test
+  void 상위_평균은_아이템_레벨_1750_이상_관측_길드원만이고_총합은_관측_길드원_전체다() throws Exception {
+    member(SERVER, "상위길드", "탭상가", "블레이드", 1760, "3500.00", null, now);
+    member(SERVER, "상위길드", "탭상나", "블레이드", 1750, "3300.00", null, now);
+    member(SERVER, "상위길드", "탭상다", "바드", 1740, "3000.00", null, now);
+    member(SERVER, "상위길드", "탭상라", "바드", 1755, null, null, now);
+    var summary = data("/api/v1/guilds/" + encode(SERVER) + "/" + encode("상위길드")).path("summary");
+    // 1750 이상이면서 전투력 관측: 3500·3300 → 3400(1755는 전투력 미관측이라 빠짐, 1740은 기준 미만)
+    assertThat(summary.path("combatPowerAvgTop").decimalValue()).isEqualByComparingTo("3400");
+    assertThat(summary.path("combatPowerTopItemLevelMin").decimalValue())
+        .isEqualByComparingTo("1750");
+    assertThat(summary.path("combatPowerTopCount").asLong()).isEqualTo(2);
+    // 총합: 관측 3명 3500 + 3300 + 3000
+    assertThat(summary.path("combatPowerTotal").decimalValue()).isEqualByComparingTo("9800");
+    assertThat(summary.path("combatPowerCount").asLong()).isEqualTo(3);
   }
 
   @Test

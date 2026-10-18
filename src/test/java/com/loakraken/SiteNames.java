@@ -18,7 +18,7 @@ public final class SiteNames {
   static final Path LOCAL_FILE = Path.of("config", "blocked-terms.local");
 
   /** 화면에 '목표 사이트' 같은 간접 표현도 쓰지 않는다(성장 도구 10-10 23:47). */
-  private static final List<String> INDIRECT = List.of("목표 사이트", "두 사이트", "계산 사이트");
+  static final List<String> INDIRECT = List.of("목표 사이트", "두 사이트", "계산 사이트", "대조 사이트");
 
   /** 비밀값·로컬 파일에서 읽은 이름. 없으면 빈 목록. */
   public static final List<String> BLOCKED = load();
@@ -52,9 +52,16 @@ public final class SiteNames {
         return List.of();
       }
     }
+    return parse(text);
+  }
+
+  /**
+   * 목록 글(줄바꿈 구분)을 이름 목록으로. 줄 끝 CRLF·앞뒤 공백·맨 앞 BOM(Windows 도구가 붙임)을 떼고, 줄 앞의 분류 표시(예: "site: ",
+   * "character: ")도 뗀다. '#'으로 시작하는 줄과 빈 줄은 건너뛴다.
+   */
+  static List<String> parse(String text) {
     var names = new ArrayList<String>();
-    for (var line : text.split("\\R")) {
-      // 줄 앞의 분류 표시(예: "site: ", "character: ")는 떼고 이름만 쓴다.
+    for (var line : text.replace("\uFEFF", "").split("\\R")) {
       var name = line.strip().replaceFirst("^[a-z]+:\\s+", "");
       if (!name.isEmpty() && !name.startsWith("#")) names.add(name);
     }

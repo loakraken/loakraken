@@ -1,5 +1,6 @@
 package com.loakraken.market.infrastructure;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.loakraken.common.api.BusinessException;
 import com.loakraken.common.lostark.*;
@@ -171,7 +172,12 @@ class LostArkMarketHttpClient {
       @JsonProperty("EtcOptions") java.util.List<EtcOption> etcOptions,
       @JsonProperty("Sort") String sort,
       @JsonProperty("SortCondition") String sortCondition,
-      @JsonProperty("PageNo") int pageNo) {
+      @JsonProperty("PageNo") int pageNo,
+      // 조건 없는 검색의 요청 본문은 예전과 같게 비우면 보내지 않는다.
+      @JsonProperty("CharacterClass") @JsonInclude(JsonInclude.Include.NON_NULL)
+          String characterClass,
+      @JsonProperty("SkillOptions") @JsonInclude(JsonInclude.Include.NON_NULL)
+          java.util.List<SkillOption> skillOptions) {
     static AuctionRequest from(AuctionPort.AuctionQuery query) {
       return new AuctionRequest(
           query.categoryCode(),
@@ -186,9 +192,21 @@ class LostArkMarketHttpClient {
               .toList(),
           "BUY_PRICE",
           "ASC",
-          query.pageNo());
+          query.pageNo(),
+          query.characterClass(),
+          query.skillOptions().isEmpty()
+              ? null
+              : query.skillOptions().stream()
+                  .map(option -> new SkillOption(option.first(), option.second(), null, null))
+                  .toList());
     }
   }
+
+  private record SkillOption(
+      @JsonProperty("FirstOption") int first,
+      @JsonProperty("SecondOption") int second,
+      @JsonProperty("MinValue") Integer min,
+      @JsonProperty("MaxValue") Integer max) {}
 
   private record EtcOption(
       @JsonProperty("FirstOption") int first,

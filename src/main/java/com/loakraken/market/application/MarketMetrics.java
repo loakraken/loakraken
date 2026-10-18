@@ -30,6 +30,14 @@ public class MarketMetrics {
     registry.counter("loakraken.market.auction_search", "event", event).increment();
   }
 
+  /**
+   * 보석 매물 직업·스킬 필터(#542) 사건: cache_hit(1분 캐시), joined(같은 조건 동시 요청에 합류), official_call(공식 검색 1회),
+   * quota_reject(기능 전용 분당 몫), gate_reject(공유 게이트), wait_timeout(합류 대기 15초 초과). 값은 이 여섯 개뿐이다.
+   */
+  public void gemFilter(String event) {
+    registry.counter("loakraken.market.gem_filter", "event", event).increment();
+  }
+
   public enum Kind {
     PRICES,
     OPTIONS,

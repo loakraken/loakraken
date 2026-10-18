@@ -86,11 +86,43 @@ class SpecUpIntegrationTest {
     assertThat(data.path("simulatorRuleVersion").asText()).isEqualTo("combat-power-sim-v8");
     assertThat(data.path("combatPower").decimalValue()).isEqualByComparingTo("3000.00");
     assertThat(data.path("sort").asText()).isEqualTo("EFFICIENCY");
-    // 보석은 단계별 후보(8→9, 8→10)가 각각 나오고, 무기 품질(90 → 100)도 계산한다.
-    assertThat(data.path("total").asInt()).isEqualTo(3);
+    // 보석은 단계별 후보(8→9, 8→10)가 각각 나오고, 빈 칸 10개는 가장 앞 빈 칸(1번) 하나로 6~10레벨, 무기 품질(90 → 100)도 계산한다.
+    assertThat(data.path("total").asInt()).isEqualTo(8);
     var candidates = data.path("candidates");
+    // 효율 순: 빈 칸 6·7·8·9·10레벨(24.68·24.56·4.93·2.23·0.83) → 보석 8→9(0.39) → 8→10(0.18) → 품질(비용 모름).
+    assertThat(
+            java.util.stream.IntStream.range(0, 8)
+                .mapToObj(i -> candidates.get(i).path("id").asText())
+                .toList())
+        .containsExactly(
+            "GEM_LEVEL:1:6",
+            "GEM_LEVEL:1:7",
+            "GEM_LEVEL:1:8",
+            "GEM_LEVEL:1:9",
+            "GEM_LEVEL:1:10",
+            "GEM_LEVEL:0:9",
+            "GEM_LEVEL:0:10",
+            "EQUIPMENT_QUALITY:0:100");
+    // 빈 칸 10레벨: 3000 × 1.0704 × (1 + 4.50%)/(1 + 3.30%) = 3248.50. 비용은 10레벨 겁화 즉시 구매 최저가 그대로.
+    var empty10 = find(candidates, "GEM_LEVEL:1:10");
+    assertThat(empty10.path("kind").asText()).isEqualTo("GEM_LEVEL");
+    assertThat(empty10.path("emptySlot").asBoolean()).isTrue();
+    assertThat(empty10.path("target").asText()).isEqualTo("빈 보석 칸 10개");
+    assertThat(empty10.path("from").asText()).isEqualTo("빈 칸");
+    assertThat(empty10.path("to").asText()).isEqualTo("10레벨 겁화");
+    assertThat(empty10.path("deltaCombatPower").decimalValue()).isEqualByComparingTo("248.50");
+    assertThat(empty10.at("/cost/code").asText()).isEqualTo("GEM_BUY");
+    assertThat(empty10.at("/cost/amount").asLong()).isEqualTo(3_000_000);
+    assertThat(empty10.path("baseAttackPctFrom").decimalValue()).isEqualByComparingTo("0");
+    assertThat(empty10.path("baseAttackPctTo").decimalValue()).isEqualByComparingTo("1.20");
+    assertThat(empty10.at("/change/slot").asInt()).isEqualTo(1);
+    assertThat(find(candidates, "GEM_LEVEL:1:6").path("deltaCombatPower").decimalValue())
+        .isEqualByComparingTo("148.05");
+    // 빈 칸은 1~5레벨 후보를 내지 않고, 다른 빈 칸(2번~)을 반복하지 않는다.
+    for (var candidate : candidates)
+      assertThat(candidate.path("id").asText()).isNotIn("GEM_LEVEL:1:5", "GEM_LEVEL:2:6");
     // 보석 8 → 9: 3000 × (1.0640/1.0576) × (1 + 3.50%)/(1 + 3.30%) = 3024.00.
-    var gem = candidates.get(0);
+    var gem = find(candidates, "GEM_LEVEL:0:9");
     assertThat(gem.path("id").asText()).isEqualTo("GEM_LEVEL:0:9");
     assertThat(gem.path("kind").asText()).isEqualTo("GEM_LEVEL");
     assertThat(gem.path("target").asText()).isEqualTo("테스트 스킬 · 8레벨 겁화");
@@ -98,6 +130,9 @@ class SpecUpIntegrationTest {
     assertThat(gem.path("from").asText()).isEqualTo("8레벨");
     assertThat(gem.path("to").asText()).isEqualTo("9레벨");
     assertThat(gem.path("status").asText()).isEqualTo("OK");
+    assertThat(gem.path("emptySlot").asBoolean()).isFalse();
+    assertThat(gem.path("baseAttackPctFrom").decimalValue()).isEqualByComparingTo("0.80");
+    assertThat(gem.path("baseAttackPctTo").decimalValue()).isEqualByComparingTo("1.00");
     assertThat(gem.path("deltaCombatPower").decimalValue()).isEqualByComparingTo("24.00");
     assertThat(gem.path("deltaPercent").decimalValue()).isEqualByComparingTo("0.800");
     // 비용: 9레벨 1,000,000 − (8레벨 400,000 − 거래소 수수료 20,000) = 620,000. 효율 = 24.00 × 10000 / 620000 =
@@ -111,7 +146,7 @@ class SpecUpIntegrationTest {
     assertThat(gem.at("/change/slot").asInt()).isZero();
     assertThat(gem.at("/change/level").asInt()).isEqualTo(9);
     // 8 → 10: 시뮬레이터 표본과 같은 48.07, 비용 3,000,000 − 380,000 = 2,620,000, 효율 0.18(효율 순이라 8 → 9 뒤).
-    var gem10 = candidates.get(1);
+    var gem10 = find(candidates, "GEM_LEVEL:0:10");
     assertThat(gem10.path("id").asText()).isEqualTo("GEM_LEVEL:0:10");
     assertThat(gem10.path("deltaCombatPower").decimalValue()).isEqualByComparingTo("48.07");
     assertThat(gem10.at("/cost/amount").asLong()).isEqualTo(2_620_000);
@@ -119,7 +154,9 @@ class SpecUpIntegrationTest {
     assertThat(gem10.path("combatPowerPer10kGold").decimalValue()).isEqualByComparingTo("0.18");
     assertThat(gem10.path("suggestedTo").isNull()).isTrue();
     // 무기 품질 90 → 100: 3000 × (1 + 30%)/(1 + 26.2%) = 3090.33. 비용 근거가 없어 UNKNOWN이고 효율이 없어 보석 뒤.
-    var quality = candidates.get(2);
+    var quality = find(candidates, "EQUIPMENT_QUALITY:0:100");
+    assertThat(quality.path("emptySlot").isNull()).isTrue();
+    assertThat(quality.path("baseAttackPctTo").isNull()).isTrue();
     assertThat(quality.path("id").asText()).isEqualTo("EQUIPMENT_QUALITY:0:100");
     assertThat(quality.path("deltaCombatPower").decimalValue()).isEqualByComparingTo("90.33");
     assertThat(quality.at("/cost/status").asText()).isEqualTo("UNKNOWN");
@@ -127,7 +164,7 @@ class SpecUpIntegrationTest {
     assertThat(quality.path("combatPowerPer10kGold").isNull()).isTrue();
     // 나머지는 UNSUPPORTED이고, 같은 코드는 같은 문장이다.
     var codes = new ArrayList<String>();
-    for (int i = 3; i < candidates.size(); i++) {
+    for (int i = 8; i < candidates.size(); i++) {
       var candidate = candidates.get(i);
       assertThat(candidate.path("status").asText()).isEqualTo("UNSUPPORTED");
       assertThat(candidate.path("deltaCombatPower").isNull()).isTrue();
@@ -415,10 +452,92 @@ class SpecUpIntegrationTest {
             .path("data");
     assertThat(data.path("sort").asText()).isEqualTo("DELTA");
     assertThat(data.path("limit").asInt()).isEqualTo(1);
-    assertThat(data.path("total").asInt()).isEqualTo(3);
-    assertThat(data.path("candidates").size()).isEqualTo(all - 2);
-    // Δ 순이라 무기 품질(90.33)이 먼저 남는다.
-    assertThat(data.at("/candidates/0/id").asText()).isEqualTo("EQUIPMENT_QUALITY:0:100");
+    assertThat(data.path("total").asInt()).isEqualTo(8);
+    assertThat(data.path("candidates").size()).isEqualTo(all - 7);
+    // Δ 순이라 빈 칸 10레벨(248.50)이 먼저 남는다.
+    assertThat(data.at("/candidates/0/id").asText()).isEqualTo("GEM_LEVEL:1:10");
+  }
+
+  @Test
+  void 보석이_하나도_없으면_빈_칸_보석_장착_후보를_6에서_10레벨까지_낸다() throws Exception {
+    when(auctions.cachedGems()).thenReturn(gemCells(true));
+    search("스펙빈칸");
+    var response = get("/api/v1/characters/spec-up?characterName=" + encode("스펙빈칸"));
+    assertThat(response.statusCode()).isEqualTo(200);
+    ApiContractFixture.write("character-spec-up-empty-gems.json", response.body());
+    SiteNames.assertAbsent(response.body());
+    var candidates = mapper.readTree(response.body()).at("/data/candidates");
+    // 보석 칸 11개가 모두 비었다: 0번 칸 하나로 6~10레벨. 기본 공격력 % 합은 스톤 1.50 + 완갑 1.00 = 2.50.
+    // 6레벨: 3000 × 1.0448 × (1 + 2.95%)/(1 + 2.50%) = 3148.16, 10레벨: 3000 × 1.0704 × 1.037/1.025 =
+    // 3248.79.
+    var expected =
+        java.util.Map.of(
+            6, new String[] {"148.16", "60000", "24.69", "0.45"},
+            7, new String[] {"172.06", "70000", "24.58", "0.60"},
+            8, new String[] {"197.56", "400000", "4.94", "0.80"},
+            9, new String[] {"223.14", "1000000", "2.23", "1.00"},
+            10, new String[] {"248.79", "3000000", "0.83", "1.20"});
+    for (var entry : expected.entrySet()) {
+      var candidate = find(candidates, "GEM_LEVEL:0:" + entry.getKey());
+      var values = entry.getValue();
+      assertThat(candidate.path("status").asText()).isEqualTo("OK");
+      assertThat(candidate.path("emptySlot").asBoolean()).isTrue();
+      assertThat(candidate.path("target").asText()).isEqualTo("빈 보석 칸 11개");
+      assertThat(candidate.path("deltaCombatPower").decimalValue()).isEqualByComparingTo(values[0]);
+      assertThat(candidate.at("/cost/code").asText()).isEqualTo("GEM_BUY");
+      assertThat(candidate.at("/cost/amount").asLong()).isEqualTo(Long.parseLong(values[1]));
+      assertThat(candidate.path("combatPowerPer10kGold").decimalValue())
+          .isEqualByComparingTo(values[2]);
+      assertThat(candidate.path("baseAttackPctFrom").decimalValue()).isEqualByComparingTo("0");
+      assertThat(candidate.path("baseAttackPctTo").decimalValue()).isEqualByComparingTo(values[3]);
+    }
+    for (var candidate : candidates)
+      assertThat(candidate.path("id").asText()).doesNotStartWith("GEM_LEVEL:1:");
+  }
+
+  @Test
+  void 기본_공격력_근거가_없는_1에서_5레벨_보석이_있어도_500이_아니다() throws Exception {
+    // 코덱스 리뷰 P1: 계수표 1~5레벨 baseAttackPct가 null이라 후보를 만들다 NPE가 났다.
+    when(auctions.cachedGems()).thenReturn(gemCells(true));
+    search("스펙저레벨");
+    var response = get("/api/v1/characters/spec-up?characterName=" + encode("스펙저레벨"));
+    assertThat(response.statusCode()).isEqualTo(200);
+    var gem = find(mapper.readTree(response.body()).at("/data/candidates"), "GEM_LEVEL:0:4");
+    assertThat(gem.path("from").asText()).isEqualTo("3레벨");
+    assertThat(gem.path("baseAttackPctFrom").isNull()).isTrue();
+    assertThat(gem.path("baseAttackPctTo").isNull()).isTrue();
+    assertThat(
+            find(mapper.readTree(response.body()).at("/data/candidates"), "GEM_LEVEL:0:6")
+                .path("baseAttackPctTo")
+                .decimalValue())
+        .isEqualByComparingTo("0.45");
+  }
+
+  @Test
+  void 보석_정보를_받지_못했으면_빈_칸_후보를_내지_않는다() throws Exception {
+    when(auctions.cachedGems()).thenReturn(gemCells(true));
+    search("스펙보석정보없음");
+    var response = get("/api/v1/characters/spec-up?characterName=" + encode("스펙보석정보없음"));
+    assertThat(response.statusCode()).isEqualTo(200);
+    for (var candidate : mapper.readTree(response.body()).at("/data/candidates"))
+      assertThat(candidate.path("kind").asText())
+          .as(candidate.path("id").asText())
+          .isNotEqualTo("GEM_LEVEL");
+  }
+
+  @Test
+  void 빈_칸_보석_후보는_시세가_비면_비용만_PENDING이다() throws Exception {
+    when(auctions.cachedGems()).thenReturn(List.of());
+    search("스펙빈칸대기");
+    var candidates =
+        mapper
+            .readTree(get("/api/v1/characters/spec-up?characterName=" + encode("스펙빈칸대기")).body())
+            .at("/data/candidates");
+    var empty = find(candidates, "GEM_LEVEL:0:8");
+    assertThat(empty.path("status").asText()).isEqualTo("OK");
+    assertThat(empty.path("deltaCombatPower").decimalValue()).isEqualByComparingTo("197.56");
+    assertThat(empty.at("/cost/status").asText()).isEqualTo("PENDING");
+    assertThat(empty.path("combatPowerPer10kGold").isNull()).isTrue();
   }
 
   @Test
@@ -683,6 +802,226 @@ class SpecUpIntegrationTest {
     assertThat(bound.at("/cost/amount").asLong()).isEqualTo(1_000_000);
   }
 
+  @Test
+  void 이름에_귀속_표시가_없어도_툴팁_거래_줄이_귀속이면_판매가를_빼지_않는다() throws Exception {
+    // #560: 이름만 보면 팔 수 있다고 보고 판매 기대가(380,000)를 빼서 620,000으로 적게 보였다.
+    when(auctions.cachedGems()).thenReturn(gemCells(true));
+    search("스펙거래줄귀속");
+    var gem =
+        find(
+            mapper
+                .readTree(
+                    get("/api/v1/characters/spec-up?characterName=" + encode("스펙거래줄귀속")).body())
+                .at("/data/candidates"),
+            "GEM_LEVEL:0:9");
+    assertThat(gem.at("/cost/code").asText()).isEqualTo("GEM_BUY_BOUND");
+    assertThat(gem.at("/cost/amount").asLong()).isEqualTo(1_000_000);
+    // 줄 상세도 파는 줄 없이 사는 줄만.
+    var market = mapper.readTree(detail("GEM_LEVEL:0:9", "스펙거래줄귀속").body()).at("/data/market");
+    assertThat(market).hasSize(1);
+    assertThat(market.at("/0/role").asText()).isEqualTo("BUY");
+  }
+
+  @Test
+  void 줄_상세는_목록과_같은_후보에_보석_시세와_기본_공격력을_붙인다() throws Exception {
+    // #544: 같은 캐릭터 캐시·같은 시세로 목록을 다시 만들어 찾는다(공식 호출 없음).
+    when(auctions.cachedGems()).thenReturn(gemCells(true));
+    search("스펙캐시");
+    var listBody =
+        mapper
+            .readTree(get("/api/v1/characters/spec-up?characterName=" + encode("스펙캐시")).body())
+            .path("data");
+    var list = listBody.path("candidates");
+    clearInvocations(detailsPort);
+    var response = detail("GEM_LEVEL:0:9", "스펙캐시");
+    assertThat(response.statusCode()).isEqualTo(200);
+    ApiContractFixture.write("character-spec-up-detail-gem.json", response.body());
+    SiteNames.assertAbsent(response.body());
+    var body = mapper.readTree(response.body());
+    assertThat(body.path("code").asText()).isEqualTo("SPEC_UP_DETAIL_SUCCESS");
+    var data = body.path("data");
+    assertThat(data.path("candidate")).isEqualTo(find(list, "GEM_LEVEL:0:9"));
+    assertThat(data.path("pricesAt").asText()).isEqualTo(listBody.path("pricesAt").asText());
+    assertThat(data.path("combatPowerBefore").decimalValue()).isEqualByComparingTo("3000.00");
+    assertThat(data.path("combatPowerAfter").decimalValue()).isEqualByComparingTo("3024.00");
+    assertThat(data.path("stats")).hasSize(1);
+    assertThat(data.at("/stats/0/name").asText()).isEqualTo("기본 공격력");
+    assertThat(data.at("/stats/0/before").decimalValue()).isEqualByComparingTo("0.80");
+    assertThat(data.at("/stats/0/after").decimalValue()).isEqualByComparingTo("1.00");
+    assertThat(data.at("/stats/0/unit").asText()).isEqualTo("%");
+    // 사는 9레벨 1,000,000, 파는 8레벨 400,000(판매 기대가 380,000) → 목록 비용 620,000과 같다.
+    var market = data.path("market");
+    assertThat(market).hasSize(2);
+    assertThat(market.at("/0/role").asText()).isEqualTo("BUY");
+    assertThat(market.at("/0/itemName").asText()).isEqualTo("9레벨 겁화의 보석");
+    assertThat(market.at("/0/price").asLong()).isEqualTo(1_000_000);
+    assertThat(market.at("/0/quantity").asInt()).isEqualTo(1);
+    assertThat(market.at("/0/listedCount").asLong()).isEqualTo(5);
+    assertThat(market.at("/1/role").asText()).isEqualTo("SELL");
+    assertThat(market.at("/1/price").asLong()).isEqualTo(400_000);
+    assertThat(market.at("/1/expectedSalePrice").asLong()).isEqualTo(380_000);
+    assertThat(market.at("/0/price").asLong() - market.at("/1/expectedSalePrice").asLong())
+        .isEqualTo(data.at("/candidate/cost/amount").asLong());
+    assertThat(data.path("materials").isNull()).isTrue();
+    assertThat(data.path("goldFee").isNull()).isTrue();
+    assertThat(data.path("refine").isNull()).isTrue();
+
+    // 빈 칸 10레벨: 사는 줄만(팔 보석 없음), 기본 공격력 0 → 1.20.
+    var empty = mapper.readTree(detail("GEM_LEVEL:1:10", "스펙캐시").body()).path("data");
+    assertThat(empty.path("candidate")).isEqualTo(find(list, "GEM_LEVEL:1:10"));
+    assertThat(empty.path("market")).hasSize(1);
+    assertThat(empty.at("/market/0/itemName").asText()).isEqualTo("10레벨 겁화의 보석");
+    assertThat(empty.at("/market/0/price").asLong()).isEqualTo(3_000_000);
+    assertThat(empty.at("/stats/0/before").decimalValue()).isEqualByComparingTo("0");
+    assertThat(empty.at("/stats/0/after").decimalValue()).isEqualByComparingTo("1.20");
+
+    // 근거가 없는 후보(품질)는 stats 빈 목록, 나머지 null.
+    var quality = mapper.readTree(detail("EQUIPMENT_QUALITY:0:100", "스펙캐시").body()).path("data");
+    assertThat(quality.path("stats")).isEmpty();
+    assertThat(quality.path("market").isNull()).isTrue();
+    assertThat(quality.path("refine").isNull()).isTrue();
+    verifyNoInteractions(detailsPort);
+  }
+
+  @Test
+  void 줄_상세_각인은_유물_각인서_5권_시세를_준다() throws Exception {
+    when(auctions.cachedGems()).thenReturn(gemCells(true));
+    search("스펙각인");
+    marketCache.saveRelicBooks(
+        new RelicBookScan(
+            Instant.now(),
+            1,
+            List.of(
+                new MarketPrice(
+                    1,
+                    "유물 원한 각인서",
+                    "유물",
+                    "https://cdn.example/use_9_25.png",
+                    1,
+                    null,
+                    null,
+                    null,
+                    new BigDecimal("12000")))),
+        Duration.ofMinutes(5));
+    var data = mapper.readTree(detail("ENGRAVING_LEVEL:원한:4", "스펙각인").body()).path("data");
+    assertThat(data.at("/candidate/cost/amount").asLong()).isEqualTo(60_000);
+    assertThat(data.path("market")).hasSize(1);
+    assertThat(data.at("/market/0/role").asText()).isEqualTo("BUY");
+    assertThat(data.at("/market/0/itemName").asText()).isEqualTo("유물 원한 각인서");
+    assertThat(data.at("/market/0/grade").asText()).isEqualTo("유물");
+    assertThat(data.at("/market/0/icon").asText()).isEqualTo("https://cdn.example/use_9_25.png");
+    assertThat(data.at("/market/0/price").asLong() * data.at("/market/0/quantity").asInt())
+        .isEqualTo(60_000);
+    assertThat(data.path("stats")).isEmpty();
+    redis.delete("market:v1:relic-books");
+  }
+
+  @Test
+  void 줄_상세_재련은_재료_내역_합이_목록_비용과_같고_시세가_없으면_PENDING이다() throws Exception {
+    stubRefineOk();
+    when(auctions.cachedGems()).thenReturn(gemCells(true));
+    search("스펙업화");
+    // 시세 예열 전: 기대 수량은 있고 단가·금액은 null, priceStatus PENDING.
+    var pending = mapper.readTree(detail("EQUIPMENT_REFINE:0:21", "스펙업화").body()).path("data");
+    assertThat(pending.at("/candidate/cost/status").asText()).isEqualTo("PENDING");
+    assertThat(pending.path("materials")).isNotEmpty();
+    for (var row : pending.path("materials")) {
+      assertThat(row.path("priceStatus").asText()).isEqualTo("PENDING");
+      assertThat(row.path("unitPrice").isNull()).isTrue();
+      assertThat(row.path("gold").isNull()).isTrue();
+    }
+    assertThat(pending.at("/refine/fromStage").asInt()).isEqualTo(20);
+    assertThat(pending.at("/refine/toStage").asInt()).isEqualTo(21);
+
+    marketCache.saveRefiningMaterials(
+        new com.loakraken.market.application.RefiningMaterialScan(
+            Instant.parse("2026-10-12T02:00:00Z"),
+            List.of(
+                material(1, "운명의 파괴석", 100, "152"),
+                material(2, "운명의 돌파석", 1, "4"),
+                material(3, "아비도스 융화 재료", 1, "210"),
+                material(4, "운명의 파편 주머니(소)", 1, "87"),
+                material(5, "운명의 파편 주머니(대)", 1, "219"),
+                material(6, "용암의 숨결", 1, "459"))),
+        java.time.Duration.ofMinutes(5));
+    var list =
+        mapper
+            .readTree(get("/api/v1/characters/spec-up?characterName=" + encode("스펙업화")).body())
+            .at("/data/candidates");
+    var response = detail("EQUIPMENT_REFINE:0:21", "스펙업화");
+    assertThat(response.statusCode()).isEqualTo(200);
+    ApiContractFixture.write("character-spec-up-detail-refine.json", response.body());
+    SiteNames.assertAbsent(response.body());
+    var data = mapper.readTree(response.body()).path("data");
+    assertThat(data.path("candidate")).isEqualTo(find(list, "EQUIPMENT_REFINE:0:21"));
+    assertThat(data.path("combatPowerAfter").decimalValue()).isEqualByComparingTo("3012.34");
+    assertThat(data.at("/refine/breath").asText()).isIn("NONE", "MAX");
+    assertThat(data.at("/refine/expectedAttempts").decimalValue()).isPositive();
+    assertThat(data.at("/refine/firstAttemptSuccessRateBp").asInt()).isPositive();
+    var sum = data.path("goldFee").decimalValue();
+    for (var row : data.path("materials")) {
+      assertThat(row.path("priceStatus").asText()).isEqualTo("OK");
+      assertThat(row.path("priceBasis").asText()).isEqualTo("MARKET_MIN_UNIT");
+      assertThat(row.path("icon").isNull()).isTrue();
+      sum = sum.add(row.path("gold").decimalValue());
+    }
+    // 표시 값(소수 둘째 자리)의 합을 올림하면 목록 비용과 1골드 안쪽.
+    long amount = data.at("/candidate/cost/amount").asLong();
+    assertThat(Math.abs(sum.setScale(0, java.math.RoundingMode.CEILING).longValue() - amount))
+        .isLessThanOrEqualTo(1);
+    assertThat(data.path("market").isNull()).isTrue();
+    org.mockito.Mockito.reset(simulator);
+  }
+
+  @Test
+  void 줄_상세는_없는_후보면_404이고_id_형식이_틀리면_400이고_캐시가_없으면_CHARACTER_NOT_CACHED다() throws Exception {
+    when(auctions.cachedGems()).thenReturn(gemCells(true));
+    search("스펙캐시");
+    var missing = detail("GEM_LEVEL:9:9", "스펙캐시");
+    assertThat(missing.statusCode()).isEqualTo(404);
+    ApiContractFixture.write("character-spec-up-detail-not-found.json", missing.body());
+    assertThat(missing.body()).contains("SPEC_UP_CANDIDATE_NOT_FOUND");
+    assertThat(detail("gem<9>", "스펙캐시").statusCode()).isEqualTo(400);
+    var notCached = detail("GEM_LEVEL:0:9", "스펙없음");
+    assertThat(notCached.statusCode()).isEqualTo(404);
+    assertThat(notCached.body()).contains("CHARACTER_NOT_CACHED");
+  }
+
+  private HttpResponse<String> detail(String candidateId, String name) throws Exception {
+    return get(
+        "/api/v1/characters/spec-up/candidates/"
+            + encode(candidateId).replace("+", "%20")
+            + "?characterName="
+            + encode(name));
+  }
+
+  @Test
+  void KRAKEN을_요청해도_점수를_낼_수_없으면_효율_순으로_되돌리고_이유를_준다() throws Exception {
+    // 이 테스트 컨텍스트는 크라켄 점수가 꺼져 있다(기본값).
+    when(auctions.cachedGems()).thenReturn(gemCells(true));
+    search("스펙캐시");
+    var data =
+        mapper
+            .readTree(
+                get("/api/v1/characters/spec-up?sort=KRAKEN&characterName=" + encode("스펙캐시"))
+                    .body())
+            .path("data");
+    assertThat(data.path("sort").asText()).isEqualTo("EFFICIENCY");
+    assertThat(data.path("krakenSortUnavailableReason").asText()).isEqualTo("DISABLED");
+    assertThat(data.path("krakenScore").isNull()).isTrue();
+    // 작열 포함 여부는 정렬과 따로: KRAKEN을 요청했으니 기본은 뺌, 실제 값을 돌려준다.
+    assertThat(data.path("cooldownGemsIncluded").asBoolean()).isFalse();
+    for (var candidate : data.path("candidates"))
+      assertThat(candidate.path("deltaKrakenScore").isNull()).isTrue();
+    var efficiency =
+        mapper
+            .readTree(get("/api/v1/characters/spec-up?characterName=" + encode("스펙캐시")).body())
+            .path("data");
+    assertThat(efficiency.path("cooldownGemsIncluded").asBoolean()).isTrue();
+    assertThat(find(efficiency.path("candidates"), "GEM_LEVEL:0:9").path("gemType").asText())
+        .isEqualTo("DAMAGE");
+  }
+
   private void search(String name) throws Exception {
     when(detailsPort.fetch(anyString()))
         .thenAnswer(invocation -> fetched(invocation.getArgument(0)));
@@ -826,22 +1165,45 @@ class SpecUpIntegrationTest {
                     // 원한 L3 S1 = 18 + 0.75 × 3 + 3 = 23.25(공식 설명 형식). 그 밖 캐릭터는 설명이 달라 UNSUPPORTED.
                     name.contains("각인") ? "적에게 주는 피해가 23.25% 증가한다." : "설명")));
     var gems =
-        new CharacterLoadout.Gems(
-            List.of(
-                new CharacterLoadout.Gem(
-                    0,
-                    // 광휘 보석(효과는 피해 증가), 이름에 "귀속"이 있으면 귀속 광휘.
-                    name.contains("광휘")
-                        ? name.contains("귀속") ? "8레벨 광휘의 보석 (귀속)" : "8레벨 광휘의 보석"
-                        : "8레벨 겁화의 보석",
-                    null,
-                    8,
-                    "고대")),
-            new CharacterLoadout.GemEffects(
-                "기본 공격력 총합 : 0.80%",
-                List.of(
-                    new CharacterLoadout.GemSkill(
-                        0, "테스트 스킬", List.of("피해 32.00% 증가"), "기본 공격력 0.80% 증가", null))));
+        name.contains("보석정보없음")
+            ? null
+            : name.contains("저레벨")
+                ? new CharacterLoadout.Gems(
+                    List.of(new CharacterLoadout.Gem(0, "3레벨 겁화의 보석", null, 3, "희귀")),
+                    new CharacterLoadout.GemEffects(
+                        "",
+                        List.of(
+                            new CharacterLoadout.GemSkill(
+                                0, "테스트 스킬", List.of("피해 9.60% 증가"), null, null))))
+                : name.contains("빈칸")
+                    ? new CharacterLoadout.Gems(
+                        List.of(), new CharacterLoadout.GemEffects("", List.of()))
+                    : new CharacterLoadout.Gems(
+                        List.of(
+                            new CharacterLoadout.Gem(
+                                0,
+                                // 광휘 보석(효과는 피해 증가), 이름에 "귀속"이 있으면 귀속 광휘.
+                                name.contains("광휘")
+                                    ? name.contains("귀속") ? "8레벨 광휘의 보석 (귀속)" : "8레벨 광휘의 보석"
+                                    : "8레벨 겁화의 보석",
+                                null,
+                                8,
+                                "고대",
+                                List.of(),
+                                null,
+                                null,
+                                null,
+                                // 이름에 표시가 없어도 공식 툴팁 거래 줄이 귀속인 보석(#560).
+                                name.contains("거래줄귀속") ? List.of("캐릭터 귀속됨") : List.of("거래가능"))),
+                        new CharacterLoadout.GemEffects(
+                            "기본 공격력 총합 : 0.80%",
+                            List.of(
+                                new CharacterLoadout.GemSkill(
+                                    0,
+                                    "테스트 스킬",
+                                    List.of("피해 32.00% 증가"),
+                                    "기본 공격력 0.80% 증가",
+                                    null))));
     var arkPassive =
         new CharacterLoadout.ArkPassive(
             "진화", true, List.of(new CharacterLoadout.PassivePoint("진화", 100, "")), List.of());

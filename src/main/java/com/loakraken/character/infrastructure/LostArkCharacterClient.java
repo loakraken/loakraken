@@ -28,6 +28,8 @@ import tools.jackson.databind.json.JsonMapper;
 
 @Component
 class LostArkCharacterClient implements CharacterDetailsPort {
+  private static final org.slf4j.Logger log =
+      org.slf4j.LoggerFactory.getLogger(LostArkCharacterClient.class);
   private static final String FILTERS =
       "profiles+equipment+engravings+gems+cards+arkpassive+arkgrid+combat-skills+avatars+collectibles";
   private final RestClient client;
@@ -35,18 +37,21 @@ class LostArkCharacterClient implements CharacterDetailsPort {
   private final LostArkRequestGate gate;
   private final JsonMapper mapper;
   private final LostArkMetrics metrics;
+  private final org.springframework.beans.factory.ObjectProvider<ArmoryRawDump> rawDump;
 
   LostArkCharacterClient(
       RestClient lostArkRestClient,
       LostArkProperties properties,
       LostArkRequestGate gate,
       JsonMapper mapper,
-      LostArkMetrics metrics) {
+      LostArkMetrics metrics,
+      org.springframework.beans.factory.ObjectProvider<ArmoryRawDump> rawDump) {
     this.client = lostArkRestClient;
     this.properties = properties;
     this.gate = gate;
     this.mapper = mapper;
     this.metrics = metrics;
+    this.rawDump = rawDump;
   }
 
   @Override
@@ -54,6 +59,8 @@ class LostArkCharacterClient implements CharacterDetailsPort {
     var armoryPayload = armory(characterName);
     var armory = armoryPayload.value();
     var profile = LostArkProfileMapper.from(armory.profile());
+    // 로컬 대조 전용(#540): local 프로필 + ARMORY_RAW_DUMP_DIR일 때만, 처리정지 목록 밖 캐릭터의 본문을 파일로 남긴다.
+    rawDump.ifAvailable(dump -> dump.write(profile, armoryPayload.json()));
     var siblingsPayload = siblings(characterName, CharacterErrorCode.LOST_ARK_API_ERROR);
     var siblings = siblingsPayload.value();
     var details =
@@ -62,20 +69,36 @@ class LostArkCharacterClient implements CharacterDetailsPort {
             armory.toLoadout(),
             toDomain(siblings),
             armory.coverage(Arrays.asList(siblings)));
-    return new FetchedCharacter(details, armoryPayload.json(), siblingsPayload.json());
+    return new FetchedCharacter(
+        details,
+        armoryPayload.json(),
+        siblingsPayload.json(),
+        krakenScoreInput(armoryPayload.json()));
   }
 
   @Override
   public FetchedCharacter fetchArmory(String characterName) {
     var armoryPayload = armory(characterName);
     var armory = armoryPayload.value();
-    var details =
-        new CharacterDetails(
-            LostArkProfileMapper.from(armory.profile()),
-            armory.toLoadout(),
-            null,
-            armory.coverage(null));
-    return new FetchedCharacter(details, armoryPayload.json(), null);
+    var profile = LostArkProfileMapper.from(armory.profile());
+    rawDump.ifAvailable(dump -> dump.write(profile, armoryPayload.json()));
+    var details = new CharacterDetails(profile, armory.toLoadout(), null, armory.coverage(null));
+    return new FetchedCharacter(
+        details, armoryPayload.json(), null, krakenScoreInput(armoryPayload.json()));
+  }
+
+  /**
+   * 크라켄 점수 엔진 입력(#559). 원문에서 엔진이 읽는 값만 뽑는다(원문은 남기지 않음). 만들지 못해도 조회는 그대로 성공하고 점수만 계산하지 않는다(로그에 캐릭터
+   * 이름 없음).
+   */
+  private tools.jackson.databind.JsonNode krakenScoreInput(String armoryJson) {
+    try {
+      return com.loakraken.character.domain.KrakenScoreInputMapper.from(
+          mapper.readTree(armoryJson));
+    } catch (RuntimeException exception) {
+      log.warn("event=kraken_score_input_failed type={}", exception.getClass().getSimpleName());
+      return null;
+    }
   }
 
   @Override

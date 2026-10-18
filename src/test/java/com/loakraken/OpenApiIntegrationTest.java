@@ -25,6 +25,7 @@ import tools.jackson.databind.json.JsonMapper;
       "ranking.collectibles.enabled=true",
       "ranking.rosters.enabled=true",
       "ranking.guilds.enabled=true",
+      "ranking.guilds.list.enabled=true",
       "ranking.titles.enabled=true",
       "loakraken.features.auction-search=true"
     })
@@ -72,6 +73,21 @@ class OpenApiIntegrationTest {
                 .asText())
         .isEqualTo("null");
     assertThat(document.at("/components/schemas/GemsResponse/type").asText()).isEqualTo("object");
+    // 보석별 기본 공격력 %(#543): 두 필드 모두 required이고 null을 허용하며, 근거 값은 enum이 아닌 문자열이다(값이 늘 수 있음).
+    assertThat(document.at("/components/schemas/GemResponse/required").toString())
+        .contains("baseAttackPct", "baseAttackPctSource");
+    for (var field : List.of("baseAttackPct", "baseAttackPctSource"))
+      assertThat(
+              document
+                  .at("/components/schemas/GemResponse/properties/" + field + "/anyOf/1/type")
+                  .asText())
+          .as(field)
+          .isEqualTo("null");
+    assertThat(
+            document
+                .at("/components/schemas/GemResponse/properties/baseAttackPctSource/anyOf/0/enum")
+                .isMissingNode())
+        .isTrue();
     assertThat(
             document
                 .at("/components/schemas/EquipmentResponse/properties/detail/anyOf/1/type")
@@ -211,6 +227,23 @@ class OpenApiIntegrationTest {
                   .asText())
           .as(field)
           .isEqualTo("null");
+    // 스펙업 Δ크라켄 점수(KRAKEN 정렬): 새 필드는 required이고 값이 없을 수 있는 것은 nullable(웹은 배포 전까지 optional).
+    for (var field : List.of("krakenScore", "krakenRuleVersion", "krakenSortUnavailableReason"))
+      assertThat(
+              document
+                  .at("/components/schemas/SpecUpResponse/properties/" + field + "/anyOf/1/type")
+                  .asText())
+          .as(field)
+          .isEqualTo("null");
+    for (var field : List.of("deltaKrakenScore", "krakenScorePer100kGold", "gemType"))
+      assertThat(
+              document
+                  .at("/components/schemas/CandidateResponse/properties/" + field + "/anyOf/1/type")
+                  .asText())
+          .as(field)
+          .isEqualTo("null");
+    assertThat(document.at("/components/schemas/SpecUpResponse/required").toString())
+        .contains("cooldownGemsIncluded");
     // 스펙업 목표 경로(L31): 새 경로, 모든 필드 required, 값이 없을 수 있는 필드만 nullable.
     assertThat(document.at("/paths/~1api~1v1~1characters~1spec-up~1goal/get").isMissingNode())
         .isFalse();
@@ -238,6 +271,36 @@ class OpenApiIntegrationTest {
                   .asText())
           .as(field)
           .isEqualTo("null");
+    // 스펙업 줄 상세(#544): 새 경로, 모든 필드 required, 해당 없는 칸만 nullable.
+    assertThat(
+            document
+                .at("/paths/~1api~1v1~1characters~1spec-up~1candidates~1{candidateId}/get")
+                .isMissingNode())
+        .isFalse();
+    assertThat(document.at("/components/schemas/SpecUpDetailResponse/required").toString())
+        .contains("candidate", "stats", "materials", "goldFee", "market", "refine");
+    for (var field :
+        List.of(
+            "pricesAt",
+            "combatPowerBefore",
+            "combatPowerAfter",
+            "materials",
+            "goldFee",
+            "market",
+            "refine"))
+      assertThat(
+              document
+                  .at(
+                      "/components/schemas/SpecUpDetailResponse/properties/"
+                          + field
+                          + "/anyOf/1/type")
+                  .asText())
+          .as(field)
+          .isEqualTo("null");
+    assertThat(document.at("/components/schemas/SpecUpMaterialResponse/required").toString())
+        .contains("itemName", "quantity", "unitPrice", "gold", "priceStatus");
+    assertThat(document.at("/components/schemas/SpecUpMarketResponse/required").toString())
+        .contains("role", "itemName", "price", "quantity", "observedAt");
     // 팔찌·젬 효율 랭킹(L38·L39): 두 경로가 같은 스키마, 필수와 nullable.
     for (var path : List.of("bracelets", "ark-grid-gems"))
       assertThat(
@@ -272,7 +335,55 @@ class OpenApiIntegrationTest {
                 .asText())
         .isEqualTo("null");
     assertThat(document.at("/components/schemas/CharacterResponse/required").toString())
-        .contains("braceletEfficiency", "arkGridEfficiency");
+        .contains("braceletEfficiency", "arkGridEfficiency", "krakenScore");
+    // 크라켄 점수(#522): 늘 들어 있는 필드, 닫힌 값은 확정, 요소 코드는 열린 문자열.
+    assertThat(
+            document
+                .at("/components/schemas/CharacterResponse/properties/krakenScore/anyOf")
+                .isMissingNode())
+        .isTrue();
+    assertThat(document.at("/components/schemas/KrakenScoreResponse/required").toString())
+        .contains(
+            "status", "reasonCode", "reason", "role", "score", "tier", "factors", "ruleVersion");
+    assertThat(
+            document
+                .at("/components/schemas/KrakenScoreResponse/properties/status/enum")
+                .toString())
+        .contains("OK", "UNSUPPORTED", "DISABLED");
+    for (var field : List.of("reasonCode", "reason", "role", "score", "tier", "ruleVersion"))
+      assertThat(
+              document
+                  .at(
+                      "/components/schemas/KrakenScoreResponse/properties/"
+                          + field
+                          + "/anyOf/1/type")
+                  .asText())
+          .as(field)
+          .isEqualTo("null");
+    assertThat(document.at("/components/schemas/KrakenScoreTierResponse/required").toString())
+        .contains(
+            "code",
+            "min",
+            "nextCode",
+            "nextMin",
+            "remaining",
+            "remainingRounded",
+            "progressPercent");
+    for (var field : List.of("nextCode", "nextMin", "remaining", "remainingRounded"))
+      assertThat(
+              document
+                  .at(
+                      "/components/schemas/KrakenScoreTierResponse/properties/"
+                          + field
+                          + "/anyOf/1/type")
+                  .asText())
+          .as(field)
+          .isEqualTo("null");
+    assertThat(
+            document
+                .at("/components/schemas/KrakenScoreFactorResponse/properties/code/enum")
+                .isMissingNode())
+        .isTrue();
     assertThat(document.at("/components/schemas/ArkGridEfficiencyResponse/required").toString())
         .contains(
             "percent", "coresPercent", "status", "reasonCode", "reason", "lines", "ruleVersion");
@@ -315,6 +426,14 @@ class OpenApiIntegrationTest {
                 .at("/components/schemas/AccessorySearchResponse/properties/nextPage/anyOf/1/type")
                 .asText())
         .isEqualTo("null");
+    // 매물 이미지·기본 효과(#524): api는 둘 다 늘 준다(icon은 nullable, baseEffects는 빈 배열).
+    assertThat(document.at("/components/schemas/AccessorySearchItemResponse/required").toString())
+        .contains("icon", "baseEffects");
+    assertThat(
+            document
+                .at("/components/schemas/AccessorySearchBaseEffectResponse/required")
+                .toString())
+        .contains("name", "value");
     for (var field :
         List.of(
             "grade",
@@ -325,7 +444,8 @@ class OpenApiIntegrationTest {
             "tradeAllowCount",
             "buyPrice",
             "bidStartPrice",
-            "endDate"))
+            "endDate",
+            "icon"))
       assertThat(
               document
                   .at(
@@ -923,8 +1043,17 @@ class OpenApiIntegrationTest {
             "aggregatedAt",
             "ruleVersion");
     assertThat(schemas.at("/GuildDetailSummary/required").toString())
-        .contains("itemLevelAvg", "combatPowerAvg", "combatPowerMedian", "combatPowerCount");
-    for (var field : List.of("combatPowerAvg", "combatPowerMedian"))
+        .contains(
+            "itemLevelAvg",
+            "combatPowerAvg",
+            "combatPowerMedian",
+            "combatPowerCount",
+            "combatPowerAvgTop",
+            "combatPowerTopItemLevelMin",
+            "combatPowerTopCount",
+            "combatPowerTotal");
+    for (var field :
+        List.of("combatPowerAvg", "combatPowerMedian", "combatPowerAvgTop", "combatPowerTotal"))
       assertThat(schemas.at("/GuildDetailSummary/properties/" + field + "/anyOf/1/type").asText())
           .as(field)
           .isEqualTo("null");
@@ -969,6 +1098,45 @@ class OpenApiIntegrationTest {
       assertThat(
               schemas
                   .at("/StatsBestCombatPowerRowResponse/properties/" + field + "/anyOf/1/type")
+                  .asText())
+          .as(field)
+          .isEqualTo("null");
+  }
+
+  @Test
+  void 전투정보실_페이지_정보는_required이고_읽지_못한_값만_nullable이며_트라이포드와_스킬_코드는_없다() throws Exception {
+    var document = JsonMapper.builder().build().readTree(request("/v3/api-docs").body());
+    assertThat(document.at("/paths/~1api~1v1~1characters~1armory-page/get").isMissingNode())
+        .isFalse();
+    var schemas = document.at("/components/schemas");
+    assertThat(schemas.at("/CharacterArmoryPageResponse/required").toString())
+        .contains("characterName", "enabled", "source", "fetchedAt", "lifeSkills");
+    for (var field : List.of("source", "fetchedAt", "lifeSkills"))
+      assertThat(
+              schemas
+                  .at("/CharacterArmoryPageResponse/properties/" + field + "/anyOf/1/type")
+                  .asText())
+          .as(field)
+          .isEqualTo("null");
+    assertThat(schemas.at("/CharacterArmoryPageResponse/properties/skills").isMissingNode())
+        .isTrue();
+    assertThat(schemas.at("/CharacterArmoryPageResponse/properties/skillCode").isMissingNode())
+        .isTrue();
+    assertThat(schemas.at("/LifeSkillResponse/required").toString()).contains("name", "level");
+    assertThat(schemas.at("/LifeSkillResponse/properties/level/anyOf/1/type").asText())
+        .isEqualTo("null");
+    // 스킬 코드(#532)는 따로 부르는 경로다.
+    assertThat(
+            document
+                .at("/paths/~1api~1v1~1characters~1armory-page~1skill-code/get")
+                .isMissingNode())
+        .isFalse();
+    assertThat(schemas.at("/CharacterSkillCodeResponse/required").toString())
+        .contains("characterName", "enabled", "fetchedAt", "skillCode");
+    for (var field : List.of("fetchedAt", "skillCode"))
+      assertThat(
+              schemas
+                  .at("/CharacterSkillCodeResponse/properties/" + field + "/anyOf/1/type")
                   .asText())
           .as(field)
           .isEqualTo("null");

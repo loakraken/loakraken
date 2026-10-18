@@ -45,6 +45,8 @@ jobs:
         env:
           # 금지 이름 목록(줄바꿈 구분). 저장소에 두지 않는다. 없으면(포크 PR 등) 이름 검사만 건너뛴다.
           BLOCKED_TERMS: ${{ secrets.BLOCKED_TERMS }}
+          # 저장소 안 PR·push면 목록이 꼭 있어야 한다(비면 가드 실패). 포크 PR은 비밀값이 없어 false.
+          BLOCKED_TERMS_REQUIRED: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
       - name: Upload OpenAPI contract
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:

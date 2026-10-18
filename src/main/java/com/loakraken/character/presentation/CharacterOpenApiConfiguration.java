@@ -41,6 +41,13 @@ class CharacterOpenApiConfiguration {
       ResponseContracts.apply(
           RosterCombatPowerController.RosterCombatPowerRefreshResponse.class,
           document.getComponents().getSchemas());
+      // 전투정보실 페이지 정보(#531)·스킬 코드(#532)
+      ResponseContracts.apply(
+          CharacterArmoryPageController.CharacterArmoryPageResponse.class,
+          document.getComponents().getSchemas());
+      ResponseContracts.apply(
+          CharacterArmoryPageController.CharacterSkillCodeResponse.class,
+          document.getComponents().getSchemas());
     };
   }
 }

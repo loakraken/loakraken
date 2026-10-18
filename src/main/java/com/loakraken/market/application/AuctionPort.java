@@ -27,8 +27,20 @@ public interface AuctionPort {
   /** 각 칸의 전날 마지막 최저가. */
   Map<String, Long> previousDay(List<String> keys, LocalDate day);
 
+  /** 보석 매물 직업·스킬 필터(#542)의 이번 분 기능 몫에서 공식 호출 하나를 가져온다. 넘었거나 저장소 장애면 false(공식 예산 보호). */
+  /**
+   * 보석 필터 기능 몫 하나를 얻는다(#542, 모든 사용자·인스턴스 공유 분당 카운터). 얻으면 돌려줄 때 쓰는 그 분의 키, 몫을 다 썼거나 저장소를 쓰지 못하면 빈
+   * 값이다.
+   */
+  Optional<String> acquireGemFilterQuota(int limit);
+
+  /** 공식 호출 전에 거절된 요청의 몫을 돌려준다(#553). 0 아래로는 내리지 않는다. 실패해도 예외를 내지 않는다(그 분이 지나면 키가 사라짐). */
+  void releaseGemFilterQuota(String key);
+
   /**
    * @param etcOptions 연마 효과 필터. min·max는 공식 값(×100 정수)
+   * @param characterClass 공식 직업 이름(보석 매물 직업 필터). 없으면 null
+   * @param skillOptions 공식 SkillOptions(보석 매물 스킬 필터). 없으면 빈 목록
    */
   record AuctionQuery(
       int categoryCode,
@@ -37,9 +49,28 @@ public interface AuctionPort {
       String itemName,
       Integer minQuality,
       List<EtcFilter> etcOptions,
-      int pageNo) {
+      int pageNo,
+      String characterClass,
+      List<SkillFilter> skillOptions) {
     public AuctionQuery {
       etcOptions = etcOptions == null ? List.of() : List.copyOf(etcOptions);
+      skillOptions = skillOptions == null ? List.of() : List.copyOf(skillOptions);
+    }
+
+    public AuctionQuery(
+        int categoryCode,
+        int itemTier,
+        String itemGrade,
+        String itemName,
+        Integer minQuality,
+        List<EtcFilter> etcOptions,
+        int pageNo) {
+      this(categoryCode, itemTier, itemGrade, itemName, minQuality, etcOptions, pageNo, null, null);
+    }
+
+    /** 직업·스킬 조건이 붙은 검색인가(결과를 시세판 칸에 저장하지 않는다). */
+    public boolean filtered() {
+      return characterClass != null || !skillOptions.isEmpty();
     }
 
     /** 캐시·일별 기록 키. 같은 조건이면 같다. */
@@ -63,6 +94,10 @@ public interface AuctionPort {
             .append(option.min())
             .append(':')
             .append(option.max());
+      // 조건 없는 검색의 키는 예전과 같다(시세판 칸·일별 기록 키 유지).
+      if (characterClass != null) text.append("|class:").append(characterClass);
+      for (var option : skillOptions)
+        text.append("|skill:").append(option.first()).append(':').append(option.second());
       try {
         var digest =
             MessageDigest.getInstance("SHA-256")
@@ -75,11 +110,22 @@ public interface AuctionPort {
 
     public AuctionQuery page(int value) {
       return new AuctionQuery(
-          categoryCode, itemTier, itemGrade, itemName, minQuality, etcOptions, value);
+          categoryCode,
+          itemTier,
+          itemGrade,
+          itemName,
+          minQuality,
+          etcOptions,
+          value,
+          characterClass,
+          skillOptions);
     }
   }
 
   record EtcFilter(int first, int second, int min, int max) {}
+
+  /** 공식 SkillOptions 한 줄: first = 스킬 코드, second = 트라이포드 값(보석 종류). 레벨은 아이템 이름으로 거르므로 범위는 비운다. */
+  record SkillFilter(int first, int second) {}
 
   record AuctionPage(long totalCount, List<AuctionListing> items, Instant observedAt) {
     public AuctionPage {
@@ -105,9 +151,34 @@ public interface AuctionPort {
       Long bidStartPrice,
       Instant endDate,
       Integer tradeAllowCount,
-      List<ListingOption> options) {
+      List<ListingOption> options,
+      String icon) {
     public AuctionListing {
       options = options == null ? List.of() : List.copyOf(options);
+    }
+
+    /** 이미지 없이(공식 Icon을 읽기 전 모양). */
+    public AuctionListing(
+        String name,
+        String grade,
+        Integer quality,
+        Long buyPrice,
+        Long bidPrice,
+        Long bidStartPrice,
+        Instant endDate,
+        Integer tradeAllowCount,
+        List<ListingOption> options) {
+      this(
+          name,
+          grade,
+          quality,
+          buyPrice,
+          bidPrice,
+          bidStartPrice,
+          endDate,
+          tradeAllowCount,
+          options,
+          null);
     }
   }
 

@@ -51,5 +51,20 @@ class SpecUpDisabledIntegrationTest {
                 HttpResponse.BodyHandlers.ofString());
     assertThat(goal.statusCode()).isEqualTo(404);
     assertThat(goal.body()).contains("SPEC_UP_DISABLED");
+    // 줄 상세(#544)도 같은 플래그를 따른다.
+    var detail =
+        HttpClient.newHttpClient()
+            .send(
+                HttpRequest.newBuilder(
+                        URI.create(
+                            "http://localhost:"
+                                + port
+                                + "/api/v1/characters/spec-up/candidates/GEM_LEVEL:0:9?characterName="
+                                + URLEncoder.encode("스펙꺼짐", StandardCharsets.UTF_8)))
+                    .GET()
+                    .build(),
+                HttpResponse.BodyHandlers.ofString());
+    assertThat(detail.statusCode()).isEqualTo(404);
+    assertThat(detail.body()).contains("SPEC_UP_DISABLED");
   }
 }

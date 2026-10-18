@@ -321,24 +321,41 @@ class PostgresStatsRepository implements StatsPort {
             SELECT 1 FROM public_exclusion e
             WHERE e.character_name = c.character_name AND (e.server_name IS NULL OR e.server_name = c.server_name))
           %KEYS%),
+      home AS (
+        SELECT DISTINCT ON (roster_key) roster_key, server_name AS home_server
+        FROM members ORDER BY roster_key, item_level DESC NULLS LAST, character_name, server_name),
+      levels AS (
+        SELECT c.roster_key, MAX(c.expedition_level) AS roster_level, COUNT(c.expedition_level) AS used_level
+        FROM characters c
+        WHERE c.roster_key IN (SELECT roster_key FROM home)
+          AND GREATEST(c.last_synced_at, c.profile_refreshed_at, c.roster_scanned_at) >= :since
+          AND NOT EXISTS (
+            SELECT 1 FROM public_exclusion e
+            WHERE e.character_name = c.character_name AND (e.server_name IS NULL OR e.server_name = c.server_name))
+        GROUP BY c.roster_key),
       valued AS (
         SELECT m.*, %VALUE% AS value,
           ROW_NUMBER() OVER (PARTITION BY m.roster_key
-            ORDER BY %VALUE% DESC NULLS LAST, m.item_level DESC NULLS LAST, m.character_name) AS vrn,
-          ROW_NUMBER() OVER (PARTITION BY m.roster_key
             ORDER BY m.item_level DESC NULLS LAST, m.character_name) AS irn
-        FROM members m)
+        FROM members m JOIN home h ON h.roster_key = m.roster_key AND m.server_name = h.home_server)
       """;
 
+  /**
+   * 원정대 값은 한 서버 기준이다(비교 기준 B와 같은 규칙, PM 판정 10-18): 서버 조건이 있으면 그 서버, 없으면 원정대 대표 캐릭터(아이템 레벨 최고)의
+   * 서버(home)만 남기고 식스맨·전체 평균·인원·전투력 미관측 제외를 그 범위로 센다. 원정대 레벨만은 계정 공통 값이라 서버 조건과 상관없이 원정대 모든 캐릭터의
+   * 최댓값이다(levels). 식스맨(TOP6)은 그 안의 아이템 레벨 상위 6명(irn ≤ 6)이고, 평균은 6명보다 적어도 늘 6으로 나눈다(PM 판정 10-15).
+   * used_top6은 그 6명 중 값이 있는 수다.
+   */
   private static final String ROSTER_RANKED =
       """
       , rosters AS (
-        SELECT roster_key, COUNT(*) AS member_count,
-          COUNT(value) FILTER (WHERE vrn <= 6) AS used_top6, COUNT(value) AS used_all,
-          AVG(value) FILTER (WHERE vrn <= 6) AS top6_avg, SUM(value) FILTER (WHERE vrn <= 6) AS top6_sum,
-          AVG(value) AS all_avg, MAX(expedition_level) AS roster_level, COUNT(expedition_level) AS used_level,
+        SELECT v.roster_key, COUNT(*) AS member_count,
+          COUNT(value) FILTER (WHERE irn <= 6) AS used_top6, COUNT(value) AS used_all,
+          SUM(value) FILTER (WHERE irn <= 6) / 6 AS top6_avg, SUM(value) FILTER (WHERE irn <= 6) AS top6_sum,
+          AVG(value) AS all_avg, l.roster_level, l.used_level,
           BOOL_OR(item_level >= 1640 AND NOT cp_observed) AS cp_missing
-        FROM valued GROUP BY roster_key),
+        FROM valued v JOIN levels l ON l.roster_key = v.roster_key
+        GROUP BY v.roster_key, l.roster_level, l.used_level),
       scored AS (
         SELECT r.*, %SCORE% AS score, %USED% AS used FROM rosters r WHERE NOT (:cpBasis AND r.cp_missing)),
       ranked AS (
@@ -444,7 +461,7 @@ class PostgresStatsRepository implements StatsPort {
                     .replace("%KEYS%", "AND c.roster_key IN (:keys)")
                     .replace("%VALUE%", rosterValue(basis))
                 + "SELECT roster_key, character_name, class_name, value FROM valued"
-                + " WHERE vrn <= 6 AND value IS NOT NULL ORDER BY roster_key, vrn")
+                + " WHERE irn <= 6 AND value IS NOT NULL ORDER BY roster_key, irn")
         .param("since", since.atOffset(ZoneOffset.UTC))
         .param("server", server)
         .param("keys", rosterKeys)

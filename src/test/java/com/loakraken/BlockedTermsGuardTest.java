@@ -1,7 +1,6 @@
 package com.loakraken;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assumptions.assumeThat;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -9,87 +8,109 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
+import java.util.regex.Pattern;
 import org.junit.jupiter.api.Test;
-import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.json.JsonMapper;
-import tools.jackson.databind.node.ObjectNode;
 
 /**
- * 공개 저장소 규칙(2026-10-12): 추적하는 공개 파일(운영·테스트 코드, 리소스·표본, 문서·배포 설정)에 금지 이름이 없다. 이름 목록은 {@link
- * SiteNames}가 저장소 밖에서 읽고, 없으면 이 검사는 건너뛴다. 실패해도 일치한 파일·줄 번호만 보이고 이름은 출력하지 않는다.
+ * 공개 저장소 규칙(2026-10-12, #535): git이 추적하는 모든 파일(코드·리소스·표본·문서·설정, JSON의 출처 값 포함)에 금지 이름과 간접 표현이 없다.
+ * 이름 목록은 {@link SiteNames}가 저장소 밖에서 읽고, 없으면(포크 PR 등) 이름 검사만 건너뛰고 간접 표현은 늘 검사한다. 실패해도 일치한 파일·줄 번호와
+ * 목록 번호만 보이고 이름은 출력하지 않는다(CI 로그가 공개라서).
  *
- * <p>예외: 데이터 리소스 JSON의 출처 값(키 {@code source}와 {@code …Source}, 그 안의 값), 이미 적용된 Flyway 마이그레이션(바꾸면
- * 체크섬이 달라진다), 이름 목록을 다루는 {@link SiteNames}와 이 검사 자체.
+ * <p>예외: 이미 적용된 Flyway 마이그레이션(바꾸면 체크섬이 달라진다), 목록을 다루는 {@link SiteNames}와 이 검사 자체.
  */
 class BlockedTermsGuardTest {
-  private static final List<String> SCOPE =
-      List.of(
-          "src/main/",
-          "src/test/",
-          "docs/",
-          "deploy/",
-          ".github/",
-          "README.md",
-          "NOTICE",
-          "build.gradle",
-          "settings.gradle",
-          "compose.yaml",
-          "Dockerfile",
-          ".env.example");
   private static final List<String> EXCLUDED =
       List.of(
           "src/main/resources/db/migration/",
           "src/test/java/com/loakraken/SiteNames.java",
           "src/test/java/com/loakraken/BlockedTermsGuardTest.java");
-  private static final JsonMapper MAPPER = JsonMapper.builder().build();
+
+  /**
+   * 이름 목록에 있어야 하는 이름 수(숫자만 공개). 로컬 목록에 이름을 더하면 이 수와 CI 비밀값 {@code BLOCKED_TERMS}도 같이 고친다. CI 비밀값이
+   * 로컬보다 오래돼 테스트 주석의 이름을 놓친 일(#576) 뒤로, 목록이 이보다 적으면 실패한다.
+   */
+  static final int EXPECTED_NAMES = 34;
 
   @Test
-  void 공개_파일에_금지_이름이_없다() throws Exception {
-    assumeThat(SiteNames.BLOCKED).as("금지 이름 목록 없음(비밀값·로컬 파일) — 건너뜀").isNotEmpty();
-    var patterns = SiteNames.BLOCKED.stream().map(SiteNames::pattern).toList();
-    var hits = new ArrayList<String>();
-    for (var file : trackedFiles()) {
-      if (SCOPE.stream().noneMatch(file::startsWith)
-          || EXCLUDED.stream().anyMatch(file::startsWith)
-          || !Files.isRegularFile(Path.of(file))
-          || binary(file)) continue;
-      var text = Files.readString(Path.of(file), StandardCharsets.UTF_8);
-      if (file.endsWith(".json")) {
-        var node = MAPPER.readTree(text);
-        stripSources(node);
-        var values = MAPPER.writeValueAsString(node);
-        if (patterns.stream().anyMatch(pattern -> pattern.matcher(values).find()))
-          hits.add(file + " (출처 밖 JSON 값)");
-        continue;
-      }
-      var lines = text.split("\\R", -1);
-      for (int i = 0; i < lines.length; i++) {
-        var line = lines[i];
-        if (patterns.stream().anyMatch(pattern -> pattern.matcher(line).find()))
-          hits.add(file + ":" + (i + 1));
-      }
+  void 이름_목록은_비거나_모자라지_않다() {
+    // 이름은 출력하지 않고 개수만 보인다(CI 로그가 공개라서).
+    System.out.println(
+        "금지 이름 " + SiteNames.BLOCKED.size() + "개를 읽었습니다(기대 " + EXPECTED_NAMES + "개)");
+    if (SiteNames.BLOCKED.isEmpty()) {
+      // 저장소 안 PR·push에서는 CI가 BLOCKED_TERMS_REQUIRED=true를 준다. 포크 PR(비밀값 없음)과 목록 파일이 없는 로컬만 건너뛴다.
+      assertThat(System.getenv("BLOCKED_TERMS_REQUIRED"))
+          .as("이 실행에는 금지 이름 목록(BLOCKED_TERMS)이 있어야 합니다")
+          .isNotEqualTo("true");
+      return;
     }
-    assertThat(hits).as("금지 이름이 있는 위치(이름은 출력하지 않음)").isEmpty();
+    // Windows PowerShell 5.1로 파이프해 넣으면 한글이 '?'로 바뀌고 줄이 합쳐진다 — 그런 이름은 아무것도 못 잡는다(#576).
+    var broken = new ArrayList<Integer>();
+    for (int i = 0; i < SiteNames.BLOCKED.size(); i++)
+      if (SiteNames.BLOCKED.get(i).matches(".*[?\\uFFFD].*")) broken.add(i);
+    assertThat(broken).as("인코딩이 깨진 금지 이름(목록 번호) — 목록을 UTF-8 그대로 다시 넣어야 합니다").isEmpty();
+    assertThat(SiteNames.BLOCKED.size())
+        .as("금지 이름 목록이 기대보다 적습니다 — CI 비밀값이나 로컬 목록이 오래됐거나 줄이 합쳐졌는지 확인")
+        .isGreaterThanOrEqualTo(EXPECTED_NAMES);
   }
 
-  private static void stripSources(JsonNode node) {
-    if (node instanceof ObjectNode object) {
-      var keys = new ArrayList<String>();
-      for (Map.Entry<String, JsonNode> entry : object.properties()) keys.add(entry.getKey());
-      for (var key : keys) {
-        if (key.equals("source") || key.endsWith("Source")) object.remove(key);
-        else stripSources(object.get(key));
-      }
-    } else if (node != null && node.isArray()) for (var item : node) stripSources(item);
+  @Test
+  void 목록은_CRLF와_BOM과_분류_표시를_떼고_읽는다() {
+    var text = "\uFEFFsite: alpha\r\ncharacter: 가나다\r\n# 주석\r\n\r\n  beta  \n";
+    assertThat(SiteNames.parse(text)).containsExactly("alpha", "가나다", "beta");
+  }
+
+  @Test
+  void 추적하는_모든_파일에_금지_이름과_간접_표현이_없다() throws Exception {
+    var hits = scan(patterns());
+    assertThat(hits).as("금지 표현이 있는 위치(이름은 출력하지 않음)").isEmpty();
+  }
+
+  @Test
+  void 검사는_JSON_출처_값도_본다() {
+    // 예전에는 source·…Source 값을 건너뛰어 출처 문구에 남은 표현을 놓쳤다(#535).
+    var json = "{\"source\": \"" + SiteNames.INDIRECT.get(0) + " 대조\"}";
+    assertThat(matches(json, patterns())).isNotEmpty();
+    assertThat(matches("{\"source\": \"비교 기준 A 대조\"}", patterns())).isEmpty();
+  }
+
+  /** 간접 표현은 늘, 이름은 목록이 있을 때만. 번호는 실패 메시지용. */
+  private static List<Pattern> patterns() {
+    var patterns = new ArrayList<Pattern>();
+    for (var phrase : SiteNames.INDIRECT) patterns.add(Pattern.compile(Pattern.quote(phrase)));
+    for (var name : SiteNames.BLOCKED) patterns.add(SiteNames.pattern(name));
+    return patterns;
+  }
+
+  private static List<String> scan(List<Pattern> patterns) throws Exception {
+    var hits = new ArrayList<String>();
+    for (var file : trackedFiles()) {
+      if (EXCLUDED.stream().anyMatch(file::startsWith)
+          || !Files.isRegularFile(Path.of(file))
+          || binary(file)) continue;
+      var lines = Files.readString(Path.of(file), StandardCharsets.UTF_8).split("\\R", -1);
+      for (int i = 0; i < lines.length; i++)
+        for (var index : matches(lines[i], patterns)) hits.add(file + ":" + (i + 1) + " #" + index);
+    }
+    return hits;
+  }
+
+  private static List<Integer> matches(String line, List<Pattern> patterns) {
+    var found = new ArrayList<Integer>();
+    for (int i = 0; i < patterns.size(); i++)
+      if (patterns.get(i).matcher(line).find()) found.add(i);
+    return found;
   }
 
   private static boolean binary(String file) {
-    return file.matches("(?i).*\\.(png|jpe?g|gif|ico|jar|woff2?|ttf)$");
+    return file.matches("(?i).*\\.(png|jpe?g|gif|ico|jar|woff2?|ttf|pdf|zip)$");
   }
 
   private static List<String> trackedFiles() throws IOException, InterruptedException {
-    var process = new ProcessBuilder("git", "ls-files").redirectErrorStream(true).start();
+    // 한글 경로가 \354… 같은 따옴표 꼴로 나오지 않게 한다.
+    var process =
+        new ProcessBuilder("git", "-c", "core.quotepath=off", "ls-files")
+            .redirectErrorStream(true)
+            .start();
     var output = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
     assertThat(process.waitFor()).as("git ls-files").isZero();
     return output.lines().filter(line -> !line.isBlank()).toList();

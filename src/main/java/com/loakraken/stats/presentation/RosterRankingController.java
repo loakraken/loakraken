@@ -49,7 +49,7 @@ public class RosterRankingController {
       description =
           "같은 서버 원정대(공식 원정대 캐릭터 목록)를 묶어 기준·합산 값 순으로 매긴 순위입니다. activeDays 안에 관측한 공개 캐릭터만 넣고, 대표는 아이템 레벨이 가장 높은 공개 캐릭터입니다. "
               + "basis: ITEM_LEVEL(아이템 레벨), COMBAT_POWER(전투력, activeDays 안에 관측한 값만), ROSTER_LEVEL(원정대 레벨, aggregate는 쓰지 않음). "
-              + "aggregate: TOP6_AVG(상위 6명 평균), TOP6_SUM(상위 6명 합), ALL_AVG(전체 평균). 원정대 인원이 6명보다 적으면 있는 인원으로 계산하고 usedCharacters로 알립니다. "
+              + "aggregate: TOP6_AVG(식스맨 평균 = 아이템 레벨 상위 6명 값의 합 ÷ 6), TOP6_SUM(같은 6명의 합), ALL_AVG(전체 평균). 원정대 값(식스맨·전체 평균·인원·전투력 미관측 제외)은 한 서버 기준입니다: server가 있으면 그 서버, 없으면 대표 캐릭터(아이템 레벨 최고)의 서버만 셉니다. 원정대 레벨만은 계정 공통 값이라 server와 상관없이 원정대 모든 캐릭터의 최댓값입니다. 상위 6명은 기준과 무관하게 그 서버 안에서 아이템 레벨 순(같으면 이름 순)으로 고르고, 원정대 인원이 6명보다 적어도 TOP6_AVG는 6으로 나눕니다(값이 있는 수는 usedCharacters). "
               + "COMBAT_POWER에서는 아이템 레벨 1640 이상인데 activeDays 안에 전투력을 관측하지 못한 캐릭터가 있는 원정대를 빼고 excludedRosters에 수를 줍니다. "
               + "값이 같으면(소수 둘째 자리) 같은 순위입니다. 모집단이 30 미만이면 sampleStatus=COLLECTING이지만 값·순위는 그대로 줍니다(참고값). "
               + "400 INVALID_REQUEST·STATS_INVALID_RANGE, 503 STATS_UNAVAILABLE")

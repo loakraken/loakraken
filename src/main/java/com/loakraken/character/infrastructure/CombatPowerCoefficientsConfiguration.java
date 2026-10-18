@@ -20,6 +20,8 @@ class CombatPowerCoefficientsConfiguration {
   static final String REFINE_RESOURCE = "combat-power/refine-coefficients.json";
   static final String BRACELET_RESOURCE = "combat-power/bracelet-coefficients.json";
   static final String ARK_GRID_RESOURCE = "combat-power/ark-grid-coefficients.json";
+  static final String KRAKEN_SCORE_TIERS_RESOURCE = "kraken-score/tiers.json";
+  static final String KRAKEN_SCORE_TABLES_RESOURCE = "kraken-score/reference-tables.json";
 
   /** 전투력 시뮬레이터 보석 계수(#243). 근거·확인 날짜는 리소스 source에 있다. 읽을 수 없으면 애플리케이션이 시작하지 않는다. */
   @Bean
@@ -65,6 +67,38 @@ class CombatPowerCoefficientsConfiguration {
       return mapper.readValue(input, CombatPowerArkGridModel.Coefficients.class);
     }
   }
+
+  /** 크라켄 점수 티어 컷(#522). 읽을 수 없으면 애플리케이션이 시작하지 않는다(조용한 UNSUPPORTED 금지). */
+  @Bean
+  com.loakraken.character.domain.KrakenScoreTier.Table krakenScoreTierTable(JsonMapper mapper)
+      throws IOException {
+    try (var input = new ClassPathResource(KRAKEN_SCORE_TIERS_RESOURCE).getInputStream()) {
+      return mapper.readValue(input, com.loakraken.character.domain.KrakenScoreTier.Table.class);
+    }
+  }
+
+  /** 크라켄 점수 엔진 표(#539): 비교 기준 B 원본 표 중 엔진이 읽는 것만. 읽을 수 없거나 표가 빠지면 애플리케이션이 시작하지 않는다(조용한 근사 금지). */
+  @Bean
+  com.loakraken.character.domain.KrakenScoreEngine.Tables krakenScoreTables(JsonMapper mapper)
+      throws IOException {
+    // 바뀌지 않는 자원 표(노드 약 1만 7천 개)라 JVM에 한 벌만 둔다 — 테스트처럼 스프링 컨텍스트가 여럿 떠도 컨텍스트마다 다시 읽지 않는다.
+    var tables = sharedKrakenScoreTables;
+    if (tables != null) return tables;
+    synchronized (CombatPowerCoefficientsConfiguration.class) {
+      if (sharedKrakenScoreTables == null) {
+        try (var input = new ClassPathResource(KRAKEN_SCORE_TABLES_RESOURCE).getInputStream()) {
+          var doc = mapper.readTree(input);
+          sharedKrakenScoreTables =
+              new com.loakraken.character.domain.KrakenScoreEngine.Tables(
+                  doc.path("savedAt").asString(""), doc.path("tables"));
+        }
+      }
+      return sharedKrakenScoreTables;
+    }
+  }
+
+  private static volatile com.loakraken.character.domain.KrakenScoreEngine.Tables
+      sharedKrakenScoreTables;
 
   /** 연마 옵션별 하·중·상 수치(#251). 근거는 리소스 source에 있다. */
   @Bean

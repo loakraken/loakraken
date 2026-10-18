@@ -1,6 +1,7 @@
 package com.loakraken.character.presentation;
 
 import com.loakraken.character.domain.CharacterLoadout;
+import com.loakraken.character.domain.GemBaseAttack;
 import com.loakraken.character.domain.SkillCooldown;
 import com.loakraken.common.api.NullableResponse;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -198,8 +199,26 @@ public record CharacterLoadoutResponse(
       List<GemResponse> items, @NullableResponse GemEffectsResponse effects) {
     static GemsResponse from(CharacterLoadout.Gems value) {
       if (value == null) return null;
+      // 칸 번호 → 공식 보석 효과 문구 전부("기본 공격력 n% 증가"를 찾는다). 같은 칸이 여러 줄이면 모두 본다(#555).
+      var options = new java.util.HashMap<Integer, java.util.List<String>>();
+      if (value.effects() != null)
+        for (var skill : value.effects().skills())
+          if (skill != null && skill.gemSlot() != null) {
+            var lines =
+                options.computeIfAbsent(skill.gemSlot(), slot -> new java.util.ArrayList<>());
+            lines.add(skill.option());
+            lines.addAll(skill.description());
+          }
       return new GemsResponse(
-          value.items().stream().map(GemResponse::from).toList(),
+          value.items().stream()
+              .map(
+                  gem ->
+                      GemResponse.from(
+                          gem,
+                          gem == null
+                              ? java.util.List.of()
+                              : options.getOrDefault(gem.slot(), java.util.List.of())))
+              .toList(),
           GemEffectsResponse.from(value.effects()));
     }
   }
@@ -213,9 +232,22 @@ public record CharacterLoadoutResponse(
       @Schema(description = "공식 Tooltip 등급 줄(예: '전설 보석')") @NullableResponse String titleLine,
       @Schema(description = "공식 Tooltip 아이템 레벨") @NullableResponse Integer itemLevel,
       @Schema(description = "공식 Tooltip 티어") @NullableResponse Integer tier,
-      @Schema(description = "공식 Tooltip 귀속·거래 줄(예: '캐릭터 귀속됨', '거래 불가')") List<String> tradeLines) {
-    static GemResponse from(CharacterLoadout.Gem value) {
+      @Schema(description = "공식 Tooltip 귀속·거래 줄(예: '캐릭터 귀속됨', '거래 불가')") List<String> tradeLines,
+      @Schema(
+              description =
+                  "보석 하나의 기본 공격력 %(4티어 보석 추가 효과). 공식 보석 효과 문구를 먼저 읽고, 없으면 레벨 표(6~10레벨 0.45·0.60·0.80·1.00·1.20). 근거가 없으면(1~5레벨·3티어) null",
+              example = "1.20")
+          @NullableResponse
+          BigDecimal baseAttackPct,
+      @Schema(
+              description =
+                  "baseAttackPct 근거(문자열, 값이 늘 수 있음): TOOLTIP(공식 문구) 또는 LEVEL_TABLE(레벨 표). 값이 없으면 null",
+              example = "TOOLTIP")
+          @NullableResponse
+          String baseAttackPctSource) {
+    static GemResponse from(CharacterLoadout.Gem value, java.util.List<String> options) {
       if (value == null) return null;
+      var baseAttack = GemBaseAttack.of(value, options);
       return new GemResponse(
           value.slot(),
           value.name(),
@@ -225,7 +257,9 @@ public record CharacterLoadoutResponse(
           value.titleLine(),
           value.itemLevel(),
           value.tier(),
-          value.tradeLines());
+          value.tradeLines(),
+          baseAttack == null ? null : baseAttack.pct(),
+          baseAttack == null ? null : baseAttack.source());
     }
   }
 

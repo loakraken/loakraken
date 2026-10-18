@@ -23,7 +23,7 @@
     "gradeByTotal": { "전설": "4~15", "유물": "16~18", "고대": "19 이상" }
   },
   "refParameters": {
-    "source": "REF: 로아또 젬파고 수동 입력(공식 수치 없음)",
+    "source": "REF: 비교 기준 G 젬파고 수동 입력(공식 수치 없음)",
     "attemptsByGrade": { "고급": 5, "희귀": 7, "영웅": 9 },
     "baseCostGold": 900,
     "costSteps": [0, 900, 1800],

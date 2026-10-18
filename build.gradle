@@ -44,6 +44,8 @@ dependencies {
 
     // Observability
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
+    // 공식 전투정보실 페이지에서 필요한 값만 뽑는 HTML 해석기(#531)
+    implementation 'org.jsoup:jsoup:1.23.2'
     runtimeOnly 'io.micrometer:micrometer-registry-prometheus'
 
     // Lombok
@@ -76,6 +78,8 @@ tasks.named('test') {
     // 시세 이력 예열이 테스트 중 공식 API를 부르거나 호출 예산 검증을 흔들지 않게 끈다.
     systemProperty 'market.warmup.enabled', 'false'
     systemProperty 'stats.collector.enabled', 'false'
+    // 통합 테스트가 스프링 컨텍스트를 20개 넘게 캐시해 기본 힙(512MB) 가까이 쓴다. 넘치면 JVM이 멈춘 채 남으므로 여유를 둔다.
+    maxHeapSize = '1g'
 }
 
 spotless {

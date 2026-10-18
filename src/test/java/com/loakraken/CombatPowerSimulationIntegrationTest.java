@@ -188,9 +188,12 @@ class CombatPowerSimulationIntegrationTest {
     var unknownKind = simulate("시뮬검증", "[{\"kind\": \"CARD_SET\"}]");
     assertThat(unknownKind.statusCode()).isEqualTo(400);
 
-    var missing = simulate("시뮬검증", "[{\"kind\": \"GEM_LEVEL\", \"slot\": 7, \"level\": 9}]");
-    assertThat(missing.statusCode()).isEqualTo(409);
-    assertThat(missing.body()).contains("CHANGE_TARGET_NOT_FOUND", "보석 slot 7");
+    // 빈 보석 칸(#541)은 409가 아니라 그 칸에 끼우는 계산이다(값은 보석 모델 단위 테스트가 '빼기의 역'으로 고정).
+    var emptySlot = simulate("시뮬검증", "[{\"kind\": \"GEM_LEVEL\", \"slot\": 7, \"level\": 9}]");
+    assertThat(emptySlot.statusCode()).isEqualTo(200);
+    assertThat(emptySlot.body())
+        .contains("\"status\":\"OK\"")
+        .doesNotContain("CHANGE_TARGET_NOT_FOUND");
 
     var notRefinable =
         simulate("시뮬검증", "[{\"kind\": \"EQUIPMENT_REFINE\", \"index\": 1, \"refine\": 20}]");
@@ -646,6 +649,14 @@ class CombatPowerSimulationIntegrationTest {
     var search = get("/api/v1/characters/search?characterName=" + encode("시뮬아크"));
     assertThat(search.statusCode()).isEqualTo(200);
     ApiContractFixture.write("character-search-ark-grid-efficiency.json", search.body());
+    // 크라켄 점수(#522): 공개 전이라 늘 DISABLED 모양(값 null, 요소 빈 배열, 이름은 비교 기준 이름 없이).
+    var krakenScore = mapper.readTree(search.body()).at("/data/krakenScore");
+    assertThat(krakenScore.path("status").asText()).isEqualTo("DISABLED");
+    assertThat(krakenScore.path("score").isNull()).isTrue();
+    assertThat(krakenScore.path("tier").isNull()).isTrue();
+    assertThat(krakenScore.path("factors").size()).isZero();
+    assertThat(krakenScore.path("ruleVersion").asText()).isEqualTo("kraken-score-v1");
+    SiteNames.assertAbsent(search.body());
     var efficiency = mapper.readTree(search.body()).at("/data/arkGridEfficiency");
     assertThat(efficiency.path("status").asText()).isEqualTo("OK");
     assertThat(efficiency.path("percent").decimalValue()).isEqualByComparingTo("38.64");

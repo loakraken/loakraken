@@ -1,0 +1,1407 @@
+{
+ "id": "g03",
+ "role": "DEALER",
+ "note": "비교 기준 B 현재 상태 입력과 같은 시각 원본 함수 값(식별 정보 제거)",
+ "input": {
+  "schemaVersion": 3,
+  "avatar": {
+   "avatarStats": 8
+  },
+  "armory": {
+   "equipment": {
+    "weapon": {
+     "grade": "에스더 - 3",
+     "tier": -1,
+     "itemLevel": 1830,
+     "reforge": 10,
+     "highReforge": null,
+     "quality": 100,
+     "stat": 259554,
+     "health": 0,
+     "name": "+10 호왕 : 의"
+    },
+    "helmet": {
+     "grade": "고대",
+     "tier": 4,
+     "itemLevel": 1800,
+     "reforge": 25,
+     "highReforge": null,
+     "quality": 100,
+     "stat": 139346,
+     "health": 12405,
+     "name": "+25 운명의 전율 머리장식"
+    },
+    "armor": {
+     "grade": "고대",
+     "tier": 4,
+     "itemLevel": 1800,
+     "reforge": 25,
+     "highReforge": null,
+     "quality": 93,
+     "stat": 111477,
+     "health": 16540,
+     "name": "+25 운명의 전율 상의"
+    },
+    "pants": {
+     "grade": "고대",
+     "tier": 4,
+     "itemLevel": 1800,
+     "reforge": 25,
+     "highReforge": null,
+     "quality": 100,
+     "stat": 120435,
+     "health": 14059,
+     "name": "+25 운명의 전율 하의"
+    },
+    "gloves": {
+     "grade": "고대",
+     "tier": 4,
+     "itemLevel": 1800,
+     "reforge": 25,
+     "highReforge": null,
+     "quality": 98,
+     "stat": 167216,
+     "health": 8270,
+     "name": "+25 운명의 전율 장갑"
+    },
+    "shoulder": {
+     "grade": "고대",
+     "tier": 4,
+     "itemLevel": 1800,
+     "reforge": 25,
+     "highReforge": null,
+     "quality": 94,
+     "stat": 148304,
+     "health": 10751,
+     "name": "+25 운명의 전율 견갑"
+    },
+    "vambrace": {
+     "grade": "고대",
+     "tier": 4,
+     "reforge": 25,
+     "stat": 73710,
+     "health": 6414,
+     "weaponAtkFlat": 22940,
+     "baseAtkFlat": 9050,
+     "baseAtkPercent": 3,
+     "name": "+25 운명의 전율 완갑"
+    }
+   },
+   "accessory": {
+    "necklace": {
+     "grade": "고대",
+     "tier": 4,
+     "stat": 17429,
+     "health": 3960,
+     "option": [
+      "적에게 주는 피해 +2.00%",
+      "상태이상 공격 지속시간 +0.20%",
+      "추가 피해 +2.60%"
+     ],
+     "enlightPoint": 13,
+     "tradeAble": true
+    },
+    "earing1": {
+     "grade": "고대",
+     "tier": 4,
+     "stat": 13702,
+     "health": 2695,
+     "option": [
+      "무기 공격력 +3.00%",
+      "공격력 +1.55%",
+      "최대 생명력 +1300"
+     ],
+     "enlightPoint": 12,
+     "tradeAble": true
+    },
+    "earing2": {
+     "grade": "고대",
+     "tier": 4,
+     "stat": 13869,
+     "health": 2867,
+     "option": [
+      "무기 공격력 +3.00%",
+      "공격력 +1.55%",
+      "최대 생명력 +1300"
+     ],
+     "enlightPoint": 12,
+     "tradeAble": true
+    },
+    "ring1": {
+     "grade": "고대",
+     "tier": 4,
+     "stat": 12820,
+     "health": 2286,
+     "option": [
+      "치명타 적중률 +1.55%",
+      "치명타 피해 +4.00%",
+      "최대 마나 +6"
+     ],
+     "enlightPoint": 12,
+     "tradeAble": true
+    },
+    "ring2": {
+     "grade": "고대",
+     "tier": 4,
+     "stat": 12801,
+     "health": 2304,
+     "option": [
+      "치명타 적중률 +1.55%",
+      "상태이상 공격 지속시간 +0.20%",
+      "치명타 피해 +4.00%"
+     ],
+     "enlightPoint": 12,
+     "tradeAble": true
+    },
+    "bangle": {
+     "grade": "고대",
+     "tier": 4,
+     "option": [
+      "치명+106",
+      "특화+116",
+      "공격적중시매초마다10초동안무기공격력이1320,공격및이동속도가1%증가한다.(최대6중첩)",
+      "치명타적중률이3.4%증가한다.공격이치명타로적중시적에게주는피해가1.5%증가한다.",
+      "스킬의재사용대기시간이2%증가하지만,적에게주는피해가4.5%증가한다."
+     ],
+     "leapPoint": 18
+    }
+   },
+   "abilityStone": {
+    "grade": "고대",
+    "tier": 4,
+    "health": 23481,
+    "healthBonus": 3525,
+    "option": [
+     "원한 Lv.2",
+     "아드레날린 Lv.3",
+     "공격력 감소 Lv.0"
+    ],
+    "attackbonus": 1.5,
+    "name": "위대한 비상의 돌"
+   },
+   "orb": {
+    "name": "응축된 자연의 보주",
+    "grade": "유물",
+    "trinity": 50957699
+   }
+  },
+  "arkPassive": {
+   "evolution": {
+    "points": 140,
+    "karmaRank": 6,
+    "karmalevel": 30,
+    "nodes": [
+     {
+      "name": "치명",
+      "level": 9,
+      "tier": 1,
+      "tooltip": "치명이 <FONT COLOR='#99ff99'>450 </FONT>증가합니다.<BR>"
+     },
+     {
+      "name": "특화",
+      "level": 10,
+      "tier": 1,
+      "tooltip": "특화가 <FONT COLOR='#99ff99'>500 </FONT>증가합니다.<BR>"
+     },
+     {
+      "name": "신속",
+      "level": 21,
+      "tier": 1,
+      "tooltip": "신속이 <FONT COLOR='#99ff99'>1050 </FONT>증가합니다.<BR>"
+     },
+     {
+      "name": "예리한 감각",
+      "level": 1,
+      "tier": 2,
+      "tooltip": "치명타 적중률이 <FONT COLOR='#99ff99'>4.0% </font>증가하고, 진화형 피해가 <FONT COLOR='#99ff99'>5.0% </font>증가합니다.<BR>"
+     },
+     {
+      "name": "최적화 훈련",
+      "level": 2,
+      "tier": 2,
+      "tooltip": "각성기, 이동 및 기상기를 제외한 스킬의 재사용 대기시간이 <FONT COLOR='#99ff99'>8.0% </font>감소하고, 진화형 피해 <FONT COLOR='#99ff99'>10.0% </font>증가합니다.<BR>"
+     },
+     {
+      "name": "일격",
+      "level": 2,
+      "tier": 3,
+      "tooltip": "치명타 적중률이 <FONT COLOR='#99ff99'>20.0% </font>증가하고, 방향성 공격 스킬의 치명타 피해가 <FONT COLOR='#99ff99'>32.0% </font>증가합니다.<BR>"
+     },
+     {
+      "name": "회심",
+      "level": 1,
+      "tier": 4,
+      "tooltip": "공격이 치명타로 적중 시 적에게 주는 피해가 <FONT COLOR='#99ff99'>12.0%</font> 증가하며, 받는 피해가 <FONT COLOR='#99ff99'>4.0%</font> 감소합니다.<BR>"
+     },
+     {
+      "name": "달인",
+      "level": 1,
+      "tier": 4,
+      "tooltip": "받는 피해가 <FONT COLOR='#99ff99'>4.0%</font> 감소하며, 이동기 및 기상기를 제외한 스킬 사용시 10초간 '달인' 효과를 얻습니다.<BR> 달인 : 치명타 적중률 <FONT COLOR='#99ff99'>+1.4%</font> / 추가 피해 <FONT COLOR='#99ff99'>+1.7%</font>, 최대 5중첩<BR>"
+     },
+     {
+      "name": "뭉툭한 가시",
+      "level": 2,
+      "tier": 5,
+      "tooltip": "진화형 피해가 <FONT COLOR='#99ff99'>15.0% </font>증가합니다. 치명타가 발생할 확률이 최대 <FONT COLOR='#ff9999'>80.0% </font>로 제한됩니다. 공격 시, 초과한 모든 치명타가 발생할 확률의 <FONT COLOR='#99ff99'>150.0%</font>가 진화형 피해로 전환됩니다. 이 노드에 의한 진화형 피해는 최대 <FONT COLOR='#99ff99'>75.0%</font>까지 적용됩니다.<BR>"
+     }
+    ]
+   },
+   "enlightenment": {
+    "points": 101,
+    "karmaRank": 6,
+    "karmalevel": 30,
+    "nodes": [
+     {
+      "name": "오의난무",
+      "level": 1,
+      "tier": 1,
+      "tooltip": "오의 스킬 사용 시 엘리멘탈 구슬을 반드시 <FONT COLOR='#ffff99'>1</FONT>개만 소모한다.<BR>"
+     },
+     {
+      "name": "답보",
+      "level": 3,
+      "tier": 2,
+      "tooltip": "이동기 사용 중 받는 피해가 <FONT COLOR='#99ff99'>10.0%</FONT> 감소하고, 오의 스킬 피해량이 <FONT COLOR='#99ff99'>12.0%</FONT> 증가한다.<BR>"
+     },
+     {
+      "name": "후방 기습",
+      "level": 2,
+      "tier": 3,
+      "tooltip": "백 어택 공격 시, 적에게 주는 피해가 <FONT COLOR='#99ff99'>2.8%</FONT> 증가한다.<BR>"
+     },
+     {
+      "name": "오의 집중",
+      "level": 3,
+      "tier": 3,
+      "tooltip": "오의 스킬 피해량이 추가로 <FONT COLOR='#99ff99'>43.5%</FONT> 증가한다.<BR>"
+     },
+     {
+      "name": "난무 강화",
+      "level": 3,
+      "tier": 4,
+      "tooltip": "일반 스킬 피해량이 <FONT COLOR='#99ff99'>36.0%</FONT> 증가하며, 일반 스킬 사용 시 엘리멘탈 구슬을 <FONT COLOR='#99ff99'>0.5</FONT>개 획득한다. 오의 스킬의 공격속도가 <FONT COLOR='#99ff99'>10.0%</FONT> 증가하며, 오의 스킬의 피해량이 <FONT COLOR='#99ff99'>20.0%</FONT> 증가한다.<BR>"
+     }
+    ]
+   },
+   "leap": {
+    "points": 70,
+    "karmaRank": 6,
+    "karmalevel": 30,
+    "nodes": [
+     {
+      "name": "풀려난 힘",
+      "level": 5,
+      "tier": 1,
+      "tooltip": "초각성 스킬이 적에게 주는 피해가 <FONT COLOR='#99ff99'>15.0%</FONT> 증가한다.<BR>"
+     },
+     {
+      "name": "잠재력 해방",
+      "level": 4,
+      "tier": 1,
+      "tooltip": "초각성 스킬의 재사용 대기 시간이 <FONT COLOR='#99ff99'>8.0%</FONT> 감소한다.<BR>"
+     },
+     {
+      "name": "즉각적인 주문",
+      "level": 2,
+      "tier": 1,
+      "tooltip": "초각성 스킬의 시전 속도가 <FONT COLOR='#99ff99'>8.0%</FONT> 증가하고, 마나 소모량이 <FONT COLOR='#99ff99'>60.0%</FONT> 감소한다.<BR>"
+     },
+     {
+      "name": "집중 타격",
+      "level": 3,
+      "tier": 2,
+      "tooltip": "전진패도격의 엘리멘탈 게이지 획득량이 <FONT COLOR='#99ff99'>50.0%</FONT> 증가하고, 적에게 주는 피해량이 <FONT COLOR='#99ff99'>75.0%</FONT> 증가한다.<BR>"
+     }
+    ]
+   }
+  },
+  "engraving": [
+   {
+    "name": "선수필승",
+    "grade": "유물",
+    "level": 4,
+    "stone": null,
+    "tooltip": "생명력이 최대인 시드 등급 이하 몬스터에게 공격 적중 시 치명타 적중률이 100%로 적용된다. 또한 이 치명타는 <FONT COLOR='#99ff99'>170.00%</FONT>의 추가 치명타 배율을 가진다."
+   },
+   {
+    "name": "저주받은 인형",
+    "grade": "유물",
+    "level": 4,
+    "stone": null,
+    "tooltip": "적에게 주는 피해가 <FONT COLOR='#99ff99'>17.00%</FONT> 증가하지만, 받는 모든 회복 효과가 <FONT COLOR='#ff9999'>25.00%</FONT> 감소한다."
+   },
+   {
+    "name": "돌격대장",
+    "grade": "유물",
+    "level": 4,
+    "stone": null,
+    "tooltip": "이동속도 증가량의 <FONT COLOR='#99ff99'>48.00%</FONT> 만큼 적에게 주는 피해량이 증가한다."
+   },
+   {
+    "name": "승부사",
+    "grade": "유물",
+    "level": 4,
+    "stone": null,
+    "tooltip": "적을 처치할 때 마다 <FONT COLOR='#ffff99'>40</FONT>초 동안, 공격력이 <FONT COLOR='#99ff99'>2.10%</FONT> 증가한다. (최대 <FONT COLOR='#ffff99'>12</FONT>중첩)"
+   },
+   {
+    "name": "마나 효율 증가",
+    "grade": "유물",
+    "level": 4,
+    "stone": null,
+    "tooltip": "마나 회복 속도가 <FONT COLOR='#99ff99'>20.00%</FONT> 증가하며, 마나를 사용하는 스킬이 적에게 주는 피해가 <FONT COLOR='#99ff99'>16.00%</FONT> 증가한다."
+   }
+  ],
+  "gem": {
+   "gems": [
+    {
+     "name": "<P ALIGN='CENTER'><FONT COLOR='#E3C7A1'>10레벨 광휘의 보석</FONT></P>",
+     "level": 10,
+     "type": "damage",
+     "skill": "격호각",
+     "attackBonus": 1.2,
+     "grade": "고대",
+     "valid": true,
+     "tooltip": " <FONT COLOR='#FFD200'>격호각</FONT> 피해 44.00% 증가<BR><BR><FONT COLOR='#A9D0F5'>추가 효과</FONT><BR>기본 공격력 1.20% 증가",
+     "tradeAble": true
+    },
+    {
+     "name": "<P ALIGN='CENTER'><FONT COLOR='#E3C7A1'>10레벨 광휘의 보석</FONT></P>",
+     "level": 10,
+     "type": "damage",
+     "skill": "오의 : 뇌호격",
+     "attackBonus": 1.2,
+     "grade": "고대",
+     "valid": true,
+     "tooltip": " <FONT COLOR='#FFD200'>오의 : 뇌호격</FONT> 피해 44.00% 증가<BR><BR><FONT COLOR='#A9D0F5'>추가 효과</FONT><BR>기본 공격력 1.20% 증가",
+     "tradeAble": true
+    },
+    {
+     "name": "<P ALIGN='CENTER'><FONT COLOR='#E3C7A1'>10레벨 광휘의 보석</FONT></P>",
+     "level": 10,
+     "type": "damage",
+     "skill": "뇌명각",
+     "attackBonus": 1.2,
+     "grade": "고대",
+     "valid": true,
+     "tooltip": " <FONT COLOR='#FFD200'>뇌명각</FONT> 피해 44.00% 증가<BR><BR><FONT COLOR='#A9D0F5'>추가 효과</FONT><BR>기본 공격력 1.20% 증가",
+     "tradeAble": true
+    },
+    {
+     "name": "<P ALIGN='CENTER'><FONT COLOR='#E3C7A1'>10레벨 광휘의 보석</FONT></P>",
+     "level": 10,
+     "type": "damage",
+     "skill": "월섬각",
+     "attackBonus": 1.2,
+     "grade": "고대",
+     "valid": true,
+     "tooltip": " <FONT COLOR='#FFD200'>월섬각</FONT> 피해 44.00% 증가<BR><BR><FONT COLOR='#A9D0F5'>추가 효과</FONT><BR>기본 공격력 1.20% 증가",
+     "tradeAble": true
+    },
+    {
+     "name": "<P ALIGN='CENTER'><FONT COLOR='#E3C7A1'>10레벨 광휘의 보석</FONT></P>",
+     "level": 10,
+     "type": "damage",
+     "skill": "방천격",
+     "attackBonus": 1.2,
+     "grade": "고대",
+     "valid": true,
+     "tooltip": " <FONT COLOR='#FFD200'>방천격</FONT> 피해 44.00% 증가<BR><BR><FONT COLOR='#A9D0F5'>추가 효과</FONT><BR>기본 공격력 1.20% 증가",
+     "tradeAble": true
+    },
+    {
+     "name": "<P ALIGN='CENTER'><FONT COLOR='#E3C7A1'>10레벨 광휘의 보석</FONT></P>",
+     "level": 10,
+     "type": "cooldown",
+     "skill": "격호각",
+     "attackBonus": 1.2,
+     "grade": "고대",
+     "valid": true,
+     "tooltip": " <FONT COLOR='#FFD200'>격호각</FONT> 재사용 대기시간 24.00% 감소<BR><BR><FONT COLOR='#A9D0F5'>추가 효과</FONT><BR>기본 공격력 1.20% 증가",
+     "tradeAble": true
+    },
+    {
+     "name": "<P ALIGN='CENTER'><FONT COLOR='#E3C7A1'>10레벨 광휘의 보석</FONT></P>",
+     "level": 10,
+     "type": "cooldown",
+     "skill": "붕천퇴",
+     "attackBonus": 1.2,
+     "grade": "고대",
+     "valid": true,
+     "tooltip": " <FONT COLOR='#FFD200'>붕천퇴</FONT> 재사용 대기시간 24.00% 감소<BR><BR><FONT COLOR='#A9D0F5'>추가 효과</FONT><BR>기본 공격력 1.20% 증가",
+     "tradeAble": true
+    },
+    {
+     "name": "<P ALIGN='CENTER'><FONT COLOR='#E3C7A1'>10레벨 광휘의 보석</FONT></P>",
+     "level": 10,
+     "type": "cooldown",
+     "skill": "번개의 속삭임",
+     "attackBonus": 1.2,
+     "grade": "고대",
+     "valid": true,
+     "tooltip": " <FONT COLOR='#FFD200'>번개의 속삭임</FONT> 재사용 대기시간 24.00% 감소<BR><BR><FONT COLOR='#A9D0F5'>추가 효과</FONT><BR>기본 공격력 1.20% 증가",
+     "tradeAble": true
+    },
+    {
+     "name": "<P ALIGN='CENTER'><FONT COLOR='#E3C7A1'>10레벨 광휘의 보석</FONT></P>",
+     "level": 10,
+     "type": "cooldown",
+     "skill": "잠룡승천축",
+     "attackBonus": 1.2,
+     "grade": "고대",
+     "valid": true,
+     "tooltip": " <FONT COLOR='#FFD200'>잠룡승천축</FONT> 재사용 대기시간 24.00% 감소<BR><BR><FONT COLOR='#A9D0F5'>추가 효과</FONT><BR>기본 공격력 1.20% 증가",
+     "tradeAble": true
+    },
+    {
+     "name": "<P ALIGN='CENTER'><FONT COLOR='#E3C7A1'>10레벨 광휘의 보석</FONT></P>",
+     "level": 10,
+     "type": "cooldown",
+     "skill": "월섬각",
+     "attackBonus": 1.2,
+     "grade": "고대",
+     "valid": true,
+     "tooltip": " <FONT COLOR='#FFD200'>월섬각</FONT> 재사용 대기시간 24.00% 감소<BR><BR><FONT COLOR='#A9D0F5'>추가 효과</FONT><BR>기본 공격력 1.20% 증가",
+     "tradeAble": true
+    },
+    {
+     "name": "<P ALIGN='CENTER'><FONT COLOR='#E3C7A1'>10레벨 광휘의 보석</FONT></P>",
+     "level": 10,
+     "type": "cooldown",
+     "skill": "방천격",
+     "attackBonus": 1.2,
+     "grade": "고대",
+     "valid": true,
+     "tooltip": " <FONT COLOR='#FFD200'>방천격</FONT> 재사용 대기시간 24.00% 감소<BR><BR><FONT COLOR='#A9D0F5'>추가 효과</FONT><BR>기본 공격력 1.20% 증가",
+     "tradeAble": true
+    }
+   ],
+   "attackBonus": 13.199999999999998
+  },
+  "card": "세 15각 + 라제10각",
+  "arkGrid": {
+   "gemEffects": [
+    {
+     "name": "공격력",
+     "level": 47,
+     "effect": 1.72
+    },
+    {
+     "name": "추가 피해",
+     "level": 62,
+     "effect": 5.01
+    },
+    {
+     "name": "보스 피해",
+     "level": 34,
+     "effect": 2.83
+    },
+    {
+     "name": "아군 피해 강화",
+     "level": 18,
+     "effect": 0.94
+    },
+    {
+     "name": "아군 공격 강화",
+     "level": 5,
+     "effect": 0.65
+    },
+    {
+     "name": "낙인력",
+     "level": 16,
+     "effect": 2.66
+    }
+   ],
+   "core": [
+    {
+     "name": "질서의 해 코어 : 광파섬",
+     "grade": "고대",
+     "point": 19,
+     "tooltip": "<FONT color='#FFD200'>[10P]</FONT> 오의 스킬의 피해량이 <FONT COLOR='#99ff99'>2.0%</FONT> 증가한다.<br><FONT color='#FFD200'>[14P]</FONT> <FONT COLOR='#bf9ef6'>'운명'</FONT> 발동 시 <FONT COLOR='#ffff99'>15.0</FONT>초 동안 <FONT COLOR='#bf9ef6'>'운명: 광파섬'</FONT> 버프가 <FONT COLOR='#ffff99'>7</FONT>중첩 부여된다.<BR><FONT COLOR='#bf9ef6'>'운명: 광파섬'</FONT> : 오의 스킬 사용 시 소모되며, 중첩 당 공격속도 및 이동속도가 <FONT COLOR='#99ff99'>4.0%</FONT> 증가하고, 중첩 수와 관계없이 효과의 지속 시간동안 오의 스킬의 피해량이 <FONT COLOR='#99ff99'>9.0%</FONT> 증가한다.<br><FONT color='#FFD200'>[17P]</FONT> <FONT COLOR='#bf9ef6'>'운명: 광파섬'</FONT> 효과의 피해 증가량을 <FONT COLOR='#99ff99'>13.0%</FONT> 변경한다.<br><FONT color='#FFD200'>[18P]</FONT> 오의 스킬이 치명타로 적중 시 적에게 주는 피해가 <FONT COLOR='#99ff99'>0.26%</FONT> 증가한다.<br><FONT color='#FFD200'>[19P]</FONT> 오의 스킬이 치명타로 적중 시 적에게 주는 피해가 <FONT COLOR='#99ff99'>0.26%</FONT> 증가한다.<br><FONT color='#FFD200'>[20P]</FONT> 오의 스킬이 치명타로 적중 시 적에게 주는 피해가 <FONT COLOR='#99ff99'>0.26%</FONT> 증가한다.",
+     "gem": [
+      {
+       "name": "질서의 젬 : 안정",
+       "requiredWillpower": 3,
+       "orderChaosPoint": 5,
+       "effects": [
+        {
+         "name": "공격력",
+         "level": 1,
+         "value": "+0.03%"
+        },
+        {
+         "name": "추가 피해",
+         "level": 4,
+         "value": "+0.32%"
+        }
+       ]
+      },
+      {
+       "name": "질서의 젬 : 안정",
+       "requiredWillpower": 4,
+       "orderChaosPoint": 5,
+       "effects": [
+        {
+         "name": "추가 피해",
+         "level": 4,
+         "value": "+0.32%"
+        },
+        {
+         "name": "공격력",
+         "level": 1,
+         "value": "+0.03%"
+        }
+       ]
+      },
+      {
+       "name": "질서의 젬 : 안정",
+       "requiredWillpower": 5,
+       "orderChaosPoint": 5,
+       "effects": [
+        {
+         "name": "공격력",
+         "level": 3,
+         "value": "+0.11%"
+        },
+        {
+         "name": "추가 피해",
+         "level": 5,
+         "value": "+0.40%"
+        }
+       ]
+      },
+      {
+       "name": "질서의 젬 : 견고",
+       "requiredWillpower": 5,
+       "orderChaosPoint": 4,
+       "effects": [
+        {
+         "name": "보스 피해",
+         "level": 5,
+         "value": "+0.41%"
+        },
+        {
+         "name": "공격력",
+         "level": 5,
+         "value": "+0.18%"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "name": "질서의 달 코어 : 풍뢰보",
+     "grade": "고대",
+     "point": 19,
+     "tooltip": "<FONT color='#FFD200'>[10P]</FONT> 오의 스킬의 피해량이 <FONT COLOR='#99ff99'>2.0%</FONT> 증가한다.<br><FONT color='#FFD200'>[14P]</FONT> 번개의 속삭임 사용 시 <FONT COLOR='#bf9ef6'>'운명'</FONT>이 발동한다.<br><FONT color='#FFD200'>[17P]</FONT> 오의 : 풍신초래의 피해량이 <FONT COLOR='#99ff99'>9.0%</FONT> 증가한다.<br><FONT color='#FFD200'>[18P]</FONT> 오의 스킬의 치명타 피해량이 <FONT COLOR='#99ff99'>0.55%</FONT> 증가한다.<br><FONT color='#FFD200'>[19P]</FONT> 오의 스킬의 치명타 피해량이 <FONT COLOR='#99ff99'>0.55%</FONT> 증가한다.<br><FONT color='#FFD200'>[20P]</FONT> 오의 스킬의 치명타 피해량이 <FONT COLOR='#99ff99'>0.55%</FONT> 증가한다.",
+     "gem": [
+      {
+       "name": "질서의 젬 : 안정",
+       "requiredWillpower": 3,
+       "orderChaosPoint": 5,
+       "effects": [
+        {
+         "name": "추가 피해",
+         "level": 4,
+         "value": "+0.32%"
+        },
+        {
+         "name": "아군 피해 강화",
+         "level": 4,
+         "value": "+0.21%"
+        }
+       ]
+      },
+      {
+       "name": "질서의 젬 : 안정",
+       "requiredWillpower": 4,
+       "orderChaosPoint": 4,
+       "effects": [
+        {
+         "name": "추가 피해",
+         "level": 5,
+         "value": "+0.40%"
+        },
+        {
+         "name": "공격력",
+         "level": 4,
+         "value": "+0.14%"
+        }
+       ]
+      },
+      {
+       "name": "질서의 젬 : 견고",
+       "requiredWillpower": 4,
+       "orderChaosPoint": 5,
+       "effects": [
+        {
+         "name": "아군 공격 강화",
+         "level": 1,
+         "value": "+0.13%"
+        },
+        {
+         "name": "공격력",
+         "level": 5,
+         "value": "+0.18%"
+        }
+       ]
+      },
+      {
+       "name": "질서의 젬 : 견고",
+       "requiredWillpower": 4,
+       "orderChaosPoint": 5,
+       "effects": [
+        {
+         "name": "보스 피해",
+         "level": 4,
+         "value": "+0.33%"
+        },
+        {
+         "name": "공격력",
+         "level": 2,
+         "value": "+0.07%"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "name": "질서의 별 코어 : 신왕화신",
+     "grade": "고대",
+     "point": 20,
+     "tooltip": "<FONT color='#FFD200'>[10P]</FONT> 오의 : 풍신초래의 피해량이 <FONT COLOR='#99ff99'>6.0%</FONT> 증가한다.<br><FONT color='#FFD200'>[14P]</FONT> 오의 : 호왕출현의 피해량이 <FONT COLOR='#99ff99'>8.0%</FONT> 증가한다.<br><FONT color='#FFD200'>[17P]</FONT> 오의 : 풍신초래의 피해량이 <FONT COLOR='#99ff99'>13.0%</FONT> 증가한다.<br><FONT color='#FFD200'>[18P]</FONT> 오의 스킬의 피해량이 <FONT COLOR='#99ff99'>0.22%</FONT> 증가한다.<br><FONT color='#FFD200'>[19P]</FONT> 오의 스킬의 피해량이 <FONT COLOR='#99ff99'>0.22%</FONT> 증가한다.<br><FONT color='#FFD200'>[20P]</FONT> 오의 스킬의 피해량이 <FONT COLOR='#99ff99'>0.22%</FONT> 증가한다.",
+     "gem": [
+      {
+       "name": "질서의 젬 : 안정",
+       "requiredWillpower": 3,
+       "orderChaosPoint": 5,
+       "effects": [
+        {
+         "name": "아군 피해 강화",
+         "level": 3,
+         "value": "+0.15%"
+        },
+        {
+         "name": "공격력",
+         "level": 5,
+         "value": "+0.18%"
+        }
+       ]
+      },
+      {
+       "name": "질서의 젬 : 안정",
+       "requiredWillpower": 3,
+       "orderChaosPoint": 5,
+       "effects": [
+        {
+         "name": "공격력",
+         "level": 3,
+         "value": "+0.11%"
+        },
+        {
+         "name": "추가 피해",
+         "level": 5,
+         "value": "+0.40%"
+        }
+       ]
+      },
+      {
+       "name": "질서의 젬 : 안정",
+       "requiredWillpower": 4,
+       "orderChaosPoint": 5,
+       "effects": [
+        {
+         "name": "낙인력",
+         "level": 4,
+         "value": "+0.66%"
+        },
+        {
+         "name": "추가 피해",
+         "level": 5,
+         "value": "+0.40%"
+        }
+       ]
+      },
+      {
+       "name": "질서의 젬 : 안정",
+       "requiredWillpower": 5,
+       "orderChaosPoint": 5,
+       "effects": [
+        {
+         "name": "추가 피해",
+         "level": 5,
+         "value": "+0.40%"
+        },
+        {
+         "name": "공격력",
+         "level": 2,
+         "value": "+0.07%"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "name": "혼돈의 해 코어 : 현란한 공격",
+     "grade": "고대",
+     "point": 20,
+     "tooltip": "<FONT color='#FFD200'>[10P]</FONT> 치명타 시 적에게 주는 피해가 <FONT COLOR='#99ff99'>0.55%</FONT> 증가한다. <br><FONT color='#FFD200'>[14P]</FONT> 적에게 주는 피해가 <FONT COLOR='#99ff99'>0.50%</FONT> 증가한다. <br><FONT color='#FFD200'>[17P]</FONT> 적에게 주는 피해가 <FONT COLOR='#99ff99'>1.50%</FONT> 추가로 증가하고, 치명타 시 적에게 주는 피해가 <FONT COLOR='#99ff99'>1.10%</FONT> 추가로 증가한다. <br><FONT color='#FFD200'>[18P]</FONT> 적에게 주는 피해가 <FONT COLOR='#99ff99'>0.16%</FONT> 증가한다. <br><FONT color='#FFD200'>[19P]</FONT> 적에게 주는 피해가 <FONT COLOR='#99ff99'>0.16%</FONT> 증가한다. <br><FONT color='#FFD200'>[20P]</FONT> 적에게 주는 피해가 <FONT COLOR='#99ff99'>0.16%</FONT> 증가한다. ",
+     "gem": [
+      {
+       "name": "혼돈의 젬 : 침식",
+       "requiredWillpower": 4,
+       "orderChaosPoint": 5,
+       "effects": [
+        {
+         "name": "추가 피해",
+         "level": 4,
+         "value": "+0.32%"
+        },
+        {
+         "name": "아군 피해 강화",
+         "level": 1,
+         "value": "+0.05%"
+        }
+       ]
+      },
+      {
+       "name": "혼돈의 젬 : 침식",
+       "requiredWillpower": 4,
+       "orderChaosPoint": 5,
+       "effects": [
+        {
+         "name": "추가 피해",
+         "level": 4,
+         "value": "+0.32%"
+        },
+        {
+         "name": "아군 피해 강화",
+         "level": 4,
+         "value": "+0.21%"
+        }
+       ]
+      },
+      {
+       "name": "혼돈의 젬 : 왜곡",
+       "requiredWillpower": 5,
+       "orderChaosPoint": 5,
+       "effects": [
+        {
+         "name": "아군 피해 강화",
+         "level": 3,
+         "value": "+0.15%"
+        },
+        {
+         "name": "보스 피해",
+         "level": 4,
+         "value": "+0.33%"
+        }
+       ]
+      },
+      {
+       "name": "혼돈의 젬 : 왜곡",
+       "requiredWillpower": 4,
+       "orderChaosPoint": 5,
+       "effects": [
+        {
+         "name": "보스 피해",
+         "level": 5,
+         "value": "+0.41%"
+        },
+        {
+         "name": "공격력",
+         "level": 3,
+         "value": "+0.11%"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "name": "혼돈의 달 코어 : 불타는 일격",
+     "grade": "고대",
+     "point": 20,
+     "tooltip": "<FONT color='#FFD200'>[10P]</FONT> 보스 이상 적에게 공격 적중 시 <FONT COLOR='#ffff99'>6.0</FONT>초 간 화상 상태로 만들어 피해를 입힌다. <br><FONT color='#FFD200'>[14P]</FONT> 보스 이상 적에게 주는 피해가 <FONT COLOR='#99ff99'>0.50%</FONT> 증가한다.<br><FONT color='#FFD200'>[17P]</FONT> 보스 이상 적에게 주는 피해가 <FONT COLOR='#99ff99'>2.00%</FONT> 추가로 증가하고, 화상의 피해량이 <FONT COLOR='#99ff99'>150%</FONT> 증가한다.<br><FONT color='#FFD200'>[18P]</FONT> 보스 이상 적에게 주는 피해가 <FONT COLOR='#99ff99'>0.16%</FONT> 증가한다.<br><FONT color='#FFD200'>[19P]</FONT> 보스 이상 적에게 주는 피해가 <FONT COLOR='#99ff99'>0.16%</FONT> 증가한다.<br><FONT color='#FFD200'>[20P]</FONT> 보스 이상 적에게 주는 피해가 <FONT COLOR='#99ff99'>0.16%</FONT> 증가한다.",
+     "gem": [
+      {
+       "name": "혼돈의 젬 : 침식",
+       "requiredWillpower": 3,
+       "orderChaosPoint": 5,
+       "effects": [
+        {
+         "name": "아군 피해 강화",
+         "level": 3,
+         "value": "+0.15%"
+        },
+        {
+         "name": "추가 피해",
+         "level": 4,
+         "value": "+0.32%"
+        }
+       ]
+      },
+      {
+       "name": "혼돈의 젬 : 침식",
+       "requiredWillpower": 4,
+       "orderChaosPoint": 5,
+       "effects": [
+        {
+         "name": "낙인력",
+         "level": 5,
+         "value": "+0.83%"
+        },
+        {
+         "name": "추가 피해",
+         "level": 5,
+         "value": "+0.40%"
+        }
+       ]
+      },
+      {
+       "name": "혼돈의 젬 : 왜곡",
+       "requiredWillpower": 4,
+       "orderChaosPoint": 5,
+       "effects": [
+        {
+         "name": "보스 피해",
+         "level": 4,
+         "value": "+0.33%"
+        },
+        {
+         "name": "아군 공격 강화",
+         "level": 4,
+         "value": "+0.52%"
+        }
+       ]
+      },
+      {
+       "name": "혼돈의 젬 : 왜곡",
+       "requiredWillpower": 6,
+       "orderChaosPoint": 5,
+       "effects": [
+        {
+         "name": "공격력",
+         "level": 5,
+         "value": "+0.18%"
+        },
+        {
+         "name": "보스 피해",
+         "level": 3,
+         "value": "+0.25%"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "name": "혼돈의 별 코어 : 공격",
+     "grade": "고대",
+     "point": 19,
+     "tooltip": "<FONT color='#FFD200'>[10P]</FONT> 공격력이 <FONT COLOR='#99ff99'>900</FONT> 증가한다.<br><FONT color='#FFD200'>[14P]</FONT> 공격력이 <FONT COLOR='#99ff99'>0.55%</FONT> 증가한다.<br><FONT color='#FFD200'>[17P]</FONT> 공격력이 <FONT COLOR='#99ff99'>1.65%</FONT> 증가하고, 추가로 <FONT COLOR='#99ff99'>2700</FONT> 증가한다.<br><FONT color='#FFD200'>[18P]</FONT> 공격력이 <FONT COLOR='#99ff99'>0.16%</FONT> 증가한다.<br><FONT color='#FFD200'>[19P]</FONT> 공격력이 <FONT COLOR='#99ff99'>0.16%</FONT> 증가한다.<br><FONT color='#FFD200'>[20P]</FONT> 공격력이 <FONT COLOR='#99ff99'>0.16%</FONT> 증가한다.",
+     "gem": [
+      {
+       "name": "혼돈의 젬 : 침식",
+       "requiredWillpower": 3,
+       "orderChaosPoint": 5,
+       "effects": [
+        {
+         "name": "낙인력",
+         "level": 3,
+         "value": "+0.50%"
+        },
+        {
+         "name": "추가 피해",
+         "level": 4,
+         "value": "+0.32%"
+        }
+       ]
+      },
+      {
+       "name": "혼돈의 젬 : 왜곡",
+       "requiredWillpower": 4,
+       "orderChaosPoint": 5,
+       "effects": [
+        {
+         "name": "보스 피해",
+         "level": 4,
+         "value": "+0.33%"
+        },
+        {
+         "name": "공격력",
+         "level": 4,
+         "value": "+0.14%"
+        }
+       ]
+      },
+      {
+       "name": "혼돈의 젬 : 왜곡",
+       "requiredWillpower": 5,
+       "orderChaosPoint": 4,
+       "effects": [
+        {
+         "name": "보스 피해",
+         "level": 5,
+         "value": "+0.41%"
+        },
+        {
+         "name": "공격력",
+         "level": 4,
+         "value": "+0.14%"
+        }
+       ]
+      },
+      {
+       "name": "혼돈의 젬 : 침식",
+       "requiredWillpower": 3,
+       "orderChaosPoint": 5,
+       "effects": [
+        {
+         "name": "낙인력",
+         "level": 4,
+         "value": "+0.66%"
+        },
+        {
+         "name": "추가 피해",
+         "level": 4,
+         "value": "+0.32%"
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  "stats": {
+   "critical": 526,
+   "special": 735,
+   "haste": 1127,
+   "suppress": 79,
+   "patience": 71,
+   "expert": 75,
+   "combatPower": 6679.87,
+   "attack": 287707,
+   "powerIndex": 2477,
+   "powerIndex_combat": 2477
+  },
+  "baseEffect": {
+   "petDamage": 1,
+   "petStat": 1,
+   "petHpEffect": 5,
+   "petHpPatrol": 2,
+   "dinner": 0,
+   "isAzena": true
+  },
+  "profile": {
+   "class": "스트라이커",
+   "secondClass": "오의난무",
+   "supportCheck": false,
+   "level": 70,
+   "itemLevel": 1805
+  },
+  "skills": [
+   {
+    "name": "월섬각",
+    "level": 14,
+    "iscounter": false,
+    "destructrion": 0,
+    "paralyzation": "중상",
+    "rune": {
+     "name": "질풍",
+     "tooltip": "스킬 시전 속도가 12% 증가",
+     "grade": "영웅"
+    },
+    "tripods": [
+     {
+      "name": "엘리멘탈 갈취",
+      "tooltip": "공격 적중 시 엘리멘탈 게이지 획득량이 75.0% 증가한다.",
+      "slot": 3
+     },
+     {
+      "name": "확섬각",
+      "tooltip": "모든 공격 범위가 30.0% 증가하고 빠르게 발차기 하는 타격의 횟수가 100.0% 증가한다.",
+      "slot": 2
+     },
+     {
+      "name": "만월각",
+      "tooltip": "일반 조작으로 변경된다. 전방으로 날카롭게 돌진 이후 즉시 돌면서 마무리 타격을 가한다. 마무리 타격이 주는 피해가 341.0% 증가한다.",
+      "slot": 2
+     }
+    ],
+    "sort": 0,
+    "type": "일반",
+    "direction": "백",
+    "coolDown": 22,
+    "isMana": true,
+    "manaCost": 495
+   },
+   {
+    "name": "격호각",
+    "level": 14,
+    "iscounter": false,
+    "destructrion": 0,
+    "paralyzation": "중",
+    "rune": {
+     "name": "질풍",
+     "tooltip": "스킬 시전 속도가 12% 증가",
+     "grade": "영웅"
+    },
+    "tripods": [
+     {
+      "name": "급소 노출",
+      "tooltip": "공격 적중 시 대상이 자신 및 파티원에게 받는 치명타 저항률이 8.0초간 10.0% 감소한다.",
+      "slot": 2
+     },
+     {
+      "name": "집중 타격",
+      "tooltip": "즉시 몸을 회전하며 전방에 강력한 발차기를 날려 적에게 주는 피해가 60.0% 증가한다.",
+      "slot": 3
+     },
+     {
+      "name": "호왕아",
+      "tooltip": "백호의 기운을 획득하여 적에게 주는 치명타 피해량이 230.0% 증가한다. ",
+      "slot": 2
+     }
+    ],
+    "sort": 0,
+    "type": "콤보",
+    "direction": "백",
+    "coolDown": 16,
+    "isMana": true,
+    "manaCost": 412
+   },
+   {
+    "name": "잠룡승천축",
+    "level": 14,
+    "iscounter": false,
+    "destructrion": 0,
+    "paralyzation": null,
+    "rune": {
+     "name": "광분",
+     "tooltip": "스킬 사용 시 일정 확률로 6초 동안 공격 속도, 이동 속도 16% 증가 ",
+     "grade": "전설"
+    },
+    "tripods": [
+     {
+      "name": "나선각",
+      "tooltip": "회전 속도를 끌어 올려 돌진 공격의 공격범위가 10.0%증가, 공격속도가 18.0% 증가한다.",
+      "slot": 1
+     },
+     {
+      "name": "빠른 준비",
+      "tooltip": "재사용 대기시간이 7.0초 감소한다.",
+      "slot": 1
+     },
+     {
+      "name": "낙엽 쓸기",
+      "tooltip": "콤보 공격이 윈드밀로 변경되어, 360도의 넓은 범위를 공격하며 적중된 적을 넘어뜨린다. 돌진 도중 윈드밀을 사용할 수 있다.",
+      "slot": 1
+     }
+    ],
+    "sort": 0,
+    "type": "콤보",
+    "direction": "백",
+    "coolDown": 16,
+    "isMana": true,
+    "manaCost": 412
+   },
+   {
+    "name": "번개의 속삭임",
+    "level": 10,
+    "iscounter": false,
+    "destructrion": 1,
+    "paralyzation": null,
+    "rune": {
+     "name": "풍요",
+     "tooltip": "스킬 적중 시 아이덴티티 게이지 획득량 40% 증가",
+     "grade": "전설"
+    },
+    "tripods": [
+     {
+      "name": "넓은 타격",
+      "tooltip": "공격 범위가 20.0% 증가한다.",
+      "slot": 2
+     },
+     {
+      "name": "번개의 축복",
+      "tooltip": "스킬 시전 시 8.0초간 24.0m 내 자신 및 파티원의 공격속도가 8.0% 증가한다.",
+      "slot": 1
+     },
+     {
+      "name": "약육강식",
+      "tooltip": "시드 이하의 적에게 주는 피해가 120.0% 증가한다.",
+      "slot": 2
+     }
+    ],
+    "sort": 0,
+    "type": "일반",
+    "direction": "백",
+    "coolDown": 25,
+    "isMana": true,
+    "manaCost": 533
+   },
+   {
+    "name": "방천격",
+    "level": 14,
+    "iscounter": false,
+    "destructrion": 0,
+    "paralyzation": "중",
+    "rune": {
+     "name": "질풍",
+     "tooltip": "스킬 시전 속도가 14% 증가",
+     "grade": "전설"
+    },
+    "tripods": [
+     {
+      "name": "약점 포착",
+      "tooltip": "피격이상 면역인 적에게 공격 적중 시 주는 피해가 60.0% 증가한다.",
+      "slot": 2
+     },
+     {
+      "name": "강렬한 전격",
+      "tooltip": "[뇌] 속성으로 변경되어 적에게 주는 치명타 피해가 180.0% 증가하고, 마지막 공격에 적중된 적을 4.0초 동안 전격 상태로 만들어 매 초 마다 79,607의 피해를 준다.",
+      "slot": 3
+     },
+     {
+      "name": "남다른 격",
+      "tooltip": "일반 조작으로 변경된다. 자세를 낮추고 발끝에 기를 끌어모은 뒤 전방으로 점프하며 극강의 발차기를 1회 날려 적에게 주는 피해가 205.0% 증가하고 주변 적을 넘어뜨린다.",
+      "slot": 1
+     }
+    ],
+    "sort": 0,
+    "type": "일반",
+    "direction": "백",
+    "coolDown": 25,
+    "isMana": true,
+    "manaCost": 533
+   },
+   {
+    "name": "오의 : 풍신초래",
+    "level": 14,
+    "iscounter": false,
+    "destructrion": 0,
+    "paralyzation": "상",
+    "rune": {
+     "name": "중독",
+     "tooltip": "스킬 적중 시 적을 6초간 '중독' 상태로 만듦",
+     "grade": "전설"
+    },
+    "tripods": [
+     {
+      "name": "번개 폭풍",
+      "tooltip": "[뇌] 속성으로 변경되고 번개 폭풍에 적중 시 매 타격마다 20.0% 확률로 적에게 기본 피해량의 160.0% 에 해당하는 추가 피해를 준다.",
+      "slot": 3
+     },
+     {
+      "name": "넓은 공격",
+      "tooltip": "공격 범위가 30.0% 증가한다.",
+      "slot": 2
+     },
+     {
+      "name": "휘몰아치는 폭풍",
+      "tooltip": "회오리 바람이 소멸될 때 강하게 흩어지면서 적에게 기본 스킬 피해의 94.8%에 해당하는 추가 피해를 주며 적중된 적을 날려버린다.",
+      "slot": 2
+     }
+    ],
+    "sort": 0,
+    "type": "홀딩",
+    "direction": "백",
+    "coolDown": 16,
+    "isMana": false,
+    "manaCost": 0
+   },
+   {
+    "name": "오의 : 뇌호격",
+    "level": 14,
+    "iscounter": false,
+    "destructrion": 2,
+    "paralyzation": "상",
+    "rune": {
+     "name": "질풍",
+     "tooltip": "스킬 시전 속도가 14% 증가",
+     "grade": "전설"
+    },
+    "tripods": [
+     {
+      "name": "행운의 버블",
+      "tooltip": "50.0% 확률로 엘리멘탈 버블 1개를 획득한다.",
+      "slot": 1
+     },
+     {
+      "name": "약점 포착",
+      "tooltip": "피격이상 면역인 적에게 공격 적중 시 주는 피해가 70.0% 증가한다.",
+      "slot": 1
+     },
+     {
+      "name": "연속 차기",
+      "tooltip": "스킬 사용 후 추가 키 입력 시 준비 동작 없이 마우스 방향으로 한 번 더 공격하여 기본 피해량의 105.0%에 해당하는 추가 피해를 입힌다.",
+      "slot": 2
+     }
+    ],
+    "sort": 0,
+    "type": "일반",
+    "direction": "백",
+    "coolDown": 18,
+    "isMana": false,
+    "manaCost": 0
+   }
+  ],
+  "gemOnlySkills": [
+   {
+    "name": "붕천퇴",
+    "level": 1
+   },
+   {
+    "name": "뇌명각",
+    "level": 1
+   }
+  ],
+  "hyperSkill": {
+   "name": "전진패도격",
+   "type": "일반",
+   "direction": "백",
+   "destructrion": 1,
+   "paralyzation": "상",
+   "manaCost": 747
+  }
+ },
+ "expected": {
+  "score": 3856.8495309703303,
+  "factors": {
+   "공격력": 287707,
+   "진피": 1.85,
+   "깨달음": 1.42,
+   "도약": 1.15,
+   "추피": 1.3761,
+   "적주피": 2.123933137381629,
+   "보석딜증": 1.0857142857142856,
+   "보석쿨감": 1.2755102040816326,
+   "스탯": 1.7776,
+   "에스더": 1.01,
+   "보주": 1.010691
+  },
+  "braceletTotal": 1.1420675241292686,
+  "attack": {
+   "기본_공격력": 264433,
+   "공격력": 287707,
+   "기본_공격력_전투력": 264811.5296579102,
+   "공격력_전투력": 288113,
+   "공격력_팔찌제외": 287707
+  },
+  "presetTag": "111 난무",
+  "presetFallback": false,
+  "gemEfficiency": {
+   "전체": {
+    "efficiency": 11.01,
+    "optionEfficiency": 8.45,
+    "pointEfficiency": 2.36,
+    "lines": [
+     {
+      "name": "공격력",
+      "level": 47,
+      "efficiency": 1.62
+     },
+     {
+      "name": "추가 피해",
+      "level": 62,
+      "efficiency": 3.77
+     },
+     {
+      "name": "보스 피해",
+      "level": 34,
+      "efficiency": 2.82
+     },
+     {
+      "name": "아군 피해 강화",
+      "level": 18,
+      "efficiency": 0
+     },
+     {
+      "name": "아군 공격 강화",
+      "level": 5,
+      "efficiency": 0
+     },
+     {
+      "name": "낙인력",
+      "level": 16,
+      "efficiency": 0
+     }
+    ]
+   },
+   "질서": {
+    "efficiency": 5.2,
+    "optionEfficiency": 4.07,
+    "pointEfficiency": 1.08,
+    "lines": [
+     {
+      "name": "공격력",
+      "level": 31,
+      "efficiency": 1.07
+     },
+     {
+      "name": "추가 피해",
+      "level": 37,
+      "efficiency": 2.22
+     },
+     {
+      "name": "보스 피해",
+      "level": 9,
+      "efficiency": 0.73
+     },
+     {
+      "name": "아군 피해 강화",
+      "level": 7,
+      "efficiency": 0
+     },
+     {
+      "name": "아군 공격 강화",
+      "level": 1,
+      "efficiency": 0
+     },
+     {
+      "name": "낙인력",
+      "level": 4,
+      "efficiency": 0
+     }
+    ]
+   },
+   "혼돈": {
+    "efficiency": 5.47,
+    "optionEfficiency": 4.15,
+    "pointEfficiency": 1.26,
+    "lines": [
+     {
+      "name": "공격력",
+      "level": 16,
+      "efficiency": 0.55
+     },
+     {
+      "name": "추가 피해",
+      "level": 25,
+      "efficiency": 1.48
+     },
+     {
+      "name": "보스 피해",
+      "level": 25,
+      "efficiency": 2.06
+     },
+     {
+      "name": "아군 피해 강화",
+      "level": 11,
+      "efficiency": 0
+     },
+     {
+      "name": "아군 공격 강화",
+      "level": 4,
+      "efficiency": 0
+     },
+     {
+      "name": "낙인력",
+      "level": 12,
+      "efficiency": 0
+     }
+    ]
+   }
+  }
+ }
+}

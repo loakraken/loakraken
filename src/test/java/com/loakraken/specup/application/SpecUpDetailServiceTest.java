@@ -18,7 +18,7 @@ class SpecUpDetailServiceTest {
   @Test
   void 비용이_OK일_때만_내역_금액과_대조하고_다르면_다시_만든다() {
     var ok = SpecUpCost.gem(1_000_000, 400_000L, false);
-    assertThat(SpecUpDetailService.matches(ok, 620_000L)).isTrue();
+    assertThat(SpecUpDetailService.matches(ok, 600_000L)).isTrue();
     // 목록 계산과 내역 읽기 사이에 시세가 바뀐 경우.
     assertThat(SpecUpDetailService.matches(ok, 630_000L)).isFalse();
     assertThat(SpecUpDetailService.matches(ok, null)).isFalse();
@@ -37,7 +37,7 @@ class SpecUpDetailServiceTest {
     // 귀속 보석·빈 칸은 파는 줄이 없어 사는 값 그대로.
     assertThat(SpecUpDetailService.gemTotal(List.of(buy)))
         .isEqualTo(SpecUpCost.gem(1_000_000, 400_000L, true).amount());
-    // 판매 기대가가 더 크면 0(목록 비용과 같음).
+    // 파는 최저가가 더 크면 0(목록 비용과 같음).
     assertThat(
             SpecUpDetailService.gemTotal(
                 List.of(market("BUY", 100, 1, null), market("SELL", 500, 1, 475L))))
@@ -90,6 +90,7 @@ class SpecUpDetailServiceTest {
 
   private static SpecUpDetailService.Market market(
       String role, long price, int quantity, Long sale) {
-    return new SpecUpDetailService.Market(role, "보석", null, null, price, quantity, sale, null, AT);
+    return new SpecUpDetailService.Market(
+        role, "보석", null, null, price, quantity, sale, null, null, AT);
   }
 }

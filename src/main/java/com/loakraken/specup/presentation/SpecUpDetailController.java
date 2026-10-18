@@ -46,7 +46,7 @@ public class SpecUpDetailController {
       summary = "스펙업 후보 줄 상세(공식 호출 없음)",
       description =
           "스펙업 가이드 목록의 후보 하나를 자세히 줍니다. 목록과 같은 캐릭터 캐시·시세 캐시로 목록을 다시 만들어 찾으므로 candidate는 목록의 같은 id 줄과 같습니다. "
-              + "보석·각인서 후보는 market(사는 품목 BUY, 지금 보석 판매 기대가를 비용에서 뺐으면 SELL 줄도), 일반 재련 후보는 refine·materials·goldFee를 줍니다. "
+              + "보석·각인서 후보는 market(사는 품목 BUY, 지금 보석 최저가를 비용에서 뺐으면 SELL 줄도 — 보석 비용 = BUY price − SELL price, 판매 수수료를 넣은 실제 부담 = 비용 + SELL sellFeeGold), 일반 재련 후보는 refine·materials·goldFee를 줍니다. "
               + "재련 비용(cost.amount)은 materials의 반올림 전 금액 합 + goldFee를 올림한 값입니다. 표시 값(소수 둘째 자리)의 합을 올림한 값과 cost.amount의 차이는 1골드 이하입니다. "
               + "stats는 근거가 확인된 스탯만 담고(지금은 보석 기본 공격력 %), 없으면 빈 목록입니다. 해당 없는 칸은 null입니다. "
               + "요청이 많으면 429 CLIENT_RATE_LIMITED와 Retry-After(초)를 줍니다. "
@@ -194,7 +194,7 @@ public class SpecUpDetailController {
 
   public record SpecUpMarketResponse(
       @Schema(
-              description = "BUY(사는 품목) 또는 SELL(지금 보석, 판매 기대가를 비용에서 뺌). 문자열, 값이 늘 수 있음",
+              description = "BUY(사는 품목) 또는 SELL(지금 보석, 최저가를 비용에서 뺌). 문자열, 값이 늘 수 있음",
               example = "BUY")
           String role,
       @Schema(description = "공식 경매장·거래소 품목 이름", example = "8레벨 겁화의 보석") String itemName,
@@ -203,8 +203,15 @@ public class SpecUpDetailController {
       @Schema(description = "공식 등급 문자열(모르면 null)") @NullableResponse String grade,
       @Schema(description = "1개 즉시 구매 최저가(골드)", example = "412000") long price,
       @Schema(description = "필요한 개수(보석 1, 유물 각인서 5 × 올리는 레벨 수)", example = "1") int quantity,
-      @Schema(description = "SELL만: 판매 기대가 = 최저가 − 거래소 수수료 5%(1골드 미만 올림)") @NullableResponse
+      @Schema(description = "SELL만: 판매 기대가 = 최저가 − 거래소 수수료 5%(1골드 미만 올림). 비용 계산에는 쓰지 않음(참고 값)")
+          @NullableResponse
           Long expectedSalePrice,
+      @Schema(
+              description =
+                  "SELL만: 지금 보석을 팔 때 거래소 수수료(판매 금액의 5%, 1골드 미만 올림). 비용(cost.amount)에는 넣지 않으며, 실제 부담 = 비용 + 이 값",
+              example = "20000")
+          @NullableResponse
+          Long sellFeeGold,
       @Schema(description = "매물 수(보석만, 모르면 null)") @NullableResponse Long listedCount,
       @Schema(description = "시세 관측 시각") Instant observedAt) {
     static SpecUpMarketResponse from(SpecUpDetailService.Market market) {
@@ -216,6 +223,7 @@ public class SpecUpDetailController {
           market.price(),
           market.quantity(),
           market.expectedSalePrice(),
+          market.sellFeeGold(),
           market.listedCount(),
           market.observedAt());
     }

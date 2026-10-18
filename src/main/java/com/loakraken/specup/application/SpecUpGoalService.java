@@ -475,8 +475,8 @@ public class SpecUpGoalService {
   }
 
   /**
-   * 보석 한 단계 비용. 처음 단계는 스펙업 후보와 같다(다음 레벨 매입가 − 지금 보석 판매 기대가, 귀속이면 빼지 않음). 같은 칸 둘째 단계부터는 이번 레벨 매입가 −
-   * 직전 레벨 매입가다.
+   * 보석 한 단계 비용. 처음 단계는 스펙업 후보와 같다(다음 레벨 매입가 − 지금 보석 최저가, 귀속이면 빼지 않음). 같은 칸 둘째 단계부터는 이번 레벨 매입가 − 직전
+   * 레벨 매입가다.
    */
   private static SpecUpCost gemCost(
       Map<String, MarketAuctionService.GemCell> gems, Instant[] pricesAt, GemSlot gem, int next) {

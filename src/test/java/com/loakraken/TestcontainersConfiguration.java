@@ -12,8 +12,8 @@ import org.testcontainers.utility.DockerImageName;
 
 /**
  * 통합 테스트 공통 저장소. 컨테이너는 테스트 JVM마다 PostgreSQL·Valkey 하나씩만 띄운다 — 전에는 스프링 컨텍스트마다 새로 떠서 빌드 한 번에 60개 넘게
- * 떴다(#572). 컨텍스트마다 새 데이터베이스와 새 Valkey DB 번호를 연결 설정으로 넘겨, 전처럼 컨텍스트마다 빈 저장소에서 시작한다(컨텍스트끼리 데이터가
- * 섞이지 않음). 컨테이너는 테스트 JVM이 끝날 때 Testcontainers가 정리한다.
+ * 떴다(#572). 컨텍스트마다 새 데이터베이스와 새 Valkey DB 번호를 연결 설정으로 넘겨, 전처럼 컨텍스트마다 빈 저장소에서 시작한다(컨텍스트끼리 데이터가 섞이지
+ * 않음). 컨테이너는 테스트 JVM이 끝날 때 Testcontainers가 정리한다.
  */
 @TestConfiguration(proxyBeanMethods = false)
 public class TestcontainersConfiguration {

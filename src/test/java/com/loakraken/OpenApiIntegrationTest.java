@@ -25,6 +25,7 @@ import tools.jackson.databind.json.JsonMapper;
       "ranking.collectibles.enabled=true",
       "ranking.rosters.enabled=true",
       "ranking.guilds.enabled=true",
+      "ranking.guilds.list.enabled=true",
       "ranking.titles.enabled=true",
       "loakraken.features.auction-search=true"
     })

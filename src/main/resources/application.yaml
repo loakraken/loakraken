@@ -148,8 +148,11 @@ ranking:
     # 칭호 장착 확인 비율(#311): 웹 화면이 준비될 때까지 꺼짐.
     enabled: ${RANKING_TITLES_ENABLED:false}
   guilds:
-    # 길드 랭킹(#301): 웹 화면이 준비될 때까지 꺼짐.
+    # 캐릭터 길드 탭·인기 길드(#301·#529): 웹 화면이 준비될 때까지 꺼짐.
     enabled: ${RANKING_GUILDS_ENABLED:false}
+    list:
+      # 길드 랭킹 API(#581): 길드 탭·인기 길드와 따로 켠다. 평균 기준 정리(#580) 전까지 꺼짐.
+      enabled: ${RANKING_GUILDS_LIST_ENABLED:false}
 
 # 원정대 영수증(#174)은 계산 일치 원칙(사용자 지시 10-09) 검증 전까지 공개하지 않는다. 검증 서버에서만 켠다.
 receipt:

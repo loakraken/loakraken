@@ -35,7 +35,7 @@ import tools.jackson.databind.json.JsonMapper;
 @Import(TestcontainersConfiguration.class)
 @SpringBootTest(
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-    properties = "ranking.guilds.enabled=true")
+    properties = {"ranking.guilds.enabled=true", "ranking.guilds.list.enabled=true"})
 class GuildDetailIntegrationTest {
   private static final String SERVER = "탭서버";
   private static final String OTHER = "탭다른서버";

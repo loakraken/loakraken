@@ -46,7 +46,7 @@ public class GuildRankingController {
       summary = "길드 랭킹",
       description =
           "같은 서버·같은 길드 이름(공식 프로필 GuildName)의 관측 캐릭터를 묶은 순위입니다. activeDays 안에 프로필을 관측한 공개 캐릭터만 넣으므로 값은 실제 길드 전체가 아니라 확인한 길드원 기준입니다. "
-              + "sort: AVG(아이템 레벨 평균, 기본)·SUM(아이템 레벨 합)·CP_AVG(combatPowerAvgTop — 아이템 레벨 1750 이상 길드원 전투력 평균)·CP_SUM(combatPowerTotal — 전투력 총합, 전원). 그 값이 null인 길드(1750 이상 전투력 관측 0명, 또는 관측 0명)는 맨 뒤.확인한 길드원이 minMembers(5명) 미만인 길드는 빼고 excludedGuilds에 수를 줍니다. "
+              + "sort: AVG(아이템 레벨 평균, 기본)·SUM(아이템 레벨 합)·CP_AVG(combatPowerAvgTop — 아이템 레벨 1750 이상 길드원 전투력 평균)·CP_SUM(combatPowerTotal — 전투력 총합, 전원). 그 값이 null인 길드(1750 이상 전투력 관측 0명, 또는 관측 0명)는 맨 뒤이며 순위는 공동 마지막(같은 rank)입니다. 확인한 길드원이 minMembers(5명) 미만인 길드는 빼고 excludedGuilds에 수를 줍니다. "
               + "guild(이름 일부)를 주면 그 이름에 맞는 줄만 주고 rank는 전체 순위 그대로입니다(맞는 줄이 없으면 rows=[]). "
               + "처리정지 목록는 캐릭터만 빼고 길드는 빼지 않습니다. 값이 같으면(소수 둘째 자리) 같은 순위입니다. 모집단이 30 미만이면 sampleStatus=COLLECTING이지만 값·순위는 그대로 줍니다(참고값). "
               + "400 INVALID_REQUEST·STATS_INVALID_RANGE, 503 STATS_UNAVAILABLE")

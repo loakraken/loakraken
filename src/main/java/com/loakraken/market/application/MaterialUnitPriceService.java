@@ -70,11 +70,12 @@ public class MaterialUnitPriceService {
   static final int MAX_REQUEST_SEARCHES = 45;
 
   /**
-   * 재료 검색 중에도 캐릭터 검색 등 사용자 호출을 위해 공유 예산(분당 90)에 늘 남겨 두는 몫. 게이트는 '호출 뒤에도 이만큼 남는지'로 허가한다. 수집기·예열은 40을
-   * 남기고 멈추므로(분당 최대 50) 재료 검색은 그 위에서도 전체 70까지 쓸 수 있고, 그때도 20은 사용자 호출에 남는다. 재료 검색 자신의 상한(분당 36, 모든
-   * 클라이언트 합계)은 클라이언트 한도의 MATERIAL_SEARCH_ALL 버킷이 따로 센다(보안 점검 10-18, PM 판정).
+   * 재료 검색 중에도 캐릭터 검색 등 사용자 호출을 위해 공유 예산(분당 90)에 늘 남겨 두는 몫(회귀 점검표 B7의 사용자 경로 30회). 게이트는 '호출 뒤에도 이만큼
+   * 남는지'로 허가하므로 재료 검색은 호출 뒤 전체 사용이 60 이하일 때만 된다. 수집기·예열은 40을 남기고 멈추므로(분당 최대 50) 그 위에서도 재료 검색은 10회 더
+   * 할 수 있고, 그때도 30은 사용자 호출에 남는다. 재료 검색 자신의 상한(분당 36, 모든 클라이언트 합계)은 클라이언트 한도의 MATERIAL_SEARCH_ALL
+   * 버킷이 따로 센다(보안 점검 10-18, PM 판정).
    */
-  static final int CHARACTER_SEARCH_RESERVE = 20;
+  static final int CHARACTER_SEARCH_RESERVE = 30;
 
   /** 분류 전체 예열 스캔의 검색 조건(이름 없음, 등급순). */
   public static MarketSearch categorySearch(int category, int page) {
@@ -184,7 +185,7 @@ public class MaterialUnitPriceService {
    * 재료 시세 API. 예열 캐시에 있는 이름은 공식 호출 없이 답한다. 캐시에 없는 이름이 있으면 그 요청을 MATERIAL_PRICES 버킷에 <b>한 번</b> 매기고,
    * 검색은 요청당 MAX_REQUEST_SEARCHES번까지, 공식 호출마다 요청 클라이언트의 MATERIAL_SEARCH 버킷(분당 15, 공식 호출 한도 OFFICIAL과
    * 따로)에 매기고, 모든 클라이언트 합계 MATERIAL_SEARCH_ALL(분당 36)에도 매기며, 공유 예산에는 캐릭터 검색 몫
-   * CHARACTER_SEARCH_RESERVE(20)를 남긴다. 상한·클라이언트 버킷·공유 예산에 걸린 이름부터는 PRICE_UNAVAILABLE이다(429가 아님).
+   * CHARACTER_SEARCH_RESERVE(30)를 남긴다. 상한·클라이언트 버킷·공유 예산에 걸린 이름부터는 PRICE_UNAVAILABLE이다(429가 아님).
    */
   public List<UnitPrice> requestPrices(MaterialPriceBasis basis, List<String> names) {
     var scans = scans();

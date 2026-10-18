@@ -132,14 +132,14 @@ class MaterialUnitPriceServiceTest {
     var result = service.requestPrices(MaterialPriceBasis.RECENT_PRICE, names);
     verify(gate, times(1))
         .chargeClient(com.loakraken.common.lostark.ClientLimiter.Bucket.MATERIAL_PRICES);
-    // 공식 검색은 요청 클라이언트의 재료 검색 버킷(15)과 모든 클라이언트 합계 버킷(36)에 매기고, 공유 예산에는 캐릭터 검색 몫 20을 남긴다.
+    // 공식 검색은 요청 클라이언트의 재료 검색 버킷(15)과 모든 클라이언트 합계 버킷(36)에 매기고, 공유 예산에는 캐릭터 검색 몫 30을 남긴다.
     verify(gate)
         .withClientBucket(
             eq(MaterialUnitPriceService.CHARACTER_SEARCH_RESERVE),
             eq(com.loakraken.common.lostark.ClientLimiter.Bucket.MATERIAL_SEARCH),
             eq(com.loakraken.common.lostark.ClientLimiter.Bucket.MATERIAL_SEARCH_ALL),
             any());
-    assertThat(MaterialUnitPriceService.CHARACTER_SEARCH_RESERVE).isEqualTo(20);
+    assertThat(MaterialUnitPriceService.CHARACTER_SEARCH_RESERVE).isEqualTo(30);
     verify(markets, times(MaterialUnitPriceService.MAX_REQUEST_SEARCHES)).search(any(), any());
     assertThat(result).hasSize(25);
     // 15개는 세 분류를 다 봐서 NOT_FOUND, 16번째부터는 상한이라 보지 못함.

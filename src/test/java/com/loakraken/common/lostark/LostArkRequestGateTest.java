@@ -98,6 +98,72 @@ class LostArkRequestGateTest {
   }
 
   @Test
+  void 저장소가_기록을_잃어도_인스턴스_상한이_분당_예산을_지킨다() {
+    // 늘 허가하는 저장소(창이 계속 지워지는 경우) — 두 번째 상한만으로 90에서 막히고, 60초 뒤 다시 찬다.
+    var clock = new MutableClock();
+    var forgetful =
+        new GateStore() {
+          @Override
+          public Admission admit(int budget, int reserve) {
+            return Admission.ADMITTED;
+          }
+
+          @Override
+          public boolean available(int budget, int reserve) {
+            return true;
+          }
+
+          @Override
+          public void blockUntil(Instant until) {}
+        };
+    var gate =
+        new LostArkRequestGate(
+            clock,
+            new LostArkProperties(
+                URI.create("https://example.com"),
+                "test",
+                Duration.ofSeconds(3),
+                Duration.ofSeconds(5),
+                90,
+                1,
+                Duration.ofMinutes(5)),
+            metrics,
+            forgetful);
+    for (int i = 0; i < 90; i++) {
+      gate.acquire();
+      gate.release();
+    }
+    assertThatThrownBy(gate::acquire).isInstanceOf(BusinessException.class);
+    assertThat(gate.backgroundAvailable(0)).isFalse();
+    // 사용자 몫을 남기는 백그라운드도 같은 상한(90 − 몫)을 본다.
+    assertThat(gate.backgroundAvailable(30)).isFalse();
+    clock.now = clock.now.plusSeconds(60);
+    gate.acquire();
+    gate.release();
+    assertThat(gate.backgroundAvailable(30)).isTrue();
+  }
+
+  @Test
+  void 저장소가_거절하면_인스턴스_상한의_기록도_되돌린다() {
+    // 저장소가 대기(429 뒤)로 거절한 호출은 두 번째 상한에도 남지 않는다.
+    var clock = new MutableClock();
+    var gate = gate(clock, 2, 1);
+    var headers = new org.springframework.http.HttpHeaders();
+    headers.add("X-RateLimit-Remaining", "0");
+    headers.add("X-RateLimit-Reset", String.valueOf(clock.now.getEpochSecond() + 10));
+    gate.observe(headers, false);
+    for (int i = 0; i < 5; i++)
+      assertThatThrownBy(gate::acquire).isInstanceOf(BusinessException.class);
+    clock.now = clock.now.plusSeconds(11);
+    // 10초 대기가 끝나면(같은 60초 창 안) 예산 2를 그대로 쓴다 — 거절된 5번이 남아 있었다면 막혔을 것.
+    for (int i = 0; i < 2; i++) {
+      gate.acquire();
+      gate.release();
+    }
+    assertThatThrownBy(gate::acquire).isInstanceOf(BusinessException.class);
+  }
+
+  @Test
   void 공식_100회_한도보다_낮은_90회_예산에서_후속_호출을_차단한다() {
     var gate = gate(new MutableClock(), 90, 1);
     for (int i = 0; i < 90; i++) {

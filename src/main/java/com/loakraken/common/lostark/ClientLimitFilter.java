@@ -61,11 +61,11 @@ class ClientLimitFilter extends OncePerRequestFilter {
       run(botClient, request, response, chain);
       return;
     }
-    // 제외는 연결 상대(소켓)가 루프백이고 넘겨받은 주소가 없을 때만(같은 호스트의 점검·도구). 신뢰 프록시가 넘긴 주소는 사설·루프백이어도 그 주소로,
-    // 프록시가 주소 없이 보낸 요청은 프록시 주소 하나로 센다.
+    // 제외는 연결 상대(소켓)가 루프백이고 X-Forwarded-For가 아예 없을 때만(같은 호스트의 점검·도구). 신뢰 프록시가 넘긴 주소는 사설·루프백이어도 그
+    // 주소로, 프록시가 주소 없이 보낸 요청은 프록시 주소 하나로 센다.
     String address = request.getRemoteAddr();
     String peer = peerAddress(request);
-    if (limiter.exemptInternal() && loopback(peer) && peer.equals(address)) {
+    if (limiter.exemptInternal() && loopback(peer) && peer.equals(address) && !forwarded(request)) {
       limiter.unattributed();
       chain.doFilter(request, response);
       return;
@@ -114,6 +114,13 @@ class ClientLimitFilter extends OncePerRequestFilter {
     return request.getAttribute(PeerAddressValve.ATTRIBUTE) instanceof String peer
         ? peer
         : request.getRemoteAddr();
+  }
+
+  /** X-Forwarded-For가 (값과 관계없이) 붙어 왔는지. Tomcat에서는 밸브가 남긴 값, 밸브가 없으면 지금 헤더. */
+  static boolean forwarded(HttpServletRequest request) {
+    return request.getAttribute(PeerAddressValve.FORWARDED_ATTRIBUTE) instanceof Boolean flag
+        ? flag
+        : request.getHeader(PeerAddressValve.FORWARDED_HEADER) != null;
   }
 
   /** 루프백(127.0.0.0/8, ::1)만. 리터럴만 해석하고 DNS는 조회하지 않는다. 비었거나 주소가 아니면 false(센다). */

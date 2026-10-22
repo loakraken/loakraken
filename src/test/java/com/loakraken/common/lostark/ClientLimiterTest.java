@@ -350,21 +350,25 @@ class ClientLimiterTest {
     var limiter = limiter(new ClientLimitProperties(true, 1, 10, 1, 1, true, 2, 6, 20, 5, 5));
     var filter = new ClientLimitFilter(limiter);
     for (var forwarded : new String[] {"10.0.0.1", "127.0.0.1", "172.31.250.10"}) {
-      assertThat(proxied(filter, "172.31.250.10", forwarded).getStatus())
+      assertThat(proxied(filter, "172.31.250.10", forwarded, true).getStatus())
           .as(forwarded)
           .isEqualTo(200);
-      assertThat(proxied(filter, "172.31.250.10", forwarded).getStatus())
+      assertThat(proxied(filter, "172.31.250.10", forwarded, true).getStatus())
           .as(forwarded)
           .isEqualTo(429);
     }
     // 프록시가 주소 없이 보낸 요청(원격 주소 = 프록시)도 프록시 주소 하나로 센다 — 위 마지막 줄과 같은 칸이라 이미 막힘.
-    assertThat(proxied(filter, "172.31.250.10", "172.31.250.10").getStatus()).isEqualTo(429);
+    assertThat(proxied(filter, "172.31.250.10", "172.31.250.10", false).getStatus()).isEqualTo(429);
     // 같은 호스트(연결 상대 루프백, 넘겨받은 주소 없음)만 세지 않는다.
     for (int i = 0; i < 3; i++)
-      assertThat(proxied(filter, "127.0.0.1", "127.0.0.1").getStatus()).isEqualTo(200);
+      assertThat(proxied(filter, "127.0.0.1", "127.0.0.1", false).getStatus()).isEqualTo(200);
     // 루프백 프록시가 넘긴 주소는 센다(같은 호스트에서 X-Forwarded-For를 붙인 요청).
-    assertThat(proxied(filter, "127.0.0.1", "203.0.113.50").getStatus()).isEqualTo(200);
-    assertThat(proxied(filter, "127.0.0.1", "203.0.113.50").getStatus()).isEqualTo(429);
+    assertThat(proxied(filter, "127.0.0.1", "203.0.113.50", true).getStatus()).isEqualTo(200);
+    assertThat(proxied(filter, "127.0.0.1", "203.0.113.50", true).getStatus()).isEqualTo(429);
+    // 같은 호스트라도 X-Forwarded-For가 붙어 있으면(값이 루프백이어도) 센다 — 위에서 127.0.0.1 칸을 이미 써서 바로 429(제외면 200).
+    assertThat(proxied(filter, "127.0.0.1", "127.0.0.1", true).getStatus()).isEqualTo(429);
+    // 헤더가 없으면 같은 칸이 차 있어도 제외라 200.
+    assertThat(proxied(filter, "127.0.0.1", "127.0.0.1", false).getStatus()).isEqualTo(200);
     // 밸브가 없는 환경(서블릿 테스트)은 원격 주소를 연결 상대로 본다.
     assertThat(run(filter, "/api/v1/markets/tabs", "127.0.0.1", null).getStatus()).isEqualTo(200);
     assertThat(run(filter, "/api/v1/markets/tabs", "10.9.9.9", null).getStatus()).isEqualTo(200);
@@ -372,9 +376,10 @@ class ClientLimiterTest {
   }
 
   private static MockHttpServletResponse proxied(
-      ClientLimitFilter filter, String peer, String resolved) throws Exception {
+      ClientLimitFilter filter, String peer, String resolved, boolean forwarded) throws Exception {
     var request = request("/api/v1/markets/tabs", resolved, null);
     request.setAttribute(PeerAddressValve.ATTRIBUTE, peer);
+    request.setAttribute(PeerAddressValve.FORWARDED_ATTRIBUTE, forwarded);
     var response = new MockHttpServletResponse();
     filter.doFilter(request, response, new MockFilterChain());
     return response;

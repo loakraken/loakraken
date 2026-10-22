@@ -14,6 +14,11 @@ import org.apache.catalina.valves.ValveBase;
 class PeerAddressValve extends ValveBase {
   static final String ATTRIBUTE = "com.loakraken.peerAddress";
 
+  /** X-Forwarded-For가 (값과 관계없이) 붙어 왔는지. RemoteIpValve가 헤더를 지우기 전에 남긴다. */
+  static final String FORWARDED_ATTRIBUTE = "com.loakraken.forwarded";
+
+  static final String FORWARDED_HEADER = "X-Forwarded-For";
+
   PeerAddressValve() {
     super(true);
   }
@@ -21,6 +26,7 @@ class PeerAddressValve extends ValveBase {
   @Override
   public void invoke(Request request, Response response) throws IOException, ServletException {
     request.setAttribute(ATTRIBUTE, request.getRemoteAddr());
+    request.setAttribute(FORWARDED_ATTRIBUTE, request.getHeader(FORWARDED_HEADER) != null);
     getNext().invoke(request, response);
   }
 }

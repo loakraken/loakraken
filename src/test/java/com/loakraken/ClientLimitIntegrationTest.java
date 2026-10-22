@@ -69,7 +69,7 @@ class ClientLimitIntegrationTest {
     long second = (System.currentTimeMillis() / 1000) % 60;
     if (second >= 50) Thread.sleep((61 - second) * 1000);
     for (var forwarded :
-        new String[] {"10.0.0." + (1 + (int) (Math.random() * 200)), "127.0.0.2"}) {
+        new String[] {"10.0.0." + (1 + (int) (Math.random() * 200)), "127.0.0.2", "127.0.0.1"}) {
       for (int i = 0; i < 4; i++)
         assertThat(get("/api/v1/markets/tabs", forwarded).statusCode())
             .as(forwarded)

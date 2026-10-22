@@ -14,6 +14,9 @@ import org.springframework.stereotype.Component;
  * 공식 API 호출 게이트. 분당 예산(60초 창)과 공식 한도 대기는 {@link GateStore}가 지킨다. 기본은 Valkey라 같은 키를 쓰는 모든 인스턴스 합산
  * 90회/분이다(#107). 같은 예산을 인스턴스 안에서도 한 번 더 센다(두 번째 상한, 저장소와 무관). 동시 요청 수는 인스턴스 안에서만 센다.
  *
+ * <p><b>운영은 api 인스턴스 하나를 전제한다.</b> 두 번째 상한은 인스턴스마다 따로 세므로, 인스턴스를 늘린 상태에서 공유 저장소 기록까지 사라지면 합계가 예산 ×
+ * 인스턴스 수가 될 수 있다. 인스턴스를 늘릴 때는 인스턴스별 예산을 나누어 정한다.
+ *
  * <p>백그라운드 작업(수집기·예열)은 {@link #withReserve}로 감싼다. 그 안의 acquire()는 사용자 몫(reserve)을 남기는지 판정과 기록을 한 번에
  * 한다. 저장소 장애면 사용자 요청은 거절하고(LOST_ARK_GATE_UNAVAILABLE), 백그라운드는 실행하지 않는다.
  */
@@ -143,7 +146,8 @@ public class LostArkRequestGate {
   private void enter() {
     if (!permits.tryAcquire()) reject(GateEvent.CONCURRENCY_REJECT);
     int reserve = currentReserve();
-    if (!local.tryAdmit(clock.millis(), budget - reserve)) {
+    var slot = local.tryAdmit(clock.millis(), budget - reserve);
+    if (slot == null) {
       permits.release();
       reject(GateEvent.BUDGET_REJECT);
     }
@@ -151,13 +155,13 @@ public class LostArkRequestGate {
     try {
       admission = store.admit(budget, reserve);
     } catch (GateStore.GateUnavailableException exception) {
-      local.undo();
+      local.undo(slot);
       permits.release();
       metrics.gate(GateEvent.GATE_UNAVAILABLE);
       throw new BusinessException(LostArkErrorCode.LOST_ARK_GATE_UNAVAILABLE);
     }
     if (admission == GateStore.Admission.ADMITTED) return;
-    local.undo();
+    local.undo(slot);
     permits.release();
     reject(
         admission == GateStore.Admission.BACKOFF

@@ -67,6 +67,35 @@ class LostArkGateConfiguration {
     return new ClientLimiter(limits, store, clock, registry, lostArk.apiKey());
   }
 
+  /**
+   * 연결 상대 주소를 남기는 밸브를 엔진 밸브 맨 앞에 둔다(Boot가 RemoteIpValve를 넣은 뒤 실행되도록 가장 늦은 순서). 클라이언트 한도는 이 값이 루프백일
+   * 때만 제외한다 — 신뢰 프록시가 넘긴 주소는 내용과 관계없이 센다.
+   */
+  @Bean
+  org.springframework.boot.web.server.WebServerFactoryCustomizer<
+          org.springframework.boot.tomcat.TomcatWebServerFactory>
+      peerAddressValveCustomizer() {
+    return new PeerAddressValveCustomizer();
+  }
+
+  static final class PeerAddressValveCustomizer
+      implements org.springframework.boot.web.server.WebServerFactoryCustomizer<
+              org.springframework.boot.tomcat.TomcatWebServerFactory>,
+          org.springframework.core.Ordered {
+    @Override
+    public void customize(org.springframework.boot.tomcat.TomcatWebServerFactory factory) {
+      var valves = new java.util.ArrayList<org.apache.catalina.Valve>();
+      valves.add(new PeerAddressValve());
+      valves.addAll(factory.getEngineValves());
+      factory.setEngineValves(valves);
+    }
+
+    @Override
+    public int getOrder() {
+      return org.springframework.core.Ordered.LOWEST_PRECEDENCE;
+    }
+  }
+
   @Bean
   org.springframework.boot.web.servlet.FilterRegistrationBean<ClientLimitFilter> clientLimitFilter(
       ClientLimiter limiter) {

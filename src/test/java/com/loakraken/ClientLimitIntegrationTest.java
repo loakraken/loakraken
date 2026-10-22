@@ -64,6 +64,24 @@ class ClientLimitIntegrationTest {
   }
 
   @Test
+  void 신뢰_프록시가_넘긴_사설_루프백_주소도_센다() throws Exception {
+    // 연결 상대는 루프백(이 테스트의 신뢰 프록시)이고, 넘긴 주소가 사설·루프백이어도 그 주소로 센다(GENERAL 4).
+    long second = (System.currentTimeMillis() / 1000) % 60;
+    if (second >= 50) Thread.sleep((61 - second) * 1000);
+    for (var forwarded :
+        new String[] {"10.0.0." + (1 + (int) (Math.random() * 200)), "127.0.0.2"}) {
+      for (int i = 0; i < 4; i++)
+        assertThat(get("/api/v1/markets/tabs", forwarded).statusCode())
+            .as(forwarded)
+            .isEqualTo(200);
+      assertThat(get("/api/v1/markets/tabs", forwarded).statusCode()).as(forwarded).isEqualTo(429);
+    }
+    // 넘긴 주소가 없는 같은 호스트 요청은 세지 않는다.
+    for (int i = 0; i < 6; i++)
+      assertThat(get("/api/v1/markets/tabs", null).statusCode()).isEqualTo(200);
+  }
+
+  @Test
   void 공식_API가_없다고_답한_이름은_5분_동안_공식_호출_없이_404다() throws Exception {
     String name = "없는캐릭" + UUID.randomUUID().toString().substring(0, 6);
     when(detailsPort.fetch(name))

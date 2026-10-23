@@ -402,8 +402,14 @@ public final class StatsResponses {
       @Schema(allowableValues = {"COMBAT_POWER", "ITEM_LEVEL"}) String metric,
       int page,
       int size,
-      @Schema(description = "전체 순위 대상 수는 meta.population")
-          List<StatsRankedCharacterResponse> rows) {
+      @Schema(description = "전체 순위 대상 수는 meta.population") List<StatsRankedCharacterResponse> rows,
+      @NullableResponse @Schema(description = "요청한 직업 각인(직업 각인 목록의 표기). 필터를 쓰지 않으면 null")
+          String classEngraving,
+      @NullableResponse
+          @Schema(
+              description =
+                  "직업 각인 필터를 켰을 때, 같은 조건에서 직업 각인을 모르는(장비를 관측하지 않았거나 직업 각인이 없는(깨달음 노드 없음)) 캐릭터 수. 이 캐릭터들은 순위에 들어가지 않습니다. 필터를 쓰지 않거나 세지 못하면 null")
+          Long classEngravingUnknown) {
     static StatsRankingResponse from(StatsQueryService.RankingResult result) {
       return new StatsRankingResponse(
           StatsMetaResponse.from(result.meta()),
@@ -439,9 +445,40 @@ public final class StatsResponses {
                               : new StatsEstherWeaponResponse(
                                   row.estherWeapon().refineLevel(),
                                   row.estherWeapon().ellaStage())))
-              .toList());
+              .toList(),
+          result.classEngraving(),
+          result.classEngravingUnknown());
     }
   }
+
+  /** 랭킹 직업 각인 선택지(#618). */
+  public record StatsClassEngravingsResponse(
+      String className,
+      @Schema(description = "직업 각인 목록 순서. 랭킹 classEngraving에 그대로 넣을 수 있는 값")
+          List<StatsClassEngravingResponse> classEngravings,
+      @NullableResponse
+          @Schema(
+              description =
+                  "같은 조건에서 직업 각인을 모르는(장비를 관측하지 않았거나 직업 각인이 없는(깨달음 노드 없음)) 캐릭터 수. 세지 못하면 null")
+          Long unknown,
+      @NullableResponse @Schema(description = "수를 센 시각(10분 캐시). 세지 못하면 null")
+          Instant aggregatedAt) {
+    static StatsClassEngravingsResponse from(StatsQueryService.ClassEngravingsResult result) {
+      return new StatsClassEngravingsResponse(
+          result.className(),
+          result.classEngravings().stream()
+              .map(row -> new StatsClassEngravingResponse(row.name(), row.count()))
+              .toList(),
+          result.unknown(),
+          result.aggregatedAt());
+    }
+  }
+
+  public record StatsClassEngravingResponse(
+      @Schema(description = "직업 각인(공식 아크 패시브 칭호 표기)") String name,
+      @NullableResponse
+          @Schema(description = "같은 조건 모집단에서 마지막으로 관측한 장비의 직업 각인이 이 값인 캐릭터 수. 세지 못하면 null")
+          Long count) {}
 
   public record StatsRankEntryResponse(
       @Schema(allowableValues = {"COMBAT_POWER", "ITEM_LEVEL"}) String metric,

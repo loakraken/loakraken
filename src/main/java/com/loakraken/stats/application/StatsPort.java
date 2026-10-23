@@ -6,6 +6,7 @@ import com.loakraken.stats.domain.StatsRules.Metric;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 /** 관측 캐릭터 집계. since는 activeDays 기준 시각이다. */
@@ -46,8 +47,17 @@ public interface StatsPort {
    */
   BigDecimal nthHighest(StatsConditions conditions, Instant since, Metric metric, long k);
 
+  /** classEngraving이 있으면 모집단을 마지막 장비 요약의 직업 각인이 그 값(공백 무시)인 캐릭터로 좁힌다(#618). 요약이 없는 캐릭터는 빠진다. */
   RankingPage ranking(
-      StatsConditions conditions, Instant since, Metric metric, int offset, int limit);
+      StatsConditions conditions,
+      Instant since,
+      Metric metric,
+      int offset,
+      int limit,
+      String classEngraving);
+
+  /** 모집단(처리정지 제외)을 마지막 장비 요약의 직업 각인(공식 칭호 원문)별로 센다(#618). 요약이 없거나 칭호가 비면 키가 null이다. */
+  Map<String, Long> classEngravingCounts(StatsConditions conditions, Instant since);
 
   /**
    * 팔찌·젬 효율 랭킹(L38·L39). 저장된 효율 중 지금 규칙 버전({@link EfficiencyKind#ruleVersion()}) 값만 센다. 처리정지 목록은

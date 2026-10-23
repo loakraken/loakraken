@@ -72,12 +72,14 @@ class ClientLimitIntegrationTest {
     var statuses = new java.util.ArrayList<Integer>();
     for (var path :
         new String[] {
-          "/api/v1/rankings/guilds", "/api/v1/rankings;x=1/guilds", "/api/v1/rankings/rosters"
+          "/api/v1/rankings/rosters", "/api/v1/stats;x=1/summary", "/api/v1/stats/summary"
         }) statuses.add(get(path, address).statusCode());
-    statuses.add(get("/api/v1/rankings/rosters", address).statusCode());
-    // ';' 경로가 처리되면(200) 그것도 세어 세 번째부터 429, 컨테이너가 400으로 거절하면 세지 않아 네 번째가 429.
-    assertThat(statuses.get(1)).as(statuses.toString()).isIn(200, 400);
-    if (statuses.get(1) == 200) assertThat(statuses.get(2)).as(statuses.toString()).isEqualTo(429);
+    statuses.add(get("/api/v1/stats/summary", address).statusCode());
+    // 랭킹 하위 경로는 통계 칸으로 센다(응답과 관계없이). ';' 경로는 처리되든(200) 경로를 못 찾든(404) 필터를 지나면 세어 세 번째부터 429, 컨테이너가
+    // 400으로 거절하면 세지 않아 네 번째가 429.
+    assertThat(statuses.getFirst()).as(statuses.toString()).isNotEqualTo(429);
+    assertThat(statuses.get(1)).as(statuses.toString()).isIn(200, 400, 404);
+    if (statuses.get(1) != 400) assertThat(statuses.get(2)).as(statuses.toString()).isEqualTo(429);
     assertThat(statuses.get(3)).as(statuses.toString()).isEqualTo(429);
     // 접두 앞쪽의 ';…'도 필터를 비켜 가지 않는다(GENERAL 4: 위 3회 + 1회, 다음은 429).
     String other = "198.51.100." + (10 + (int) (Math.random() * 200));

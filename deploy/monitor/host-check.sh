@@ -44,9 +44,11 @@ disk_pct=$(df -P / | awk 'NR==2{gsub("%","",$5); print $5}')
 
 restarts=0
 unhealthy=()
+declare -A svc_restarts=()
 while read -r name health count; do
   [[ -n "$name" ]] || continue
   restarts=$(( restarts + count ))
+  svc_restarts["$name"]=$(( ${svc_restarts["$name"]:-0} + count ))
   [[ "$health" == "unhealthy" ]] && unhealthy+=("$name")
 done < <(docker ps -aq --filter "label=com.docker.compose.project=${STACK_NAME}" \
   | xargs -r docker inspect --format '{{index .Config.Labels "com.docker.compose.service"}} {{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}} {{.RestartCount}}')
@@ -63,6 +65,27 @@ fi
 
 printf '%s mem=%s%% swap=%sMB disk=%s%% restarts=%s evicted=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$mem_pct" "$swap_mb" "$disk_pct" "$restarts" "$evicted" >> host-metrics.log
 tail -n "$KEEP_LINES" host-metrics.log > host-metrics.log.tmp && mv host-metrics.log.tmp host-metrics.log
+
+# 모니터링 대시보드용: 서비스별 컨테이너 재시작 수(누적)를 node-exporter 텍스트 파일로 남긴다(라벨은 compose 서비스 이름뿐).
+# 알림은 아래에서 이 스크립트가 보내고, Grafana는 그래프만 그린다. 모니터링을 켜지 않은 서버에서도 써 두기만 한다(작은 파일).
+TEXTFILE_DIR="${TEXTFILE_DIR:-/var/lib/node_exporter/textfile}"
+if mkdir -p "$TEXTFILE_DIR" 2>/dev/null; then
+  {
+    echo "# HELP loakraken_container_restarts 컨테이너 재시작 수(누적, 서버 점검 스크립트)"
+    echo "# TYPE loakraken_container_restarts gauge"
+    for svc in "${!svc_restarts[@]}"; do
+      printf 'loakraken_container_restarts{service="%s"} %s\n' "$svc" "${svc_restarts[$svc]}"
+    done | sort
+    # node-exporter는 호스트 / 를 붙이지 않으므로(파일 시스템 수집 끔) 루트 디스크 크기·여유를 여기서 넘긴다.
+    df -PB1 / | awk 'NR==2{
+      print "# HELP loakraken_root_disk_size_bytes 루트(/) 파일 시스템 크기(서버 점검 스크립트)"
+      print "# TYPE loakraken_root_disk_size_bytes gauge"
+      print "loakraken_root_disk_size_bytes " $2
+      print "# HELP loakraken_root_disk_avail_bytes 루트(/) 파일 시스템 남은 공간(서버 점검 스크립트)"
+      print "# TYPE loakraken_root_disk_avail_bytes gauge"
+      print "loakraken_root_disk_avail_bytes " $4 }'
+  } > "$TEXTFILE_DIR/loakraken.prom.tmp" && mv "$TEXTFILE_DIR/loakraken.prom.tmp" "$TEXTFILE_DIR/loakraken.prom"
+fi
 
 # 메모리: 순간 치솟음은 무시하고 3회(15분) 연속일 때만 알린다.
 if (( mem_pct >= MEM_ALERT_PCT && swap_mb >= SWAP_ALERT_MB )); then

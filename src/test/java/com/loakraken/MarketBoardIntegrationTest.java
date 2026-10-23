@@ -100,6 +100,23 @@ class MarketBoardIntegrationTest {
 
     assertThat(get("/api/v1/markets/board?tab=ENGRAVING_BOOK&sort=fall&page=2").statusCode())
         .isEqualTo(200);
+    // 이름 검색(#619)은 같은 스캔 캐시(탭+티어)를 거른다 — 공식 추가 호출 0.
+    var named =
+        mapper.readTree(
+            get("/api/v1/markets/board?tab=ENGRAVING_BOOK&q="
+                    + java.net.URLEncoder.encode(" 품목1 ", java.nio.charset.StandardCharsets.UTF_8))
+                .body());
+    assertThat(named.at("/data/totalItems").asInt()).isEqualTo(5);
+    assertThat(named.at("/data/scannedItems").asInt()).isEqualTo(13);
+    assertThat(named.at("/data/complete").asBoolean()).isTrue();
+    assertThat(named.at("/data/items/0/itemId").asLong()).isEqualTo(1L);
+    var initials =
+        mapper.readTree(
+            get("/api/v1/markets/board?tab=ENGRAVING_BOOK&sort=high&q="
+                    + java.net.URLEncoder.encode("ㅍㅁ", java.nio.charset.StandardCharsets.UTF_8))
+                .body());
+    assertThat(initials.at("/data/totalItems").asInt()).isEqualTo(13);
+    assertThat(initials.at("/data/items/0/itemId").asLong()).isEqualTo(13L);
     verify(prices, times(2)).fetch(any(), any());
     ApiContractFixture.write("market-board.json", response.body());
   }
@@ -126,7 +143,10 @@ class MarketBoardIntegrationTest {
         "tab=REFINING&sort=up",
         "tab=REFINING&page=0",
         "tab=REFINING&page=11",
-        "tab=REFINING&tier=5"
+        "tab=REFINING&tier=5",
+        "tab=REFINING&q=aaaaaaaaaaaaaaaaaaaaa",
+        "tab=REFINING&q=a%3Cb",
+        "tab=REFINING&q=%25"
       })
   void 잘못된_보드_조건은_조회_전에_400이다(String query) throws Exception {
     var response = get("/api/v1/markets/board?" + query);

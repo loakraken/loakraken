@@ -80,7 +80,8 @@ public class CharacterController {
       return scores.score(result);
     } catch (RuntimeException exception) {
       log.warn("크라켄 점수를 계산하지 못했습니다. 예외 유형={}", exception.getClass().getSimpleName());
-      return null;
+      // null이면 '꺼짐(DISABLED)' 모양이 되므로, 실패는 실패로(UNSUPPORTED·CALC_FAILED).
+      return scores.failed();
     }
   }
 

@@ -171,7 +171,7 @@ public record CharacterResponse(
       @Schema(
               description =
                   "UNSUPPORTED 이유 코드(화면은 이 코드로 그림). 그 밖에는 null. 지금 값: INPUT_PENDING(점수 입력이 없는 이전 조회"
-                      + " 결과 — 다시 조회하면 계산)·ROLE_UNKNOWN(딜러·서포터 판정 못 함)·SCORE_UNAVAILABLE(점수가 음수·수 아님). 열린"
+                      + " 결과 — 다시 조회하면 계산)·ROLE_UNKNOWN(딜러·서포터 판정 못 함)·SCORE_UNAVAILABLE(점수가 음수·수 아님)·CALC_FAILED(켜진 상태에서 계산 중 예상 못 한 오류). 열린"
                       + " 값이라 단계마다 늘 수 있음 — 모르는 코드는 '-'로 그림",
               example = "INPUT_PENDING")
           @NullableResponse

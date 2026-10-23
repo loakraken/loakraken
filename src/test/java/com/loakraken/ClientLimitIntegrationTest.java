@@ -64,6 +64,30 @@ class ClientLimitIntegrationTest {
   }
 
   @Test
+  void 랭킹_아래_경로와_경로_매개변수가_붙은_경로도_센다() throws Exception {
+    // STATS 2: 랭킹 아래 경로도 통계 칸이고, 원문 URI에 ';…'가 붙어도 정규화된 경로로 센다.
+    long second = (System.currentTimeMillis() / 1000) % 60;
+    if (second >= 50) Thread.sleep((61 - second) * 1000);
+    String address = "203.0.113." + (10 + (int) (Math.random() * 200));
+    var statuses = new java.util.ArrayList<Integer>();
+    for (var path :
+        new String[] {
+          "/api/v1/rankings/rosters", "/api/v1/stats;x=1/summary", "/api/v1/stats/summary"
+        }) statuses.add(get(path, address).statusCode());
+    statuses.add(get("/api/v1/stats/summary", address).statusCode());
+    // 랭킹 하위 경로는 통계 칸으로 센다(응답과 관계없이). ';' 경로는 처리되든(200) 경로를 못 찾든(404) 필터를 지나면 세어 세 번째부터 429, 컨테이너가
+    // 400으로 거절하면 세지 않아 네 번째가 429.
+    assertThat(statuses.getFirst()).as(statuses.toString()).isNotEqualTo(429);
+    assertThat(statuses.get(1)).as(statuses.toString()).isIn(200, 400, 404);
+    if (statuses.get(1) != 400) assertThat(statuses.get(2)).as(statuses.toString()).isEqualTo(429);
+    assertThat(statuses.get(3)).as(statuses.toString()).isEqualTo(429);
+    // 접두 앞쪽의 ';…'도 필터를 비켜 가지 않는다(GENERAL 4: 위 3회 + 1회, 다음은 429).
+    String other = "198.51.100." + (10 + (int) (Math.random() * 200));
+    for (int i = 0; i < 4; i++) get("/api;x=1/v1/markets/tabs", other);
+    assertThat(get("/api;x=1/v1/markets/tabs", other).statusCode()).isIn(400, 429);
+  }
+
+  @Test
   void 신뢰_프록시가_넘긴_사설_루프백_주소도_센다() throws Exception {
     // 연결 상대는 루프백(이 테스트의 신뢰 프록시)이고, 넘긴 주소가 사설·루프백이어도 그 주소로 센다(GENERAL 4).
     long second = (System.currentTimeMillis() / 1000) % 60;

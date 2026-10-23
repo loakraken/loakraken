@@ -8,7 +8,7 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
  *
  * @param enabled 끄면 어떤 버킷도 세지 않는다
  * @param officialPerMinute 한 클라이언트 요청이 실제로 일으킨 공식 API 호출 수. 캐시 적중·단일 비행 합류는 세지 않는다
- * @param statsPerMinute /stats/**·/rankings·/characters/rank 요청 수(DB 집계)
+ * @param statsPerMinute /stats/**·/rankings·/rankings/**·/characters/rank 요청 수(DB 집계)
  * @param generalPerMinute /api/v1/** 전체 요청 수
  * @param botPerMinute 검색봇 표시 요청 수(봇 주소별). 봇 표시는 흉내 낼 수 있으므로 generalPerMinute보다 클 수 없다
  * @param rosterRefreshPerMinute 원정대 전투력 불러오기(POST /api/v1/characters/roster-combat-power/refresh)

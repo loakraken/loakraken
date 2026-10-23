@@ -111,9 +111,14 @@ class ClientLimitFilter extends OncePerRequestFilter {
         && path(request).equals("/api/v1/characters/roster-combat-power/refresh");
   }
 
+  /**
+   * DB 집계 경로(통계·랭킹·캐릭터 순위). 랭킹은 `/api/v1/rankings`와 그 아래 모든 경로(팔찌·젬·원정대·길드·수집품·직업 각인 선택지 등)를 센다 —
+   * 조건마다 캐시가 따로라 조건을 바꿔 가며 부르면 캐시를 비켜 DB 집계를 일으키므로 일반 칸보다 작은 칸으로 묶는다.
+   */
   static boolean stats(String path) {
     return path.startsWith("/api/v1/stats/")
         || path.equals("/api/v1/rankings")
+        || path.startsWith("/api/v1/rankings/")
         || path.equals("/api/v1/characters/rank");
   }
 
@@ -144,8 +149,16 @@ class ClientLimitFilter extends OncePerRequestFilter {
     }
   }
 
-  private static String path(HttpServletRequest request) {
-    return request.getRequestURI().substring(request.getContextPath().length());
+  /**
+   * 경로 판정에 쓰는 경로. 서블릿 경로(+ 경로 정보)는 컨테이너가 디코딩·정규화하고 경로 매개변수(';…')를 뺀 값이라, 컨트롤러가 받는 경로와 같은 모양으로
+   * 판정한다(원문 URI의 ';…'가 경로 비교를 비켜 가지 않게). 서블릿 경로가 비어 있는 환경(서블릿 테스트)은 원문 URI에서 문맥 경로를 뺀 값.
+   */
+  static String path(HttpServletRequest request) {
+    var servletPath = request.getServletPath();
+    if (servletPath == null || servletPath.isEmpty())
+      return request.getRequestURI().substring(request.getContextPath().length());
+    var pathInfo = request.getPathInfo();
+    return pathInfo == null ? servletPath : servletPath + pathInfo;
   }
 
   private static void reject(HttpServletResponse response, ClientLimiter.Decision decision)

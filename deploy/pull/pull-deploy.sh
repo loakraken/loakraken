@@ -4,6 +4,7 @@
 # Deploy 워크플로(deploy.yml)가 GHCR 채널 태그(:production/:staging)를 옮기고, 이 스크립트가 그 태그를 따라간다:
 #   채널 태그 확인 → (운영) 서버에서 사용자가 approve.sh로 승인한 릴리스인지 확인 → 배포 번들 풀기 → DB 백업
 #   → 이미지를 digest로 고정 → up -d --wait (edge 설정 파일이 바뀐 릴리스는 edge만 다시 만든다)
+#   → (모니터링 프로필을 켠 서버) prometheus·node-exporter·grafana를 새 설정으로 다시 만든다(실패해도 서비스 배포는 그대로)
 #   → 실패하면 직전 이미지·번들로 되돌리고 그 릴리스는 다시 시도하지 않는다 → Slack 알림
 #
 # 스택 디렉터리(/opt/loakraken/<환경>)에서 root로 실행한다(docker 그룹 권한과 같음, 비밀 디렉터리의 웹훅 파일을 읽기 위해).
@@ -162,12 +163,29 @@ sync_units() {
 
 env_files=(--env-file stack.env)
 compose() { docker compose -f compose.prod.yaml "${env_files[@]}" --env-file images.env "$@"; }
+# 서비스 배포·되돌리기용: 모니터링 프로필을 끈 채로 올린다(셸 환경 변수가 --env-file 값을 이긴다).
+# 모니터링이 헬스에 실패해도 서비스 배포가 실패·되돌림으로 번지지 않게 한다. 이미 떠 있는 모니터링 컨테이너는 그대로 둔다.
+compose_app() { COMPOSE_PROFILES='' docker compose -f compose.prod.yaml "${env_files[@]}" --env-file images.env "$@"; }
 
 # edge 설정 파일이 바뀐 릴리스에서만 edge를 다시 만든다(위 edge_changed). 다른 서비스는 건드리지 않는다.
 recreate_edge() {
   ((edge_changed)) || return 0
   log "edge 설정이 바뀌어 edge를 다시 만든다"
   compose up -d --wait --wait-timeout 120 --no-deps --force-recreate edge
+}
+
+# 모니터링(프로필 monitor)을 켠 서버에서만: prometheus·grafana는 설정 디렉터리(./monitor/…)를 통째로 붙이는데,
+# swap_in이 옛 디렉터리를 지우면 실행 중 컨테이너에는 빈 디렉터리가 남는다. 그래서 배포마다 둘을 다시 만든다.
+# 모니터링이 실패해도 서비스 배포는 되돌리지 않는다(알림만).
+recreate_monitor() {
+  [[ ",$(env_value COMPOSE_PROFILES)," == *",monitor,"* ]] || return 0
+  # cloudflared는 번들 파일을 붙이지 않아 다시 만들 필요가 없고, 없을 때만 올린다.
+  if compose up -d --wait --wait-timeout 180 --no-deps --force-recreate prometheus node-exporter grafana \
+    && compose up -d --wait --wait-timeout 120 --no-deps cloudflared; then
+    log "모니터링(prometheus·node-exporter·grafana)을 새 설정으로 다시 만들었다"
+  else
+    notify "모니터링 다시 만들기 실패(서비스 배포는 끝남). 서버에서 compose ps로 prometheus·grafana 확인"
+  fi
 }
 
 # 2. 배포 전 DB 백업(실행 중일 때만).
@@ -184,12 +202,13 @@ fi
 [[ -f images.env ]] && cp images.env images.prev.env
 printf 'API_IMAGE=%s\nWEB_IMAGE=%s\n' "$api_digest" "$web_digest" > images.env
 
-if compose up -d --wait --wait-timeout 300 --remove-orphans && recreate_edge; then
+if compose_app up -d --wait --wait-timeout 300 --remove-orphans && recreate_edge; then
   printf '%s\n' "$want" > .deployed
   rm -f .failed .pending
   printf '%s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$want" >> deploy-history.log
   notify "배포 완료: api=${api_digest##*@sha256:} web=${web_digest##*@sha256:}"
   sync_units || log "systemd 유닛 갱신 실패(배포는 끝남). 수동: 운영 문서 deploy pull 배포 설치"
+  recreate_monitor
   exit 0
 fi
 
@@ -199,11 +218,13 @@ if [[ -f images.prev.env ]]; then
   cp images.prev.env images.env
   swap_in .bundle.prev
   # 새 설정으로 다시 만든 edge도 직전 설정으로 되돌린다(edge_changed일 때만).
-  if compose up -d --wait --wait-timeout 300 --remove-orphans && recreate_edge; then
+  if compose_app up -d --wait --wait-timeout 300 --remove-orphans && recreate_edge; then
     notify "배포 실패 → 직전 릴리스로 되돌림(헬스 확인 통과). 실패 릴리스는 다시 시도하지 않음"
   else
     notify "배포 실패, 되돌리기도 실패. 즉시 확인 필요(운영 문서 deploy 롤백)"
   fi
+  # 되돌리기도 설정 디렉터리를 바꾸므로 모니터링을 다시 붙인다(켠 서버만).
+  recreate_monitor
 else
   notify "첫 배포 실패. 되돌릴 이전 릴리스가 없음. 즉시 확인 필요"
 fi

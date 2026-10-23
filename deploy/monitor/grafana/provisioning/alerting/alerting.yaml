@@ -1,0 +1,267 @@
+# Grafana 경보(파일 프로비저닝) → Slack #alerts.
+# 원칙: 사용자가 겪는 증상만 즉시(severity=page), 원인 쪽은 확인 등급(severity=ticket). 기준값은 공개 뒤 2주 실측으로 다시 맞춘다.
+# 디스크·컨테이너 재시작·메모리+스왑·unhealthy는 서버 점검 스크립트(host-check)가 이미 알리므로 여기 넣지 않는다(대시보드만).
+# 각 경보의 description이 짧은 런북이다(뜻 → 먼저 볼 것 → 다음 할 일). 알림에는 개인정보가 들어가지 않는다(지표에 이름·IP 태그 없음).
+apiVersion: 1
+
+contactPoints:
+  - orgId: 1
+    name: slack-alerts
+    receivers:
+      - uid: loakraken-slack-alerts
+        type: slack
+        disableResolveMessage: false
+        settings:
+          # 기존 Slack 웹훅 비밀 파일(서버 점검·배포 알림과 같은 채널)을 컨테이너 안에서 읽는다.
+          url: $__file{/run/secrets/slack_webhook_alerts}
+
+policies:
+  - orgId: 1
+    receiver: slack-alerts
+    group_by: ["alertname"]
+    group_wait: 30s
+    group_interval: 5m
+    repeat_interval: 4h
+    routes:
+      - receiver: slack-alerts
+        object_matchers:
+          - ["severity", "=", "ticket"]
+        repeat_interval: 12h
+
+groups:
+  - orgId: 1
+    name: loakraken-symptoms
+    folder: LOAKraken
+    interval: 1m
+    rules:
+      - uid: loakraken-5xx-ratio
+        title: 5xx 비율 1% 초과
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: loakraken-prometheus
+            model:
+              refId: A
+              instant: true
+              expr: >-
+                (sum(rate(http_server_requests_seconds_count{application="loakraken",uri!~"/actuator.*",status=~"5.."}[5m]))
+                / sum(rate(http_server_requests_seconds_count{application="loakraken",uri!~"/actuator.*"}[5m])))
+                and on() (sum(increase(http_server_requests_seconds_count{application="loakraken",uri!~"/actuator.*"}[5m])) >= 20)
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [0.01] }
+        for: 5m
+        noDataState: OK
+        execErrState: Error
+        labels: { severity: page }
+        annotations:
+          summary: api 응답의 5xx 비율이 5분 동안 1%를 넘었다(5분 요청 20건 이상일 때만 판단).
+          description: "먼저: 대시보드 LOAKraken 개요의 5xx 패널에서 경로 확인 → 서버에서 api 오류 로그(docker logs --since 15m loakraken-api-1). 배포 직후면 직전 판으로 되돌리기 검토."
+
+      - uid: loakraken-p95-local
+        title: 응답 지연 p95 2초 초과(공식 호출 없는 경로)
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: loakraken-prometheus
+            model:
+              refId: A
+              instant: true
+              expr: >-
+                histogram_quantile(0.95, sum by (le) (rate(http_server_requests_seconds_bucket{application="loakraken",uri!~"/actuator.*|/api/v1/(characters|market).*"}[5m])))
+                and on() (sum(increase(http_server_requests_seconds_count{application="loakraken",uri!~"/actuator.*|/api/v1/(characters|market).*"}[5m])) >= 20)
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [2] }
+        for: 10m
+        noDataState: OK
+        execErrState: Error
+        labels: { severity: page }
+        annotations:
+          summary: 공식 API를 부르지 않는 경로의 p95가 10분 동안 2초를 넘었다.
+          description: "먼저: 대시보드의 p95·힙·DB 패널 → 서버 메모리(MEM 줄)와 postgres 상태. 캐릭터·시세 경로(공식 호출)는 이 경보에서 뺐다 — 대시보드로 따로 본다."
+
+      - uid: loakraken-api-down
+        title: api 지표 끊김
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: loakraken-prometheus
+            model:
+              refId: A
+              instant: true
+              expr: max(up{job="loakraken-api"})
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: lt, params: [1] }
+        for: 5m
+        noDataState: Alerting
+        execErrState: Error
+        labels: { severity: page }
+        annotations:
+          summary: Prometheus가 5분 동안 api 지표를 받지 못했다(api가 멈췄거나 다시 시작 중).
+          description: "먼저: 서버에서 docker ps로 api 상태·재시작 수 → docker logs --since 15m loakraken-api-1. 서버 점검 스크립트의 unhealthy·재시작 알림과 같이 올 수 있다."
+
+  - orgId: 1
+    name: loakraken-causes
+    folder: LOAKraken
+    interval: 1m
+    rules:
+      - uid: loakraken-heap
+        title: api 힙 90% 초과
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: loakraken-prometheus
+            model:
+              refId: A
+              instant: true
+              # G1의 Eden·Survivor 풀은 최대값이 -1이라 0보다 큰 최대값만 더한다(사실상 Old Gen = 힙 최대).
+              expr: >-
+                sum(jvm_memory_used_bytes{application="loakraken",area="heap"})
+                / sum(jvm_memory_max_bytes{application="loakraken",area="heap"} > 0)
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [0.9] }
+        for: 15m
+        noDataState: OK
+        execErrState: Error
+        labels: { severity: ticket }
+        annotations:
+          summary: api 힙 사용이 15분 동안 최대의 90%를 넘었다.
+          description: "먼저: 대시보드 JVM(Micrometer)의 힙·GC 패널 → 계속 오르면 메모리 한도(API_MEM_LIMIT) 검토. 사용자 증상(5xx·지연)이 없으면 급하지 않다."
+
+      - uid: loakraken-collector-failures
+        title: 수집기 실패 증가
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 1800, to: 0 }
+            datasourceUid: loakraken-prometheus
+            model:
+              refId: A
+              instant: true
+              expr: sum(increase(loakraken_stats_collector_total{application="loakraken",outcome=~"failed|storage_failed"}[15m]))
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [0] }
+        for: 0s
+        noDataState: OK
+        execErrState: Error
+        labels: { severity: ticket }
+        annotations:
+          summary: 15분 안에 통계 수집기 실패(failed·storage_failed)가 늘었다.
+          description: "먼저: 대시보드 수집기 패널의 task별 결과 → api 로그의 수집기 경고. 공식 API 거절 경보와 같이 오면 공식 쪽 문제다."
+
+      - uid: loakraken-collector-stalled
+        title: 수집기 멈춤(남은 시드 있음)
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: loakraken-prometheus
+            model:
+              refId: A
+              instant: true
+              # 대상이 없으면 성공 시각이 멈추는 게 정상이라, 남은 시드가 있을 때만 나이를 본다. 0(아직 성공 없음)은 뺀다.
+              expr: >-
+                (time() - max(loakraken_background_last_success_seconds{application="loakraken",job="collector"} > 0))
+                and on() (max(loakraken_stats_seed_pending{application="loakraken"}) > 0)
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [900] }
+        for: 0s
+        noDataState: OK
+        execErrState: Error
+        labels: { severity: ticket }
+        annotations:
+          summary: 남은 시드가 있는데 수집기가 15분 넘게 성공하지 못했다.
+          description: "먼저: 수집 스위치(STATS_COLLECTOR_ENABLED)와 api 로그 → 공식 API 게이트 패널(예산 거절이 많으면 사용자 요청이 우선이라 정상일 수 있다)."
+
+      - uid: loakraken-official-429
+        title: 공식 API 429·차단
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 1800, to: 0 }
+            datasourceUid: loakraken-prometheus
+            model:
+              refId: A
+              instant: true
+              expr: sum(increase(loakraken_lostark_gate_total{application="loakraken",event=~"upstream_429|upstream_backoff_reject|gate_unavailable"}[15m]))
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [0] }
+        for: 0s
+        noDataState: OK
+        execErrState: Error
+        labels: { severity: ticket }
+        annotations:
+          summary: 15분 안에 공식 API가 429를 돌려줬거나 게이트가 물러서기·사용 불가로 거절했다.
+          description: "먼저: 대시보드 공식 API 패널의 엔드포인트별 결과 → 수집 속도(분당 예산)가 공식 한도에 가까운지. 계속되면 수집 속도를 늦추는 오픈 절차서 3부 줄."
+
+      - uid: loakraken-official-budget
+        title: 공식 API 예산 거절 많음
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 1800, to: 0 }
+            datasourceUid: loakraken-prometheus
+            model:
+              refId: A
+              instant: true
+              expr: sum(increase(loakraken_lostark_gate_total{application="loakraken",event=~"budget_reject|concurrency_reject"}[15m]))
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [30] }
+        for: 0s
+        noDataState: OK
+        execErrState: Error
+        labels: { severity: ticket }
+        annotations:
+          summary: 15분 안에 공유 게이트의 예산·동시 실행 거절이 30번을 넘었다(사용자 요청이 공식 호출 대기에서 밀림).
+          description: "먼저: 대시보드 공식 API 패널과 사용자 한도 거절 패널 → 접속이 몰린 건지, 수집기가 예산을 많이 쓰는지. 기준 30은 공개 뒤 실측으로 다시 맞춘다."

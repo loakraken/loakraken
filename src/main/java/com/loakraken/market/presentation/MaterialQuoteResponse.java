@@ -36,11 +36,22 @@ public record MaterialQuoteResponse(
       long ownedQuantity,
       long missingQuantity,
       MaterialQuoteSearchResponse search,
-      MaterialQuote.Status status,
+      @Schema(
+              description =
+                  "PRICED 계산됨(구매 후 거래 횟수 제한 상품 포함), COVERED_BY_INVENTORY 보유량으로 충당, ITEM_NOT_IN_PAGE 검색 페이지에 상품 없음,"
+                      + " PRICE_UNAVAILABLE 선택한 가격 미제공, ZERO_PRICE 0원 가격(무료로 해석하지 않음). AMBIGUOUS_ITEM·TRADE_RESTRICTED_ITEM은"
+                      + " material-purchase-v2부터 내지 않습니다(값 목록 호환용).")
+          MaterialQuote.Status status,
       @NullableResponse @Schema(description = "가격 페이지 관측 시각. 재고로 충당하면 조회하지 않아 null")
           Instant observedAt,
       @NullableResponse String itemName,
       @NullableResponse Integer bundleCount,
+      @NullableResponse
+          @Schema(
+              description =
+                  "가격을 쓴 상품의 공식 TradeRemainCount(구매 후 거래 가능 횟수, 0이면 산 뒤 거래 불가). 일반 상품·가격을 쓰지 않은 줄은 null."
+                      + " 같은 상품이 여러 줄이면 선택한 가격 기준으로 가장 싸게 사는 줄의 값입니다.")
+          Integer tradeRemainCount,
       @NullableResponse @Schema(description = "선택한 공식 묶음 가격. 0을 무료로 해석하지 않고 ZERO_PRICE로 계산 제외")
           BigDecimal pricePerBundle,
       @NullableResponse MaterialPurchaseResponse purchase) {
@@ -57,6 +68,7 @@ public record MaterialQuoteResponse(
           line.observedAt(),
           line.itemName(),
           line.bundleCount(),
+          line.tradeRemainCount(),
           line.pricePerBundle(),
           cost == null
               ? null

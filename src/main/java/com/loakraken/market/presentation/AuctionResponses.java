@@ -202,7 +202,9 @@ public final class AuctionResponses {
       @NullableResponse Long bidStartPrice,
       @NullableResponse @Schema(description = "경매 종료 시각") Instant endDate,
       @NullableResponse @Schema(description = "구매 후 거래 가능 횟수(0이면 거래 불가)") Integer tradeAllowCount,
-      List<AuctionListingOptionResponse> options) {
+      List<AuctionListingOptionResponse> options,
+      @NullableResponse @Schema(description = "아이템 이미지 URL(공식 Icon 그대로). 공식 응답에 없으면 null")
+          String icon) {
     static AuctionListingResponse from(AuctionPort.AuctionListing listing) {
       return new AuctionListingResponse(
           listing.name(),
@@ -213,7 +215,8 @@ public final class AuctionResponses {
           listing.bidStartPrice(),
           listing.endDate(),
           listing.tradeAllowCount(),
-          listing.options().stream().map(AuctionListingOptionResponse::from).toList());
+          listing.options().stream().map(AuctionListingOptionResponse::from).toList(),
+          listing.icon());
     }
   }
 

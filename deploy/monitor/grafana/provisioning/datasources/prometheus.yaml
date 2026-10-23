@@ -1,0 +1,14 @@
+# Grafana 데이터소스(파일 프로비저닝, 화면에서 고칠 수 없음).
+# uid는 대시보드 JSON과 받기 스크립트(fetch-dashboards.sh)가 같은 값을 쓴다.
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    uid: loakraken-prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    editable: false
+    jsonData:
+      timeInterval: 30s

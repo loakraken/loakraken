@@ -139,6 +139,83 @@ class MarketBoardServiceTest {
     assertThat(row.spark7().getLast().date()).isEqualTo(today.minusDays(1));
   }
 
+  @Test
+  void 이름_검색은_등락_정렬과_같은_스캔_캐시에서_이름_초성으로_거른_뒤_정렬_페이지를_적용한다() {
+    var items =
+        List.of(
+            named(1, "운명의 파괴석", "30"),
+            named(2, "운명의 수호석", "10"),
+            named(3, "정제된 파괴강석", "50"),
+            named(4, "Abydos Item", null),
+            named(5, "아비도스 융화 재료", "70"));
+    when(cache.findBoardScan(MarketTab.REFINING, 4))
+        .thenReturn(Optional.of(new MarketBoardScan(MarketTab.REFINING, 4, OBSERVED, 150, items)));
+    var board = service.board(MarketTab.REFINING, null, MarketBoardRules.Sort.DEFAULT, 1, "파괴");
+    // 캐시가 있으면 공식 호출 0, 기본 정렬은 스캔 순서.
+    verifyNoInteractions(markets);
+    assertThat(board.rows()).extracting(row -> row.price().id()).containsExactly(1L, 3L);
+    assertThat(board.totalItems()).isEqualTo(2);
+    assertThat(board.scannedItems()).isEqualTo(5);
+    assertThat(board.complete()).isFalse();
+    assertThat(board.observedAt()).isEqualTo(OBSERVED);
+    assertThat(service.board(MarketTab.REFINING, null, MarketBoardRules.Sort.HIGH, 1, "파괴").rows())
+        .extracting(row -> row.price().id())
+        .containsExactly(3L, 1L);
+    assertThat(service.board(MarketTab.REFINING, null, MarketBoardRules.Sort.LOW, 1, "ㅍㄱ").rows())
+        .extracting(row -> row.price().id())
+        .containsExactly(1L, 3L);
+    // 초성은 앞이 아니어도 일치, 영문은 대소문자·공백 무시, 가격 없는 품목은 고가·저가에서 맨 뒤.
+    assertThat(
+            service.board(MarketTab.REFINING, null, MarketBoardRules.Sort.DEFAULT, 1, "ㅁㅇㅍ").rows())
+        .extracting(row -> row.price().id())
+        .containsExactly(1L);
+    assertThat(
+            service.board(MarketTab.REFINING, null, MarketBoardRules.Sort.LOW, 1, "abydosi").rows())
+        .extracting(row -> row.price().id())
+        .containsExactly(4L);
+    assertThat(service.board(MarketTab.REFINING, null, MarketBoardRules.Sort.HIGH, 1, "ㅇ").rows())
+        .extracting(row -> row.price().id())
+        .containsExactly(5L, 1L, 2L);
+    // 없는 이름은 빈 페이지, 범위를 넘는 페이지도 빈 페이지.
+    var none = service.board(MarketTab.REFINING, null, MarketBoardRules.Sort.DEFAULT, 1, "없는품목");
+    assertThat(none.rows()).isEmpty();
+    assertThat(none.totalItems()).isZero();
+    assertThat(
+            service.board(MarketTab.REFINING, null, MarketBoardRules.Sort.DEFAULT, 3, "파괴").rows())
+        .isEmpty();
+    verifyNoInteractions(markets);
+  }
+
+  @Test
+  void 이름_검색은_스캔이_없으면_등락_정렬과_같은_키로_한_번_스캔하고_저장한다() {
+    stubPages(MarketTab.ENGRAVING_BOOK, null, 23);
+    var board = service.board(MarketTab.ENGRAVING_BOOK, null, MarketBoardRules.Sort.RISE, 1, "품목2");
+    verify(markets, times(3)).search(eq(MarketSource.ACTIVE_LISTING), any());
+    // 품목2·품목20~23, 등락률 큰 순.
+    assertThat(board.rows())
+        .extracting(row -> row.price().id())
+        .containsExactly(23L, 22L, 21L, 20L, 2L);
+    assertThat(board.complete()).isTrue();
+    var saved = ArgumentCaptor.forClass(MarketBoardScan.class);
+    verify(cache).saveBoardScan(saved.capture());
+    assertThat(saved.getValue().tab()).isEqualTo(MarketTab.ENGRAVING_BOOK);
+    assertThat(saved.getValue().tier()).isNull();
+    assertThat(saved.getValue().items()).hasSize(23);
+  }
+
+  private static MarketPrice named(long id, String name, String current) {
+    return new MarketPrice(
+        id,
+        name,
+        "일반",
+        null,
+        1,
+        null,
+        BigDecimal.valueOf(100),
+        null,
+        current == null ? null : new BigDecimal(current));
+  }
+
   /** totalCount개 품목을 10개씩 페이지로 나눠 돌려준다. 품목 i는 전일 100, 현재 100+i. */
   private void stubPages(MarketTab tab, Integer tier, int totalCount) {
     when(markets.search(

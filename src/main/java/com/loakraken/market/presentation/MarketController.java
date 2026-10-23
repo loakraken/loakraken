@@ -109,13 +109,20 @@ public class MarketController {
       description =
           "탭별 현재 판매 품목과 전일 대비 등락률입니다. default·high·low는 공식 정렬 한 페이지(검색 캐시 30초)를 씁니다. "
               + "rise·fall은 공식 정렬에 없어 탭 전체(최대 10페이지)를 순차 스캔하고 3분 캐시합니다. 동시 요청은 합칩니다. "
-              + "changeWeek·spark7은 상품 이력 캐시가 있을 때만 채웁니다(추가 외부 호출 없음).")
+              + "changeWeek·spark7은 상품 이력 캐시가 있을 때만 채웁니다(추가 외부 호출 없음). "
+              + "q(이름 검색)를 주면 rise·fall과 같은 탭 전체 스캔(같은 캐시·합치기)에서 이름 또는 초성 포함으로 거른 뒤 정렬·페이지를 적용합니다. "
+              + "이때 totalItems는 찾은 품목 수이고, 10페이지를 넘는 탭이면 complete=false(일부 품목에서만 찾음)입니다. q가 규칙 밖이면 400 INVALID_REQUEST.")
   public ApiResponse<MarketBoardResponse> board(
       @Valid @ModelAttribute @ParameterObject MarketBoardRequest request) {
     return ApiResponse.of(
         MarketSuccessCode.MARKET_BOARD_SUCCESS,
         MarketBoardResponse.from(
-            board.board(request.tab(), request.tier(), request.toSort(), request.pageOrDefault())));
+            board.board(
+                request.tab(),
+                request.tier(),
+                request.toSort(),
+                request.pageOrDefault(),
+                request.query())));
   }
 
   @GetMapping("/items/{itemId}/history")

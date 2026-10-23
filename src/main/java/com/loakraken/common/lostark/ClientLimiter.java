@@ -31,6 +31,7 @@ public class ClientLimiter {
   private static final Duration WINDOW = Duration.ofMinutes(1);
   private static final String BOT_PREFIX = "bot:";
   private static final String BOT_ALL = "all";
+  private static final String SHARED = "shared";
 
   /** 제한을 끈 상태. 단위 테스트용 게이트가 쓴다. */
   public static final ClientLimiter DISABLED =
@@ -70,7 +71,10 @@ public class ClientLimiter {
     BOT_OFFICIAL,
     BOT_ADDRESS_OFFICIAL,
     ALERT_SUBSCRIBE,
-    MATERIAL_PRICES
+    MATERIAL_PRICES,
+    GEM_FILTER,
+    MATERIAL_SEARCH,
+    MATERIAL_SEARCH_ALL
   }
 
   /** 판정 결과. 거절이면 retryAfterSeconds는 지금 창이 끝날 때까지 남은 초(1 이상)다. */
@@ -105,10 +109,7 @@ public class ClientLimiter {
     long window = now / WINDOW.toMillis();
     long count;
     try {
-      count =
-          store.increment(
-              PREFIX + bucket.name().toLowerCase(Locale.ROOT) + ":" + clientKey + ":" + window,
-              WINDOW.plusSeconds(1));
+      count = store.increment(storeKey(bucket, clientKey, window), WINDOW.plusSeconds(1));
     } catch (ClientLimitStore.Unavailable exception) {
       count(bucket, "unavailable");
       return Decision.ALLOW;
@@ -117,6 +118,28 @@ public class ClientLimiter {
     count(bucket, "reject");
     long remaining = (window + 1) * WINDOW.toMillis() - now;
     return new Decision(false, Math.max(1, (remaining + 999) / 1000));
+  }
+
+  private static String storeKey(Bucket bucket, String clientKey, long window) {
+    return PREFIX + bucket.name().toLowerCase(Locale.ROOT) + ":" + clientKey + ":" + window;
+  }
+
+  /**
+   * 지금 스레드의 클라이언트가 이번 창에서 공식 호출을 몇 번 더 할 수 있는지(올리지 않고 읽기만). 세지 않는 경로(한도 꺼짐·클라이언트 없음)와 저장소 장애는
+   * {@link Integer#MAX_VALUE} — 그때는 {@link #chargeOfficial}도 막지 않으므로 같게 둔다.
+   */
+  int remainingOfficial() {
+    if (!properties.enabled()) return Integer.MAX_VALUE;
+    var client = CLIENT.get();
+    if (client == null) return Integer.MAX_VALUE;
+    var bucket = bot(client) ? Bucket.BOT_ADDRESS_OFFICIAL : Bucket.OFFICIAL;
+    long window = clock.millis() / WINDOW.toMillis();
+    try {
+      long used = store.current(storeKey(bucket, client, window));
+      return (int) Math.max(0, properties.limit(bucket) - used);
+    } catch (ClientLimitStore.Unavailable exception) {
+      return Integer.MAX_VALUE;
+    }
   }
 
   /** 요청을 처리하는 동안 이 스레드의 공식 호출을 clientKey에 매긴다. */
@@ -161,6 +184,53 @@ public class ClientLimiter {
     if (!decision.allowed())
       throw new BusinessException(
           LostArkErrorCode.CLIENT_RATE_LIMITED, Duration.ofSeconds(decision.retryAfterSeconds()));
+  }
+
+  /**
+   * 지금 클라이언트를 버킷에 한 번 세고, 되돌릴 때 쓸 카운터 키를 돌려준다(세지 않았으면 null — 클라이언트 없음·제한 꺼짐·저장소 장애). 넘으면 센 것을 바로
+   * 되돌리고 CLIENT_RATE_LIMITED(카운터가 한도 위로 부풀지 않게).
+   */
+  String chargeRefundable(Bucket bucket) {
+    var client = CLIENT.get();
+    if (client == null) return null;
+    return countRefundable(bucket, client, LostArkErrorCode.CLIENT_RATE_LIMITED);
+  }
+
+  /**
+   * 모든 클라이언트가 함께 쓰는 기능 상한(예: 재료 검색 전체 분당 36)을 한 번 세고 되돌리기용 키를 돌려준다. 클라이언트가 없어도(내부 주소) 센다. 넘으면 센 것을
+   * 되돌리고 LOST_ARK_RATE_LIMITED(공유 예산이 막힌 것과 같은 거절 — 부르는 쪽은 지금 알 수 없음으로 처리).
+   */
+  String chargeShared(Bucket bucket) {
+    return countRefundable(bucket, SHARED, LostArkErrorCode.LOST_ARK_RATE_LIMITED);
+  }
+
+  /**
+   * {@link #chargeRefundable}·{@link #chargeShared}로 센 것을 되돌린다(공식 호출 전에 게이트가 거절했을 때). null이면 아무것도
+   * 하지 않는다.
+   */
+  void refund(String counterKey) {
+    if (counterKey != null) store.decrement(counterKey);
+  }
+
+  private String countRefundable(Bucket bucket, String clientKey, LostArkErrorCode rejected) {
+    if (!properties.enabled()) return null;
+    long now = clock.millis();
+    long window = now / WINDOW.toMillis();
+    String key = storeKey(bucket, clientKey, window);
+    long count;
+    try {
+      count = store.increment(key, WINDOW.plusSeconds(1));
+    } catch (ClientLimitStore.Unavailable exception) {
+      count(bucket, "unavailable");
+      return null;
+    }
+    if (count <= properties.limit(bucket)) return key;
+    store.decrement(key);
+    count(bucket, "reject");
+    long remaining = (window + 1) * WINDOW.toMillis() - now;
+    throw rejected == LostArkErrorCode.CLIENT_RATE_LIMITED
+        ? new BusinessException(rejected, Duration.ofSeconds(Math.max(1, (remaining + 999) / 1000)))
+        : new BusinessException(rejected);
   }
 
   void count(Bucket bucket, String event) {

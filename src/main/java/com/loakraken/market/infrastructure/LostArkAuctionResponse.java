@@ -57,7 +57,8 @@ record LostArkAuctionResponse(
                               option.className() == null || option.className().isBlank()
                                   ? null
                                   : option.className()))
-                  .toList());
+                  .toList(),
+          icon);
     }
   }
 

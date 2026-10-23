@@ -45,6 +45,7 @@ public class RosterCombatPowerService {
   private final RosterCombatPowerPolicy policy;
   private final RosterTransientPort transients;
   private final Clock clock;
+  private final com.loakraken.common.lostark.LostArkRequestGate gate;
   private final SingleFlight<Refresh> flights = new SingleFlight<>();
 
   public RosterCombatPowerService(
@@ -57,7 +58,9 @@ public class RosterCombatPowerService {
       CharacterMetrics metrics,
       RosterCombatPowerPolicy policy,
       RosterTransientPort transients,
-      Clock clock) {
+      Clock clock,
+      com.loakraken.common.lostark.LostArkRequestGate gate) {
+    this.gate = gate;
     this.transients = transients;
     this.queries = queries;
     this.details = details;
@@ -144,6 +147,11 @@ public class RosterCombatPowerService {
     boolean unavailable = false;
     for (var target : targets) {
       if (attempted == policy.maxTargets()) break;
+      // 방문자 한 명의 분당 공식 칸을 다 쓰지 않게, 남은 칸이 적으면 멈추고 나머지는 다음 분으로(remaining, #614).
+      if (!gate.bulkMayContinue()) {
+        stopped = true;
+        break;
+      }
       attempted++;
       try {
         // 처리정지 목록도 다른 캐릭터와 똑같이 부른다(호출 수·fetched가 같아야 숫자로 드러나지 않음, B5).

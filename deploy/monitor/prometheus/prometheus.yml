@@ -6,7 +6,7 @@ global:
   evaluation_interval: 30s
 
 scrape_configs:
-  # api 관리 포트(9090)의 지표. 관리 포트는 internal 망에만 있고 edge로 나가지 않는다.
+  # api 관리 포트(9090)의 지표. 관리 포트는 metrics망의 api 주소에만 묶여 있고(prometheus만 닿음) edge로 나가지 않는다.
   # 대시보드 질의가 application 라벨로 거르므로 수집 쪽에서 붙인다(백엔드 코드 변경 없음).
   # 지표에 이미 job 태그(collector·retention·warmup 등)가 있어 honor_labels로 그 값을 지킨다(대상 1개·신뢰 대상).
   - job_name: loakraken-api

@@ -171,6 +171,72 @@ class ClientLimiterTest {
   }
 
   @Test
+  void 랭킹_아래_경로도_통계_칸으로_센다() {
+    for (var path :
+        new String[] {
+          "/api/v1/rankings",
+          "/api/v1/rankings/bracelets",
+          "/api/v1/rankings/ark-grid-gems",
+          "/api/v1/rankings/rosters",
+          "/api/v1/rankings/guilds",
+          "/api/v1/rankings/collectibles",
+          "/api/v1/rankings/collectibles/standing",
+          "/api/v1/rankings/class-engravings",
+          "/api/v1/stats/summary",
+          "/api/v1/characters/rank"
+        }) assertThat(ClientLimitFilter.stats(path)).as(path).isTrue();
+    for (var path :
+        new String[] {"/api/v1/rankingsx", "/api/v1/characters/search", "/api/v1/markets/board"})
+      assertThat(ClientLimitFilter.stats(path)).as(path).isFalse();
+  }
+
+  @Test
+  void 경로_판정은_원문_URI가_아니라_정규화된_서블릿_경로로_한다() {
+    // 원문 URI에 경로 매개변수(';…')가 있어도 컨테이너가 정한 서블릿 경로로 판정한다.
+    var request = new MockHttpServletRequest("GET", "/api/v1/rankings;x=1/guilds");
+    request.setServletPath("/api/v1/rankings/guilds");
+    assertThat(ClientLimitFilter.path(request)).isEqualTo("/api/v1/rankings/guilds");
+    assertThat(ClientLimitFilter.stats(ClientLimitFilter.path(request))).isTrue();
+    var prefixed = new MockHttpServletRequest("GET", "/api;x/v1/markets/tabs");
+    prefixed.setServletPath("/api/v1/markets/tabs");
+    assertThat(ClientLimitFilter.path(prefixed)).isEqualTo("/api/v1/markets/tabs");
+    // 서블릿 경로가 비면(서블릿 테스트) 원문 URI에서 문맥 경로를 뺀다.
+    var bare = new MockHttpServletRequest("GET", "/ctx/api/v1/rankings");
+    bare.setContextPath("/ctx");
+    assertThat(ClientLimitFilter.path(bare)).isEqualTo("/api/v1/rankings");
+  }
+
+  @Test
+  void 기본_한도에서_사람이_랭킹을_넘겨_보는_정도는_막히지_않는다() throws Exception {
+    // 기본값(STATS 60, GENERAL 240). 웹은 페이지·탭·조건을 바꿀 때마다 한 번 부른다(입력은 0.3초 뒤). 1분 안에 랭킹 30쪽 넘기기 + 캐릭터
+    // 10명
+    // 보기(순위·수집품 순위 2번씩) = 통계 칸 50번 — 모두 통과하고, 그 분의 61번째 통계 요청부터 막힌다.
+    var limiter = limiter(new ClientLimitProperties(true, 20, 60, 240, 120, true, 2, 6, 20, 5, 5));
+    var filter = new ClientLimitFilter(limiter);
+    var address = "203.0.113.90";
+    var tabs =
+        new String[] {
+          "/api/v1/rankings",
+          "/api/v1/rankings/rosters",
+          "/api/v1/rankings/guilds",
+          "/api/v1/rankings/collectibles",
+          "/api/v1/rankings/bracelets"
+        };
+    for (int i = 0; i < 30; i++)
+      assertThat(run(filter, tabs[i % tabs.length], address, null).getStatus()).isEqualTo(200);
+    for (int i = 0; i < 10; i++) {
+      assertThat(run(filter, "/api/v1/characters/rank", address, null).getStatus()).isEqualTo(200);
+      assertThat(run(filter, "/api/v1/rankings/collectibles/standing", address, null).getStatus())
+          .isEqualTo(200);
+    }
+    for (int i = 0; i < 10; i++)
+      assertThat(run(filter, "/api/v1/rankings/guilds", address, null).getStatus()).isEqualTo(200);
+    assertThat(run(filter, "/api/v1/rankings/guilds", address, null).getStatus()).isEqualTo(429);
+    // 통계가 아닌 경로는 일반 칸만 센다.
+    assertThat(run(filter, "/api/v1/markets/board", address, null).getStatus()).isEqualTo(200);
+  }
+
+  @Test
   void 필터는_공개_주소를_세고_내부_주소는_세지_않는다() throws Exception {
     var limiter = limiter(new ClientLimitProperties(true, 2, 1, 3, 3, true, 2, 6, 20, 5, 5));
     var filter = new ClientLimitFilter(limiter);

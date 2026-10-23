@@ -64,6 +64,28 @@ class ClientLimitIntegrationTest {
   }
 
   @Test
+  void 랭킹_아래_경로와_경로_매개변수가_붙은_경로도_센다() throws Exception {
+    // STATS 2: 랭킹 아래 경로도 통계 칸이고, 원문 URI에 ';…'가 붙어도 정규화된 경로로 센다.
+    long second = (System.currentTimeMillis() / 1000) % 60;
+    if (second >= 50) Thread.sleep((61 - second) * 1000);
+    String address = "203.0.113." + (10 + (int) (Math.random() * 200));
+    var statuses = new java.util.ArrayList<Integer>();
+    for (var path :
+        new String[] {
+          "/api/v1/rankings/guilds", "/api/v1/rankings;x=1/guilds", "/api/v1/rankings/rosters"
+        }) statuses.add(get(path, address).statusCode());
+    statuses.add(get("/api/v1/rankings/rosters", address).statusCode());
+    // ';' 경로가 처리되면(200) 그것도 세어 세 번째부터 429, 컨테이너가 400으로 거절하면 세지 않아 네 번째가 429.
+    assertThat(statuses.get(1)).as(statuses.toString()).isIn(200, 400);
+    if (statuses.get(1) == 200) assertThat(statuses.get(2)).as(statuses.toString()).isEqualTo(429);
+    assertThat(statuses.get(3)).as(statuses.toString()).isEqualTo(429);
+    // 접두 앞쪽의 ';…'도 필터를 비켜 가지 않는다(GENERAL 4: 위 3회 + 1회, 다음은 429).
+    String other = "198.51.100." + (10 + (int) (Math.random() * 200));
+    for (int i = 0; i < 4; i++) get("/api;x=1/v1/markets/tabs", other);
+    assertThat(get("/api;x=1/v1/markets/tabs", other).statusCode()).isIn(400, 429);
+  }
+
+  @Test
   void 공식_API가_없다고_답한_이름은_5분_동안_공식_호출_없이_404다() throws Exception {
     String name = "없는캐릭" + UUID.randomUUID().toString().substring(0, 6);
     when(detailsPort.fetch(name))

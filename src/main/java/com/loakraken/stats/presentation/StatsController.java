@@ -3,6 +3,7 @@ package com.loakraken.stats.presentation;
 import com.loakraken.common.api.ApiResponse;
 import com.loakraken.stats.application.StatsPort;
 import com.loakraken.stats.application.StatsQueryService;
+import com.loakraken.stats.domain.ClassEngravingCatalog;
 import com.loakraken.stats.domain.StatsRules.Metric;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -20,12 +21,14 @@ import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
 import org.springdoc.core.annotations.ParameterObject;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.server.ResponseStatusException;
 
 @RestController
 @Validated
@@ -37,9 +40,11 @@ public class StatsController {
   private static final String ERRORS =
       "400 INVALID_REQUEST·STATS_INVALID_RANGE·STATS_TOO_MANY_BINS, 503 STATS_UNAVAILABLE";
   private final StatsQueryService stats;
+  private final ClassEngravingCatalog classEngravings;
 
-  public StatsController(StatsQueryService stats) {
+  public StatsController(StatsQueryService stats, ClassEngravingCatalog classEngravings) {
     this.stats = stats;
+    this.classEngravings = classEngravings;
   }
 
   @GetMapping(value = "/api/v1/stats/summary", produces = MediaType.APPLICATION_JSON_VALUE)
@@ -137,6 +142,8 @@ public class StatsController {
       summary = "랭킹",
       description =
           "전투력 또는 아이템 레벨 순위. 서버·직업·역할 등 필터로 범위를 정합니다. 동률은 같은 순위입니다. 50개 단위 페이지, 최대 10,000위까지. "
+              + "classEngraving(직업 각인)을 주면 마지막으로 관측한 장비의 직업 각인이 그 값인 캐릭터만 순위·모집단(meta.population)에 넣습니다. "
+              + "className과 함께만 받고, 그 직업의 직업 각인(GET /api/v1/rankings/class-engravings)이 아니면 400 INVALID_REQUEST입니다. "
               + ERRORS)
   @StandardErrors
   public ApiResponse<StatsResponses.StatsRankingResponse> rankings(
@@ -149,15 +156,48 @@ public class StatsController {
           @RequestParam(required = false)
           @Min(1)
           @Max(100)
-          Integer size) {
+          Integer size,
+      @Parameter(description = "직업 각인(공식 아크 패시브 칭호). className 필요. 공백은 비교하지 않습니다")
+          @RequestParam(required = false)
+          @Size(max = 32)
+          String classEngraving) {
+    var conditions = filter.toConditions();
+    String engraving = null;
+    if (classEngraving != null)
+      // 빈 값·공백뿐, 직업 없음, 그 직업의 직업 각인 목록 밖이면 400 INVALID_REQUEST(새 오류 코드 없음, #618).
+      engraving =
+          classEngravings
+              .canonical(conditions.className(), classEngraving)
+              .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST));
     return ApiResponse.of(
         StatsSuccessCode.RANKING_SUCCESS,
         StatsResponses.StatsRankingResponse.from(
             stats.ranking(
-                filter.toConditions(),
+                conditions,
                 metric == null ? Metric.COMBAT_POWER : metric,
                 page == null ? 1 : page,
-                size == null ? 50 : size)));
+                size == null ? 50 : size,
+                engraving)));
+  }
+
+  @GetMapping(
+      value = "/api/v1/rankings/class-engravings",
+      produces = MediaType.APPLICATION_JSON_VALUE)
+  @Operation(
+      summary = "랭킹 직업 각인 선택지",
+      description =
+          "직업의 직업 각인(랭킹 classEngraving에 넣을 수 있는 값) 목록과, 랭킹과 같은 조건 모집단에서 마지막으로 관측한 장비의 직업 각인이 그 값인 캐릭터 수입니다. "
+              + "className이 필요하고 모르는 직업이면 400 INVALID_REQUEST입니다. 집계를 못 하면 count·unknown은 null입니다. "
+              + ERRORS)
+  @StandardErrors
+  public ApiResponse<StatsResponses.StatsClassEngravingsResponse> classEngravings(
+      @Valid @ModelAttribute @ParameterObject StatsFilterRequest filter) {
+    var conditions = filter.toConditions();
+    var names = classEngravings.of(conditions.className());
+    if (names.isEmpty()) throw new ResponseStatusException(HttpStatus.BAD_REQUEST);
+    return ApiResponse.of(
+        StatsSuccessCode.RANKING_SUCCESS,
+        StatsResponses.StatsClassEngravingsResponse.from(stats.classEngravings(conditions, names)));
   }
 
   @GetMapping(value = "/api/v1/rankings/bracelets", produces = MediaType.APPLICATION_JSON_VALUE)

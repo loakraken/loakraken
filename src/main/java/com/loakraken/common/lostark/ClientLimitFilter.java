@@ -42,6 +42,17 @@ class ClientLimitFilter extends OncePerRequestFilter {
   protected void doFilterInternal(
       HttpServletRequest request, HttpServletResponse response, FilterChain chain)
       throws ServletException, IOException {
+    // 거절 로그용 경로 힌트(자원명까지만, #616). 요청이 끝나면 지운다.
+    limiter.enterRoute(request.getMethod(), path(request));
+    try {
+      limit(request, response, chain);
+    } finally {
+      limiter.exitRoute();
+    }
+  }
+
+  private void limit(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
+      throws ServletException, IOException {
     if ("1".equals(request.getHeader(BOT_HEADER))) {
       // 봇 표시는 User-Agent로 붙어 흉내 낼 수 있다. 그래서 봇 칸은 일반 칸보다 느슨하면 안 된다(PM-백엔드 #151 P1): 주소별 BOT
       // 한도(≤ GENERAL)에 통계 경로는 그 주소의 STATS도 센다. 주소별로 세므로 한 주소가 다른 봇 주소를 막지 못한다.
@@ -61,13 +72,16 @@ class ClientLimitFilter extends OncePerRequestFilter {
       run(botClient, request, response, chain);
       return;
     }
+    // 제외는 연결 상대(소켓)가 루프백이고 X-Forwarded-For가 아예 없을 때만(같은 호스트의 점검·도구). 신뢰 프록시가 넘긴 주소는 사설·루프백이어도 그
+    // 주소로, 프록시가 주소 없이 보낸 요청은 프록시 주소 하나로 센다.
     String address = request.getRemoteAddr();
-    if (limiter.exemptInternal() && internal(address)) {
+    String peer = peerAddress(request);
+    if (limiter.exemptInternal() && loopback(peer) && peer.equals(address) && !forwarded(request)) {
       limiter.unattributed();
       chain.doFilter(request, response);
       return;
     }
-    var client = limiter.clientKey(ClientAddresses.normalize(address));
+    var client = limiter.clientKey(ClientAddresses.normalize(address == null ? "" : address));
     var decision = limiter.check(ClientLimiter.Bucket.GENERAL, client);
     if (decision.allowed() && stats(path(request)))
       decision = limiter.check(ClientLimiter.Bucket.STATS, client);
@@ -108,19 +122,31 @@ class ClientLimitFilter extends OncePerRequestFilter {
         || path.equals("/api/v1/characters/rank");
   }
 
-  /** 루프백·사설망·링크 로컬·고유 로컬(fc00::/7). 리터럴만 해석하고 DNS는 조회하지 않는다. */
-  static boolean internal(String address) {
-    if (address == null || address.isBlank()) return true;
-    InetAddress parsed;
+  /**
+   * 연결 상대(소켓) 주소. Tomcat에서는 {@link PeerAddressValve}가 X-Forwarded-For 처리 전에 남긴 값이고, 그 밸브가 없는 환경(서블릿
+   * 테스트)은 원격 주소 그대로다.
+   */
+  static String peerAddress(HttpServletRequest request) {
+    return request.getAttribute(PeerAddressValve.ATTRIBUTE) instanceof String peer
+        ? peer
+        : request.getRemoteAddr();
+  }
+
+  /** X-Forwarded-For가 (값과 관계없이) 붙어 왔는지. Tomcat에서는 밸브가 남긴 값, 밸브가 없으면 지금 헤더. */
+  static boolean forwarded(HttpServletRequest request) {
+    return request.getAttribute(PeerAddressValve.FORWARDED_ATTRIBUTE) instanceof Boolean flag
+        ? flag
+        : request.getHeader(PeerAddressValve.FORWARDED_HEADER) != null;
+  }
+
+  /** 루프백(127.0.0.0/8, ::1)만. 리터럴만 해석하고 DNS는 조회하지 않는다. 비었거나 주소가 아니면 false(센다). */
+  static boolean loopback(String address) {
+    if (address == null || address.isBlank()) return false;
     try {
-      parsed = InetAddress.ofLiteral(address.strip());
+      return InetAddress.ofLiteral(address.strip()).isLoopbackAddress();
     } catch (IllegalArgumentException exception) {
       return false;
     }
-    if (parsed.isLoopbackAddress() || parsed.isSiteLocalAddress() || parsed.isLinkLocalAddress())
-      return true;
-    var bytes = parsed.getAddress();
-    return bytes.length == 16 && (bytes[0] & 0xfe) == 0xfc;
   }
 
   /**

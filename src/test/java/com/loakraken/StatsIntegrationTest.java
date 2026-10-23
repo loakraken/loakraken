@@ -446,6 +446,97 @@ class StatsIntegrationTest {
   }
 
   @Test
+  void 직업_각인_필터는_마지막_장비의_직업_각인으로_모집단을_좁히고_모르는_수를_준다() throws Exception {
+    // #618: 블레이드 5명 — 마지막 요약 기준 버스트 2(한 명은 예전 요약이 잔재된 기운), 잔재된 기운 1, 요약 없음 1, 빈 칭호 1.
+    var titles = new String[] {"버스트", "잔재된 기운", "버스트", null, ""};
+    for (int i = 0; i < titles.length; i++) {
+      insert(
+          "각인캐" + i,
+          "블레이드",
+          new BigDecimal(1720 - i),
+          new BigDecimal(5000 - 1000 * i),
+          "DEALER",
+          null,
+          null,
+          now.minus(1, ChronoUnit.DAYS));
+      if (titles[i] == null) continue;
+      var id =
+          jdbc.sql(
+                  "SELECT character_id FROM characters WHERE character_name = :n AND server_name = :s")
+              .param("n", "각인캐" + i)
+              .param("s", SERVER)
+              .query(UUID.class)
+              .single();
+      summary(id, i == 0 ? "잔재된 기운" : titles[i], 5, "a" + i);
+      if (i == 0) summary(id, titles[i], 1, "b" + i);
+    }
+    var base = "/api/v1/rankings?className=" + encode("블레이드") + "&server=" + encode(SERVER);
+
+    var all = data(base);
+    assertThat(all.at("/meta/population").asLong()).isEqualTo(5);
+    assertThat(all.path("classEngraving").isNull()).isTrue();
+    assertThat(all.path("classEngravingUnknown").isNull()).isTrue();
+
+    // 공백은 비교하지 않고, 응답은 목록의 표기다.
+    var burst = data(base + "&classEngraving=" + encode("버 스트"));
+    assertThat(burst.at("/meta/population").asLong()).isEqualTo(2);
+    assertThat(burst.path("classEngraving").asText()).isEqualTo("버스트");
+    assertThat(burst.path("classEngravingUnknown").asLong()).isEqualTo(2);
+    assertThat(burst.at("/rows").size()).isEqualTo(2);
+    assertThat(burst.at("/rows/0/characterName").asText()).isEqualTo("각인캐0");
+    assertThat(burst.at("/rows/0/rank").asLong()).isEqualTo(1);
+    assertThat(burst.at("/rows/1/characterName").asText()).isEqualTo("각인캐2");
+    assertThat(burst.at("/rows/1/rank").asLong()).isEqualTo(2);
+    assertThat(burst.at("/rows/1/classEngraving").asText()).isEqualTo("버스트");
+
+    var choices =
+        data(
+            "/api/v1/rankings/class-engravings?className="
+                + encode("블레이드")
+                + "&server="
+                + encode(SERVER));
+    assertThat(choices.path("className").asText()).isEqualTo("블레이드");
+    var counts = new java.util.HashMap<String, Long>();
+    choices
+        .path("classEngravings")
+        .forEach(row -> counts.put(row.path("name").asText(), row.path("count").asLong()));
+    assertThat(counts).containsEntry("버스트", 2L).containsEntry("잔재된 기운", 1L).hasSize(2);
+    assertThat(choices.path("unknown").asLong()).isEqualTo(2);
+
+    // 직업 없이, 다른 직업의 직업 각인, 모르는 직업은 기존 400 INVALID_REQUEST다.
+    for (var path :
+        new String[] {
+          "/api/v1/rankings?classEngraving=" + encode("버스트"),
+          base + "&classEngraving=" + encode("광기"),
+          base + "&classEngraving=",
+          "/api/v1/rankings?classEngraving=%20",
+          "/api/v1/rankings/class-engravings",
+          "/api/v1/rankings/class-engravings?className=" + encode(MAIN_CLASS)
+        }) {
+      var response = get(path);
+      assertThat(response.statusCode()).as(path).isEqualTo(400);
+      assertThat(mapper.readTree(response.body()).path("code").asText())
+          .as(path)
+          .isEqualTo("INVALID_REQUEST");
+    }
+  }
+
+  private void summary(UUID id, String title, int hoursAgo, String hash) {
+    jdbc.sql(
+            """
+        INSERT INTO character_equipment_summary (character_id, observed_at, last_confirmed_at,
+          schema_version, combat_power, item_level, class_name, ark_passive_title, features, features_hash)
+        VALUES (:id, :at, :at, 'equipment-summary-v1', 3000, 1720, '블레이드', :title,
+          CAST('{}' AS JSONB), :hash)
+        """)
+        .param("id", id)
+        .param("at", now.minus(hoursAgo, ChronoUnit.HOURS).atOffset(ZoneOffset.UTC))
+        .param("title", title)
+        .param("hash", hash + "0".repeat(64 - hash.length()))
+        .update();
+  }
+
+  @Test
   void 저장된_효율이_없으면_빈_랭킹이다() throws Exception {
     표본();
     var empty = data("/api/v1/rankings/ark-grid-gems?server=" + encode(SERVER));

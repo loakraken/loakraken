@@ -26,8 +26,8 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
  *     예산을 혼자 쓰지 못하게 한다. 넘으면 그 이름부터 지금 알 수 없음(429 아님)
  * @param materialSearchAllPerMinute 재료 시세 검색이 모든 클라이언트를 합쳐 분당 일으킬 수 있는 공식 호출 수(공유 예산 90의 40%).
  *     수집기·예열이 공유 예산을 얼마나 쓰든 재료 검색 자신의 사용만 센다
- * @param exemptInternal 원격 주소가 루프백·사설망이면 세지 않는다. 운영에서는 웹이 실제 IP를 X-Forwarded-For로 넘기므로, 사설 주소는 헤더가
- *     빠진 내부 요청이다
+ * @param exemptInternal 연결 상대(소켓)가 루프백이면 세지 않는다(같은 호스트의 점검·도구). 신뢰 프록시를 거친 요청은 X-Forwarded-For 값과
+ *     관계없이 세고, 프록시가 주소 없이 보낸 요청은 프록시 주소 하나로 센다
  */
 @ConfigurationProperties("lostark.client-limit")
 public record ClientLimitProperties(

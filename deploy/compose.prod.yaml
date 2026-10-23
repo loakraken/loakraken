@@ -185,8 +185,9 @@ services:
       MARKET_WARMUP_REFINING_MATERIALS_ENABLED: ${MARKET_WARMUP_REFINING_MATERIALS_ENABLED:-false}
       MARKET_WARMUP_RELIC_BOOKS_ENABLED: ${MARKET_WARMUP_RELIC_BOOKS_ENABLED:-false}
       API_DOCS_ENABLED: "false"
-      # 관리(actuator) 포트를 앱 포트와 나눈다. internal·data망 안에서만 닿고 edge는 이 망에 없다.
+      # 관리(actuator) 포트를 앱 포트와 나누고, metrics망의 api 주소에만 묶는다(prometheus만 닿음, internal·data망의 다른 컨테이너는 닿지 않음).
       MANAGEMENT_SERVER_PORT: "9090"
+      MANAGEMENT_SERVER_ADDRESS: ${API_METRICS_IP:?API_METRICS_IP가 필요합니다(env 예시 참고)}
       # liveness는 프로세스 생존, readiness는 DB·Valkey까지 확인한다(출시 점검표 R2).
       MANAGEMENT_ENDPOINT_HEALTH_PROBES_ENABLED: "true"
       MANAGEMENT_ENDPOINT_HEALTH_GROUP_READINESS_INCLUDE: readinessState,db,redis
@@ -220,17 +221,19 @@ services:
         - CMD
         - bash
         - -c
-        - "exec 3<>/dev/tcp/127.0.0.1/9090 && printf 'GET /actuator/health/readiness HTTP/1.0\\r\\nHost: localhost\\r\\n\\r\\n' >&3 && grep -q '\"status\":\"UP\"' <&3"
+        # 관리 포트가 metrics망 주소에만 묶여 있어 그 주소로 확인한다(127.0.0.1에는 열려 있지 않음).
+        - "exec 3<>/dev/tcp/${API_METRICS_IP:?API_METRICS_IP가 필요합니다(env 예시 참고)}/9090 && printf 'GET /actuator/health/readiness HTTP/1.0\\r\\nHost: localhost\\r\\n\\r\\n' >&3 && grep -q '\"status\":\"UP\"' <&3"
       interval: 15s
       timeout: 5s
       start_period: 90s
       retries: 5
     mem_limit: ${API_MEM_LIMIT:-768m}
     networks:
-      - internal
-      - data
-      # 모니터링 수집용(prometheus만 함께 있는 망). 프로필을 끈 서버에서도 망만 있고 다른 컨테이너는 없다.
-      - metrics
+      internal: {}
+      data: {}
+      # 모니터링 수집용(prometheus만 함께 있는 망). 프로필을 끈 서버에서도 망만 있고 다른 컨테이너는 없다. 주소를 고정해 관리 포트를 여기에만 묶는다.
+      metrics:
+        ipv4_address: ${API_METRICS_IP:?API_METRICS_IP가 필요합니다(env 예시 참고)}
     security_opt:
       - no-new-privileges:true
     cap_drop:
@@ -478,8 +481,12 @@ networks:
   # 모니터링(프로필 monitor): prometheus·node-exporter·grafana·cloudflared. grafana가 Slack, cloudflared가 Cloudflare로 나가야 해서 외부 통신을 막지 않는다.
   monitor:
   # api↔prometheus만(관리 포트 9090 수집). 외부 통신 없음. grafana·cloudflared는 이 망에 없어 api에 닿지 않는다.
+  # 서브넷을 고정해 api 관리 포트를 이 망의 api 주소(API_METRICS_IP)에만 묶는다.
   metrics:
     internal: true
+    ipam:
+      config:
+        - subnet: ${METRICS_SUBNET:?METRICS_SUBNET이 필요합니다(env 예시 참고)}
 
 volumes:
   edge-data:

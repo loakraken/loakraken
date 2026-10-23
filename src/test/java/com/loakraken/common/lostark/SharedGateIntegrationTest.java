@@ -81,6 +81,35 @@ class SharedGateIntegrationTest {
   }
 
   @Test
+  void 창_키는_만료가_없고_지워져도_인스턴스_상한이_예산을_넘기지_않는다() {
+    String keyId = "test-" + UUID.randomUUID();
+    var store = new ValkeyGateStore(redis, keyId);
+    var gate = gate(store, 10);
+    for (int i = 0; i < 10; i++) {
+      gate.acquire();
+      gate.release();
+    }
+    // 만료 시간이 없어 메모리 정책(만료 있는 키만 내보냄)에 지워지지 않는다.
+    assertThat(store.expiries().getFirst()).isEqualTo(-1L);
+    // 창이 분 중간에 사라져도(내보내짐·삭제) 이 인스턴스는 11번째를 부르지 않는다.
+    redis.delete(ValkeyGateStore.PREFIX + keyId + ":window");
+    assertThatThrownBy(gate::acquire).isInstanceOf(BusinessException.class);
+    assertThat(gate.backgroundAvailable(0)).isFalse();
+    // 저장소 자체는 비어 있다: 상한이 없는 다른 인스턴스(새 게이트)는 부를 수 있다.
+    var fresh = gate(new ValkeyGateStore(redis, keyId), 10);
+    fresh.acquire();
+    fresh.release();
+
+    // 공식 한도 대기 시각도 만료 시간 없이 시각 값으로 둔다.
+    var blockedId = "test-" + UUID.randomUUID();
+    var blocked = new ValkeyGateStore(redis, blockedId);
+    gate(blocked, 10).observe(new HttpHeaders(), true);
+    assertThat(blocked.expiries().get(1)).isEqualTo(-1L);
+    assertThat(blocked.blockedFor()).isGreaterThan(Duration.ofSeconds(30));
+    assertThatThrownBy(gate(blocked, 10)::acquire).isInstanceOf(BusinessException.class);
+  }
+
+  @Test
   void 한_인스턴스가_받은_429는_다른_인스턴스도_기다리게_한다() {
     String keyId = "test-" + UUID.randomUUID();
     var first = gate(new ValkeyGateStore(redis, keyId), 90);

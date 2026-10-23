@@ -265,3 +265,30 @@ groups:
         annotations:
           summary: 15분 안에 공유 게이트의 예산·동시 실행 거절이 30번을 넘었다(사용자 요청이 공식 호출 대기에서 밀림).
           description: "먼저: 대시보드 공식 API 패널과 사용자 한도 거절 패널 → 접속이 몰린 건지, 수집기가 예산을 많이 쓰는지. 기준 30은 공개 뒤 실측으로 다시 맞춘다."
+
+      - uid: loakraken-client-limit-unattributed
+        title: 클라이언트 한도 제외 요청
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 1800, to: 0 }
+            datasourceUid: loakraken-prometheus
+            model:
+              refId: A
+              instant: true
+              expr: sum(increase(loakraken_client_limit_unattributed_total{application="loakraken"}[15m]))
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [0] }
+        for: 0s
+        noDataState: OK
+        execErrState: Error
+        labels: { severity: ticket }
+        annotations:
+          summary: 15분 안에 클라이언트 한도를 세지 않은 요청(같은 호스트에서 넘겨받은 주소 없이 앱 포트로 온 요청)이 있었다.
+          description: "먼저: 같은 시각 api 로그의 요청 경로 → 운영 점검은 관리 포트를 쓰므로 이 요청은 보통 없다. 반복되면 어디서 온 요청인지 확인."

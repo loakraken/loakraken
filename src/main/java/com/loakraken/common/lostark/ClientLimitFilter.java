@@ -61,13 +61,16 @@ class ClientLimitFilter extends OncePerRequestFilter {
       run(botClient, request, response, chain);
       return;
     }
+    // 제외는 연결 상대(소켓)가 루프백이고 X-Forwarded-For가 아예 없을 때만(같은 호스트의 점검·도구). 신뢰 프록시가 넘긴 주소는 사설·루프백이어도 그
+    // 주소로, 프록시가 주소 없이 보낸 요청은 프록시 주소 하나로 센다.
     String address = request.getRemoteAddr();
-    if (limiter.exemptInternal() && internal(address)) {
+    String peer = peerAddress(request);
+    if (limiter.exemptInternal() && loopback(peer) && peer.equals(address) && !forwarded(request)) {
       limiter.unattributed();
       chain.doFilter(request, response);
       return;
     }
-    var client = limiter.clientKey(ClientAddresses.normalize(address));
+    var client = limiter.clientKey(ClientAddresses.normalize(address == null ? "" : address));
     var decision = limiter.check(ClientLimiter.Bucket.GENERAL, client);
     if (decision.allowed() && stats(path(request)))
       decision = limiter.check(ClientLimiter.Bucket.STATS, client);
@@ -103,19 +106,31 @@ class ClientLimitFilter extends OncePerRequestFilter {
         || path.equals("/api/v1/characters/rank");
   }
 
-  /** 루프백·사설망·링크 로컬·고유 로컬(fc00::/7). 리터럴만 해석하고 DNS는 조회하지 않는다. */
-  static boolean internal(String address) {
-    if (address == null || address.isBlank()) return true;
-    InetAddress parsed;
+  /**
+   * 연결 상대(소켓) 주소. Tomcat에서는 {@link PeerAddressValve}가 X-Forwarded-For 처리 전에 남긴 값이고, 그 밸브가 없는 환경(서블릿
+   * 테스트)은 원격 주소 그대로다.
+   */
+  static String peerAddress(HttpServletRequest request) {
+    return request.getAttribute(PeerAddressValve.ATTRIBUTE) instanceof String peer
+        ? peer
+        : request.getRemoteAddr();
+  }
+
+  /** X-Forwarded-For가 (값과 관계없이) 붙어 왔는지. Tomcat에서는 밸브가 남긴 값, 밸브가 없으면 지금 헤더. */
+  static boolean forwarded(HttpServletRequest request) {
+    return request.getAttribute(PeerAddressValve.FORWARDED_ATTRIBUTE) instanceof Boolean flag
+        ? flag
+        : request.getHeader(PeerAddressValve.FORWARDED_HEADER) != null;
+  }
+
+  /** 루프백(127.0.0.0/8, ::1)만. 리터럴만 해석하고 DNS는 조회하지 않는다. 비었거나 주소가 아니면 false(센다). */
+  static boolean loopback(String address) {
+    if (address == null || address.isBlank()) return false;
     try {
-      parsed = InetAddress.ofLiteral(address.strip());
+      return InetAddress.ofLiteral(address.strip()).isLoopbackAddress();
     } catch (IllegalArgumentException exception) {
       return false;
     }
-    if (parsed.isLoopbackAddress() || parsed.isSiteLocalAddress() || parsed.isLinkLocalAddress())
-      return true;
-    var bytes = parsed.getAddress();
-    return bytes.length == 16 && (bytes[0] & 0xfe) == 0xfc;
   }
 
   private static String path(HttpServletRequest request) {

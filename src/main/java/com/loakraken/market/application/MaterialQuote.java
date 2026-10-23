@@ -13,7 +13,8 @@ public record MaterialQuote(
     BigDecimal knownCostGold,
     BigDecimal totalCostGold,
     List<Line> items) {
-  public static final String RULE_VERSION = "material-purchase-v1";
+  // v2(#617): 구매 후 거래 횟수 제한 상품도 계산하고, 같은 상품 여러 줄은 가장 싸게 사는 줄을 쓴다.
+  public static final String RULE_VERSION = "material-purchase-v2";
 
   public MaterialQuote {
     items = List.copyOf(items);
@@ -35,6 +36,7 @@ public record MaterialQuote(
       Instant observedAt,
       String itemName,
       Integer bundleCount,
+      Integer tradeRemainCount,
       BigDecimal pricePerBundle,
       MaterialPurchaseCost purchase) {}
 }

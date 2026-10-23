@@ -68,7 +68,8 @@ class MaterialQuoteIntegrationTest {
     assertThat(response.statusCode()).isEqualTo(200);
     var json = mapper.readTree(response.body());
     assertThat(json.path("code").asText()).isEqualTo("MATERIAL_QUOTE_SUCCESS");
-    assertThat(json.at("/data/ruleVersion").asText()).isEqualTo("material-purchase-v1");
+    assertThat(json.at("/data/ruleVersion").asText()).isEqualTo("material-purchase-v2");
+    assertThat(json.at("/data/items/0/tradeRemainCount").isNull()).isTrue();
     assertThat(json.at("/data/source").asText()).isEqualTo("ACTIVE_LISTING");
     assertThat(json.at("/data/complete").asBoolean()).isTrue();
     assertThat(json.at("/data/totalCostGold").decimalValue()).isEqualByComparingTo("30.375");

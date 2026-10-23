@@ -159,6 +159,92 @@ class ClientLimiterTest {
   }
 
   @Test
+  @org.junit.jupiter.api.extension.ExtendWith(
+      org.springframework.boot.test.system.OutputCaptureExtension.class)
+  void 거절_로그는_버킷_경로_키_앞_6자리만_남기고_한_분에_처음_몇_건만이다(
+      org.springframework.boot.test.system.CapturedOutput output) {
+    // #616: 경로는 자원명까지만(이름이 들어갈 수 있는 뒤쪽은 …), 클라이언트는 HMAC 키 앞 6자리, 주소·이름 없음.
+    var limiter = limiter(new ClientLimitProperties(true, 2, 2, 1, 1, true, 2, 6, 20, 5, 5));
+    var client = limiter.clientKey("203.0.113.77");
+    limiter.enterRoute("GET", "/api/v1/characters/검증캐릭터/siblings");
+    try {
+      for (int i = 0; i < 1 + ClientLimiter.REJECT_LOGS_PER_WINDOW + 3; i++)
+        limiter.check(ClientLimiter.Bucket.GENERAL, client);
+    } finally {
+      limiter.exitRoute();
+    }
+    var lines =
+        output.getOut().lines().filter(line -> line.contains("event=client_limit_reject")).toList();
+    assertThat(lines).hasSize(ClientLimiter.REJECT_LOGS_PER_WINDOW);
+    assertThat(lines.getFirst())
+        .contains("bucket=general")
+        .contains("route=GET /api/v1/characters/…")
+        .contains("client=" + client.substring(0, 6))
+        .doesNotContain("검증캐릭터")
+        .doesNotContain("203.0.113.77")
+        .doesNotContain(client.substring(0, 7));
+    // 지표는 거절을 전부 센다.
+    assertThat(registry.get("loakraken.client.limit").tag("event", "reject").counter().count())
+        .isEqualTo(ClientLimiter.REJECT_LOGS_PER_WINDOW + 3);
+  }
+
+  @Test
+  @org.junit.jupiter.api.extension.ExtendWith(
+      org.springframework.boot.test.system.OutputCaptureExtension.class)
+  void 되돌리는_버킷의_거절도_한_분에_처음_몇_건만_로그에_남긴다(
+      org.springframework.boot.test.system.CapturedOutput output) {
+    // 되돌리는 버킷(재료 검색 클라이언트 몫)은 거절 때 카운터를 되돌려 한도 + 1에 머물므로 로그 상한을 따로 센다.
+    var limiter =
+        limiter(new ClientLimitProperties(true, 2, 2, 10, 10, true, 2, 6, 20, 5, 5, 10, 3, 1, 36));
+    var client = limiter.clientKey("203.0.113.78");
+    limiter.enter(client);
+    limiter.enterRoute("POST", "/api/v1/markets/material-prices");
+    int rejected = 0;
+    try {
+      for (int i = 0; i < 1 + ClientLimiter.REJECT_LOGS_PER_WINDOW + 3; i++)
+        try {
+          limiter.chargeRefundable(ClientLimiter.Bucket.MATERIAL_SEARCH);
+        } catch (com.loakraken.common.api.BusinessException exception) {
+          rejected++;
+        }
+    } finally {
+      limiter.exitRoute();
+      limiter.exit();
+    }
+    assertThat(rejected).isEqualTo(ClientLimiter.REJECT_LOGS_PER_WINDOW + 3);
+    var lines =
+        output.getOut().lines().filter(line -> line.contains("event=client_limit_reject")).toList();
+    assertThat(lines).hasSize(ClientLimiter.REJECT_LOGS_PER_WINDOW);
+    assertThat(lines.getFirst())
+        .contains("bucket=material_search")
+        .contains("route=POST /api/v1/markets/…")
+        .contains("client=" + client.substring(0, 6))
+        .doesNotContain("203.0.113.78");
+  }
+
+  @Test
+  void 로그용_경로와_키는_값을_남기지_않는다() {
+    assertThat(ClientLimiter.routeHint("POST", "/api/v1/characters/roster-combat-power/refresh"))
+        .isEqualTo("POST /api/v1/characters/…");
+    assertThat(ClientLimiter.routeHint("GET", "/api/v1/guilds/서버/길드"))
+        .isEqualTo("GET /api/v1/guilds/…");
+    assertThat(ClientLimiter.routeHint("GET", "/api/v1/rankings"))
+        .isEqualTo("GET /api/v1/rankings");
+    assertThat(ClientLimiter.routeHint("GET", "/api/v1/Name")).isEqualTo("GET /api/v1/*");
+    // 알려진 자원명이 아니면 소문자여도 남기지 않는다.
+    assertThat(ClientLimiter.routeHint("GET", "/api/v1/secret-token/x"))
+        .isEqualTo("GET /api/v1/*/…");
+    assertThat(ClientLimiter.routeHint("GET", "/other/v9/characters")).isEqualTo("GET *");
+    assertThat(ClientLimiter.routeHint("GET", "/api")).isEqualTo("GET *");
+    assertThat(ClientLimiter.shortKey("0123456789abcdef")).isEqualTo("012345");
+    assertThat(ClientLimiter.shortKey("bot:fedcba9876543210")).isEqualTo("bot:fedcba");
+    assertThat(ClientLimiter.shortKey("all")).isEqualTo("bot-all");
+    assertThat(ClientLimiter.shortKey("shared")).isEqualTo("shared");
+    // 요청 밖(백그라운드)은 경로가 없다.
+    assertThat(ClientLimiter.route()).isEqualTo("-");
+  }
+
+  @Test
   void 끄면_세지_않는다() {
     var limiter = limiter(new ClientLimitProperties(false, 0, 0, 0, 0, true, 2, 6, 20, 5, 5));
     assertThat(limiter.check(ClientLimiter.Bucket.GENERAL, "c").allowed()).isTrue();

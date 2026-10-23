@@ -28,10 +28,35 @@ import javax.crypto.spec.SecretKeySpec;
 public class ClientLimiter {
   static final String PREFIX = "lostark:client-limit:";
   private static final ThreadLocal<String> CLIENT = new ThreadLocal<>();
+
+  /** 필터가 둔 경로 힌트('POST /api/v1/자원명/…'). 컨트롤러 경로 템플릿이 아직 없는 필터 단계 거절 로그에 쓴다. */
+  private static final ThreadLocal<String> ROUTE = new ThreadLocal<>();
+
   private static final Duration WINDOW = Duration.ofMinutes(1);
   private static final String BOT_PREFIX = "bot:";
   private static final String BOT_ALL = "all";
   private static final String SHARED = "shared";
+
+  /** 거절 로그는 버킷·클라이언트·분마다 처음 이만큼만(지표는 전부 센다) — 한 클라이언트가 로그를 넘치게 하지 못하게. */
+  static final int REJECT_LOGS_PER_WINDOW = 5;
+
+  private static final org.slf4j.Logger log =
+      org.slf4j.LoggerFactory.getLogger(ClientLimiter.class);
+
+  /** 로그 경로 힌트에 그대로 남기는 자원명(/api/v1/ 다음 첫 칸). 그 밖은 '*' — 모르는 경로의 값이 로그에 남지 않게(#616 코덱스 P2). */
+  static final java.util.Set<String> ROUTE_RESOURCES =
+      java.util.Set.of(
+          "alerts",
+          "characters",
+          "collectibles",
+          "gems",
+          "guilds",
+          "home",
+          "markets",
+          "rankings",
+          "refining",
+          "stats",
+          "titles");
 
   /** 제한을 끈 상태. 단위 테스트용 게이트가 쓴다. */
   public static final ClientLimiter DISABLED =
@@ -116,8 +141,18 @@ public class ClientLimiter {
     }
     if (count <= properties.limit(bucket)) return Decision.ALLOW;
     count(bucket, "reject");
+    if (count <= properties.limit(bucket) + REJECT_LOGS_PER_WINDOW) logReject(bucket, clientKey);
     long remaining = (window + 1) * WINDOW.toMillis() - now;
     return new Decision(false, Math.max(1, (remaining + 999) / 1000));
+  }
+
+  /** 주소·캐릭터 이름은 남기지 않는다: 경로는 템플릿(값 없음) 또는 자원명까지, 클라이언트는 HMAC 키 앞 6자리(#616). */
+  private static void logReject(Bucket bucket, String clientKey) {
+    log.info(
+        "event=client_limit_reject bucket={} route={} client={}",
+        bucket.name().toLowerCase(Locale.ROOT),
+        route(),
+        shortKey(clientKey));
   }
 
   private static String storeKey(Bucket bucket, String clientKey, long window) {
@@ -140,6 +175,63 @@ public class ClientLimiter {
     } catch (ClientLimitStore.Unavailable exception) {
       return Integer.MAX_VALUE;
     }
+  }
+
+  /** 로그용 클라이언트 표시: HMAC 키 앞 6자리(봇은 'bot:' + 앞 6자리, 봇 전체 상한은 'bot-all'). */
+  static String shortKey(String clientKey) {
+    if (clientKey == null) return "-";
+    if (BOT_ALL.equals(clientKey)) return "bot-all";
+    if (SHARED.equals(clientKey)) return "shared";
+    if (clientKey.startsWith(BOT_PREFIX))
+      return BOT_PREFIX + head(clientKey.substring(BOT_PREFIX.length()));
+    return head(clientKey);
+  }
+
+  private static String head(String hex) {
+    return hex.length() <= 6 ? hex : hex.substring(0, 6);
+  }
+
+  /**
+   * 로그용 경로. 컨트롤러가 정해졌으면 그 경로 템플릿(예: GET /api/v1/guilds/{server}/{guildName} — 실제 이름 없음), 아니면 필터가 둔
+   * 힌트, 둘 다 없으면 '-'(백그라운드).
+   */
+  static String route() {
+    if (org.springframework.web.context.request.RequestContextHolder.getRequestAttributes()
+        instanceof org.springframework.web.context.request.ServletRequestAttributes attributes) {
+      var request = attributes.getRequest();
+      var pattern =
+          request.getAttribute(
+              org.springframework.web.servlet.HandlerMapping.BEST_MATCHING_PATTERN_ATTRIBUTE);
+      if (pattern instanceof String template) return request.getMethod() + " " + template;
+    }
+    var hint = ROUTE.get();
+    return hint == null ? "-" : hint;
+  }
+
+  /**
+   * 경로 힌트: '/api/v1/자원명'까지만 남기고 뒤는 '…'(캐릭터·길드 이름이 들어갈 수 있어서). 자원명이 알려진 목록({@link
+   * #ROUTE_RESOURCES})에 없으면 '*', '/api/v1/' 모양이 아니면 '*'.
+   */
+  static String routeHint(String method, String path) {
+    var parts = path.split("/", -1);
+    if (parts.length < 4 || !"api".equals(parts[1]) || !"v1".equals(parts[2])) return method + " *";
+    var resource = ROUTE_RESOURCES.contains(parts[3]) ? parts[3] : "*";
+    return method
+        + " /"
+        + parts[1]
+        + "/"
+        + parts[2]
+        + "/"
+        + resource
+        + (parts.length > 4 ? "/…" : "");
+  }
+
+  void enterRoute(String method, String path) {
+    ROUTE.set(routeHint(method, path));
+  }
+
+  void exitRoute() {
+    ROUTE.remove();
   }
 
   /** 요청을 처리하는 동안 이 스레드의 공식 호출을 clientKey에 매긴다. */
@@ -227,6 +319,14 @@ public class ClientLimiter {
     if (count <= properties.limit(bucket)) return key;
     store.decrement(key);
     count(bucket, "reject");
+    // 되돌려서 카운터가 한도 + 1에 머무르므로, 거절 로그 상한은 따로 센다(같은 5건, #616 코덱스 P2).
+    try {
+      if (store.increment(
+              PREFIX + "reject-log:" + key.substring(PREFIX.length()), WINDOW.plusSeconds(1))
+          <= REJECT_LOGS_PER_WINDOW) logReject(bucket, clientKey);
+    } catch (ClientLimitStore.Unavailable exception) {
+      // 로그 상한을 셀 수 없으면 로그를 남기지 않는다(거절은 그대로).
+    }
     long remaining = (window + 1) * WINDOW.toMillis() - now;
     throw rejected == LostArkErrorCode.CLIENT_RATE_LIMITED
         ? new BusinessException(rejected, Duration.ofSeconds(Math.max(1, (remaining + 999) / 1000)))

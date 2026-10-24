@@ -97,11 +97,13 @@ class SpecUpKrakenIntegrationTest {
     var burst7 = byTarget(candidates, "블레이드 버스트", "7레벨");
     assertThat(burst7.path("deltaKrakenScore").decimalValue()).isEqualByComparingTo("98.81");
     long cost = burst7.at("/cost/amount").asLong();
+    // 10만 골드당은 반올림 전 Δ ÷ 비용 × 10⁵(B와 같은 순서)라 반올림한 ▲로 나눈 값과 0.01 안.
     assertThat(burst7.path("krakenScorePer100kGold").decimalValue())
-        .isEqualByComparingTo(
+        .isCloseTo(
             new BigDecimal("98.81")
                 .multiply(BigDecimal.valueOf(100_000))
-                .divide(BigDecimal.valueOf(cost), 2, java.math.RoundingMode.HALF_UP));
+                .divide(BigDecimal.valueOf(cost), 2, java.math.RoundingMode.HALF_UP),
+            org.assertj.core.data.Offset.offset(new BigDecimal("0.01")));
     assertThat(byTarget(candidates, "블레이드 버스트", "10레벨").path("deltaKrakenScore").decimalValue())
         .isEqualByComparingTo("402.75");
     // 각인 다단계 줄: 기습의 대가 X0 → X1·X4, 비용은 5권 × 올리는 레벨 수.
@@ -135,10 +137,30 @@ class SpecUpKrakenIntegrationTest {
     var stone = find(candidates, "ABILITY_STONE:2:3");
     assertThat(stone.path("deltaKrakenScore").decimalValue()).isEqualByComparingTo("0.91");
     assertThat(stone.path("to").asText()).isEqualTo("97돌 아드레날린 Lv.2 · 원한 Lv.3");
-    assertThat(stone.at("/cost/code").asText()).isEqualTo("STONE_COST_UNCONFIRMED");
+    // B1 비용(비교 기준 B 원본 식): 스톤 = 1 ÷ 목표 조합 확률 키트 × 50골드, 10만 골드당은 B 화면 값과 같다(같은 시각 레퍼런스 표).
+    assertThat(stone.at("/cost/code").asText()).isEqualTo("STONE_EXPECTED_KITS");
+    assertThat(stone.at("/cost/amount").asLong()).isEqualTo(36_765L); // 735.29개 × 50
+    var stones =
+        Map.of(
+            "ABILITY_STONE:2:3", "2.47",
+            "ABILITY_STONE:1:4", "2.47",
+            "ABILITY_STONE:2:4", "1.94",
+            "ABILITY_STONE:3:3", "0.32",
+            "ABILITY_STONE:3:4", "0.02",
+            "ABILITY_STONE:4:4", "0.00");
+    stones.forEach(
+        (id, per100k) ->
+            assertThat(find(candidates, id).path("krakenScorePer100kGold").decimalValue())
+                .as(id)
+                .isEqualByComparingTo(per100k));
+    assertThat(find(candidates, "ABILITY_STONE:4:4").at("/cost/amount").asLong())
+        .isEqualTo(31_446_540_881L); // 6.29억개 × 50
     var karma = find(candidates, "KARMA_LEVEL:30");
     assertThat(karma.path("deltaKrakenScore").decimalValue()).isEqualByComparingTo("1.84");
-    assertThat(karma.at("/cost/code").asText()).isEqualTo("KARMA_COST_UNCONFIRMED");
+    // 카르마 29 → 30: 기대 시도 × 900 = 41.32만, 10만 골드당 0.44(B 화면 값).
+    assertThat(karma.at("/cost/code").asText()).isEqualTo("KARMA_EXPECTED");
+    assertThat(karma.at("/cost/amount").asLong()).isEqualTo(413_228L);
+    assertThat(karma.path("krakenScorePer100kGold").decimalValue()).isEqualByComparingTo("0.44");
     var armGuard = find(candidates, "EQUIPMENT_REFINE:16:15");
     assertThat(armGuard.path("kind").asText()).isEqualTo("EQUIPMENT_REFINE");
     assertThat(armGuard.path("deltaKrakenScore").decimalValue()).isEqualByComparingTo("37.02");

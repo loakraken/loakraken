@@ -149,8 +149,17 @@ public class SpecUpKrakenScore {
     return Double.isFinite(value) && value > 0;
   }
 
+  /** 점수·Δ 표시: 비교 기준 B 원본의 ▲Δ toFixed(2)와 같이 배정밀도 정확값에서 반올림(1.005 → 1.00, 이진값이 1.00499…). */
   static BigDecimal round2(double value) {
     return new BigDecimal(value).setScale(2, RoundingMode.HALF_UP);
+  }
+
+  /**
+   * 효율 표시: 비교 기준 B 원본의 효율은 Intl.NumberFormat(소수 둘째 자리)이라 가장 짧은 십진 표기에서 반올림한다(1.005 → 1.01). Δ
+   * 표시(toFixed)와 규칙이 다르다.
+   */
+  static BigDecimal roundEfficiency(double value) {
+    return BigDecimal.valueOf(value).setScale(2, RoundingMode.HALF_UP);
   }
 
   /**

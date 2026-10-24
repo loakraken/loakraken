@@ -130,6 +130,8 @@ class SpecUpKrakenIntegrationTest {
     assertThat(polish.path("to").asText()).isEqualTo("무기 공격력 +1.80%(중) · 공격력 +0.95%(중)");
     assertThat(polish.path("change").isNull()).isTrue();
     assertThat(polish.path("status").asText()).isEqualTo("UNSUPPORTED");
+    // 크라켄 점수로만 비교하는 종류: 오류가 아니라 전투력을 계산하지 않는 종류라는 이유.
+    assertThat(polish.path("reasonCode").asText()).isEqualTo("SCORE_ONLY");
     assertThat(polish.at("/cost/code").asText()).isEqualTo("POLISH_COST_UNCONFIRMED");
     assertThat(polish.path("krakenScorePer100kGold").isNull()).isTrue();
     var stone = find(candidates, "ABILITY_STONE:2:3");

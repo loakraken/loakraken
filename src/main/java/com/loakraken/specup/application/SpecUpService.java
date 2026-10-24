@@ -308,7 +308,15 @@ public class SpecUpService {
   private Candidate evaluate(CharacterResult snapshot, Planned plan) {
     if (plan.change() == null)
       return plan.candidate(
-          "UNSUPPORTED", null, null, null, null, CombatPowerReasons.MODEL_UNCONFIRMED, null);
+          "UNSUPPORTED",
+          null,
+          null,
+          null,
+          null,
+          plan.kraken() != null
+              ? CombatPowerReasons.SCORE_ONLY
+              : CombatPowerReasons.MODEL_UNCONFIRMED,
+          null);
     var result = simulator.simulate(snapshot, List.of(plan.change()));
     var contribution = result.contributions().getFirst();
     if (contribution.status() != CombatPowerSimulationService.Status.OK) {
@@ -544,9 +552,9 @@ public class SpecUpService {
     if (loadout.engravings() == null) return;
     for (var engraving : loadout.engravings().arkPassiveEffects()) {
       if (engraving == null || engraving.name() == null || engraving.level() == null) continue;
-      if (engraving.level() >= 4) continue;
-      // 다음 레벨부터 4까지 줄을 따로(비교 기준 B처럼 누적 줄). 기존 +1 줄 id·값은 그대로.
-      for (int next = engraving.level() + 1; next <= 4; next++)
+      int max = engravingMaxLevel(engraving.grade());
+      // 다음 레벨부터 등급 최대 레벨까지 줄을 따로(비교 기준 B처럼 누적 줄). 기존 +1 줄 id·값은 그대로.
+      for (int next = engraving.level() + 1; next <= max; next++)
         planned.add(
             new Planned(
                 "ENGRAVING_LEVEL:" + engraving.name() + ":" + next,
@@ -798,6 +806,16 @@ public class SpecUpService {
       }
     }
     return new RefineBreakdown(bestPlan, bestBreath, unitPrices, SpecUpCost.refineExpected(best));
+  }
+
+  /**
+   * 등급별 각인 최대 레벨: 유물 4, 영웅·전설 3(크라켄 점수 계수표와 비교 기준 B 표에 전설 4가 없음 — 계수 0으로 Δ가 음수가 되던 줄을 만들지 않는다). 그 밖
+   * 등급(고대 등)은 올리는 줄을 만들지 않는다.
+   */
+  static int engravingMaxLevel(String grade) {
+    if ("유물".equals(grade)) return 4;
+    if ("영웅".equals(grade) || "전설".equals(grade)) return 3;
+    return 0;
   }
 
   static RefiningRules.Grade refineGrade(String name) {

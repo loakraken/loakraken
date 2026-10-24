@@ -677,7 +677,7 @@ public class SpecUpGoalService {
           if (engraving != null
               && engraving.name() != null
               && engraving.level() != null
-              && engraving.level() < 4)
+              && engraving.level() < SpecUpService.engravingMaxLevel(engraving.grade()))
             engravings.put(
                 engraving.name(),
                 new Engraving(engraving.name(), engraving.grade(), engraving.level()));
@@ -729,7 +729,8 @@ public class SpecUpGoalService {
                     : new Item(quality.index(), quality.equipment(), change.quality());
         case ENGRAVING_LEVEL -> {
           var engraving = engravings.get(change.name());
-          if (change.level() >= 4) engravings.remove(change.name());
+          if (change.level() >= SpecUpService.engravingMaxLevel(engraving.grade()))
+            engravings.remove(change.name());
           else
             engravings.put(
                 change.name(), new Engraving(engraving.name(), engraving.grade(), change.level()));

@@ -24,4 +24,7 @@ public interface CharacterPublicSummaryPort {
 
   /** 서버와 관계없이 이 이름이 처리정지 목록에 있는가(기록이 없을 때 쓴다). */
   boolean excludedAnyServer(String characterName);
+
+  /** names 중 그 서버에서 처리정지 목록에 있는 이름(서버 생략 제외는 모든 서버). 한 번의 조회다. */
+  java.util.Set<String> excludedNames(java.util.Collection<String> names, String serverName);
 }

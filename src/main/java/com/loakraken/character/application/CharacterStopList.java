@@ -26,6 +26,11 @@ public class CharacterStopList {
     return summaries.excluded(characterName, serverName);
   }
 
+  /** names 중 그 서버에서 목록에 있는 이름. 확인 실패는 예외를 그대로 던진다. */
+  public java.util.Set<String> listed(java.util.Collection<String> names, String serverName) {
+    return summaries.excludedNames(names, serverName);
+  }
+
   /** 기록해도 되는가. 확인에 실패하면 기록하지 않는다. */
   public boolean recordable(String characterName, String serverName) {
     try {

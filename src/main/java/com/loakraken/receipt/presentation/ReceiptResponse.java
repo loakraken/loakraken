@@ -34,7 +34,8 @@ public record ReceiptResponse(
         receipt.characterName(),
         receipt.computedAt(),
         receipt.priceObservedAt(),
-        new ReceiptTotalResponse(receipt.totalGold(), List.of("EQUIPMENT", "GEM")),
+        new ReceiptTotalResponse(
+            receipt.totalGold(), List.of("EQUIPMENT", "GEM"), receipt.totalStatus().name()),
         new ReceiptEquipmentResponse(
             receipt.equipmentGold(),
             receipt.characters().stream().map(ReceiptCharacterResponse::from).toList()),
@@ -51,8 +52,17 @@ public record ReceiptResponse(
   }
 
   public record ReceiptTotalResponse(
-      @Schema(description = "포함 분류 합계(골드)") BigDecimal gold,
-      @Schema(description = "금액에 넣은 분류") List<String> includedKinds) {}
+      @Schema(
+              description =
+                  "포함 분류 합계(골드). status가 COMPLETE가 아니면 센 것만의 합이라 실제보다 작고, UNAVAILABLE이면 값이 아니다")
+          BigDecimal gold,
+      @Schema(description = "금액에 넣은 분류") List<String> includedKinds,
+      @Schema(
+              description =
+                  "합계 상태. COMPLETE: 원정대 전원을 받았고 산정 대상을 모두 셈. PARTIAL: 일부만 셈(대기 캐릭터, 시세 없는 부위·보석, 읽지 못한 재련 단계). "
+                      + "UNAVAILABLE: 빠진 것이 있는데 센 금액이 없음(합계 0을 금액으로 보이지 말 것)",
+              allowableValues = {"COMPLETE", "PARTIAL", "UNAVAILABLE"})
+          String status) {}
 
   public record ReceiptEquipmentResponse(
       BigDecimal gold, List<ReceiptCharacterResponse> characters) {}
@@ -65,7 +75,12 @@ public record ReceiptResponse(
           ReceiptService.Status status,
       @Schema(description = "PENDING이면 null") @NullableResponse BigDecimal gold,
       List<ReceiptPartResponse> parts,
-      List<ReceiptExcludedResponse> excluded) {
+      List<ReceiptExcludedResponse> excluded,
+      @Schema(
+              description =
+                  "산정 대상 부위를 모두 셌는가. false면 gold는 센 부위만의 합(시세 없음·재련 단계를 읽지 못함·장비 정보 없음). PENDING이면 null")
+          @NullableResponse
+          Boolean complete) {
     static ReceiptCharacterResponse from(ReceiptService.CharacterReceipt receipt) {
       var equipment = receipt.equipment();
       return new ReceiptCharacterResponse(
@@ -79,7 +94,8 @@ public record ReceiptResponse(
               : equipment.parts().stream().map(ReceiptPartResponse::from).toList(),
           equipment == null
               ? List.of()
-              : equipment.excluded().stream().map(ReceiptExcludedResponse::from).toList());
+              : equipment.excluded().stream().map(ReceiptExcludedResponse::from).toList(),
+          equipment == null ? null : equipment.complete());
     }
   }
 

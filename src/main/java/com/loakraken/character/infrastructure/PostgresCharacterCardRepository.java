@@ -127,6 +127,10 @@ class PostgresCharacterCardRepository implements CharacterCardPort {
               bracelet_rule_version = :braceletVersion,
               ark_grid_gem_pct = CAST(:gem AS NUMERIC),
               ark_grid_rule_version = :gemVersion,
+              bracelet_real_pct = CAST(:braceletReal AS NUMERIC),
+              bracelet_real_rule_version = :braceletRealVersion,
+              ark_grid_real_pct = CAST(:gemReal AS NUMERIC),
+              ark_grid_real_rule_version = :gemRealVersion,
               efficiency_observed_at = :at
             WHERE character_id = :id
               AND (efficiency_observed_at IS NULL OR efficiency_observed_at <= :at)
@@ -135,6 +139,10 @@ class PostgresCharacterCardRepository implements CharacterCardPort {
             .param("braceletVersion", efficiency.braceletRuleVersion())
             .param("gem", efficiency.arkGridGemPct())
             .param("gemVersion", efficiency.arkGridRuleVersion())
+            .param("braceletReal", efficiency.braceletRealPct())
+            .param("braceletRealVersion", efficiency.braceletRealRuleVersion())
+            .param("gemReal", efficiency.arkGridRealPct())
+            .param("gemRealVersion", efficiency.arkGridRealRuleVersion())
             .param("at", at)
             .param("id", characterId.get())
             .update();

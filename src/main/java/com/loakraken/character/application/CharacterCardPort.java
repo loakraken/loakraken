@@ -93,7 +93,28 @@ public interface CharacterCardPort {
       BigDecimal braceletPct,
       String braceletRuleVersion,
       BigDecimal arkGridGemPct,
-      String arkGridRuleVersion) {}
+      String arkGridRuleVersion,
+      BigDecimal braceletRealPct,
+      String braceletRealRuleVersion,
+      BigDecimal arkGridRealPct,
+      String arkGridRealRuleVersion) {
+    /** 실 효율 없이(전투력 기여 모델 값만). */
+    public Efficiency(
+        BigDecimal braceletPct,
+        String braceletRuleVersion,
+        BigDecimal arkGridGemPct,
+        String arkGridRuleVersion) {
+      this(
+          braceletPct,
+          braceletRuleVersion,
+          arkGridGemPct,
+          arkGridRuleVersion,
+          null,
+          null,
+          null,
+          null);
+    }
+  }
 
   record RosterCards(List<CardCollection.OwnedCard> cards, int observedCharacters) {}
 }

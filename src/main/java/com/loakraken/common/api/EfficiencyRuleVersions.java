@@ -11,5 +11,11 @@ public final class EfficiencyRuleVersions {
   /** 아크 그리드 효율 규칙 버전. combat-power/ark-grid-coefficients.json의 ruleVersion과 같아야 한다(시작 때 확인). */
   public static final String ARK_GRID = "ark-grid-efficiency-v1";
 
+  /** 팔찌 실 효율(크라켄 점수 엔진, 비교 기준 B의 정보 탭 팔찌 %) 규칙 버전. 캐릭터 응답 braceletEfficiency.real과 같은 값이다. */
+  public static final String BRACELET_REAL = "bracelet-real-v1";
+
+  /** 아크 그리드 젬 실 효율(#520, 비교 기준 B의 젬 실 효율) 규칙 버전. 캐릭터 응답 arkGridEfficiency.real과 같은 값이다. */
+  public static final String ARK_GRID_REAL = "ark-grid-real-v1";
+
   private EfficiencyRuleVersions() {}
 }

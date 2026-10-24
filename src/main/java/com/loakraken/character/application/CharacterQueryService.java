@@ -124,7 +124,7 @@ public class CharacterQueryService {
                       cache.save(name, result);
                       if (recordable) {
                         history.record(profile, fetchedAt);
-                        cards.record(fetched.details(), fetchedAt);
+                        cards.record(fetched.details(), fetched.krakenScoreInput(), fetchedAt);
                       }
                       return result;
                     }));
@@ -154,7 +154,7 @@ public class CharacterQueryService {
                       var profile = fetched.details().profile();
                       if (stopList.recordable(profile.characterName(), profile.serverName())) {
                         history.record(profile, now);
-                        cards.record(fetched.details(), now);
+                        cards.record(fetched.details(), fetched.krakenScoreInput(), now);
                       }
                       return result;
                     }));

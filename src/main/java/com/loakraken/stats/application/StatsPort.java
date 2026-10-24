@@ -60,11 +60,11 @@ public interface StatsPort {
   Map<String, Long> classEngravingCounts(StatsConditions conditions, Instant since);
 
   /**
-   * 팔찌·젬 효율 랭킹(L38·L39). 저장된 효율 중 지금 규칙 버전({@link EfficiencyKind#ruleVersion()}) 값만 센다. 처리정지 목록은
-   * 모집단에서 뺀다.
+   * 팔찌·젬 효율 랭킹(L38·L39). columns의 값 열에서 지금 규칙 버전({@link EfficiencyColumns#ruleVersion()}) 값만 센다.
+   * 처리정지 목록은 모집단에서 뺀다.
    */
   EfficiencyPage efficiencyRanking(
-      StatsConditions conditions, Instant since, EfficiencyKind kind, int offset, int limit);
+      StatsConditions conditions, Instant since, EfficiencyColumns columns, int offset, int limit);
 
   /**
    * 직업 상세 빌드(M12) 표본. 모집단(처리정지 제외)에서 conditions.className 직업 캐릭터마다 마지막 장비 요약 1행을 읽는다. population은
@@ -144,39 +144,53 @@ public interface StatsPort {
 
   record RankingPage(long total, List<RankingRow> rows) {}
 
-  /** 효율 랭킹 종류(L38 팔찌, L39 젬 옵션 합계). 열 이름은 characters 테이블이고, 지금 규칙 버전은 캐릭터 모듈이 저장할 때 쓰는 공통 상수다. */
+  /**
+   * 효율 랭킹 종류(L38 팔찌, L39 젬). 열 이름은 characters 테이블이고, 지금 규칙 버전은 캐릭터 모듈이 저장할 때 쓰는 공통 상수다. legacy는 전투력
+   * 기여 모델(팔찌 = 전투력 시뮬레이터, 젬 = 젬 옵션 합계 줄), real은 캐릭터 응답의 실 효율(팔찌·젬 실 효율)이다. 어느 쪽으로 세는지는 설정이 고른다.
+   */
   enum EfficiencyKind {
     BRACELET(
-        "bracelet_efficiency_pct",
-        "bracelet_rule_version",
-        com.loakraken.common.api.EfficiencyRuleVersions.COMBAT_POWER_SIM),
+        new EfficiencyColumns(
+            "bracelet_efficiency_pct",
+            "bracelet_rule_version",
+            com.loakraken.common.api.EfficiencyRuleVersions.COMBAT_POWER_SIM,
+            false),
+        new EfficiencyColumns(
+            "bracelet_real_pct",
+            "bracelet_real_rule_version",
+            com.loakraken.common.api.EfficiencyRuleVersions.BRACELET_REAL,
+            true)),
     ARK_GRID_GEM(
-        "ark_grid_gem_pct",
-        "ark_grid_rule_version",
-        com.loakraken.common.api.EfficiencyRuleVersions.ARK_GRID);
+        new EfficiencyColumns(
+            "ark_grid_gem_pct",
+            "ark_grid_rule_version",
+            com.loakraken.common.api.EfficiencyRuleVersions.ARK_GRID,
+            false),
+        new EfficiencyColumns(
+            "ark_grid_real_pct",
+            "ark_grid_real_rule_version",
+            com.loakraken.common.api.EfficiencyRuleVersions.ARK_GRID_REAL,
+            true));
 
-    private final String column;
-    private final String versionColumn;
-    private final String ruleVersion;
+    private final EfficiencyColumns legacy;
+    private final EfficiencyColumns real;
 
-    EfficiencyKind(String column, String versionColumn, String ruleVersion) {
-      this.column = column;
-      this.versionColumn = versionColumn;
-      this.ruleVersion = ruleVersion;
+    EfficiencyKind(EfficiencyColumns legacy, EfficiencyColumns real) {
+      this.legacy = legacy;
+      this.real = real;
     }
 
-    public String ruleVersion() {
-      return ruleVersion;
-    }
-
-    public String column() {
-      return column;
-    }
-
-    public String versionColumn() {
-      return versionColumn;
+    public EfficiencyColumns columns(boolean useReal) {
+      return useReal ? real : legacy;
     }
   }
+
+  /**
+   * 랭킹 값 열, 규칙 버전 열, 지금 규칙 버전(이 버전 값만 센다). 열 이름은 코드 상수뿐이다(요청 값이 SQL에 들어가지 않음). dealersOnly면 포지션이
+   * 딜러인 캐릭터만 센다 — 실 효율은 서포터도 저장되지만(서포터는 점수 기준이 달라) 딜러와 한 줄로 세지 않는다. 전투력 기여 모델 값은 딜러만 계산된다.
+   */
+  record EfficiencyColumns(
+      String column, String versionColumn, String ruleVersion, boolean dealersOnly) {}
 
   record EfficiencyRow(
       long rank,

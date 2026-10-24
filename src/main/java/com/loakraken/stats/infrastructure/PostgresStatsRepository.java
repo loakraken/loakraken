@@ -952,14 +952,20 @@ class PostgresStatsRepository implements StatsPort {
 
   @Override
   public EfficiencyPage efficiencyRanking(
-      StatsConditions conditions, Instant since, EfficiencyKind kind, int offset, int limit) {
-    String column = kind.column();
-    String versionColumn = kind.versionColumn();
+      StatsConditions conditions, Instant since, EfficiencyColumns columns, int offset, int limit) {
+    String column = columns.column();
+    String versionColumn = columns.versionColumn();
     // 지금 규칙 버전(공통 상수) 값만 센다. 모델이 바뀌면 다음 관측 때 다시 저장된 캐릭터부터 들어간다.
-    var version = kind.ruleVersion();
+    var version = columns.ruleVersion();
     var rows = new ArrayList<EfficiencyRow>();
     long[] total = {0};
-    String filter = " WHERE " + column + " IS NOT NULL AND " + versionColumn + " = :version";
+    String filter =
+        " WHERE "
+            + column
+            + " IS NOT NULL AND "
+            + versionColumn
+            + " = :version"
+            + (columns.dealersOnly() ? " AND position = 'DEALER'" : "");
     population(conditions, since)
         .statement(
             "SELECT character_name, server_name, class_name, position, item_level, combat_power, "
@@ -1185,7 +1191,8 @@ class PostgresStatsRepository implements StatsPort {
         "WITH pop AS (SELECT c.character_id, c.character_name, c.server_name, c.class_name, c.item_level,"
             + " c.combat_power, c.best_combat_power, c.position, c.gem_mean_level, c.bracelet_efficiency_pct,"
             + " c.bracelet_rule_version, c.ark_grid_gem_pct, c.ark_grid_rule_version,"
-            + " c.efficiency_observed_at FROM characters c WHERE "
+            + " c.bracelet_real_pct, c.bracelet_real_rule_version, c.ark_grid_real_pct,"
+            + " c.ark_grid_real_rule_version, c.efficiency_observed_at FROM characters c WHERE "
             + where
             + ") ";
     return new Population(cte, params);

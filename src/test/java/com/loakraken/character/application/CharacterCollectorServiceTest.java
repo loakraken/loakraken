@@ -92,7 +92,7 @@ class CharacterCollectorServiceTest {
     var service = service("key", true);
     assertThat(service.tick()).isEqualTo(Task.PROFILE);
     verify(history).record(profile, clock.instant());
-    verify(cards).record(any(), eq(clock.instant()));
+    verify(cards).record(any(), any(), eq(clock.instant()));
     verify(collection).markProfileRefreshed(eq(target), any(), eq(clock.instant()));
     assertThat(service.tick()).isEqualTo(Task.ROSTER);
     verify(collection).markRosterScanned(target, clock.instant());

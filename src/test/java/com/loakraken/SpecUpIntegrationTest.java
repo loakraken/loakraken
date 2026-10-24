@@ -377,6 +377,11 @@ class SpecUpIntegrationTest {
 
   /** 재련 후보만 시뮬레이터가 OK(Δ+12.34)를 내게 한다. 나머지 후보는 실제 계산. 테스트 끝에 reset(simulator). */
   private void stubRefineOk() {
+    stubRefine(true);
+  }
+
+  /** 재련 후보의 전투력 계산 결과만 바꾼다(ok=false면 계산식 확인 중 UNSUPPORTED). */
+  private void stubRefine(boolean okStatus) {
     org.mockito.Mockito.doAnswer(
             invocation -> {
               List<com.loakraken.character.application.CombatPowerSimulationService.Change>
@@ -391,10 +396,14 @@ class SpecUpIntegrationTest {
                       "무기",
                       "+20",
                       "+21",
-                      new BigDecimal("12.34"),
-                      com.loakraken.character.application.CombatPowerSimulationService.Status.OK,
+                      okStatus ? new BigDecimal("12.34") : null,
+                      okStatus
+                          ? com.loakraken.character.application.CombatPowerSimulationService.Status
+                              .OK
+                          : com.loakraken.character.application.CombatPowerSimulationService.Status
+                              .UNSUPPORTED,
                       "재련",
-                      null);
+                      okStatus ? null : "MODEL_UNCONFIRMED");
               return new com.loakraken.character.application.CombatPowerSimulationService.Result(
                   "스펙재련",
                   Instant.now(),
@@ -413,6 +422,30 @@ class SpecUpIntegrationTest {
             org.mockito.ArgumentMatchers.any(
                 com.loakraken.character.application.CharacterResult.class),
             org.mockito.ArgumentMatchers.anyList());
+  }
+
+  @Test
+  void 순위_밖_재련_줄은_목록에_다음_단계_하나만_두고_줄_상세는_모든_단계를_찾는다() throws Exception {
+    // #585: 전투력 계산식 확인 중(UNSUPPORTED)인 재련 줄은 limit 밖에 모두 붙으므로 +1 줄만 둔다. 줄 상세는 정렬과 상관없이 찾는다.
+    stubRefine(false);
+    when(auctions.cachedGems()).thenReturn(gemCells(true));
+    search("스펙업화");
+    for (var sort : List.of("EFFICIENCY", "DELTA")) {
+      var ids = new ArrayList<String>();
+      for (var candidate :
+          mapper
+              .readTree(
+                  get("/api/v1/characters/spec-up?characterName="
+                          + encode("스펙업화")
+                          + "&sort="
+                          + sort)
+                      .body())
+              .at("/data/candidates")) ids.add(candidate.path("id").asText());
+      assertThat(ids).as(sort).contains("EQUIPMENT_REFINE:0:21");
+      assertThat(ids).as(sort).noneMatch(id -> id.matches("EQUIPMENT_REFINE:0:2[2-5]"));
+    }
+    assertThat(detail("EQUIPMENT_REFINE:0:23", "스펙업화").statusCode()).isEqualTo(200);
+    org.mockito.Mockito.reset(simulator);
   }
 
   @Test

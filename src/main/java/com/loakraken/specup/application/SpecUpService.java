@@ -199,6 +199,19 @@ public class SpecUpService {
   }
 
   Guide guide(CharacterResult snapshot, Sort requested, int limit, Boolean includeCooldownGems) {
+    return guide(snapshot, requested, limit, includeCooldownGems, false);
+  }
+
+  /**
+   * allRefineStages=false(목록)면 재련 +2 단계 이상 줄은 순위에 들 때만 낸다. 순위 밖 줄(전투력 계산식 확인 중 등)은 limit 밖에 모두 붙어
+   * 단계 수만큼 목록·응답이 늘고, Δ가 없어 +1 줄 하나와 알려 주는 것이 같다(#585). 줄 상세는 어느 정렬 목록의 id든 찾도록 모든 단계를 본다.
+   */
+  Guide guide(
+      CharacterResult snapshot,
+      Sort requested,
+      int limit,
+      Boolean includeCooldownGems,
+      boolean allRefineStages) {
     var profile = snapshot.details().profile();
     var loadout = snapshot.details().loadout();
     var prices = new HashMap<String, MarketAuctionService.GemCell>();
@@ -242,6 +255,7 @@ public class SpecUpService {
       boolean ranked =
           "OK".equals(candidate.status())
               || (sort == Sort.KRAKEN && candidate.deltaKrakenScore() != null);
+      if (!ranked && !allRefineStages && laterRefineStage(plan)) continue;
       (ranked ? ok : unsupported).add(candidate);
     }
     ok.sort(order(sort));
@@ -779,6 +793,13 @@ public class SpecUpService {
    * 재련 후보로 낼 마지막 단계: 재련 계획(계열·부위 단계표)의 최대 목표 단계, 25 이하. 계획이 다루지 않는 장비(계열을 모름 등)는 다음 단계 하나(+1 줄만, 비용
    * UNCONFIRMED).
    */
+  /** 재련 +2 단계 이상 줄(목표 단계가 지금 단계 + 1보다 큼). */
+  private static boolean laterRefineStage(Planned plan) {
+    if (!Kind.EQUIPMENT_REFINE.name().equals(plan.kind()) || plan.change() == null) return false;
+    var target = plan.change().refine();
+    return target != null && !plan.from().equals("+" + (target - 1));
+  }
+
   int refineMaxTarget(CharacterLoadout.Equipment item, int refine) {
     var grade = refineGrade(item.name());
     if (grade == null) return refine + 1;

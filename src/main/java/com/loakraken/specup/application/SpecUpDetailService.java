@@ -138,7 +138,8 @@ public class SpecUpDetailService {
             snapshot,
             SpecUpService.Sort.DELTA,
             Integer.MAX_VALUE,
-            includeCooldownGems == null ? Boolean.TRUE : includeCooldownGems);
+            includeCooldownGems == null ? Boolean.TRUE : includeCooldownGems,
+            true);
     var candidate =
         guide.candidates().stream()
             .filter(item -> item.id().equals(candidateId))

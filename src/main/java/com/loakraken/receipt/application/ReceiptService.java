@@ -5,6 +5,7 @@ import com.loakraken.character.application.CharacterErrorCode;
 import com.loakraken.character.application.CharacterException;
 import com.loakraken.character.application.CharacterQueryService;
 import com.loakraken.character.application.CharacterResult;
+import com.loakraken.character.application.CharacterStopList;
 import com.loakraken.character.application.SearchCharacterCommand;
 import com.loakraken.character.domain.CharacterLoadout;
 import com.loakraken.character.domain.CharacterSibling;
@@ -42,6 +43,7 @@ public class ReceiptService {
   private final MaterialUnitPriceService materials;
   private final MarketAuctionService auctions;
   private final OptimalStageCache optimalCache;
+  private final CharacterStopList stopList;
   private final Clock clock;
 
   public ReceiptService(
@@ -51,6 +53,7 @@ public class ReceiptService {
       MaterialUnitPriceService materials,
       MarketAuctionService auctions,
       OptimalStageCache optimalCache,
+      CharacterStopList stopList,
       Clock clock) {
     this.characters = characters;
     this.cache = cache;
@@ -58,12 +61,23 @@ public class ReceiptService {
     this.materials = materials;
     this.auctions = auctions;
     this.optimalCache = optimalCache;
+    this.stopList = stopList;
     this.clock = clock;
   }
 
   public enum Status {
     READY,
     PENDING
+  }
+
+  /**
+   * 합계 상태. COMPLETE: 원정대 전원을 받았고 산정 대상을 모두 셌다. PARTIAL: 일부만 셌다(대기 캐릭터, 시세 없는 부위·보석, 읽지 못한 단계) — 합계는
+   * 실제보다 작다. UNAVAILABLE: 빠진 것이 있는데 센 금액이 하나도 없다 — 합계 0은 값이 아니다.
+   */
+  public enum TotalStatus {
+    COMPLETE,
+    PARTIAL,
+    UNAVAILABLE
   }
 
   public record CharacterReceipt(
@@ -92,6 +106,20 @@ public class ReceiptService {
     public BigDecimal totalGold() {
       return equipmentGold.add(gems.gold());
     }
+
+    public TotalStatus totalStatus() {
+      boolean missing =
+          pending > 0
+              || gems.unpriced() > 0
+              || characters.stream()
+                  .anyMatch(c -> c.equipment() != null && !c.equipment().complete());
+      if (!missing) return TotalStatus.COMPLETE;
+      boolean counted =
+          gems.priced() > 0
+              || characters.stream()
+                  .anyMatch(c -> c.equipment() != null && !c.equipment().parts().isEmpty());
+      return counted ? TotalStatus.PARTIAL : TotalStatus.UNAVAILABLE;
+    }
   }
 
   public Receipt receipt(String characterName) {
@@ -108,10 +136,15 @@ public class ReceiptService {
             .findFirst()
             .orElseThrow(() -> new CharacterException(CharacterErrorCode.CHARACTER_NOT_FOUND));
     String server = self.serverName();
+    var listed = listed(siblings, server);
+    // 처리정지 목록 캐릭터는 영수증에 넣지 않고 전투정보도 부르지 않는다(PM 2026-10-25). 원정대 수도 뺀 수로 센다.
     var roster =
         siblings.stream()
             .filter(
-                sibling -> server.equals(sibling.serverName()) && sibling.characterName() != null)
+                sibling ->
+                    server.equals(sibling.serverName())
+                        && sibling.characterName() != null
+                        && !listed.contains(sibling.characterName()))
             .sorted(
                 Comparator.comparing(
                         (CharacterSibling sibling) ->
@@ -249,6 +282,22 @@ public class ReceiptService {
 
   public String refiningRuleVersion() {
     return refining.rules().ruleVersion();
+  }
+
+  /** 같은 서버 원정대 중 처리정지 목록 이름. 확인하지 못하면 목록 캐릭터가 섞이지 않게 영수증을 내지 않는다(503). */
+  private java.util.Set<String> listed(List<CharacterSibling> siblings, String server) {
+    var names =
+        siblings.stream()
+            .filter(sibling -> server.equals(sibling.serverName()))
+            .map(CharacterSibling::characterName)
+            .filter(java.util.Objects::nonNull)
+            .toList();
+    try {
+      return stopList.listed(names, server);
+    } catch (org.springframework.dao.DataAccessException
+        | org.springframework.transaction.TransactionException exception) {
+      throw new CharacterException(CharacterErrorCode.CHARACTER_STORAGE_UNAVAILABLE);
+    }
   }
 
   private Optional<CharacterResult> cached(String name) {

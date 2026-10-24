@@ -128,6 +128,10 @@ class ReceiptIntegrationTest {
         .isEqualByComparingTo(
             data.at("/equipment/gold").decimalValue().add(data.at("/gems/gold").decimalValue()));
     assertThat(data.path("priceObservedAt").asText()).isEqualTo("2026-10-09T07:59:30Z");
+    // 2명이 대기라 합계는 일부만 센 값이다. 받은 캐릭터는 산정 대상을 모두 셌다.
+    assertThat(data.at("/total/status").asText()).isEqualTo("PARTIAL");
+    assertThat(main.path("complete").asBoolean()).isTrue();
+    assertThat(data.at("/equipment/characters/9/complete").isNull()).isTrue();
     assertThat(data.path("notIncluded").toString()).contains("ARK_GRID_GEM", "VERIFYING");
     assertThat(data.path("assumptions").size()).isGreaterThan(0);
     verify(detailsPort, times(8)).fetchArmory(anyString());
@@ -139,6 +143,7 @@ class ReceiptIntegrationTest {
     var again = mapper.readTree(second.body()).path("data");
     assertThat(again.at("/coverage/ready").asInt()).isEqualTo(10);
     assertThat(again.at("/coverage/nextAvailableAt").isNull()).isTrue();
+    assertThat(again.at("/total/status").asText()).isEqualTo("COMPLETE");
     // 앞의 8명은 캐시를 쓰고 남은 2명만 새로 받는다.
     verify(detailsPort, times(10)).fetchArmory(anyString());
 
@@ -151,6 +156,59 @@ class ReceiptIntegrationTest {
                     .body())
             .path("data");
     assertThat(withoutBook.at("/assumptions/0").asText()).contains("넣지 않습니다");
+  }
+
+  @Test
+  void 시세를_하나도_찾지_못하면_합계_0이_아니라_UNAVAILABLE이다() throws Exception {
+    when(materials.prices(any(), anyList()))
+        .thenAnswer(
+            invocation -> {
+              List<String> wanted = invocation.getArgument(1);
+              return wanted.stream()
+                  .map(
+                      name ->
+                          new MaterialUnitPriceService.UnitPrice(
+                              name,
+                              MaterialUnitPriceService.UnitPrice.Status.PRICE_UNAVAILABLE,
+                              null,
+                              name,
+                              1,
+                              null,
+                              null,
+                              OBSERVED))
+                  .toList();
+            });
+    when(auctions.gems()).thenReturn(List.of());
+    get("/api/v1/characters/receipt?characterName=" + encode(MAIN));
+    var data =
+        mapper
+            .readTree(get("/api/v1/characters/receipt?characterName=" + encode(MAIN)).body())
+            .path("data");
+    assertThat(data.at("/coverage/pending").asInt()).isZero();
+    assertThat(data.at("/total/gold").decimalValue()).isZero();
+    assertThat(data.at("/total/status").asText()).isEqualTo("UNAVAILABLE");
+    assertThat(data.at("/equipment/characters/0/complete").asBoolean()).isFalse();
+    assertThat(data.at("/equipment/characters/0/excluded").toString())
+        .contains("PRICE_UNAVAILABLE");
+  }
+
+  @Test
+  void 처리정지_목록_캐릭터는_영수증에_넣지_않고_전투정보도_부르지_않는다() throws Exception {
+    jdbc.sql(
+            "INSERT INTO public_exclusion (character_name, server_name, reason_code) VALUES ('영수증부캐1', :s, 'REQUEST')")
+        .param("s", SERVER)
+        .update();
+    try {
+      var data =
+          mapper
+              .readTree(get("/api/v1/characters/receipt?characterName=" + encode(MAIN)).body())
+              .path("data");
+      assertThat(data.at("/coverage/rosterCharacters").asInt()).isEqualTo(9);
+      assertThat(data.at("/equipment/characters").toString()).doesNotContain("영수증부캐1\"");
+      verify(detailsPort, never()).fetchArmory("영수증부캐1");
+    } finally {
+      jdbc.sql("DELETE FROM public_exclusion WHERE server_name = :s").param("s", SERVER).update();
+    }
   }
 
   @Test

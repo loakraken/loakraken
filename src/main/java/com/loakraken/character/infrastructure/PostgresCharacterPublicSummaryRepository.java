@@ -66,4 +66,20 @@ class PostgresCharacterPublicSummaryRepository implements CharacterPublicSummary
             .query(Boolean.class)
             .single());
   }
+
+  @Override
+  public java.util.Set<String> excludedNames(
+      java.util.Collection<String> names, String serverName) {
+    if (names.isEmpty()) return java.util.Set.of();
+    return java.util.Set.copyOf(
+        jdbc.sql(
+                """
+            SELECT DISTINCT character_name FROM public_exclusion
+            WHERE character_name IN (:names) AND (server_name IS NULL OR server_name = :server)
+            """)
+            .param("names", java.util.List.copyOf(names))
+            .param("server", serverName)
+            .query(String.class)
+            .list());
+  }
 }

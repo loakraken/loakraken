@@ -60,6 +60,44 @@ class ReceiptDomainTest {
     assertThat(result.excluded().getFirst().message())
         .isEqualTo("「+20 빛나는 하의」: 업화·전율 장비가 아니라 산정하지 않습니다.");
     assertThat(result.gold()).isEqualByComparingTo(weapon.gold().add(helmet.gold()));
+    // 완갑·다른 등급처럼 정해서 넣지 않는 부위만 빠졌으면 다 센 것이다.
+    assertThat(result.complete()).isTrue();
+  }
+
+  @Test
+  void 재련_단계를_읽지_못한_부위는_0이_아니라_산정하지_못한_것이다() {
+    var noLevel =
+        new CharacterLoadout.Equipment(
+            "투구",
+            "운명의 업화 머리장식",
+            null,
+            "고대",
+            new CharacterLoadout.EquipmentDetail(
+                null, 100, 1700, 4, null, List.of(), List.of(), List.of(), List.of(), null,
+                List.of(), null, List.of(), 0));
+    var noDetail = new CharacterLoadout.Equipment("상의", "운명의 업화 상의", null, "고대", null);
+    var result =
+        EquipmentReceipt.calculate(
+            RULES,
+            List.of(item("무기", "+12 운명의 전율 검", 12, 4), noLevel, noDetail),
+            prices(BigDecimal.ONE));
+    assertThat(result.parts()).extracting(EquipmentReceipt.Part::slot).containsExactly("무기");
+    assertThat(result.excluded())
+        .extracting(EquipmentReceipt.Excluded::reason)
+        .contains(
+            EquipmentReceipt.Reason.UNSUPPORTED_STAGE, EquipmentReceipt.Reason.UNSUPPORTED_STAGE);
+    assertThat(result.excluded())
+        .filteredOn(e -> e.reason() == EquipmentReceipt.Reason.UNSUPPORTED_STAGE)
+        .extracting(EquipmentReceipt.Excluded::slot)
+        .containsExactly("투구", "상의");
+    assertThat(result.complete()).isFalse();
+  }
+
+  @Test
+  void 장비_정보가_없으면_합계_0이_아니라_산정하지_못한_것이다() {
+    var result = EquipmentReceipt.calculate(RULES, List.of(), prices(BigDecimal.ONE));
+    assertThat(result.gold()).isZero();
+    assertThat(result.complete()).isFalse();
   }
 
   @Test
@@ -171,6 +209,7 @@ class ReceiptDomainTest {
         .extracting(EquipmentReceipt.Excluded::reason)
         .containsExactly(EquipmentReceipt.Reason.PRICE_UNAVAILABLE);
     assertThat(result.gold()).isZero();
+    assertThat(result.complete()).isFalse();
   }
 
   @Test

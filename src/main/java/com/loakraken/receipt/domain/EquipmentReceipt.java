@@ -62,7 +62,17 @@ public final class EquipmentReceipt {
 
   public record Excluded(String slot, String name, Reason reason, String message) {}
 
-  public record Result(List<Part> parts, List<Excluded> excluded, BigDecimal gold) {}
+  /**
+   * complete: 이 캐릭터의 산정 대상 부위를 모두 셌는가. 시세가 없어 뺀 부위(PRICE_UNAVAILABLE), 재련 단계를 읽지 못했거나 규칙이 다루지 않는 부위
+   * (UNSUPPORTED_STAGE), 장비 정보 자체가 없으면 false다 — gold는 센 부위만의 합이라 실제보다 작다. 완갑·상급 재련·한계 해방처럼 정해서 넣지
+   * 않는 항목은 빠져도 complete다(영수증은 검증된 항목만 금액에 넣는다).
+   */
+  public record Result(
+      List<Part> parts, List<Excluded> excluded, BigDecimal gold, boolean complete) {
+    public Result(List<Part> parts, List<Excluded> excluded, BigDecimal gold) {
+      this(parts, excluded, gold, true);
+    }
+  }
 
   /** 장비에서 산정할 수 있는 부위와 단계 범위. 가격을 묻기 전에 필요한 재료 이름을 모은다. */
   public static Set<String> materialNames(
@@ -134,6 +144,8 @@ public final class EquipmentReceipt {
       OptimalStageCache optimalCache) {
     var parts = new ArrayList<Part>();
     var excluded = new ArrayList<Excluded>();
+    // 장비 정보가 아예 없으면(전투정보의 장비 구역이 빔) 0이 아니라 산정하지 못한 것이다.
+    boolean complete = items.stream().anyMatch(item -> item != null && item.type() != null);
     for (var item : items) {
       if (item == null || item.type() == null) continue;
       if (ARM_GUARD.equals(item.type())) {
@@ -151,6 +163,14 @@ public final class EquipmentReceipt {
         continue;
       }
       int from = fromStage(grade);
+      if (item.detail() == null || item.detail().refineLevel() == null) {
+        // 단계를 모르면 +10 이하(비용 0)로 보지 않는다.
+        excluded.add(
+            new Excluded(
+                item.type(), item.name(), Reason.UNSUPPORTED_STAGE, "재련 단계를 읽지 못해 산정하지 않았습니다."));
+        complete = false;
+        continue;
+      }
       if (stage <= from) {
         parts.add(
             new Part(item.type(), item.name(), grade, from, stage, BigDecimal.ZERO, List.of()));
@@ -161,6 +181,7 @@ public final class EquipmentReceipt {
         excluded.add(
             new Excluded(
                 item.type(), item.name(), Reason.UNSUPPORTED_STAGE, "재련 규칙이 지원하지 않는 단계입니다."));
+        complete = false;
         continue;
       }
       var stages = new ArrayList<StageCost>();
@@ -194,6 +215,7 @@ public final class EquipmentReceipt {
         excluded.add(
             new Excluded(
                 item.type(), item.name(), Reason.PRICE_UNAVAILABLE, "재련 재료 시세를 찾지 못했습니다."));
+        complete = false;
         continue;
       }
       parts.add(
@@ -250,7 +272,7 @@ public final class EquipmentReceipt {
       excluded.add(
           new Excluded(null, null, Reason.ADVANCED_REFINING, "상급 재련은 아직 산정하지 않습니다(재련 v2 준비 중)."));
     var gold = parts.stream().map(Part::gold).reduce(BigDecimal.ZERO, BigDecimal::add);
-    return new Result(List.copyOf(parts), List.copyOf(excluded), gold);
+    return new Result(List.copyOf(parts), List.copyOf(excluded), gold, complete);
   }
 
   /** 회차별 최적 캐시 키: 트랙·단계·성장 지원·책 허용과 그 단계 재료·숨결·책 시세 값(#287·#292). */

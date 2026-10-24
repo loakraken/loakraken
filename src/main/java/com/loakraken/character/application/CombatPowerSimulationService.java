@@ -835,21 +835,27 @@ public class CombatPowerSimulationService {
         text("option", change.option());
         grade(change.grade());
         var current = item.detail().polishEffects().get(change.line());
+        // 수치표는 한 아이템 레벨·등급(지금 1680 고대) 값이다. 다른 장신구(예: 1540)는 같은 등급도 값이 달라 계산하지 않는다(코드 리뷰 10-25).
+        boolean tableFits = polishTableFits(polishValues, item);
         var value =
-            polishValue(polishValues, item.type(), change.option(), change.grade(), current);
+            tableFits
+                ? polishValue(polishValues, item.type(), change.option(), change.grade(), current)
+                : null;
         var option = optionName(change.option());
         var from = CombatPowerPolishModel.line(current.name(), current.value());
         var to = value == null ? null : CombatPowerPolishModel.line(option, value);
         String reason =
-            value == null
-                ? "이 부위·연마 옵션·등급의 수치를 확인하지 않아 계산하지 않았습니다."
-                : from == null
-                    ? "지금 연마 줄("
-                        + current.name()
-                        + " "
-                        + current.value()
-                        + ")의 전투력 계수를 확인하지 않아 계산하지 않았습니다."
-                    : to == null ? "이 연마 옵션의 전투력 계수를 확인하지 않아 계산하지 않았습니다." : null;
+            !tableFits
+                ? POLISH_TABLE_MISMATCH
+                : value == null
+                    ? "이 부위·연마 옵션·등급의 수치를 확인하지 않아 계산하지 않았습니다."
+                    : from == null
+                        ? "지금 연마 줄("
+                            + current.name()
+                            + " "
+                            + current.value()
+                            + ")의 전투력 계수를 확인하지 않아 계산하지 않았습니다."
+                        : to == null ? "이 연마 옵션의 전투력 계수를 확인하지 않아 계산하지 않았습니다." : null;
         yield new Planned(
             change,
             item.name() + " 연마 " + (change.line() + 1),
@@ -1029,6 +1035,18 @@ public class CombatPowerSimulationService {
    * 연마 수치 표(polish-values)에서 부위·옵션·등급의 공식 수치. 같은 부위에 같은 이름의 %·고정값 옵션이 둘 다 있으면(귀걸이 공격력·무기 공격력) % 쪽은
    * 옵션 끝에 " %"를 붙여 고른다(예: "공격력 %"). 없으면 null.
    */
+  static final String POLISH_TABLE_MISMATCH = "이 장신구의 아이템 레벨·등급에 맞는 연마 수치표를 아직 확인하지 않아 계산하지 않았습니다.";
+
+  /** 장신구의 등급·아이템 레벨이 연마 수치표와 같은지(모르면 아님). */
+  static boolean polishTableFits(
+      CombatPowerPolishValues polishValues, CharacterLoadout.Equipment item) {
+    return polishValues.accessoryGrade() != null
+        && polishValues.accessoryGrade().equals(item.grade())
+        && polishValues.itemLevel() != null
+        && item.detail() != null
+        && polishValues.itemLevel().equals(item.detail().itemLevel());
+  }
+
   static String polishValue(
       CombatPowerPolishValues polishValues,
       String part,

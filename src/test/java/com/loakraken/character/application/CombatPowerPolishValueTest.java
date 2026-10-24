@@ -45,4 +45,23 @@ class CombatPowerPolishValueTest {
     assertThat(CombatPowerSimulationService.polishValue(VALUES, "목걸이", "공격력", "LOW", other))
         .isEqualTo("+80");
   }
+
+  @Test
+  void 수치표와_아이템_레벨이나_등급이_다른_장신구는_계산하지_않는다() {
+    // 코드 리뷰 10-25: 1540 귀걸이 공격력 % 중 +0.66%가 1680 표의 +0.95%로 읽혔다.
+    assertThat(CombatPowerSimulationService.polishTableFits(VALUES, earring("고대", 1680))).isTrue();
+    assertThat(CombatPowerSimulationService.polishTableFits(VALUES, earring("고대", 1540))).isFalse();
+    assertThat(CombatPowerSimulationService.polishTableFits(VALUES, earring("유물", 1680))).isFalse();
+    assertThat(CombatPowerSimulationService.polishTableFits(VALUES, earring("고대", null))).isFalse();
+  }
+
+  private static CharacterLoadout.Equipment earring(String grade, Integer itemLevel) {
+    return new CharacterLoadout.Equipment(
+        "귀걸이",
+        "귀걸이",
+        null,
+        grade,
+        new CharacterLoadout.EquipmentDetail(
+            null, null, itemLevel, 4, null, List.of(), List.of(), List.of(), List.of()));
+  }
 }

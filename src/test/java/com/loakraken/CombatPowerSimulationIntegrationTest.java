@@ -280,7 +280,7 @@ class CombatPowerSimulationIntegrationTest {
             new CharacterLoadout.EquipmentDetail(
                 null,
                 80,
-                null,
+                1680, // 연마 수치표(1680 고대)와 같은 장신구
                 4,
                 null,
                 List.of(),

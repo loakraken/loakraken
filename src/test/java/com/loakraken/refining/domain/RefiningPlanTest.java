@@ -12,6 +12,17 @@ class RefiningPlanTest {
   private static final RefiningRules.Book BOOK = new RefiningRules.Book("재봉술 : 업화 [11-14]", 1000);
 
   @Test
+  void 장인의_기운은_성공률_곱하기_0_465를_0_01퍼센트포인트에서_버린다() {
+    // 게임 화면(계산 검증 캡처 10-25): 성공률 3.000% → +1.39%, 3.150% → +1.46%.
+    assertThat(RefiningPlan.artisanGainHundredths(0.03)).isEqualTo(139);
+    assertThat(RefiningPlan.artisanGainHundredths(0.0315)).isEqualTo(146);
+    // 정수 경계: 10% → 4.65%, 20% → 9.30%(부동소수 오차로 한 칸 낮아지지 않음).
+    assertThat(RefiningPlan.artisanGainHundredths(0.1)).isEqualTo(465);
+    assertThat(RefiningPlan.artisanGainHundredths(0.2)).isEqualTo(930);
+    assertThat(RefiningPlan.artisanGainHundredths(0.15)).isEqualTo(697);
+  }
+
+  @Test
   void 실패_보너스와_장인의_기운으로_시도_분포를_계산한다() {
     // 50% → 55% → 60% → 65%, 장인의 기운 23.25 → 48.825 → 76.725 → 106.95%라 5번째가 확정이다.
     var plan = plan(stage(11, 5000, null, null), options(10, 11, false, false, 0, 0));

@@ -10,7 +10,8 @@ import java.util.Map;
 /**
  * 현재 단계에서 목표 단계까지의 시도 수 분포와 재료 소모량을 계산한다.
  *
- * <p>실패할 때마다 기본 확률의 10%가 오르며(최대 10회), 장인의 기운은 시도 최종 성공률 × 0.465만큼 쌓여 100%가 되면 다음 시도가 확정 성공이다.
+ * <p>실패할 때마다 기본 확률의 10%가 오르며(최대 10회), 장인의 기운은 시도 최종 성공률 × 0.465(0.01%p에서 버림)만큼 쌓여 100%가 되면 다음 시도가
+ * 확정 성공이다.
  */
 public record RefiningPlan(
     List<StagePlan> stages,
@@ -20,6 +21,15 @@ public record RefiningPlan(
     long worstCaseGold) {
   public static final String SHARD = "운명의 파편";
   static final double ARTISAN_RATE = 0.465;
+
+  /**
+   * 실패 한 번에 쌓이는 장인의 기운(0.01%p 단위, 버림): 시도 최종 성공률(%) × 0.465를 소수 둘째 자리에서 버린다. 게임 화면 기준(계산 검증 캡처
+   * 10-25: 성공률 3.000% → +1.39%, 3.150% → +1.46%). 부동소수 오차로 정수 경계 바로 밑이 되지 않게 1e-9를 더한다.
+   */
+  static int artisanGainHundredths(double probability) {
+    return (int) Math.floor(probability * ARTISAN_RATE * 10_000 + 1e-9);
+  }
+
   static final int MAX_BONUS_FAILURES = 10;
   private static final int MAX_ATTEMPTS = 10_000;
   private static final int GROWTH_SUPPORT_MAX_STAGE = 18;
@@ -181,7 +191,7 @@ public record RefiningPlan(
       if (p90 == 0 && cumulative >= 0.9 - 1e-12) p90 = attempts;
       reach *= 1 - probability;
       if (probability >= 1) break;
-      artisan += Math.round(probability * ARTISAN_RATE * 100_000) / 100_000.0;
+      artisan += artisanGainHundredths(probability) / 10_000.0;
       failures++;
     }
     double goldRate =

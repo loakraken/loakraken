@@ -1,6 +1,5 @@
-package com.loakraken.receipt.domain;
+package com.loakraken.refining.domain;
 
-import com.loakraken.refining.domain.RefiningOptimal;
 import java.util.Optional;
 import java.util.function.Supplier;
 

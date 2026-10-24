@@ -47,12 +47,19 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
       HttpHeaders headers,
       HttpStatusCode status,
       WebRequest request) {
+    // 길이를 알리지 않은 본문이 상한을 넘으면 읽기 예외(400 경로)로 오므로 413으로 바꾼다(RequestBodyLimitFilter).
+    if (tooLarge(exception)) {
+      status = CommonErrorCode.REQUEST_TOO_LARGE.httpStatus();
+      headers = new HttpHeaders(headers);
+      headers.set(HttpHeaders.CONNECTION, "close");
+    }
     var errorCode =
         switch (status.value()) {
           case 400 -> CommonErrorCode.INVALID_REQUEST;
           case 404 -> CommonErrorCode.RESOURCE_NOT_FOUND;
           case 405 -> CommonErrorCode.METHOD_NOT_ALLOWED;
           case 406 -> CommonErrorCode.NOT_ACCEPTABLE;
+          case 413 -> CommonErrorCode.REQUEST_TOO_LARGE;
           case 415 -> CommonErrorCode.UNSUPPORTED_MEDIA_TYPE;
           default -> null;
         };
@@ -64,6 +71,12 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     responseHeaders.putAll(headers);
     responseHeaders.setContentType(MediaType.APPLICATION_JSON);
     return super.handleExceptionInternal(exception, response, responseHeaders, status, request);
+  }
+
+  private static boolean tooLarge(Throwable exception) {
+    for (var cause = exception; cause != null; cause = cause.getCause())
+      if (cause instanceof RequestBodyLimitFilter.BodyTooLargeException) return true;
+    return false;
   }
 
   /** 스택에서 처음 나오는 우리 코드(com.loakraken) 위치. 없으면 맨 위 위치. */
@@ -81,6 +94,11 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
   @ExceptionHandler(Exception.class)
   public ResponseEntity<ApiResponse<Void>> handleUnexpectedException(Exception exception) {
+    if (tooLarge(exception))
+      return ResponseEntity.status(CommonErrorCode.REQUEST_TOO_LARGE.httpStatus())
+          .header(HttpHeaders.CONNECTION, "close")
+          .contentType(MediaType.APPLICATION_JSON)
+          .body(ApiResponse.from(CommonErrorCode.REQUEST_TOO_LARGE));
     // 예외 메시지나 원인에는 외부 응답·비밀값·캐릭터 이름이 포함될 수 있어 타입과 우리 코드의 발생 위치(클래스·메서드·줄)만 기록한다(P0 10-12).
     log.error(
         "처리하지 못한 서버 오류가 발생했습니다. exceptionType={}, at={}",

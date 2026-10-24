@@ -6,9 +6,9 @@ import java.util.List;
 import org.springframework.stereotype.Service;
 
 /**
- * 상점 공지 알림(#636). 공식 공지 목록을 1회 읽어(백그라운드 몫을 남김) 상점 분류이거나 제목에 상점·패키지 말이 있는 공지 가운데 처음 보는 것만 Slack에 한
- * 번 알린다. 공지 내용(패키지 구성)은 읽지 않는다. 처음 켠 실행은 지금 공지를 기준으로만 저장하고 알리지 않는다. Slack 전송이 실패하면 기억하지 않아 다음
- * 실행에 다시 알린다.
+ * 상점 공지 알림(#636). 공식 공지 목록을 1회 읽어(백그라운드 몫을 남김) 상점 분류이거나 제목에 상점·패키지 말이 있는 공지 가운데 처음 보는 것만 Slack에 한 번
+ * 알린다. 공지 내용(패키지 구성)은 읽지 않는다. 처음 켠 실행은 지금 공지를 기준으로만 저장하고 알리지 않는다. Slack 전송이 실패하면 기억하지 않아 다음 실행에 다시
+ * 알린다.
  */
 @Service
 public class ShopNoticeAlertService {
@@ -61,7 +61,11 @@ public class ShopNoticeAlertService {
   static String message(List<NewsFeed.Notice> notices) {
     var text = new StringBuilder(HEADLINE).append(" — 새 상점 공지 ").append(notices.size()).append("건");
     for (var notice : notices)
-      text.append("\n• <").append(notice.url()).append('|').append(escape(notice.title())).append('>');
+      text.append("\n• <")
+          .append(notice.url())
+          .append('|')
+          .append(escape(notice.title()))
+          .append('>');
     return text.toString();
   }
 

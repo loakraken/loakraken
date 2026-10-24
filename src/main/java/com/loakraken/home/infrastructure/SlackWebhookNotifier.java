@@ -16,8 +16,8 @@ import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 
 /**
- * Slack 수신 웹훅으로 글 한 개를 보낸다. 주소는 보낼 때마다 비밀 파일에서 읽고(설정·로그·예외 문장에 두지 않음), {@code https://hooks.slack.com/}로
- * 시작하는 주소만 쓴다(파일이 바뀌어도 다른 곳으로 보내지 않게).
+ * Slack 수신 웹훅으로 글 한 개를 보낸다. 주소는 보낼 때마다 비밀 파일에서 읽고(설정·로그·예외 문장에 두지 않음), {@code
+ * https://hooks.slack.com/}로 시작하는 주소만 쓴다(파일이 바뀌어도 다른 곳으로 보내지 않게).
  */
 @Component
 class SlackWebhookNotifier implements ShopNoticeNotifier {
@@ -53,8 +53,7 @@ class SlackWebhookNotifier implements ShopNoticeNotifier {
 
   /** 비밀 파일의 첫 줄(앞뒤 공백 제외). 경로가 비었거나 읽지 못하거나 Slack 주소가 아니면 예외(주소는 문장에 넣지 않음). */
   static String webhook(String file) {
-    if (file == null || file.isBlank())
-      throw new IllegalStateException("Slack 웹훅 파일이 설정되지 않았습니다.");
+    if (file == null || file.isBlank()) throw new IllegalStateException("Slack 웹훅 파일이 설정되지 않았습니다.");
     String url;
     try {
       url = Files.readString(Path.of(file), StandardCharsets.UTF_8).strip();

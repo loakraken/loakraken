@@ -52,6 +52,12 @@ class LostArkHomeClient implements HomeSourcePort {
     return LostArkNewsResponse.toDomain(notices, events);
   }
 
+  @Override
+  public java.util.List<NewsFeed.Notice> fetchNotices() {
+    var notices = get(Endpoint.NEWS_NOTICES, "/news/notices", LostArkNewsResponse.Notice[].class);
+    return LostArkNewsResponse.toDomain(notices, new LostArkNewsResponse.Event[0]).notices();
+  }
+
   private <T> T get(Endpoint endpoint, String path, Class<T> type) {
     if (properties.apiKey().isBlank()) throw error(LostArkErrorCode.LOST_ARK_NOT_CONFIGURED);
     gate.acquire(endpoint);

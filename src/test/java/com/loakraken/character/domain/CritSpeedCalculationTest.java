@@ -51,7 +51,8 @@ class CritSpeedCalculationTest {
     assertThat(hundred.requiredAdditionalCritStat()).isEqualTo(358);
     var thornTarget = crit.targets().get(1);
     assertThat(thornTarget.targetRate()).isEqualByComparingTo("120");
-    assertThat(thornTarget.requiredAdditionalCritStat()).isEqualTo(917);
+    assertThat(thornTarget.requiredAdditionalCritStat())
+        .isEqualTo(916); // 53.40% 더 → 5340 × 0.2794 = 1491.996 → 1492 − 576
     assertThat(crit.bluntThorn().source()).isEqualTo(NodeSource.REFERENCE_LEVEL_2);
     assertThat(crit.bluntThorn().evolutionDamage()).isEqualByComparingTo("25.82");
     assertThat(crit.effectiveRate()).isEqualByComparingTo("87.21");
@@ -85,6 +86,63 @@ class CritSpeedCalculationTest {
   }
 
   @Test
+  void 스탯_환산은_비교_기준_원본처럼_소수_둘째_자리에서_버린다() {
+    // 공식 Tooltip = floor(스탯 ÷ 0.2794) ÷ 100(치명), floor(스탯 ÷ 0.5821) ÷ 100(신속) — 계산 검증 저장 원문
+    // 29/29(10-25).
+    assertThat(CritSpeedCalculation.critPercent(682)).isEqualByComparingTo("24.40");
+    assertThat(CritSpeedCalculation.critPercent(1800)).isEqualByComparingTo("64.42");
+    assertThat(CritSpeedCalculation.critPercent(576)).isEqualByComparingTo("20.61");
+    assertThat(CritSpeedCalculation.speedPercent(1606)).isEqualByComparingTo("27.58");
+    assertThat(CritSpeedCalculation.speedPercent(1000)).isEqualByComparingTo("17.17");
+    assertThat(CritSpeedCalculation.speedPercent(1794)).isEqualByComparingTo("30.81");
+    assertThat(CritSpeedCalculation.speedPercent(77)).isEqualByComparingTo("1.32");
+  }
+
+  @Test
+  void 필요_스탯은_버린_환산이_목표에_닿는_가장_작은_스탯이고_펫은_한_번만_센다() {
+    // 다른 효과 0에서 치명타 적중률 100%: 2794.
+    assertThat(CritSpeedCalculation.statFor(new BigDecimal("100"), 0.2794)).isEqualTo(2794);
+    assertThat(CritSpeedCalculation.critPercent(2793)).isLessThan(new BigDecimal("100"));
+    assertThat(CritSpeedCalculation.statFor(BigDecimal.ZERO, 0.2794)).isZero();
+    // 치명 500, 다른 효과 60%, 펫 켬: 펫 = 환산(660) − 환산(500) = 5.73, 더 필요한 치명 458(펫을 두 번 세면 298).
+    var pet = CritSpeedCalculation.petCrit(500);
+    assertThat(pet).isEqualByComparingTo("5.73");
+    assertThat(
+            CritSpeedCalculation.statFor(
+                    new BigDecimal("100").subtract(new BigDecimal("60")).subtract(pet), 0.2794)
+                - 500)
+        .isEqualTo(458);
+    assertThat(CritSpeedCalculation.petCrit(null)).isEqualByComparingTo("5.72");
+  }
+
+  @Test
+  void 펫을_켜면_필요_스탯은_펫_160을_스탯에_더해_버림_경계를_잰다() {
+    // 치명 400, 펫 말고 다른 효과 47.10%, 펫 켬: 지금 스탯에서 잰 펫 %(5.73)로 구하면 1318이지만, 1318 + 160 = 1478은
+    // floor(1478 ÷ 0.2794) = 5289 → 52.89%로 52.90%에 못 미친다. 필요한 내 치명은 1319(1479 − 160), 더 필요한 치명
+    // 919.
+    var other = new BigDecimal("47.10");
+    var nonStat = other.add(CritSpeedCalculation.petCrit(400));
+    var total = nonStat.add(CritSpeedCalculation.critPercent(400));
+    var target =
+        CritSpeedCalculation.target("CRIT_100", new BigDecimal("100"), total, nonStat, 400, true);
+    assertThat(target.requiredCritStat()).isEqualTo(1319);
+    assertThat(target.requiredAdditionalCritStat()).isEqualTo(919);
+    assertThat(CritSpeedCalculation.critPercent(1478)).isEqualByComparingTo("52.89");
+    assertThat(CritSpeedCalculation.critPercent(1479)).isEqualByComparingTo("52.93");
+    // 펫을 끄면 그대로 스탯 외 합계로 구한다.
+    var off =
+        CritSpeedCalculation.target(
+            "CRIT_100",
+            new BigDecimal("100"),
+            other.add(CritSpeedCalculation.critPercent(400)),
+            other,
+            400,
+            false);
+    assertThat(off.requiredCritStat())
+        .isEqualTo(CritSpeedCalculation.statFor(new BigDecimal("52.90"), 0.2794));
+  }
+
+  @Test
   void 신속_스탯별_표는_현재값과_최적값_행을_포함하고_신속_외_출처를_유지한다() {
     var result =
         CritSpeedCalculation.calculate(
@@ -93,7 +151,7 @@ class CritSpeedCalculationTest {
             new Assumptions(
                 false, false, 0, null, null, null, new BigDecimal("14"), new BigDecimal("14")));
     var speed = result.speed();
-    assertThat(speed.swiftnessPerPercent()).isEqualByComparingTo("58.22");
+    assertThat(speed.swiftnessPerPercent()).isEqualByComparingTo("58.21");
     var table = speed.swiftnessTable();
     assertThat(table.getFirst().swiftness()).isZero();
     assertThat(table.getFirst().attack()).isEqualByComparingTo("14");
@@ -101,7 +159,8 @@ class CritSpeedCalculationTest {
     var optimal =
         table.stream().filter(CritSpeedCalculation.SwiftnessRow::optimal).findFirst().orElseThrow();
     assertThat(optimal.swiftness()).isEqualTo(2290);
-    assertThat(optimal.attack()).isEqualByComparingTo("53.33");
+    assertThat(optimal.attack())
+        .isEqualByComparingTo("53.34"); // 14 + floor(2290 ÷ 0.5821) ÷ 100, 2289면 53.32
     assertThat(optimal.attackEffective()).isEqualByComparingTo("40");
     assertThat(optimal.supersonicEvolutionDamage()).isEqualByComparingTo("24");
     assertThat(table.getLast().swiftness()).isEqualTo(2600);
@@ -313,9 +372,9 @@ class CritSpeedCalculationTest {
         .filteredOn(source -> source.category() == Category.BRACELET)
         .extracting(source -> source.value().stripTrailingZeros().toPlainString())
         .containsExactly("3.4");
-    // 펫 160/27.944 = 5.73, 시너지 20, 서포터 2.5
-    assertThat(result.crit().assumedRate()).isEqualByComparingTo("28.23");
-    // 치명 746/27.944 = 26.70(Tooltip 없음 → 환산) + 팔찌 3.4
+    // 펫 = 환산(746 + 160) − 환산(746) = 32.42 − 26.70 = 5.72, 시너지 20, 서포터 2.5
+    assertThat(result.crit().assumedRate()).isEqualByComparingTo("28.22");
+    // 치명 746 → floor(746 ÷ 0.2794) ÷ 100 = 26.70(Tooltip 없음 → 환산) + 팔찌 3.4
     assertThat(result.crit().observedRate()).isEqualByComparingTo("30.10");
     assertThat(result.speed().swiftnessStat()).isEqualTo(1794);
     assertThat(result.speed().attack().observed()).isEqualByComparingTo("30.81");

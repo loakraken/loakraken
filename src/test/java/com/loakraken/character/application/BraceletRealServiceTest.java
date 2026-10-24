@@ -159,6 +159,26 @@ class BraceletRealServiceTest {
     var vitality = SERVICE.compute(result(raw, withVitality));
     assertThat(vitality.status()).isEqualTo(BraceletRealEfficiency.Status.OK);
     assertThat(vitality.percent()).isEqualByComparingTo(base.percent());
+    // 빈 칸(효과 부여 가능)과 회복만 하는 [긴급수혈]도 효과 없는 줄(계산 검증 도달 범위 10-25: 저장된 요약 746명 중 8명)
+    for (var line :
+        List.of(
+            "효과부여가능",
+            "효과 부여 가능",
+            "[긴급수혈]생명력이30%이하로떨어지면즉시생명력을13000회복한다.(재사용대기시간180초)")) {
+      var withLine = KrakenScoreInputMapper.from(raw);
+      ((tools.jackson.databind.node.ArrayNode)
+              withLine.path("armory").path("accessory").path("bangle").path("option"))
+          .add(line);
+      var zero = SERVICE.compute(result(raw, withLine));
+      assertThat(zero.status()).as(line).isEqualTo(BraceletRealEfficiency.Status.OK);
+      assertThat(zero.percent()).as(line).isEqualByComparingTo(base.percent());
+    }
+    // 빈 칸 문구가 다른 문장 안에 있으면 효과 없는 줄로 보지 않는다
+    var embedded = KrakenScoreInputMapper.from(raw);
+    ((tools.jackson.databind.node.ArrayNode)
+            embedded.path("armory").path("accessory").path("bangle").path("option"))
+        .add("효과부여가능한공격력이3%증가한다.");
+    assertThat(SERVICE.compute(result(raw, embedded)).reasonCode()).isEqualTo("UNAVAILABLE");
     var withUnknown = KrakenScoreInputMapper.from(raw);
     ((tools.jackson.databind.node.ArrayNode)
             withUnknown.path("armory").path("accessory").path("bangle").path("option"))

@@ -161,10 +161,7 @@ class BraceletRealServiceTest {
     assertThat(vitality.percent()).isEqualByComparingTo(base.percent());
     // 빈 칸(효과 부여 가능)과 회복만 하는 [긴급수혈]도 효과 없는 줄(계산 검증 도달 범위 10-25: 저장된 요약 746명 중 8명)
     for (var line :
-        List.of(
-            "효과부여가능",
-            "효과 부여 가능",
-            "[긴급수혈]생명력이30%이하로떨어지면즉시생명력을13000회복한다.(재사용대기시간180초)")) {
+        List.of("효과부여가능", "효과 부여 가능", "[긴급수혈]생명력이30%이하로떨어지면즉시생명력을13000회복한다.(재사용대기시간180초)")) {
       var withLine = KrakenScoreInputMapper.from(raw);
       ((tools.jackson.databind.node.ArrayNode)
               withLine.path("armory").path("accessory").path("bangle").path("option"))

@@ -722,8 +722,8 @@ public final class KrakenScoreBracelet {
   private static final Pattern ZERO_EFFECT_STAT = Pattern.compile("(?:체력|제압|인내|숙련)\\s*\\+[\\d,]+");
 
   /**
-   * 피해에 영향이 없는 팔찌 줄: 아직 효과를 부여하지 않은 빈 칸("효과 부여 가능")과 회복만 하는 T3 옵션([긴급수혈]). 원본도 배율 1로 지나간다. 저장된
-   * 요약 746명 가운데 빈 칸 7명, 긴급수혈 1명(계산 검증 10-25).
+   * 피해에 영향이 없는 팔찌 줄: 아직 효과를 부여하지 않은 빈 칸("효과 부여 가능")과 회복만 하는 T3 옵션([긴급수혈]). 원본도 배율 1로 지나간다. 저장된 요약
+   * 746명 가운데 빈 칸 7명, 긴급수혈 1명(계산 검증 10-25).
    */
   private static final Pattern ZERO_EFFECT_LINE =
       Pattern.compile("^\\s*(?:효과\\s*부여\\s*가능\\s*$|\\[긴급수혈\\])");
@@ -798,8 +798,8 @@ public final class KrakenScoreBracelet {
   }
 
   /**
-   * 팔찌 옵션 가운데 총배율 계산식이 알아보지 못하는 줄(주 스탯·치명·특화·신속 줄도, 효과 없는 줄도 아니고 옵션 표·추가 공격 표에도 없음). 이런 줄은 원본처럼 배율 1로 지나가므로, 효율을 내기
-   * 전에 거른다(코드 리뷰 10-25).
+   * 팔찌 옵션 가운데 총배율 계산식이 알아보지 못하는 줄(주 스탯·치명·특화·신속 줄도, 효과 없는 줄도 아니고 옵션 표·추가 공격 표에도 없음). 이런 줄은 원본처럼 배율
+   * 1로 지나가므로, 효율을 내기 전에 거른다(코드 리뷰 10-25).
    */
   public static List<String> unparsedOptions(JsonNode e, KrakenScoreEngine.Tables tables) {
     var bangle = bangle(e);

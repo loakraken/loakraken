@@ -83,6 +83,38 @@ class LostArkRequestGateTest {
   }
 
   @Test
+  void 허가된_공식_호출만_경로별로_센다() {
+    var gate = gate(new MutableClock(), 90, 10);
+    gate.acquire(LostArkMetrics.Endpoint.PROFILE);
+    gate.withReserve(
+        1,
+        () -> {
+          gate.acquire(LostArkMetrics.Endpoint.MARKET_ITEMS);
+          return null;
+        });
+    gate.withUserReserve(
+        1,
+        () -> {
+          gate.acquire(LostArkMetrics.Endpoint.ARMORY);
+          gate.acquire(LostArkMetrics.Endpoint.ARMORY);
+          return null;
+        });
+    // 예산을 넘은 호출은 거절이라 세지 않는다.
+    var tight = gate(new MutableClock(), 1, 10);
+    tight.acquire(LostArkMetrics.Endpoint.PROFILE);
+    assertThatThrownBy(() -> tight.acquire(LostArkMetrics.Endpoint.PROFILE))
+        .isInstanceOf(BusinessException.class);
+    assertThat(calls("user")).isEqualTo(2);
+    assertThat(calls("user_reserve")).isEqualTo(2);
+    assertThat(calls("background")).isEqualTo(1);
+    assertThat(registry.find("loakraken.lostark.calls").counters()).hasSize(3);
+  }
+
+  private double calls(String origin) {
+    return registry.get("loakraken.lostark.calls").tag("origin", origin).counter().count();
+  }
+
+  @Test
   void 최근_1분의_호출_예산을_넘지_않는다() {
     var clock = new MutableClock();
     var gate = gate(clock, 1, 1);

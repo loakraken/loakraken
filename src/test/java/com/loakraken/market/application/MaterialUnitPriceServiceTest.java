@@ -179,7 +179,14 @@ class MaterialUnitPriceServiceTest {
 
   @Test
   void 거래_불가_품목은_검색하지_않고_UNTRADEABLE이며_한도도_쓰지_않는다() {
-    var names = List.of("고급 생명의 기운 회복물약", "중급 생명의 기운 회복물약", "환희의 전설 카드 팩", "환희의 전설~영웅 카드 팩");
+    var names =
+        List.of(
+            "고급 생명의 기운 회복물약",
+            "중급 생명의 기운 회복물약",
+            "환희의 전설 카드 팩",
+            "환희의 전설~영웅 카드 팩",
+            "우레의 뇌옥",
+            "아크 그리드 코어");
     var result = service.requestPrices(MaterialPriceBasis.CURRENT_MIN_PRICE, names);
     assertThat(result)
         .extracting(MaterialUnitPriceService.UnitPrice::status)

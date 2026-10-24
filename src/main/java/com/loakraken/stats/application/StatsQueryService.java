@@ -863,7 +863,8 @@ public class StatsQueryService {
                             top == null ? null : Tier.of(top),
                             row.bestCombatPower(),
                             row.arkPassive(),
-                            row.estherWeapon());
+                            row.estherWeapon(),
+                            row.imageUrl());
                       })
                   .toList(),
               classEngraving,
@@ -982,7 +983,8 @@ public class StatsQueryService {
                             row.value(),
                             row.observedAt(),
                             top,
-                            top == null ? null : Tier.of(top));
+                            top == null ? null : Tier.of(top),
+                            row.imageUrl());
                       })
                   .toList());
         });
@@ -1331,7 +1333,8 @@ public class StatsQueryService {
       Tier tier,
       BigDecimal bestCombatPower,
       StatsPort.ArkPassiveSummary arkPassive,
-      StatsPort.EstherWeapon estherWeapon) {}
+      StatsPort.EstherWeapon estherWeapon,
+      String imageUrl) {}
 
   /** 수집품 랭킹 결과(#295). unit은 ROSTER·CHARACTER(응답에서는 문자열). */
   public record CollectibleRankingResult(
@@ -1493,7 +1496,8 @@ public class StatsQueryService {
       BigDecimal value,
       java.time.Instant observedAt,
       BigDecimal topPercent,
-      Tier tier) {}
+      Tier tier,
+      String imageUrl) {}
 
   public record EfficiencyRankingResult(
       Meta meta,

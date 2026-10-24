@@ -868,7 +868,7 @@ class PostgresStatsRepository implements StatsPort {
     population(conditions, since, classEngraving)
         .statement(
             ", ranked AS (SELECT character_id, character_name, server_name, class_name, position,"
-                + " item_level, combat_power, best_combat_power, RANK() OVER (ORDER BY "
+                + " item_level, combat_power, best_combat_power, image_url, RANK() OVER (ORDER BY "
                 + column
                 + " DESC) AS rnk, COUNT(*) OVER () AS total FROM pop ORDER BY "
                 + order
@@ -901,7 +901,8 @@ class PostgresStatsRepository implements StatsPort {
                       row.getBigDecimal("combat_power"),
                       row.getBigDecimal("best_combat_power"),
                       arkPassive(row),
-                      estherWeapon(row)));
+                      estherWeapon(row),
+                      row.getString("image_url")));
             });
     // 요청 페이지가 범위를 넘으면 행이 없어 total을 따로 센다.
     if (rows.isEmpty())
@@ -970,7 +971,7 @@ class PostgresStatsRepository implements StatsPort {
         .statement(
             "SELECT character_name, server_name, class_name, position, item_level, combat_power, "
                 + column
-                + " AS value, efficiency_observed_at, RANK() OVER (ORDER BY "
+                + " AS value, efficiency_observed_at, image_url, RANK() OVER (ORDER BY "
                 + column
                 + " DESC) AS rnk, COUNT(*) OVER () AS total FROM pop"
                 + filter
@@ -996,7 +997,8 @@ class PostgresStatsRepository implements StatsPort {
                       row.getBigDecimal("item_level"),
                       row.getBigDecimal("combat_power"),
                       row.getBigDecimal("value"),
-                      observed == null ? null : observed.toInstant()));
+                      observed == null ? null : observed.toInstant(),
+                      row.getString("image_url")));
             });
     // 요청 페이지가 범위를 넘으면 행이 없어 total을 따로 센다.
     if (rows.isEmpty())
@@ -1219,7 +1221,7 @@ class PostgresStatsRepository implements StatsPort {
             + " c.combat_power, c.best_combat_power, c.position, c.gem_mean_level, c.bracelet_efficiency_pct,"
             + " c.bracelet_rule_version, c.ark_grid_gem_pct, c.ark_grid_rule_version,"
             + " c.bracelet_real_pct, c.bracelet_real_rule_version, c.ark_grid_real_pct,"
-            + " c.ark_grid_real_rule_version, c.efficiency_observed_at FROM characters c WHERE "
+            + " c.ark_grid_real_rule_version, c.efficiency_observed_at, c.image_url FROM characters c WHERE "
             + where
             + ") ";
     return new Population(cte, params);

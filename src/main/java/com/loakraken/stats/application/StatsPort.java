@@ -139,7 +139,8 @@ public interface StatsPort {
       BigDecimal combatPower,
       BigDecimal bestCombatPower,
       ArkPassiveSummary arkPassive,
-      EstherWeapon estherWeapon) {}
+      EstherWeapon estherWeapon,
+      String imageUrl) {}
 
   /** 아크 패시브 진화·깨달음·도약 포인트와 직업 각인(공식 ArkPassive.Title). 못 읽은 값은 null. */
   record ArkPassiveSummary(
@@ -207,7 +208,8 @@ public interface StatsPort {
       BigDecimal itemLevel,
       BigDecimal combatPower,
       BigDecimal value,
-      Instant observedAt) {}
+      Instant observedAt,
+      String imageUrl) {}
 
   record EfficiencyPage(long total, String ruleVersion, List<EfficiencyRow> rows) {}
 

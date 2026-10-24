@@ -63,7 +63,18 @@ class StatsQueryServiceStopListRecheckTest {
         50,
         List.of(
             new StatsQueryService.EfficiencyRankedCharacter(
-                1, name, "서버", "블레이드", "DEALER", null, null, BigDecimal.TEN, null, null, null)));
+                1,
+                name,
+                "서버",
+                "블레이드",
+                "DEALER",
+                null,
+                null,
+                BigDecimal.TEN,
+                null,
+                null,
+                null,
+                null)));
   }
 
   @BeforeEach

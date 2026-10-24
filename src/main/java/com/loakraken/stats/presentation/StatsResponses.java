@@ -325,7 +325,11 @@ public final class StatsResponses {
           String classEngraving,
       @NullableResponse
           @Schema(description = "에스더 무기 강화·엘라 부여 단계(마지막으로 관측한 장비 기준). 에스더 무기가 아니거나 관측하지 않았으면 null")
-          StatsEstherWeaponResponse estherWeapon) {}
+          StatsEstherWeaponResponse estherWeapon,
+      @NullableResponse @Schema(description = IMAGE_URL) String imageUrl) {}
+
+  static final String IMAGE_URL =
+      "캐릭터 이미지 주소(공식 프로필 CharacterImage, 공식 이미지 서버 주소 그대로). 이미지는 저장하지 않고 주소만 줍니다. 받은 적이 없으면 null";
 
   public record StatsEstherWeaponResponse(
       @NullableResponse @Schema(description = "강화 단계(이름 앞 +N)") Integer refineLevel,
@@ -379,7 +383,8 @@ public final class StatsResponses {
                           row.value(),
                           row.observedAt(),
                           row.topPercent(),
-                          row.tier() == null ? null : row.tier().name()))
+                          row.tier() == null ? null : row.tier().name(),
+                          row.imageUrl()))
               .toList());
     }
   }
@@ -397,7 +402,8 @@ public final class StatsResponses {
       @NullableResponse BigDecimal topPercent,
       @NullableResponse
           @Schema(allowableValues = {"TOP1", "TOP5", "TOP10", "TOP25", "TOP50", "REST"})
-          String tier) {}
+          String tier,
+      @NullableResponse @Schema(description = IMAGE_URL) String imageUrl) {}
 
   public record StatsRankingResponse(
       StatsMetaResponse meta,
@@ -445,8 +451,8 @@ public final class StatsResponses {
                           row.estherWeapon() == null
                               ? null
                               : new StatsEstherWeaponResponse(
-                                  row.estherWeapon().refineLevel(),
-                                  row.estherWeapon().ellaStage())))
+                                  row.estherWeapon().refineLevel(), row.estherWeapon().ellaStage()),
+                          row.imageUrl()))
               .toList(),
           result.classEngraving(),
           result.classEngravingUnknown());

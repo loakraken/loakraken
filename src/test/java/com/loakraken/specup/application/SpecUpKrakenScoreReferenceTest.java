@@ -11,6 +11,7 @@ import com.loakraken.character.domain.KrakenScoreEngine;
 import com.loakraken.character.domain.KrakenScoreInputMapper;
 import com.loakraken.character.infrastructure.ArmoryRawFixtures;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -216,6 +217,62 @@ class SpecUpKrakenScoreReferenceTest {
         .as("반올림 전 차 %s", delta)
         .isEqualByComparingTo(expected);
     assertThat(KrakenScoreEngine.dealerScore(input, tables())).isEqualTo(before);
+  }
+
+  @Test
+  void 수치표와_다른_레벨_장신구는_연마_후보를_만들지_않는다() throws Exception {
+    // 코드 리뷰 10-25: 점수에 안 쓰이는 줄만 있는 다른 레벨 장신구도 1680 표로 후보가 생겼다. 시뮬레이터와 같은 규칙으로 막는다.
+    // 기준 캐릭터 1의 첫 귀걸이를 거래 제한 아이템 레벨 1540 장신구로 바꾸면 그 귀걸이 5줄만 빠진다.
+    var l01 = context("l01");
+    var loadout = loadout("l01");
+    var equipment = new ArrayList<>(loadout.equipment());
+    int first = -1;
+    for (int i = 0; i < equipment.size(); i++)
+      if (equipment.get(i) != null && "귀걸이".equals(equipment.get(i).type())) {
+        first = i;
+        break;
+      }
+    var item = equipment.get(first);
+    var d = item.detail();
+    equipment.set(
+        first,
+        new CharacterLoadout.Equipment(
+            item.type(),
+            item.name(),
+            item.icon(),
+            item.grade(),
+            new CharacterLoadout.EquipmentDetail(
+                d.refineLevel(),
+                d.quality(),
+                d.itemLevel(),
+                d.tier(),
+                d.arkPassivePoint(),
+                d.effects(),
+                d.stoneEngravings(),
+                d.polishEffects(),
+                d.braceletEffects(),
+                d.titleLine(),
+                List.of("거래 제한 아이템 레벨 1540"),
+                d.refineExp(),
+                d.extraLines(),
+                d.advancedRefineLevel(),
+                d.extraLineSections())));
+    var lower =
+        new CharacterLoadout(
+            equipment,
+            loadout.engravings(),
+            loadout.gems(),
+            loadout.cards(),
+            loadout.arkPassive(),
+            loadout.arkGrid(),
+            loadout.skills(),
+            loadout.avatars(),
+            loadout.collectibles());
+    var all = SpecUpScoreCandidates.polish(l01.input(), loadout, polishValues());
+    var rows = SpecUpScoreCandidates.polish(l01.input(), lower, polishValues());
+    assertThat(all).hasSize(19);
+    int index = first;
+    assertThat(rows).hasSize(14).noneMatch(row -> row.id().startsWith("POLISH:" + index + ":"));
   }
 
   @Test

@@ -1045,7 +1045,7 @@ public class CombatPowerSimulationService {
    * 있다(계산 검증 원문 확인 10-25). 그래서 등급이 같고, (1) 거래 제한 아이템 레벨 줄이 있으면 그 레벨이 같을 때, (2) 없으면(거래 불가) 지금 연마 줄
    * 값이 모두 이 수치표의 그 부위 값일 때만 같은 장신구로 본다. 그 밖(모르면)은 아님.
    */
-  static boolean polishTableFits(
+  public static boolean polishTableFits(
       CombatPowerPolishValues polishValues, CharacterLoadout.Equipment item) {
     if (polishValues.accessoryGrade() == null
         || !polishValues.accessoryGrade().equals(item.grade())

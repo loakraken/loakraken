@@ -169,6 +169,10 @@ final class SpecUpScoreCandidates {
       CombatPowerPolishValues values) {
     var option = input.path("armory").path("accessory").path(slot).path("option");
     if (!option.isArray() || option.size() != 3) return null;
+    // 시뮬레이터와 같은 규칙: 수치표(1680 고대)와 같은 장신구만(거래 제한 아이템 레벨 줄, 없으면 모든 연마 값이 표의 값). 점수에 안 쓰이는 줄만 있는
+    // 다른 레벨 장신구가 1680 표로 후보를 만들지 않게(코드 리뷰 10-25).
+    if (!com.loakraken.character.application.CombatPowerSimulationService.polishTableFits(
+        values, item)) return null;
     var lines = new ArrayList<String>();
     option.forEach(line -> lines.add(line.asString("")));
     var part = item.type();

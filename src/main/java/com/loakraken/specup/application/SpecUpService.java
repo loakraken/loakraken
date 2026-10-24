@@ -50,7 +50,7 @@ public class SpecUpService {
   private final CombatPowerGemModel.Coefficients gemCoefficients;
   private final SpecUpKrakenScore kraken;
   private final CombatPowerPolishValues polishValues;
-  private final com.loakraken.receipt.domain.OptimalStageCache optimalCache;
+  private final com.loakraken.refining.domain.OptimalStageCache optimalCache;
   private final boolean enabled;
 
   /** 빈 칸 후보 레벨: 기본 공격력 %가 확인된 6~10레벨만(1~5레벨은 계수표에 근거가 없어 계산하지 않는다). */
@@ -65,7 +65,7 @@ public class SpecUpService {
       CombatPowerGemModel.Coefficients gemCoefficients,
       SpecUpKrakenScore kraken,
       CombatPowerPolishValues polishValues,
-      com.loakraken.receipt.domain.OptimalStageCache optimalCache,
+      com.loakraken.refining.domain.OptimalStageCache optimalCache,
       @Value("${spec-up.enabled:false}") boolean enabled) {
     this.simulator = simulator;
     this.auctions = auctions;

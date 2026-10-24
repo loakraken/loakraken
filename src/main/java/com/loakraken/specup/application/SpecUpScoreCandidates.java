@@ -3,6 +3,7 @@ package com.loakraken.specup.application;
 import com.loakraken.character.domain.CharacterLoadout;
 import com.loakraken.character.domain.CombatPowerPolishValues;
 import com.loakraken.specup.domain.SpecUpCost;
+import com.loakraken.specup.domain.SpecUpCostRules;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -66,7 +67,7 @@ final class SpecUpScoreCandidates {
               next + "레벨",
               null,
               null,
-              SpecUpCost.KARMA_COST_UNCONFIRMED,
+              karmaCost(current, next),
               new SpecUpKrakenScore.Karma(next)));
     return planned;
   }
@@ -109,10 +110,20 @@ final class SpecUpScoreCandidates {
               label + " " + stoneText(best),
               item == null ? null : item.icon(),
               item == null ? null : item.grade(),
-              SpecUpCost.STONE_COST_UNCONFIRMED,
+              stoneCost(label),
               new SpecUpKrakenScore.Stone(best)));
     }
     return planned;
+  }
+
+  private static SpecUpCost karmaCost(int current, int next) {
+    var gold = SpecUpCostRules.karmaGold(current, next);
+    return gold == null ? SpecUpCost.KARMA_COST_UNCONFIRMED : SpecUpCost.karma(gold);
+  }
+
+  private static SpecUpCost stoneCost(String label) {
+    var gold = SpecUpCostRules.stoneGold(label);
+    return gold == null ? SpecUpCost.STONE_COST_UNCONFIRMED : SpecUpCost.stone(gold);
   }
 
   private static String stoneText(Map<String, Integer> levels) {

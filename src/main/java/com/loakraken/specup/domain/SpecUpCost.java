@@ -7,7 +7,35 @@ import java.math.RoundingMode;
  * 후보 비용(#315). unit은 금액 단위(문자열, 지금은 GOLD뿐, 스톤 등 개수 단위가 들어올 수 있음). status: OK(금액 있음), PENDING(시세 칸을
  * 아직 관측하지 못함), UNKNOWN(비용 근거가 없음). 같은 code는 늘 같은 basis 문장이다.
  */
-public record SpecUpCost(String unit, Long amount, String status, String code, String basis) {
+public record SpecUpCost(
+    String unit, Long amount, String status, String code, String basis, Double exact) {
+  /** exact는 반올림 전 금액(카르마·스톤 기대 골드처럼 정수가 아닌 비용). 정수 비용이면 amount와 같다. 효율은 이 값으로 나눈다. */
+  public SpecUpCost(String unit, Long amount, String status, String code, String basis) {
+    this(unit, amount, status, code, basis, amount == null ? null : amount.doubleValue());
+  }
+
+  /** 깨달음 카르마 레벨 기대 골드(반올림 전 값으로 효율 계산). */
+  public static SpecUpCost karma(double gold) {
+    return new SpecUpCost(
+        "GOLD",
+        Math.round(gold),
+        "OK",
+        "KARMA_EXPECTED",
+        "단계마다 성공 확률과 실패 시 장인의 기운(천장)으로 구한 기대 시도 수에 시도당 900골드를 곱해 더한 값입니다.",
+        gold);
+  }
+
+  /** 어빌리티 스톤 목표 조합 기대 골드 = 기대 키트 수(1 ÷ 목표 조합 확률) × 돌 1개 50골드(반올림 전 값으로 효율 계산). */
+  public static SpecUpCost stone(double gold) {
+    return new SpecUpCost(
+        "GOLD",
+        Math.round(gold),
+        "OK",
+        "STONE_EXPECTED_KITS",
+        "목표 조합이 나올 확률로 구한 기대 돌(키트) 수에 돌 1개 50골드를 곱한 값입니다(페온 제외).",
+        gold);
+  }
+
   public static final SpecUpCost PRICE_PENDING =
       new SpecUpCost(
           "GOLD", null, "PENDING", "PRICE_PENDING", "보석 시세를 아직 받지 못했습니다. 잠시 뒤 다시 확인해 주세요.");

@@ -113,18 +113,27 @@ public class SpecUpService {
      * Δ크라켄 점수가 있으면 계획한 비용(planned)을 준다 — 그래야 KRAKEN 정렬에서 비용으로 나눌 수 있다.
      */
     Candidate withKraken(BigDecimal delta, SpecUpCost planned) {
+      return withKraken(delta, delta == null ? null : delta.doubleValue(), planned);
+    }
+
+    /**
+     * raw는 반올림 전 Δ크라켄 점수. 10만 골드당 = raw ÷ 반올림 전 비용 × 10만을 소수 둘째 자리로(비교 기준 B 원본과 같은 계산 순서 — 카르마·스톤처럼
+     * 비용이 정수가 아니거나 Δ가 작으면 반올림한 값끼리 나누면 둘째 자리가 달라진다).
+     */
+    Candidate withKraken(BigDecimal delta, Double raw, SpecUpCost planned) {
       var cost = this.cost == null && delta != null ? planned : this.cost;
       BigDecimal per100k = null;
       if (delta != null
           && delta.signum() > 0
+          && raw != null
           && cost != null
           && "OK".equals(cost.status())
-          && cost.amount() != null
-          && cost.amount() > 0)
-        per100k =
-            delta
-                .multiply(BigDecimal.valueOf(100_000))
-                .divide(BigDecimal.valueOf(cost.amount()), 2, RoundingMode.HALF_UP);
+          && cost.exact() != null
+          && cost.exact() > 0) {
+        double value = raw / cost.exact() * 100_000;
+        if (Double.isFinite(value) && value > 0)
+          per100k = new BigDecimal(value).setScale(2, RoundingMode.HALF_UP);
+      }
       return new Candidate(
           id,
           kind,
@@ -226,7 +235,10 @@ public class SpecUpService {
                   CombatPowerReasons.classify(roleReason),
                   null)
               : evaluate(snapshot, plan);
-      candidate = candidate.withKraken(krakenDelta(krakenContext, loadout, plan), plan.cost());
+      var raw = krakenDelta(krakenContext, loadout, plan);
+      candidate =
+          candidate.withKraken(
+              raw == null ? null : SpecUpKrakenScore.round2(raw), raw, plan.cost());
       // KRAKEN은 Δ크라켄 점수가 있으면 전투력 계산과 상관없이 순위에 넣는다.
       boolean ranked =
           "OK".equals(candidate.status())
@@ -262,14 +274,12 @@ public class SpecUpService {
    * 후보 하나의 Δ크라켄 점수 = (적용 뒤 점수 − 지금 점수)를 소수 둘째 자리로 반올림(비교 기준 B 스펙업 ▲와 같은 정의 — 화면 점수끼리의 차가 아니라 반올림 전
    * 값의 차, 레퍼런스 26줄 대조). 계산 못 하면 null.
    */
-  private BigDecimal krakenDelta(
+  /** 반올림 전 Δ크라켄 점수(응답 값은 round2). */
+  private Double krakenDelta(
       SpecUpKrakenScore.Context context, CharacterLoadout loadout, Planned plan) {
-    var raw =
-        plan.kraken() != null
-            ? kraken.delta(context, plan.kraken())
-            : kraken.delta(context, loadout, plan.change());
-    if (raw == null) return null;
-    return SpecUpKrakenScore.round2(raw);
+    return plan.kraken() != null
+        ? kraken.delta(context, plan.kraken())
+        : kraken.delta(context, loadout, plan.change());
   }
 
   /** 효율 순: 효율 있음(내림차순) → 비용 모름(Δ 내림차순). Δ 순: Δ 내림차순. 같으면 id 순. */

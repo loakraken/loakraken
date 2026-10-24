@@ -90,7 +90,10 @@ class LostArkCharacterClientTest {
       assertThat(id.toString())
           .doesNotContain("모험가", "원정대캐릭터", "test-token", "secret", "http", "/characters/");
       assertThat(id.getTags())
-          .allMatch(tag -> java.util.Set.of("endpoint", "outcome", "event").contains(tag.getKey()));
+          .allMatch(
+              tag ->
+                  java.util.Set.of("endpoint", "outcome", "event", "origin")
+                      .contains(tag.getKey()));
     }
     server.stop(0);
     executor.close();

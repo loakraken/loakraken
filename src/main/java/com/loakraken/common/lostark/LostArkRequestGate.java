@@ -94,21 +94,24 @@ public class LostArkRequestGate {
    */
   public void acquire(LostArkMetrics.Endpoint endpoint, String target) {
     admit();
+    // 허가된 호출만 경로별로 센다(거절은 loakraken.lostark.gate). 사용자 경로가 예산 가까이 쓰는지 운영 경보가 본다.
+    var origin = origin();
+    metrics.call(origin);
     if (CALLS.isDebugEnabled())
       CALLS.debug(
           "official-call endpoint={} origin={} reserve={}{}",
           endpoint == null ? "UNKNOWN" : endpoint.name(),
-          origin(),
+          origin.name(),
           currentReserve(),
           target == null ? "" : " " + target);
   }
 
   /** BACKGROUND: 예열·수집기(reserve, 클라이언트 한도 안 셈), USER_RESERVE: 사용자 요청 중 reserve 호출, USER: 사용자 요청. */
-  private static String origin() {
-    if (currentReserve() == 0) return "USER";
+  private static LostArkMetrics.CallOrigin origin() {
+    if (currentReserve() == 0) return LostArkMetrics.CallOrigin.USER;
     return Boolean.TRUE.equals(CHARGE_CLIENT.get()) || CHARGE_BUCKET.get() != null
-        ? "USER_RESERVE"
-        : "BACKGROUND";
+        ? LostArkMetrics.CallOrigin.USER_RESERVE
+        : LostArkMetrics.CallOrigin.BACKGROUND;
   }
 
   private void admit() {

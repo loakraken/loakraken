@@ -28,6 +28,11 @@ public class LostArkMetrics {
     registry.counter("loakraken.lostark.gate", "event", tag(event)).increment();
   }
 
+  /** 게이트가 허가한 공식 호출 1회를 경로별로 센다(거절은 세지 않음). */
+  public void call(CallOrigin origin) {
+    registry.counter("loakraken.lostark.calls", "origin", tag(origin)).increment();
+  }
+
   private String tag(Enum<?> value) {
     return value.name().toLowerCase(Locale.ROOT);
   }
@@ -52,6 +57,15 @@ public class LostArkMetrics {
     RATE_LIMITED,
     TIMEOUT,
     ERROR
+  }
+
+  /**
+   * 공식 호출 경로. USER: 사용자 요청, USER_RESERVE: 사용자 요청 중 사용자 몫을 남기는 호출, BACKGROUND: 수집기·예열(클라이언트 한도 안 셈).
+   */
+  public enum CallOrigin {
+    USER,
+    USER_RESERVE,
+    BACKGROUND
   }
 
   public enum GateEvent {

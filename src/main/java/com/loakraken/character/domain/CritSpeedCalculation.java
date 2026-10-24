@@ -662,6 +662,10 @@ public final class CritSpeedCalculation {
     return critFromStat;
   }
 
+  static final String STONE_ATTACK_SPEED_DOWN = "공격속도 감소";
+  static final String STONE_MOVE_SPEED_DOWN = "이동속도 감소";
+  static final BigDecimal STONE_SPEED_DOWN_PER_LEVEL = BigDecimal.valueOf(2);
+
   private static void engravingSources(
       CharacterLoadout loadout, List<Source> sources, List<String> conditional) {
     if (loadout.engravings() == null) return;
@@ -681,6 +685,27 @@ public final class CritSpeedCalculation {
     for (var equipment : loadout.equipment()) {
       if (equipment == null || equipment.detail() == null) continue;
       var detail = equipment.detail();
+      // 어빌리티 스톤 감소 각인 "공격속도 감소 Lv.N"·"이동속도 감소 Lv.N": 레벨당 2% 감소(비교 기준 원본 모듈 78512, 계산 검증 실제 경로
+      // 10-25).
+      for (var stone : detail.stoneEngravings()) {
+        if (stone == null || stone.name() == null || stone.level() == null || stone.level() <= 0)
+          continue;
+        var name = stone.name().strip();
+        var axis =
+            STONE_ATTACK_SPEED_DOWN.equals(name)
+                ? Axis.ATTACK_SPEED
+                : STONE_MOVE_SPEED_DOWN.equals(name) ? Axis.MOVE_SPEED : null;
+        if (axis == null) continue;
+        var label = name + " Lv." + stone.level();
+        sources.add(
+            new Source(
+                Kind.OBSERVED,
+                Category.ENGRAVING,
+                axis,
+                "스톤 " + label,
+                STONE_SPEED_DOWN_PER_LEVEL.multiply(BigDecimal.valueOf(stone.level())).negate(),
+                label));
+      }
       for (var polish : detail.polishEffects()) {
         if (polish == null || polish.name() == null) continue;
         String text = polish.name() + " " + (polish.value() == null ? "" : polish.value());

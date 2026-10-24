@@ -105,6 +105,15 @@ public class KrakenScoreService {
     }
   }
 
+  /**
+   * 엔진 기본값으로 틀린 점수가 나오는 입력을 거른다(근사 금지): 무기 stat이 숫자이고 진화 points가 숫자여야 한다. points가 없으면 엔진이 진화 배율을 1로
+   * 두어 낮은 점수·등급이 나온다(코드 리뷰 10-25: 3977.02 GOLD가 2149.74 BRONZE).
+   */
+  public static boolean scorable(JsonNode input) {
+    return input.path("armory").path("equipment").path("weapon").path("stat").isNumber()
+        && input.path("arkPassive").path("evolution").path("points").isNumber();
+  }
+
   /** 켜진 상태에서 계산하지 못했을 때의 응답(UNSUPPORTED, CALC_FAILED). 컨트롤러의 마지막 안전망도 이 값을 쓴다. */
   public KrakenScore failed() {
     return unsupported(null, Reason.CALC_FAILED);
@@ -120,9 +129,7 @@ public class KrakenScoreService {
     if (position.role() == null) return unsupported(null, Reason.ROLE_UNKNOWN);
     var role = position.role() == CharacterPosition.Role.SUPPORT ? Role.SUPPORT : Role.DEALER;
     // 무기·아크 패시브가 비어 있으면 엔진 기본값으로 0점이 나오므로 계산하지 않는다(근사 금지).
-    if (!input.path("armory").path("equipment").path("weapon").path("stat").isNumber()
-        || !input.path("arkPassive").path("evolution").isObject())
-      return unsupported(role, Reason.SCORE_UNAVAILABLE);
+    if (!scorable(input)) return unsupported(role, Reason.SCORE_UNAVAILABLE);
     double raw;
     var sample = Timer.start(registry);
     try {

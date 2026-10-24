@@ -81,8 +81,7 @@ public class SpecUpKrakenScore {
     if (position.role() == CharacterPosition.Role.SUPPORT)
       return new Context(null, Double.NaN, "SUPPORTER_PENDING");
     // 점수 서비스와 같은 조건: 무기·아크 패시브가 비면 엔진 기본값으로 0점이 나온다.
-    if (!input.path("armory").path("equipment").path("weapon").path("stat").isNumber()
-        || !input.path("arkPassive").path("evolution").isObject())
+    if (!com.loakraken.character.application.KrakenScoreService.scorable(input))
       return new Context(null, Double.NaN, "SCORE_UNAVAILABLE");
     double before = score(input);
     if (!usable(before)) return new Context(null, Double.NaN, "SCORE_UNAVAILABLE");

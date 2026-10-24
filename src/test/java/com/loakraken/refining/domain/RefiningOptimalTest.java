@@ -27,6 +27,40 @@ class RefiningOptimalTest {
   }
 
   @Test
+  void 업화_방어구_10에서_12는_단계마다_회차별_최적의_합이다() {
+    // 계산 검증 10-25, 비교 기준 B 같은 시각 시세(2026-10-24T15:54:51Z). 회차당 비용은 B와 같다(11단계 2,920, 12단계 3,056).
+    // 우리(공식 규칙): 장인의 기운 0.01%p 버림, 숨결 일부 사용 가능 → 10→11 19,382, 10→12 39,572.
+    // B: 10→11 19,362, 10→12 39,591 — 기운 0.1%p 반올림과 정책 차이(B 12단계는 2회째 책·숨결 없음, 우리는 1회째 책·마지막 회차 숨결
+    // 1개).
+    // 증명된 차이로 두고 B와는 회차당 비용·단계 합 방식만 맞춘다.
+    var track = RULES.track(RefiningRules.Grade.UPHWA, RefiningRules.EquipmentType.ARMOR);
+    var prices =
+        Map.of(
+            "운명의 수호석",
+            new BigDecimal("0.32"),
+            "운명의 돌파석",
+            new BigDecimal("5"),
+            "아비도스 융화 재료",
+            new BigDecimal("197"),
+            RefiningPlan.SHARD,
+            new BigDecimal("0.092"),
+            "빙하의 숨결",
+            new BigDecimal("430"),
+            "재봉술 : 업화 [11-14]",
+            new BigDecimal("2000"));
+    var eleven = RefiningOptimal.calculate(track.stage(11), 1, prices, true, true);
+    var twelve = RefiningOptimal.calculate(track.stage(12), 1, prices, true, true);
+    assertThat(Math.round(eleven.expectedGold())).isEqualTo(19_382);
+    assertThat(Math.round(eleven.expectedGold() + twelve.expectedGold())).isEqualTo(39_572);
+    assertThat(eleven.usesBook()).isTrue();
+    // 업화 18단계까지 성장 지원 20%(재련 골드만, 공식 공지 13307): 18,095 + 18,866.
+    var elevenSupported = RefiningOptimal.calculate(track.stage(11), 0.8, prices, true, true);
+    var twelveSupported = RefiningOptimal.calculate(track.stage(12), 0.8, prices, true, true);
+    assertThat(Math.round(elevenSupported.expectedGold() + twelveSupported.expectedGold()))
+        .isEqualTo(36_962);
+  }
+
+  @Test
   void 기대_수량으로_다시_더한_골드는_기대_골드와_같다() {
     // 스펙업 줄 상세(#585): 내역 합 = 목록 비용이 되려면 최적 정책의 기대 시도·숨결·책 수가 기대 골드와 맞아야 한다.
     for (var grade : RefiningRules.Grade.values())

@@ -5,13 +5,20 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.loakraken.common.lostark.LeaderLease;
 import com.loakraken.common.lostark.LostArkRequestGate;
+import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
+import java.util.regex.Pattern;
 import org.junit.jupiter.api.MethodOrderer;
 import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Test;
@@ -55,31 +62,46 @@ class ValkeyAclIntegrationTest {
   static final String INSPECTOR = "acl-inspector";
   static final String INSPECTOR_PASSWORD = "acl-inspector-password";
 
-  /** 운영과 같은 접근 규칙(배포 설정과 맞춤): 기본 사용자 끔, 앱 사용자는 모든 키·채널에 위험 명령만 빼고 INFO는 허용. */
+  static final Path COMPOSE = Path.of("deploy/compose.prod.yaml");
+
+  /**
+   * 운영 배포 설정(deploy/compose.prod.yaml)이 Valkey 설정 파일에 쓰는 'user …' 줄 그대로(비밀번호 자리만 테스트 값). 배포 설정의 규칙이
+   * 바뀌면 이 테스트도 그 규칙으로 돈다.
+   */
+  static List<String> productionAclRules() {
+    try {
+      var matcher =
+          Pattern.compile("printf '(user [^']*)'")
+              .matcher(Files.readString(COMPOSE, StandardCharsets.UTF_8));
+      if (!matcher.find())
+        throw new IllegalStateException(COMPOSE + "에 Valkey 'user …' 규칙 줄이 없습니다.");
+      return Arrays.stream(matcher.group(1).split("\\\\n"))
+          .map(String::strip)
+          .filter(line -> !line.isEmpty())
+          .map(line -> line.replace("%s", PASSWORD))
+          .toList();
+    } catch (IOException exception) {
+      throw new UncheckedIOException(exception);
+    }
+  }
+
+  /** 운영 규칙 + 테스트 확인 전용 사용자. 규칙 한 줄('user 이름 …')은 서버 시작 인자 '--user 이름 …'과 같다. */
+  static String[] serverCommand() {
+    var command = new ArrayList<String>(List.of("valkey-server"));
+    for (var rule : productionAclRules()) {
+      var tokens = rule.split("\\s+");
+      command.add("--" + tokens[0]);
+      command.addAll(Arrays.asList(tokens).subList(1, tokens.length));
+    }
+    command.addAll(
+        List.of("--user", INSPECTOR, "on", ">" + INSPECTOR_PASSWORD, "~*", "&*", "+@all"));
+    return command.toArray(String[]::new);
+  }
+
   static final GenericContainer<?> VALKEY =
       new GenericContainer<>(DockerImageName.parse("valkey/valkey:9.1.2"))
           .withExposedPorts(6379)
-          .withCommand(
-              "valkey-server",
-              "--user",
-              "default",
-              "off",
-              "--user",
-              USER,
-              "on",
-              ">" + PASSWORD,
-              "~*",
-              "&*",
-              "+@all",
-              "-@dangerous",
-              "+info",
-              "--user",
-              INSPECTOR,
-              "on",
-              ">" + INSPECTOR_PASSWORD,
-              "~*",
-              "&*",
-              "+@all");
+          .withCommand(serverCommand());
 
   @TestConfiguration(proxyBeanMethods = false)
   static class AclRedis {
@@ -188,6 +210,11 @@ class ValkeyAclIntegrationTest {
   @Test
   @Order(2)
   void 앱이_쓰는_명령은_모두_허용되고_KEYS_SCAN_같은_위험_명령만_막힌다() throws Exception {
+    // 배포 설정에서 읽은 규칙이 예상한 모양인지(읽기가 조용히 틀리지 않게).
+    assertThat(productionAclRules())
+        .containsExactly(
+            "user default off",
+            "user " + USER + " on >" + PASSWORD + " ~* &* +@all -@dangerous +info");
     // 연결 인사와 Lua 실행 경로.
     for (var command :
         List.of(

@@ -1037,14 +1037,42 @@ public class CombatPowerSimulationService {
    */
   static final String POLISH_TABLE_MISMATCH = "이 장신구의 아이템 레벨·등급에 맞는 연마 수치표를 아직 확인하지 않아 계산하지 않았습니다.";
 
-  /** 장신구의 등급·아이템 레벨이 연마 수치표와 같은지(모르면 아님). */
+  private static final java.util.regex.Pattern TRADE_ITEM_LEVEL =
+      java.util.regex.Pattern.compile("거래 제한 아이템 레벨\\s*([0-9,]+)");
+
+  /**
+   * 장신구가 연마 수치표(등급·아이템 레벨)와 같은 장신구인지. 공식 장신구 툴팁에는 '아이템 레벨 N' 줄이 없고 거래 가능한 장신구에만 '거래 제한 아이템 레벨 N' 줄이
+   * 있다(계산 검증 원문 확인 10-25). 그래서 등급이 같고, (1) 거래 제한 아이템 레벨 줄이 있으면 그 레벨이 같을 때, (2) 없으면(거래 불가) 지금 연마 줄
+   * 값이 모두 이 수치표의 그 부위 값일 때만 같은 장신구로 본다. 그 밖(모르면)은 아님.
+   */
   static boolean polishTableFits(
       CombatPowerPolishValues polishValues, CharacterLoadout.Equipment item) {
-    return polishValues.accessoryGrade() != null
-        && polishValues.accessoryGrade().equals(item.grade())
-        && polishValues.itemLevel() != null
-        && item.detail() != null
-        && polishValues.itemLevel().equals(item.detail().itemLevel());
+    if (polishValues.accessoryGrade() == null
+        || !polishValues.accessoryGrade().equals(item.grade())
+        || polishValues.itemLevel() == null
+        || item.detail() == null) return false;
+    var detail = item.detail();
+    if (detail.itemLevel() != null) return polishValues.itemLevel().equals(detail.itemLevel());
+    for (var line : detail.tradeLines() == null ? List.<String>of() : detail.tradeLines()) {
+      var matcher = TRADE_ITEM_LEVEL.matcher(line == null ? "" : line);
+      if (matcher.find())
+        return polishValues.itemLevel().equals(Integer.valueOf(matcher.group(1).replace(",", "")));
+    }
+    if (detail.polishEffects().isEmpty()) return false;
+    for (var polish : detail.polishEffects())
+      if (polish == null || !tableHasValue(polishValues, item.type(), polish)) return false;
+    return true;
+  }
+
+  /** 지금 연마 줄(이름·값)이 수치표의 그 부위 하·중·상 값 가운데 하나인지. */
+  private static boolean tableHasValue(
+      CombatPowerPolishValues polishValues, String part, CharacterLoadout.PolishEffect polish) {
+    if (polish.name() == null || polish.value() == null) return false;
+    var value = polish.value().strip();
+    return polishValues.options().stream()
+        .filter(row -> row.option().equals(polish.name()) && row.parts().contains(part))
+        .anyMatch(
+            row -> value.equals(row.low()) || value.equals(row.mid()) || value.equals(row.high()));
   }
 
   static String polishValue(

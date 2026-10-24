@@ -162,6 +162,26 @@ public record GameCalendar(List<Entry> entries) {
 
   public record IslandDay(String name, Set<RewardKind> rewardKinds) {}
 
+  public record DayKinds(LocalDate date, boolean chaosGate, boolean fieldBoss) {}
+
+  /**
+   * 공식 일정이 덮는 날짜마다(첫 날 … 마지막 날, 날짜순) 그 날 회차가 있는 카오스게이트·필드 보스가 있는지. 일정이 없으면 빈 목록. 날짜별 일정 칸과 같은 기준(그
+   * 날 시작 시각이 있는 항목).
+   */
+  public List<DayKinds> weekKinds() {
+    var from = coveredFrom();
+    var to = coveredTo();
+    if (from == null || to == null) return List.of();
+    var days = new ArrayList<DayKinds>();
+    for (var date = from; !date.isAfter(to); date = date.plusDays(1))
+      days.add(new DayKinds(date, hasRoundOn(CHAOS_GATE, date), hasRoundOn(FIELD_BOSS, date)));
+    return List.copyOf(days);
+  }
+
+  private boolean hasRoundOn(String category, LocalDate date) {
+    return byCategory(category).stream().anyMatch(entry -> !entry.startTimesOn(date).isEmpty());
+  }
+
   /** 모험 섬이 열리는 날짜별 섬 목록(날짜순, 섬 이름순). */
   public List<DayIslands> weekly() {
     var days = new TreeMap<LocalDate, List<IslandDay>>();

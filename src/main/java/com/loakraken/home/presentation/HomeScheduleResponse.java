@@ -25,7 +25,11 @@ public record HomeScheduleResponse(
     @Schema(description = "카오스게이트(지역별 공식 항목 그대로)") List<HomeTimedResponse> chaosGates,
     @Schema(description = "섬·항해·로웬·태초의 섬 등 그 날 회차가 있는 기타 일정") List<HomeOtherResponse> others,
     @Schema(description = "이번 주 골드 회차가 있는 날") List<HomeGoldDayResponse> goldIslandDays,
-    @Schema(description = "이번 주 날짜별 모험 섬") List<HomeWeeklyDayResponse> weekly) {
+    @Schema(description = "이번 주 날짜별 모험 섬") List<HomeWeeklyDayResponse> weekly,
+    @Schema(
+            description =
+                "이번 주 날짜별(coveredFrom … coveredTo, KST, 날짜순) 카오스게이트·필드 보스 회차가 있는지. 요청 날짜와 상관없이 같은 값, 일정이 없으면 빈 목록")
+        List<HomeWeekKindsResponse> weekKinds) {
   public static final String RULE_VERSION = "home-schedule-v1";
   static final ZoneOffset KST = ZoneOffset.ofHours(9);
 
@@ -102,6 +106,9 @@ public record HomeScheduleResponse(
                                     new HomeWeeklyIslandResponse(
                                         island.name(), island.rewardKinds()))
                             .toList()))
+            .toList(),
+        calendar.weekKinds().stream()
+            .map(day -> new HomeWeekKindsResponse(day.date(), day.chaosGate(), day.fieldBoss()))
             .toList());
   }
 
@@ -200,6 +207,11 @@ public record HomeScheduleResponse(
   public record HomeGoldDayResponse(LocalDate date, List<String> islands) {}
 
   public record HomeWeeklyDayResponse(LocalDate date, List<HomeWeeklyIslandResponse> islands) {}
+
+  public record HomeWeekKindsResponse(
+      @Schema(description = "날짜(KST)") LocalDate date,
+      @Schema(description = "그 날 시작 시각이 있는 카오스게이트가 있다") boolean chaosGate,
+      @Schema(description = "그 날 시작 시각이 있는 필드 보스가 있다") boolean fieldBoss) {}
 
   public record HomeWeeklyIslandResponse(String name, Set<GameCalendar.RewardKind> rewardKinds) {}
 }

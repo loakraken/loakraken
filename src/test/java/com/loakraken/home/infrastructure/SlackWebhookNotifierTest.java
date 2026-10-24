@@ -45,15 +45,15 @@ class SlackWebhookNotifierTest {
             "https://hooks.slack.com:8443/services/T0/B0/x",
             "",
             "   ",
-            "https://hooks.slack.com/services/T0/B0/x
-https://evil.example/",
-            "https://hooks.slack.com/services/T0/B0/xhttps://evil.example/",
+            "https://hooks.slack.com/services/T0/B0/x\nhttps://evil.example/",
+            "https://hooks.slack.com/services/T0/B0/x\rhttps://evil.example/",
             "https://hooks.slack.com/services/T0/B0/x y",
-            "https://hooks.slack.com/services/T0/B0/x	y");
+            "https://hooks.slack.com/services/T0/B0/x\ty");
     for (var value : values) {
       var file = dir.resolve("hook-" + Integer.toHexString(value.hashCode()));
       Files.writeString(file, value);
-      assertThatThrownBy(() -> SlackWebhookNotifier.uri(SlackWebhookNotifier.webhook(file.toString())))
+      assertThatThrownBy(
+              () -> SlackWebhookNotifier.uri(SlackWebhookNotifier.webhook(file.toString())))
           .as(value)
           .isInstanceOf(IllegalStateException.class)
           .hasNoCause()

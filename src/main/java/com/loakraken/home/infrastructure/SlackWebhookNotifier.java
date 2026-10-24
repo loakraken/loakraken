@@ -53,8 +53,8 @@ class SlackWebhookNotifier implements ShopNoticeNotifier {
   }
 
   /**
-   * 주소 형식이 틀리면 URI 예외 문장에 주소가 그대로 들어가므로, 문장·원인 없이 새 예외로 바꾼다. 읽은 주소도 https·hooks.slack.com·사용자 정보 없음·기본
-   * 포트인지 다시 확인한다(앞부분 검사만으로 다른 곳에 보내지 않게, 코드 리뷰 10-25).
+   * 주소 형식이 틀리면 URI 예외 문장에 주소가 그대로 들어가므로, 문장·원인 없이 새 예외로 바꾼다. 읽은 주소도 https·hooks.slack.com·사용자 정보
+   * 없음·기본 포트인지 다시 확인한다(앞부분 검사만으로 다른 곳에 보내지 않게, 코드 리뷰 10-25).
    */
   static URI uri(String url) {
     URI uri;

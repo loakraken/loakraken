@@ -848,6 +848,7 @@ class OpenApiIntegrationTest {
         new String[] {
           "/api/v1/stats/summary",
           "/api/v1/stats/classes",
+          "/api/v1/stats/class-engravings",
           "/api/v1/stats/servers",
           "/api/v1/stats/distribution",
           "/api/v1/stats/snapshots",

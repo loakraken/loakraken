@@ -147,6 +147,37 @@ class PostgresStatsRepository implements StatsPort {
   }
 
   @Override
+  public List<ClassEngravingRow> classEngravingTable(StatsConditions conditions, Instant since) {
+    // 직업 표와 같은 집계를 직업 × 마지막 장비 요약의 직업 각인으로 나눈다. 빈 칭호는 직업 각인이 없는 것과 같다(null).
+    return population(conditions, since)
+        .statement(
+            """
+        SELECT p.class_name, NULLIF(BTRIM(s.ark_passive_title), '') AS title, COUNT(*) AS n,
+          COUNT(*) FILTER (WHERE p.position = 'DEALER') AS dealers,
+          COUNT(*) FILTER (WHERE p.position = 'SUPPORT') AS supports,
+          AVG(p.item_level) AS il_mean, AVG(p.gem_mean_level) AS gem_mean,
+          percentile_cont(ARRAY[0.1, 0.25, 0.5, 0.75, 0.9]) WITHIN GROUP (ORDER BY p.combat_power) AS cp
+        FROM pop p LEFT JOIN LATERAL (SELECT e.ark_passive_title FROM character_equipment_summary e
+          WHERE e.character_id = p.character_id ORDER BY e.observed_at DESC LIMIT 1) s ON TRUE
+        GROUP BY p.class_name, 2 ORDER BY n DESC, p.class_name, 2
+        """,
+            jdbc)
+        .query(
+            (row, index) ->
+                new ClassEngravingRow(
+                    row.getString("title"),
+                    new ClassRow(
+                        row.getString("class_name"),
+                        row.getLong("n"),
+                        row.getLong("dealers"),
+                        row.getLong("supports"),
+                        round(row.getBigDecimal("il_mean")),
+                        round(row.getBigDecimal("gem_mean")),
+                        percentiles(row.getArray("cp")))))
+        .list();
+  }
+
+  @Override
   public List<ServerRow> servers(StatsConditions conditions, Instant since) {
     // 모집단이 0명인 서버도 알고 있는 캐릭터·원정대 수는 보여 준다.
     var rows =

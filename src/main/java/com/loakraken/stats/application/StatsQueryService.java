@@ -399,31 +399,61 @@ public class StatsQueryService {
           var rows = stats.classes(conditions, conditions.since(now));
           long population = rows.stream().mapToLong(StatsPort.ClassRow::count).sum();
           var result = new ArrayList<ClassStat>();
-          for (var row : rows) {
-            var status = SampleStatus.of(row.count());
-            boolean ready = status == SampleStatus.READY;
-            var p = row.combatPowerPercentiles();
-            long known = row.dealers() + row.supports();
-            result.add(
-                new ClassStat(
-                    row.className(),
-                    row.count(),
-                    population == 0 ? null : share(row.count(), population),
-                    row.dealers(),
-                    row.supports(),
-                    row.count() - known,
-                    known > 0 && StatsRules.SUPPORT_CLASSES.contains(row.className())
-                        ? share(row.supports(), known)
-                        : null,
-                    row.itemLevelMean(),
-                    row.gemMeanLevel(),
-                    ready && p.size() == 5
-                        ? new Percentiles(p.get(0), p.get(1), p.get(2), p.get(3), p.get(4))
-                        : null,
-                    status));
-          }
+          for (var row : rows) result.add(classStat(row, population));
           return new ClassesResult(meta(conditions, population, now), result);
         });
+  }
+
+  /**
+   * 직업 각인별 통계(직업 표의 직업 각인 보기). 행 모양은 직업별 통계와 같고(비율은 같은 모집단 대비), 직업 각인을 모르는 캐릭터는 행 대신 직업별 미확인 수로 준다.
+   */
+  public ClassEngravingTableResult classEngravingTable(StatsConditions conditions) {
+    return cached(
+        "class-engraving-table:" + key(conditions),
+        ClassEngravingTableResult.class,
+        () -> {
+          var now = clock.instant();
+          var rows = stats.classEngravingTable(conditions, conditions.since(now));
+          long population = rows.stream().mapToLong(row -> row.stats().count()).sum();
+          var result = new ArrayList<ClassEngravingStat>();
+          var unknown = new java.util.LinkedHashMap<String, Long>();
+          for (var row : rows) {
+            if (row.classEngraving() == null)
+              unknown.merge(row.stats().className(), row.stats().count(), Long::sum);
+            else
+              result.add(
+                  new ClassEngravingStat(row.classEngraving(), classStat(row.stats(), population)));
+          }
+          return new ClassEngravingTableResult(
+              meta(conditions, population, now),
+              result,
+              unknown.entrySet().stream()
+                  .map(entry -> new ClassCount(entry.getKey(), entry.getValue()))
+                  .toList());
+        });
+  }
+
+  private ClassStat classStat(StatsPort.ClassRow row, long population) {
+    var status = SampleStatus.of(row.count());
+    boolean ready = status == SampleStatus.READY;
+    var p = row.combatPowerPercentiles();
+    long known = row.dealers() + row.supports();
+    return new ClassStat(
+        row.className(),
+        row.count(),
+        population == 0 ? null : share(row.count(), population),
+        row.dealers(),
+        row.supports(),
+        row.count() - known,
+        known > 0 && StatsRules.SUPPORT_CLASSES.contains(row.className())
+            ? share(row.supports(), known)
+            : null,
+        row.itemLevelMean(),
+        row.gemMeanLevel(),
+        ready && p.size() == 5
+            ? new Percentiles(p.get(0), p.get(1), p.get(2), p.get(3), p.get(4))
+            : null,
+        status);
   }
 
   public ServersResult servers(StatsConditions conditions) {
@@ -1247,6 +1277,15 @@ public class StatsQueryService {
       SampleStatus sampleStatus) {}
 
   public record ClassesResult(Meta meta, List<ClassStat> rows) {}
+
+  /** 직업 각인 한 행: 직업 각인(공식 칭호 원문)과 직업별 통계와 같은 값. */
+  public record ClassEngravingStat(String classEngraving, ClassStat stats) {}
+
+  /** 직업별 직업 각인 미확인 수(장비 요약이 없거나 칭호가 빈 캐릭터). */
+  public record ClassCount(String className, long count) {}
+
+  public record ClassEngravingTableResult(
+      Meta meta, List<ClassEngravingStat> rows, List<ClassCount> unknownByClass) {}
 
   /** 길드 탭 결과. guildName은 저장된 철자. */
   public record GuildDetailResult(

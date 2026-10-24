@@ -71,6 +71,21 @@ public class StatsController {
         StatsResponses.StatsClassesResponse.from(stats.classes(filter.toConditions())));
   }
 
+  @GetMapping(value = "/api/v1/stats/class-engravings", produces = MediaType.APPLICATION_JSON_VALUE)
+  @Operation(
+      summary = "직업 각인별 통계",
+      description =
+          "직업별 통계를 직업 각인(마지막으로 관측한 장비의 아크 패시브 칭호)까지 나눈 표. 행 값은 직업별 통계와 같고, 직업 각인을 모르는 캐릭터는 직업별 미확인 수로 줍니다. 필터는 직업별 통계와 같습니다. "
+              + ERRORS)
+  @StandardErrors
+  public ApiResponse<StatsResponses.StatsClassEngravingTableResponse> classEngravingTable(
+      @Valid @ModelAttribute @ParameterObject StatsFilterRequest filter) {
+    return ApiResponse.of(
+        StatsSuccessCode.STATS_CLASSES_SUCCESS,
+        StatsResponses.StatsClassEngravingTableResponse.from(
+            stats.classEngravingTable(filter.toConditions())));
+  }
+
   @GetMapping(
       value = "/api/v1/stats/best-combat-power",
       produces = MediaType.APPLICATION_JSON_VALUE)

@@ -15,6 +15,12 @@ public interface StatsPort {
 
   List<ClassRow> classes(StatsConditions conditions, Instant since);
 
+  /**
+   * 직업 각인별 통계(직업 표의 직업 각인 보기). 모집단(처리정지 제외)을 직업과 마지막 장비 요약의 직업 각인(공식 칭호 원문)으로 나눈다. 요약이 없거나 칭호가 비면
+   * classEngraving이 null인 행이다(직업별 미확인 수).
+   */
+  List<ClassEngravingRow> classEngravingTable(StatsConditions conditions, Instant since);
+
   List<ServerRow> servers(StatsConditions conditions, Instant since);
 
   /**
@@ -108,6 +114,9 @@ public interface StatsPort {
       BigDecimal itemLevelMean,
       BigDecimal gemMeanLevel,
       List<BigDecimal> combatPowerPercentiles) {}
+
+  /** 직업 표의 한 행을 직업 각인까지 나눈 것. classEngraving이 null이면 직업 각인을 모르는 캐릭터다. */
+  record ClassEngravingRow(String classEngraving, ClassRow stats) {}
 
   /** knownCharacters·rosters는 필터와 무관하게 그 서버에서 알고 있는 전체 캐릭터 수와 원정대 수다. */
   record ServerRow(

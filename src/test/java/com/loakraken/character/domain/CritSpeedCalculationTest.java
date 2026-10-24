@@ -534,7 +534,9 @@ class CritSpeedCalculationTest {
   void 치명_신속_스탯을_읽지_못하면_0퍼센트_대신_이유를_낸다() {
     var noStats =
         CritSpeedCalculation.calculate(
-            statsOnly(List.of()), new CharacterLoadout(List.of(), null, null, null, null, null), null);
+            statsOnly(List.of()),
+            new CharacterLoadout(List.of(), null, null, null, null, null),
+            null);
     assertThat(noStats.crit().unavailableReason()).contains("치명 스탯을 읽지 못해");
     assertThat(noStats.speed().unavailableReason()).contains("신속 스탯을 읽지 못해");
 
@@ -543,7 +545,8 @@ class CritSpeedCalculationTest {
         CritSpeedCalculation.calculate(
             statsOnly(
                 List.of(
-                    new CharacterProfile.Stat("치명", "-"), new CharacterProfile.Stat("신속", "1,000"))),
+                    new CharacterProfile.Stat("치명", "-"),
+                    new CharacterProfile.Stat("신속", "1,000"))),
             new CharacterLoadout(List.of(), null, null, null, null, null),
             null);
     assertThat(unreadCrit.crit().unavailableReason()).isNotNull();
@@ -554,7 +557,8 @@ class CritSpeedCalculationTest {
     var zero =
         CritSpeedCalculation.calculate(
             statsOnly(
-                List.of(new CharacterProfile.Stat("치명", "0"), new CharacterProfile.Stat("신속", "0"))),
+                List.of(
+                    new CharacterProfile.Stat("치명", "0"), new CharacterProfile.Stat("신속", "0"))),
             new CharacterLoadout(List.of(), null, null, null, null, null),
             null);
     assertThat(zero.crit().unavailableReason()).isNull();
@@ -562,7 +566,9 @@ class CritSpeedCalculationTest {
 
     var normal =
         CritSpeedCalculation.calculate(
-            profile("576", "77"), new CharacterLoadout(List.of(), null, null, null, null, null), null);
+            profile("576", "77"),
+            new CharacterLoadout(List.of(), null, null, null, null, null),
+            null);
     assertThat(normal.crit().unavailableReason()).isNull();
     assertThat(normal.speed().unavailableReason()).isNull();
   }

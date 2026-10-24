@@ -925,9 +925,13 @@ class OpenApiIntegrationTest {
             .at("/components/schemas");
     assertThat(schemas.at("/CritSpeedCritResponse/required").toString()).contains("damage");
     // 스탯을 읽지 못하면 이유(코드 리뷰 10-25): 추가 필드, 계산했으면 null
-    assertThat(schemas.at("/CritSpeedCritResponse/properties/unavailableReason/anyOf/1/type").asText())
+    assertThat(
+            schemas.at("/CritSpeedCritResponse/properties/unavailableReason/anyOf/1/type").asText())
         .isEqualTo("null");
-    assertThat(schemas.at("/CritSpeedSpeedResponse/properties/unavailableReason/anyOf/1/type").asText())
+    assertThat(
+            schemas
+                .at("/CritSpeedSpeedResponse/properties/unavailableReason/anyOf/1/type")
+                .asText())
         .isEqualTo("null");
     assertThat(schemas.at("/CritSpeedCritDamageResponse/required").toString())
         .contains("base", "observed", "total");

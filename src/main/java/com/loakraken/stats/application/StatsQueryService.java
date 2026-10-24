@@ -44,18 +44,32 @@ public class StatsQueryService {
    */
   private final int detailMinSample;
 
+  /**
+   * 팔찌·젬 효율 랭킹을 실 효율(캐릭터 응답 braceletEfficiency.real·arkGridEfficiency.real과 같은 정의)로 셀지. 기본은 꺼짐(전투력
+   * 기여 모델 열) — 실 효율 열은 배포 뒤 관측부터 채워지므로, 표본이 쌓이면 운영 설정으로 켠다.
+   */
+  private final boolean realEfficiencyRanking;
+
+  public StatsQueryService(StatsPort stats, StatsCache cache, Clock clock, int detailMinSample) {
+    this(stats, cache, clock, detailMinSample, false);
+  }
+
+  @org.springframework.beans.factory.annotation.Autowired
   public StatsQueryService(
       StatsPort stats,
       StatsCache cache,
       Clock clock,
       @org.springframework.beans.factory.annotation.Value(
               "${stats.class-builds.detail-min-sample:" + StatsRules.MIN_SAMPLE + "}")
-          int detailMinSample) {
+          int detailMinSample,
+      @org.springframework.beans.factory.annotation.Value("${stats.efficiency-ranking.real:false}")
+          boolean realEfficiencyRanking) {
     if (detailMinSample < 1) throw new IllegalArgumentException("detail-min-sample는 1 이상");
     this.stats = stats;
     this.cache = cache;
     this.clock = clock;
     this.detailMinSample = detailMinSample;
+    this.realEfficiencyRanking = realEfficiencyRanking;
   }
 
   public SummaryResult summary(StatsConditions conditions) {
@@ -919,13 +933,24 @@ public class StatsQueryService {
     int offset = (page - 1) * size;
     if (offset > MAX_RANKING_OFFSET)
       throw new BusinessException(StatsErrorCode.STATS_INVALID_RANGE);
+    var columns = kind.columns(realEfficiencyRanking);
+    // 열(정의)이 키에 들어가야 설정을 바꾼 뒤 옛 정의의 캐시 값을 내지 않는다.
     return cached(
-        "efficiency-ranking:" + kind + ":" + page + ":" + size + ":" + key(conditions),
+        "efficiency-ranking:"
+            + kind
+            + ":"
+            + columns.ruleVersion()
+            + ":"
+            + page
+            + ":"
+            + size
+            + ":"
+            + key(conditions),
         EfficiencyRankingResult.class,
         () -> {
           var now = clock.instant();
           var result =
-              stats.efficiencyRanking(conditions, conditions.since(now), kind, offset, size);
+              stats.efficiencyRanking(conditions, conditions.since(now), columns, offset, size);
           var meta = meta(conditions, result.total(), now);
           boolean ready = meta.sampleStatus() == SampleStatus.READY;
           return new EfficiencyRankingResult(

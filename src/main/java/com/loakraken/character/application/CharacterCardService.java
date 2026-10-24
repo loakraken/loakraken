@@ -22,6 +22,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataAccessException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.TransactionException;
+import tools.jackson.databind.JsonNode;
 
 /**
  * 원정대 카드 기록(F-6), 포지션·4티어 보석 평균 레벨, 장비 요약 테이블(#146) 기록. 관측 이력 기능(character.history.enabled)을 따른다.
@@ -39,6 +40,8 @@ public class CharacterCardService {
   private final CharacterMetrics metrics;
   private final CombatPowerSimulationService simulator;
   private final ArkGridEfficiencyService arkGrids;
+  private final BraceletRealService braceletReals;
+  private final ArkGridRealService arkGridReals;
   private final ThreadPoolExecutor writer =
       new ThreadPoolExecutor(
           1,
@@ -55,17 +58,24 @@ public class CharacterCardService {
       CharacterHistoryPolicy policy,
       CharacterMetrics metrics,
       CombatPowerSimulationService simulator,
-      ArkGridEfficiencyService arkGrids) {
+      ArkGridEfficiencyService arkGrids,
+      BraceletRealService braceletReals,
+      ArkGridRealService arkGridReals) {
     this.cards = cards;
     this.summaries = summaries;
     this.policy = policy;
     this.metrics = metrics;
     this.simulator = simulator;
     this.arkGrids = arkGrids;
+    this.braceletReals = braceletReals;
+    this.arkGridReals = arkGridReals;
   }
 
-  /** 관측 이력을 남긴 뒤 호출한다. 실패는 검색·수집을 막지 않는다. */
-  public void record(CharacterDetails details, Instant observedAt) {
+  /**
+   * 관측 이력을 남긴 뒤 호출한다. 실패는 검색·수집을 막지 않는다. krakenScoreInput은 같은 공식 조회로 만든 크라켄 점수 엔진 입력이다(없으면 null — 실
+   * 효율만 비운다).
+   */
+  public void record(CharacterDetails details, JsonNode krakenScoreInput, Instant observedAt) {
     if (!policy.enabled()) return;
     var base = observe(details, observedAt);
     // 해석은 이미 한 도메인에서 뽑으므로 요청 스레드에서 해도 가볍다. 쓰기만 작업자에 넘긴다.
@@ -75,7 +85,8 @@ public class CharacterCardService {
       writer.execute(
           () -> {
             // 팔찌·젬 효율 재계산은 검색 응답 시간을 늘리지 않도록 작업자에서 한다(#443 성능 조건).
-            var observation = base.withEfficiency(efficiency(details, observedAt));
+            var observation =
+                base.withEfficiency(efficiency(details, krakenScoreInput, observedAt));
             write(observation);
             writeSummary(observation, summary);
             writeCollectibles(observation, collectibles);
@@ -87,11 +98,13 @@ public class CharacterCardService {
 
   /**
    * 팔찌 효율·젬 효율(L38·L39): 검색 응답과 같은 모델로 메모리에서 계산한다(공식 호출 없음). 장비를 관측하지 않았으면 null(저장값 유지), 계산이 실패하거나
-   * OK가 아니면 그 값만 null이다(B8: 관측 저장은 그대로).
+   * OK가 아니면 그 값만 null이다(B8: 관측 저장은 그대로). 실 효율(팔찌·젬)은 캐릭터 응답의
+   * braceletEfficiency.real·arkGridEfficiency.real과 같은 서비스·같은 입력으로 내서 랭킹 값이 캐릭터 화면 값과 같다.
    */
-  CharacterCardPort.Efficiency efficiency(CharacterDetails details, Instant observedAt) {
+  CharacterCardPort.Efficiency efficiency(
+      CharacterDetails details, JsonNode krakenScoreInput, Instant observedAt) {
     if (details.loadout().equipment().isEmpty()) return null;
-    var result = new CharacterResult(details, observedAt);
+    var result = new CharacterResult(details, observedAt, null, krakenScoreInput);
     java.math.BigDecimal bracelet = null;
     String braceletVersion = null;
     try {
@@ -121,7 +134,29 @@ public class CharacterCardService {
     } catch (RuntimeException exception) {
       log.warn("젬 효율을 저장용으로 계산하지 못했습니다. 예외 유형={}", exception.getClass().getSimpleName());
     }
-    return new CharacterCardPort.Efficiency(bracelet, braceletVersion, gem, gemVersion);
+    BigDecimal braceletReal = null;
+    try {
+      var value = braceletReals.compute(result);
+      if (value.status() == BraceletRealEfficiency.Status.OK) braceletReal = value.percent();
+    } catch (RuntimeException exception) {
+      log.warn("팔찌 실 효율을 저장용으로 계산하지 못했습니다. 예외 유형={}", exception.getClass().getSimpleName());
+    }
+    BigDecimal gemReal = null;
+    try {
+      var value = arkGridReals.compute(details, krakenScoreInput);
+      if (value.status() == ArkGridRealEfficiency.Status.OK) gemReal = value.percent();
+    } catch (RuntimeException exception) {
+      log.warn("젬 실 효율을 저장용으로 계산하지 못했습니다. 예외 유형={}", exception.getClass().getSimpleName());
+    }
+    return new CharacterCardPort.Efficiency(
+        bracelet,
+        braceletVersion,
+        gem,
+        gemVersion,
+        braceletReal,
+        braceletReal == null ? null : BraceletRealEfficiency.RULE_VERSION,
+        gemReal,
+        gemReal == null ? null : ArkGridRealEfficiency.RULE_VERSION);
   }
 
   static CharacterCardPort.Observation observe(CharacterDetails details, Instant observedAt) {

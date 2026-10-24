@@ -18,7 +18,8 @@ public record BraceletRealEfficiency(
     BigDecimal percent,
     BigDecimal devilDamagePercent,
     String ruleVersion) {
-  public static final String RULE_VERSION = "bracelet-real-v1";
+  public static final String RULE_VERSION =
+      com.loakraken.common.api.EfficiencyRuleVersions.BRACELET_REAL;
 
   public enum Status {
     OK,

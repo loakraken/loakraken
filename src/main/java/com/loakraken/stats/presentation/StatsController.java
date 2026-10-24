@@ -204,7 +204,9 @@ public class StatsController {
   @Operation(
       summary = "팔찌 효율 랭킹",
       description =
-          "팔찌 효율 %(지금 전투력이 팔찌를 뺀 전투력보다 몇 % 높은지) 순위. 캐릭터 검색으로 장비를 관측한 딜러의 계산된 값만, 지금 계산 규칙 버전 값만 셉니다. 필터·페이지는 전투력 랭킹과 같습니다. "
+          "팔찌 효율 % 순위. 값의 정의는 ruleVersion으로 구분합니다: combat-power-sim-*는 지금 전투력이 팔찌를 뺀 전투력보다 몇 % 높은지, "
+              + "bracelet-real-*는 캐릭터 응답 braceletEfficiency.real.percent와 같은 값(팔찌 실 효율)입니다. "
+              + "캐릭터 검색으로 장비를 관측한 딜러의 계산된 값만, 지금 계산 규칙 버전 값만 셉니다. 필터·페이지는 전투력 랭킹과 같습니다. "
               + ERRORS)
   @StandardErrors
   public ApiResponse<StatsResponses.StatsEfficiencyRankingResponse> braceletRanking(
@@ -223,7 +225,9 @@ public class StatsController {
   @Operation(
       summary = "젬 효율 랭킹",
       description =
-          "아크 그리드 젬 옵션 합계 효율 %(지금 전투력이 젬 옵션을 모두 뺀 전투력보다 몇 % 높은지, 코어 제외) 순위. 캐릭터 검색으로 장비를 관측한 딜러의 계산된 값만, 지금 계산 규칙 버전 값만 셉니다. 필터·페이지는 전투력 랭킹과 같습니다. "
+          "아크 그리드 젬 효율 % 순위. 값의 정의는 ruleVersion으로 구분합니다: ark-grid-efficiency-*는 젬 옵션 합계 효율(지금 전투력이 젬 옵션을 모두 뺀 "
+              + "전투력보다 몇 % 높은지, 코어 제외), ark-grid-real-*는 캐릭터 응답 arkGridEfficiency.real.percent와 같은 값(젬 실 효율)입니다. "
+              + "캐릭터 검색으로 장비를 관측한 딜러의 계산된 값만, 지금 계산 규칙 버전 값만 셉니다. 필터·페이지는 전투력 랭킹과 같습니다. "
               + ERRORS)
   @StandardErrors
   public ApiResponse<StatsResponses.StatsEfficiencyRankingResponse> arkGridGemRanking(

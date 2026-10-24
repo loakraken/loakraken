@@ -19,7 +19,8 @@ public record ArkGridRealEfficiency(
     List<Option> options,
     List<Series> series,
     String ruleVersion) {
-  public static final String RULE_VERSION = "ark-grid-real-v1";
+  public static final String RULE_VERSION =
+      com.loakraken.common.api.EfficiencyRuleVersions.ARK_GRID_REAL;
 
   public enum Status {
     OK,

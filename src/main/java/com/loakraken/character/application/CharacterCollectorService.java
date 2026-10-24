@@ -135,7 +135,7 @@ public class CharacterCollectorService {
                 policy.reserve(), () -> details.fetchArmory(target.get().characterName()));
         var profile = fetched.details().profile();
         history.record(profile, now);
-        cards.record(fetched.details(), now);
+        cards.record(fetched.details(), fetched.krakenScoreInput(), now);
         var position =
             CharacterPosition.judge(profile.className(), fetched.details().loadout().arkPassive());
         collection.markProfileRefreshed(

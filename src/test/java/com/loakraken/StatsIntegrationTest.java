@@ -2,6 +2,8 @@ package com.loakraken;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.loakraken.common.api.EfficiencyRuleVersions;
+import com.loakraken.stats.application.StatsPort;
 import java.math.BigDecimal;
 import java.net.URI;
 import java.net.URLEncoder;
@@ -37,6 +39,7 @@ class StatsIntegrationTest {
   @LocalServerPort int port;
   @Autowired StringRedisTemplate redis;
   @Autowired JdbcClient jdbc;
+  @Autowired StatsPort statsPort;
   private final JsonMapper mapper = new JsonMapper();
   private final Instant now = Instant.now();
 
@@ -543,6 +546,90 @@ class StatsIntegrationTest {
     assertThat(empty.path("ruleVersion").asText())
         .isEqualTo(com.loakraken.common.api.EfficiencyRuleVersions.ARK_GRID);
     assertThat(empty.at("/rows").size()).isZero();
+  }
+
+  @Test
+  void 실_효율_열은_지금_규칙_버전의_딜러_값만_높은_순으로_세고_원본_자릿수를_지킨다() {
+    // B3: 실 효율 열(설정이 켜지면 쓰는 기준). 홀수 = 딜러, 짝수 = 서포터.
+    표본();
+    var t = Instant.now();
+    realEfficiency(
+        "통계캐1", "17.88", EfficiencyRuleVersions.BRACELET_REAL, "11.21", t.minusSeconds(60));
+    realEfficiency(
+        "통계캐3", "11.3", EfficiencyRuleVersions.BRACELET_REAL, "9.07", t.minusSeconds(50));
+    realEfficiency("통계캐5", "99.99", "bracelet-real-v0", null, t.minusSeconds(40));
+    realEfficiency(
+        "통계캐2",
+        "18.107142857142858",
+        EfficiencyRuleVersions.BRACELET_REAL,
+        "30.00",
+        t.minusSeconds(30));
+    var conditions =
+        new com.loakraken.stats.domain.StatsConditions(
+            SERVER,
+            null,
+            null,
+            com.loakraken.stats.domain.StatsRules.DEFAULT_ACTIVE_DAYS,
+            null,
+            null,
+            null,
+            null,
+            false);
+    var since = conditions.since(Instant.now());
+
+    var bracelets =
+        statsPort.efficiencyRanking(
+            conditions, since, StatsPort.EfficiencyKind.BRACELET.columns(true), 0, 10);
+    assertThat(bracelets.ruleVersion()).isEqualTo(EfficiencyRuleVersions.BRACELET_REAL);
+    // 옛 버전(통계캐5)과 서포터(통계캐2)는 빠진다.
+    assertThat(bracelets.total()).isEqualTo(2);
+    assertThat(bracelets.rows().get(0).characterName()).isEqualTo("통계캐1");
+    assertThat(bracelets.rows().get(0).value()).isEqualByComparingTo("17.88");
+    assertThat(bracelets.rows().get(1).characterName()).isEqualTo("통계캐3");
+
+    var gems =
+        statsPort.efficiencyRanking(
+            conditions, since, StatsPort.EfficiencyKind.ARK_GRID_GEM.columns(true), 0, 10);
+    assertThat(gems.ruleVersion()).isEqualTo(EfficiencyRuleVersions.ARK_GRID_REAL);
+    assertThat(gems.rows())
+        .extracting(StatsPort.EfficiencyRow::characterName)
+        .containsExactly("통계캐1", "통계캐3");
+
+    // 서포터 원본 값은 자릿수를 자르지 않고 저장된다(캐릭터 화면 값과 같게).
+    var supporter =
+        jdbc.sql(
+                "SELECT bracelet_real_pct FROM characters WHERE server_name = :s AND character_name = '통계캐2'")
+            .param("s", SERVER)
+            .query(BigDecimal.class)
+            .single();
+    assertThat(supporter).isEqualTo(new BigDecimal("18.107142857142858"));
+
+    // 전투력 기여 모델 열은 따로다(실 효율만 저장된 캐릭터는 들어가지 않음).
+    assertThat(
+            statsPort
+                .efficiencyRanking(
+                    conditions, since, StatsPort.EfficiencyKind.BRACELET.columns(false), 0, 10)
+                .total())
+        .isZero();
+  }
+
+  private void realEfficiency(
+      String name, String bracelet, String braceletVersion, String gem, Instant observedAt) {
+    jdbc.sql(
+            """
+        UPDATE characters SET bracelet_real_pct = CAST(:bracelet AS NUMERIC),
+          bracelet_real_rule_version = :bv, ark_grid_real_pct = CAST(:gem AS NUMERIC),
+          ark_grid_real_rule_version = :gv, efficiency_observed_at = :at
+        WHERE character_name = :name AND server_name = :server
+        """)
+        .param("bracelet", new BigDecimal(bracelet))
+        .param("bv", braceletVersion)
+        .param("gem", gem == null ? null : new BigDecimal(gem))
+        .param("gv", gem == null ? null : EfficiencyRuleVersions.ARK_GRID_REAL)
+        .param("at", observedAt.atOffset(ZoneOffset.UTC))
+        .param("name", name)
+        .param("server", SERVER)
+        .update();
   }
 
   private void efficiency(

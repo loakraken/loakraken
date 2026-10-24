@@ -103,13 +103,15 @@ public class MarketAuctionService {
       for (int level = AuctionCatalog.MAX_GEM_LEVEL; level >= 1; level--)
         cells.put(
             gemQuery(kind, level, 1).key(), new GemSpec(kind, level, gemQuery(kind, level, 1)));
-    var filled = fill(cells.values().stream().map(GemSpec::query).toList());
+    // 한 요청 안에서는 '전날'을 한 날짜로 본다(자정을 넘는 요청에서 칸마다 다른 전날을 쓰지 않게, 코드 리뷰 10-25).
+    var today = LocalDate.now(clock.withZone(KST));
+    var filled = fill(cells.values().stream().map(GemSpec::query).toList(), today);
     // 3분 칸이 비었고 이번에 채우지 못했으면 마지막 관측 값을 그 시각과 함께 보인다(PENDING 대신, PM 총괄 승인 10-25).
     var lasts = new LinkedHashMap<String, AuctionCell>();
     for (var key : cells.keySet())
       if (filled.get(key).cell() == null)
         auctions.findLastCell(key).ifPresent(cell -> lasts.put(key, cell));
-    var previous = previousOf(List.copyOf(lasts.keySet()));
+    var previous = previousOf(List.copyOf(lasts.keySet()), today);
     var result = new ArrayList<GemCell>();
     for (var spec : cells.values()) {
       var value = filled.get(spec.query().key());
@@ -163,7 +165,8 @@ public class MarketAuctionService {
                 levels,
                 accessoryQuery(grade, slot, options, levels, minQuality, 1)));
     }
-    var filled = fill(specs.stream().map(AccessorySpec::query).toList());
+    var filled =
+        fill(specs.stream().map(AccessorySpec::query).toList(), LocalDate.now(clock.withZone(KST)));
     var slots = new ArrayList<AccessorySlot>();
     for (var slot : Slot.values()) {
       var cells = new ArrayList<AccessoryCell>();
@@ -208,7 +211,7 @@ public class MarketAuctionService {
     return page;
   }
 
-  private Map<String, Filled> fill(List<AuctionQuery> queries) {
+  private Map<String, Filled> fill(List<AuctionQuery> queries, LocalDate today) {
     var cells = new LinkedHashMap<String, AuctionCell>();
     for (var query : queries) cells.put(query.key(), auctions.findCell(query.key()).orElse(null));
     int fetched = 0;
@@ -233,7 +236,6 @@ public class MarketAuctionService {
         fillLock.unlock();
       }
     }
-    var today = LocalDate.now(clock.withZone(KST));
     Map<String, Long> previous;
     try {
       previous = auctions.previousDay(List.copyOf(cells.keySet()), today);
@@ -249,10 +251,10 @@ public class MarketAuctionService {
   }
 
   /** 마지막 값으로 보이는 칸들의 전날 마지막 최저가(한 번에). 저장소 장애면 빈 값. */
-  private Map<String, Long> previousOf(List<String> keys) {
+  private Map<String, Long> previousOf(List<String> keys, LocalDate today) {
     if (keys.isEmpty()) return Map.of();
     try {
-      return auctions.previousDay(keys, LocalDate.now(clock.withZone(KST)));
+      return auctions.previousDay(keys, today);
     } catch (DataAccessException exception) {
       return Map.of();
     }

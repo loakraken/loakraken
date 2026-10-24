@@ -20,6 +20,7 @@ import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -189,6 +190,50 @@ class MarketAuctionServiceTest {
     assertThat(port.last).hasSize(5);
   }
 
+  @Test
+  void 자정을_넘는_요청도_채운_칸과_마지막_값_칸을_같은_전날과_비교한다() {
+    // 코드 리뷰 10-25: 요청 중에 KST 자정을 넘으면 채운 칸과 마지막 값 칸이 서로 다른 '전날'과 비교됐다.
+    service.gems();
+    port.cells.clear();
+    port.previousDays.clear();
+    gate = gate(10);
+    var crossing =
+        new MarketAuctionService(
+            port,
+            port,
+            gate,
+            ticking(Instant.parse("2026-10-09T14:59:59Z"), Instant.parse("2026-10-09T15:00:01Z")),
+            Runnable::run);
+    crossing.gems();
+    assertThat(port.previousDays).hasSize(2).containsOnly(LocalDate.parse("2026-10-09"));
+  }
+
+  /** 처음 한 번은 first, 그 뒤로는 then을 돌려주는 시계(withZone으로 만든 시계도 같은 상태를 쓴다). */
+  private static Clock ticking(Instant first, Instant then) {
+    var used = new java.util.concurrent.atomic.AtomicBoolean();
+    return ticking(first, then, used, ZoneOffset.UTC);
+  }
+
+  private static Clock ticking(
+      Instant first, Instant then, java.util.concurrent.atomic.AtomicBoolean used, ZoneId zone) {
+    return new Clock() {
+      @Override
+      public ZoneId getZone() {
+        return zone;
+      }
+
+      @Override
+      public Clock withZone(ZoneId other) {
+        return ticking(first, then, used, other);
+      }
+
+      @Override
+      public Instant instant() {
+        return used.getAndSet(true) ? then : first;
+      }
+    };
+  }
+
   private final class FakeAuctions implements AuctionPort, AuctionSearchPort {
     int searches;
     final Map<String, AuctionCell> cells = new HashMap<>();
@@ -248,8 +293,11 @@ class MarketAuctionServiceTest {
       daily.put(key + "@" + day, cell);
     }
 
+    final List<LocalDate> previousDays = new ArrayList<>();
+
     @Override
     public Map<String, Long> previousDay(List<String> keys, LocalDate day) {
+      previousDays.add(day);
       return previous;
     }
   }

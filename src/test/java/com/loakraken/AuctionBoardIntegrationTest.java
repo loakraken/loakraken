@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
+import com.loakraken.market.application.AuctionPort.AuctionCell;
 import com.loakraken.market.application.AuctionPort.AuctionListing;
 import com.loakraken.market.application.AuctionPort.AuctionPage;
 import com.loakraken.market.application.AuctionPort.AuctionQuery;
@@ -56,6 +57,30 @@ class AuctionBoardIntegrationTest {
     if (limits != null) keys.addAll(limits);
     if (!keys.isEmpty()) redis.delete(keys);
     jdbc.sql("DELETE FROM auction_price_daily").update();
+  }
+
+  @Autowired com.loakraken.market.application.AuctionPort auctions;
+
+  @Test
+  void 마지막_값은_늦게_끝난_옛_관측이_새_값을_덮지_않는다() {
+    // 코드 리뷰 10-25: 무조건 덮어써서, 늦게 끝난 옛 관측이 새 값을 지우면 3분 칸이 빈 뒤 옛 시세가 보였다.
+    var key = "gem:test-last";
+    var newer = new AuctionCell(1_200_000L, 5, Instant.parse("2026-10-25T03:00:00Z"));
+    var older = new AuctionCell(900_000L, 4, Instant.parse("2026-10-25T02:59:00Z"));
+    auctions.saveLastCell(key, newer);
+    auctions.saveLastCell(key, older);
+    assertThat(auctions.findLastCell(key)).contains(newer);
+    // 같은 시각이나 더 새 관측은 바꾼다
+    var same = new AuctionCell(1_100_000L, 6, newer.observedAt());
+    auctions.saveLastCell(key, same);
+    assertThat(auctions.findLastCell(key)).contains(same);
+    var latest = new AuctionCell(1_000_000L, 7, Instant.parse("2026-10-25T03:05:00Z"));
+    auctions.saveLastCell(key, latest);
+    assertThat(auctions.findLastCell(key)).contains(latest);
+    // 관측 시각 없는 칸은 남기지 않고, 마지막 값 키는 만료가 없다
+    auctions.saveLastCell(key, new AuctionCell(1L, 1, null));
+    assertThat(auctions.findLastCell(key)).contains(latest);
+    assertThat(redis.getExpire("market:v1:auction-last:" + key)).isEqualTo(-1L);
   }
 
   @Test

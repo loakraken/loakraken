@@ -55,16 +55,43 @@ class AuctionStore implements AuctionPort {
     write(CELL_PREFIX + key, cell, CELL_TTL);
   }
 
+  /** 마지막 값은 해시 하나: at = 관측 시각(epoch ms), v = 칸 JSON. */
   @Override
   public Optional<AuctionCell> findLastCell(String key) {
-    return read(LAST_PREFIX + key, AuctionCell.class);
+    try {
+      Object json = redis.opsForHash().get(LAST_PREFIX + key, "v");
+      return json == null
+          ? Optional.empty()
+          : Optional.ofNullable(mapper.readValue(json.toString(), AuctionCell.class));
+    } catch (DataAccessException | JacksonException | IllegalArgumentException exception) {
+      return Optional.empty();
+    }
   }
 
-  /** 만료 없이 둔다: volatile-lru에서 만료 키만 지워지므로 메모리가 모자라도 마지막 값은 남는다. */
+  /**
+   * 저장된 값보다 새것이거나 같은 시각일 때만 바꾼다(ARGV[1] = 관측 epoch ms). 늦게 끝난 옛 관측이 새 값을 덮으면 3분 칸이 비었을 때 옛 시세가 보였다(코드 리뷰
+   * 10-25).
+   */
+  private static final DefaultRedisScript<Long> LAST_CELL_SET =
+      new DefaultRedisScript<>(
+          """
+          local at = redis.call('HGET', KEYS[1], 'at')
+          if at and tonumber(at) > tonumber(ARGV[1]) then return 0 end
+          redis.call('HSET', KEYS[1], 'at', ARGV[1], 'v', ARGV[2])
+          return 1
+          """,
+          Long.class);
+
+  /** 만료 없이 둔다: volatile-lru에서 만료 키만 지워지므로 메모리가 모자라도 마지막 값은 남는다. 관측 시각이 없는 칸은 남기지 않는다. */
   @Override
   public void saveLastCell(String key, AuctionCell cell) {
+    if (cell == null || cell.observedAt() == null) return;
     try {
-      redis.opsForValue().set(LAST_PREFIX + key, mapper.writeValueAsString(cell));
+      redis.execute(
+          LAST_CELL_SET,
+          List.of(LAST_PREFIX + key),
+          String.valueOf(cell.observedAt().toEpochMilli()),
+          mapper.writeValueAsString(cell));
     } catch (DataAccessException | JacksonException exception) {
       log.warn("경매장 마지막 값을 쓰지 못했습니다. 예외 유형={}", exception.getClass().getSimpleName());
     }

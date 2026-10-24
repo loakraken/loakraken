@@ -24,7 +24,23 @@ public final class RefiningOptimal {
    * "기본")이다.
    */
   public record Result(
-      double expectedGold, boolean usesBreath, boolean usesBook, List<String> path) {}
+      double expectedGold,
+      boolean usesBreath,
+      boolean usesBook,
+      List<String> path,
+      double expectedAttempts,
+      double expectedBreaths,
+      double expectedBooks,
+      int firstRateBp) {
+    /**
+     * 기대 수량 없이(캐시 테스트 등). expectedAttempts·expectedBreaths·expectedBooks는 최적 정책의 기대 시도 수·숨결 개수·책
+     * 권수로, 기대 골드 = 시도 × 기본 비용 + 숨결 × 숨결 값 + 책 × 책 값이다. firstRateBp는 첫 시도(기운 0, 실패 0)에 고른 선택의 성공
+     * 확률(만분율)이다.
+     */
+    public Result(double expectedGold, boolean usesBreath, boolean usesBook, List<String> path) {
+      this(expectedGold, usesBreath, usesBook, path, Double.NaN, Double.NaN, Double.NaN, 0);
+    }
+  }
 
   private record Choice(int breaths, boolean book, double bonusBp, double extraGold) {
     String label() {
@@ -176,6 +192,12 @@ public final class RefiningOptimal {
     var path = new ArrayList<String>();
     int failures = 0;
     int energy = 0;
+    // 그 회차까지 실패만 이어질 확률(reach)로 기대 시도·숨결·책 수를 더한다(실패 경로가 하나라 그대로 합).
+    double reach = 1;
+    double attempts = 0;
+    double breaths = 0;
+    double books = 0;
+    int firstRateBp = 0;
     while (energy < FULL && path.size() < 10_000) {
       int n = Math.min(failures, BONUS_FAILURES);
       int c = picks[n][energy];
@@ -183,12 +205,23 @@ public final class RefiningOptimal {
       path.add(choice.label());
       usesBreath |= choice.breaths() > 0;
       usesBook |= choice.book();
-      if (fail[n][c] <= 0) break;
+      if (path.size() == 1) firstRateBp = (int) Math.round((1 - fail[n][c]) * 10_000);
+      attempts += reach;
+      breaths += reach * choice.breaths();
+      if (choice.book()) books += reach;
+      if (fail[n][c] <= 0) {
+        reach = 0;
+        break;
+      }
+      reach *= fail[n][c];
       energy += increment[n][c];
       failures++;
     }
+    // 장인의 기운 100%: 숨결·책 없이 확정 성공하는 마지막 회차.
+    if (energy >= FULL) attempts += reach;
     double expected = current[0];
     POOL.offer(buffers);
-    return new Result(expected, usesBreath, usesBook, List.copyOf(path));
+    return new Result(
+        expected, usesBreath, usesBook, List.copyOf(path), attempts, breaths, books, firstRateBp);
   }
 }

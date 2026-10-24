@@ -238,7 +238,8 @@ public class SpecUpDetailController {
       @Schema(example = "19") int fromStage,
       @Schema(example = "20") int toStage,
       @Schema(
-              description = "비용에 쓴 숨결 사용: NONE 또는 MAX(문자열, 값이 늘 수 있음). 재련 계획이 다루지 않으면 null",
+              description =
+                  "비용에 쓴 숨결 사용: NONE(쓰지 않음) 또는 OPTIMAL(시도마다 숨결 개수를 골라 씀, 기대 비용 최소)(문자열, 값이 늘 수 있음). 재련 계획이 다루지 않으면 null",
               example = "NONE")
           @NullableResponse
           String breath,

@@ -27,6 +27,38 @@ class RefiningOptimalTest {
   }
 
   @Test
+  void 기대_수량으로_다시_더한_골드는_기대_골드와_같다() {
+    // 스펙업 줄 상세(#585): 내역 합 = 목록 비용이 되려면 최적 정책의 기대 시도·숨결·책 수가 기대 골드와 맞아야 한다.
+    for (var grade : RefiningRules.Grade.values())
+      for (var type : RefiningRules.EquipmentType.values()) {
+        var track = RULES.track(grade, type);
+        for (int stage : new int[] {12, 15, 19, 24}) {
+          if (stage < track.minTargetStage() || stage > track.maxTargetStage()) continue;
+          var rule = track.stage(stage);
+          for (double breathScale : new double[] {0.2, 1, 5}) {
+            var prices = prices(rule, breathScale);
+            var optimal = RefiningOptimal.calculate(rule, 1, prices, true, true);
+            double base = rule.gold();
+            for (var material : rule.materials())
+              base += material.count() * prices.get(material.name()).doubleValue();
+            base += rule.shard() * prices.get(RefiningPlan.SHARD).doubleValue();
+            double again = optimal.expectedAttempts() * base;
+            if (rule.breath() != null)
+              again += optimal.expectedBreaths() * prices.get(rule.breath().name()).doubleValue();
+            if (rule.book() != null)
+              again += optimal.expectedBooks() * prices.get(rule.book().name()).doubleValue();
+            assertThat(again)
+                .as(grade + " " + type + " " + stage + " ×" + breathScale)
+                .isCloseTo(
+                    optimal.expectedGold(),
+                    org.assertj.core.data.Offset.offset(1e-6 * optimal.expectedGold()));
+            assertThat(optimal.expectedAttempts()).isGreaterThanOrEqualTo(1);
+          }
+        }
+      }
+  }
+
+  @Test
   void 어떤_고정_전략보다_같거나_싸다() {
     for (var grade : RefiningRules.Grade.values())
       for (var type : RefiningRules.EquipmentType.values()) {

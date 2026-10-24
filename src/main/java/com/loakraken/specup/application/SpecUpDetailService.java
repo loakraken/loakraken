@@ -198,7 +198,7 @@ public class SpecUpDetailService {
             new Refine(
                 from,
                 to,
-                plan == null ? null : breakdown.breath() ? "MAX" : "NONE",
+                plan == null ? null : breakdown.breath() ? "OPTIMAL" : "NONE",
                 attempts,
                 stage == null ? null : stage.firstAttemptSuccessRateBp());
       }

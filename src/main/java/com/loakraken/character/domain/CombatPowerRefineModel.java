@@ -330,6 +330,59 @@ public final class CombatPowerRefineModel {
         .setScale(0, RoundingMode.CEILING);
   }
 
+  static final String WEAPON_CORE = "혼돈의 별 코어 : 무기";
+
+  /**
+   * 혼돈의 별 코어 : 무기의 무기 공격력(고정 +N, +%). 포인트 구간 10·14·17·18·19·20, 등급 유물·고대(비교 기준 원본 모듈 21818·50080의
+   * 표와 같은 값). 포인트는 그 구간 이상이면 그 구간 효과(10~13 → 10, 14~16 → 14) — 게임 코어 옵션 발동 기준. 원본은 정확히 같은 포인트만 찾아
+   * 15·16 포인트에서 0이 된다(증명된 차이).
+   */
+  private static final Map<Integer, BigDecimal[]> WEAPON_CORE_RELIC =
+      Map.of(
+          10, new BigDecimal[] {new BigDecimal("1300"), BigDecimal.ZERO},
+          14, new BigDecimal[] {new BigDecimal("1300"), new BigDecimal("0.75")},
+          17, new BigDecimal[] {new BigDecimal("3900"), new BigDecimal("2.25")},
+          18, new BigDecimal[] {new BigDecimal("3900"), new BigDecimal("2.48")},
+          19, new BigDecimal[] {new BigDecimal("3900"), new BigDecimal("2.71")},
+          20, new BigDecimal[] {new BigDecimal("3900"), new BigDecimal("2.94")});
+
+  private static final Map<Integer, BigDecimal[]> WEAPON_CORE_ANCIENT =
+      Map.of(
+          10, new BigDecimal[] {new BigDecimal("1300"), BigDecimal.ZERO},
+          14, new BigDecimal[] {new BigDecimal("1300"), new BigDecimal("0.75")},
+          17, new BigDecimal[] {new BigDecimal("5200"), new BigDecimal("3")},
+          18, new BigDecimal[] {new BigDecimal("5200"), new BigDecimal("3.23")},
+          19, new BigDecimal[] {new BigDecimal("5200"), new BigDecimal("3.46")},
+          20, new BigDecimal[] {new BigDecimal("5200"), new BigDecimal("3.69")});
+
+  /** 무기 코어 무기 공격력. pct는 백분율(3이면 3%). 코어가 없으면 0. 읽지 못하거나 표에 없는 등급이면 reason. */
+  record WeaponCore(BigDecimal flat, BigDecimal pct, String reason) {}
+
+  static WeaponCore weaponCore(CharacterLoadout loadout) {
+    var none = new WeaponCore(BigDecimal.ZERO, BigDecimal.ZERO, null);
+    if (loadout.arkGrid() == null) return none;
+    for (var slot : loadout.arkGrid().slots()) {
+      if (slot == null || slot.name() == null || !slot.name().strip().startsWith(WEAPON_CORE))
+        continue;
+      if (slot.point() == null || slot.grade() == null)
+        return new WeaponCore(BigDecimal.ZERO, BigDecimal.ZERO, "무기 코어의 등급·포인트를 읽지 못해 계산하지 않았습니다.");
+      var table =
+          "고대".equals(slot.grade())
+              ? WEAPON_CORE_ANCIENT
+              : "유물".equals(slot.grade()) ? WEAPON_CORE_RELIC : null;
+      if (table == null)
+        return new WeaponCore(
+            BigDecimal.ZERO,
+            BigDecimal.ZERO,
+            "무기 코어 등급(" + slot.grade() + ")의 무기 공격력을 아직 확인하지 않아 계산하지 않았습니다.");
+      int point = slot.point();
+      int bucket = point >= 17 ? Math.min(point, 20) : point >= 14 ? 14 : point >= 10 ? 10 : 0;
+      var row = table.get(bucket);
+      return row == null ? none : new WeaponCore(row[0], row[1], null);
+    }
+    return none;
+  }
+
   /** 캐릭터 하나의 재련 모델. baseAttackPct는 보석 모델이 구한 지금 기본 공격력 %(백분율, null이면 계산하지 않음). */
   public static Model of(
       Coefficients c,
@@ -394,6 +447,11 @@ public final class CombatPowerRefineModel {
     }
     // 팔찌 "무기 공격력 +N"·"무기 공격력이 N 증가한다"의 고정 N도 W에 넣는다(버프 부분은 빼고, 계산 검증 10-11 23:45).
     accessoryFlat = accessoryFlat.add(CombatPowerBraceletModel.weaponFlat(loadout));
+    // 아크 그리드 혼돈의 별 코어 : 무기 — 무기 공격력 +N은 W의 고정값, +%는 무기 공격력 %에 넣는다(코드 리뷰 10-25 P0-3).
+    var core = weaponCore(loadout);
+    if (core.reason() != null && reason == null) reason = core.reason();
+    accessoryFlat = accessoryFlat.add(core.flat());
+    weaponPct = weaponPct.add(core.pct().divide(HUNDRED));
     if (flatWeapon == null && reason == null)
       reason = "무기 공격력(무기 Tooltip 기본 효과)을 읽지 못해 계산하지 않았습니다.";
     var karma = karmaLevel(loadout);

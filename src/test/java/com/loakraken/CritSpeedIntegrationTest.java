@@ -70,7 +70,7 @@ class CritSpeedIntegrationTest {
     assertThat(response.statusCode()).isEqualTo(200);
     var json = mapper.readTree(response.body());
     assertThat(json.path("code").asText()).isEqualTo("CHARACTER_CRIT_SPEED_SUCCESS");
-    assertThat(json.at("/data/ruleVersion").asText()).isEqualTo("crit-speed-v7");
+    assertThat(json.at("/data/ruleVersion").asText()).isEqualTo("crit-speed-v8");
     assertThat(json.at("/data/characterName").asText()).isEqualTo(NAME);
     assertThat(json.at("/data/crit/observedRate").decimalValue()).isEqualByComparingTo("25.71");
     assertThat(json.at("/data/crit/assumedRate").decimalValue()).isEqualByComparingTo("10");
@@ -78,9 +78,9 @@ class CritSpeedIntegrationTest {
     assertThat(json.at("/data/crit/bluntThorn/source").asText()).isEqualTo("REFERENCE_LEVEL_2");
     assertThat(json.at("/data/speed/supersonic/requiredSwiftness").asInt()).isEqualTo(2290);
     assertThat(json.at("/data/speed/swiftnessPerPercent").decimalValue())
-        .isEqualByComparingTo("58.22");
+        .isEqualByComparingTo("58.21");
     assertThat(json.at("/data/crit/critStatPerPercent").decimalValue())
-        .isEqualByComparingTo("27.944");
+        .isEqualByComparingTo("27.94");
     assertThat(json.at("/data/speed/swiftnessTable/0/swiftness").asInt()).isZero();
     assertThat(json.at("/data/speed/swiftnessTable/0/attack").decimalValue())
         .isEqualByComparingTo("14");

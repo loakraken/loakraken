@@ -15,7 +15,7 @@ import java.util.regex.Pattern;
  * 스탯 계산에만 쓴다. 뭉툭한 가시·음속 돌파는 장착 노드의 공식 문구에서 수치를 읽고, 미장착이면 2026-10-05 공식 Lv.2 문구를 기준값으로 쓴다.
  */
 public final class CritSpeedCalculation {
-  public static final String RULE_VERSION = "crit-speed-v7";
+  public static final String RULE_VERSION = "crit-speed-v8";
 
   /**
    * 치명타 피해 앞(같은 문장)에 오면 조건부로 보고 합산하지 않는 말. 비교 기준 2곳은 "폭주 중"·"마력 해방 중"(각성 상태)은 넣고 "사신화 상태에서"· "페르소나
@@ -23,11 +23,19 @@ public final class CritSpeedCalculation {
    */
   private static final List<String> CONDITIONAL_STATE = List.of("상태에서", "상태일 때");
 
-  /** 치명 27.944 = 치명타 적중률 1%. 공식 Tooltip 576→20.61%, 1800→64.42% 일치(2026-10-05). */
-  static final BigDecimal CRIT_STAT_PER_PERCENT = new BigDecimal("27.944");
+  /**
+   * 치명 27.94 = 치명타 적중률 1%. 환산은 floor(스탯 ÷ 0.2794) ÷ 100(소수 둘째 자리 버림) — 비교 기준 원본과 같고 공식 Tooltip과 저장
+   * 원문 29/29 일치(계산 검증 10-25: 682→24.40%, 1800→64.42%, 576→20.61%).
+   */
+  static final BigDecimal CRIT_STAT_PER_PERCENT = new BigDecimal("27.94");
 
-  /** 신속 58.22 = 공격·이동 속도 1%. 공식 Tooltip 77→1.32%, 1794→30.81% 일치(2026-10-05). */
-  static final BigDecimal SPEED_STAT_PER_PERCENT = new BigDecimal("58.22");
+  /**
+   * 신속 58.21 = 공격·이동 속도 1%. 환산은 floor(스탯 ÷ 0.5821) ÷ 100(1606→27.58%, 1000→17.17%, 1794→30.81%).
+   */
+  static final BigDecimal SPEED_STAT_PER_PERCENT = new BigDecimal("58.21");
+
+  private static final double CRIT_DIVISOR = 0.2794;
+  private static final double SPEED_DIVISOR = 0.5821;
 
   static final BigDecimal BACK_ATTACK_CRIT = BigDecimal.TEN;
   static final BigDecimal SYNERGY_CRIT = BigDecimal.TEN;
@@ -444,7 +452,7 @@ public final class CritSpeedCalculation {
     classBuffSources(profile, loadout, input, sources, toggles);
     classSpeedSources(profile, input, sources, toggles);
     tripodSpeedSources(loadout, input, sources, toggles, speedNotes);
-    assumptionSources(input, sources);
+    assumptionSources(input, critStat, sources);
     agilitySources(agility, sources);
     // 직업 상태 가정(정답표 표의 피냄새·직업 버프)은 스킬별 치적 기본에도 넣는다.
     var classStateCrit =
@@ -461,7 +469,6 @@ public final class CritSpeedCalculation {
     var assumedCrit = sum(sources, Kind.ASSUMED, Axis.CRIT);
     var totalCrit = observedCrit.add(assumedCrit);
     var nonStatCrit = totalCrit.subtract(critFromStat);
-    var effectiveStat = critStat == null ? null : critStat + (input.critPet() ? CRIT_PET_STAT : 0);
 
     var thornRule = equippedThorn == null ? BLUNT_THORN_REFERENCE : equippedThorn;
     var thornSource =
@@ -476,8 +483,8 @@ public final class CritSpeedCalculation {
             scale(totalCrit.min(thornRule.critCap())));
     var targets =
         List.of(
-            target("CRIT_100", CRIT_CAP, totalCrit, nonStatCrit, effectiveStat),
-            target("BLUNT_THORN_OPTIMAL", thornOptimal, totalCrit, nonStatCrit, effectiveStat));
+            target("CRIT_100", CRIT_CAP, totalCrit, nonStatCrit, critStat),
+            target("BLUNT_THORN_OPTIMAL", thornOptimal, totalCrit, nonStatCrit, critStat));
     var crit =
         new Crit(
             critStat,
@@ -500,15 +507,10 @@ public final class CritSpeedCalculation {
     var swiftnessSpeed = statSpeed(sources);
     var needAttack = optimalSpeed.subtract(attack.total().subtract(swiftnessSpeed.attack()));
     var needMove = optimalSpeed.subtract(move.total().subtract(swiftnessSpeed.move()));
-    int requiredSwiftness =
-        ceil(needAttack.max(needMove).max(BigDecimal.ZERO).multiply(SPEED_STAT_PER_PERCENT));
+    int requiredSwiftness = statFor(needAttack.max(needMove), SPEED_DIVISOR);
     int additionalSwiftness =
         swiftness == null
-            ? ceil(
-                optimalSpeed
-                    .subtract(attack.total().min(move.total()))
-                    .max(BigDecimal.ZERO)
-                    .multiply(SPEED_STAT_PER_PERCENT))
+            ? statFor(optimalSpeed.subtract(attack.total().min(move.total())), SPEED_DIVISOR)
             : Math.max(0, requiredSwiftness - swiftness);
     var speed =
         new Speed(
@@ -588,8 +590,7 @@ public final class CritSpeedCalculation {
     if (optimal <= TABLE_MAX) points.add(optimal);
     var rows = new ArrayList<SwiftnessRow>();
     for (int value : points) {
-      var percent =
-          BigDecimal.valueOf(value).divide(SPEED_STAT_PER_PERCENT, 6, RoundingMode.HALF_UP);
+      var percent = speedPercent(value);
       var attack = nonStatAttack.add(percent);
       var move = nonStatMove.add(percent);
       rows.add(
@@ -619,8 +620,7 @@ public final class CritSpeedCalculation {
       if (stat.type().equals("치명")) {
         var value = first(STAT_CRIT, text);
         if (value == null && critStat != null) {
-          value =
-              BigDecimal.valueOf(critStat).divide(CRIT_STAT_PER_PERCENT, 6, RoundingMode.HALF_UP);
+          value = critPercent(critStat);
           limitations.add("치명 Tooltip이 없어 치명 스탯을 계수로 환산했습니다.");
         }
         if (value != null) {
@@ -633,8 +633,7 @@ public final class CritSpeedCalculation {
         var attack = first(STAT_ATTACK_SPEED, text);
         var move = first(STAT_MOVE_SPEED, text);
         if ((attack == null || move == null) && swiftness != null) {
-          var converted =
-              BigDecimal.valueOf(swiftness).divide(SPEED_STAT_PER_PERCENT, 6, RoundingMode.HALF_UP);
+          var converted = speedPercent(swiftness);
           if (attack == null) attack = converted;
           if (move == null) move = converted;
           limitations.add("신속 Tooltip이 없어 신속 스탯을 계수로 환산했습니다.");
@@ -715,16 +714,10 @@ public final class CritSpeedCalculation {
     }
   }
 
-  private static void assumptionSources(Assumptions input, List<Source> sources) {
+  private static void assumptionSources(Assumptions input, Integer critStat, List<Source> sources) {
     if (input.backAttack())
       assumed(sources, Axis.CRIT, "백어택", BACK_ATTACK_CRIT, "백어택 적중 시 치명타 적중률 +10%");
-    if (input.critPet())
-      assumed(
-          sources,
-          Axis.CRIT,
-          "치명 펫",
-          BigDecimal.valueOf(CRIT_PET_STAT).divide(CRIT_STAT_PER_PERCENT, 6, RoundingMode.HALF_UP),
-          "펫 효과 치명 +160");
+    if (input.critPet()) assumed(sources, Axis.CRIT, "치명 펫", petCrit(critStat), "펫 효과 치명 +160");
     if (input.critSynergyCount() > 0)
       assumed(
           sources,
@@ -1686,16 +1679,40 @@ public final class CritSpeedCalculation {
     return new SupersonicRule(level(effect.description()), r1, bonus, r2, max);
   }
 
+  /** 치명 스탯 → 치명타 적중률 %: floor(스탯 ÷ 0.2794) ÷ 100. */
+  static BigDecimal critPercent(int stat) {
+    return BigDecimal.valueOf((long) Math.floor(stat / CRIT_DIVISOR)).movePointLeft(2);
+  }
+
+  /** 신속 스탯 → 공격·이동 속도 %: floor(스탯 ÷ 0.5821) ÷ 100. */
+  static BigDecimal speedPercent(int stat) {
+    return BigDecimal.valueOf((long) Math.floor(stat / SPEED_DIVISOR)).movePointLeft(2);
+  }
+
+  /** 치명 펫(+160)의 %: 스탯에 더한 뒤 환산한 차(비교 기준 원본이 팔찌 치명을 스탯에 더해 한 번 버리는 것과 같음). 스탯을 모르면 160만 환산. */
+  static BigDecimal petCrit(Integer critStat) {
+    return critStat == null
+        ? critPercent(CRIT_PET_STAT)
+        : critPercent(critStat + CRIT_PET_STAT).subtract(critPercent(critStat));
+  }
+
+  /** 환산(버림)한 %가 percent 이상이 되는 가장 작은 스탯. percent ≤ 0이면 0. */
+  static int statFor(BigDecimal percent, double divisor) {
+    if (percent.signum() <= 0) return 0;
+    long hundredths = percent.movePointRight(2).setScale(0, RoundingMode.CEILING).longValueExact();
+    int stat = Math.max(0, (int) Math.floor(hundredths * divisor) - 1);
+    while (Math.floor(stat / divisor) < hundredths) stat++;
+    return stat;
+  }
+
   private static CritTarget target(
       String key, BigDecimal targetRate, BigDecimal total, BigDecimal nonStat, Integer critStat) {
     boolean reached = total.compareTo(targetRate) >= 0;
     if (critStat == null) {
-      int additional =
-          ceil(targetRate.subtract(total).max(BigDecimal.ZERO).multiply(CRIT_STAT_PER_PERCENT));
+      int additional = statFor(targetRate.subtract(total), CRIT_DIVISOR);
       return new CritTarget(key, scale(targetRate), null, additional, reached);
     }
-    int required =
-        ceil(targetRate.subtract(nonStat).max(BigDecimal.ZERO).multiply(CRIT_STAT_PER_PERCENT));
+    int required = statFor(targetRate.subtract(nonStat), CRIT_DIVISOR);
     return new CritTarget(
         key, scale(targetRate), required, reached ? 0 : Math.max(0, required - critStat), reached);
   }
@@ -1763,10 +1780,6 @@ public final class CritSpeedCalculation {
     if (text == null) return null;
     var matcher = pattern.matcher(text);
     return matcher.find() ? new BigDecimal(matcher.group(1)) : null;
-  }
-
-  private static int ceil(BigDecimal value) {
-    return value.setScale(0, RoundingMode.CEILING).intValueExact();
   }
 
   private static BigDecimal scale(BigDecimal value) {

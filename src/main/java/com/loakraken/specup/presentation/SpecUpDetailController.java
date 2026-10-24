@@ -242,9 +242,11 @@ public class SpecUpDetailController {
               example = "NONE")
           @NullableResponse
           String breath,
-      @Schema(description = "기대 시도 횟수(소수 둘째 자리)", example = "7.42") @NullableResponse
+      @Schema(description = "기대 시도 횟수(소수 둘째 자리). 여러 단계 줄이면 단계마다 기대 시도의 합", example = "7.42")
+          @NullableResponse
           BigDecimal expectedAttempts,
-      @Schema(description = "첫 시도 성공 확률(만분율)", example = "500") @NullableResponse
+      @Schema(description = "첫 시도 성공 확률(만분율). 여러 단계 줄이면 첫 단계의 확률", example = "500")
+          @NullableResponse
           Integer firstAttemptSuccessRateBp) {
     static SpecUpRefineResponse from(SpecUpDetailService.Refine refine) {
       return refine == null

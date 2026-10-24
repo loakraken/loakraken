@@ -632,32 +632,34 @@ public class SpecUpService {
       if (item == null || !WEAPON_ARMOR.contains(item.type()) || item.detail() == null) continue;
       var refine = item.detail().refineLevel();
       if (refine != null && refine >= 10 && refine < 25)
-        planned.add(
-            new Planned(
-                "EQUIPMENT_REFINE:" + index + ":" + (refine + 1),
-                Kind.EQUIPMENT_REFINE.name(),
-                item.name(),
-                "+" + refine,
-                "+" + (refine + 1),
-                item.icon(),
-                item.grade(),
-                null,
-                new Change(
-                    Kind.EQUIPMENT_REFINE,
-                    null,
-                    index,
-                    null,
-                    null,
-                    refine + 1,
-                    null,
-                    null,
-                    null,
-                    null,
-                    null,
-                    null,
-                    null,
-                    null),
-                refineCost(item, refine, prices, pricesAt)));
+        // 다음 단계부터 재련 계획 최대 단계까지 줄마다 따로(누적 Δ·누적 비용, #585). 계획이 다루지 않는 장비는 +1 줄 하나.
+        for (int target = refine + 1; target <= refineMaxTarget(item, refine); target++)
+          planned.add(
+              new Planned(
+                  "EQUIPMENT_REFINE:" + index + ":" + target,
+                  Kind.EQUIPMENT_REFINE.name(),
+                  item.name(),
+                  "+" + refine,
+                  "+" + target,
+                  item.icon(),
+                  item.grade(),
+                  null,
+                  new Change(
+                      Kind.EQUIPMENT_REFINE,
+                      null,
+                      index,
+                      null,
+                      null,
+                      target,
+                      null,
+                      null,
+                      null,
+                      null,
+                      null,
+                      null,
+                      null,
+                      null),
+                  refineCost(item, refine, target, prices, pricesAt)));
       var advanced = item.detail().advancedRefineLevel();
       // 전율 장비에는 상급 재련이 없다(E21). 후보를 만들지 않는다.
       if (advanced != null
@@ -726,7 +728,17 @@ public class SpecUpService {
       int refine,
       java.util.Optional<RefiningMaterialPriceService.Prices> prices,
       Instant[] pricesAt) {
-    var breakdown = refineBreakdown(item, refine, prices);
+    return refineCost(item, refine, refine + 1, prices, pricesAt);
+  }
+
+  /** 지금 단계 refine에서 target까지 누적 기대 비용(한 번의 재련 계획). */
+  SpecUpCost refineCost(
+      CharacterLoadout.Equipment item,
+      int refine,
+      int target,
+      java.util.Optional<RefiningMaterialPriceService.Prices> prices,
+      Instant[] pricesAt) {
+    var breakdown = refineBreakdown(item, refine, target, prices);
     if ("OK".equals(breakdown.cost().status())
         && (pricesAt[0] == null || breakdown.prices().observedAt().isBefore(pricesAt[0])))
       pricesAt[0] = breakdown.prices().observedAt();
@@ -751,6 +763,37 @@ public class SpecUpService {
       CharacterLoadout.Equipment item,
       int refine,
       java.util.Optional<RefiningMaterialPriceService.Prices> prices) {
+    return refineBreakdown(item, refine, refine + 1, prices);
+  }
+
+  /**
+   * 재련 후보로 낼 마지막 단계: 재련 계획(계열·부위 단계표)의 최대 목표 단계, 25 이하. 계획이 다루지 않는 장비(계열을 모름 등)는 다음 단계 하나(+1 줄만, 비용
+   * UNCONFIRMED).
+   */
+  int refineMaxTarget(CharacterLoadout.Equipment item, int refine) {
+    var grade = refineGrade(item.name());
+    if (grade == null) return refine + 1;
+    var type =
+        "무기".equals(item.type())
+            ? RefiningRules.EquipmentType.WEAPON
+            : RefiningRules.EquipmentType.ARMOR;
+    try {
+      var track = plans.rules().track(grade, type);
+      return Math.max(refine + 1, Math.min(25, track.maxTargetStage()));
+    } catch (IllegalArgumentException exception) {
+      return refine + 1;
+    }
+  }
+
+  /**
+   * 지금 단계 refine에서 target까지 누적 비용 내역(여러 단계면 한 번의 재련 계획으로 — 장인의 기운·실패 횟수는 지금 단계에서 0부터). 숨결 없음과 최대 사용
+   * 중 기대 비용이 작은 쪽.
+   */
+  RefineBreakdown refineBreakdown(
+      CharacterLoadout.Equipment item,
+      int refine,
+      int target,
+      java.util.Optional<RefiningMaterialPriceService.Prices> prices) {
     var grade = refineGrade(item.name());
     if (grade == null)
       return new RefineBreakdown(null, false, null, SpecUpCost.REFINE_COST_UNCONFIRMED);
@@ -764,8 +807,7 @@ public class SpecUpService {
     } catch (IllegalArgumentException exception) {
       return new RefineBreakdown(null, false, null, SpecUpCost.REFINE_COST_UNCONFIRMED);
     }
-    int target = refine + 1;
-    if (target < track.minTargetStage() || target > track.maxTargetStage())
+    if (target <= refine || target < track.minTargetStage() || target > track.maxTargetStage())
       return new RefineBreakdown(null, false, null, SpecUpCost.REFINE_COST_UNCONFIRMED);
     var withoutBreath =
         plans.plan(grade, type, new RefiningPlan.Options(refine, target, false, false, true, 0, 0));

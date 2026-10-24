@@ -151,6 +151,8 @@ services:
       STATS_COLLECTOR_RESERVE: ${STATS_COLLECTOR_RESERVE:-40}
       # 방문자 한 명이 분당 일으킬 수 있는 공식 호출 수(기본 20). 접속이 몰려 예산 거절이 이어질 때만 낮춘다(부하 대응 2단계).
       CLIENT_LIMIT_OFFICIAL: ${CLIENT_LIMIT_OFFICIAL:-20}
+      # 검색봇 표시 요청 전체가 분당 일으킬 수 있는 공식 호출 수(기본 20). 캐릭터 페이지 색인을 켤 때만 낮춘다.
+      CLIENT_LIMIT_BOT_OFFICIAL: ${CLIENT_LIMIT_BOT_OFFICIAL:-20}
       # 시드 목록(#255): 쉼표 구분 이름. 값은 운영 서버 stack.env에만 둔다(저장소 커밋 금지).
       STATS_SEED_ENABLED: ${STATS_SEED_ENABLED:-false}
       STATS_SEED_NAMES: ${STATS_SEED_NAMES:-}

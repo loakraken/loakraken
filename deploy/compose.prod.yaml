@@ -411,7 +411,8 @@ services:
       timeout: 5s
       start_period: 30s
       retries: 5
-    mem_limit: ${GRAFANA_MEM_LIMIT:-384m}
+    # 대시보드 3개·경보 규칙을 올린 상태에서 384m 한도의 99%까지 쓰는 것을 운영에서 확인해 512m로 둔다.
+    mem_limit: ${GRAFANA_MEM_LIMIT:-512m}
     networks:
       # 경보를 Slack으로 보내야 해서 외부 통신이 되는 망.
       - monitor

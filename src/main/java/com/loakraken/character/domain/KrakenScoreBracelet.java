@@ -790,7 +790,6 @@ public final class KrakenScoreBracelet {
     return b.isMissingNode() || b.isNull() ? null : b;
   }
 
-  /** 원본 y(tier, option): we[티어][옵션] 또는 공백을 뺀 옵션. 없으면 null. */
   /**
    * 팔찌 옵션 가운데 총배율 계산식이 알아보지 못하는 줄(주 스탯·치명·특화·신속 줄도 아니고 옵션 표에도 없음). 이런 줄은 원본처럼 배율 1로 지나가므로, 효율을 내기
    * 전에 거른다(코드 리뷰 10-25).
@@ -808,6 +807,7 @@ public final class KrakenScoreBracelet {
     return List.copyOf(unparsed);
   }
 
+  /** 원본 y(tier, option): we[티어][옵션] 또는 공백을 뺀 옵션. 없으면 null. */
   static JsonNode entry(KrakenScoreEngine.Tables tables, JsonNode tier, String option) {
     if (!truthy(tier)) return null;
     var row = tables.get("we").path(KrakenScoreEngine.jsString(tier));

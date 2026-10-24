@@ -54,7 +54,12 @@ services:
       - ALL
     cap_add:
       - NET_BIND_SERVICE
+    # 임시 파일은 메모리에(이미지 루트에 쓰지 않게).
+    tmpfs:
+      - /tmp:size=16m
     mem_limit: ${EDGE_MEM_LIMIT:-128m}
+    # 프로세스 수 상한(포크 폭주가 서버 전체로 번지지 않게). Caddy 한 프로세스(스레드 수십 개).
+    pids_limit: 128
 
   web:
     image: "${WEB_IMAGE:?WEB_IMAGE가 필요합니다}"
@@ -115,6 +120,8 @@ services:
       start_period: 30s
       retries: 5
     mem_limit: ${WEB_MEM_LIMIT:-384m}
+    # 프로세스 수 상한(포크 폭주가 서버 전체로 번지지 않게). Node 한 프로세스(스레드 10여 개).
+    pids_limit: 256
     networks:
       public:
       internal:
@@ -228,6 +235,8 @@ services:
       start_period: 90s
       retries: 5
     mem_limit: ${API_MEM_LIMIT:-768m}
+    # 프로세스 수 상한(포크 폭주가 서버 전체로 번지지 않게). JVM 스레드도 pid로 센다(Tomcat 최대 200 + 풀·GC·배경 작업).
+    pids_limit: 1024
     networks:
       internal: {}
       data: {}
@@ -261,10 +270,21 @@ services:
       timeout: 5s
       retries: 10
     mem_limit: ${POSTGRES_MEM_LIMIT:-384m}
+    # 프로세스 수 상한(포크 폭주가 서버 전체로 번지지 않게). 연결마다 프로세스 하나 + 배경 프로세스.
+    pids_limit: 256
     networks:
       - data
     security_opt:
       - no-new-privileges:true
+    # 이미지 진입 스크립트가 root로 데이터 디렉터리 소유·권한을 맞춘 뒤 postgres 사용자로 낮춘다. 그 몇 가지만 남긴다.
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - SETGID
+      - SETUID
 
   valkey:
     image: valkey/valkey:9.1.2
@@ -297,10 +317,21 @@ services:
       timeout: 3s
       retries: 10
     mem_limit: ${VALKEY_MEM_LIMIT:-128m}
+    # 프로세스 수 상한(포크 폭주가 서버 전체로 번지지 않게). 단일 스레드 + I/O 스레드 몇 개.
+    pids_limit: 64
     networks:
       - data
     security_opt:
       - no-new-privileges:true
+    # 진입 스크립트가 /data 소유를 맞추고(chown) valkey 사용자로 낮춘다(setpriv). 설정 파일 chgrp도 같은 권한.
+    # 다시 뜰 때 root가 valkey 소유 appendonlydir(750) 안을 훑어야 해서 DAC_READ_SEARCH가 필요하다(없으면 find가 실패해 재시작을 반복).
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_READ_SEARCH
+      - SETGID
+      - SETUID
 
   # ── 모니터링(프로필 monitor) ─────────────────────────────────────────────
   # stack.env에 COMPOSE_PROFILES=monitor를 넣은 서버에서만 뜬다. 공개 포트 없음(grafana만 호스트 127.0.0.1에 묶는다).
@@ -325,6 +356,8 @@ services:
       start_period: 20s
       retries: 5
     mem_limit: ${PROMETHEUS_MEM_LIMIT:-384m}
+    # prometheus·node-exporter·cloudflared는 프로세스 수 상한 128(실제 수십 개). grafana는 아래에 따로.
+    pids_limit: 128
     networks:
       # metrics: api와 prometheus만 있는 망(api 관리 포트 9090 수집용, web·DB에는 닿지 않는다). monitor: grafana·node-exporter.
       - metrics
@@ -352,6 +385,7 @@ services:
       - /sys:/host/sys:ro
       - /var/lib/node_exporter/textfile:/textfile:ro
     mem_limit: ${NODE_EXPORTER_MEM_LIMIT:-48m}
+    pids_limit: 128
     networks:
       - monitor
     security_opt:
@@ -413,6 +447,8 @@ services:
       retries: 5
     # 대시보드 3개·경보 규칙을 올린 상태에서 384m 한도의 99%까지 쓰는 것을 운영에서 확인해 512m로 둔다.
     mem_limit: ${GRAFANA_MEM_LIMIT:-512m}
+    # grafana는 Go 스레드와 데이터 원본 플러그인 프로세스로 뜨자마자 120개를 넘는다(128이면 플러그인이 죽음 — 로컬 측정).
+    pids_limit: 512
     networks:
       # 경보를 Slack으로 보내야 해서 외부 통신이 되는 망.
       - monitor
@@ -443,6 +479,7 @@ services:
       start_period: 30s
       retries: 3
     mem_limit: ${CLOUDFLARED_MEM_LIMIT:-64m}
+    pids_limit: 128
     networks:
       # grafana:3000에만 닿으면 된다(api·DB 망에는 붙지 않는다).
       - monitor

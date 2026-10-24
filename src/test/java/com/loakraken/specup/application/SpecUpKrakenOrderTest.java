@@ -38,16 +38,19 @@ class SpecUpKrakenOrderTest {
   }
 
   @Test
-  void 소수_둘째_자리는_화면_표기처럼_가장_짧은_십진_표기에서_반올림한다() {
-    // 비교 기준 B는 Intl.NumberFormat(소수 둘째 자리)으로 보인다: 1.005 → 1.01, 0.125 → 0.13, 1.6249999999999998 →
-    // 1.62.
-    assertThat(SpecUpKrakenScore.round2(1.005)).isEqualByComparingTo("1.01");
+  void Δ는_toFixed처럼_정확값에서_효율은_Intl처럼_가장_짧은_표기에서_반올림한다() {
+    // 비교 기준 B 원본: ▲Δ = toFixed(2)(이진 정확값, 1.005 → "1.00").
+    // 효율 = Intl.NumberFormat 둘째 자리(가장 짧은 십진 표기, 1.005 → "1.01").
+    assertThat(SpecUpKrakenScore.round2(1.005)).isEqualByComparingTo("1.00");
     assertThat(SpecUpKrakenScore.round2(0.125)).isEqualByComparingTo("0.13");
-    assertThat(SpecUpKrakenScore.round2(1.625 / 1e5 * 1e5)).isEqualByComparingTo("1.62");
-    // 10만 골드당도 같은 반올림: Δ 1.005 ÷ 10만 골드 × 10만 = 1.005 → 1.01.
+    assertThat(SpecUpKrakenScore.roundEfficiency(1.005)).isEqualByComparingTo("1.01");
+    assertThat(SpecUpKrakenScore.roundEfficiency(0.125)).isEqualByComparingTo("0.13");
+    assertThat(SpecUpKrakenScore.roundEfficiency(1.625 / 1e5 * 1e5)).isEqualByComparingTo("1.62");
+    // 10만 골드당: Δ 1.005 ÷ 10만 골드 × 10만 = 1.005 → 1.01(Intl). 같은 Δ의 표시는 1.00(toFixed).
     var tie =
-        candidate("tie", "1.01", SpecUpCost.refineExpected(100_000))
-            .withKraken(new BigDecimal("1.01"), 1.005, SpecUpCost.refineExpected(100_000));
+        candidate("tie", "1.00", SpecUpCost.refineExpected(100_000))
+            .withKraken(SpecUpKrakenScore.round2(1.005), 1.005, SpecUpCost.refineExpected(100_000));
+    assertThat(tie.deltaKrakenScore()).isEqualByComparingTo("1.00");
     assertThat(tie.krakenScorePer100kGold()).isEqualByComparingTo("1.01");
   }
 

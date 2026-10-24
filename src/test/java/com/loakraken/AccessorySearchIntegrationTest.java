@@ -117,6 +117,8 @@ class AccessorySearchIntegrationTest {
   @Test
   void 같은_클라이언트의_캐시_미스_공식_호출은_분당_5회까지다() throws Exception {
     when(search.search(any())).thenAnswer(invocation -> page(17000));
+    // 클라이언트 한도는 1분 고정 창이다. 여섯 번이 두 창에 걸치면 여섯 번째가 새 창에서 통과하므로, 창 끝 15초 안이면 다음 창까지 기다린다.
+    awaitFreshWindow(15);
     for (int page = 1; page <= 5; page++)
       assertThat(post(pageBody(page), "203.0.113.20").statusCode())
           .as("page " + page)
@@ -204,6 +206,12 @@ class AccessorySearchIntegrationTest {
             // 값이 없는 STAT 줄은 기본 효과에 넣지 않는다.
             new ListingOption("STAT", "치명", null, false, null)),
         "https://cdn.example/acc_necklace.png");
+  }
+
+  /** 지금 1분 창이 끝나기까지 seconds초보다 적게 남았으면 다음 창 시작 직후까지 기다린다(창 = 시각 ÷ 1분, 한도와 같은 계산). */
+  private static void awaitFreshWindow(int seconds) throws InterruptedException {
+    long remaining = 60_000 - System.currentTimeMillis() % 60_000;
+    if (remaining < seconds * 1000L) Thread.sleep(remaining + 200);
   }
 
   private HttpResponse<String> post(String body, String clientAddress) throws Exception {

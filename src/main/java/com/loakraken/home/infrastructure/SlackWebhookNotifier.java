@@ -36,11 +36,11 @@ class SlackWebhookNotifier implements ShopNoticeNotifier {
 
   @Override
   public void send(String text) {
-    var url = webhook(policy.slackWebhookFile());
+    var uri = uri(webhook(policy.slackWebhookFile()));
     try {
       client
           .post()
-          .uri(URI.create(url))
+          .uri(uri)
           .contentType(MediaType.APPLICATION_JSON)
           .body(Map.of("text", text))
           .retrieve()
@@ -48,6 +48,15 @@ class SlackWebhookNotifier implements ShopNoticeNotifier {
     } catch (RestClientException exception) {
       throw new IllegalStateException(
           "Slack 알림을 보내지 못했습니다. 예외 유형=" + exception.getClass().getSimpleName());
+    }
+  }
+
+  /** 주소 형식이 틀리면 URI 예외 문장에 주소가 그대로 들어가므로, 문장·원인 없이 새 예외로 바꾼다. */
+  static URI uri(String url) {
+    try {
+      return URI.create(url);
+    } catch (IllegalArgumentException exception) {
+      throw new IllegalStateException("Slack 웹훅 파일 내용이 올바른 주소가 아닙니다.");
     }
   }
 

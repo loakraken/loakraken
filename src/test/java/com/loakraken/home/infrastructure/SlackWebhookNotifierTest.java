@@ -32,4 +32,16 @@ class SlackWebhookNotifierTest {
         .isInstanceOf(IllegalStateException.class)
         .hasMessageNotContaining("attacker.example");
   }
+
+  @Test
+  void Slack_주소로_시작해도_형식이_틀리면_문장과_원인에_주소를_남기지_않는다() throws Exception {
+    var bad = dir.resolve("bad");
+    Files.writeString(bad, "https://hooks.slack.com/services/T0/B0/se cret");
+    var url = SlackWebhookNotifier.webhook(bad.toString());
+    assertThatThrownBy(() -> SlackWebhookNotifier.uri(url))
+        .isInstanceOf(IllegalStateException.class)
+        .hasNoCause()
+        .hasMessageNotContaining("hooks.slack.com")
+        .hasMessageNotContaining("se cret");
+  }
 }

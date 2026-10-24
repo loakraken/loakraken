@@ -81,6 +81,7 @@ public class CharacterCardService {
     // 해석은 이미 한 도메인에서 뽑으므로 요청 스레드에서 해도 가볍다. 쓰기만 작업자에 넘긴다.
     var summary = EquipmentSummary.from(details.profile(), details.loadout());
     var collectibles = details.loadout().collectibles();
+    var polishLines = polishLines(details.loadout());
     try {
       writer.execute(
           () -> {
@@ -90,6 +91,7 @@ public class CharacterCardService {
             write(observation);
             writeSummary(observation, summary);
             writeCollectibles(observation, collectibles);
+            if (polishLines != null) writePolishLines(observation, polishLines);
           });
     } catch (RejectedExecutionException exception) {
       metrics.cards(false);
@@ -204,6 +206,41 @@ public class CharacterCardService {
     } catch (DataAccessException | TransactionException exception) {
       metrics.cards(false);
       log.warn("카드 기록 저장에 실패했습니다. 예외 유형={}", exception.getClass().getSimpleName());
+    }
+  }
+
+  private static final List<String> ACCESSORY_SLOTS = List.of("목걸이", "귀걸이", "반지");
+
+  /** 장신구(목걸이·귀걸이·반지)의 연마 효과 줄. 장비를 관측하지 않았으면 null(저장된 줄을 바꾸지 않음). */
+  static List<CharacterCardPort.PolishLine> polishLines(CharacterLoadout loadout) {
+    if (loadout.equipment().isEmpty()) return null;
+    var lines = new java.util.ArrayList<CharacterCardPort.PolishLine>();
+    for (var item : loadout.equipment()) {
+      if (item == null || !ACCESSORY_SLOTS.contains(item.type()) || item.detail() == null) continue;
+      var detail = item.detail();
+      if (detail.polishEffects() == null) continue;
+      for (var effect : detail.polishEffects()) {
+        if (effect == null || effect.name() == null || effect.value() == null) continue;
+        lines.add(
+            new CharacterCardPort.PolishLine(
+                item.type(),
+                detail.itemLevel(),
+                item.grade(),
+                effect.name().strip(),
+                effect.value().strip(),
+                effect.grade() == null ? null : effect.grade().name()));
+      }
+    }
+    return List.copyOf(lines);
+  }
+
+  private void writePolishLines(
+      CharacterCardPort.Observation observation, List<CharacterCardPort.PolishLine> lines) {
+    try {
+      cards.recordPolishLines(
+          observation.serverName(), observation.characterName(), lines, observation.observedAt());
+    } catch (DataAccessException | TransactionException exception) {
+      log.warn("연마 효과 줄 저장에 실패했습니다. 예외 유형={}", exception.getClass().getSimpleName());
     }
   }
 

@@ -25,6 +25,19 @@ public interface CharacterCardPort {
       List<com.loakraken.character.domain.CharacterLoadout.Collectible> collectibles,
       Instant observedAt);
 
+  /** 장신구 연마 효과 줄(연마 수치표 근거 집계): 이 캐릭터의 줄을 이번 관측의 줄로 바꾼다. 더 늦은 관측이 이미 있거나 캐릭터가 없으면 아무것도 하지 않는다. */
+  void recordPolishLines(
+      String serverName, String characterName, List<PolishLine> lines, Instant observedAt);
+
+  /** 연마 효과 한 줄. colour는 효과 등급(HIGH·MID·LOW = 상·중·하), 모르면 null. */
+  record PolishLine(
+      String slot,
+      Integer itemLevel,
+      String itemGrade,
+      String optionName,
+      String optionValue,
+      String colour) {}
+
   /** 같은 서버의 원정대 캐릭터들이 기록한 카드. recordedBy는 그 최고 기록을 남긴 캐릭터다. */
   RosterCards rosterCards(String serverName, Collection<String> characterNames);
 

@@ -35,6 +35,61 @@ class PostgresCharacterCardRepository implements CharacterCardPort {
 
   @Override
   @Transactional(timeout = 5)
+  public void recordPolishLines(
+      String serverName,
+      String characterName,
+      List<PolishLine> lines,
+      java.time.Instant observedAt) {
+    var characterId =
+        jdbc.sql(
+                "SELECT character_id FROM characters WHERE server_name = :server AND character_name = :name FOR UPDATE")
+            .param("server", serverName)
+            .param("name", characterName)
+            .query(UUID.class)
+            .optional();
+    if (characterId.isEmpty()) return;
+    var at = utc(observedAt);
+    // 더 늦은 관측의 줄이 이미 있으면 덮지 않는다(관측 기록은 비동기라 순서가 바뀔 수 있음).
+    boolean newer =
+        Boolean.TRUE.equals(
+            jdbc.sql(
+                    "SELECT EXISTS (SELECT 1 FROM character_polish_line WHERE character_id = :id AND observed_at > :at)")
+                .param("id", characterId.get())
+                .param("at", at)
+                .query(Boolean.class)
+                .single());
+    if (newer) return;
+    jdbc.sql("DELETE FROM character_polish_line WHERE character_id = :id")
+        .param("id", characterId.get())
+        .update();
+    short lineNo = 0;
+    for (var line : lines) {
+      lineNo++;
+      jdbc.sql(
+              """
+          INSERT INTO character_polish_line (character_id, line_no, slot, item_level, item_grade,
+            option_name, option_value, colour, observed_at)
+          VALUES (:id, :no, :slot, :itemLevel, :itemGrade, :option, :value, :colour, :at)
+          """)
+          .param("id", characterId.get())
+          .param("no", lineNo)
+          .param("slot", truncate(line.slot(), 16))
+          .param("itemLevel", line.itemLevel())
+          .param("itemGrade", truncate(line.itemGrade(), 16))
+          .param("option", truncate(line.optionName(), 64))
+          .param("value", truncate(line.optionValue(), 32))
+          .param("colour", truncate(line.colour(), 8))
+          .param("at", at)
+          .update();
+    }
+  }
+
+  private static String truncate(String value, int max) {
+    return value == null || value.length() <= max ? value : value.substring(0, max);
+  }
+
+  @Override
+  @Transactional(timeout = 5)
   public void recordCollectibles(
       String serverName,
       String characterName,

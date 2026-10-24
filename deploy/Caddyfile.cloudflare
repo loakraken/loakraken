@@ -35,6 +35,11 @@
 		X-Request-Id {http.request.uuid}
 	}
 
+	# /api/*(JSON만 오가는 경로) 요청 본문 상한. 넘으면 413으로 끊어 큰 본문이 web까지 오지 않게 한다. 화면·정적 파일 경로는 그대로.
+	request_body /api/* {
+		max_size 256KB
+	}
+
 	reverse_proxy web:3000 {
 		header_up X-Forwarded-For {client_ip}
 		# 신뢰 대역(Cloudflare)에서 온 X-Forwarded-Host는 Caddy가 그대로 넘긴다. web이 보는 값을 요청의 실제 Host로 고정한다.

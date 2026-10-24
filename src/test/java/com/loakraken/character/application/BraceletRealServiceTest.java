@@ -173,6 +173,14 @@ class BraceletRealServiceTest {
       assertThat(zero.status()).as(line).isEqualTo(BraceletRealEfficiency.Status.OK);
       assertThat(zero.percent()).as(line).isEqualByComparingTo(base.percent());
     }
+    // 옵션 표에 없고 추가 공격 표에만 있는 줄([반격])은 계산식이 쓰므로 계산하고 값이 오른다
+    var withAddon = KrakenScoreInputMapper.from(raw);
+    ((tools.jackson.databind.node.ArrayNode)
+            withAddon.path("armory").path("accessory").path("bangle").path("option"))
+        .add("[반격]기상기사용후8초동안무기공격력이2200증가한다.");
+    var addon = SERVICE.compute(result(raw, withAddon));
+    assertThat(addon.status()).isEqualTo(BraceletRealEfficiency.Status.OK);
+    assertThat(addon.percent()).isGreaterThan(base.percent());
     // 빈 칸 문구가 다른 문장 안에 있으면 효과 없는 줄로 보지 않는다
     var embedded = KrakenScoreInputMapper.from(raw);
     ((tools.jackson.databind.node.ArrayNode)

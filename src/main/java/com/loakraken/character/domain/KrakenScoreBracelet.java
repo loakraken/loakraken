@@ -798,7 +798,7 @@ public final class KrakenScoreBracelet {
   }
 
   /**
-   * 팔찌 옵션 가운데 총배율 계산식이 알아보지 못하는 줄(주 스탯·치명·특화·신속 줄도 아니고 옵션 표에도 없음). 이런 줄은 원본처럼 배율 1로 지나가므로, 효율을 내기
+   * 팔찌 옵션 가운데 총배율 계산식이 알아보지 못하는 줄(주 스탯·치명·특화·신속 줄도, 효과 없는 줄도 아니고 옵션 표·추가 공격 표에도 없음). 이런 줄은 원본처럼 배율 1로 지나가므로, 효율을 내기
    * 전에 거른다(코드 리뷰 10-25).
    */
   public static List<String> unparsedOptions(JsonNode e, KrakenScoreEngine.Tables tables) {
@@ -811,6 +811,8 @@ public final class KrakenScoreBracelet {
           && !SUB_STAT.matcher(option).find()
           && !ZERO_EFFECT_STAT.matcher(option).find()
           && !ZERO_EFFECT_LINE.matcher(option).find()
+          // 옵션 표(we)에 없어도 추가 공격 표에 있으면 총배율 계산식이 쓴다([반격]·[투자] 등, 계산 검증 10-25).
+          && !tables.get("braceletAddonAttack").has(option)
           && entry(tables, tier, option) == null) unparsed.add(option);
     return List.copyOf(unparsed);
   }

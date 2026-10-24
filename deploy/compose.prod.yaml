@@ -153,6 +153,11 @@ services:
       CLIENT_LIMIT_OFFICIAL: ${CLIENT_LIMIT_OFFICIAL:-20}
       # 검색봇 표시 요청 전체가 분당 일으킬 수 있는 공식 호출 수(기본 20). 캐릭터 페이지 색인을 켤 때만 낮춘다.
       CLIENT_LIMIT_BOT_OFFICIAL: ${CLIENT_LIMIT_BOT_OFFICIAL:-20}
+      # 상점 공지 알림 배치(#640): 하루 한 번 공식 공지를 읽어 새 상점·패키지 공지를 Slack에 알린다. 기본 꺼짐.
+      # 웹훅 주소는 상점 공지 전용 비밀 파일(감시 알림 웹훅과 분리)에서 보낼 때마다 읽는다.
+      SHOP_NOTICE_ENABLED: ${SHOP_NOTICE_ENABLED:-false}
+      SHOP_NOTICE_CRON: "${SHOP_NOTICE_CRON:-0 10 10 * * *}"
+      SHOP_NOTICE_SLACK_WEBHOOK_FILE: /run/secrets/slack_webhook_shop
       # 시드 목록(#255): 쉼표 구분 이름. 값은 운영 서버 stack.env에만 둔다(저장소 커밋 금지).
       STATS_SEED_ENABLED: ${STATS_SEED_ENABLED:-false}
       STATS_SEED_NAMES: ${STATS_SEED_NAMES:-}
@@ -220,6 +225,8 @@ services:
       # 원정대 전투력 불러오기의 표시 키 비밀값(16자 이상). 없으면 불러오기가 404다.
       - source: roster_marker_secret
         target: character.roster-combat-power.marker-secret
+      # 상점 공지 알림 전용 Slack 웹훅(파일 이름 그대로 /run/secrets/slack_webhook_shop). 끈 동안은 빈 파일이어도 된다.
+      - slack_webhook_shop
     volumes:
       # 통계 시드 파일(#271). 저장소에 커밋하지 않는다. 디렉터리가 없어도 기동한다(파일이 없으면 시드 없이 수집).
       - ./seed:/seed:ro
@@ -503,6 +510,9 @@ secrets:
     file: ${SECRETS_DIR:?SECRETS_DIR가 필요합니다}/lostark_api_key
   roster_marker_secret:
     file: ${SECRETS_DIR:?SECRETS_DIR가 필요합니다}/roster_marker_secret
+  # 상점 공지 알림 Slack 웹훅. api가 쓰므로 파일이 있어야 compose가 올라간다(끈 동안은 빈 파일, 444).
+  slack_webhook_shop:
+    file: ${SECRETS_DIR:?SECRETS_DIR가 필요합니다}/slack_webhook_shop
   # 모니터링(프로필 monitor)만 쓴다. 프로필을 켜지 않은 서버는 이 파일이 없어도 된다.
   grafana_admin_password:
     file: ${SECRETS_DIR:?SECRETS_DIR가 필요합니다}/grafana_admin_password

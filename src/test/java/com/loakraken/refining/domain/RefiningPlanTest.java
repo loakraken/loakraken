@@ -29,7 +29,7 @@ class RefiningPlanTest {
 
   @Test
   void 실패_보너스와_장인의_기운으로_시도_분포를_계산한다() {
-    // 50% → 55% → 60% → 65%, 장인의 기운 23.25 → 48.825 → 76.725 → 106.95%라 5번째가 확정이다.
+    // 50% → 55% → 60% → 65%, 장인의 기운(÷ 2.15, 0.01%p 버림) 23.25 → 48.83 → 76.73 → 106.96%라 5번째가 확정이다.
     var plan = plan(stage(11, 5000, null, null), options(10, 11, false, false, 0, 0));
     var stage = plan.stages().getFirst();
     assertThat(stage.firstAttemptSuccessRateBp()).isEqualTo(5000);

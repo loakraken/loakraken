@@ -127,6 +127,38 @@ class TitleEquipIntegrationTest {
   }
 
   @Test
+  void 기간_밖_기록도_관측으로_세고_최근_30일_첫_기록과_캐릭터_수를_준다() throws Exception {
+    var now = Instant.now();
+    // 원정대 A: 지금 X 장착(최근 첫 기록). 같은 원정대의 다른 캐릭터는 40일 전에 X를 장착했다(프로필도 오래됨).
+    var a = UUID.randomUUID();
+    var a1 = character(SERVER, "칭호관측가", a, "X 칭호", now);
+    var a2 = character(SERVER, "칭호관측가둘", a, null, now.minus(Duration.ofDays(40)));
+    title(a2, "X 칭호", now.minus(Duration.ofDays(40)), now.minus(Duration.ofDays(40)));
+    // 원정대 B: 지금은 Y, 40일 전에만 Z를 장착했다.
+    var b = UUID.randomUUID();
+    var b1 = character(SERVER, "칭호관측나", b, "Y 칭호", now);
+    title(b1, "Z 칭호", now.minus(Duration.ofDays(45)), now.minus(Duration.ofDays(40)));
+
+    var data = data(get("/api/v1/titles/equipped?server=" + encode(SERVER)));
+    assertThat(data.at("/meta/population").asLong()).isEqualTo(2);
+    var rows = new java.util.HashMap<String, JsonNode>();
+    data.path("titles").forEach(row -> rows.put(row.path("title").asText(), row));
+    // X: 기간 안 장착 1원정대, 관측 1원정대, 캐릭터 2명, 원정대의 첫 기록은 40일 전이라 최근 30일 아님.
+    assertThat(rows.get("X 칭호").path("equippedRosters").asLong()).isEqualTo(1);
+    assertThat(rows.get("X 칭호").path("observedRosters").asLong()).isEqualTo(1);
+    assertThat(rows.get("X 칭호").path("observedCharacters").asLong()).isEqualTo(2);
+    assertThat(rows.get("X 칭호").path("newRosters30d").asLong()).isZero();
+    // Y: 지금 처음 기록 → 최근 30일.
+    assertThat(rows.get("Y 칭호").path("newRosters30d").asLong()).isEqualTo(1);
+    // Z: 기간 밖 장착만 → 장착 0, 관측 1(50.00%).
+    assertThat(rows.get("Z 칭호").path("equippedRosters").asLong()).isZero();
+    assertThat(rows.get("Z 칭호").path("observedRosters").asLong()).isEqualTo(1);
+    assertThat(rows.get("Z 칭호").path("observedPercent").decimalValue())
+        .isEqualByComparingTo("50.00");
+    assertThat(a1).isNotNull();
+  }
+
+  @Test
   void 관측_원정대가_없으면_빈_목록이다() throws Exception {
     var response = get("/api/v1/titles/equipped?server=" + encode("칭호없음서버"));
     assertThat(response.statusCode()).isEqualTo(200);
@@ -136,7 +168,20 @@ class TitleEquipIntegrationTest {
     assertThat(data.path("titles").size()).isZero();
   }
 
-  private void character(String server, String name, UUID roster, String title, Instant at) {
+  private void title(UUID id, String title, Instant first, Instant last) {
+    jdbc.sql(
+            """
+            INSERT INTO character_title_observation (character_id, title, first_observed_at, last_observed_at)
+            VALUES (:id, :title, :first, :last)
+            """)
+        .param("id", id)
+        .param("title", title)
+        .param("first", first.atOffset(ZoneOffset.UTC))
+        .param("last", last.atOffset(ZoneOffset.UTC))
+        .update();
+  }
+
+  private UUID character(String server, String name, UUID roster, String title, Instant at) {
     var id = UUID.randomUUID();
     var time = at.atOffset(ZoneOffset.UTC);
     jdbc.sql(
@@ -152,7 +197,7 @@ class TitleEquipIntegrationTest {
         .param("at", time)
         .param("roster", roster)
         .update();
-    if (title == null) return;
+    if (title == null) return id;
     jdbc.sql(
             """
             INSERT INTO character_title_observation (character_id, title, first_observed_at, last_observed_at)
@@ -162,6 +207,7 @@ class TitleEquipIntegrationTest {
         .param("title", title)
         .param("at", time)
         .update();
+    return id;
   }
 
   private JsonNode data(HttpResponse<String> response) throws Exception {

@@ -419,15 +419,30 @@ public interface StatsPort {
   /** 수집품 항목을 관측한 원정대의 서버 이름(예열 대상, #305). */
   List<String> collectibleServers();
 
-  /** 칭호 하나의 장착 확인 원정대 수(#311). */
-  record TitleEquipRow(String title, long rosters) {}
+  /**
+   * 칭호 하나(#311). rosters: since 뒤에 장착이 확인된 원정대 수. observedRosters: 같은 모집단 원정대 가운데 그 칭호 장착이 한 번이라도
+   * 기록된 원정대 수(기간 무관, 보유의 하한). newRosters: 그 원정대에서 이 칭호를 처음 기록한 때가 recentSince 뒤인 원정대 수.
+   * observedCharacters: 그 원정대들에서 이 칭호 장착이 기록된 서로 다른 공개 캐릭터 수(희소도 보기의 표본 기준).
+   */
+  record TitleEquipRow(
+      String title, long rosters, long observedRosters, long newRosters, long observedCharacters) {}
 
   /** population: 조건에 맞는 관측 원정대 수(분모 N). */
   record TitleEquip(long population, List<TitleEquipRow> titles) {}
 
   /**
    * 칭호 장착 확인(#311). 분모는 since 뒤에 프로필(칭호가 보이는 관측)을 받은 공개 캐릭터가 있는 원정대, 분자는 그 가운데 since 뒤에 그 칭호를 장착한
-   * 공개 캐릭터가 확인된 원정대다. 공식 프로필에는 장착 칭호만 있어 보유 여부는 알 수 없다. title이 있으면 그 칭호만.
+   * 공개 캐릭터가 확인된 원정대다. 공식 프로필에는 장착 칭호만 있어 보유 여부는 알 수 없다. title이 있으면 그 칭호만. 기록이 한 번이라도 있으면 기간 밖 장착만
+   * 있어도 행이 있다(rosters 0).
    */
-  TitleEquip titleEquip(String server, Instant since, String title);
+  TitleEquip titleEquip(String server, Instant since, Instant recentSince, String title);
+
+  /** 휘장 하나: 공식 아이콘 주소(묶음 기준)와 그 휘장을 장착한 공개 캐릭터 수. */
+  record EmblemRow(String iconUrl, long characters) {}
+
+  /** population: since 뒤에 프로필과 휘장 정보를 관측한 공개 캐릭터 수. withoutEmblem: 그중 휘장이 없는 캐릭터 수. */
+  record EmblemEquip(long population, long withoutEmblem, List<EmblemRow> emblems) {}
+
+  /** 휘장 장착 분포. 캐릭터 단위(휘장은 캐릭터 프로필마다 있다). 공식 호출 없음. */
+  EmblemEquip emblemEquip(String server, Instant since);
 }

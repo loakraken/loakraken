@@ -13,7 +13,7 @@ class RefiningPlanTest {
 
   @Test
   void 장인의_기운은_성공률을_2_15로_나눠_0_01퍼센트포인트에서_버린다() {
-    // 인벤 실측 규칙(계산 검증 10-25), 게임 화면 캡처와 같음: 3.000% → +1.39%, 3.150% → +1.46%.
+    // 실측 규칙(계산 검증 10-25), 게임 화면 캡처와 같음: 3.000% → +1.39%, 3.150% → +1.46%.
     assertThat(RefiningPlan.artisanGainHundredths(300)).isEqualTo(139);
     assertThat(RefiningPlan.artisanGainHundredths(315)).isEqualTo(146);
     // × 0.465 근사와 갈리는 경계(정확히 나누어떨어짐): 0.860% → 0.40%, 6.450% → 3.00%, 8.600% → 4.00%.

@@ -10,8 +10,8 @@ import java.util.Map;
 /**
  * 현재 단계에서 목표 단계까지의 시도 수 분포와 재료 소모량을 계산한다.
  *
- * <p>실패할 때마다 기본 확률의 10%가 오르며(최대 10회), 장인의 기운은 시도 최종 성공률 × 0.465(0.01%p에서 버림)만큼 쌓여 100%가 되면 다음 시도가
- * 확정 성공이다.
+ * <p>실패할 때마다 기본 확률의 10%가 오르며(최대 10회), 장인의 기운은 시도 최종 성공률 ÷ 2.15(0.01%p에서 버림)만큼 쌓여 100%가 되면 다음 시도가 확정
+ * 성공이다.
  */
 public record RefiningPlan(
     List<StagePlan> stages,
@@ -20,14 +20,19 @@ public record RefiningPlan(
     BigDecimal expectedGold,
     long worstCaseGold) {
   public static final String SHARD = "운명의 파편";
-  static final double ARTISAN_RATE = 0.465;
 
   /**
-   * 실패 한 번에 쌓이는 장인의 기운(0.01%p 단위, 버림): 시도 최종 성공률(%) × 0.465를 소수 둘째 자리에서 버린다. 게임 화면 기준(계산 검증 캡처
-   * 10-25: 성공률 3.000% → +1.39%, 3.150% → +1.46%). 부동소수 오차로 정수 경계 바로 밑이 되지 않게 1e-9를 더한다.
+   * 실패 한 번에 쌓이는 장인의 기운(0.01%p 단위, 버림) = floor(시도 최종 성공률(만분율) × 100 ÷ 215), 정확한 십진 계산. 성공률 ÷ 2.15를
+   * 소수 둘째 자리에서 버린 값으로, 인벤 실측 규칙이고 게임 화면 캡처(3.000% → +1.39%, 3.150% → +1.46%)와 같다. 근사 × 0.465는 경계에서
+   * 0.01%p씩 달라지는 성공률이 있어(계산 검증이 도달 가능한 480개 가운데 33개 확인, 예: 6.450% → 3.00%, × 0.465면 2.99%) 쓰지 않는다.
+   * 성공률은 소수 여섯째 자리로 맞춰 부동소수 오차(1950.0000000000002 같은 값)를 지운다.
    */
-  static int artisanGainHundredths(double probability) {
-    return (int) Math.floor(probability * ARTISAN_RATE * 10_000 + 1e-9);
+  static int artisanGainHundredths(double rateBp) {
+    return BigDecimal.valueOf(rateBp)
+        .setScale(6, RoundingMode.HALF_UP)
+        .multiply(BigDecimal.valueOf(100))
+        .divide(BigDecimal.valueOf(215), 0, RoundingMode.DOWN)
+        .intValueExact();
   }
 
   static final int MAX_BONUS_FAILURES = 10;
@@ -191,7 +196,7 @@ public record RefiningPlan(
       if (p90 == 0 && cumulative >= 0.9 - 1e-12) p90 = attempts;
       reach *= 1 - probability;
       if (probability >= 1) break;
-      artisan += artisanGainHundredths(probability) / 10_000.0;
+      artisan += artisanGainHundredths(rateBp) / 10_000.0;
       failures++;
     }
     double goldRate =

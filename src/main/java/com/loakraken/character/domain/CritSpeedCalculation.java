@@ -483,8 +483,14 @@ public final class CritSpeedCalculation {
             scale(totalCrit.min(thornRule.critCap())));
     var targets =
         List.of(
-            target("CRIT_100", CRIT_CAP, totalCrit, nonStatCrit, critStat),
-            target("BLUNT_THORN_OPTIMAL", thornOptimal, totalCrit, nonStatCrit, critStat));
+            target("CRIT_100", CRIT_CAP, totalCrit, nonStatCrit, critStat, input.critPet()),
+            target(
+                "BLUNT_THORN_OPTIMAL",
+                thornOptimal,
+                totalCrit,
+                nonStatCrit,
+                critStat,
+                input.critPet()));
     var crit =
         new Crit(
             critStat,
@@ -1705,14 +1711,25 @@ public final class CritSpeedCalculation {
     return stat;
   }
 
-  private static CritTarget target(
-      String key, BigDecimal targetRate, BigDecimal total, BigDecimal nonStat, Integer critStat) {
+  /**
+   * 필요 치명 스탯. 펫(+160)은 스탯으로 센다: 펫 %를 뺀 스탯 외 합계로 필요한 전체 스탯을 구한 뒤 160을 뺀다(원본처럼 스탯에 더해 한 번 버림 — 지금
+   * 스탯에서 잰 펫 %를 쓰면 필요 스탯에서 버림 경계가 달라 1 차이 날 수 있다).
+   */
+  static CritTarget target(
+      String key,
+      BigDecimal targetRate,
+      BigDecimal total,
+      BigDecimal nonStat,
+      Integer critStat,
+      boolean pet) {
     boolean reached = total.compareTo(targetRate) >= 0;
     if (critStat == null) {
       int additional = statFor(targetRate.subtract(total), CRIT_DIVISOR);
       return new CritTarget(key, scale(targetRate), null, additional, reached);
     }
-    int required = statFor(targetRate.subtract(nonStat), CRIT_DIVISOR);
+    int petStat = pet ? CRIT_PET_STAT : 0;
+    var withoutPet = pet ? nonStat.subtract(petCrit(critStat)) : nonStat;
+    int required = Math.max(0, statFor(targetRate.subtract(withoutPet), CRIT_DIVISOR) - petStat);
     return new CritTarget(
         key, scale(targetRate), required, reached ? 0 : Math.max(0, required - critStat), reached);
   }

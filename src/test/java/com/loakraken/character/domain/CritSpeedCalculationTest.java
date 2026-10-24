@@ -116,6 +116,33 @@ class CritSpeedCalculationTest {
   }
 
   @Test
+  void 펫을_켜면_필요_스탯은_펫_160을_스탯에_더해_버림_경계를_잰다() {
+    // 치명 400, 펫 말고 다른 효과 47.10%, 펫 켬: 지금 스탯에서 잰 펫 %(5.73)로 구하면 1318이지만, 1318 + 160 = 1478은
+    // floor(1478 ÷ 0.2794) = 5289 → 52.89%로 52.90%에 못 미친다. 필요한 내 치명은 1319(1479 − 160), 더 필요한 치명
+    // 919.
+    var other = new BigDecimal("47.10");
+    var nonStat = other.add(CritSpeedCalculation.petCrit(400));
+    var total = nonStat.add(CritSpeedCalculation.critPercent(400));
+    var target =
+        CritSpeedCalculation.target("CRIT_100", new BigDecimal("100"), total, nonStat, 400, true);
+    assertThat(target.requiredCritStat()).isEqualTo(1319);
+    assertThat(target.requiredAdditionalCritStat()).isEqualTo(919);
+    assertThat(CritSpeedCalculation.critPercent(1478)).isEqualByComparingTo("52.89");
+    assertThat(CritSpeedCalculation.critPercent(1479)).isEqualByComparingTo("52.93");
+    // 펫을 끄면 그대로 스탯 외 합계로 구한다.
+    var off =
+        CritSpeedCalculation.target(
+            "CRIT_100",
+            new BigDecimal("100"),
+            other.add(CritSpeedCalculation.critPercent(400)),
+            other,
+            400,
+            false);
+    assertThat(off.requiredCritStat())
+        .isEqualTo(CritSpeedCalculation.statFor(new BigDecimal("52.90"), 0.2794));
+  }
+
+  @Test
   void 신속_스탯별_표는_현재값과_최적값_행을_포함하고_신속_외_출처를_유지한다() {
     var result =
         CritSpeedCalculation.calculate(

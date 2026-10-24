@@ -346,6 +346,32 @@ class SpecUpIntegrationTest {
     org.mockito.Mockito.reset(simulator);
   }
 
+  @Test
+  void 숨결_시세가_없으면_숨결_없이_풀지_않고_PENDING이다() throws Exception {
+    // PM 판정 10-25: 예열 중 숨결 시세만 빠지면 숨결 없는 비용이 최적으로 순위에 들어 비교 기준과 달라진다 — PENDING으로 둔다.
+    stubRefineOk();
+    when(auctions.cachedGems()).thenReturn(gemCells(true));
+    search("스펙업화");
+    marketCache.saveRefiningMaterials(
+        new com.loakraken.market.application.RefiningMaterialScan(
+            Instant.parse("2026-10-12T02:00:00Z"),
+            List.of(
+                material(1, "운명의 파괴석", 100, "152"),
+                material(2, "운명의 돌파석", 1, "4"),
+                material(3, "아비도스 융화 재료", 1, "210"),
+                material(4, "운명의 파편 주머니(소)", 1, "87"),
+                material(5, "운명의 파편 주머니(대)", 1, "219"))),
+        java.time.Duration.ofMinutes(5));
+    var candidates =
+        mapper
+            .readTree(get("/api/v1/characters/spec-up?characterName=" + encode("스펙업화")).body())
+            .at("/data/candidates");
+    var refine = find(candidates, "EQUIPMENT_REFINE:0:21");
+    assertThat(refine.at("/cost/status").asText()).isEqualTo("PENDING");
+    assertThat(refine.at("/cost/code").asText()).isEqualTo("PRICE_PENDING");
+    org.mockito.Mockito.reset(simulator);
+  }
+
   /**
    * 지금 from에서 to까지 업화 무기 재련 기대 비용: 단계마다 회차별 최적 전략(시도마다 숨결·책 선택 — 이 시세표에는 책 값이 없어 숨결만, 업화 18단계까지 골드
    * 20% 할인)의 기대 골드 합(비교 기준 B와 같은 방식). 목록은 기대 수량 × 단가를 더해 올림하므로 1골드 안에서 같다.

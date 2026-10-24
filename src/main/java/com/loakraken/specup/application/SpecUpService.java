@@ -868,11 +868,7 @@ public class SpecUpService {
                   optimalKey(grade, type, rule, goldRate, stagePrices),
                   () ->
                       RefiningOptimal.calculate(
-                          rule,
-                          goldRate,
-                          stagePrices,
-                          rule.breath() != null,
-                          rule.book() != null && stagePrices.containsKey(rule.book().name())))
+                          rule, goldRate, stagePrices, rule.breath() != null, rule.book() != null))
               .orElse(null);
       if (optimal == null) return pending(grade, type, refine, target, unitPrices);
       breath |= optimal.usesBreath();
@@ -934,7 +930,7 @@ public class SpecUpService {
         SpecUpCost.REFINE_PRICE_PENDING);
   }
 
-  /** 단계 계산에 쓰는 재료 1개 값. 기본 재료·파편 값이 하나라도 없으면 null(숨결 값이 없으면 숨결 없이 푼다). */
+  /** 단계 계산에 쓰는 재료 1개 값. 기본 재료·파편·숨결·책(그 단계에 있으면) 값이 하나라도 없으면 null(PENDING). */
   private static java.util.Map<String, BigDecimal> stagePrices(
       RefiningRules.Stage rule, RefiningMaterialPriceService.Prices prices) {
     var map = new java.util.HashMap<String, BigDecimal>();
@@ -949,10 +945,17 @@ public class SpecUpService {
       if (unit == null) return null;
       map.put(RefiningPlan.SHARD, unit);
     }
-    if (rule.breath() != null)
-      prices.unit(rule.breath().name()).ifPresent(unit -> map.put(rule.breath().name(), unit));
-    if (rule.book() != null)
-      prices.unit(rule.book().name()).ifPresent(unit -> map.put(rule.book().name(), unit));
+    // 숨결·책 시세가 없으면 그 선택지 없이 풀지 않고 PENDING이다: 예열 중 숨결 없는 비용이 최적으로 순위에 들면 비교 기준과 달라진다(PM 판정 10-25).
+    for (var auxiliary :
+        new String[] {
+          rule.breath() == null ? null : rule.breath().name(),
+          rule.book() == null ? null : rule.book().name()
+        }) {
+      if (auxiliary == null) continue;
+      var unit = prices.unit(auxiliary).orElse(null);
+      if (unit == null) return null;
+      map.put(auxiliary, unit);
+    }
     return map;
   }
 

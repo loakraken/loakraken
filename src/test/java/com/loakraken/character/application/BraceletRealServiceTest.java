@@ -146,4 +146,25 @@ class BraceletRealServiceTest {
     var empty = KrakenScoreInputMapper.from(MAPPER.readTree("{}"));
     assertThat(SERVICE.compute(result(raw, empty)).reasonCode()).isEqualTo("UNAVAILABLE");
   }
+
+  @Test
+  void 계산식이_알아보지_못하는_팔찌_줄이_있으면_내지_않고_체력_줄은_그대로다() throws IOException {
+    // 코드 리뷰 10-25: 알아보지 못한 줄은 배율 1로 지나가 효율이 낮게 나왔다. 실제 원문 33명에서 그런 줄은 체력 +N뿐(효과 없음).
+    var raw = read("l01").path("raw");
+    var base = SERVICE.compute(result(raw, KrakenScoreInputMapper.from(raw)));
+    var withVitality = KrakenScoreInputMapper.from(raw);
+    ((tools.jackson.databind.node.ArrayNode)
+            withVitality.path("armory").path("accessory").path("bangle").path("option"))
+        .add("체력+3500");
+    var vitality = SERVICE.compute(result(raw, withVitality));
+    assertThat(vitality.status()).isEqualTo(BraceletRealEfficiency.Status.OK);
+    assertThat(vitality.percent()).isEqualByComparingTo(base.percent());
+    var withUnknown = KrakenScoreInputMapper.from(raw);
+    ((tools.jackson.databind.node.ArrayNode)
+            withUnknown.path("armory").path("accessory").path("bangle").path("option"))
+        .add("알 수 없는 새 효과가 3% 증가한다.");
+    var unknown = SERVICE.compute(result(raw, withUnknown));
+    assertThat(unknown.reasonCode()).isEqualTo("UNAVAILABLE");
+    assertThat(unknown.percent()).isNull();
+  }
 }

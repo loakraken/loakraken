@@ -186,19 +186,21 @@ class KrakenScoreServiceTest {
         MAPPER.readTree(
             new ClassPathResource("kraken-score/l01.json")
                 .getContentAsString(StandardCharsets.UTF_8));
-    for (var bad : new String[] {"null", "\"?\"", "remove"}) {
-      var raw = doc.path("raw").deepCopy();
-      for (var point : raw.path("ArkPassive").path("Points"))
-        if ("진화".equals(point.path("Name").asString(""))) {
-          var node = (tools.jackson.databind.node.ObjectNode) point;
-          if (bad.equals("remove")) node.remove("Value");
-          else node.set("Value", MAPPER.readTree(bad));
-        }
-      var score = service.score(withInput(KrakenScoreInputMapper.from(raw)));
-      assertThat(score.status()).as(bad).isEqualTo(KrakenScoreService.Status.UNSUPPORTED);
-      assertThat(score.reason()).as(bad).isEqualTo(KrakenScoreService.Reason.SCORE_UNAVAILABLE);
-      assertThat(score.tier()).as(bad).isNull();
-    }
+    // 깨달음·도약 포인트도 같은 조건(코드 리뷰 10-25 P2).
+    for (var tree : new String[] {"진화", "깨달음", "도약"})
+      for (var bad : new String[] {"null", "\"?\"", "remove"}) {
+        var raw = doc.path("raw").deepCopy();
+        for (var point : raw.path("ArkPassive").path("Points"))
+          if (tree.equals(point.path("Name").asString(""))) {
+            var node = (tools.jackson.databind.node.ObjectNode) point;
+            if (bad.equals("remove")) node.remove("Value");
+            else node.set("Value", MAPPER.readTree(bad));
+          }
+        var score = service.score(withInput(KrakenScoreInputMapper.from(raw)));
+        assertThat(score.status()).as(bad).isEqualTo(KrakenScoreService.Status.UNSUPPORTED);
+        assertThat(score.reason()).as(bad).isEqualTo(KrakenScoreService.Reason.SCORE_UNAVAILABLE);
+        assertThat(score.tier()).as(bad).isNull();
+      }
   }
 
   private static JsonNode fixtureInput(String id) throws IOException {

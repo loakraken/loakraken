@@ -227,7 +227,8 @@ public interface StatsPort {
       long characterCount,
       long point,
       long maxPoint,
-      Instant observedAt) {}
+      Instant observedAt,
+      String imageUrl) {}
 
   record CollectiblePage(long total, List<CollectibleRow> rows) {}
 
@@ -297,7 +298,8 @@ public interface StatsPort {
       BigDecimal combatPower,
       long characterCount,
       long usedCharacters,
-      BigDecimal score) {}
+      BigDecimal score,
+      String imageUrl) {}
 
   /** excluded: COMBAT_POWER에서 전투력 관측 누락으로 뺀 원정대 수(다른 기준은 0). */
   record RosterPage(long total, long excluded, List<RosterRow> rows) {}

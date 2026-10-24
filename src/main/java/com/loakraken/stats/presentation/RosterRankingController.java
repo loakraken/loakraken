@@ -126,7 +126,8 @@ public class RosterRankingController {
                           row.characterCount(),
                           row.usedCharacters(),
                           row.value(),
-                          row.composition().stream().map(RosterMemberResponse::from).toList()))
+                          row.composition().stream().map(RosterMemberResponse::from).toList(),
+                          row.imageUrl()))
               .toList());
     }
   }
@@ -148,7 +149,9 @@ public class RosterRankingController {
               example = "1712.50")
           BigDecimal value,
       @Schema(description = "기준 상위 최대 6명(값이 있는 공개 캐릭터만, 순서대로). ROSTER_LEVEL이면 아이템 레벨 상위")
-          List<RosterMemberResponse> composition) {}
+          List<RosterMemberResponse> composition,
+      @NullableResponse @Schema(description = "대표 캐릭터 " + StatsResponses.IMAGE_URL)
+          String imageUrl) {}
 
   public record RosterMemberResponse(
       String characterName,

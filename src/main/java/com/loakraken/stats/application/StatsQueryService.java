@@ -553,7 +553,8 @@ public class StatsQueryService {
                               row.point(),
                               row.maxPoint(),
                               row.observedAt(),
-                              types.getOrDefault(row.rosterKey(), List.of())))
+                              types.getOrDefault(row.rosterKey(), List.of()),
+                              row.imageUrl()))
                   .toList());
         });
   }
@@ -606,7 +607,8 @@ public class StatsQueryService {
                               row.characterCount(),
                               row.usedCharacters(),
                               row.score().setScale(2, RoundingMode.HALF_UP),
-                              composition.getOrDefault(row.rosterKey(), List.of())))
+                              composition.getOrDefault(row.rosterKey(), List.of()),
+                              row.imageUrl()))
                   .toList());
         });
   }
@@ -1359,7 +1361,8 @@ public class StatsQueryService {
       long point,
       long maxPoint,
       Instant observedAt,
-      List<StatsPort.CollectibleType> types) {}
+      List<StatsPort.CollectibleType> types,
+      String imageUrl) {}
 
   /** 원정대 랭킹 결과(#297). basis·aggregate는 응답에서 문자열. */
   public record RosterRankingResult(
@@ -1389,7 +1392,8 @@ public class StatsQueryService {
       long characterCount,
       long usedCharacters,
       BigDecimal value,
-      List<StatsPort.RosterMember> composition) {}
+      List<StatsPort.RosterMember> composition,
+      String imageUrl) {}
 
   /** 캐릭터 기준 수집품 순위 결과(#303). reason이 있으면 rank·값은 null. */
   public record CollectibleStandingResult(

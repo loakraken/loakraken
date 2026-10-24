@@ -373,6 +373,28 @@ class CritSpeedCalculationTest {
   }
 
   @Test
+  void 켠_치명타_피해_토글은_치명타_피해_합계에_들어간다() {
+    // 코드 리뷰 10-25: 켠 토글(가정 출처)이 치명타 피해 합계에 반영되지 않았다.
+    var nodes =
+        List.of(
+            node(
+                "깨달음 1티어 단련 Lv.1",
+                "우산 스킬 사용 후 치명타 적중률이 8.0초간 2.0% 증가한다. 기상 스킬 사용 후 치명타 피해량이 8.0초간 8.0% 증가한다. 단, 두 효과는 동시에 적용되지 않는다."));
+    var off =
+        CritSpeedCalculation.calculate(profile("576", "77"), loadout(nodes), Assumptions.NONE);
+    var on =
+        CritSpeedCalculation.calculate(
+            profile("576", "77"),
+            loadout(nodes),
+            new Assumptions(
+                false, false, 0, null, null, null, null, null, true, Map.of("단련 치명타 피해", true)));
+    assertThat(off.crit().damage().assumed()).isZero();
+    assertThat(on.crit().damage().assumed()).isEqualByComparingTo("8");
+    assertThat(on.crit().damage().total())
+        .isEqualByComparingTo(off.crit().damage().total().add(new BigDecimal("8")));
+  }
+
+  @Test
   void 팔찌와_가정_시너지_펫을_분리해_더하고_원문이_없으면_계수로_환산한다() {
     var bracelet =
         new CharacterLoadout.Equipment(

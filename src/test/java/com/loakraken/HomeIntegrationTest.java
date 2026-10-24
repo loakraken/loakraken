@@ -89,10 +89,28 @@ class HomeIntegrationTest {
     assertThat(json.at("/data/goldIslandDays/0/date").asText()).isEqualTo(later.toString());
     assertThat(json.at("/data/goldIslandDays/0/islands/0").asText()).isEqualTo("라일라이 아일랜드");
     assertThat(json.at("/data/weekly").size()).isEqualTo(2);
+    // 주간 종류(#643): 덮는 날짜마다 한 줄. 오늘 필드 보스 항목은 목록에 있지만 오늘 회차가 없어 거짓.
+    assertThat(json.at("/data/weekKinds").toString())
+        .isEqualTo(
+            "[{\"date\":\""
+                + today
+                + "\",\"chaosGate\":true,\"fieldBoss\":false},{\"date\":\""
+                + later
+                + "\",\"chaosGate\":false,\"fieldBoss\":true}]");
 
     var next = mapper.readTree(get("/api/v1/home/schedule?date=" + later).body());
     assertThat(next.at("/data/adventureIslands/0/rewardKinds").toString()).isEqualTo("[\"GOLD\"]");
     assertThat(next.at("/data/others").size()).isZero();
+    // 요청 날짜와 상관없이 같은 주간 종류이고, 날짜별 응답의 그 날 회차와 맞는다.
+    assertThat(next.at("/data/weekKinds")).isEqualTo(json.at("/data/weekKinds"));
+    for (var day : json.at("/data/weekKinds")) {
+      var daily =
+          mapper.readTree(get("/api/v1/home/schedule?date=" + day.path("date").asText()).body());
+      assertThat(day.path("chaosGate").asBoolean())
+          .isEqualTo(hasRound(daily.at("/data/chaosGates")));
+      assertThat(day.path("fieldBoss").asBoolean())
+          .isEqualTo(hasRound(daily.at("/data/fieldBosses")));
+    }
     verify(source, times(1)).fetchCalendar();
     ApiContractFixture.write("home-schedule.json", response.body());
   }
@@ -173,5 +191,10 @@ class HomeIntegrationTest {
               .build(),
           HttpResponse.BodyHandlers.ofString());
     }
+  }
+
+  private static boolean hasRound(tools.jackson.databind.JsonNode items) {
+    for (var item : items) if (!item.path("startTimes").isEmpty()) return true;
+    return false;
   }
 }

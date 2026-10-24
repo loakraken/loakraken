@@ -102,6 +102,32 @@ class GameCalendarTest {
     assertThat(RewardKind.of(null)).isNull();
   }
 
+  @Test
+  void 주간_종류는_덮는_날짜마다_한_줄이고_그_날_회차가_있을_때만_참이다() {
+    var wed = LocalDate.parse("2026-10-21");
+    var calendar =
+        new GameCalendar(
+            List.of(
+                island("라일라이 아일랜드", wed),
+                // 같은 항목이 다른 날 회차만 가지면 그 날은 거짓(목록에 있어도).
+                new GameCalendar.Entry(
+                    "카오스게이트",
+                    "애니츠",
+                    null,
+                    1580,
+                    List.of(at(wed, 11), at(wed.plusDays(3), 11)),
+                    List.of()),
+                new GameCalendar.Entry(
+                    "필드보스", "세베크 아툰", null, 1460, List.of(at(wed.plusDays(3), 21)), List.of())));
+    assertThat(calendar.weekKinds())
+        .containsExactly(
+            new GameCalendar.DayKinds(wed, true, false),
+            new GameCalendar.DayKinds(wed.plusDays(1), false, false),
+            new GameCalendar.DayKinds(wed.plusDays(2), false, false),
+            new GameCalendar.DayKinds(wed.plusDays(3), true, true));
+    assertThat(new GameCalendar(List.of()).weekKinds()).isEmpty();
+  }
+
   private static GameCalendar.Entry island(String name, LocalDate date) {
     return new GameCalendar.Entry("모험 섬", name, null, 635, List.of(at(date, 19)), List.of());
   }

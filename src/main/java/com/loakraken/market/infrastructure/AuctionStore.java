@@ -20,14 +20,15 @@ import tools.jackson.core.JacksonException;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * 경매장 캐시·일별 기록. 칸 캐시 `market:v1:auction-cell:{키}`(3분), 매물
- * `market:v1:auction-listings:{키}:{페이지}`(1분), 일별 최저가는 Postgres `auction_price_daily`. 캐시 장애는 조회를 막지
- * 않는다.
+ * 경매장 캐시·일별 기록. 칸 캐시 `market:v1:auction-cell:{키}`(3분), 보석 칸 마지막 값 `market:v1:auction-last:{키}`(만료
+ * 없음), 매물 `market:v1:auction-listings:{키}:{페이지}`(1분), 일별 최저가는 Postgres `auction_price_daily`. 캐시
+ * 장애는 조회를 막지 않는다.
  */
 @Component
 class AuctionStore implements AuctionPort {
   static final String CELL_PREFIX = "market:v1:auction-cell:";
   static final String LISTINGS_PREFIX = "market:v1:auction-listings:";
+  static final String LAST_PREFIX = "market:v1:auction-last:";
   static final String GEM_FILTER_QUOTA_PREFIX = "market:v1:auction-gem-filter-quota:";
   static final Duration CELL_TTL = Duration.ofMinutes(3);
   static final Duration LISTINGS_TTL = Duration.ofMinutes(1);
@@ -52,6 +53,21 @@ class AuctionStore implements AuctionPort {
   @Override
   public void saveCell(String key, AuctionCell cell) {
     write(CELL_PREFIX + key, cell, CELL_TTL);
+  }
+
+  @Override
+  public Optional<AuctionCell> findLastCell(String key) {
+    return read(LAST_PREFIX + key, AuctionCell.class);
+  }
+
+  /** 만료 없이 둔다: volatile-lru에서 만료 키만 지워지므로 메모리가 모자라도 마지막 값은 남는다. */
+  @Override
+  public void saveLastCell(String key, AuctionCell cell) {
+    try {
+      redis.opsForValue().set(LAST_PREFIX + key, mapper.writeValueAsString(cell));
+    } catch (DataAccessException | JacksonException exception) {
+      log.warn("경매장 마지막 값을 쓰지 못했습니다. 예외 유형={}", exception.getClass().getSimpleName());
+    }
   }
 
   /**

@@ -163,11 +163,48 @@ class MarketAuctionServiceTest {
     assertThat(MarketAuctionService.changeRate(new AuctionCell(110L, 1, NOW), null)).isNull();
   }
 
+  @Test
+  void 칸이_만료돼_채우지_못하면_마지막_관측_값을_그_시각과_함께_준다() {
+    // PM 총괄 승인 10-25: 3분 칸이 비었을 때 '집계 중' 대신 마지막 관측 값(관측 시각 그대로)을 보인다.
+    service.gems();
+    assertThat(port.last).hasSize(5);
+    port.cells.clear(); // 3분 칸 만료
+    gate = gate(10); // 사용자 몫이 남지 않아 이번 요청은 채우지 못함
+    service = service();
+    var cells = service.gems();
+    assertThat(port.searches).isEqualTo(5);
+    var stale = cells.stream().filter(MarketAuctionService.GemCell::stale).toList();
+    assertThat(stale)
+        .hasSize(5)
+        .allMatch(cell -> cell.status() == MarketAuctionService.Status.READY)
+        .allMatch(cell -> cell.cell().observedAt().equals(NOW));
+    assertThat(cells.stream().filter(cell -> cell.status() == MarketAuctionService.Status.PENDING))
+        .hasSize(15);
+    // 장신구 표 칸은 채워도 마지막 값을 남기지 않는다(키가 품질 조건마다 늘 수 있어서).
+    gate = gate(90);
+    service = service();
+    int before = port.searches;
+    service.accessories(Grade.ANCIENT, Role.DEALER, null);
+    assertThat(port.searches).isGreaterThan(before);
+    assertThat(port.last).hasSize(5);
+  }
+
   private final class FakeAuctions implements AuctionPort, AuctionSearchPort {
     int searches;
     final Map<String, AuctionCell> cells = new HashMap<>();
     final Map<String, Long> previous = new HashMap<>();
     final Map<String, AuctionCell> daily = new HashMap<>();
+    final Map<String, AuctionCell> last = new HashMap<>();
+
+    @Override
+    public Optional<AuctionCell> findLastCell(String key) {
+      return Optional.ofNullable(last.get(key));
+    }
+
+    @Override
+    public void saveLastCell(String key, AuctionCell cell) {
+      last.put(key, cell);
+    }
 
     @Override
     public AuctionPage search(AuctionQuery query) {

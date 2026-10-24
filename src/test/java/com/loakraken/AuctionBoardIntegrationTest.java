@@ -93,8 +93,17 @@ class AuctionBoardIntegrationTest {
     assertThat(first.path("previousDayChangeRate").decimalValue()).isEqualByComparingTo("25.0");
     assertThat(data.at("/cells/1/previousDayChangeRate").isNull()).isTrue();
     assertThat(first.path("status").asText()).isEqualTo("READY");
+    assertThat(first.path("stale").asBoolean(true)).isFalse();
     ApiContractFixture.write("auction-gems.json", get("/api/v1/markets/auctions/gems").body());
     verify(search, times(20)).search(any());
+    // 3분 칸만 지우면(만료) 다음 요청은 앞 5칸만 다시 채우고, 나머지는 마지막 관측 값을 stale=true로 준다(관측 시각 그대로).
+    var observed = data.at("/cells/10/observedAt").asText();
+    redis.delete(redis.keys("market:v1:auction-cell:*"));
+    var again = mapper.readTree(get("/api/v1/markets/auctions/gems").body()).at("/data/cells/10");
+    assertThat(again.path("status").asText()).isEqualTo("READY");
+    assertThat(again.path("stale").asBoolean()).isTrue();
+    assertThat(again.path("observedAt").asText()).isEqualTo(observed);
+    verify(search, org.mockito.Mockito.atMost(25)).search(any());
     assertThat(
             jdbc.sql("SELECT COUNT(*) FROM auction_price_daily WHERE kst_date = :d")
                 .param("d", LocalDate.now(ZoneId.of("Asia/Seoul")))

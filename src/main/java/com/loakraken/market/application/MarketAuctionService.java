@@ -107,14 +107,21 @@ public class MarketAuctionService {
     var result = new ArrayList<GemCell>();
     for (var spec : cells.values()) {
       var value = filled.get(spec.query().key());
+      // 3분 칸이 비었고 이번에 채우지 못했으면 마지막 관측 값을 그 시각과 함께 보인다(PENDING 대신, PM 총괄 승인 10-25).
+      var last =
+          value.cell() == null ? auctions.findLastCell(spec.query().key()).orElse(null) : null;
+      var cell = value.cell() != null ? value.cell() : last;
       result.add(
           new GemCell(
               spec.kind(),
               spec.level(),
               AuctionCatalog.gemName(spec.kind(), spec.level()),
-              value.cell(),
-              value.previousDayChangeRate(),
-              value.cell() == null ? Status.PENDING : Status.READY));
+              cell,
+              last != null
+                  ? changeRate(last, previousOf(spec.query().key()))
+                  : value.previousDayChangeRate(),
+              cell == null ? Status.PENDING : Status.READY,
+              last != null));
     }
     return result;
   }
@@ -237,8 +244,28 @@ public class MarketAuctionService {
     return result;
   }
 
+  private Long previousOf(String key) {
+    try {
+      return auctions.previousDay(List.of(key), LocalDate.now(clock.withZone(KST))).get(key);
+    } catch (DataAccessException exception) {
+      return null;
+    }
+  }
+
+  /** 보석 시세 표 20칸의 키(마지막 값을 남기는 칸). */
+  private static final java.util.Set<String> GEM_KEYS = gemKeys();
+
+  private static java.util.Set<String> gemKeys() {
+    var keys = new java.util.HashSet<String>();
+    for (var kind : AuctionCatalog.GEM_KINDS)
+      for (int level = 1; level <= AuctionCatalog.MAX_GEM_LEVEL; level++)
+        keys.add(gemQuery(kind, level, 1).key());
+    return java.util.Set.copyOf(keys);
+  }
+
   private void remember(String key, AuctionCell cell) {
     auctions.saveCell(key, cell);
+    if (GEM_KEYS.contains(key)) auctions.saveLastCell(key, cell);
     if (cell.minBuyPrice() == null) return;
     dailyWriter.execute(() -> recordDaily(key, cell));
   }
@@ -325,13 +352,25 @@ public class MarketAuctionService {
   private record Filled(AuctionCell cell, BigDecimal previousDayChangeRate) {}
 
   /** cell이 null이면 아직 관측하지 못한 칸(PENDING)이다. */
+  /** stale이면 cell은 3분 칸이 비어 대신 보이는 마지막 관측 값이다(observedAt이 그 시각). */
   public record GemCell(
       String kind,
       int level,
       String itemName,
       AuctionCell cell,
       BigDecimal previousDayChangeRate,
-      Status status) {}
+      Status status,
+      boolean stale) {
+    public GemCell(
+        String kind,
+        int level,
+        String itemName,
+        AuctionCell cell,
+        BigDecimal previousDayChangeRate,
+        Status status) {
+      this(kind, level, itemName, cell, previousDayChangeRate, status, false);
+    }
+  }
 
   public record AccessoryCell(
       List<Level> levels,

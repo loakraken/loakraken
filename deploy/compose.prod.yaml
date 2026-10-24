@@ -151,7 +151,7 @@ services:
       # 기능 플래그(#214): 비우면 꺼짐. 스테이징은 치명 계산을 켜고(web 치적 도구가 보임), 영수증·젬 가공은 검증 때만 켠다.
       CRIT_SPEED_ENABLED: ${CRIT_SPEED_ENABLED:-false}
       GEM_ENABLED: ${GEM_ENABLED:-false}
-      # 팔찌·젬 효율 랭킹을 캐릭터 카드의 실 효율로 센다(#647). 켤 때 GEM_ENABLED·web EFFICIENCY_RANKING과 함께.
+      # 팔찌·젬 효율 랭킹을 캐릭터 카드의 실 효율로 센다(#647). 켤 때 web EFFICIENCY_RANKING과 함께(GEM_ENABLED는 보석 가공 API라 따로).
       STATS_EFFICIENCYRANKING_REAL: ${STATS_EFFICIENCYRANKING_REAL:-false}
       RECEIPT_ENABLED: ${RECEIPT_ENABLED:-false}
       # 전투력 시뮬레이터(#239): 보석·재련·각인 계산식 확정 전까지 운영 꺼짐(PM 총괄 10-10).

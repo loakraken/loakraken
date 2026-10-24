@@ -305,8 +305,12 @@ public final class CritSpeedCalculation {
       BigDecimal critStatPerPercent,
       CritDamage damage) {}
 
-  /** 치명타 피해(%). base 200 + 관측 출처 합(observed). 스킬·조건 한정 문구는 더하지 않는다. */
-  public record CritDamage(BigDecimal base, BigDecimal observed, BigDecimal total) {}
+  /**
+   * 치명타 피해(%). total = base 200 + 관측 출처 합(observed) + 가정 출처 합(assumed, 켠 토글 등). 스킬·조건 한정 문구는 더하지
+   * 않는다.
+   */
+  public record CritDamage(
+      BigDecimal base, BigDecimal observed, BigDecimal total, BigDecimal assumed) {}
 
   public record SpeedAxis(
       BigDecimal observed, BigDecimal assumed, BigDecimal total, BigDecimal effective) {}
@@ -501,10 +505,15 @@ public final class CritSpeedCalculation {
             thorn,
             targets,
             CRIT_STAT_PER_PERCENT,
+            // 켠 치명타 피해 토글(단련 등 가정 출처)도 합계에 넣는다(코드 리뷰 10-25: 토글이 합계에 반영되지 않았다).
             new CritDamage(
                 scale(BASE_CRIT_DAMAGE),
                 scale(sum(sources, Kind.OBSERVED, Axis.CRIT_DAMAGE)),
-                scale(BASE_CRIT_DAMAGE.add(sum(sources, Kind.OBSERVED, Axis.CRIT_DAMAGE)))));
+                scale(
+                    BASE_CRIT_DAMAGE
+                        .add(sum(sources, Kind.OBSERVED, Axis.CRIT_DAMAGE))
+                        .add(sum(sources, Kind.ASSUMED, Axis.CRIT_DAMAGE))),
+                scale(sum(sources, Kind.ASSUMED, Axis.CRIT_DAMAGE))));
 
     var attack = axis(sources, Axis.ATTACK_SPEED);
     var move = axis(sources, Axis.MOVE_SPEED);
@@ -550,7 +559,10 @@ public final class CritSpeedCalculation {
             loadout,
             observedCrit.add(classStateCrit),
             equippedThorn == null ? CRIT_CAP : thornRule.critCap(),
-            BASE_CRIT_DAMAGE.add(sum(sources, Kind.OBSERVED, Axis.CRIT_DAMAGE)),
+            // 스킬별 기본 치명타 피해도 치명타 적중률처럼 관측 + 직업 상태 가정.
+            BASE_CRIT_DAMAGE
+                .add(sum(sources, Kind.OBSERVED, Axis.CRIT_DAMAGE))
+                .add(classState(sources, Axis.CRIT_DAMAGE)),
             limitations,
             skillBonuses,
             input,
@@ -662,6 +674,10 @@ public final class CritSpeedCalculation {
     return critFromStat;
   }
 
+  static final String STONE_ATTACK_SPEED_DOWN = "공격속도 감소";
+  static final String STONE_MOVE_SPEED_DOWN = "이동속도 감소";
+  static final BigDecimal STONE_SPEED_DOWN_PER_LEVEL = BigDecimal.valueOf(2);
+
   private static void engravingSources(
       CharacterLoadout loadout, List<Source> sources, List<String> conditional) {
     if (loadout.engravings() == null) return;
@@ -681,6 +697,27 @@ public final class CritSpeedCalculation {
     for (var equipment : loadout.equipment()) {
       if (equipment == null || equipment.detail() == null) continue;
       var detail = equipment.detail();
+      // 어빌리티 스톤 감소 각인 "공격속도 감소 Lv.N"·"이동속도 감소 Lv.N": 레벨당 2% 감소(비교 기준 원본 모듈 78512, 계산 검증 실제 경로
+      // 10-25).
+      for (var stone : detail.stoneEngravings()) {
+        if (stone == null || stone.name() == null || stone.level() == null || stone.level() <= 0)
+          continue;
+        var name = stone.name().strip();
+        var axis =
+            STONE_ATTACK_SPEED_DOWN.equals(name)
+                ? Axis.ATTACK_SPEED
+                : STONE_MOVE_SPEED_DOWN.equals(name) ? Axis.MOVE_SPEED : null;
+        if (axis == null) continue;
+        var label = name + " Lv." + stone.level();
+        sources.add(
+            new Source(
+                Kind.OBSERVED,
+                Category.ENGRAVING,
+                axis,
+                "스톤 " + label,
+                STONE_SPEED_DOWN_PER_LEVEL.multiply(BigDecimal.valueOf(stone.level())).negate(),
+                label));
+      }
       for (var polish : detail.polishEffects()) {
         if (polish == null || polish.name() == null) continue;
         String text = polish.name() + " " + (polish.value() == null ? "" : polish.value());
@@ -718,6 +755,13 @@ public final class CritSpeedCalculation {
         scan(Category.CARD, effect.name(), effect.description(), sources, false);
       }
     }
+  }
+
+  private static BigDecimal classState(List<Source> sources, Axis axis) {
+    return sources.stream()
+        .filter(source -> source.axis() == axis && source.classState())
+        .map(Source::value)
+        .reduce(BigDecimal.ZERO, BigDecimal::add);
   }
 
   private static void assumptionSources(Assumptions input, Integer critStat, List<Source> sources) {

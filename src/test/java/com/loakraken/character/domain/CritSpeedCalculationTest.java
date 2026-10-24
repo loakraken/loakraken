@@ -143,6 +143,53 @@ class CritSpeedCalculationTest {
   }
 
   @Test
+  void 스톤_감소_각인은_레벨당_공격_이동_속도를_2퍼센트씩_뺀다() {
+    // 코드 리뷰·계산 검증 10-25: 비교 기준 원본(모듈 78512)은 "공격속도 감소 Lv.N"·"이동속도 감소 Lv.N"을 2 × N% 뺀다.
+    var assumptions =
+        new Assumptions(
+            false, false, 0, null, null, null, new BigDecimal("14"), new BigDecimal("14"));
+    var base = loadout(List.of());
+    var stone =
+        new CharacterLoadout.Equipment(
+            "어빌리티 스톤",
+            "준엄한 비상의 돌",
+            null,
+            "고대",
+            new CharacterLoadout.EquipmentDetail(
+                null,
+                null,
+                null,
+                4,
+                null,
+                List.of(),
+                List.of(
+                    new CharacterLoadout.StoneEngraving("원한", 3),
+                    new CharacterLoadout.StoneEngraving("공격속도 감소", 2),
+                    new CharacterLoadout.StoneEngraving("이동속도 감소", 1)),
+                List.of(),
+                List.of()));
+    var equipment = new java.util.ArrayList<>(base.equipment());
+    equipment.add(stone);
+    var withStone =
+        new CharacterLoadout(
+            equipment,
+            base.engravings(),
+            base.gems(),
+            base.cards(),
+            base.arkPassive(),
+            base.arkGrid(),
+            base.skills(),
+            base.avatars(),
+            base.collectibles());
+    var without = CritSpeedCalculation.calculate(profile("576", "77"), base, assumptions).speed();
+    var with = CritSpeedCalculation.calculate(profile("576", "77"), withStone, assumptions).speed();
+    assertThat(with.attack().total())
+        .isEqualByComparingTo(without.attack().total().subtract(new BigDecimal("4")));
+    assertThat(with.move().total())
+        .isEqualByComparingTo(without.move().total().subtract(new BigDecimal("2")));
+  }
+
+  @Test
   void 신속_스탯별_표는_현재값과_최적값_행을_포함하고_신속_외_출처를_유지한다() {
     var result =
         CritSpeedCalculation.calculate(
@@ -323,6 +370,28 @@ class CritSpeedCalculationTest {
                 false, false, 0, null, null, null, null, null, true, Map.of("달의 소리", true)));
     assertThat(on.speed().attack().total()).isEqualByComparingTo("15.32");
     assertThat(on.speed().attack().assumed()).isEqualByComparingTo("10");
+  }
+
+  @Test
+  void 켠_치명타_피해_토글은_치명타_피해_합계에_들어간다() {
+    // 코드 리뷰 10-25: 켠 토글(가정 출처)이 치명타 피해 합계에 반영되지 않았다.
+    var nodes =
+        List.of(
+            node(
+                "깨달음 1티어 단련 Lv.1",
+                "우산 스킬 사용 후 치명타 적중률이 8.0초간 2.0% 증가한다. 기상 스킬 사용 후 치명타 피해량이 8.0초간 8.0% 증가한다. 단, 두 효과는 동시에 적용되지 않는다."));
+    var off =
+        CritSpeedCalculation.calculate(profile("576", "77"), loadout(nodes), Assumptions.NONE);
+    var on =
+        CritSpeedCalculation.calculate(
+            profile("576", "77"),
+            loadout(nodes),
+            new Assumptions(
+                false, false, 0, null, null, null, null, null, true, Map.of("단련 치명타 피해", true)));
+    assertThat(off.crit().damage().assumed()).isZero();
+    assertThat(on.crit().damage().assumed()).isEqualByComparingTo("8");
+    assertThat(on.crit().damage().total())
+        .isEqualByComparingTo(off.crit().damage().total().add(new BigDecimal("8")));
   }
 
   @Test

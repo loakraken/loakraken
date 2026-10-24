@@ -67,7 +67,10 @@ public record CritSpeedResponse(
                 .toList(),
             crit.critStatPerPercent(),
             new CritSpeedCritDamageResponse(
-                crit.damage().base(), crit.damage().observed(), crit.damage().total())),
+                crit.damage().base(),
+                crit.damage().observed(),
+                crit.damage().total(),
+                crit.damage().assumed())),
         new CritSpeedSpeedResponse(
             speed.swiftnessStat(),
             speed.cap(),
@@ -212,7 +215,8 @@ public record CritSpeedResponse(
   public record CritSpeedCritDamageResponse(
       @Schema(description = "기본 치명타 피해(200)") BigDecimal base,
       @Schema(description = "관측 출처 합") BigDecimal observed,
-      @Schema(description = "base + observed") BigDecimal total) {}
+      @Schema(description = "base + observed + assumed(켠 토글 등 가정 출처)") BigDecimal total,
+      @Schema(description = "가정 출처 합(켠 치명타 피해 토글 등, 없으면 0)") BigDecimal assumed) {}
 
   public record CritSpeedBluntThornResponse(
       @Schema(description = "EQUIPPED_NODE: 장착 노드 공식 문구, REFERENCE_LEVEL_2: 미장착이라 공식 Lv.2 문구 기준")

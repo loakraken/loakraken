@@ -37,6 +37,20 @@ class SpecUpKrakenOrderTest {
             "none");
   }
 
+  @Test
+  void 소수_둘째_자리는_화면_표기처럼_가장_짧은_십진_표기에서_반올림한다() {
+    // 비교 기준 B는 Intl.NumberFormat(소수 둘째 자리)으로 보인다: 1.005 → 1.01, 0.125 → 0.13, 1.6249999999999998 →
+    // 1.62.
+    assertThat(SpecUpKrakenScore.round2(1.005)).isEqualByComparingTo("1.01");
+    assertThat(SpecUpKrakenScore.round2(0.125)).isEqualByComparingTo("0.13");
+    assertThat(SpecUpKrakenScore.round2(1.625 / 1e5 * 1e5)).isEqualByComparingTo("1.62");
+    // 10만 골드당도 같은 반올림: Δ 1.005 ÷ 10만 골드 × 10만 = 1.005 → 1.01.
+    var tie =
+        candidate("tie", "1.01", SpecUpCost.refineExpected(100_000))
+            .withKraken(new BigDecimal("1.01"), 1.005, SpecUpCost.refineExpected(100_000));
+    assertThat(tie.krakenScorePer100kGold()).isEqualByComparingTo("1.01");
+  }
+
   private static SpecUpService.Candidate candidate(String id, String delta, SpecUpCost cost) {
     return new SpecUpService.Candidate(
             id,

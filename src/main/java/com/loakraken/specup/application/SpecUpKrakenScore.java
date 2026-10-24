@@ -150,7 +150,9 @@ public class SpecUpKrakenScore {
   }
 
   static BigDecimal round2(double value) {
-    return new BigDecimal(value).setScale(2, RoundingMode.HALF_UP);
+    // 비교 기준 B 화면(Intl.NumberFormat 소수 둘째 자리)처럼 배정밀도의 가장 짧은 십진 표기에서 반올림한다: 1.005 → 1.01(이진 정확값
+    // 1.00499…로 반올림하면 1.00).
+    return BigDecimal.valueOf(value).setScale(2, RoundingMode.HALF_UP);
   }
 
   /**

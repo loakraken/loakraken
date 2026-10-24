@@ -131,8 +131,7 @@ public class SpecUpService {
           && cost.exact() != null
           && cost.exact() > 0) {
         double value = raw / cost.exact() * 100_000;
-        if (Double.isFinite(value) && value > 0)
-          per100k = new BigDecimal(value).setScale(2, RoundingMode.HALF_UP);
+        if (Double.isFinite(value) && value > 0) per100k = SpecUpKrakenScore.round2(value);
       }
       return new Candidate(
           id,

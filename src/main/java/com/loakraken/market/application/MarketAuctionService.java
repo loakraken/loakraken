@@ -104,12 +104,16 @@ public class MarketAuctionService {
         cells.put(
             gemQuery(kind, level, 1).key(), new GemSpec(kind, level, gemQuery(kind, level, 1)));
     var filled = fill(cells.values().stream().map(GemSpec::query).toList());
+    // 3분 칸이 비었고 이번에 채우지 못했으면 마지막 관측 값을 그 시각과 함께 보인다(PENDING 대신, PM 총괄 승인 10-25).
+    var lasts = new LinkedHashMap<String, AuctionCell>();
+    for (var key : cells.keySet())
+      if (filled.get(key).cell() == null)
+        auctions.findLastCell(key).ifPresent(cell -> lasts.put(key, cell));
+    var previous = previousOf(List.copyOf(lasts.keySet()));
     var result = new ArrayList<GemCell>();
     for (var spec : cells.values()) {
       var value = filled.get(spec.query().key());
-      // 3분 칸이 비었고 이번에 채우지 못했으면 마지막 관측 값을 그 시각과 함께 보인다(PENDING 대신, PM 총괄 승인 10-25).
-      var last =
-          value.cell() == null ? auctions.findLastCell(spec.query().key()).orElse(null) : null;
+      var last = lasts.get(spec.query().key());
       var cell = value.cell() != null ? value.cell() : last;
       result.add(
           new GemCell(
@@ -118,7 +122,7 @@ public class MarketAuctionService {
               AuctionCatalog.gemName(spec.kind(), spec.level()),
               cell,
               last != null
-                  ? changeRate(last, previousOf(spec.query().key()))
+                  ? changeRate(last, previous.get(spec.query().key()))
                   : value.previousDayChangeRate(),
               cell == null ? Status.PENDING : Status.READY,
               last != null));
@@ -244,11 +248,13 @@ public class MarketAuctionService {
     return result;
   }
 
-  private Long previousOf(String key) {
+  /** 마지막 값으로 보이는 칸들의 전날 마지막 최저가(한 번에). 저장소 장애면 빈 값. */
+  private Map<String, Long> previousOf(List<String> keys) {
+    if (keys.isEmpty()) return Map.of();
     try {
-      return auctions.previousDay(List.of(key), LocalDate.now(clock.withZone(KST))).get(key);
+      return auctions.previousDay(keys, LocalDate.now(clock.withZone(KST)));
     } catch (DataAccessException exception) {
-      return null;
+      return Map.of();
     }
   }
 

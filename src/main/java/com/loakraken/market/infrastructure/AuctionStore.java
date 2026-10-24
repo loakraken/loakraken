@@ -69,8 +69,8 @@ class AuctionStore implements AuctionPort {
   }
 
   /**
-   * 저장된 값보다 새것이거나 같은 시각일 때만 바꾼다(ARGV[1] = 관측 epoch ms). 늦게 끝난 옛 관측이 새 값을 덮으면 3분 칸이 비었을 때 옛 시세가 보였다(코드 리뷰
-   * 10-25).
+   * 저장된 값보다 새것이거나 같은 시각일 때만 바꾼다(ARGV[1] = 관측 epoch ms). 늦게 끝난 옛 관측이 새 값을 덮으면 3분 칸이 비었을 때 옛 시세가
+   * 보였다(코드 리뷰 10-25).
    */
   private static final DefaultRedisScript<Long> LAST_CELL_SET =
       new DefaultRedisScript<>(

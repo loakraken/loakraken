@@ -75,13 +75,15 @@ class RefiningOptimalTest {
             new BigDecimal("14870"));
     double growth = 105_000 * 0.083;
     var withBook = RefiningOptimal.calculate(rule, 1, prices, true, true);
+    // 10-25: 장인의 기운을 게임처럼 0.01%p에서 버린 뒤 값(전에는 0.001%p 반올림으로 616,461.9·숨결 4). 기운이 조금 덜 쌓여
+    // 확정 성공 전 회차가 비싸진다.
     assertThat(withBook.expectedGold() + growth)
-        .isCloseTo(616_461.9, org.assertj.core.data.Offset.offset(1.0));
-    // 20회째(실패 19번 뒤)는 숨결 4개만 쓴다.
-    assertThat(withBook.path().get(19)).isEqualTo("숨결 4");
+        .isCloseTo(616_506.9, org.assertj.core.data.Offset.offset(1.0));
+    // 20회째(실패 19번 뒤)는 숨결 5개만 쓴다.
+    assertThat(withBook.path().get(19)).isEqualTo("숨결 5");
     var withoutBook = RefiningOptimal.calculate(rule, 1, prices, true, false);
     assertThat(withoutBook.expectedGold() + growth)
-        .isCloseTo(652_179.8, org.assertj.core.data.Offset.offset(1.0));
+        .isCloseTo(652_272.6, org.assertj.core.data.Offset.offset(1.0));
     assertThat(withoutBook.usesBook()).isFalse();
   }
 

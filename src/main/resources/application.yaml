@@ -186,6 +186,9 @@ spec-up:
   # 연마 교체 비용의 시세 칸을 요청에서 채우는가(요청마다 최대 5칸, 사용자 요청 한도 안). 꺼져 있으면 캐시된 칸만 쓰고 없으면 비용 미확정.
   polish-price-fill:
     enabled: ${SPEC_UP_POLISH_PRICE_FILL_ENABLED:false}
+  # 팔 보호구(완갑) 재련 줄: 기본 켬. 끄면 목록과 줄 상세에서 완갑 줄을 뺀다(되돌리기 없이 숨김).
+  arm-guard:
+    enabled: ${SPEC_UP_ARM_GUARD_ENABLED:true}
 
 home:
   cache:

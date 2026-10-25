@@ -148,11 +148,13 @@ class MigrateServiceSplitIntegrationTest {
     }
   }
 
+  private static Map<String, Object> compose() throws IOException {
+    return new Yaml().load(Files.readString(COMPOSE, StandardCharsets.UTF_8));
+  }
+
   @SuppressWarnings("unchecked")
   private static Map<String, Object> service(String name) throws IOException {
-    Map<String, Object> compose =
-        new Yaml().load(Files.readString(COMPOSE, StandardCharsets.UTF_8));
-    var services = (Map<String, Object>) compose.get("services");
+    var services = (Map<String, Object>) compose().get("services");
     assertThat(services).containsKey(name);
     return (Map<String, Object>) services.get(name);
   }
@@ -208,6 +210,24 @@ class MigrateServiceSplitIntegrationTest {
         .doesNotContainKey("db_password")
         .containsEntry("db_app_password", "DB_PASSWORD");
     assertThat(secrets(api).values()).noneMatch(target -> target.toLowerCase().contains("flyway"));
+    // 환경 파일·폴더 연결로도 소유 역할 비밀번호(또는 비밀값 폴더 전체)가 api에 들어가지 않는다.
+    var secretFile =
+        String.valueOf(
+            ((Map<String, Object>)
+                    ((Map<String, Object>) compose().get("secrets")).get("db_password"))
+                .get("file"));
+    assertThat(api).doesNotContainKey("env_file").doesNotContainKey("configs");
+    var mounts = new java.util.ArrayList<String>();
+    for (var volume : (List<Object>) api.getOrDefault("volumes", List.of()))
+      mounts.add(
+          volume instanceof Map<?, ?> map
+              ? String.valueOf(map.get("source"))
+              : String.valueOf(volume).split(":")[0]);
+    assertThat(mounts)
+        .noneMatch(source -> source.contains("SECRETS_DIR"))
+        .noneMatch(source -> source.contains("secrets"))
+        .noneMatch(source -> source.contains("db_password"))
+        .noneMatch(source -> secretFile.startsWith(source));
     var dependsOn = (Map<String, Object>) api.get("depends_on");
     assertThat((Map<String, Object>) dependsOn.get("migrate"))
         .containsEntry("condition", "service_completed_successfully");
@@ -289,5 +309,19 @@ class MigrateServiceSplitIntegrationTest {
     assertThat(get(port, "/api/v1/stats/summary").statusCode()).isEqualTo(200);
     var readiness = get(managementPort, "/actuator/health/readiness");
     assertThat(readiness.statusCode()).as(readiness.body()).isEqualTo(200);
+
+    // api 자신의 연결로 스키마를 바꾸거나 마이그레이션 기록을 고치려 하면 막힌다.
+    org.assertj.core.api.Assertions.assertThatThrownBy(
+            () -> jdbc.sql("CREATE TABLE f3b_check (id INT)").update())
+        .rootCause()
+        .hasMessageContaining("permission denied");
+    org.assertj.core.api.Assertions.assertThatThrownBy(
+            () -> jdbc.sql("ALTER TABLE characters ADD COLUMN f3b_check INT").update())
+        .rootCause()
+        .hasMessageContaining("must be owner");
+    org.assertj.core.api.Assertions.assertThatThrownBy(
+            () -> jdbc.sql("DELETE FROM flyway_schema_history").update())
+        .rootCause()
+        .hasMessageContaining("permission denied");
   }
 }

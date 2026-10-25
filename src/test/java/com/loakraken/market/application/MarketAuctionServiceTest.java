@@ -20,6 +20,7 @@ import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -163,11 +164,92 @@ class MarketAuctionServiceTest {
     assertThat(MarketAuctionService.changeRate(new AuctionCell(110L, 1, NOW), null)).isNull();
   }
 
+  @Test
+  void 칸이_만료돼_채우지_못하면_마지막_관측_값을_그_시각과_함께_준다() {
+    // PM 총괄 승인 10-25: 3분 칸이 비었을 때 '집계 중' 대신 마지막 관측 값(관측 시각 그대로)을 보인다.
+    service.gems();
+    assertThat(port.last).hasSize(5);
+    port.cells.clear(); // 3분 칸 만료
+    gate = gate(10); // 사용자 몫이 남지 않아 이번 요청은 채우지 못함
+    service = service();
+    var cells = service.gems();
+    assertThat(port.searches).isEqualTo(5);
+    var stale = cells.stream().filter(MarketAuctionService.GemCell::stale).toList();
+    assertThat(stale)
+        .hasSize(5)
+        .allMatch(cell -> cell.status() == MarketAuctionService.Status.READY)
+        .allMatch(cell -> cell.cell().observedAt().equals(NOW));
+    assertThat(cells.stream().filter(cell -> cell.status() == MarketAuctionService.Status.PENDING))
+        .hasSize(15);
+    // 장신구 표 칸은 채워도 마지막 값을 남기지 않는다(키가 품질 조건마다 늘 수 있어서).
+    gate = gate(90);
+    service = service();
+    int before = port.searches;
+    service.accessories(Grade.ANCIENT, Role.DEALER, null);
+    assertThat(port.searches).isGreaterThan(before);
+    assertThat(port.last).hasSize(5);
+  }
+
+  @Test
+  void 자정을_넘는_요청도_채운_칸과_마지막_값_칸을_같은_전날과_비교한다() {
+    // 코드 리뷰 10-25: 요청 중에 KST 자정을 넘으면 채운 칸과 마지막 값 칸이 서로 다른 '전날'과 비교됐다.
+    service.gems();
+    port.cells.clear();
+    port.previousDays.clear();
+    gate = gate(10);
+    var crossing =
+        new MarketAuctionService(
+            port,
+            port,
+            gate,
+            ticking(Instant.parse("2026-10-09T14:59:59Z"), Instant.parse("2026-10-09T15:00:01Z")),
+            Runnable::run);
+    crossing.gems();
+    assertThat(port.previousDays).hasSize(2).containsOnly(LocalDate.parse("2026-10-09"));
+  }
+
+  /** 처음 한 번은 first, 그 뒤로는 then을 돌려주는 시계(withZone으로 만든 시계도 같은 상태를 쓴다). */
+  private static Clock ticking(Instant first, Instant then) {
+    var used = new java.util.concurrent.atomic.AtomicBoolean();
+    return ticking(first, then, used, ZoneOffset.UTC);
+  }
+
+  private static Clock ticking(
+      Instant first, Instant then, java.util.concurrent.atomic.AtomicBoolean used, ZoneId zone) {
+    return new Clock() {
+      @Override
+      public ZoneId getZone() {
+        return zone;
+      }
+
+      @Override
+      public Clock withZone(ZoneId other) {
+        return ticking(first, then, used, other);
+      }
+
+      @Override
+      public Instant instant() {
+        return used.getAndSet(true) ? then : first;
+      }
+    };
+  }
+
   private final class FakeAuctions implements AuctionPort, AuctionSearchPort {
     int searches;
     final Map<String, AuctionCell> cells = new HashMap<>();
     final Map<String, Long> previous = new HashMap<>();
     final Map<String, AuctionCell> daily = new HashMap<>();
+    final Map<String, AuctionCell> last = new HashMap<>();
+
+    @Override
+    public Optional<AuctionCell> findLastCell(String key) {
+      return Optional.ofNullable(last.get(key));
+    }
+
+    @Override
+    public void saveLastCell(String key, AuctionCell cell) {
+      last.put(key, cell);
+    }
 
     @Override
     public AuctionPage search(AuctionQuery query) {
@@ -211,8 +293,11 @@ class MarketAuctionServiceTest {
       daily.put(key + "@" + day, cell);
     }
 
+    final List<LocalDate> previousDays = new ArrayList<>();
+
     @Override
     public Map<String, Long> previousDay(List<String> keys, LocalDate day) {
+      previousDays.add(day);
       return previous;
     }
   }

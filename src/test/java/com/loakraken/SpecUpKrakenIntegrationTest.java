@@ -223,15 +223,37 @@ class SpecUpKrakenIntegrationTest {
       if (!candidate.path("deltaKrakenScore").isNull()) scored++;
     }
     assertThat(scored).as("Δ서포터 점수가 있는 후보").isPositive();
-    // 서포터 연마 후보: 서포터 옵션 표 규칙의 줄(코드 S…), Δ서포터 점수가 0보다 큰 것만(비교 기준 B와 같음).
-    int polish = 0;
+    // 서포터 연마 후보는 Δ서포터 점수가 0보다 큰 것만(비교 기준 B와 같음). 이 고정 자료는 주옵션이 모두 상이거나, 바꾸면 고정값 무기 공격력 줄이 빠져
+    // 점수가 내려가 후보가 없다.
     for (var candidate : candidates)
-      if ("POLISH".equals(candidate.path("kind").asText())) {
-        polish++;
-        assertThat(candidate.path("id").asText()).matches("POLISH:\\d+:S[LMHNX]+(\\+[BVP][LMH])?");
-        assertThat(candidate.path("deltaKrakenScore").decimalValue()).isPositive();
-      }
-    assertThat(polish).as("서포터 연마 후보").isPositive();
+      assertThat(candidate.path("kind").asText())
+          .as(candidate.path("id").asText())
+          .isNotEqualTo("POLISH");
+  }
+
+  @Test
+  void 서포터_연마_후보는_서포터_옵션_표로_만들고_Δ가_오르는_것만_낸다() throws Exception {
+    when(auctions.cachedGems()).thenReturn(gemCells());
+    var raw =
+        mapper
+            .readTree(
+                new ClassPathResource("kraken-score/l04.json")
+                    .getContentAsString(StandardCharsets.UTF_8))
+            .path("raw");
+    search("l04", raw.path("ArmoryProfile").path("CharacterClassName").asString());
+    var candidates = guide("&sort=KRAKEN&limit=200").path("candidates");
+    var polish = new java.util.LinkedHashMap<String, String>();
+    for (var candidate : candidates)
+      if ("POLISH".equals(candidate.path("kind").asText()))
+        polish.put(
+            candidate.path("id").asText().replaceFirst("^POLISH:\\d+:", ""),
+            candidate.path("deltaKrakenScore").decimalValue().toPlainString());
+    // 목걸이 세레나데 중 → 상, 반지 둘 아군 공격력 강화 중 → 상. 다른 조합은 점수가 오르지 않는다.
+    assertThat(polish)
+        .containsOnly(
+            java.util.Map.entry("SHMH", "80.77"),
+            java.util.Map.entry("SHLH", "84.72"),
+            java.util.Map.entry("SHHL", "84.72"));
   }
 
   @Test

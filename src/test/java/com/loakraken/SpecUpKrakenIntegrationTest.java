@@ -200,6 +200,13 @@ class SpecUpKrakenIntegrationTest {
     var data = mapper.readTree(detail.body()).path("data");
     assertThat(data.at("/refine/fromStage").asInt()).isEqualTo(14);
     assertThat(data.at("/refine/toStage").asInt()).isEqualTo(15);
+    // 여러 단계 줄은 그 줄의 목표 단계(코드 리뷰 10-25: +25 줄 상세가 +15로 보였다).
+    var far =
+        get(
+            "/api/v1/characters/spec-up/candidates/EQUIPMENT_REFINE:16:25?characterName="
+                + encode(NAME));
+    assertThat(far.statusCode()).as(far.body()).isEqualTo(200);
+    assertThat(mapper.readTree(far.body()).at("/data/refine/toStage").asInt()).isEqualTo(25);
     assertThat(data.path("materials").isNull()).isTrue();
     var polishDetail =
         get("/api/v1/characters/spec-up/candidates/POLISH:7:MM?characterName=" + encode(NAME));

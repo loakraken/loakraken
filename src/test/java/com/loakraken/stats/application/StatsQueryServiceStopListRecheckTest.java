@@ -63,7 +63,18 @@ class StatsQueryServiceStopListRecheckTest {
         50,
         List.of(
             new StatsQueryService.EfficiencyRankedCharacter(
-                1, name, "서버", "블레이드", "DEALER", null, null, BigDecimal.TEN, null, null, null)));
+                1,
+                name,
+                "서버",
+                "블레이드",
+                "DEALER",
+                null,
+                null,
+                BigDecimal.TEN,
+                null,
+                null,
+                null,
+                null)));
   }
 
   @BeforeEach
@@ -121,7 +132,8 @@ class StatsQueryServiceStopListRecheckTest {
                     BigDecimal.TEN,
                     List.of(
                         new StatsPort.RosterMember("대표캐", "블레이드", BigDecimal.TEN),
-                        new StatsPort.RosterMember("구성캐", "바드", BigDecimal.ONE)))));
+                        new StatsPort.RosterMember("구성캐", "바드", BigDecimal.ONE)),
+                    null)));
     assertThat(result.listedCharacters())
         .contains(new StatsPort.Named("대표캐", "서버"), new StatsPort.Named("구성캐", "서버"));
   }

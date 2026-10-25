@@ -553,7 +553,8 @@ public class StatsQueryService {
                               row.point(),
                               row.maxPoint(),
                               row.observedAt(),
-                              types.getOrDefault(row.rosterKey(), List.of())))
+                              types.getOrDefault(row.rosterKey(), List.of()),
+                              row.imageUrl()))
                   .toList());
         });
   }
@@ -606,7 +607,8 @@ public class StatsQueryService {
                               row.characterCount(),
                               row.usedCharacters(),
                               row.score().setScale(2, RoundingMode.HALF_UP),
-                              composition.getOrDefault(row.rosterKey(), List.of())))
+                              composition.getOrDefault(row.rosterKey(), List.of()),
+                              row.imageUrl()))
                   .toList());
         });
   }
@@ -863,7 +865,8 @@ public class StatsQueryService {
                             top == null ? null : Tier.of(top),
                             row.bestCombatPower(),
                             row.arkPassive(),
-                            row.estherWeapon());
+                            row.estherWeapon(),
+                            row.imageUrl());
                       })
                   .toList(),
               classEngraving,
@@ -982,7 +985,8 @@ public class StatsQueryService {
                             row.value(),
                             row.observedAt(),
                             top,
-                            top == null ? null : Tier.of(top));
+                            top == null ? null : Tier.of(top),
+                            row.imageUrl());
                       })
                   .toList());
         });
@@ -1331,7 +1335,8 @@ public class StatsQueryService {
       Tier tier,
       BigDecimal bestCombatPower,
       StatsPort.ArkPassiveSummary arkPassive,
-      StatsPort.EstherWeapon estherWeapon) {}
+      StatsPort.EstherWeapon estherWeapon,
+      String imageUrl) {}
 
   /** 수집품 랭킹 결과(#295). unit은 ROSTER·CHARACTER(응답에서는 문자열). */
   public record CollectibleRankingResult(
@@ -1356,7 +1361,8 @@ public class StatsQueryService {
       long point,
       long maxPoint,
       Instant observedAt,
-      List<StatsPort.CollectibleType> types) {}
+      List<StatsPort.CollectibleType> types,
+      String imageUrl) {}
 
   /** 원정대 랭킹 결과(#297). basis·aggregate는 응답에서 문자열. */
   public record RosterRankingResult(
@@ -1393,7 +1399,8 @@ public class StatsQueryService {
       long characterCount,
       long usedCharacters,
       BigDecimal value,
-      List<StatsPort.RosterMember> composition) {}
+      List<StatsPort.RosterMember> composition,
+      String imageUrl) {}
 
   /**
    * 캐릭터 기준 수집품 순위 결과(#303). reason이 있으면 rank·값은 null. 캐시를 쓸 때 그 캐릭터가 처리정지 목록에 들었으면 다시 센다(목록 캐릭터는
@@ -1511,7 +1518,8 @@ public class StatsQueryService {
       BigDecimal value,
       java.time.Instant observedAt,
       BigDecimal topPercent,
-      Tier tier) {}
+      Tier tier,
+      String imageUrl) {}
 
   public record EfficiencyRankingResult(
       Meta meta,

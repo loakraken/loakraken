@@ -247,7 +247,7 @@ class PostgresStatsRepository implements StatsPort {
         FROM roster_collectible GROUP BY roster_key
         HAVING MAX(observed_at) >= :since AND SUM(point) > 0 AND SUM(max_point) > 0),
       members AS (
-        SELECT c.roster_key, c.character_name, c.server_name, c.class_name, c.item_level,
+        SELECT c.roster_key, c.character_name, c.server_name, c.class_name, c.item_level, c.image_url,
           ROW_NUMBER() OVER (PARTITION BY c.roster_key ORDER BY c.item_level DESC NULLS LAST, c.character_name) AS rn,
           COUNT(*) OVER (PARTITION BY c.roster_key) AS member_count
         FROM characters c JOIN totals t ON t.roster_key = c.roster_key
@@ -257,7 +257,7 @@ class PostgresStatsRepository implements StatsPort {
           AND (CAST(:server AS VARCHAR) IS NULL OR c.server_name = CAST(:server AS VARCHAR))),
       ranked AS (
         SELECT t.roster_key, t.point, t.max_point, t.observed_at, m.character_name, m.server_name, m.class_name,
-          m.item_level, m.member_count,
+          m.item_level, m.member_count, m.image_url,
           RANK() OVER (ORDER BY ROUND(t.point * 100.0 / t.max_point, 2) DESC, t.point DESC) AS rank
         FROM totals t JOIN members m ON m.roster_key = t.roster_key AND (:characterUnit OR m.rn = 1))
       """;
@@ -289,7 +289,8 @@ class PostgresStatsRepository implements StatsPort {
                       row.getLong("member_count"),
                       row.getLong("point"),
                       row.getLong("max_point"),
-                      row.getTimestamp("observed_at").toInstant());
+                      row.getTimestamp("observed_at").toInstant(),
+                      row.getString("image_url"));
                 })
             .list();
     long total = totals[0];
@@ -312,7 +313,7 @@ class PostgresStatsRepository implements StatsPort {
       """
       WITH members AS (
         SELECT c.roster_key, c.character_name, c.server_name, c.class_name, c.item_level, c.combat_power,
-          c.expedition_level, (c.combat_power IS NOT NULL
+          c.image_url, c.expedition_level, (c.combat_power IS NOT NULL
             AND GREATEST(c.profile_refreshed_at, c.last_synced_at) >= :since) AS cp_observed
         FROM characters c
         WHERE c.roster_key IS NOT NULL
@@ -361,7 +362,7 @@ class PostgresStatsRepository implements StatsPort {
         SELECT r.*, %SCORE% AS score, %USED% AS used FROM rosters r WHERE NOT (:cpBasis AND r.cp_missing)),
       ranked AS (
         SELECT s.roster_key, s.member_count, s.used, s.score, v.character_name, v.server_name, v.class_name,
-          v.item_level, v.combat_power, RANK() OVER (ORDER BY ROUND(s.score, 2) DESC) AS rank
+          v.item_level, v.combat_power, v.image_url, RANK() OVER (ORDER BY ROUND(s.score, 2) DESC) AS rank
         FROM scored s JOIN valued v ON v.roster_key = s.roster_key AND v.irn = 1
         WHERE s.score IS NOT NULL)
       """;
@@ -431,7 +432,8 @@ class PostgresStatsRepository implements StatsPort {
                       row.getBigDecimal("combat_power"),
                       row.getLong("member_count"),
                       row.getLong("used"),
-                      row.getBigDecimal("score"));
+                      row.getBigDecimal("score"),
+                      row.getString("image_url"));
                 })
             .list();
     if (rows.isEmpty())
@@ -868,7 +870,7 @@ class PostgresStatsRepository implements StatsPort {
     population(conditions, since, classEngraving)
         .statement(
             ", ranked AS (SELECT character_id, character_name, server_name, class_name, position,"
-                + " item_level, combat_power, best_combat_power, RANK() OVER (ORDER BY "
+                + " item_level, combat_power, best_combat_power, image_url, RANK() OVER (ORDER BY "
                 + column
                 + " DESC) AS rnk, COUNT(*) OVER () AS total FROM pop ORDER BY "
                 + order
@@ -901,7 +903,8 @@ class PostgresStatsRepository implements StatsPort {
                       row.getBigDecimal("combat_power"),
                       row.getBigDecimal("best_combat_power"),
                       arkPassive(row),
-                      estherWeapon(row)));
+                      estherWeapon(row),
+                      row.getString("image_url")));
             });
     // 요청 페이지가 범위를 넘으면 행이 없어 total을 따로 센다.
     if (rows.isEmpty())
@@ -970,7 +973,7 @@ class PostgresStatsRepository implements StatsPort {
         .statement(
             "SELECT character_name, server_name, class_name, position, item_level, combat_power, "
                 + column
-                + " AS value, efficiency_observed_at, RANK() OVER (ORDER BY "
+                + " AS value, efficiency_observed_at, image_url, RANK() OVER (ORDER BY "
                 + column
                 + " DESC) AS rnk, COUNT(*) OVER () AS total FROM pop"
                 + filter
@@ -996,7 +999,8 @@ class PostgresStatsRepository implements StatsPort {
                       row.getBigDecimal("item_level"),
                       row.getBigDecimal("combat_power"),
                       row.getBigDecimal("value"),
-                      observed == null ? null : observed.toInstant()));
+                      observed == null ? null : observed.toInstant(),
+                      row.getString("image_url")));
             });
     // 요청 페이지가 범위를 넘으면 행이 없어 total을 따로 센다.
     if (rows.isEmpty())
@@ -1219,7 +1223,7 @@ class PostgresStatsRepository implements StatsPort {
             + " c.combat_power, c.best_combat_power, c.position, c.gem_mean_level, c.bracelet_efficiency_pct,"
             + " c.bracelet_rule_version, c.ark_grid_gem_pct, c.ark_grid_rule_version,"
             + " c.bracelet_real_pct, c.bracelet_real_rule_version, c.ark_grid_real_pct,"
-            + " c.ark_grid_real_rule_version, c.efficiency_observed_at FROM characters c WHERE "
+            + " c.ark_grid_real_rule_version, c.efficiency_observed_at, c.image_url FROM characters c WHERE "
             + where
             + ") ";
     return new Population(cte, params);

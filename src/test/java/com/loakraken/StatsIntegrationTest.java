@@ -540,6 +540,22 @@ class StatsIntegrationTest {
   }
 
   @Test
+  void 랭킹_행은_저장된_캐릭터_이미지_주소를_그대로_준다() throws Exception {
+    표본();
+    String url = "https://img.lostark.co.kr/armory/test/ranking.png";
+    jdbc.sql(
+            "UPDATE characters SET image_url = :url WHERE server_name = :s AND character_name = '통계캐34'")
+        .param("url", url)
+        .param("s", SERVER)
+        .update();
+    var ranking = data("/api/v1/rankings?size=2&server=" + encode(SERVER));
+    assertThat(ranking.at("/rows/0/characterName").asText()).isEqualTo("통계캐34");
+    assertThat(ranking.at("/rows/0/imageUrl").asText()).isEqualTo(url);
+    // 받은 적이 없으면 null이다.
+    assertThat(ranking.at("/rows/1/imageUrl").isNull()).isTrue();
+  }
+
+  @Test
   void 저장된_효율이_없으면_빈_랭킹이다() throws Exception {
     표본();
     var empty = data("/api/v1/rankings/ark-grid-gems?server=" + encode(SERVER));

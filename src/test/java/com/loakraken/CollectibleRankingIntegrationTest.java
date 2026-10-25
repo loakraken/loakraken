@@ -216,6 +216,22 @@ class CollectibleRankingIntegrationTest {
   }
 
   @Test
+  void 행은_대표_캐릭터의_저장된_이미지_주소를_준다() throws Exception {
+    var a = roster(TIE_SERVER, "수집이미지가", 1750);
+    collectible(a, 1, "모코코 씨앗", 740, 1480);
+    String url = "https://img.lostark.co.kr/armory/test/collectible.png";
+    jdbc.sql("UPDATE characters SET image_url = :url WHERE character_name = '수집이미지가'")
+        .param("url", url)
+        .update();
+    JsonNode rows =
+        mapper
+            .readTree(get("/api/v1/rankings/collectibles?server=" + encode(TIE_SERVER)).body())
+            .at("/data/rows");
+    assertThat(rows.at("/0/characterName").asText()).isEqualTo("수집이미지가");
+    assertThat(rows.at("/0/imageUrl").asText()).isEqualTo(url);
+  }
+
+  @Test
   void 원정대가_30개_이상이면_READY다() throws Exception {
     for (int i = 0; i < 31; i++) {
       var key = roster(TIE_SERVER, "수집표본" + i, 1700 + i);

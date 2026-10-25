@@ -136,7 +136,8 @@ public class CharacterPopularService {
     String cacheKey = period.key() + ":" + limit;
     try {
       var cached = popular.findCached(cacheKey);
-      if (cached.isPresent()) return cached.get();
+      // 캐시 뒤 처리정지 목록에 든 캐릭터가 있으면 캐시를 쓰지 않고 다시 센다(집계 SQL이 목록을 뺀다).
+      if (cached.isPresent() && !stopListed(cached.get())) return cached.get();
     } catch (DataAccessException exception) {
       // 캐시 장애는 집계로 대신한다.
     }
@@ -166,6 +167,23 @@ public class CharacterPopularService {
       log.warn("인기 검색 캐시를 쓰지 못했습니다. 예외 유형={}", exception.getClass().getSimpleName());
     }
     return result;
+  }
+
+  /** 캐시된 인기 목록에 처리정지 목록 캐릭터가 있는가. 확인하지 못하면 목록을 내지 않는다(503). */
+  private boolean stopListed(PopularResult result) {
+    var byServer = new java.util.HashMap<String, java.util.List<String>>();
+    for (var item : result.items())
+      if (item.characterName() != null && item.serverName() != null)
+        byServer
+            .computeIfAbsent(item.serverName(), server -> new ArrayList<>())
+            .add(item.characterName());
+    try {
+      for (var entry : byServer.entrySet())
+        if (!stopList.listed(entry.getValue(), entry.getKey()).isEmpty()) return true;
+      return false;
+    } catch (DataAccessException | TransactionException exception) {
+      throw new CharacterException(CharacterErrorCode.CHARACTER_POPULAR_UNAVAILABLE);
+    }
   }
 
   /**

@@ -1368,11 +1368,18 @@ public class StatsQueryService {
       long excludedRosters,
       List<RankedRoster> rows)
       implements ListsCharacters {
+    /** 대표와 구성(composition) 캐릭터 모두. 구성은 대표 서버의 캐릭터만이라 서버는 행의 서버다. */
     @Override
     public List<StatsPort.Named> listedCharacters() {
-      return rows == null
-          ? List.of()
-          : rows.stream().map(r -> new StatsPort.Named(r.characterName(), r.serverName())).toList();
+      if (rows == null) return List.of();
+      var names = new ArrayList<StatsPort.Named>();
+      for (var row : rows) {
+        names.add(new StatsPort.Named(row.characterName(), row.serverName()));
+        if (row.composition() != null)
+          for (var member : row.composition())
+            names.add(new StatsPort.Named(member.characterName(), row.serverName()));
+      }
+      return List.copyOf(names);
     }
   }
 
@@ -1388,7 +1395,10 @@ public class StatsQueryService {
       BigDecimal value,
       List<StatsPort.RosterMember> composition) {}
 
-  /** 캐릭터 기준 수집품 순위 결과(#303). reason이 있으면 rank·값은 null. */
+  /**
+   * 캐릭터 기준 수집품 순위 결과(#303). reason이 있으면 rank·값은 null. 캐시를 쓸 때 그 캐릭터가 처리정지 목록에 들었으면 다시 센다(목록 캐릭터는
+   * 순위가 없다).
+   */
   public record CollectibleStandingResult(
       Meta meta,
       String unit,
@@ -1400,7 +1410,15 @@ public class StatsQueryService {
       BigDecimal progressPercent,
       Long point,
       Long maxPoint,
-      String reason) {}
+      String reason)
+      implements ListsCharacters {
+    @Override
+    public List<StatsPort.Named> listedCharacters() {
+      return characterName == null
+          ? List.of()
+          : List.of(new StatsPort.Named(characterName, serverName));
+    }
+  }
 
   /** 길드 랭킹 결과(#301). sort는 응답에서 문자열. */
   public record GuildRankingResult(

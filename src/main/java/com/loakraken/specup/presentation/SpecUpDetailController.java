@@ -238,13 +238,16 @@ public class SpecUpDetailController {
       @Schema(example = "19") int fromStage,
       @Schema(example = "20") int toStage,
       @Schema(
-              description = "비용에 쓴 숨결 사용: NONE 또는 MAX(문자열, 값이 늘 수 있음). 재련 계획이 다루지 않으면 null",
+              description =
+                  "비용에 쓴 숨결 사용: NONE(쓰지 않음) 또는 OPTIMAL(시도마다 숨결 개수를 골라 씀, 기대 비용 최소)(문자열, 값이 늘 수 있음). 재련 계획이 다루지 않으면 null",
               example = "NONE")
           @NullableResponse
           String breath,
-      @Schema(description = "기대 시도 횟수(소수 둘째 자리)", example = "7.42") @NullableResponse
+      @Schema(description = "기대 시도 횟수(소수 둘째 자리). 여러 단계 줄이면 단계마다 기대 시도의 합", example = "7.42")
+          @NullableResponse
           BigDecimal expectedAttempts,
-      @Schema(description = "첫 시도 성공 확률(만분율)", example = "500") @NullableResponse
+      @Schema(description = "첫 시도 성공 확률(만분율). 여러 단계 줄이면 첫 단계의 확률", example = "500")
+          @NullableResponse
           Integer firstAttemptSuccessRateBp) {
     static SpecUpRefineResponse from(SpecUpDetailService.Refine refine) {
       return refine == null

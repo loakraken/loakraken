@@ -3,6 +3,7 @@ package com.loakraken.specup.application;
 import com.loakraken.character.domain.CharacterLoadout;
 import com.loakraken.character.domain.CombatPowerPolishValues;
 import com.loakraken.specup.domain.SpecUpCost;
+import com.loakraken.specup.domain.SpecUpCostRules;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -66,7 +67,7 @@ final class SpecUpScoreCandidates {
               next + "레벨",
               null,
               null,
-              SpecUpCost.KARMA_COST_UNCONFIRMED,
+              karmaCost(current, next),
               new SpecUpKrakenScore.Karma(next)));
     return planned;
   }
@@ -109,10 +110,20 @@ final class SpecUpScoreCandidates {
               label + " " + stoneText(best),
               item == null ? null : item.icon(),
               item == null ? null : item.grade(),
-              SpecUpCost.STONE_COST_UNCONFIRMED,
+              stoneCost(label),
               new SpecUpKrakenScore.Stone(best)));
     }
     return planned;
+  }
+
+  private static SpecUpCost karmaCost(int current, int next) {
+    var gold = SpecUpCostRules.karmaGold(current, next);
+    return gold == null ? SpecUpCost.KARMA_COST_UNCONFIRMED : SpecUpCost.karma(gold);
+  }
+
+  private static SpecUpCost stoneCost(String label) {
+    var gold = SpecUpCostRules.stoneGold(label);
+    return gold == null ? SpecUpCost.STONE_COST_UNCONFIRMED : SpecUpCost.stone(gold);
   }
 
   private static String stoneText(Map<String, Integer> levels) {
@@ -158,6 +169,10 @@ final class SpecUpScoreCandidates {
       CombatPowerPolishValues values) {
     var option = input.path("armory").path("accessory").path(slot).path("option");
     if (!option.isArray() || option.size() != 3) return null;
+    // 시뮬레이터와 같은 규칙: 수치표(1680 고대)와 같은 장신구만(거래 제한 아이템 레벨 줄, 없으면 모든 연마 값이 표의 값). 점수에 안 쓰이는 줄만 있는
+    // 다른 레벨 장신구가 1680 표로 후보를 만들지 않게(코드 리뷰 10-25).
+    if (!com.loakraken.character.application.CombatPowerSimulationService.polishTableFits(
+        values, item)) return null;
     var lines = new ArrayList<String>();
     option.forEach(line -> lines.add(line.asString("")));
     var part = item.type();

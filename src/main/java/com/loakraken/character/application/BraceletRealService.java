@@ -43,9 +43,13 @@ public class BraceletRealService {
     // 원본은 팔찌가 없거나 티어·옵션이 비면 총배율 1을 돌려준다 — 그 값은 팔찌 효율이 아니라서 내지 않는다.
     if (!bangle.isObject() || bangle.path("option").isEmpty() || !bangle.path("tier").isNumber())
       return BraceletRealEfficiency.unsupported(UNAVAILABLE, "팔찌 옵션이 없어 계산하지 않았습니다.", role);
-    if (!input.path("armory").path("equipment").path("weapon").path("stat").isNumber()
-        || !input.path("arkPassive").path("evolution").isObject())
+    if (!KrakenScoreService.scorable(input))
       return BraceletRealEfficiency.unsupported(UNAVAILABLE, "무기나 아크 패시브 정보가 없어 계산하지 않았습니다.", role);
+    // 계산식이 알아보지 못하는 팔찌 줄은 배율 1로 지나가 효율이 낮게 나온다 — 그 값을 내지 않는다(코드 리뷰 10-25).
+    var unparsed = KrakenScoreBracelet.unparsedOptions(input, tables);
+    if (!unparsed.isEmpty())
+      return BraceletRealEfficiency.unsupported(
+          UNAVAILABLE, "팔찌 옵션(" + String.join(", ", unparsed) + ")을 계산식에 넣지 못해 계산하지 않았습니다.", role);
     try {
       boolean supporter = position.role() == CharacterPosition.Role.SUPPORT;
       double value = supporter ? support(input) : dealer(input, false);

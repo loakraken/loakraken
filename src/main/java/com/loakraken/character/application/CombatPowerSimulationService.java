@@ -835,21 +835,27 @@ public class CombatPowerSimulationService {
         text("option", change.option());
         grade(change.grade());
         var current = item.detail().polishEffects().get(change.line());
+        // 수치표는 한 아이템 레벨·등급(지금 1680 고대) 값이다. 다른 장신구(예: 1540)는 같은 등급도 값이 달라 계산하지 않는다(코드 리뷰 10-25).
+        boolean tableFits = polishTableFits(polishValues, item);
         var value =
-            polishValue(polishValues, item.type(), change.option(), change.grade(), current);
+            tableFits
+                ? polishValue(polishValues, item.type(), change.option(), change.grade(), current)
+                : null;
         var option = optionName(change.option());
         var from = CombatPowerPolishModel.line(current.name(), current.value());
         var to = value == null ? null : CombatPowerPolishModel.line(option, value);
         String reason =
-            value == null
-                ? "이 부위·연마 옵션·등급의 수치를 확인하지 않아 계산하지 않았습니다."
-                : from == null
-                    ? "지금 연마 줄("
-                        + current.name()
-                        + " "
-                        + current.value()
-                        + ")의 전투력 계수를 확인하지 않아 계산하지 않았습니다."
-                    : to == null ? "이 연마 옵션의 전투력 계수를 확인하지 않아 계산하지 않았습니다." : null;
+            !tableFits
+                ? POLISH_TABLE_MISMATCH
+                : value == null
+                    ? "이 부위·연마 옵션·등급의 수치를 확인하지 않아 계산하지 않았습니다."
+                    : from == null
+                        ? "지금 연마 줄("
+                            + current.name()
+                            + " "
+                            + current.value()
+                            + ")의 전투력 계수를 확인하지 않아 계산하지 않았습니다."
+                        : to == null ? "이 연마 옵션의 전투력 계수를 확인하지 않아 계산하지 않았습니다." : null;
         yield new Planned(
             change,
             item.name() + " 연마 " + (change.line() + 1),
@@ -1029,6 +1035,46 @@ public class CombatPowerSimulationService {
    * 연마 수치 표(polish-values)에서 부위·옵션·등급의 공식 수치. 같은 부위에 같은 이름의 %·고정값 옵션이 둘 다 있으면(귀걸이 공격력·무기 공격력) % 쪽은
    * 옵션 끝에 " %"를 붙여 고른다(예: "공격력 %"). 없으면 null.
    */
+  static final String POLISH_TABLE_MISMATCH = "이 장신구의 아이템 레벨·등급에 맞는 연마 수치표를 아직 확인하지 않아 계산하지 않았습니다.";
+
+  private static final java.util.regex.Pattern TRADE_ITEM_LEVEL =
+      java.util.regex.Pattern.compile("거래 제한 아이템 레벨\\s*([0-9,]+)");
+
+  /**
+   * 장신구가 연마 수치표(등급·아이템 레벨)와 같은 장신구인지. 공식 장신구 툴팁에는 '아이템 레벨 N' 줄이 없고 거래 가능한 장신구에만 '거래 제한 아이템 레벨 N' 줄이
+   * 있다(계산 검증 원문 확인 10-25). 그래서 등급이 같고, (1) 거래 제한 아이템 레벨 줄이 있으면 그 레벨이 같을 때, (2) 없으면(거래 불가) 지금 연마 줄
+   * 값이 모두 이 수치표의 그 부위 값일 때만 같은 장신구로 본다. 그 밖(모르면)은 아님.
+   */
+  public static boolean polishTableFits(
+      CombatPowerPolishValues polishValues, CharacterLoadout.Equipment item) {
+    if (polishValues.accessoryGrade() == null
+        || !polishValues.accessoryGrade().equals(item.grade())
+        || polishValues.itemLevel() == null
+        || item.detail() == null) return false;
+    var detail = item.detail();
+    if (detail.itemLevel() != null) return polishValues.itemLevel().equals(detail.itemLevel());
+    for (var line : detail.tradeLines() == null ? List.<String>of() : detail.tradeLines()) {
+      var matcher = TRADE_ITEM_LEVEL.matcher(line == null ? "" : line);
+      if (matcher.find())
+        return polishValues.itemLevel().equals(Integer.valueOf(matcher.group(1).replace(",", "")));
+    }
+    if (detail.polishEffects().isEmpty()) return false;
+    for (var polish : detail.polishEffects())
+      if (polish == null || !tableHasValue(polishValues, item.type(), polish)) return false;
+    return true;
+  }
+
+  /** 지금 연마 줄(이름·값)이 수치표의 그 부위 하·중·상 값 가운데 하나인지. */
+  private static boolean tableHasValue(
+      CombatPowerPolishValues polishValues, String part, CharacterLoadout.PolishEffect polish) {
+    if (polish.name() == null || polish.value() == null) return false;
+    var value = polish.value().strip();
+    return polishValues.options().stream()
+        .filter(row -> row.option().equals(polish.name()) && row.parts().contains(part))
+        .anyMatch(
+            row -> value.equals(row.low()) || value.equals(row.mid()) || value.equals(row.high()));
+  }
+
   static String polishValue(
       CombatPowerPolishValues polishValues,
       String part,

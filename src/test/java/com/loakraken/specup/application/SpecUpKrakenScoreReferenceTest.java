@@ -11,6 +11,7 @@ import com.loakraken.character.domain.KrakenScoreEngine;
 import com.loakraken.character.domain.KrakenScoreInputMapper;
 import com.loakraken.character.infrastructure.ArmoryRawFixtures;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -219,6 +220,76 @@ class SpecUpKrakenScoreReferenceTest {
   }
 
   @Test
+  void 팔_보호구_목표_등급은_등급_끝을_넘을_때마다_이어서_올린다() throws Exception {
+    var scorer = new SpecUpKrakenScore(tables(), refine(), true);
+    // 영웅 0~10, 전설 10~15, 유물 15~20, 고대 20~25
+    assertThat(scorer.armGuardGrade("전설", 15)).isEqualTo("전설");
+    assertThat(scorer.armGuardGrade("전설", 16)).isEqualTo("유물");
+    assertThat(scorer.armGuardGrade("전설", 21)).isEqualTo("고대");
+    assertThat(scorer.armGuardGrade("영웅", 11)).isEqualTo("전설");
+    assertThat(scorer.armGuardGrade("영웅", 25)).isEqualTo("고대");
+    assertThat(scorer.armGuardGrade("고대", 25)).isEqualTo("고대");
+    assertThat(scorer.armGuardGrade("고대", 26)).isNull();
+    assertThat(scorer.armGuardGrade("모름", 15)).isNull();
+  }
+
+  @Test
+  void 수치표와_다른_레벨_장신구는_연마_후보를_만들지_않는다() throws Exception {
+    // 코드 리뷰 10-25: 점수에 안 쓰이는 줄만 있는 다른 레벨 장신구도 1680 표로 후보가 생겼다. 시뮬레이터와 같은 규칙으로 막는다.
+    // 기준 캐릭터 1의 첫 귀걸이를 거래 제한 아이템 레벨 1540 장신구로 바꾸면 그 귀걸이 5줄만 빠진다.
+    var l01 = context("l01");
+    var loadout = loadout("l01");
+    var equipment = new ArrayList<>(loadout.equipment());
+    int first = -1;
+    for (int i = 0; i < equipment.size(); i++)
+      if (equipment.get(i) != null && "귀걸이".equals(equipment.get(i).type())) {
+        first = i;
+        break;
+      }
+    var item = equipment.get(first);
+    var d = item.detail();
+    equipment.set(
+        first,
+        new CharacterLoadout.Equipment(
+            item.type(),
+            item.name(),
+            item.icon(),
+            item.grade(),
+            new CharacterLoadout.EquipmentDetail(
+                d.refineLevel(),
+                d.quality(),
+                d.itemLevel(),
+                d.tier(),
+                d.arkPassivePoint(),
+                d.effects(),
+                d.stoneEngravings(),
+                d.polishEffects(),
+                d.braceletEffects(),
+                d.titleLine(),
+                List.of("거래 제한 아이템 레벨 1540"),
+                d.refineExp(),
+                d.extraLines(),
+                d.advancedRefineLevel(),
+                d.extraLineSections())));
+    var lower =
+        new CharacterLoadout(
+            equipment,
+            loadout.engravings(),
+            loadout.gems(),
+            loadout.cards(),
+            loadout.arkPassive(),
+            loadout.arkGrid(),
+            loadout.skills(),
+            loadout.avatars(),
+            loadout.collectibles());
+    var all = SpecUpScoreCandidates.polish(l01.input(), loadout, polishValues());
+    var rows = SpecUpScoreCandidates.polish(l01.input(), lower, polishValues());
+    assertThat(all).hasSize(19);
+    int index = first;
+    assertThat(rows).hasSize(14).noneMatch(row -> row.id().startsWith("POLISH:" + index + ":"));
+  }
+
+  @Test
   void 후보_목록_모양이_레퍼런스와_같다() throws Exception {
     // 기준 캐릭터 1: 연마 19줄(목걸이 3·귀걸이 5+5·반지 3+3), 스톤 6줄(배치는 점수가 더 오르는 쪽), 카르마 1줄(29 → 30).
     var l01 = context("l01");
@@ -366,6 +437,55 @@ class SpecUpKrakenScoreReferenceTest {
     for (int i = 0; i < loadout.equipment().size(); i++)
       if (type.equals(loadout.equipment().get(i).type())) return i;
     throw new AssertionError(type + " 장비가 없습니다");
+  }
+
+  @ParameterizedTest(name = "{0} 서폿 {1}")
+  @CsvSource({"l04, 5286.475085510006", "l07, 9972.379331813927"})
+  void 서포터는_서포터_점수식으로_지금_점수와_Δ를_낸다(String id, double expected) throws Exception {
+    // PM 총괄 10-25: 서포터 스펙업은 서포터 점수 기준(비교 기준 B는 역할에 따라 점수 키만 바꾼다). 고정 자료의 기대 점수는 B의 서폿 점수.
+    var raw =
+        MAPPER
+            .readTree(
+                new ClassPathResource("kraken-score/" + id + ".json")
+                    .getContentAsString(StandardCharsets.UTF_8))
+            .path("raw");
+    var input = KrakenScoreInputMapper.from(raw);
+    var profile =
+        new com.loakraken.character.domain.CharacterProfile(
+            "표본",
+            "서버",
+            raw.path("ArmoryProfile").path("CharacterClassName").asString(""),
+            70,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            List.of());
+    var snapshot =
+        new com.loakraken.character.application.CharacterResult(
+            com.loakraken.CharacterTestFixture.details(
+                profile, ArmoryRawFixtures.loadout(raw), List.of()),
+            java.time.Instant.EPOCH,
+            null,
+            input);
+    var scorer = new SpecUpKrakenScore(tables(), refine(), true);
+    var context = scorer.context(snapshot);
+    assertThat(context.available()).as(context.unavailable()).isTrue();
+    assertThat(context.support()).isTrue();
+    assertThat(context.before()).isCloseTo(expected, org.assertj.core.data.Offset.offset(1e-9));
+    // 카르마 +1: 같은 입력 사본에 레벨만 바꿔 서포터 점수식으로 다시 잰 차와 같다(딜러 점수식이 아님).
+    int karma = input.path("arkPassive").path("enlightenment").path("karmalevel").asInt();
+    var delta = scorer.delta(context, new SpecUpKrakenScore.Karma(karma + 1));
+    var copy = (ObjectNode) input.deepCopy();
+    ((ObjectNode) copy.path("arkPassive").path("enlightenment")).put("karmalevel", karma + 1);
+    double support =
+        com.loakraken.character.domain.KrakenScoreSupport.score(copy, tables()) - context.before();
+    if (karma < SpecUpScoreCandidates.KARMA_MAX) {
+      assertThat(delta).isNotNull();
+      assertThat(delta).isCloseTo(support, org.assertj.core.data.Offset.offset(1e-9));
+    }
   }
 
   private static KrakenScoreEngine.Tables tables() throws Exception {

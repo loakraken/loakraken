@@ -81,6 +81,89 @@ class CombatPowerRefineModelTest {
   }
 
   @Test
+  void 혼돈의_별_코어_무기는_무기_공격력_고정값과_퍼센트로_W에_들어간다() {
+    // 코드 리뷰·계산 검증 10-25 P0-3: 무기 코어가 있어도 Δ가 같던 문제. 고대 17P = +5,200, +3%.
+    var base =
+        loadout(19, 19, "운명의 전율 검", "208130", "2030", "14817", List.of("+1.80%", "+0.80%"), 29);
+    var withCore =
+        new CharacterLoadout(
+            base.equipment(),
+            base.engravings(),
+            base.gems(),
+            base.cards(),
+            base.arkPassive(),
+            new CharacterLoadout.ArkGrid(
+                List.of(
+                    new CharacterLoadout.GridSlot(0, null, "혼돈의 별 코어 : 무기", 17, "고대", List.of())),
+                List.of()),
+            base.skills(),
+            base.avatars(),
+            base.collectibles());
+    var none =
+        CombatPowerRefineModel.of(coefficients, base, stats("188163"), new BigDecimal("7.45"));
+    var core =
+        CombatPowerRefineModel.of(coefficients, withCore, stats("188163"), new BigDecimal("7.45"));
+    assertThat(core.unsupportedReason()).isNull();
+    // W = (무기 208,130 + 팔 보호구 14,817 + 코어 5,200) × (1 + 무공% 2.6 + 카르마 2.9 + 코어 3).
+    assertThat(none.w())
+        .isEqualByComparingTo(new BigDecimal("222947").multiply(new BigDecimal("1.055")));
+    assertThat(core.w())
+        .isEqualByComparingTo(new BigDecimal("228147").multiply(new BigDecimal("1.085")));
+    var afterNone = after("3345.24", none, Map.of(0, 20));
+    var afterCore = after("3345.24", core, Map.of(0, 20));
+    assertThat(afterNone).isEqualByComparingTo("3383.60");
+    // 코어가 W를 키우면 같은 무기 단계 차이의 비중이 줄어 Δ가 작아진다(코드 리뷰 손계산 약 3382.73과 같음).
+    assertThat(afterCore).isEqualByComparingTo("3382.73");
+  }
+
+  @Test
+  void 무기_코어는_포인트_구간과_등급별_값이고_모르는_등급은_계산하지_않는다() {
+    assertThat(core(15, "고대").flat()).isEqualByComparingTo("1300");
+    assertThat(core(15, "고대").pct()).isEqualByComparingTo("0.75");
+    assertThat(core(20, "유물").flat()).isEqualByComparingTo("3900");
+    assertThat(core(20, "유물").pct()).isEqualByComparingTo("2.94");
+    assertThat(core(12, "유물").pct()).isZero();
+    assertThat(core(12, "유물").flat()).isEqualByComparingTo("1300");
+    assertThat(core(9, "고대").flat()).isZero();
+    assertThat(core(17, "전설").reason()).contains("전설");
+    assertThat(core(null, "고대").reason()).isNotNull();
+    // 이름을 읽지 못한 코어는 무기 코어인지 몰라 0으로 두지 않는다(코드 리뷰 10-25 P2).
+    var unnamed =
+        CombatPowerRefineModel.weaponCore(
+            new CharacterLoadout(
+                List.of(),
+                null,
+                null,
+                null,
+                null,
+                new CharacterLoadout.ArkGrid(
+                    List.of(new CharacterLoadout.GridSlot(0, null, null, 17, "고대", List.of())),
+                    List.of()),
+                List.of(),
+                List.of(),
+                List.of()));
+    assertThat(unnamed.reason()).contains("코어 이름");
+  }
+
+  private static CombatPowerRefineModel.WeaponCore core(Integer point, String grade) {
+    return CombatPowerRefineModel.weaponCore(
+        new CharacterLoadout(
+            List.of(),
+            null,
+            null,
+            null,
+            null,
+            new CharacterLoadout.ArkGrid(
+                List.of(
+                    new CharacterLoadout.GridSlot(
+                        0, null, "혼돈의 별 코어 : 무기", point, grade, List.of())),
+                List.of()),
+            List.of(),
+            List.of(),
+            List.of()));
+  }
+
+  @Test
   void 에스더_무기는_계산하지_않고_전율_방어구는_계산한다() {
     // c01: B 267,396, q 17.7%, F 9,050, W 고정 283,652(에스더 259,554 + 22,940 + 장신구 960 + 195 + 3),
     // 무공% 3 + 3 + 3.0.

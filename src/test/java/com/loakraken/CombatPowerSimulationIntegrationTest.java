@@ -280,7 +280,7 @@ class CombatPowerSimulationIntegrationTest {
             new CharacterLoadout.EquipmentDetail(
                 null,
                 80,
-                null,
+                null, // 공식 장신구 툴팁처럼 아이템 레벨 없음 — 연마 값(추가 피해 +1.60%)이 1680 표의 목걸이 값이라 같은 장신구
                 4,
                 null,
                 List.of(),

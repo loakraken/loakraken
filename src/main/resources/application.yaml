@@ -189,6 +189,12 @@ home:
     calendar-ttl: ${HOME_CALENDAR_CACHE_TTL:30m}
     news-ttl: ${HOME_NEWS_CACHE_TTL:10m}
 
+# 상점 공지 알림(#636): 하루 한 번 공식 공지 1회 조회, 새 상점·패키지 공지면 Slack 알림. 운영 Slack 웹훅을 붙이기 전까지 꺼 둔다.
+shop-notice:
+  enabled: ${SHOP_NOTICE_ENABLED:false}
+  cron: ${SHOP_NOTICE_CRON:0 10 10 * * *}
+  slack-webhook-file: ${SHOP_NOTICE_SLACK_WEBHOOK_FILE:}
+
 management:
   metrics:
     distribution:

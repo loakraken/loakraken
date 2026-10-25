@@ -51,7 +51,8 @@ class CritSpeedCalculationTest {
     assertThat(hundred.requiredAdditionalCritStat()).isEqualTo(358);
     var thornTarget = crit.targets().get(1);
     assertThat(thornTarget.targetRate()).isEqualByComparingTo("120");
-    assertThat(thornTarget.requiredAdditionalCritStat()).isEqualTo(917);
+    assertThat(thornTarget.requiredAdditionalCritStat())
+        .isEqualTo(916); // 53.40% 더 → 5340 × 0.2794 = 1491.996 → 1492 − 576
     assertThat(crit.bluntThorn().source()).isEqualTo(NodeSource.REFERENCE_LEVEL_2);
     assertThat(crit.bluntThorn().evolutionDamage()).isEqualByComparingTo("25.82");
     assertThat(crit.effectiveRate()).isEqualByComparingTo("87.21");
@@ -85,6 +86,110 @@ class CritSpeedCalculationTest {
   }
 
   @Test
+  void 스탯_환산은_비교_기준_원본처럼_소수_둘째_자리에서_버린다() {
+    // 공식 Tooltip = floor(스탯 ÷ 0.2794) ÷ 100(치명), floor(스탯 ÷ 0.5821) ÷ 100(신속) — 계산 검증 저장 원문
+    // 29/29(10-25).
+    assertThat(CritSpeedCalculation.critPercent(682)).isEqualByComparingTo("24.40");
+    assertThat(CritSpeedCalculation.critPercent(1800)).isEqualByComparingTo("64.42");
+    assertThat(CritSpeedCalculation.critPercent(576)).isEqualByComparingTo("20.61");
+    assertThat(CritSpeedCalculation.speedPercent(1606)).isEqualByComparingTo("27.58");
+    assertThat(CritSpeedCalculation.speedPercent(1000)).isEqualByComparingTo("17.17");
+    assertThat(CritSpeedCalculation.speedPercent(1794)).isEqualByComparingTo("30.81");
+    assertThat(CritSpeedCalculation.speedPercent(77)).isEqualByComparingTo("1.32");
+  }
+
+  @Test
+  void 필요_스탯은_버린_환산이_목표에_닿는_가장_작은_스탯이고_펫은_한_번만_센다() {
+    // 다른 효과 0에서 치명타 적중률 100%: 2794.
+    assertThat(CritSpeedCalculation.statFor(new BigDecimal("100"), 0.2794)).isEqualTo(2794);
+    assertThat(CritSpeedCalculation.critPercent(2793)).isLessThan(new BigDecimal("100"));
+    assertThat(CritSpeedCalculation.statFor(BigDecimal.ZERO, 0.2794)).isZero();
+    // 치명 500, 다른 효과 60%, 펫 켬: 펫 = 환산(660) − 환산(500) = 5.73, 더 필요한 치명 458(펫을 두 번 세면 298).
+    var pet = CritSpeedCalculation.petCrit(500);
+    assertThat(pet).isEqualByComparingTo("5.73");
+    assertThat(
+            CritSpeedCalculation.statFor(
+                    new BigDecimal("100").subtract(new BigDecimal("60")).subtract(pet), 0.2794)
+                - 500)
+        .isEqualTo(458);
+    assertThat(CritSpeedCalculation.petCrit(null)).isEqualByComparingTo("5.72");
+  }
+
+  @Test
+  void 펫을_켜면_필요_스탯은_펫_160을_스탯에_더해_버림_경계를_잰다() {
+    // 치명 400, 펫 말고 다른 효과 47.10%, 펫 켬: 지금 스탯에서 잰 펫 %(5.73)로 구하면 1318이지만, 1318 + 160 = 1478은
+    // floor(1478 ÷ 0.2794) = 5289 → 52.89%로 52.90%에 못 미친다. 필요한 내 치명은 1319(1479 − 160), 더 필요한 치명
+    // 919.
+    var other = new BigDecimal("47.10");
+    var nonStat = other.add(CritSpeedCalculation.petCrit(400));
+    var total = nonStat.add(CritSpeedCalculation.critPercent(400));
+    var target =
+        CritSpeedCalculation.target("CRIT_100", new BigDecimal("100"), total, nonStat, 400, true);
+    assertThat(target.requiredCritStat()).isEqualTo(1319);
+    assertThat(target.requiredAdditionalCritStat()).isEqualTo(919);
+    assertThat(CritSpeedCalculation.critPercent(1478)).isEqualByComparingTo("52.89");
+    assertThat(CritSpeedCalculation.critPercent(1479)).isEqualByComparingTo("52.93");
+    // 펫을 끄면 그대로 스탯 외 합계로 구한다.
+    var off =
+        CritSpeedCalculation.target(
+            "CRIT_100",
+            new BigDecimal("100"),
+            other.add(CritSpeedCalculation.critPercent(400)),
+            other,
+            400,
+            false);
+    assertThat(off.requiredCritStat())
+        .isEqualTo(CritSpeedCalculation.statFor(new BigDecimal("52.90"), 0.2794));
+  }
+
+  @Test
+  void 스톤_감소_각인은_레벨당_공격_이동_속도를_2퍼센트씩_뺀다() {
+    // 코드 리뷰·계산 검증 10-25: 비교 기준 원본(모듈 78512)은 "공격속도 감소 Lv.N"·"이동속도 감소 Lv.N"을 2 × N% 뺀다.
+    var assumptions =
+        new Assumptions(
+            false, false, 0, null, null, null, new BigDecimal("14"), new BigDecimal("14"));
+    var base = loadout(List.of());
+    var stone =
+        new CharacterLoadout.Equipment(
+            "어빌리티 스톤",
+            "준엄한 비상의 돌",
+            null,
+            "고대",
+            new CharacterLoadout.EquipmentDetail(
+                null,
+                null,
+                null,
+                4,
+                null,
+                List.of(),
+                List.of(
+                    new CharacterLoadout.StoneEngraving("원한", 3),
+                    new CharacterLoadout.StoneEngraving("공격속도 감소", 2),
+                    new CharacterLoadout.StoneEngraving("이동속도 감소", 1)),
+                List.of(),
+                List.of()));
+    var equipment = new java.util.ArrayList<>(base.equipment());
+    equipment.add(stone);
+    var withStone =
+        new CharacterLoadout(
+            equipment,
+            base.engravings(),
+            base.gems(),
+            base.cards(),
+            base.arkPassive(),
+            base.arkGrid(),
+            base.skills(),
+            base.avatars(),
+            base.collectibles());
+    var without = CritSpeedCalculation.calculate(profile("576", "77"), base, assumptions).speed();
+    var with = CritSpeedCalculation.calculate(profile("576", "77"), withStone, assumptions).speed();
+    assertThat(with.attack().total())
+        .isEqualByComparingTo(without.attack().total().subtract(new BigDecimal("4")));
+    assertThat(with.move().total())
+        .isEqualByComparingTo(without.move().total().subtract(new BigDecimal("2")));
+  }
+
+  @Test
   void 신속_스탯별_표는_현재값과_최적값_행을_포함하고_신속_외_출처를_유지한다() {
     var result =
         CritSpeedCalculation.calculate(
@@ -93,7 +198,7 @@ class CritSpeedCalculationTest {
             new Assumptions(
                 false, false, 0, null, null, null, new BigDecimal("14"), new BigDecimal("14")));
     var speed = result.speed();
-    assertThat(speed.swiftnessPerPercent()).isEqualByComparingTo("58.22");
+    assertThat(speed.swiftnessPerPercent()).isEqualByComparingTo("58.21");
     var table = speed.swiftnessTable();
     assertThat(table.getFirst().swiftness()).isZero();
     assertThat(table.getFirst().attack()).isEqualByComparingTo("14");
@@ -101,7 +206,8 @@ class CritSpeedCalculationTest {
     var optimal =
         table.stream().filter(CritSpeedCalculation.SwiftnessRow::optimal).findFirst().orElseThrow();
     assertThat(optimal.swiftness()).isEqualTo(2290);
-    assertThat(optimal.attack()).isEqualByComparingTo("53.33");
+    assertThat(optimal.attack())
+        .isEqualByComparingTo("53.34"); // 14 + floor(2290 ÷ 0.5821) ÷ 100, 2289면 53.32
     assertThat(optimal.attackEffective()).isEqualByComparingTo("40");
     assertThat(optimal.supersonicEvolutionDamage()).isEqualByComparingTo("24");
     assertThat(table.getLast().swiftness()).isEqualTo(2600);
@@ -267,6 +373,28 @@ class CritSpeedCalculationTest {
   }
 
   @Test
+  void 켠_치명타_피해_토글은_치명타_피해_합계에_들어간다() {
+    // 코드 리뷰 10-25: 켠 토글(가정 출처)이 치명타 피해 합계에 반영되지 않았다.
+    var nodes =
+        List.of(
+            node(
+                "깨달음 1티어 단련 Lv.1",
+                "우산 스킬 사용 후 치명타 적중률이 8.0초간 2.0% 증가한다. 기상 스킬 사용 후 치명타 피해량이 8.0초간 8.0% 증가한다. 단, 두 효과는 동시에 적용되지 않는다."));
+    var off =
+        CritSpeedCalculation.calculate(profile("576", "77"), loadout(nodes), Assumptions.NONE);
+    var on =
+        CritSpeedCalculation.calculate(
+            profile("576", "77"),
+            loadout(nodes),
+            new Assumptions(
+                false, false, 0, null, null, null, null, null, true, Map.of("단련 치명타 피해", true)));
+    assertThat(off.crit().damage().assumed()).isZero();
+    assertThat(on.crit().damage().assumed()).isEqualByComparingTo("8");
+    assertThat(on.crit().damage().total())
+        .isEqualByComparingTo(off.crit().damage().total().add(new BigDecimal("8")));
+  }
+
+  @Test
   void 팔찌와_가정_시너지_펫을_분리해_더하고_원문이_없으면_계수로_환산한다() {
     var bracelet =
         new CharacterLoadout.Equipment(
@@ -313,9 +441,9 @@ class CritSpeedCalculationTest {
         .filteredOn(source -> source.category() == Category.BRACELET)
         .extracting(source -> source.value().stripTrailingZeros().toPlainString())
         .containsExactly("3.4");
-    // 펫 160/27.944 = 5.73, 시너지 20, 서포터 2.5
-    assertThat(result.crit().assumedRate()).isEqualByComparingTo("28.23");
-    // 치명 746/27.944 = 26.70(Tooltip 없음 → 환산) + 팔찌 3.4
+    // 펫 = 환산(746 + 160) − 환산(746) = 32.42 − 26.70 = 5.72, 시너지 20, 서포터 2.5
+    assertThat(result.crit().assumedRate()).isEqualByComparingTo("28.22");
+    // 치명 746 → floor(746 ÷ 0.2794) ÷ 100 = 26.70(Tooltip 없음 → 환산) + 팔찌 3.4
     assertThat(result.crit().observedRate()).isEqualByComparingTo("30.10");
     assertThat(result.speed().swiftnessStat()).isEqualTo(1794);
     assertThat(result.speed().attack().observed()).isEqualByComparingTo("30.81");
@@ -400,6 +528,57 @@ class CritSpeedCalculationTest {
     assertThat(CritSpeedCalculation.classState("깨달음 1티어 다른 노드 Lv.3", "치명타 적중률이 23.0% 로 변경된다."))
         .isNull();
     assertThat(CritSpeedCalculation.classState("피냄새 Lv.3", "혼돈 게이지 획득량이 50.0% 증가한다.")).isNull();
+  }
+
+  @Test
+  void 치명_신속_스탯을_읽지_못하면_0퍼센트_대신_이유를_낸다() {
+    var noStats =
+        CritSpeedCalculation.calculate(
+            statsOnly(List.of()),
+            new CharacterLoadout(List.of(), null, null, null, null, null),
+            null);
+    assertThat(noStats.crit().unavailableReason()).contains("치명 스탯을 읽지 못해");
+    assertThat(noStats.speed().unavailableReason()).contains("신속 스탯을 읽지 못해");
+    // 화면에 그대로 보이는 문장이라 해요체(프론트 요청 10-25).
+    assertThat(noStats.crit().unavailableReason()).endsWith("계산하지 않았어요.");
+    assertThat(noStats.speed().unavailableReason()).endsWith("계산하지 않았어요.");
+
+    // 수치가 숫자가 아니고 Tooltip도 없음 → 이유. 신속은 수치로 환산되니 계산함
+    var unreadCrit =
+        CritSpeedCalculation.calculate(
+            statsOnly(
+                List.of(
+                    new CharacterProfile.Stat("치명", "-"),
+                    new CharacterProfile.Stat("신속", "1,000"))),
+            new CharacterLoadout(List.of(), null, null, null, null, null),
+            null);
+    assertThat(unreadCrit.crit().unavailableReason()).isNotNull();
+    assertThat(unreadCrit.speed().unavailableReason()).isNull();
+    assertThat(unreadCrit.speed().attack().observed()).isEqualByComparingTo("17.17");
+
+    // 스탯 0도 읽은 값이라 0%를 그대로 낸다
+    var zero =
+        CritSpeedCalculation.calculate(
+            statsOnly(
+                List.of(
+                    new CharacterProfile.Stat("치명", "0"), new CharacterProfile.Stat("신속", "0"))),
+            new CharacterLoadout(List.of(), null, null, null, null, null),
+            null);
+    assertThat(zero.crit().unavailableReason()).isNull();
+    assertThat(zero.speed().unavailableReason()).isNull();
+
+    var normal =
+        CritSpeedCalculation.calculate(
+            profile("576", "77"),
+            new CharacterLoadout(List.of(), null, null, null, null, null),
+            null);
+    assertThat(normal.crit().unavailableReason()).isNull();
+    assertThat(normal.speed().unavailableReason()).isNull();
+  }
+
+  private static CharacterProfile statsOnly(List<CharacterProfile.Stat> stats) {
+    return new CharacterProfile(
+        "기준캐릭터", "카단", "블레이드", 70, null, null, null, null, null, null, stats);
   }
 
   private static CharacterProfile profile(String crit, String swiftness) {

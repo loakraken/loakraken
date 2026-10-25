@@ -52,7 +52,8 @@ public record ReceiptResponse(
             receipt.rosterCharacters(),
             receipt.ready(),
             receipt.pending(),
-            receipt.nextAvailableAt()),
+            receipt.nextAvailableAt(),
+            receipt.unavailable()),
         ReceiptService.assumptions(receipt.assumeBook()));
   }
 
@@ -84,16 +85,21 @@ public record ReceiptResponse(
       String characterName,
       @NullableResponse String className,
       @NullableResponse BigDecimal itemLevel,
-      @Schema(description = "READY 또는 PENDING(이번 요청에서 전투정보를 아직 받지 못함)")
+      @Schema(
+              description =
+                  "READY, PENDING(이번 요청에서 전투정보를 아직 받지 못함, 다시 요청하면 채움), UNAVAILABLE(캐릭터를 찾지 못해 받을 수 없음, 대기 수에 넣지 않음)")
           ReceiptService.Status status,
-      @Schema(description = "PENDING이면 null") @NullableResponse BigDecimal gold,
+      @Schema(description = "READY가 아니면 null") @NullableResponse BigDecimal gold,
       List<ReceiptPartResponse> parts,
       List<ReceiptExcludedResponse> excluded,
       @Schema(
               description =
-                  "산정 대상 부위를 모두 셌는가. false면 gold는 센 부위만의 합(시세 없음·재련 단계를 읽지 못함·장비 정보 없음). PENDING이면 null")
+                  "산정 대상 부위를 모두 셌는가. false면 gold는 센 부위만의 합(시세 없음·재련 단계를 읽지 못함·장비 정보 없음). READY가 아니면 null")
           @NullableResponse
-          Boolean complete) {
+          Boolean complete,
+      @Schema(description = "계산에 쓴 장비를 관측한 시각(조금 전 관측을 다시 쓸 수 있음). READY가 아니면 null")
+          @NullableResponse
+          Instant observedAt) {
     static ReceiptCharacterResponse from(ReceiptService.CharacterReceipt receipt) {
       var equipment = receipt.equipment();
       return new ReceiptCharacterResponse(
@@ -108,7 +114,8 @@ public record ReceiptResponse(
           equipment == null
               ? List.of()
               : equipment.excluded().stream().map(ReceiptExcludedResponse::from).toList(),
-          equipment == null ? null : equipment.complete());
+          equipment == null ? null : equipment.complete(),
+          receipt.observedAt());
     }
   }
 
@@ -207,10 +214,11 @@ public record ReceiptResponse(
   public record ReceiptCoverageResponse(
       int rosterCharacters,
       int ready,
-      @Schema(description = "아직 전투정보를 받지 못한 캐릭터 수(다시 요청하면 최대 8명씩 채움)") int pending,
+      @Schema(description = "아직 전투정보를 받지 못한 캐릭터 수(다시 요청하면 최대 2명씩 채움)") int pending,
       @Schema(
               description =
-                  "남은 캐릭터를 이어 받을 수 있는 시각. 상한으로 멈췄으면 지금, 공식 한도·장애로 멈췄으면 1분 뒤. 남은 사람이 없으면 null")
+                  "남은 캐릭터를 이어 받을 수 있는 시각. 요청당 상한으로 멈췄고 방문자의 분당 공식 호출 칸이 남았으면 지금, 칸이 모자라면 칸이 다시 차는 시각(분 경계), 공식 한도·장애로 멈췄으면 1분 뒤. 이 시각 전에 다시 요청하면 새로 받지 못할 수 있다. 남은 사람이 없으면 null")
           @NullableResponse
-          Instant nextAvailableAt) {}
+          Instant nextAvailableAt,
+      @Schema(description = "캐릭터를 찾지 못해 받을 수 없는 수(UNAVAILABLE, 대기 수에 넣지 않음)") int unavailable) {}
 }

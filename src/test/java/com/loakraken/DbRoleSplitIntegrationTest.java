@@ -95,7 +95,8 @@ class DbRoleSplitIntegrationTest {
               "-f",
               "/tmp/db-app-role.sql");
       if (result.getExitCode() != 0)
-        throw new IllegalStateException("역할 SQL 실패: " + result.getStderr());
+        // 오류 출력에는 비밀번호가 든 문장이 섞일 수 있어 종료 코드만 남긴다.
+        throw new IllegalStateException("역할 SQL 실패: 종료 코드 " + result.getExitCode());
       var lines = result.getStdout().strip().lines().toList();
       return lines.isEmpty() ? "" : lines.getLast();
     } catch (IOException exception) {
@@ -227,6 +228,19 @@ class DbRoleSplitIntegrationTest {
         .hasMessageContaining("permission denied");
     assertThatThrownBy(
             () -> jdbc.sql("SELECT pg_read_file('/etc/hostname')").query(String.class).single())
+        .rootCause()
+        .hasMessageContaining("permission denied");
+    // 서버에서 명령 실행·역할 만들기·소유 역할로 바꾸기·표 비우기도 막힌다(최소 권한).
+    assertThatThrownBy(() -> jdbc.sql("COPY (SELECT 1) TO PROGRAM 'true'").update())
+        .rootCause()
+        .hasMessageContaining("permission denied");
+    assertThatThrownBy(() -> jdbc.sql("CREATE ROLE role_check_role").update())
+        .rootCause()
+        .hasMessageContaining("permission denied");
+    assertThatThrownBy(() -> jdbc.sql("SET ROLE " + OWNER).update())
+        .rootCause()
+        .hasMessageContaining("permission denied");
+    assertThatThrownBy(() -> jdbc.sql("TRUNCATE characters").update())
         .rootCause()
         .hasMessageContaining("permission denied");
   }

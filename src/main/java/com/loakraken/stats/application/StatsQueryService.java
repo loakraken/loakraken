@@ -428,7 +428,7 @@ public class StatsQueryService {
 
   public ServersResult servers(StatsConditions conditions) {
     return cached(
-        "servers:" + key(conditions),
+        "servers:v2:" + key(conditions),
         ServersResult.class,
         () -> {
           var now = clock.instant();
@@ -441,6 +441,7 @@ public class StatsQueryService {
                       row -> {
                         var status = SampleStatus.of(row.count());
                         boolean ready = status == SampleStatus.READY;
+                        var p = row.combatPowerPercentiles();
                         return new ServerStat(
                             row.serverName(),
                             row.count(),
@@ -449,7 +450,14 @@ public class StatsQueryService {
                             row.combatPowerMedian(),
                             row.knownCharacters(),
                             row.rosters(),
-                            status);
+                            status,
+                            row.dealers(),
+                            row.supports(),
+                            row.count() - row.dealers() - row.supports(),
+                            row.itemLevelMean(),
+                            ready && p.size() == 5
+                                ? new Percentiles(p.get(0), p.get(1), p.get(2), p.get(3), p.get(4))
+                                : null);
                       })
                   .toList());
         });
@@ -460,7 +468,7 @@ public class StatsQueryService {
     var binWidth = width == null ? defaultWidth(metric) : StatsConditions.strip(width);
     var distribution =
         cached(
-            "distribution:" + metric + ":" + binWidth.toPlainString() + ":" + key(conditions),
+            "distribution:v2:" + metric + ":" + binWidth.toPlainString() + ":" + key(conditions),
             DistributionResult.class,
             () -> {
               var now = clock.instant();
@@ -482,7 +490,12 @@ public class StatsQueryService {
                           .map(bin -> new Bin(bin.from(), bin.from().add(binWidth), bin.count()))
                           .toList();
               return new DistributionResult(
-                  meta(conditions, range.count(), now), metric, binWidth, bins, null);
+                  meta(conditions, range.count(), now),
+                  metric,
+                  binWidth,
+                  bins,
+                  null,
+                  topPercentCutoffs(conditions, since, metric, range.count()));
             });
     if (percentileOf == null) return distribution;
     return new DistributionResult(
@@ -494,7 +507,32 @@ public class StatsQueryService {
             conditions,
             metric,
             StatsConditions.strip(percentileOf),
-            distribution.meta().aggregatedAt()));
+            distribution.meta().aggregatedAt()),
+        distribution.topPercentCutoffs());
+  }
+
+  /**
+   * '상위 N%' 기준값(전투력만, 표본 READY일 때만). 기준 순위 K = ⌊N × total / 100⌋, 값 = 내림차순 K번째 — 다음 티어 경계와 같은 규칙이라 이
+   * 값 이상인 캐릭터의 percentileOf.topPercent는 N 이하다. K = 0이면 그 항목은 빠진다.
+   */
+  private List<TopPercentCutoff> topPercentCutoffs(
+      StatsConditions conditions, Instant since, Metric metric, long total) {
+    if (metric != Metric.COMBAT_POWER || SampleStatus.of(total) != SampleStatus.READY) return null;
+    var ranks = new java.util.LinkedHashMap<Integer, Long>();
+    for (int percent : StatsRules.TOP_PERCENT_CUTOFFS) {
+      long k = StatsRules.cutoffRank(percent, total);
+      if (k > 0) ranks.put(percent, k);
+    }
+    var values = new java.util.HashMap<Long, BigDecimal>();
+    for (var row : stats.valuesAtRanks(conditions, since, metric, new java.util.TreeSet<>(ranks.values())))
+      values.put(row.rank(), row.value());
+    var result = new ArrayList<TopPercentCutoff>();
+    ranks.forEach(
+        (percent, k) -> {
+          var value = values.get(k);
+          if (value != null) result.add(new TopPercentCutoff(percent, k, value));
+        });
+    return List.copyOf(result);
   }
 
   public SnapshotsResult snapshots() {
@@ -1295,6 +1333,7 @@ public class StatsQueryService {
       ClassBuilds.Result builds,
       ClassBuilds.Details details) {}
 
+  /** dealers·supports·unknownRole·itemLevelMean·combatPower는 직업 행(ClassStat)과 같은 계산이다(표본 30 미만이면 combatPower null). */
   public record ServerStat(
       String serverName,
       long count,
@@ -1303,7 +1342,15 @@ public class StatsQueryService {
       BigDecimal combatPowerMedian,
       long knownCharacters,
       long rosters,
-      SampleStatus sampleStatus) {}
+      SampleStatus sampleStatus,
+      long dealers,
+      long supports,
+      long unknownRole,
+      BigDecimal itemLevelMean,
+      Percentiles combatPower) {}
+
+  /** 분포 위 '상위 topPercent%' 기준값: 내림차순 rank번째 값. 이 값 이상이면 percentileOf.topPercent ≤ topPercent다. */
+  public record TopPercentCutoff(int topPercent, long rank, BigDecimal value) {}
 
   public record ServersResult(Meta meta, List<ServerStat> rows) {}
 
@@ -1312,8 +1359,14 @@ public class StatsQueryService {
   public record PercentileOf(
       BigDecimal value, long rank, long total, BigDecimal topPercent, Tier tier) {}
 
+  /** topPercentCutoffs: 전투력 분포만, 표본이 READY일 때만(아니면 null). 기준 순위가 0인 항목은 빠진다. */
   public record DistributionResult(
-      Meta meta, Metric metric, BigDecimal width, List<Bin> bins, PercentileOf percentileOf) {}
+      Meta meta,
+      Metric metric,
+      BigDecimal width,
+      List<Bin> bins,
+      PercentileOf percentileOf,
+      List<TopPercentCutoff> topPercentCutoffs) {}
 
   public record SnapshotInfo(String snapshot, Instant aggregatedAt, long population) {}
 

@@ -188,6 +188,60 @@ class StatsIntegrationTest {
   }
 
   @Test
+  void 분포의_상위_N퍼센트_기준값은_내_위치와_맞고_서버_행은_직업_행과_같은_값을_준다() throws Exception {
+    표본();
+    // 모집단 40명(전투력 3000~3340 10씩 35명 + 2000 5명). K = ⌊N×40/100⌋: 1%는 0이라 빠지고 5·10·25·50·75% = 2·4·10·20·30위.
+    var distribution =
+        data("/api/v1/stats/distribution?metric=COMBAT_POWER&server=" + encode(SERVER));
+    var cutoffs = distribution.path("topPercentCutoffs");
+    assertThat(cutoffs.size()).isEqualTo(5);
+    String[][] expected = {
+      {"5", "2", "3330"}, {"10", "4", "3310"}, {"25", "10", "3250"}, {"50", "20", "3150"},
+      {"75", "30", "3050"}
+    };
+    for (int i = 0; i < expected.length; i++) {
+      var cutoff = cutoffs.get(i);
+      assertThat(cutoff.path("topPercent").asInt()).isEqualTo(Integer.parseInt(expected[i][0]));
+      assertThat(cutoff.path("rank").asLong()).isEqualTo(Long.parseLong(expected[i][1]));
+      assertThat(cutoff.path("value").decimalValue()).isEqualByComparingTo(expected[i][2]);
+      // 기준값의 '내 위치'는 그 N% 이내다(같은 순위 규칙).
+      var standing =
+          data(
+              "/api/v1/stats/distribution?metric=COMBAT_POWER&percentileOf="
+                  + expected[i][2]
+                  + "&server="
+                  + encode(SERVER));
+      assertThat(standing.at("/percentileOf/topPercent").decimalValue())
+          .isLessThanOrEqualTo(new BigDecimal(expected[i][0]));
+      assertThat(standing.path("topPercentCutoffs").size()).isEqualTo(5);
+    }
+    // 아이템 레벨 분포와 작은 표본에는 주지 않는다.
+    assertThat(
+            data("/api/v1/stats/distribution?metric=ITEM_LEVEL&server=" + encode(SERVER))
+                .path("topPercentCutoffs")
+                .isNull())
+        .isTrue();
+    assertThat(
+            data(
+                    "/api/v1/stats/distribution?metric=COMBAT_POWER&role=SUPPORT&itemLevelMin=1710&server="
+                        + encode(SERVER))
+                .path("topPercentCutoffs")
+                .isNull())
+        .isTrue();
+
+    // 서버 행: 직업 행과 같은 역할 수·평균 레벨·전투력 분위수.
+    var server = data("/api/v1/stats/servers?server=" + encode(SERVER)).at("/rows/0");
+    assertThat(server.path("dealers").asLong()).isEqualTo(17);
+    assertThat(server.path("supports").asLong()).isEqualTo(18);
+    assertThat(server.path("unknownRole").asLong()).isEqualTo(5);
+    // (1650×5 + 1700..1734 합) / 40 = 1708.625
+    assertThat(server.path("itemLevelMean").decimalValue()).isEqualByComparingTo("1708.63");
+    assertThat(server.at("/combatPower/p50").decimalValue())
+        .isEqualByComparingTo(server.path("combatPowerMedian").decimalValue());
+    assertThat(server.at("/combatPower/p90").isNull()).isFalse();
+  }
+
+  @Test
   void 랭킹과_캐릭터_순위는_동률을_같은_순위로_주고_상위_퍼센트로_티어를_정한다() throws Exception {
     표본();
     var ranking = data("/api/v1/rankings?metric=COMBAT_POWER&size=3&server=" + encode(SERVER));

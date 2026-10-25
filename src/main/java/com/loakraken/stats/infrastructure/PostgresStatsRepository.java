@@ -159,9 +159,14 @@ class PostgresStatsRepository implements StatsPort {
             stat AS (
               SELECT server_name, COUNT(*) AS n,
                 percentile_cont(0.5) WITHIN GROUP (ORDER BY item_level) AS il_median,
-                percentile_cont(0.5) WITHIN GROUP (ORDER BY combat_power) AS cp_median
+                percentile_cont(0.5) WITHIN GROUP (ORDER BY combat_power) AS cp_median,
+                COUNT(*) FILTER (WHERE position = 'DEALER') AS dealers,
+                COUNT(*) FILTER (WHERE position = 'SUPPORT') AS supports,
+                AVG(item_level) AS il_mean,
+                percentile_cont(ARRAY[0.1, 0.25, 0.5, 0.75, 0.9]) WITHIN GROUP (ORDER BY combat_power) AS cp
               FROM pop GROUP BY server_name)
-            SELECT k.server_name, COALESCE(s.n, 0) AS n, s.il_median, s.cp_median, k.known, k.rosters
+            SELECT k.server_name, COALESCE(s.n, 0) AS n, s.il_median, s.cp_median, k.known, k.rosters,
+              COALESCE(s.dealers, 0) AS dealers, COALESCE(s.supports, 0) AS supports, s.il_mean, s.cp
             FROM known k LEFT JOIN stat s ON s.server_name = k.server_name
             ORDER BY n DESC, k.known DESC, k.server_name
             """
@@ -175,7 +180,11 @@ class PostgresStatsRepository implements StatsPort {
                         percentile(row.getBigDecimal("il_median")),
                         percentile(row.getBigDecimal("cp_median")),
                         row.getLong("known"),
-                        row.getLong("rosters")))
+                        row.getLong("rosters"),
+                        row.getLong("dealers"),
+                        row.getLong("supports"),
+                        round(row.getBigDecimal("il_mean")),
+                        percentiles(row.getArray("cp"))))
             .list();
     if (conditions.server() == null) return rows;
     return rows.stream().filter(row -> row.serverName().equals(conditions.server())).toList();
@@ -237,6 +246,25 @@ class PostgresStatsRepository implements StatsPort {
         .query(BigDecimal.class)
         .optional()
         .orElse(null);
+  }
+
+  @Override
+  public List<RankValue> valuesAtRanks(
+      StatsConditions conditions, Instant since, Metric metric, java.util.Collection<Long> ranks) {
+    if (ranks.isEmpty()) return List.of();
+    String column = metric.column();
+    // nthHighest와 같은 순서(내림차순)의 rank번째 값을 한 번의 정렬로. 같은 값이 여럿이면 어느 행이든 값은 같다.
+    return population(conditions, since)
+        .statement(
+            "SELECT rn, v FROM (SELECT "
+                + column
+                + " AS v, row_number() OVER (ORDER BY "
+                + column
+                + " DESC) AS rn FROM pop) t WHERE rn IN (:ranks) ORDER BY rn",
+            jdbc)
+        .param("ranks", List.copyOf(ranks))
+        .query((row, index) -> new RankValue(row.getLong("rn"), row.getBigDecimal("v")))
+        .list();
   }
 
   /** 수집품 랭킹 공통 CTE(#295). */

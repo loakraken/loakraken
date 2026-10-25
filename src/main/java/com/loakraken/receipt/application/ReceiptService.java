@@ -30,9 +30,9 @@ import org.springframework.stereotype.Service;
 /**
  * 원정대 영수증(receipt-v1, #173). 같은 서버 원정대의 전투정보로 장비 재련 기대 비용과 거래 가능 보석 시세를 더한다.
  *
- * <p>전투정보는 캐릭터 캐시(5분) → 영수증 입력 보관(receipt.input-ttl, 기본 5분 — 처리방침 문구가 바뀌면 늘림) 순서로 먼저 쓰고, 둘 다 없을 때만 공식 armory를 부른다. 한
- * 요청에 receipt.max-fetch명(기본 2)까지만 새로 부르고 나머지는 PENDING이다. 다시 요청하면 이어서 채운다. 캐릭터를 찾지 못하면 UNAVAILABLE이고
- * 대기 수에 넣지 않는다(다시 요청해도 받을 수 없음). 공식 원문은 저장하지 않는다.
+ * <p>전투정보는 캐릭터 캐시(5분) → 영수증 입력 보관(receipt.input-ttl, 기본 5분 — 처리방침 문구가 바뀌면 늘림) 순서로 먼저 쓰고, 둘 다 없을 때만
+ * 공식 armory를 부른다. 한 요청에 receipt.max-fetch명(기본 2)까지만 새로 부르고 나머지는 PENDING이다. 다시 요청하면 이어서 채운다. 캐릭터를 찾지
+ * 못하면 UNAVAILABLE이고 대기 수에 넣지 않는다(다시 요청해도 받을 수 없음). 공식 원문은 저장하지 않는다.
  */
 @Service
 public class ReceiptService {
@@ -206,9 +206,7 @@ public class ReceiptService {
 
     var rules = refining.rules();
     var allEquipment =
-        loadouts.values().stream()
-            .flatMap(input -> input.loadout().equipment().stream())
-            .toList();
+        loadouts.values().stream().flatMap(input -> input.loadout().equipment().stream()).toList();
     var names = EquipmentReceipt.materialNames(rules, allEquipment);
     var unitPrices = new HashMap<String, BigDecimal>();
     Instant priceObservedAt = null;
@@ -321,8 +319,8 @@ public class ReceiptService {
   }
 
   /**
-   * 남은 캐릭터를 이어 받을 수 있는 시각. 남은 사람이 없으면 null. 요청당 상한으로 멈췄으면 지금 바로, 공식 한도·장애로 멈췄으면 1분 뒤(클라이언트 공식
-   * 호출 창이 1분이다).
+   * 남은 캐릭터를 이어 받을 수 있는 시각. 남은 사람이 없으면 null. 요청당 상한으로 멈췄으면 지금 바로, 공식 한도·장애로 멈췄으면 1분 뒤(클라이언트 공식 호출 창이
+   * 1분이다).
    */
   private Instant nextAvailableAt(int pending, boolean stopped) {
     if (pending == 0) return null;

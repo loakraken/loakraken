@@ -13,8 +13,8 @@ import tools.jackson.core.JacksonException;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * 영수증 입력 `receipt:v1:input:{캐릭터}`. 보관 시간은 receipt.input-ttl(기본 5분 = 개인정보 처리방침의 원정대 불러오기 임시 보관 시간). 더
- * 길게 두려면 처리방침 문구가 먼저 바뀌어야 한다.
+ * 영수증 입력 `receipt:v1:input:{캐릭터}`. 보관 시간은 receipt.input-ttl(기본 5분 = 개인정보 처리방침의 원정대 불러오기 임시 보관 시간).
+ * 더 길게 두려면 처리방침 문구가 먼저 바뀌어야 한다.
  */
 @Component
 class ValkeyReceiptInputStore implements ReceiptInputStore {
@@ -37,7 +37,9 @@ class ValkeyReceiptInputStore implements ReceiptInputStore {
   public Optional<Input> find(String characterName) {
     try {
       var json = redis.opsForValue().get(PREFIX + characterName);
-      return json == null ? Optional.empty() : Optional.ofNullable(mapper.readValue(json, Input.class));
+      return json == null
+          ? Optional.empty()
+          : Optional.ofNullable(mapper.readValue(json, Input.class));
     } catch (DataAccessException | JacksonException | IllegalArgumentException exception) {
       return Optional.empty();
     }

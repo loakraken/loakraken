@@ -36,9 +36,8 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * 영수증 공식 호출 줄이기(기본 설정): 한 번 열 때 새로 받는 전투정보는 2명까지, 받은 입력은 캐릭터 캐시가 지나도 영수증 입력 보관에서 다시
- * 쓴다. 찾지 못한 캐릭터는 UNAVAILABLE로 대기 수에서 빠지고 다시 부르지 않는다. 처리정지 목록 캐릭터의 보관 입력은 지운다. 공식 API·시세는 모두
- * 대역이다.
+ * 영수증 공식 호출 줄이기(기본 설정): 한 번 열 때 새로 받는 전투정보는 2명까지, 받은 입력은 캐릭터 캐시가 지나도 영수증 입력 보관에서 다시 쓴다. 찾지 못한 캐릭터는
+ * UNAVAILABLE로 대기 수에서 빠지고 다시 부르지 않는다. 처리정지 목록 캐릭터의 보관 입력은 지운다. 공식 API·시세는 모두 대역이다.
  */
 @Import(TestcontainersConfiguration.class)
 @SpringBootTest(

@@ -9,7 +9,7 @@ import java.util.Map;
 import java.util.regex.Pattern;
 
 /**
- * 전투력 시뮬레이터 보석 항목(B단계, #243). 근거는 볼트 「전투력 검증 준비」 7·8절과 리소스 combat-power/gem-coefficients.json.
+ * 전투력 시뮬레이터 보석 항목(B단계, #243). 근거는 리소스 combat-power/gem-coefficients.json(출처 포함).
  *
  * <p>전투력 비 = Π(1 + 보석 배수) × (1 + 기본 공격력 % 합). 기본 공격력 % 합은 공식 툴팁의 세 문구에서만 모은다: 보석 효과 "기본 공격력 n% 증가",
  * 어빌리티 스톤 "[레벨 보너스] 기본 공격력 +n%", 완갑 "추가 효과" "기본 공격력 +n%". 그 밖에서 기본 공격력 % 문구를 만나거나 보석 표기가 계수표와 다르면
@@ -196,7 +196,10 @@ public final class CombatPowerGemModel {
       for (var skill : gems.effects().skills())
         if (skill != null && skill.gemSlot() != null) options.put(skill.gemSlot(), skill.option());
     for (var gem : gems.items()) {
-      if (gem == null || gem.slot() == null || gem.level() == null) continue;
+      if (gem == null || gem.slot() == null) continue;
+      // 보석이 있는데 레벨을 읽지 못하면 빈 칸처럼 넘기지 않는다(그 보석이 빠진 값으로 OK가 나옴, 코드 리뷰 10-25).
+      if (gem.level() == null)
+        return new Model(slots, BigDecimal.ZERO, "보석(" + gem.name() + ")의 레벨을 읽지 못했습니다.");
       var kind = match(GEM_KIND, gem.name());
       var tier = kind == null ? null : coefficients.tierOf(kind);
       if (tier == null)

@@ -29,8 +29,8 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * 원정대 랭킹(#297, 볼트 「랭킹 확장 설계 초안」 v1 2절). 웹 화면이 준비될 때까지 기본 꺼짐(ranking.rosters.enabled). 공식 API를 부르지
- * 않고 관측 DB에서 집계해 조건별로 10분 캐시한다.
+ * 원정대 랭킹(#297). 웹 화면이 준비될 때까지 기본 꺼짐(ranking.rosters.enabled). 공식 API를 부르지 않고 관측 DB에서 집계해 조건별로 10분
+ * 캐시한다.
  */
 @ConditionalOnProperty(prefix = "ranking.rosters", name = "enabled", havingValue = "true")
 @RestController

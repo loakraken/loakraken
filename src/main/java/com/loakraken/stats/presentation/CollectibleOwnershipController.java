@@ -24,8 +24,8 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * 수집품 항목별 보유율(#305, 볼트 「수집품 순위·보유율 설계 메모」 2절). 수집품 랭킹과 같은 플래그(ranking.collectibles.enabled)로 켠다. 공식
- * API를 부르지 않고 관측 DB에서 집계해 조건별로 10분 캐시한다.
+ * 수집품 항목별 보유율(#305). 수집품 랭킹과 같은 플래그(ranking.collectibles.enabled)로 켠다. 공식 API를 부르지 않고 관측 DB에서 집계해
+ * 조건별로 10분 캐시한다.
  */
 @ConditionalOnProperty(prefix = "ranking.collectibles", name = "enabled", havingValue = "true")
 @RestController

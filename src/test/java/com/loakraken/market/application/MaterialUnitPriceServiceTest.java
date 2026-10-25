@@ -28,9 +28,12 @@ class MaterialUnitPriceServiceTest {
     when(cache.findRefiningMaterials()).thenReturn(java.util.Optional.empty());
     when(cache.findLifeMaterials(org.mockito.ArgumentMatchers.anyInt()))
         .thenReturn(java.util.Optional.empty());
-    when(gate.withReserve(
-            org.mockito.ArgumentMatchers.anyInt(), org.mockito.ArgumentMatchers.any()))
-        .thenAnswer(invocation -> invocation.<java.util.function.Supplier<?>>getArgument(1).get());
+    when(gate.withClientBucket(
+            org.mockito.ArgumentMatchers.anyInt(),
+            org.mockito.ArgumentMatchers.any(),
+            org.mockito.ArgumentMatchers.any(),
+            org.mockito.ArgumentMatchers.any()))
+        .thenAnswer(invocation -> invocation.<java.util.function.Supplier<?>>getArgument(3).get());
   }
 
   private final Instant observed = Instant.parse("2026-10-05T00:00:00Z");
@@ -129,7 +132,14 @@ class MaterialUnitPriceServiceTest {
     var result = service.requestPrices(MaterialPriceBasis.RECENT_PRICE, names);
     verify(gate, times(1))
         .chargeClient(com.loakraken.common.lostark.ClientLimiter.Bucket.MATERIAL_PRICES);
-    verify(gate).withReserve(eq(MaterialUnitPriceService.REQUEST_RESERVE), any());
+    // 공식 검색은 요청 클라이언트의 재료 검색 버킷(15)과 모든 클라이언트 합계 버킷(36)에 매기고, 공유 예산에는 캐릭터 검색 몫 30을 남긴다.
+    verify(gate)
+        .withClientBucket(
+            eq(MaterialUnitPriceService.CHARACTER_SEARCH_RESERVE),
+            eq(com.loakraken.common.lostark.ClientLimiter.Bucket.MATERIAL_SEARCH),
+            eq(com.loakraken.common.lostark.ClientLimiter.Bucket.MATERIAL_SEARCH_ALL),
+            any());
+    assertThat(MaterialUnitPriceService.CHARACTER_SEARCH_RESERVE).isEqualTo(30);
     verify(markets, times(MaterialUnitPriceService.MAX_REQUEST_SEARCHES)).search(any(), any());
     assertThat(result).hasSize(25);
     // 15개는 세 분류를 다 봐서 NOT_FOUND, 16번째부터는 상한이라 보지 못함.
@@ -139,6 +149,13 @@ class MaterialUnitPriceServiceTest {
     assertThat(result.subList(15, 25))
         .extracting(MaterialUnitPriceService.UnitPrice::status)
         .containsOnly(MaterialUnitPriceService.UnitPrice.Status.PRICE_UNAVAILABLE);
+    // 요청당 검색 상한으로 보지 못한 이름의 사유는 SEARCH_LIMIT(끝까지 찾아 없던 이름은 사유 없음).
+    assertThat(result.subList(15, 25))
+        .extracting(MaterialUnitPriceService.UnitPrice::unavailableReason)
+        .containsOnly(MaterialUnitPriceService.SEARCH_LIMIT);
+    assertThat(result.subList(0, 15))
+        .extracting(MaterialUnitPriceService.UnitPrice::unavailableReason)
+        .containsOnlyNulls();
   }
 
   @Test
@@ -162,7 +179,14 @@ class MaterialUnitPriceServiceTest {
 
   @Test
   void 거래_불가_품목은_검색하지_않고_UNTRADEABLE이며_한도도_쓰지_않는다() {
-    var names = List.of("고급 생명의 기운 회복물약", "중급 생명의 기운 회복물약", "환희의 전설 카드 팩", "환희의 전설~영웅 카드 팩");
+    var names =
+        List.of(
+            "고급 생명의 기운 회복물약",
+            "중급 생명의 기운 회복물약",
+            "환희의 전설 카드 팩",
+            "환희의 전설~영웅 카드 팩",
+            "우레의 뇌옥",
+            "아크 그리드 코어");
     var result = service.requestPrices(MaterialPriceBasis.CURRENT_MIN_PRICE, names);
     assertThat(result)
         .extracting(MaterialUnitPriceService.UnitPrice::status)

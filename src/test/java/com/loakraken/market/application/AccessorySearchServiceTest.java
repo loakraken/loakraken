@@ -382,7 +382,8 @@ class AccessorySearchServiceTest {
             new ListingOption("STAT", "힘", BigDecimal.valueOf(mainStat), false, null),
             new ListingOption("STAT", "민첩", BigDecimal.valueOf(mainStat), false, null),
             new ListingOption("STAT", "지능", BigDecimal.valueOf(mainStat), false, null),
-            new ListingOption("STAT", "체력", new BigDecimal("4100.0"), false, null)));
+            new ListingOption("STAT", "체력", new BigDecimal("4100.0"), false, null)),
+        null);
   }
 
   private static final class FakeStore implements AccessorySearchStorePort {

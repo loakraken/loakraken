@@ -99,6 +99,53 @@ class KrakenScoreServiceTest {
     assertThat(registry.find("loakraken.kraken_score.unsupported").counter()).isNull();
   }
 
+  @Test
+  void 켜진_상태에서_엔진_밖_예외가_나면_꺼짐이_아니라_CALC_FAILED다() {
+    // 캐릭터 정보가 없는 결과: 입력 확인은 지나고 역할 판정에서 예외 — 전에는 컨트롤러가 null을 받아 DISABLED로 보였다.
+    var broken =
+        new CharacterResult(null, java.time.Instant.EPOCH, null, MAPPER.createObjectNode());
+    var registry = new SimpleMeterRegistry();
+    var score = new KrakenScoreService(TABLE, ENGINE, true, registry).score(broken);
+    assertThat(score.status()).isEqualTo(KrakenScoreService.Status.UNSUPPORTED);
+    assertThat(score.reason()).isEqualTo(KrakenScoreService.Reason.CALC_FAILED);
+    assertThat(score.score()).isNull();
+    assertThat(score.tier()).isNull();
+    // 꺼져 있으면 같은 결과도 지금처럼 DISABLED(계산하지 않음).
+    assertThat(
+            new KrakenScoreService(TABLE, ENGINE, false, new SimpleMeterRegistry())
+                .score(broken)
+                .status())
+        .isEqualTo(KrakenScoreService.Status.DISABLED);
+    // 컨트롤러의 마지막 안전망도 같은 값.
+    assertThat(new KrakenScoreService(TABLE, ENGINE, true, registry).failed().reason())
+        .isEqualTo(KrakenScoreService.Reason.CALC_FAILED);
+  }
+
+  @Test
+  void 엔진_안에서_예외가_나도_점수_값_문제가_아니라_CALC_FAILED다() throws IOException {
+    // 입력 확인은 지나고 엔진 계산에서 예상 못 한 예외가 난 경우.
+    var registry = new SimpleMeterRegistry();
+    var service =
+        new KrakenScoreService(TABLE, ENGINE, true, registry) {
+          @Override
+          double rawScore(Role role, JsonNode input) {
+            throw new IllegalStateException("엔진 실패");
+          }
+        };
+    var score = service.score(withInput(fixtureInput("l01")));
+    assertThat(score.status()).isEqualTo(KrakenScoreService.Status.UNSUPPORTED);
+    assertThat(score.reason()).isEqualTo(KrakenScoreService.Reason.CALC_FAILED);
+    assertThat(score.role()).isEqualTo(KrakenScoreService.Role.DEALER);
+    assertThat(score.score()).isNull();
+    assertThat(
+            registry
+                .get("loakraken.kraken_score.unsupported")
+                .tag("reason", "CALC_FAILED")
+                .counter()
+                .count())
+        .isEqualTo(1);
+  }
+
   private static CharacterResult withInput(JsonNode input) {
     return withInput(input, "블레이드", null);
   }
@@ -127,6 +174,33 @@ class KrakenScoreServiceTest {
     assertThat(empty.status()).isEqualTo(KrakenScoreService.Status.UNSUPPORTED);
     assertThat(empty.reason()).isEqualTo(KrakenScoreService.Reason.SCORE_UNAVAILABLE);
     assertThat(empty.score()).isNull();
+  }
+
+  @Test
+  void 진화_포인트가_숫자가_아니거나_없으면_틀린_등급_대신_계산하지_않는다() throws IOException {
+    // 코드 리뷰 10-25: 진화 points가 없으면 엔진이 진화 배율을 1로 두어 3977.02 GOLD가 2149.74 BRONZE로 나온다.
+    var service = new KrakenScoreService(TABLE, ENGINE, true, new SimpleMeterRegistry());
+    assertThat(service.score(withInput(fixtureInput("l01"))).status())
+        .isEqualTo(KrakenScoreService.Status.OK);
+    var doc =
+        MAPPER.readTree(
+            new ClassPathResource("kraken-score/l01.json")
+                .getContentAsString(StandardCharsets.UTF_8));
+    // 깨달음·도약 포인트도 같은 조건(코드 리뷰 10-25 P2).
+    for (var tree : new String[] {"진화", "깨달음", "도약"})
+      for (var bad : new String[] {"null", "\"?\"", "remove"}) {
+        var raw = doc.path("raw").deepCopy();
+        for (var point : raw.path("ArkPassive").path("Points"))
+          if (tree.equals(point.path("Name").asString(""))) {
+            var node = (tools.jackson.databind.node.ObjectNode) point;
+            if (bad.equals("remove")) node.remove("Value");
+            else node.set("Value", MAPPER.readTree(bad));
+          }
+        var score = service.score(withInput(KrakenScoreInputMapper.from(raw)));
+        assertThat(score.status()).as(bad).isEqualTo(KrakenScoreService.Status.UNSUPPORTED);
+        assertThat(score.reason()).as(bad).isEqualTo(KrakenScoreService.Reason.SCORE_UNAVAILABLE);
+        assertThat(score.tier()).as(bad).isNull();
+      }
   }
 
   private static JsonNode fixtureInput(String id) throws IOException {

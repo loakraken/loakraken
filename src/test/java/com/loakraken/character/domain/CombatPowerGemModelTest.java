@@ -15,9 +15,8 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * 보석 B단계(#243) 근거 고정: 볼트 「전투력 검증 준비」 7절. 기준 캐릭터(공식 전투력 4,052.77, 4티어 6레벨 11칸, 스톤 레벨 보너스 1.50%, 완갑
- * +13 추가 효과 1.00%)을 비교 기준 시뮬레이터에 넣은 값 두 건을 재현한다. 캐릭터 데이터는 같은 형식의 합성 값이다. 계산 검증 표본(#244, 5명 30건)도
- * 기대값으로 쓴다.
+ * 보석 B단계(#243) 근거 고정(내부 검증 기록). 기준 캐릭터(공식 전투력 4,052.77, 4티어 6레벨 11칸, 스톤 레벨 보너스 1.50%, 완갑 +13 추가 효과
+ * 1.00%)을 비교 기준 시뮬레이터에 넣은 값 두 건을 재현한다. 캐릭터 데이터는 같은 형식의 합성 값이다. 계산 검증 표본(#244, 5명 30건)도 기대값으로 쓴다.
  */
 class CombatPowerGemModelTest {
   private static final BigDecimal BEFORE = new BigDecimal("4052.77");
@@ -212,6 +211,27 @@ class CombatPowerGemModelTest {
         .multiply(model.ratio(levels))
         .divide(model.ratio(Map.of()), MathContext.DECIMAL64)
         .setScale(2, RoundingMode.HALF_UP);
+  }
+
+  @Test
+  void 보석_레벨을_읽지_못하면_빈_칸처럼_넘기지_않고_계산하지_않는다() {
+    // 코드 리뷰 10-25: 레벨이 빈 보석을 빈 칸처럼 건너뛰어 그 보석이 빠진 값으로 OK가 나왔다.
+    var base = loadout(6, "0.45", extraLines());
+    var gems = new ArrayList<>(base.gems().items());
+    var first = gems.getFirst();
+    gems.set(
+        0, new CharacterLoadout.Gem(first.slot(), first.name(), first.icon(), null, first.grade()));
+    var broken =
+        new CharacterLoadout(
+            base.equipment(),
+            null,
+            new CharacterLoadout.Gems(gems, base.gems().effects()),
+            null,
+            null,
+            null,
+            List.of());
+    var model = CombatPowerGemModel.of(COEFFICIENTS, broken);
+    assertThat(model.unsupportedReason()).contains("레벨을 읽지 못했습니다");
   }
 
   private static CharacterLoadout loadout(

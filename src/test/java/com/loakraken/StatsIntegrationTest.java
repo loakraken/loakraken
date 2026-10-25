@@ -2,6 +2,8 @@ package com.loakraken;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.loakraken.common.api.EfficiencyRuleVersions;
+import com.loakraken.stats.application.StatsPort;
 import java.math.BigDecimal;
 import java.net.URI;
 import java.net.URLEncoder;
@@ -37,6 +39,7 @@ class StatsIntegrationTest {
   @LocalServerPort int port;
   @Autowired StringRedisTemplate redis;
   @Autowired JdbcClient jdbc;
+  @Autowired StatsPort statsPort;
   private final JsonMapper mapper = new JsonMapper();
   private final Instant now = Instant.now();
 
@@ -446,12 +449,187 @@ class StatsIntegrationTest {
   }
 
   @Test
+  void 직업_각인_필터는_마지막_장비의_직업_각인으로_모집단을_좁히고_모르는_수를_준다() throws Exception {
+    // #618: 블레이드 5명 — 마지막 요약 기준 버스트 2(한 명은 예전 요약이 잔재된 기운), 잔재된 기운 1, 요약 없음 1, 빈 칭호 1.
+    var titles = new String[] {"버스트", "잔재된 기운", "버스트", null, ""};
+    for (int i = 0; i < titles.length; i++) {
+      insert(
+          "각인캐" + i,
+          "블레이드",
+          new BigDecimal(1720 - i),
+          new BigDecimal(5000 - 1000 * i),
+          "DEALER",
+          null,
+          null,
+          now.minus(1, ChronoUnit.DAYS));
+      if (titles[i] == null) continue;
+      var id =
+          jdbc.sql(
+                  "SELECT character_id FROM characters WHERE character_name = :n AND server_name = :s")
+              .param("n", "각인캐" + i)
+              .param("s", SERVER)
+              .query(UUID.class)
+              .single();
+      summary(id, i == 0 ? "잔재된 기운" : titles[i], 5, "a" + i);
+      if (i == 0) summary(id, titles[i], 1, "b" + i);
+    }
+    var base = "/api/v1/rankings?className=" + encode("블레이드") + "&server=" + encode(SERVER);
+
+    var all = data(base);
+    assertThat(all.at("/meta/population").asLong()).isEqualTo(5);
+    assertThat(all.path("classEngraving").isNull()).isTrue();
+    assertThat(all.path("classEngravingUnknown").isNull()).isTrue();
+
+    // 공백은 비교하지 않고, 응답은 목록의 표기다.
+    var burst = data(base + "&classEngraving=" + encode("버 스트"));
+    assertThat(burst.at("/meta/population").asLong()).isEqualTo(2);
+    assertThat(burst.path("classEngraving").asText()).isEqualTo("버스트");
+    assertThat(burst.path("classEngravingUnknown").asLong()).isEqualTo(2);
+    assertThat(burst.at("/rows").size()).isEqualTo(2);
+    assertThat(burst.at("/rows/0/characterName").asText()).isEqualTo("각인캐0");
+    assertThat(burst.at("/rows/0/rank").asLong()).isEqualTo(1);
+    assertThat(burst.at("/rows/1/characterName").asText()).isEqualTo("각인캐2");
+    assertThat(burst.at("/rows/1/rank").asLong()).isEqualTo(2);
+    assertThat(burst.at("/rows/1/classEngraving").asText()).isEqualTo("버스트");
+
+    var choices =
+        data(
+            "/api/v1/rankings/class-engravings?className="
+                + encode("블레이드")
+                + "&server="
+                + encode(SERVER));
+    assertThat(choices.path("className").asText()).isEqualTo("블레이드");
+    var counts = new java.util.HashMap<String, Long>();
+    choices
+        .path("classEngravings")
+        .forEach(row -> counts.put(row.path("name").asText(), row.path("count").asLong()));
+    assertThat(counts).containsEntry("버스트", 2L).containsEntry("잔재된 기운", 1L).hasSize(2);
+    assertThat(choices.path("unknown").asLong()).isEqualTo(2);
+
+    // 직업 없이, 다른 직업의 직업 각인, 모르는 직업은 기존 400 INVALID_REQUEST다.
+    for (var path :
+        new String[] {
+          "/api/v1/rankings?classEngraving=" + encode("버스트"),
+          base + "&classEngraving=" + encode("광기"),
+          base + "&classEngraving=",
+          "/api/v1/rankings?classEngraving=%20",
+          "/api/v1/rankings/class-engravings",
+          "/api/v1/rankings/class-engravings?className=" + encode(MAIN_CLASS)
+        }) {
+      var response = get(path);
+      assertThat(response.statusCode()).as(path).isEqualTo(400);
+      assertThat(mapper.readTree(response.body()).path("code").asText())
+          .as(path)
+          .isEqualTo("INVALID_REQUEST");
+    }
+  }
+
+  private void summary(UUID id, String title, int hoursAgo, String hash) {
+    jdbc.sql(
+            """
+        INSERT INTO character_equipment_summary (character_id, observed_at, last_confirmed_at,
+          schema_version, combat_power, item_level, class_name, ark_passive_title, features, features_hash)
+        VALUES (:id, :at, :at, 'equipment-summary-v1', 3000, 1720, '블레이드', :title,
+          CAST('{}' AS JSONB), :hash)
+        """)
+        .param("id", id)
+        .param("at", now.minus(hoursAgo, ChronoUnit.HOURS).atOffset(ZoneOffset.UTC))
+        .param("title", title)
+        .param("hash", hash + "0".repeat(64 - hash.length()))
+        .update();
+  }
+
+  @Test
   void 저장된_효율이_없으면_빈_랭킹이다() throws Exception {
     표본();
     var empty = data("/api/v1/rankings/ark-grid-gems?server=" + encode(SERVER));
     assertThat(empty.path("ruleVersion").asText())
         .isEqualTo(com.loakraken.common.api.EfficiencyRuleVersions.ARK_GRID);
     assertThat(empty.at("/rows").size()).isZero();
+  }
+
+  @Test
+  void 실_효율_열은_지금_규칙_버전의_딜러_값만_높은_순으로_세고_원본_자릿수를_지킨다() {
+    // B3: 실 효율 열(설정이 켜지면 쓰는 기준). 홀수 = 딜러, 짝수 = 서포터.
+    표본();
+    var t = Instant.now();
+    realEfficiency(
+        "통계캐1", "17.88", EfficiencyRuleVersions.BRACELET_REAL, "11.21", t.minusSeconds(60));
+    realEfficiency(
+        "통계캐3", "11.3", EfficiencyRuleVersions.BRACELET_REAL, "9.07", t.minusSeconds(50));
+    realEfficiency("통계캐5", "99.99", "bracelet-real-v0", null, t.minusSeconds(40));
+    realEfficiency(
+        "통계캐2",
+        "18.107142857142858",
+        EfficiencyRuleVersions.BRACELET_REAL,
+        "30.00",
+        t.minusSeconds(30));
+    var conditions =
+        new com.loakraken.stats.domain.StatsConditions(
+            SERVER,
+            null,
+            null,
+            com.loakraken.stats.domain.StatsRules.DEFAULT_ACTIVE_DAYS,
+            null,
+            null,
+            null,
+            null,
+            false);
+    var since = conditions.since(Instant.now());
+
+    var bracelets =
+        statsPort.efficiencyRanking(
+            conditions, since, StatsPort.EfficiencyKind.BRACELET.columns(true), 0, 10);
+    assertThat(bracelets.ruleVersion()).isEqualTo(EfficiencyRuleVersions.BRACELET_REAL);
+    // 옛 버전(통계캐5)과 서포터(통계캐2)는 빠진다.
+    assertThat(bracelets.total()).isEqualTo(2);
+    assertThat(bracelets.rows().get(0).characterName()).isEqualTo("통계캐1");
+    assertThat(bracelets.rows().get(0).value()).isEqualByComparingTo("17.88");
+    assertThat(bracelets.rows().get(1).characterName()).isEqualTo("통계캐3");
+
+    var gems =
+        statsPort.efficiencyRanking(
+            conditions, since, StatsPort.EfficiencyKind.ARK_GRID_GEM.columns(true), 0, 10);
+    assertThat(gems.ruleVersion()).isEqualTo(EfficiencyRuleVersions.ARK_GRID_REAL);
+    assertThat(gems.rows())
+        .extracting(StatsPort.EfficiencyRow::characterName)
+        .containsExactly("통계캐1", "통계캐3");
+
+    // 서포터 원본 값은 자릿수를 자르지 않고 저장된다(캐릭터 화면 값과 같게).
+    var supporter =
+        jdbc.sql(
+                "SELECT bracelet_real_pct FROM characters WHERE server_name = :s AND character_name = '통계캐2'")
+            .param("s", SERVER)
+            .query(BigDecimal.class)
+            .single();
+    assertThat(supporter).isEqualTo(new BigDecimal("18.107142857142858"));
+
+    // 전투력 기여 모델 열은 따로다(실 효율만 저장된 캐릭터는 들어가지 않음).
+    assertThat(
+            statsPort
+                .efficiencyRanking(
+                    conditions, since, StatsPort.EfficiencyKind.BRACELET.columns(false), 0, 10)
+                .total())
+        .isZero();
+  }
+
+  private void realEfficiency(
+      String name, String bracelet, String braceletVersion, String gem, Instant observedAt) {
+    jdbc.sql(
+            """
+        UPDATE characters SET bracelet_real_pct = CAST(:bracelet AS NUMERIC),
+          bracelet_real_rule_version = :bv, ark_grid_real_pct = CAST(:gem AS NUMERIC),
+          ark_grid_real_rule_version = :gv, efficiency_observed_at = :at
+        WHERE character_name = :name AND server_name = :server
+        """)
+        .param("bracelet", new BigDecimal(bracelet))
+        .param("bv", braceletVersion)
+        .param("gem", gem == null ? null : new BigDecimal(gem))
+        .param("gv", gem == null ? null : EfficiencyRuleVersions.ARK_GRID_REAL)
+        .param("at", observedAt.atOffset(ZoneOffset.UTC))
+        .param("name", name)
+        .param("server", SERVER)
+        .update();
   }
 
   private void efficiency(

@@ -52,6 +52,10 @@ class RosterCombatPowerIntegrationTest {
   @Autowired JdbcClient jdbc;
   @Autowired StringRedisTemplate redis;
   @MockitoBean CharacterDetailsPort detailsPort;
+
+  @org.springframework.test.context.bean.override.mockito.MockitoSpyBean
+  com.loakraken.common.lostark.LostArkRequestGate gate;
+
   private final JsonMapper mapper = new JsonMapper();
 
   @BeforeEach
@@ -266,6 +270,28 @@ class RosterCombatPowerIntegrationTest {
     assertThat(none.path("fetched").asInt()).isZero();
     assertThat(none.path("refreshAvailableAt").isNull()).isTrue();
     assertThat(post("원정전투영가", "203.0.113.33").statusCode()).isEqualTo(200);
+  }
+
+  @Test
+  void 방문자_공식_칸이_적게_남으면_남겨_두고_멈추며_나머지는_remaining이다() throws Exception {
+    // #614: 일괄 불러오기가 방문자 분당 공식 칸을 다 쓰지 않게, 대상마다 '더 불러도 되는지' 보고 아니면 멈춘다.
+    roster("원정전투남가", "원정전투남나", "원정전투남다", "원정전투남라", "원정전투남마");
+    when(detailsPort.fetchProfile(anyString(), anyInt()))
+        .thenAnswer(invocation -> profile(invocation.getArgument(0), "3000.00"));
+    org.mockito.Mockito.doReturn(true, true, false).when(gate).bulkMayContinue();
+    var partial = post("원정전투남가", "203.0.113.40");
+    assertThat(partial.statusCode()).isEqualTo(200);
+    assertThat(data(partial).path("fetched").asInt()).isEqualTo(2);
+    assertThat(data(partial).path("remaining").asInt()).isEqualTo(3);
+
+    // 처음부터 칸이 모자라면 하나도 부르지 않고 쿨다운을 묶지 않는다(바로 다시 누를 수 있음).
+    정리();
+    roster("원정전투없가", "원정전투없나");
+    org.mockito.Mockito.doReturn(false).when(gate).bulkMayContinue();
+    var none = data(post("원정전투없가", "203.0.113.41"));
+    assertThat(none.path("fetched").asInt()).isZero();
+    assertThat(none.path("remaining").asInt()).isEqualTo(2);
+    assertThat(none.path("refreshAvailableAt").isNull()).isTrue();
   }
 
   @Test

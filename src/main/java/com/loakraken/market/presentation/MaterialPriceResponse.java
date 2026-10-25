@@ -26,7 +26,8 @@ public record MaterialPriceResponse(
                         price.bundleCount(),
                         price.bundlePrice(),
                         price.contentsPerItem(),
-                        price.observedAt()))
+                        price.observedAt(),
+                        price.unavailableReason()))
             .toList());
   }
 
@@ -46,5 +47,11 @@ public record MaterialPriceResponse(
       @Schema(
               description =
                   "거래소 페이지를 읽은 UTC 시각(예열 시세면 그 스캔 시각). 캐시 적중에도 유지. 조회하지 못한 PRICE_UNAVAILABLE이면 응답 시각")
-          Instant observedAt) {}
+          Instant observedAt,
+      @Schema(
+              description =
+                  "PRICE_UNAVAILABLE 가운데 지금 조회하지 못한 이유(문자열, 값이 늘 수 있음). RATE_LIMITED: 재료 검색 한도(클라이언트·전체)나 공유 호출 예산에 걸림 — 시세가 없는 것이 아니라 잠시 뒤 다시 보면 채워짐, SEARCH_LIMIT: 요청당 검색 상한, OFFICIAL_UNAVAILABLE: 공식 서버 장애. 시세를 읽었는데 가격이 없거나 0이면, 또는 다른 상태면 null",
+              example = "RATE_LIMITED")
+          @NullableResponse
+          String unavailableReason) {}
 }

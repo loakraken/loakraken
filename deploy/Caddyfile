@@ -24,7 +24,16 @@
 		X-Request-Id {http.request.uuid}
 	}
 
-	reverse_proxy web:3000
+	# /api/* 요청 본문 상한(Caddyfile.cloudflare와 같음). 넘으면 413.
+	request_body /api/* {
+		max_size 256KB
+	}
+
+	# web 컨테이너를 다시 만드는 동안 연결이 안 되면 10초까지 다시 시도한다(Caddyfile.cloudflare와 같음).
+	reverse_proxy web:3000 {
+		lb_try_duration 10s
+		lb_try_interval 250ms
+	}
 }
 
 # 컨테이너 헬스 체크 전용(compose healthcheck). 컨테이너 안 127.0.0.1에만 열고 호스트로 내보내지 않는다.

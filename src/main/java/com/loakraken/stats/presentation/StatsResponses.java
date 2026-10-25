@@ -340,10 +340,13 @@ public final class StatsResponses {
   public record StatsEfficiencyRankingResponse(
       StatsMetaResponse meta,
       @Schema(
-              description = "BRACELET(팔찌 효율) 또는 ARK_GRID_GEM(젬 옵션 합계 효율)",
+              description = "BRACELET(팔찌 효율) 또는 ARK_GRID_GEM(젬 효율)",
               allowableValues = {"BRACELET", "ARK_GRID_GEM"})
           String kind,
-      @Schema(description = "순위에 쓴 계산 규칙 버전. 이 버전으로 계산된 값만 셉니다") String ruleVersion,
+      @Schema(
+              description = "순위에 쓴 계산 규칙 버전. 이 버전으로 계산된 값만 셉니다. 값의 정의도 이 버전으로 구분합니다(경로 설명)",
+              example = "bracelet-real-v1")
+          String ruleVersion,
       @Schema(
               description =
                   "순위 대상: 캐릭터 검색으로 장비를 관측해 효율을 계산한 캐릭터(딜러, 계산이 된 값만)입니다. 수집기만 거친 캐릭터는 들어가지 않습니다. 계산 모델이 바뀌면 다음 관측 때 갱신된 캐릭터부터 다시 셉니다.")
@@ -389,8 +392,7 @@ public final class StatsResponses {
       @NullableResponse @Schema(allowableValues = {"DEALER", "SUPPORT"}) String position,
       BigDecimal itemLevel,
       BigDecimal combatPower,
-      @Schema(description = "효율 %(소수 둘째 자리): 지금 전투력이 그 항목을 뺀 전투력보다 몇 % 높은지")
-          BigDecimal valuePercent,
+      @Schema(description = "효율 %(소수 둘째 자리). 정의는 ruleVersion에 따릅니다(경로 설명)") BigDecimal valuePercent,
       @Schema(description = "효율을 계산한 관측 시각") java.time.Instant observedAt,
       @NullableResponse BigDecimal topPercent,
       @NullableResponse
@@ -402,8 +404,14 @@ public final class StatsResponses {
       @Schema(allowableValues = {"COMBAT_POWER", "ITEM_LEVEL"}) String metric,
       int page,
       int size,
-      @Schema(description = "전체 순위 대상 수는 meta.population")
-          List<StatsRankedCharacterResponse> rows) {
+      @Schema(description = "전체 순위 대상 수는 meta.population") List<StatsRankedCharacterResponse> rows,
+      @NullableResponse @Schema(description = "요청한 직업 각인(직업 각인 목록의 표기). 필터를 쓰지 않으면 null")
+          String classEngraving,
+      @NullableResponse
+          @Schema(
+              description =
+                  "직업 각인 필터를 켰을 때, 같은 조건에서 직업 각인을 모르는(장비를 관측하지 않았거나 직업 각인이 없는(깨달음 노드 없음)) 캐릭터 수. 이 캐릭터들은 순위에 들어가지 않습니다. 필터를 쓰지 않거나 세지 못하면 null")
+          Long classEngravingUnknown) {
     static StatsRankingResponse from(StatsQueryService.RankingResult result) {
       return new StatsRankingResponse(
           StatsMetaResponse.from(result.meta()),
@@ -439,9 +447,40 @@ public final class StatsResponses {
                               : new StatsEstherWeaponResponse(
                                   row.estherWeapon().refineLevel(),
                                   row.estherWeapon().ellaStage())))
-              .toList());
+              .toList(),
+          result.classEngraving(),
+          result.classEngravingUnknown());
     }
   }
+
+  /** 랭킹 직업 각인 선택지(#618). */
+  public record StatsClassEngravingsResponse(
+      String className,
+      @Schema(description = "직업 각인 목록 순서. 랭킹 classEngraving에 그대로 넣을 수 있는 값")
+          List<StatsClassEngravingResponse> classEngravings,
+      @NullableResponse
+          @Schema(
+              description =
+                  "같은 조건에서 직업 각인을 모르는(장비를 관측하지 않았거나 직업 각인이 없는(깨달음 노드 없음)) 캐릭터 수. 세지 못하면 null")
+          Long unknown,
+      @NullableResponse @Schema(description = "수를 센 시각(10분 캐시). 세지 못하면 null")
+          Instant aggregatedAt) {
+    static StatsClassEngravingsResponse from(StatsQueryService.ClassEngravingsResult result) {
+      return new StatsClassEngravingsResponse(
+          result.className(),
+          result.classEngravings().stream()
+              .map(row -> new StatsClassEngravingResponse(row.name(), row.count()))
+              .toList(),
+          result.unknown(),
+          result.aggregatedAt());
+    }
+  }
+
+  public record StatsClassEngravingResponse(
+      @Schema(description = "직업 각인(공식 아크 패시브 칭호 표기)") String name,
+      @NullableResponse
+          @Schema(description = "같은 조건 모집단에서 마지막으로 관측한 장비의 직업 각인이 이 값인 캐릭터 수. 세지 못하면 null")
+          Long count) {}
 
   public record StatsRankEntryResponse(
       @Schema(allowableValues = {"COMBAT_POWER", "ITEM_LEVEL"}) String metric,

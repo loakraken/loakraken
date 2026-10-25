@@ -264,4 +264,154 @@ groups:
         labels: { severity: ticket }
         annotations:
           summary: 15분 안에 공유 게이트의 예산·동시 실행 거절이 30번을 넘었다(사용자 요청이 공식 호출 대기에서 밀림).
-          description: "먼저: 대시보드 공식 API 패널과 사용자 한도 거절 패널 → 접속이 몰린 건지, 수집기가 예산을 많이 쓰는지. 기준 30은 공개 뒤 실측으로 다시 맞춘다."
+          description: "먼저: 대시보드 공식 API 패널과 사용자 한도 거절 패널 → 접속이 몰린 건지, 수집기가 예산을 많이 쓰는지. 거절이 10분 넘게 늘면 부하 대응 1단계(수집기·예열 끄기). 기준 30은 공개 뒤 실측으로 다시 맞춘다."
+
+      - uid: loakraken-official-user-near-budget
+        title: 사용자 공식 호출이 예산에 가까움
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: loakraken-prometheus
+            model:
+              refId: A
+              instant: true
+              # 사용자 요청 몫(user·user_reserve)의 분당 공식 호출. 배경 작업은 사용자 몫을 남기고 예산을 채우도록 되어 있어 전체 호출 수로는 보지 않는다.
+              # 실제로 예산 거절이 난 때만 본다(사용자가 기다리거나 실패하는 증상).
+              expr: >-
+                (sum(rate(loakraken_lostark_calls_total{application="loakraken",origin=~"user|user_reserve"}[5m])) * 60)
+                and on() (sum(increase(loakraken_lostark_gate_total{application="loakraken",event="budget_reject"}[5m])) > 0)
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [72] }
+        for: 15m
+        noDataState: OK
+        execErrState: Error
+        labels: { severity: page }
+        annotations:
+          summary: 사용자 요청의 공식 호출이 분당 72(예산 90의 80%)를 넘고 예산 거절이 나는 상태가 15분 넘게 이어졌다.
+          description: "먼저: 대시보드 공식 API 패널의 엔드포인트별 호출 → 한 엔드포인트가 몰렸는지. 1단계: 수집기·예열을 끄고 사용자 몫을 늘린다. 2단계(1단계 뒤에도 이 경보가 10분 이어지거나 사용자 예산 거절이 5분 넘게 계속될 때): 방문자별 공식 한도 CLIENT_LIMIT_OFFICIAL 20→10. 되돌리기: 이 경보와 거절이 둘 다 15분 조용하면 20으로."
+
+      - uid: loakraken-client-limit-unattributed
+        title: 클라이언트 한도 제외 요청
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 1800, to: 0 }
+            datasourceUid: loakraken-prometheus
+            model:
+              refId: A
+              instant: true
+              expr: sum(increase(loakraken_client_limit_unattributed_total{application="loakraken"}[15m]))
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [0] }
+        for: 0s
+        noDataState: OK
+        execErrState: Error
+        labels: { severity: ticket }
+        annotations:
+          summary: 15분 안에 클라이언트 한도를 세지 않은 요청(같은 호스트에서 넘겨받은 주소 없이 앱 포트로 온 요청)이 있었다.
+          description: "먼저: 같은 시각 api 로그의 요청 경로 → 운영 점검은 관리 포트를 쓰므로 이 요청은 보통 없다. 반복되면 어디서 온 요청인지 확인."
+
+      # 비정상 트래픽: 평소 대비로 본다. 기준 구간은 15분 전에서 끝나 지금 몰린 요청이 평소 값을 끌어올리지 않는다.
+      - uid: loakraken-route-surge
+        title: 경로별 요청 급증
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 5400, to: 0 }
+            datasourceUid: loakraken-prometheus
+            model:
+              refId: A
+              instant: true
+              # 경로 묶음 = /api/v1/ 다음 첫 경로(고정된 몇 개). 5분 요청 300건(초당 1건) 미만인 묶음은 보지 않는다.
+              expr: >-
+                (sum by (route) (label_replace(rate(http_server_requests_seconds_count{application="loakraken",uri=~"/api/.+"}[5m]), "route", "$1", "uri", "/api/v[0-9]+/([^/]+).*"))
+                / sum by (route) (label_replace(rate(http_server_requests_seconds_count{application="loakraken",uri=~"/api/.+"}[1h] offset 15m), "route", "$1", "uri", "/api/v[0-9]+/([^/]+).*")))
+                and (sum by (route) (label_replace(increase(http_server_requests_seconds_count{application="loakraken",uri=~"/api/.+"}[5m]), "route", "$1", "uri", "/api/v[0-9]+/([^/]+).*")) >= 300)
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [3] }
+        for: 10m
+        noDataState: OK
+        execErrState: Error
+        labels: { severity: ticket }
+        annotations:
+          summary: "경로 묶음 {{ $labels.route }}의 요청 속도가 평소(15분 전까지 1시간 평균)의 3배를 10분 넘게 유지했다."
+          description: "먼저: 대시보드 '요청 수(분당)'에서 같은 묶음의 경로 → '사용자 한도 거절(분당) — 버킷별'(한 곳에서 몰리면 거절이 같이 오른다). 공지·업데이트로 사람이 몰린 것이면 정상. 아니면 api 로그에서 같은 시각 요청 경로·응답 코드를 본다."
+
+      - uid: loakraken-4xx-surge
+        title: 4xx 비율 급증
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 5400, to: 0 }
+            datasourceUid: loakraken-prometheus
+            model:
+              refId: A
+              instant: true
+              # 429(한도 거절)는 아래 한도 경보가 따로 본다. 평소 비율의 2배가 넘고 5분 요청 200건 이상일 때만 판단한다.
+              expr: >-
+                (sum(rate(http_server_requests_seconds_count{application="loakraken",uri!~"/actuator.*",status=~"4..",status!="429"}[5m]))
+                / sum(rate(http_server_requests_seconds_count{application="loakraken",uri!~"/actuator.*"}[5m])))
+                > on() (2 * ((sum(rate(http_server_requests_seconds_count{application="loakraken",uri!~"/actuator.*",status=~"4..",status!="429"}[1h] offset 15m))
+                / sum(rate(http_server_requests_seconds_count{application="loakraken",uri!~"/actuator.*"}[1h] offset 15m))) or on() vector(0)))
+                and on() (sum(increase(http_server_requests_seconds_count{application="loakraken",uri!~"/actuator.*"}[5m])) >= 200)
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [0.2] }
+        for: 10m
+        noDataState: OK
+        execErrState: Error
+        labels: { severity: ticket }
+        annotations:
+          summary: api 응답의 4xx 비율(429 제외)이 20%를 넘고 평소의 2배가 넘는 상태가 10분 넘게 이어졌다.
+          description: "먼저: 대시보드 '요청 수 — 상태별(분당)'에서 어느 코드인지 → 없는 캐릭터 이름 조회(404)가 몰린 것인지, 잘못된 입력(400)이 몰린 것인지. 배포 직후면 web과 api 판이 맞는지 본다."
+
+      - uid: loakraken-client-limit-rejects
+        title: 사용자 한도 거절 급증
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 1800, to: 0 }
+            datasourceUid: loakraken-prometheus
+            model:
+              refId: A
+              instant: true
+              expr: sum by (bucket) (increase(loakraken_client_limit_total{application="loakraken",event="reject"}[15m]))
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [100] }
+        for: 0s
+        noDataState: OK
+        execErrState: Error
+        labels: { severity: ticket }
+        annotations:
+          summary: "15분 안에 사용자 한도({{ $labels.bucket }}) 거절이 100번을 넘었다."
+          description: "먼저: api 로그의 event=client_limit_reject 줄(client는 해시 앞부분이라 개인정보 없음)에서 같은 client·route가 반복되는지 → 한 곳이 계속 두드리는 것이면 Cloudflare에서 막는 것을 검토. 여러 키에 고르게 퍼져 있으면 한도가 너무 낮은 것일 수 있다(공개 뒤 실측으로 조정)."

@@ -16,7 +16,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.TransactionException;
 
 /**
- * 원정대 캐릭터별 전투력(L19, 볼트 「원정대 캐릭터별 전투력 설계 (L19)」).
+ * 원정대 캐릭터별 전투력(L19).
  *
  * <p>조회는 원정대 목록 캐시(/siblings와 같은 캐시, 없으면 공식 1회)와 우리 DB 기록만 쓴다. 불러오기는 사용자가 누를 때만, 기록이 없거나 오래된(기본
  * 24시간) 캐릭터를 아이템 레벨 높은 순으로 최대 12명 공식 프로필 API(전투력 포함, 2026-10-12 확인)로 부르고 검색과 같은 기록 경로로 저장한다. 같은
@@ -45,6 +45,7 @@ public class RosterCombatPowerService {
   private final RosterCombatPowerPolicy policy;
   private final RosterTransientPort transients;
   private final Clock clock;
+  private final com.loakraken.common.lostark.LostArkRequestGate gate;
   private final SingleFlight<Refresh> flights = new SingleFlight<>();
 
   public RosterCombatPowerService(
@@ -57,7 +58,9 @@ public class RosterCombatPowerService {
       CharacterMetrics metrics,
       RosterCombatPowerPolicy policy,
       RosterTransientPort transients,
-      Clock clock) {
+      Clock clock,
+      com.loakraken.common.lostark.LostArkRequestGate gate) {
+    this.gate = gate;
     this.transients = transients;
     this.queries = queries;
     this.details = details;
@@ -144,6 +147,11 @@ public class RosterCombatPowerService {
     boolean unavailable = false;
     for (var target : targets) {
       if (attempted == policy.maxTargets()) break;
+      // 방문자 한 명의 분당 공식 칸을 다 쓰지 않게, 남은 칸이 적으면 멈추고 나머지는 다음 분으로(remaining, #614).
+      if (!gate.bulkMayContinue()) {
+        stopped = true;
+        break;
+      }
       attempted++;
       try {
         // 처리정지 목록도 다른 캐릭터와 똑같이 부른다(호출 수·fetched가 같아야 숫자로 드러나지 않음, B5).

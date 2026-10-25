@@ -852,6 +852,7 @@ class OpenApiIntegrationTest {
           "/api/v1/stats/distribution",
           "/api/v1/stats/snapshots",
           "/api/v1/rankings",
+          "/api/v1/rankings/class-engravings",
           "/api/v1/characters/rank"
         })
       assertThat(document.at("/paths/" + path.replace("/", "~1") + "/get").isMissingNode())
@@ -923,6 +924,15 @@ class OpenApiIntegrationTest {
             .readTree(request("/v3/api-docs").body())
             .at("/components/schemas");
     assertThat(schemas.at("/CritSpeedCritResponse/required").toString()).contains("damage");
+    // 스탯을 읽지 못하면 이유(코드 리뷰 10-25): 추가 필드, 계산했으면 null
+    assertThat(
+            schemas.at("/CritSpeedCritResponse/properties/unavailableReason/anyOf/1/type").asText())
+        .isEqualTo("null");
+    assertThat(
+            schemas
+                .at("/CritSpeedSpeedResponse/properties/unavailableReason/anyOf/1/type")
+                .asText())
+        .isEqualTo("null");
     assertThat(schemas.at("/CritSpeedCritDamageResponse/required").toString())
         .contains("base", "observed", "total");
     // 스킬별 치명타 적중률(#168): 추가 필드, 모르는 값은 null

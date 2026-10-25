@@ -56,7 +56,7 @@ public class SpecUpController {
           "캐릭터 캐시의 현재 세팅에서 후보 업그레이드마다 전투력 시뮬레이터를 변화 하나로 돌린 Δ전투력, 시세 캐시로 구한 비용, 1만 골드당 전투력을 줍니다. 후보끼리 Δ를 더하지 않습니다. "
               + "계산식이 확정되지 않은 후보도 status=UNSUPPORTED와 reasonCode·reason(같은 코드는 같은 문장)으로 남깁니다. "
               + "limit은 OK 후보에만 적용하고(total = 자르기 전 OK 후보 수), UNSUPPORTED는 모두 뒤에 붙습니다. "
-              + "cost.status: OK(금액 있음)·PENDING(시세 칸을 아직 받지 못함)·UNKNOWN(비용 근거 없음). 보석 비용은 목표 레벨 즉시 구매 최저가 − 지금 보석 판매 기대가(거래소 수수료 5% 올림, 귀속이면 빼지 않음)입니다. "
+              + "cost.status: OK(금액 있음)·PENDING(시세 칸을 아직 받지 못함)·UNKNOWN(비용 근거 없음). 보석 비용은 목표 레벨 즉시 구매 최저가 − 지금 보석 즉시 구매 최저가(판매 수수료는 빼지 않음, 귀속이면 빼지 않음)입니다. "
               + "sort=KRAKEN이면 후보마다 크라켄 점수 엔진으로 Δ크라켄 점수(적용 뒤 점수 − 지금 점수, 반올림 전 값의 차를 소수 둘째 자리로)를 내고 10만 골드당 점수 내림차순으로 정렬합니다(비용 모름은 Δ 순, 그 밖은 효율 순). "
               + "점수를 낼 수 없으면(서포터·점수 꺼짐·입력 없음) 효율 순으로 정렬하고 krakenSortUnavailableReason에 이유를 줍니다. "
               + "includeCooldownGems를 주지 않으면 KRAKEN은 작열(쿨) 보석 후보를 빼고 다른 정렬은 넣으며, 실제로 적용한 값은 cooldownGemsIncluded입니다. "
@@ -89,10 +89,10 @@ public class SpecUpController {
           @RequestParam(required = false)
           @Pattern(regexp = "EFFICIENCY|DELTA|KRAKEN")
           String sort,
-      @Parameter(description = "OK 후보 최대 개수(기본 20, 최대 50)")
+      @Parameter(description = "순위 후보 최대 개수(기본 20, 최대 200 — 연마·스톤·카르마 줄까지 모두 보려면 크게)")
           @RequestParam(required = false)
           @Min(1)
-          @Max(50)
+          @Max(200)
           Integer limit,
       @Parameter(description = "작열(쿨) 보석 후보를 넣을지. 주지 않으면 KRAKEN은 빼고 다른 정렬은 넣음")
           @RequestParam(required = false)
@@ -114,8 +114,8 @@ public class SpecUpController {
       description =
           "목표 전투력에 닿을 때까지 지금 상태에서 항목마다 다음 한 단계를 만들고, 효율 순(1만 골드당 전투력, 비용을 모르는 단계는 그 뒤에 Δ전투력 순)으로 가장 앞의 단계를 적용하기를 되풀이한 경로를 줍니다. "
               + "같은 항목을 여러 단계 올릴 수 있습니다. 모든 전투력은 전투력 시뮬레이터 결과입니다(steps[].change를 차례로 시뮬레이터에 넣은 값과 같음). "
-              + "금액(cost.amount·cumulativeCost·totalCost)은 모두 골드입니다. 시세가 없는 단계가 있으면 그 단계부터 cumulativeCost와 totalCost는 null입니다(0으로 더하지 않음). "
-              + "같은 보석 칸을 이어서 올리면 둘째 단계부터 비용은 이번 레벨 매입가 − 직전 레벨 매입가(GEM_STEP)라 단계 비용의 합은 마지막 레벨 매입가 − 처음 보석 판매 기대가입니다. "
+              + "금액(cost.amount·cumulativeCost·totalCost)은 모두 골드입니다. 합계에 들어가는 값 가운데 모르는 것이 있으면 cumulativeCost와 totalCost는 null입니다(0으로 더하지 않음 — 같은 보석 칸의 다음 단계 비용을 알면 그 칸 값은 다음 단계 것으로 바뀌어 다시 값이 생길 수 있음). "
+              + "보석 단계의 cost는 지금에서 그 레벨까지의 누적 비용(스펙업 목록의 같은 목표 후보 비용과 같은 식, 음수 없음)이고, 같은 칸을 이어서 올리면 cumulativeCost·totalCost에는 그 칸의 마지막 단계 누적만 들어갑니다(단계 비용을 더하지 않음). 단계마다 따로 구해 그 레벨 시세가 없으면 그 단계만 비용을 모릅니다. "
               + "딜러가 아니거나 공식 전투력이 없으면 200, 빈 steps, stopReasonCode에 스펙업 가이드와 같은 이유 코드를 줍니다. "
               + "최대 30단계, 계산 시간 상한이 있습니다. 같은 캐릭터 수집 시각·시세 시각·목표는 10분 동안 캐시합니다(시간 상한으로 멈춘 결과는 캐시하지 않음). "
               + "요청이 많으면 429 CLIENT_RATE_LIMITED와 Retry-After(초)를 줍니다. 503은 저장소 장애이고 Retry-After가 없으니 잠시 뒤 다시 요청합니다. "
@@ -241,10 +241,16 @@ public class SpecUpController {
       @Schema(description = "전투력 시뮬레이터 요청의 changes[] 하나와 같은 모양") ChangeResponse change,
       @Schema(description = "이 단계로 늘어난 전투력(소수 둘째 자리)") BigDecimal deltaCombatPower,
       @Schema(description = "이 단계까지 적용한 전투력(시뮬레이터)") BigDecimal combatPowerAfter,
-      @Schema(description = "이 단계 비용(골드)") CostResponse cost,
-      @Schema(description = "이 단계까지 누적 비용(골드). 앞 단계 포함 시세 없는 단계가 있으면 null") @NullableResponse
+      @Schema(description = "이 단계 비용(골드). 보석 단계는 지금에서 그 레벨까지의 누적 비용(음수 없음)") CostResponse cost,
+      @Schema(
+              description =
+                  "이 단계까지 경로 합계(골드, 보석 칸은 그 칸의 마지막 단계 누적만). 합계에 들어가는 값 가운데 모르는 것이 있으면 null")
+          @NullableResponse
           Long cumulativeCost,
-      @Schema(description = "1만 골드당 전투력(소수 둘째 자리). 비용이 OK일 때만") @NullableResponse
+      @Schema(
+              description =
+                  "1만 골드당 전투력(소수 둘째 자리) = 이 단계 Δ ÷ 이 단계에 더 드는 비용(보석은 누적 차이). 더 드는 비용이 0 이하이거나 모르면 null")
+          @NullableResponse
           BigDecimal combatPowerPer10kGold) {
     static SpecUpGoalStepResponse from(SpecUpGoalService.Step step) {
       return new SpecUpGoalStepResponse(
@@ -295,8 +301,8 @@ public class SpecUpController {
           boolean cooldownGemsIncluded,
       @Schema(
               description =
-                  "Δ크라켄 점수를 낼 수 없는 이유(문자열, 값이 늘 수 있음): DISABLED·INPUT_PENDING·ROLE_UNKNOWN·SUPPORTER_PENDING·SCORE_UNAVAILABLE. 이때 KRAKEN도 효율 순. 낼 수 있으면 null",
-              example = "SUPPORTER_PENDING")
+                  "Δ크라켄 점수를 낼 수 없는 이유(문자열, 값이 늘 수 있음): DISABLED·INPUT_PENDING·ROLE_UNKNOWN·SCORE_UNAVAILABLE(예전 SUPPORTER_PENDING은 더 내지 않음 — 서포터는 서포터 점수식으로 Δ를 낸다). 이때 KRAKEN도 효율 순. 낼 수 있으면 null",
+              example = "INPUT_PENDING")
           @NullableResponse
           String krakenSortUnavailableReason) {
     static SpecUpResponse from(SpecUpService.Guide guide) {
@@ -324,7 +330,7 @@ public class SpecUpController {
       @Schema(description = "같은 캐릭터·같은 후보면 늘 같은 값(목록 키)", example = "GEM_LEVEL:3:8") String id,
       @Schema(
               description =
-                  "후보 종류(문자열, 값이 늘 수 있음). 시뮬레이터 kind와 같고, 아직 계산하지 않는 종류(KARMA_LEVEL·ABILITY_STONE 등)는 한 줄 UNSUPPORTED로",
+                  "후보 종류(문자열, 값이 늘 수 있음). 시뮬레이터 kind와 같다. POLISH(장신구 연마 교체)·ABILITY_STONE(어빌리티 스톤)·KARMA_LEVEL(깨달음 카르마)은 크라켄 점수를 낼 수 있으면 후보마다 한 줄(change null·전투력 UNSUPPORTED·deltaKrakenScore 있음)이고, 그럴 수 없으면 종류마다 한 줄 UNSUPPORTED 알림",
               example = "GEM_LEVEL")
           String kind,
       @Schema(description = "화면에 그대로 쓰는 대상 이름", example = "블레이드 버스트 · 7레벨 겁화") String target,
@@ -339,7 +345,10 @@ public class SpecUpController {
       @Schema(description = "보석이 붙은 스킬 이름(보석 후보만)") @NullableResponse String skillName,
       @Schema(description = "권장 목표 단계(강화 후보용, to와 별개). 지금은 늘 null") @NullableResponse
           String suggestedTo,
-      @Schema(description = "전투력 시뮬레이터 요청의 changes[] 하나와 같은 모양. 한 줄 알림 종류는 null") @NullableResponse
+      @Schema(
+              description =
+                  "전투력 시뮬레이터 요청의 changes[] 하나와 같은 모양. 한 줄 알림 종류와 점수 입력에서 만든 후보(POLISH·ABILITY_STONE·KARMA_LEVEL)는 null")
+          @NullableResponse
           ChangeResponse change,
       @Schema(description = "OK 또는 UNSUPPORTED(문자열, 값이 늘 수 있음)", example = "OK") String status,
       @Schema(description = "Δ전투력(소수 둘째 자리). UNSUPPORTED면 null") @NullableResponse
@@ -376,7 +385,7 @@ public class SpecUpController {
           BigDecimal baseAttackPctTo,
       @Schema(
               description =
-                  "Δ크라켄 점수 = 이 후보를 적용한 점수 − 지금 점수(반올림 전 값의 차를 소수 둘째 자리로 — 지금 점수 + Δ와 화면 최종 점수의 차이는 0.01 이하). 계산하지 못하면 null(빈 칸 보석·상급 재련·서포터 등)",
+                  "Δ크라켄 점수 = 이 후보를 적용한 점수 − 지금 점수(반올림 전 값의 차를 소수 둘째 자리로 — 지금 점수 + Δ와 화면 최종 점수의 차이는 0.01 이하). 계산하지 못하면 null(빈 칸 보석·상급 재련·서포터 등). 장신구 연마 교체는 목표 장신구를 점수 옵션 두 줄(두 옵션이 모두 상이면 고정값 공격력·무기 공격력 셋째 줄 포함)만 있는 매물로 보고 계산한다",
               example = "98.81")
           @NullableResponse
           BigDecimal deltaKrakenScore,
@@ -439,7 +448,9 @@ public class SpecUpController {
       @NullableResponse Integer level,
       @NullableResponse Integer refine,
       @NullableResponse Integer quality,
-      @NullableResponse String name) {
+      @NullableResponse String name,
+      @Schema(description = "팔 보호구 등급(ARM_GUARD만, 영웅·전설·유물·고대). 그 밖에는 null") @NullableResponse
+          String grade) {
     static ChangeResponse from(CombatPowerSimulationService.Change change) {
       return change == null
           ? null
@@ -450,7 +461,8 @@ public class SpecUpController {
               change.level(),
               change.refine(),
               change.quality(),
-              change.name());
+              change.name(),
+              change.grade());
     }
   }
 

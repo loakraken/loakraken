@@ -63,8 +63,9 @@ public class SpecUpDetailService {
       String priceBasis) {}
 
   /**
-   * 사거나 파는 품목 하나(보석·각인서). role: BUY(사는 품목) 또는 SELL(지금 보석, 판매 기대가를 비용에서 뺀 경우). price는 1개 즉시 구매 최저가,
-   * quantity는 필요한 개수(각인서 5권).
+   * 사거나 파는 품목 하나(보석·각인서). role: BUY(사는 품목) 또는 SELL(지금 보석, 최저가를 비용에서 뺀 경우). price는 1개 즉시 구매 최저가,
+   * quantity는 필요한 개수(각인서 5권). SELL만: expectedSalePrice = 최저가 − 판매 수수료, sellFeeGold = 판매 수수료(비용에는 넣지
+   * 않음).
    */
   public record Market(
       String role,
@@ -74,6 +75,7 @@ public class SpecUpDetailService {
       Long price,
       int quantity,
       Long expectedSalePrice,
+      Long sellFeeGold,
       Long listedCount,
       Instant observedAt) {}
 
@@ -136,7 +138,8 @@ public class SpecUpDetailService {
             snapshot,
             SpecUpService.Sort.DELTA,
             Integer.MAX_VALUE,
-            includeCooldownGems == null ? Boolean.TRUE : includeCooldownGems);
+            includeCooldownGems == null ? Boolean.TRUE : includeCooldownGems,
+            true);
     var candidate =
         guide.candidates().stream()
             .filter(item -> item.id().equals(candidateId))
@@ -170,7 +173,13 @@ public class SpecUpDetailService {
         var index = Integer.parseInt(parts[1]);
         var item = loadout.equipment().get(index);
         int from = item.detail().refineLevel();
-        var breakdown = specUp.refineBreakdown(item, from, materials.cached());
+        // 팔 보호구(완갑)는 재련 계획 밖이다(비용 UNKNOWN): 단계만 준다.
+        if ("완갑".equals(item.type())) {
+          refine = new Refine(from, from + 1, null, null, null);
+          break;
+        }
+        int to = Integer.parseInt(parts[2]);
+        var breakdown = specUp.refineBreakdown(item, from, to, materials.cached());
         var plan = breakdown.plan();
         if (plan != null) {
           materialRows = materialRows(plan, breakdown.prices());
@@ -178,12 +187,19 @@ public class SpecUpDetailService {
           consistent = matches(candidate.cost(), breakdown.cost().amount());
         }
         var stage = plan == null || plan.stages().isEmpty() ? null : plan.stages().getFirst();
+        // 여러 단계 줄이면 기대 시도는 단계마다의 합, 첫 시도 확률은 첫 단계(#585).
+        BigDecimal attempts = null;
+        if (plan != null && !plan.stages().isEmpty()) {
+          attempts = BigDecimal.ZERO;
+          for (var each : plan.stages()) attempts = attempts.add(each.expectedAttempts());
+          attempts = attempts.setScale(2, RoundingMode.HALF_UP);
+        }
         refine =
             new Refine(
                 from,
-                from + 1,
-                plan == null ? null : breakdown.breath() ? "MAX" : "NONE",
-                stage == null ? null : stage.expectedAttempts().setScale(2, RoundingMode.HALF_UP),
+                to,
+                plan == null ? null : breakdown.breath() ? "OPTIMAL" : "NONE",
+                attempts,
                 stage == null ? null : stage.firstAttemptSuccessRateBp());
       }
       default -> {}
@@ -219,8 +235,8 @@ public class SpecUpDetailService {
   }
 
   /**
-   * 보석 시세 줄: 목표 레벨 칸(BUY), 비용에서 지금 보석 판매 기대가를 뺀 경우(GEM_UPGRADE) 지금 레벨 칸(SELL). 시세 종류는 목록 비용과 같다(광휘는
-   * 그 칸 효과의 종류, 빈 칸은 겁화). 칸을 아직 받지 못했으면 그 줄은 넣지 않는다.
+   * 보석 시세 줄: 목표 레벨 칸(BUY), 비용에서 지금 보석 최저가를 뺀 경우(GEM_UPGRADE) 지금 레벨 칸(SELL). 시세 종류는 목록 비용과 같다(광휘는 그
+   * 칸 효과의 종류, 빈 칸은 겁화). 칸을 아직 받지 못했으면 그 줄은 넣지 않는다.
    */
   List<Market> gemMarket(CharacterLoadout loadout, int slot, int next, Candidate candidate) {
     String kind = CombatPowerGemModel.EMPTY_SLOT_KIND;
@@ -254,6 +270,7 @@ public class SpecUpDetailService {
               buy.cell().minBuyPrice(),
               1,
               null,
+              null,
               buy.cell().totalCount(),
               buy.cell().observedAt()));
     var cost = candidate.cost();
@@ -270,6 +287,7 @@ public class SpecUpDetailService {
                 price,
                 1,
                 price - SpecUpCost.exchangeSaleFee(price),
+                SpecUpCost.exchangeSaleFee(price),
                 sell.cell().totalCount(),
                 sell.cell().observedAt()));
       }
@@ -277,14 +295,14 @@ public class SpecUpDetailService {
     return rows.isEmpty() ? null : List.copyOf(rows);
   }
 
-  /** 시세 줄로 다시 구한 보석 비용(목록 SpecUpCost.gem과 같은 식). 사는 줄이 없으면 null. */
+  /** 시세 줄로 다시 구한 보석 비용(목록 SpecUpCost.gem과 같은 식: 사는 최저가 − 파는 최저가). 사는 줄이 없으면 null. */
   static Long gemTotal(List<Market> market) {
     if (market == null) return null;
     Long buy = null;
     Long sale = null;
     for (var row : market) {
       if ("BUY".equals(row.role())) buy = row.price();
-      if ("SELL".equals(row.role())) sale = row.expectedSalePrice();
+      if ("SELL".equals(row.role())) sale = row.price();
     }
     if (buy == null) return null;
     return sale == null ? buy : Math.max(0, buy - sale);
@@ -317,6 +335,7 @@ public class SpecUpDetailService {
             BOOK_GRADE,
             price.unitPrice(),
             SpecUpCost.BOOKS_PER_LEVEL * levels,
+            null,
             null,
             null,
             price.observedAt()));

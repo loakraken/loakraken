@@ -126,6 +126,125 @@ class ClientLimiterTest {
   }
 
   @Test
+  void 남은_공식_칸을_올리지_않고_읽고_일괄_불러오기는_6을_남기고_멈춘다() {
+    // #614: 공식 칸 10. 세지 않는 경로(클라이언트 없음)는 막지 않으므로 '남은 칸'도 끝이 없다.
+    var limiter = limiter(new ClientLimitProperties(true, 10, 10, 10, 10, true, 2, 6, 20, 5, 5));
+    var gate =
+        new LostArkRequestGate(
+            clock, properties(), new LostArkMetrics(registry), new MemoryGateStore(clock), limiter);
+    assertThat(gate.remainingClientOfficial()).isEqualTo(Integer.MAX_VALUE);
+    assertThat(gate.bulkMayContinue()).isTrue();
+    limiter.enter("client-bulk");
+    try {
+      assertThat(gate.remainingClientOfficial()).isEqualTo(10);
+      for (int i = 0; i < 3; i++) {
+        gate.acquire();
+        gate.release();
+      }
+      // 읽기는 칸을 쓰지 않는다.
+      assertThat(gate.remainingClientOfficial()).isEqualTo(7);
+      assertThat(gate.remainingClientOfficial()).isEqualTo(7);
+      assertThat(gate.bulkMayContinue()).isTrue();
+      gate.acquire();
+      gate.release();
+      // 남은 6 = BULK_KEEP_OFFICIAL이면 더 부르지 않는다.
+      assertThat(gate.remainingClientOfficial()).isEqualTo(LostArkRequestGate.BULK_KEEP_OFFICIAL);
+      assertThat(gate.bulkMayContinue()).isFalse();
+      // 창이 바뀌면 다시 찬다.
+      clock.now = clock.now.plusSeconds(60);
+      assertThat(gate.remainingClientOfficial()).isEqualTo(10);
+    } finally {
+      limiter.exit();
+    }
+  }
+
+  @Test
+  @org.junit.jupiter.api.extension.ExtendWith(
+      org.springframework.boot.test.system.OutputCaptureExtension.class)
+  void 거절_로그는_버킷_경로_키_앞_6자리만_남기고_한_분에_처음_몇_건만이다(
+      org.springframework.boot.test.system.CapturedOutput output) {
+    // #616: 경로는 자원명까지만(이름이 들어갈 수 있는 뒤쪽은 …), 클라이언트는 HMAC 키 앞 6자리, 주소·이름 없음.
+    var limiter = limiter(new ClientLimitProperties(true, 2, 2, 1, 1, true, 2, 6, 20, 5, 5));
+    var client = limiter.clientKey("203.0.113.77");
+    limiter.enterRoute("GET", "/api/v1/characters/검증캐릭터/siblings");
+    try {
+      for (int i = 0; i < 1 + ClientLimiter.REJECT_LOGS_PER_WINDOW + 3; i++)
+        limiter.check(ClientLimiter.Bucket.GENERAL, client);
+    } finally {
+      limiter.exitRoute();
+    }
+    var lines =
+        output.getOut().lines().filter(line -> line.contains("event=client_limit_reject")).toList();
+    assertThat(lines).hasSize(ClientLimiter.REJECT_LOGS_PER_WINDOW);
+    assertThat(lines.getFirst())
+        .contains("bucket=general")
+        .contains("route=GET /api/v1/characters/…")
+        .contains("client=" + client.substring(0, 6))
+        .doesNotContain("검증캐릭터")
+        .doesNotContain("203.0.113.77")
+        .doesNotContain(client.substring(0, 7));
+    // 지표는 거절을 전부 센다.
+    assertThat(registry.get("loakraken.client.limit").tag("event", "reject").counter().count())
+        .isEqualTo(ClientLimiter.REJECT_LOGS_PER_WINDOW + 3);
+  }
+
+  @Test
+  @org.junit.jupiter.api.extension.ExtendWith(
+      org.springframework.boot.test.system.OutputCaptureExtension.class)
+  void 되돌리는_버킷의_거절도_한_분에_처음_몇_건만_로그에_남긴다(
+      org.springframework.boot.test.system.CapturedOutput output) {
+    // 되돌리는 버킷(재료 검색 클라이언트 몫)은 거절 때 카운터를 되돌려 한도 + 1에 머물므로 로그 상한을 따로 센다.
+    var limiter =
+        limiter(new ClientLimitProperties(true, 2, 2, 10, 10, true, 2, 6, 20, 5, 5, 10, 3, 1, 36));
+    var client = limiter.clientKey("203.0.113.78");
+    limiter.enter(client);
+    limiter.enterRoute("POST", "/api/v1/markets/material-prices");
+    int rejected = 0;
+    try {
+      for (int i = 0; i < 1 + ClientLimiter.REJECT_LOGS_PER_WINDOW + 3; i++)
+        try {
+          limiter.chargeRefundable(ClientLimiter.Bucket.MATERIAL_SEARCH);
+        } catch (com.loakraken.common.api.BusinessException exception) {
+          rejected++;
+        }
+    } finally {
+      limiter.exitRoute();
+      limiter.exit();
+    }
+    assertThat(rejected).isEqualTo(ClientLimiter.REJECT_LOGS_PER_WINDOW + 3);
+    var lines =
+        output.getOut().lines().filter(line -> line.contains("event=client_limit_reject")).toList();
+    assertThat(lines).hasSize(ClientLimiter.REJECT_LOGS_PER_WINDOW);
+    assertThat(lines.getFirst())
+        .contains("bucket=material_search")
+        .contains("route=POST /api/v1/markets/…")
+        .contains("client=" + client.substring(0, 6))
+        .doesNotContain("203.0.113.78");
+  }
+
+  @Test
+  void 로그용_경로와_키는_값을_남기지_않는다() {
+    assertThat(ClientLimiter.routeHint("POST", "/api/v1/characters/roster-combat-power/refresh"))
+        .isEqualTo("POST /api/v1/characters/…");
+    assertThat(ClientLimiter.routeHint("GET", "/api/v1/guilds/서버/길드"))
+        .isEqualTo("GET /api/v1/guilds/…");
+    assertThat(ClientLimiter.routeHint("GET", "/api/v1/rankings"))
+        .isEqualTo("GET /api/v1/rankings");
+    assertThat(ClientLimiter.routeHint("GET", "/api/v1/Name")).isEqualTo("GET /api/v1/*");
+    // 알려진 자원명이 아니면 소문자여도 남기지 않는다.
+    assertThat(ClientLimiter.routeHint("GET", "/api/v1/secret-token/x"))
+        .isEqualTo("GET /api/v1/*/…");
+    assertThat(ClientLimiter.routeHint("GET", "/other/v9/characters")).isEqualTo("GET *");
+    assertThat(ClientLimiter.routeHint("GET", "/api")).isEqualTo("GET *");
+    assertThat(ClientLimiter.shortKey("0123456789abcdef")).isEqualTo("012345");
+    assertThat(ClientLimiter.shortKey("bot:fedcba9876543210")).isEqualTo("bot:fedcba");
+    assertThat(ClientLimiter.shortKey("all")).isEqualTo("bot-all");
+    assertThat(ClientLimiter.shortKey("shared")).isEqualTo("shared");
+    // 요청 밖(백그라운드)은 경로가 없다.
+    assertThat(ClientLimiter.route()).isEqualTo("-");
+  }
+
+  @Test
   void 끄면_세지_않는다() {
     var limiter = limiter(new ClientLimitProperties(false, 0, 0, 0, 0, true, 2, 6, 20, 5, 5));
     assertThat(limiter.check(ClientLimiter.Bucket.GENERAL, "c").allowed()).isTrue();
@@ -138,12 +257,81 @@ class ClientLimiterTest {
   }
 
   @Test
-  void 필터는_공개_주소를_세고_내부_주소는_세지_않는다() throws Exception {
+  void 랭킹_아래_경로도_통계_칸으로_센다() {
+    for (var path :
+        new String[] {
+          "/api/v1/rankings",
+          "/api/v1/rankings/bracelets",
+          "/api/v1/rankings/ark-grid-gems",
+          "/api/v1/rankings/rosters",
+          "/api/v1/rankings/guilds",
+          "/api/v1/rankings/collectibles",
+          "/api/v1/rankings/collectibles/standing",
+          "/api/v1/rankings/class-engravings",
+          "/api/v1/stats/summary",
+          "/api/v1/characters/rank"
+        }) assertThat(ClientLimitFilter.stats(path)).as(path).isTrue();
+    for (var path :
+        new String[] {"/api/v1/rankingsx", "/api/v1/characters/search", "/api/v1/markets/board"})
+      assertThat(ClientLimitFilter.stats(path)).as(path).isFalse();
+  }
+
+  @Test
+  void 경로_판정은_원문_URI가_아니라_정규화된_서블릿_경로로_한다() {
+    // 원문 URI에 경로 매개변수(';…')가 있어도 컨테이너가 정한 서블릿 경로로 판정한다.
+    var request = new MockHttpServletRequest("GET", "/api/v1/rankings;x=1/guilds");
+    request.setServletPath("/api/v1/rankings/guilds");
+    assertThat(ClientLimitFilter.path(request)).isEqualTo("/api/v1/rankings/guilds");
+    assertThat(ClientLimitFilter.stats(ClientLimitFilter.path(request))).isTrue();
+    var prefixed = new MockHttpServletRequest("GET", "/api;x/v1/markets/tabs");
+    prefixed.setServletPath("/api/v1/markets/tabs");
+    assertThat(ClientLimitFilter.path(prefixed)).isEqualTo("/api/v1/markets/tabs");
+    // 서블릿 경로가 비면(서블릿 테스트) 원문 URI에서 문맥 경로를 뺀다.
+    var bare = new MockHttpServletRequest("GET", "/ctx/api/v1/rankings");
+    bare.setContextPath("/ctx");
+    assertThat(ClientLimitFilter.path(bare)).isEqualTo("/api/v1/rankings");
+  }
+
+  @Test
+  void 기본_한도에서_사람이_랭킹을_넘겨_보는_정도는_막히지_않는다() throws Exception {
+    // 기본값(STATS 60, GENERAL 240). 웹은 페이지·탭·조건을 바꿀 때마다 한 번 부른다(입력은 0.3초 뒤). 1분 안에 랭킹 30쪽 넘기기 + 캐릭터
+    // 10명 보기(순위·수집품 순위 2번씩) = 통계 칸 50번 — 모두 통과하고, 그 분의 61번째 통계 요청부터 막힌다.
+    var limiter = limiter(new ClientLimitProperties(true, 20, 60, 240, 120, true, 2, 6, 20, 5, 5));
+    var filter = new ClientLimitFilter(limiter);
+    var address = "203.0.113.90";
+    var tabs =
+        new String[] {
+          "/api/v1/rankings",
+          "/api/v1/rankings/rosters",
+          "/api/v1/rankings/guilds",
+          "/api/v1/rankings/collectibles",
+          "/api/v1/rankings/bracelets"
+        };
+    for (int i = 0; i < 30; i++)
+      assertThat(run(filter, tabs[i % tabs.length], address, null).getStatus()).isEqualTo(200);
+    for (int i = 0; i < 10; i++) {
+      assertThat(run(filter, "/api/v1/characters/rank", address, null).getStatus()).isEqualTo(200);
+      assertThat(run(filter, "/api/v1/rankings/collectibles/standing", address, null).getStatus())
+          .isEqualTo(200);
+    }
+    for (int i = 0; i < 10; i++)
+      assertThat(run(filter, "/api/v1/rankings/guilds", address, null).getStatus()).isEqualTo(200);
+    assertThat(run(filter, "/api/v1/rankings/guilds", address, null).getStatus()).isEqualTo(429);
+    // 통계가 아닌 경로는 일반 칸만 센다.
+    assertThat(run(filter, "/api/v1/markets/board", address, null).getStatus()).isEqualTo(200);
+  }
+
+  @Test
+  void 필터는_주소를_세고_루프백은_세지_않는다() throws Exception {
     var limiter = limiter(new ClientLimitProperties(true, 2, 1, 3, 3, true, 2, 6, 20, 5, 5));
     var filter = new ClientLimitFilter(limiter);
     for (int i = 0; i < 5; i++)
       assertThat(run(filter, "/api/v1/markets/tabs", "127.0.0.1", null).getStatus()).isEqualTo(200);
-    assertThat(run(filter, "/api/v1/markets/tabs", "172.18.0.5", null).getStatus()).isEqualTo(200);
+    // 사설 주소도 센다(GENERAL 3): 네 번째는 거절.
+    for (int i = 0; i < 3; i++)
+      assertThat(run(filter, "/api/v1/markets/tabs", "172.18.0.5", null).getStatus())
+          .isEqualTo(200);
+    assertThat(run(filter, "/api/v1/markets/tabs", "172.18.0.5", null).getStatus()).isEqualTo(429);
     // STATS는 1회: 두 번째 통계 요청은 GENERAL 안이어도 거절
     assertThat(run(filter, "/api/v1/stats/summary", "203.0.113.7", null).getStatus())
         .isEqualTo(200);
@@ -291,15 +479,61 @@ class ClientLimiterTest {
   }
 
   @Test
-  void 내부_주소_판정() {
-    assertThat(ClientLimitFilter.internal("127.0.0.1")).isTrue();
-    assertThat(ClientLimitFilter.internal("10.1.2.3")).isTrue();
-    assertThat(ClientLimitFilter.internal("192.168.0.1")).isTrue();
-    assertThat(ClientLimitFilter.internal("::1")).isTrue();
-    assertThat(ClientLimitFilter.internal("fd00::1")).isTrue();
-    assertThat(ClientLimitFilter.internal("203.0.113.7")).isFalse();
-    assertThat(ClientLimitFilter.internal("2001:db8::1")).isFalse();
-    assertThat(ClientLimitFilter.internal("not-an-ip")).isFalse();
+  void 제외는_루프백만이다() {
+    assertThat(ClientLimitFilter.loopback("127.0.0.1")).isTrue();
+    assertThat(ClientLimitFilter.loopback("127.0.0.53")).isTrue();
+    assertThat(ClientLimitFilter.loopback("::1")).isTrue();
+    // 사설망·링크 로컬·고유 로컬은 더는 제외하지 않는다.
+    assertThat(ClientLimitFilter.loopback("10.1.2.3")).isFalse();
+    assertThat(ClientLimitFilter.loopback("172.31.250.10")).isFalse();
+    assertThat(ClientLimitFilter.loopback("192.168.0.1")).isFalse();
+    assertThat(ClientLimitFilter.loopback("169.254.1.1")).isFalse();
+    assertThat(ClientLimitFilter.loopback("fd00::1")).isFalse();
+    assertThat(ClientLimitFilter.loopback("203.0.113.7")).isFalse();
+    assertThat(ClientLimitFilter.loopback("not-an-ip")).isFalse();
+    assertThat(ClientLimitFilter.loopback("")).isFalse();
+    assertThat(ClientLimitFilter.loopback(null)).isFalse();
+  }
+
+  @Test
+  void 신뢰_프록시를_거친_요청은_넘긴_주소가_사설이나_루프백이어도_센다() throws Exception {
+    // GENERAL 1: 두 번째 요청은 429. 연결 상대는 프록시(사설), 원격 주소는 프록시가 넘긴 값.
+    var limiter = limiter(new ClientLimitProperties(true, 1, 10, 1, 1, true, 2, 6, 20, 5, 5));
+    var filter = new ClientLimitFilter(limiter);
+    for (var forwarded : new String[] {"10.0.0.1", "127.0.0.1", "172.31.250.10"}) {
+      assertThat(proxied(filter, "172.31.250.10", forwarded, true).getStatus())
+          .as(forwarded)
+          .isEqualTo(200);
+      assertThat(proxied(filter, "172.31.250.10", forwarded, true).getStatus())
+          .as(forwarded)
+          .isEqualTo(429);
+    }
+    // 프록시가 주소 없이 보낸 요청(원격 주소 = 프록시)도 프록시 주소 하나로 센다 — 위 마지막 줄과 같은 칸이라 이미 막힘.
+    assertThat(proxied(filter, "172.31.250.10", "172.31.250.10", false).getStatus()).isEqualTo(429);
+    // 같은 호스트(연결 상대 루프백, 넘겨받은 주소 없음)만 세지 않는다.
+    for (int i = 0; i < 3; i++)
+      assertThat(proxied(filter, "127.0.0.1", "127.0.0.1", false).getStatus()).isEqualTo(200);
+    // 루프백 프록시가 넘긴 주소는 센다(같은 호스트에서 X-Forwarded-For를 붙인 요청).
+    assertThat(proxied(filter, "127.0.0.1", "203.0.113.50", true).getStatus()).isEqualTo(200);
+    assertThat(proxied(filter, "127.0.0.1", "203.0.113.50", true).getStatus()).isEqualTo(429);
+    // 같은 호스트라도 X-Forwarded-For가 붙어 있으면(값이 루프백이어도) 센다 — 위에서 127.0.0.1 칸을 이미 써서 바로 429(제외면 200).
+    assertThat(proxied(filter, "127.0.0.1", "127.0.0.1", true).getStatus()).isEqualTo(429);
+    // 헤더가 없으면 같은 칸이 차 있어도 제외라 200.
+    assertThat(proxied(filter, "127.0.0.1", "127.0.0.1", false).getStatus()).isEqualTo(200);
+    // 밸브가 없는 환경(서블릿 테스트)은 원격 주소를 연결 상대로 본다.
+    assertThat(run(filter, "/api/v1/markets/tabs", "127.0.0.1", null).getStatus()).isEqualTo(200);
+    assertThat(run(filter, "/api/v1/markets/tabs", "10.9.9.9", null).getStatus()).isEqualTo(200);
+    assertThat(run(filter, "/api/v1/markets/tabs", "10.9.9.9", null).getStatus()).isEqualTo(429);
+  }
+
+  private static MockHttpServletResponse proxied(
+      ClientLimitFilter filter, String peer, String resolved, boolean forwarded) throws Exception {
+    var request = request("/api/v1/markets/tabs", resolved, null);
+    request.setAttribute(PeerAddressValve.ATTRIBUTE, peer);
+    request.setAttribute(PeerAddressValve.FORWARDED_ATTRIBUTE, forwarded);
+    var response = new MockHttpServletResponse();
+    filter.doFilter(request, response, new MockFilterChain());
+    return response;
   }
 
   private ClientLimiter limiter(ClientLimitProperties properties) {

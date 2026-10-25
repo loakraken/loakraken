@@ -11,6 +11,11 @@ public final class CombatPowerReasons {
 
   public static final Reason MODEL_UNCONFIRMED =
       new Reason("MODEL_UNCONFIRMED", "이 항목의 전투력 계산식을 아직 확인하고 있어 계산하지 않았습니다.");
+
+  /** 크라켄 점수로만 비교하는 종류(장신구 연마·어빌리티 스톤·깨달음 카르마): 전투력 Δ를 내지 않는 것이 정상이다(오류 아님). */
+  public static final Reason SCORE_ONLY =
+      new Reason("SCORE_ONLY", "이 종류는 전투력을 계산하지 않고 크라켄 점수로 비교합니다.");
+
   public static final Reason SUPPORTER_MODEL_PENDING =
       new Reason("SUPPORTER_MODEL_PENDING", "서포터 전투력 계산식은 아직 적용하지 않았습니다.");
   public static final Reason ROLE_UNKNOWN =

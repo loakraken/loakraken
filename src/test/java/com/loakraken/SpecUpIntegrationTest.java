@@ -1,6 +1,7 @@
 package com.loakraken;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.within;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
 
@@ -40,7 +41,7 @@ import tools.jackson.databind.json.JsonMapper;
 
 /**
  * 스펙업 가이드 1차판(#315): 캐릭터 캐시 + 시세 캐시만 쓰고(공식 호출 없음), 후보마다 시뮬레이터 변화 하나로 Δ전투력, 보석 비용(다음 레벨 구매가 − 지금 보석
- * 판매 기대가), 1만 골드당 전투력. 계산할 수 없는 후보는 reasonCode·reason과 함께 남긴다. 표본: 정상(UNSUPPORTED 섞임)·시세 PENDING·캐시
+ * 최저가), 1만 골드당 전투력. 계산할 수 없는 후보는 reasonCode·reason과 함께 남긴다. 표본: 정상(UNSUPPORTED 섞임)·시세 PENDING·캐시
  * 없음.
  */
 @Import(TestcontainersConfiguration.class)
@@ -135,21 +136,21 @@ class SpecUpIntegrationTest {
     assertThat(gem.path("baseAttackPctTo").decimalValue()).isEqualByComparingTo("1.00");
     assertThat(gem.path("deltaCombatPower").decimalValue()).isEqualByComparingTo("24.00");
     assertThat(gem.path("deltaPercent").decimalValue()).isEqualByComparingTo("0.800");
-    // 비용: 9레벨 1,000,000 − (8레벨 400,000 − 거래소 수수료 20,000) = 620,000. 효율 = 24.00 × 10000 / 620000 =
+    // 비용: 9레벨 1,000,000 − 8레벨 400,000 = 600,000(수수료는 빼지 않음). 효율 = 24.00 × 10000 / 600000 =
     // 0.39.
     // 10000 / 615000 = 0.39.
     assertThat(gem.at("/cost/status").asText()).isEqualTo("OK");
     assertThat(gem.at("/cost/code").asText()).isEqualTo("GEM_UPGRADE");
-    assertThat(gem.at("/cost/amount").asLong()).isEqualTo(620_000);
-    assertThat(gem.path("combatPowerPer10kGold").decimalValue()).isEqualByComparingTo("0.39");
+    assertThat(gem.at("/cost/amount").asLong()).isEqualTo(600_000);
+    assertThat(gem.path("combatPowerPer10kGold").decimalValue()).isEqualByComparingTo("0.40");
     assertThat(gem.at("/change/kind").asText()).isEqualTo("GEM_LEVEL");
     assertThat(gem.at("/change/slot").asInt()).isZero();
     assertThat(gem.at("/change/level").asInt()).isEqualTo(9);
-    // 8 → 10: 시뮬레이터 표본과 같은 48.07, 비용 3,000,000 − 380,000 = 2,620,000, 효율 0.18(효율 순이라 8 → 9 뒤).
+    // 8 → 10: 시뮬레이터 표본과 같은 48.07, 비용 3,000,000 − 400,000 = 2,600,000, 효율 0.18(효율 순이라 8 → 9 뒤).
     var gem10 = find(candidates, "GEM_LEVEL:0:10");
     assertThat(gem10.path("id").asText()).isEqualTo("GEM_LEVEL:0:10");
     assertThat(gem10.path("deltaCombatPower").decimalValue()).isEqualByComparingTo("48.07");
-    assertThat(gem10.at("/cost/amount").asLong()).isEqualTo(2_620_000);
+    assertThat(gem10.at("/cost/amount").asLong()).isEqualTo(2_600_000);
     assertThat(gem10.at("/cost/unit").asText()).isEqualTo("GOLD");
     assertThat(gem10.path("combatPowerPer10kGold").decimalValue()).isEqualByComparingTo("0.18");
     assertThat(gem10.path("suggestedTo").isNull()).isTrue();
@@ -297,19 +298,7 @@ class SpecUpIntegrationTest {
             // 파편은 주머니 가운데 1개당 가장 싼 값: (대) 219 ÷ 3000 = 0.073 < (소) 87 ÷ 1000.
             "운명의 파편", new BigDecimal("0.073"),
             "용암의 숨결", new BigDecimal("459"));
-    long expected = Long.MAX_VALUE;
-    for (boolean breath : new boolean[] {false, true}) {
-      var plan =
-          plans.plan(
-              com.loakraken.refining.domain.RefiningRules.Grade.UPHWA,
-              com.loakraken.refining.domain.RefiningRules.EquipmentType.WEAPON,
-              new com.loakraken.refining.domain.RefiningPlan.Options(
-                  20, 21, breath, false, true, 0, 0));
-      var total = plan.expectedGold();
-      for (var quantity : plan.expectedMaterials())
-        total = total.add(quantity.amount().multiply(units.get(quantity.name())));
-      expected = Math.min(expected, total.setScale(0, java.math.RoundingMode.CEILING).longValue());
-    }
+    long expected = refineExpected(units, 20, 21);
     var response = get("/api/v1/characters/spec-up?characterName=" + encode("스펙업화"));
     assertThat(response.statusCode()).isEqualTo(200);
     ApiContractFixture.write("character-spec-up-refine-cost.json", response.body());
@@ -317,16 +306,101 @@ class SpecUpIntegrationTest {
     var refine = find(data.path("candidates"), "EQUIPMENT_REFINE:0:21");
     assertThat(refine.at("/cost/status").asText()).isEqualTo("OK");
     assertThat(refine.at("/cost/code").asText()).isEqualTo("REFINE_EXPECTED");
-    assertThat(refine.at("/cost/amount").asLong()).isEqualTo(expected);
+    assertThat(refine.at("/cost/amount").asLong()).isCloseTo(expected, within(1L));
     assertThat(expected).isPositive();
     // 가장 이른 시세 관측 시각이 보석 표 시각보다 이르면 그 시각이다.
     assertThat(Instant.parse(data.path("pricesAt").asText())).isBeforeOrEqualTo(observedAt);
     SiteNames.assertAbsent(response.body());
+    // #585: 다음 단계부터 재련 계획 최대 단계까지 줄마다 따로, 비용은 한 번의 계획(지금 → 목표) 누적.
+    int max =
+        plans
+            .rules()
+            .track(
+                com.loakraken.refining.domain.RefiningRules.Grade.UPHWA,
+                com.loakraken.refining.domain.RefiningRules.EquipmentType.WEAPON)
+            .maxTargetStage();
+    assertThat(max).isGreaterThan(21);
+    long previous = 0;
+    for (int target = 21; target <= Math.min(25, max); target++) {
+      var row = find(data.path("candidates"), "EQUIPMENT_REFINE:0:" + target);
+      assertThat(row.path("from").asText()).isEqualTo("+20");
+      assertThat(row.path("to").asText()).isEqualTo("+" + target);
+      assertThat(row.at("/change/refine").asInt()).isEqualTo(target);
+      long cost = refineExpected(units, 20, target);
+      assertThat(row.at("/cost/amount").asLong()).as("+" + target).isCloseTo(cost, within(1L));
+      assertThat(cost).isGreaterThan(previous);
+      previous = cost;
+    }
+    // 줄 상세도 같은 범위·같은 금액(내역 합 = 목록 비용), 기대 시도는 단계마다의 합.
+    var detail = mapper.readTree(detail("EQUIPMENT_REFINE:0:23", "스펙업화").body()).path("data");
+    assertThat(detail.at("/refine/fromStage").asInt()).isEqualTo(20);
+    assertThat(detail.at("/refine/toStage").asInt()).isEqualTo(23);
+    assertThat(detail.at("/candidate/cost/amount").asLong())
+        .isCloseTo(refineExpected(units, 20, 23), within(1L));
+    assertThat(detail.at("/refine/expectedAttempts").decimalValue())
+        .isGreaterThan(
+            mapper
+                .readTree(detail("EQUIPMENT_REFINE:0:21", "스펙업화").body())
+                .at("/data/refine/expectedAttempts")
+                .decimalValue());
     org.mockito.Mockito.reset(simulator);
+  }
+
+  @Test
+  void 숨결_시세가_없으면_숨결_없이_풀지_않고_PENDING이다() throws Exception {
+    // PM 판정 10-25: 예열 중 숨결 시세만 빠지면 숨결 없는 비용이 최적으로 순위에 들어 비교 기준과 달라진다 — PENDING으로 둔다.
+    stubRefineOk();
+    when(auctions.cachedGems()).thenReturn(gemCells(true));
+    search("스펙업화");
+    marketCache.saveRefiningMaterials(
+        new com.loakraken.market.application.RefiningMaterialScan(
+            Instant.parse("2026-10-12T02:00:00Z"),
+            List.of(
+                material(1, "운명의 파괴석", 100, "152"),
+                material(2, "운명의 돌파석", 1, "4"),
+                material(3, "아비도스 융화 재료", 1, "210"),
+                material(4, "운명의 파편 주머니(소)", 1, "87"),
+                material(5, "운명의 파편 주머니(대)", 1, "219"))),
+        java.time.Duration.ofMinutes(5));
+    var candidates =
+        mapper
+            .readTree(get("/api/v1/characters/spec-up?characterName=" + encode("스펙업화")).body())
+            .at("/data/candidates");
+    var refine = find(candidates, "EQUIPMENT_REFINE:0:21");
+    assertThat(refine.at("/cost/status").asText()).isEqualTo("PENDING");
+    assertThat(refine.at("/cost/code").asText()).isEqualTo("PRICE_PENDING");
+    org.mockito.Mockito.reset(simulator);
+  }
+
+  /**
+   * 지금 from에서 to까지 업화 무기 재련 기대 비용: 단계마다 회차별 최적 전략(시도마다 숨결·책 선택 — 이 시세표에는 책 값이 없어 숨결만, 업화 18단계까지 골드
+   * 20% 할인)의 기대 골드 합(비교 기준 B와 같은 방식). 목록은 기대 수량 × 단가를 더해 올림하므로 1골드 안에서 같다.
+   */
+  private long refineExpected(java.util.Map<String, BigDecimal> units, int from, int to) {
+    var track =
+        plans
+            .rules()
+            .track(
+                com.loakraken.refining.domain.RefiningRules.Grade.UPHWA,
+                com.loakraken.refining.domain.RefiningRules.EquipmentType.WEAPON);
+    double total = 0;
+    for (int stage = from + 1; stage <= to; stage++) {
+      var rule = track.stage(stage);
+      total +=
+          com.loakraken.refining.domain.RefiningOptimal.calculate(
+                  rule, stage <= 18 ? 0.8 : 1, units, true, true)
+              .expectedGold();
+    }
+    return (long) Math.ceil(total);
   }
 
   /** 재련 후보만 시뮬레이터가 OK(Δ+12.34)를 내게 한다. 나머지 후보는 실제 계산. 테스트 끝에 reset(simulator). */
   private void stubRefineOk() {
+    stubRefine(true);
+  }
+
+  /** 재련 후보의 전투력 계산 결과만 바꾼다(ok=false면 계산식 확인 중 UNSUPPORTED). */
+  private void stubRefine(boolean okStatus) {
     org.mockito.Mockito.doAnswer(
             invocation -> {
               List<com.loakraken.character.application.CombatPowerSimulationService.Change>
@@ -341,10 +415,14 @@ class SpecUpIntegrationTest {
                       "무기",
                       "+20",
                       "+21",
-                      new BigDecimal("12.34"),
-                      com.loakraken.character.application.CombatPowerSimulationService.Status.OK,
+                      okStatus ? new BigDecimal("12.34") : null,
+                      okStatus
+                          ? com.loakraken.character.application.CombatPowerSimulationService.Status
+                              .OK
+                          : com.loakraken.character.application.CombatPowerSimulationService.Status
+                              .UNSUPPORTED,
                       "재련",
-                      null);
+                      okStatus ? null : "MODEL_UNCONFIRMED");
               return new com.loakraken.character.application.CombatPowerSimulationService.Result(
                   "스펙재련",
                   Instant.now(),
@@ -363,6 +441,30 @@ class SpecUpIntegrationTest {
             org.mockito.ArgumentMatchers.any(
                 com.loakraken.character.application.CharacterResult.class),
             org.mockito.ArgumentMatchers.anyList());
+  }
+
+  @Test
+  void 순위_밖_재련_줄은_목록에_다음_단계_하나만_두고_줄_상세는_모든_단계를_찾는다() throws Exception {
+    // #585: 전투력 계산식 확인 중(UNSUPPORTED)인 재련 줄은 limit 밖에 모두 붙으므로 +1 줄만 둔다. 줄 상세는 정렬과 상관없이 찾는다.
+    stubRefine(false);
+    when(auctions.cachedGems()).thenReturn(gemCells(true));
+    search("스펙업화");
+    for (var sort : List.of("EFFICIENCY", "DELTA")) {
+      var ids = new ArrayList<String>();
+      for (var candidate :
+          mapper
+              .readTree(
+                  get("/api/v1/characters/spec-up?characterName="
+                          + encode("스펙업화")
+                          + "&sort="
+                          + sort)
+                      .body())
+              .at("/data/candidates")) ids.add(candidate.path("id").asText());
+      assertThat(ids).as(sort).contains("EQUIPMENT_REFINE:0:21");
+      assertThat(ids).as(sort).noneMatch(id -> id.matches("EQUIPMENT_REFINE:0:2[2-5]"));
+    }
+    assertThat(detail("EQUIPMENT_REFINE:0:23", "스펙업화").statusCode()).isEqualTo(200);
+    org.mockito.Mockito.reset(simulator);
   }
 
   @Test
@@ -627,8 +729,33 @@ class SpecUpIntegrationTest {
   }
 
   @Test
+  void 거꾸로_시세에서_비용_0_보석_단계가_경로_맨_앞에_들어가고_합계가_그만큼_작다() throws Exception {
+    // 9레벨(390,000)이 지금 8레벨(400,000)보다 싸다: 8 → 9는 비용 0이라 효율은 '-'지만 목표 경로 맨 앞에 들어간다(PM 판정 10-18).
+    // 전에는 효율 없는 단계끼리 Δ 순이라 무기 품질(비용 미확인)이 먼저 와 경로가 품질 하나로 끝나고 합계를 몰랐다.
+    when(auctions.cachedGems()).thenReturn(gemCells(true, java.util.Map.of(9, 390_000L)));
+    search("스펙거꾸로");
+    var response =
+        get(
+            "/api/v1/characters/spec-up/goal?characterName="
+                + encode("스펙거꾸로")
+                + "&targetCombatPower=3048");
+    assertThat(response.statusCode()).as(response.body()).isEqualTo(200);
+    var data = mapper.readTree(response.body()).path("data");
+    var steps = data.path("steps");
+    assertThat(steps.size()).isEqualTo(2);
+    assertThat(steps.get(0).path("candidateId").asText()).isEqualTo("GEM_LEVEL:0:9");
+    assertThat(steps.get(0).at("/cost/amount").asLong()).isZero();
+    assertThat(steps.get(0).path("combatPowerPer10kGold").isNull()).isTrue();
+    assertThat(steps.get(1).path("candidateId").asText()).isEqualTo("GEM_LEVEL:0:10");
+    assertThat(steps.get(1).at("/cost/amount").asLong()).isEqualTo(3_000_000 - 400_000);
+    // 합계 = 지금(8레벨)에서 10레벨까지 직접 비용 2,600,000(0 단계는 더하지 않은 것과 같음).
+    assertThat(data.path("totalCost").asLong()).isEqualTo(2_600_000);
+    assertThat(data.path("reached").asBoolean()).isTrue();
+  }
+
+  @Test
   void 목표_경로는_같은_보석_칸을_이어서_올리고_시세_없는_단계부터_누적_비용이_null이다() throws Exception {
-    // L31: 효율 순으로 보석 8→9(620,000), 9→10(증분 2,000,000), 그다음 비용을 모르는 무기 품질 90→100.
+    // L31: 효율 순으로 보석 8→9(600,000), 9→10(증분 2,000,000), 그다음 비용을 모르는 무기 품질 90→100.
     when(auctions.cachedGems()).thenReturn(gemCells(true));
     search("스펙목표");
     var response =
@@ -640,7 +767,7 @@ class SpecUpIntegrationTest {
     ApiContractFixture.write("character-spec-up-goal.json", response.body());
     SiteNames.assertAbsent(response.body());
     var data = mapper.readTree(response.body()).path("data");
-    assertThat(data.path("ruleVersion").asText()).isEqualTo("spec-up-goal-v1");
+    assertThat(data.path("ruleVersion").asText()).isEqualTo("spec-up-goal-v2");
     assertThat(data.path("combatPower").decimalValue()).isEqualByComparingTo("3000.00");
     assertThat(data.path("targetCombatPower").decimalValue()).isEqualByComparingTo("3100.00");
     assertThat(data.path("stopReasonCode").asText()).isEqualTo("REACHED");
@@ -655,17 +782,19 @@ class SpecUpIntegrationTest {
     assertThat(first.path("deltaCombatPower").decimalValue()).isEqualByComparingTo("24.00");
     assertThat(first.path("combatPowerAfter").decimalValue()).isEqualByComparingTo("3024.00");
     assertThat(first.at("/cost/code").asText()).isEqualTo("GEM_UPGRADE");
-    assertThat(first.at("/cost/amount").asLong()).isEqualTo(620_000);
-    assertThat(first.path("cumulativeCost").asLong()).isEqualTo(620_000);
+    assertThat(first.at("/cost/amount").asLong()).isEqualTo(600_000);
+    assertThat(first.path("cumulativeCost").asLong()).isEqualTo(600_000);
     assertThat(first.at("/change/kind").asText()).isEqualTo("GEM_LEVEL");
     assertThat(first.at("/change/level").asInt()).isEqualTo(9);
-    // 같은 칸 둘째 단계: 10레벨 3,000,000 − 9레벨 1,000,000. 합 2,620,000 = 10레벨 매입가 − 8레벨 판매 기대가(380,000).
+    // 같은 칸 둘째 단계: 지금(8레벨 400,000)에서 10레벨까지 누적 3,000,000 − 400,000 = 2,600,000(목록 GEM_LEVEL:0:10과
+    // 같음).
+    // 경로 합계에는 그 칸의 마지막 누적만 들어간다(600,000 + 2,600,000이 아님).
     var second = steps.get(1);
     assertThat(second.path("candidateId").asText()).isEqualTo("GEM_LEVEL:0:10");
     assertThat(second.path("from").asText()).isEqualTo("9레벨");
-    assertThat(second.at("/cost/code").asText()).isEqualTo("GEM_STEP");
-    assertThat(second.at("/cost/amount").asLong()).isEqualTo(2_000_000);
-    assertThat(second.path("cumulativeCost").asLong()).isEqualTo(3_000_000 - 380_000);
+    assertThat(second.at("/cost/code").asText()).isEqualTo("GEM_UPGRADE");
+    assertThat(second.at("/cost/amount").asLong()).isEqualTo(2_600_000);
+    assertThat(second.path("cumulativeCost").asLong()).isEqualTo(3_000_000 - 400_000);
     // 보석 8→10 한 번에 넣은 시뮬레이터 값(48.07)과 같다.
     assertThat(second.path("combatPowerAfter").decimalValue()).isEqualByComparingTo("3048.07");
     var third = steps.get(2);
@@ -708,7 +837,7 @@ class SpecUpIntegrationTest {
             .path("data");
     assertThat(data.path("stopReasonCode").asText()).isEqualTo("REACHED");
     assertThat(data.path("steps").size()).isEqualTo(2);
-    assertThat(data.path("totalCost").asLong()).isEqualTo(2_620_000);
+    assertThat(data.path("totalCost").asLong()).isEqualTo(2_600_000);
     assertThat(data.path("unpricedSteps").asInt()).isZero();
 
     var far =
@@ -778,7 +907,7 @@ class SpecUpIntegrationTest {
     var gem = find(guide.path("candidates"), "GEM_LEVEL:0:9");
     assertThat(gem.path("target").asText()).isEqualTo("테스트 스킬 · 8레벨 광휘");
     assertThat(gem.at("/cost/code").asText()).isEqualTo("GEM_UPGRADE");
-    assertThat(gem.at("/cost/amount").asLong()).isEqualTo(620_000);
+    assertThat(gem.at("/cost/amount").asLong()).isEqualTo(600_000);
     var goal =
         mapper
             .readTree(
@@ -787,8 +916,9 @@ class SpecUpIntegrationTest {
                         + "&targetCombatPower=3030")
                     .body())
             .path("data");
-    assertThat(goal.path("totalCost").asLong()).isEqualTo(3_000_000 - 380_000);
-    assertThat(goal.at("/steps/1/cost/code").asText()).isEqualTo("GEM_STEP");
+    assertThat(goal.path("totalCost").asLong()).isEqualTo(3_000_000 - 400_000);
+    assertThat(goal.at("/steps/1/cost/code").asText()).isEqualTo("GEM_UPGRADE");
+    assertThat(goal.at("/steps/1/cost/amount").asLong()).isEqualTo(3_000_000 - 400_000);
 
     search("스펙광휘귀속");
     var bound =
@@ -804,7 +934,7 @@ class SpecUpIntegrationTest {
 
   @Test
   void 이름에_귀속_표시가_없어도_툴팁_거래_줄이_귀속이면_판매가를_빼지_않는다() throws Exception {
-    // #560: 이름만 보면 팔 수 있다고 보고 판매 기대가(380,000)를 빼서 620,000으로 적게 보였다.
+    // #560: 이름만 보면 팔 수 있다고 보고 지금 보석 값을 빼서 비용을 적게 보였다.
     when(auctions.cachedGems()).thenReturn(gemCells(true));
     search("스펙거래줄귀속");
     var gem =
@@ -849,7 +979,7 @@ class SpecUpIntegrationTest {
     assertThat(data.at("/stats/0/before").decimalValue()).isEqualByComparingTo("0.80");
     assertThat(data.at("/stats/0/after").decimalValue()).isEqualByComparingTo("1.00");
     assertThat(data.at("/stats/0/unit").asText()).isEqualTo("%");
-    // 사는 9레벨 1,000,000, 파는 8레벨 400,000(판매 기대가 380,000) → 목록 비용 620,000과 같다.
+    // 사는 9레벨 1,000,000 − 파는 8레벨 400,000 = 목록 비용 600,000. 판매 수수료 20,000은 비용 밖(sellFeeGold).
     var market = data.path("market");
     assertThat(market).hasSize(2);
     assertThat(market.at("/0/role").asText()).isEqualTo("BUY");
@@ -860,7 +990,9 @@ class SpecUpIntegrationTest {
     assertThat(market.at("/1/role").asText()).isEqualTo("SELL");
     assertThat(market.at("/1/price").asLong()).isEqualTo(400_000);
     assertThat(market.at("/1/expectedSalePrice").asLong()).isEqualTo(380_000);
-    assertThat(market.at("/0/price").asLong() - market.at("/1/expectedSalePrice").asLong())
+    assertThat(market.at("/1/sellFeeGold").asLong()).isEqualTo(20_000);
+    assertThat(market.at("/0/sellFeeGold").isNull()).isTrue();
+    assertThat(market.at("/0/price").asLong() - market.at("/1/price").asLong())
         .isEqualTo(data.at("/candidate/cost/amount").asLong());
     assertThat(data.path("materials").isNull()).isTrue();
     assertThat(data.path("goldFee").isNull()).isTrue();
@@ -955,7 +1087,7 @@ class SpecUpIntegrationTest {
     var data = mapper.readTree(response.body()).path("data");
     assertThat(data.path("candidate")).isEqualTo(find(list, "EQUIPMENT_REFINE:0:21"));
     assertThat(data.path("combatPowerAfter").decimalValue()).isEqualByComparingTo("3012.34");
-    assertThat(data.at("/refine/breath").asText()).isIn("NONE", "MAX");
+    assertThat(data.at("/refine/breath").asText()).isIn("NONE", "OPTIMAL");
     assertThat(data.at("/refine/expectedAttempts").decimalValue()).isPositive();
     assertThat(data.at("/refine/firstAttemptSuccessRateBp").asInt()).isPositive();
     var sum = data.path("goldFee").decimalValue();
@@ -1030,14 +1162,21 @@ class SpecUpIntegrationTest {
   }
 
   private static List<GemCell> gemCells(boolean ready) {
+    return gemCells(ready, java.util.Map.of());
+  }
+
+  /** prices: 레벨별 시세 덮어쓰기(거꾸로 시세 등). */
+  private static List<GemCell> gemCells(boolean ready, java.util.Map<Integer, Long> prices) {
     var at = Instant.parse("2026-10-11T07:00:00Z");
     var cells = new ArrayList<GemCell>();
     for (var kind : List.of("겁화", "작열"))
       for (int level = 10; level >= 1; level--) {
         long price =
-            level == 10
-                ? 3_000_000
-                : level == 9 ? 1_000_000 : level == 8 ? 400_000 : 10_000L * level;
+            prices.getOrDefault(
+                level,
+                level == 10
+                    ? 3_000_000
+                    : level == 9 ? 1_000_000 : level == 8 ? 400_000 : 10_000L * level);
         var cell = ready ? new AuctionCell(price, 5, at) : null;
         cells.add(
             new GemCell(

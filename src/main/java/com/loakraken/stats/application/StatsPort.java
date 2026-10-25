@@ -6,6 +6,7 @@ import com.loakraken.stats.domain.StatsRules.Metric;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 /** 관측 캐릭터 집계. since는 activeDays 기준 시각이다. */
@@ -46,15 +47,24 @@ public interface StatsPort {
    */
   BigDecimal nthHighest(StatsConditions conditions, Instant since, Metric metric, long k);
 
+  /** classEngraving이 있으면 모집단을 마지막 장비 요약의 직업 각인이 그 값(공백 무시)인 캐릭터로 좁힌다(#618). 요약이 없는 캐릭터는 빠진다. */
   RankingPage ranking(
-      StatsConditions conditions, Instant since, Metric metric, int offset, int limit);
+      StatsConditions conditions,
+      Instant since,
+      Metric metric,
+      int offset,
+      int limit,
+      String classEngraving);
+
+  /** 모집단(처리정지 제외)을 마지막 장비 요약의 직업 각인(공식 칭호 원문)별로 센다(#618). 요약이 없거나 칭호가 비면 키가 null이다. */
+  Map<String, Long> classEngravingCounts(StatsConditions conditions, Instant since);
 
   /**
-   * 팔찌·젬 효율 랭킹(L38·L39). 저장된 효율 중 지금 규칙 버전({@link EfficiencyKind#ruleVersion()}) 값만 센다. 처리정지 목록은
-   * 모집단에서 뺀다.
+   * 팔찌·젬 효율 랭킹(L38·L39). columns의 값 열에서 지금 규칙 버전({@link EfficiencyColumns#ruleVersion()}) 값만 센다.
+   * 처리정지 목록은 모집단에서 뺀다.
    */
   EfficiencyPage efficiencyRanking(
-      StatsConditions conditions, Instant since, EfficiencyKind kind, int offset, int limit);
+      StatsConditions conditions, Instant since, EfficiencyColumns columns, int offset, int limit);
 
   /**
    * 직업 상세 빌드(M12) 표본. 모집단(처리정지 제외)에서 conditions.className 직업 캐릭터마다 마지막 장비 요약 1행을 읽는다. population은
@@ -134,39 +144,53 @@ public interface StatsPort {
 
   record RankingPage(long total, List<RankingRow> rows) {}
 
-  /** 효율 랭킹 종류(L38 팔찌, L39 젬 옵션 합계). 열 이름은 characters 테이블이고, 지금 규칙 버전은 캐릭터 모듈이 저장할 때 쓰는 공통 상수다. */
+  /**
+   * 효율 랭킹 종류(L38 팔찌, L39 젬). 열 이름은 characters 테이블이고, 지금 규칙 버전은 캐릭터 모듈이 저장할 때 쓰는 공통 상수다. legacy는 전투력
+   * 기여 모델(팔찌 = 전투력 시뮬레이터, 젬 = 젬 옵션 합계 줄), real은 캐릭터 응답의 실 효율(팔찌·젬 실 효율)이다. 어느 쪽으로 세는지는 설정이 고른다.
+   */
   enum EfficiencyKind {
     BRACELET(
-        "bracelet_efficiency_pct",
-        "bracelet_rule_version",
-        com.loakraken.common.api.EfficiencyRuleVersions.COMBAT_POWER_SIM),
+        new EfficiencyColumns(
+            "bracelet_efficiency_pct",
+            "bracelet_rule_version",
+            com.loakraken.common.api.EfficiencyRuleVersions.COMBAT_POWER_SIM,
+            false),
+        new EfficiencyColumns(
+            "bracelet_real_pct",
+            "bracelet_real_rule_version",
+            com.loakraken.common.api.EfficiencyRuleVersions.BRACELET_REAL,
+            true)),
     ARK_GRID_GEM(
-        "ark_grid_gem_pct",
-        "ark_grid_rule_version",
-        com.loakraken.common.api.EfficiencyRuleVersions.ARK_GRID);
+        new EfficiencyColumns(
+            "ark_grid_gem_pct",
+            "ark_grid_rule_version",
+            com.loakraken.common.api.EfficiencyRuleVersions.ARK_GRID,
+            false),
+        new EfficiencyColumns(
+            "ark_grid_real_pct",
+            "ark_grid_real_rule_version",
+            com.loakraken.common.api.EfficiencyRuleVersions.ARK_GRID_REAL,
+            true));
 
-    private final String column;
-    private final String versionColumn;
-    private final String ruleVersion;
+    private final EfficiencyColumns legacy;
+    private final EfficiencyColumns real;
 
-    EfficiencyKind(String column, String versionColumn, String ruleVersion) {
-      this.column = column;
-      this.versionColumn = versionColumn;
-      this.ruleVersion = ruleVersion;
+    EfficiencyKind(EfficiencyColumns legacy, EfficiencyColumns real) {
+      this.legacy = legacy;
+      this.real = real;
     }
 
-    public String ruleVersion() {
-      return ruleVersion;
-    }
-
-    public String column() {
-      return column;
-    }
-
-    public String versionColumn() {
-      return versionColumn;
+    public EfficiencyColumns columns(boolean useReal) {
+      return useReal ? real : legacy;
     }
   }
+
+  /**
+   * 랭킹 값 열, 규칙 버전 열, 지금 규칙 버전(이 버전 값만 센다). 열 이름은 코드 상수뿐이다(요청 값이 SQL에 들어가지 않음). dealersOnly면 포지션이
+   * 딜러인 캐릭터만 센다 — 실 효율은 서포터도 저장되지만(서포터는 점수 기준이 달라) 딜러와 한 줄로 세지 않는다. 전투력 기여 모델 값은 딜러만 계산된다.
+   */
+  record EfficiencyColumns(
+      String column, String versionColumn, String ruleVersion, boolean dealersOnly) {}
 
   record EfficiencyRow(
       long rank,
@@ -310,12 +334,18 @@ public interface StatsPort {
       String characterName, String server, Instant since, boolean characterUnit);
 
   /** 길드 랭킹 정렬(#301). 요청 값만 이 enum이고 응답에는 문자열로 나간다. */
+  /** AVG·SUM: 아이템 레벨 평균·합. CP_AVG: 아이템 레벨 1750 이상 길드원 전투력 평균. CP_SUM: 전투력 총합(전원). */
   enum GuildSort {
     AVG,
-    SUM
+    SUM,
+    CP_AVG,
+    CP_SUM
   }
 
-  /** 길드 랭킹 행(#301). 평균·합은 관측한 공개 길드원의 아이템 레벨(반올림 전). */
+  /**
+   * 길드 랭킹 행(#301). 평균·합은 관측한 공개 길드원의 아이템 레벨(반올림 전). 전투력은 관측한 길드원만: combatPowerAvg는 전원 평균,
+   * combatPowerAvgTop은 아이템 레벨 1750 이상 평균(#580, 길드 탭과 같은 정의), combatPowerTotal은 전원 합.
+   */
   record GuildRow(
       long rank,
       String serverName,
@@ -324,7 +354,10 @@ public interface StatsPort {
       BigDecimal itemLevelAvg,
       BigDecimal itemLevelSum,
       BigDecimal combatPowerAvg,
-      long combatPowerCount) {}
+      long combatPowerCount,
+      BigDecimal combatPowerAvgTop,
+      long combatPowerTopCount,
+      BigDecimal combatPowerTotal) {}
 
   /** excluded: 관측 길드원이 최소 인원 미만이라 뺀 길드 수. */
   /**

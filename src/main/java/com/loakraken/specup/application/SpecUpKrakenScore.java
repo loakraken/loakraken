@@ -7,11 +7,14 @@ import com.loakraken.character.domain.CharacterPosition;
 import com.loakraken.character.domain.CombatPowerRefineModel;
 import com.loakraken.character.domain.GemBaseAttack;
 import com.loakraken.character.domain.KrakenScoreEngine;
+import com.loakraken.character.domain.KrakenScoreSupport;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Pattern;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.JsonNode;
@@ -21,8 +24,8 @@ import tools.jackson.databind.node.ObjectNode;
 
 /**
  * 스펙업 후보 하나의 Δ크라켄 점수. 캐릭터 결과에 캐시된 점수 엔진 입력의 <b>사본</b>에 그 후보만 적용해 딜러 점수를 다시 계산한다(원본 입력은 그대로, 공식 호출
- * 없음). 바꾸는 곳은 엔진이 읽는 필드뿐이다: 보석 레벨·기본 공격력 %(순서·합 다시), 각인 레벨, 무기 품질, 재련 부위 스탯(전투력 재련 모델 단계표의 Δ). 근거가
- * 없으면(빈 칸 보석·서포터·상급 재련 등) null이고 근사하지 않는다.
+ * 없음). 바꾸는 곳은 엔진이 읽는 필드뿐이다: 보석 레벨·기본 공격력 %(순서·합 다시), 각인 레벨, 무기 품질, 재련 부위 스탯(전투력 재련 모델 단계표의 Δ), 깨달음
+ * 카르마 레벨, 스톤 세공 레벨·레벨 보너스, 장신구 연마 줄(#575). 근거가 없으면(빈 칸 보석·서포터·상급 재련 등) null이고 근사하지 않는다.
  */
 @Component
 public class SpecUpKrakenScore {
@@ -54,10 +57,14 @@ public class SpecUpKrakenScore {
 
   /**
    * 캐릭터 하나의 계산 기준. unavailable이 있으면 모든 후보의 Δ점수는 null이고 KRAKEN 정렬은 효율 순으로 되돌린다. unavailable 값:
-   * DISABLED(점수 기능 꺼짐), INPUT_PENDING(점수 입력이 없는 이전 조회), ROLE_UNKNOWN, SUPPORTER_PENDING(서포터는 준비 중),
-   * SCORE_UNAVAILABLE(지금 점수를 낼 수 없음).
+   * DISABLED(점수 기능 꺼짐), INPUT_PENDING(점수 입력이 없는 이전 조회), ROLE_UNKNOWN, SCORE_UNAVAILABLE(지금 점수를 낼 수
+   * 없음). support = 서포터 점수식(서폿 스펙 포인트)으로 계산했는가 — 비교 기준 B도 역할에 따라 점수 키만 바꾸고 후보는 같게 만든다.
    */
-  public record Context(JsonNode input, double before, String unavailable) {
+  public record Context(JsonNode input, double before, String unavailable, boolean support) {
+    Context(JsonNode input, double before, String unavailable) {
+      this(input, before, unavailable, false);
+    }
+
     boolean available() {
       return unavailable == null;
     }
@@ -76,16 +83,28 @@ public class SpecUpKrakenScore {
     var position =
         CharacterPosition.judge(details.profile().className(), details.loadout().arkPassive());
     if (position.role() == null) return new Context(null, Double.NaN, "ROLE_UNKNOWN");
-    if (position.role() == CharacterPosition.Role.SUPPORT)
-      return new Context(null, Double.NaN, "SUPPORTER_PENDING");
+    // 서포터는 서포터 점수식(점수 API와 같은 KrakenScoreSupport.score). 후보·바꾸는 필드는 딜러와 같다(PM 총괄 10-25: 서포터 점수 기준
+    // 줄).
+    boolean support = position.role() == CharacterPosition.Role.SUPPORT;
     // 점수 서비스와 같은 조건: 무기·아크 패시브가 비면 엔진 기본값으로 0점이 나온다.
-    if (!input.path("armory").path("equipment").path("weapon").path("stat").isNumber()
-        || !input.path("arkPassive").path("evolution").isObject())
-      return new Context(null, Double.NaN, "SCORE_UNAVAILABLE");
-    double before = score(input);
-    if (!usable(before)) return new Context(null, Double.NaN, "SCORE_UNAVAILABLE");
-    return new Context(input, before, null);
+    if (!com.loakraken.character.application.KrakenScoreService.scorable(input))
+      return new Context(null, Double.NaN, "SCORE_UNAVAILABLE", support);
+    double before = score(input, support);
+    if (!usable(before)) return new Context(null, Double.NaN, "SCORE_UNAVAILABLE", support);
+    return new Context(input, before, null, support);
   }
+
+  /**
+   * 시뮬레이터 입력으로 나타낼 수 없는 후보(점수 입력에서 만든 후보)의 바꿀 값. Karma = 깨달음 카르마 레벨, Stone = 스톤 증가 각인 두 개의 세공 레벨(스톤
+   * 줄 순서), Polish = 장신구 한 부위(입력 키 necklace·earing1·…)의 연마 줄 전체.
+   */
+  sealed interface Edit permits Karma, Stone, Polish {}
+
+  record Karma(int level) implements Edit {}
+
+  record Stone(Map<String, Integer> levels) implements Edit {}
+
+  record Polish(String slot, List<String> option) implements Edit {}
 
   /** 후보 하나를 적용한 Δ점수(반올림 전). 계산할 수 없으면 null. */
   Double delta(Context context, CharacterLoadout loadout, Change change) {
@@ -98,16 +117,36 @@ public class SpecUpKrakenScore {
           case ENGRAVING_LEVEL -> engraving(copy, change.name(), change.level());
           case EQUIPMENT_QUALITY -> quality(copy, change.quality());
           case EQUIPMENT_REFINE -> refine(copy, loadout, change.index(), change.refine());
+          case ARM_GUARD -> armGuard(copy, loadout, change.level(), change.grade());
           default -> false;
         };
+    return rescore(context, copy, applied);
+  }
+
+  /** 점수 입력에서 만든 후보 하나를 적용한 Δ점수(반올림 전). 계산할 수 없으면 null. */
+  Double delta(Context context, Edit edit) {
+    if (context == null || !context.available() || edit == null) return null;
+    var copy = (ObjectNode) context.input().deepCopy();
+    boolean applied =
+        switch (edit) {
+          case Karma karma -> karma(copy, karma.level());
+          case Stone stone -> stone(copy, stone.levels());
+          case Polish polish -> polish(copy, polish.slot(), polish.option());
+        };
+    return rescore(context, copy, applied);
+  }
+
+  private Double rescore(Context context, ObjectNode copy, boolean applied) {
     if (!applied) return null;
-    double after = score(copy);
+    double after = score(copy, context.support());
     return usable(after) ? after - context.before() : null;
   }
 
-  private double score(JsonNode input) {
+  private double score(JsonNode input, boolean support) {
     try {
-      return KrakenScoreEngine.dealerScore(input, tables);
+      return support
+          ? KrakenScoreSupport.score(input, tables)
+          : KrakenScoreEngine.dealerScore(input, tables);
     } catch (RuntimeException exception) {
       return Double.NaN;
     }
@@ -117,8 +156,17 @@ public class SpecUpKrakenScore {
     return Double.isFinite(value) && value > 0;
   }
 
+  /** 점수·Δ 표시: 비교 기준 B 원본의 ▲Δ toFixed(2)와 같이 배정밀도 정확값에서 반올림(1.005 → 1.00, 이진값이 1.00499…). */
   static BigDecimal round2(double value) {
     return new BigDecimal(value).setScale(2, RoundingMode.HALF_UP);
+  }
+
+  /**
+   * 효율 표시: 비교 기준 B 원본의 효율은 Intl.NumberFormat(소수 둘째 자리)이라 가장 짧은 십진 표기에서 반올림한다(1.005 → 1.01). Δ
+   * 표시(toFixed)와 규칙이 다르다.
+   */
+  static BigDecimal roundEfficiency(double value) {
+    return BigDecimal.valueOf(value).setScale(2, RoundingMode.HALF_UP);
   }
 
   /**
@@ -243,6 +291,130 @@ public class SpecUpKrakenScore {
     var part = input.path("armory").path("equipment").path(key);
     if (from == null || to == null || !part.path("stat").isNumber()) return false;
     ((ObjectNode) part).put("stat", part.path("stat").asDouble() + to.subtract(from).doubleValue());
+    return true;
+  }
+
+  /**
+   * 팔 보호구(완갑) 재련: 단계표(armGuardTable)의 주스탯·무기 공격력·기본 공격력 +N을 목표 단계 값으로, 기본 공격력 %를 grade의 등급 효과로. 지금
+   * 단계와 목표 단계가 모두 확인된 칸이고 입력 값이 지금 단계·지금 등급과 같을 때만 바꾼다.
+   */
+  boolean armGuard(ObjectNode input, CharacterLoadout loadout, Integer level, String grade) {
+    if (level == null || grade == null) return false;
+    var item = armGuardItem(loadout);
+    if (item == null || item.detail() == null || item.detail().refineLevel() == null) return false;
+    var from = refine.armGuardTable().get(item.detail().refineLevel());
+    var to = refine.armGuardTable().get(level);
+    var fromPct = refine.armGuardGradePct().get(item.grade());
+    var toPct = refine.armGuardGradePct().get(grade);
+    var part = input.path("armory").path("equipment").path("vambrace");
+    if (from == null
+        || to == null
+        || !from.confirmed()
+        || !to.confirmed()
+        || fromPct == null
+        || toPct == null
+        || !part.isObject()) return false;
+    if (part.path("stat").asLong(-1) != from.mainStat()
+        || part.path("weaponAtkFlat").asLong(-1) != from.weaponAttack()
+        || part.path("baseAtkFlat").asLong(-1) != from.baseAttack()
+        || part.path("baseAtkPercent").asDouble(-1) != fromPct.doubleValue() * 100) return false;
+    var vambrace = (ObjectNode) part;
+    vambrace.put("stat", to.mainStat());
+    vambrace.put("weaponAtkFlat", to.weaponAttack());
+    vambrace.put("baseAtkFlat", to.baseAttack());
+    vambrace.put("baseAtkPercent", toPct.doubleValue() * 100);
+    return true;
+  }
+
+  /** 팔 보호구 등급 순서. */
+  static final List<String> ARM_GUARD_GRADES = List.of("영웅", "전설", "유물", "고대");
+
+  /**
+   * 목표 단계의 팔 보호구 등급: 지금 등급의 최대 단계(armGuardGradeRange 끝)를 넘으면 다음 등급(승급), 아니면 지금 등급. 모르는 등급이면 null.
+   */
+  String armGuardGrade(String current, int target) {
+    int at = ARM_GUARD_GRADES.indexOf(current);
+    var range = refine.armGuardGradeRange().get(current);
+    if (at < 0 || range == null || range.size() < 2) return null;
+    if (target <= range.get(1)) return current;
+    return at + 1 < ARM_GUARD_GRADES.size() ? ARM_GUARD_GRADES.get(at + 1) : null;
+  }
+
+  static CharacterLoadout.Equipment armGuardItem(CharacterLoadout loadout) {
+    return loadout.equipment().stream()
+        .filter(equipment -> equipment != null && "완갑".equals(equipment.type()))
+        .findFirst()
+        .orElse(null);
+  }
+
+  /** 깨달음 카르마 레벨(엔진은 레벨 × 0.1%를 무기 공격력 %에 더한다). */
+  static boolean karma(ObjectNode input, int level) {
+    var enlightenment = input.path("arkPassive").path("enlightenment");
+    if (!enlightenment.isObject() || !enlightenment.path("karmalevel").isNumber()) return false;
+    ((ObjectNode) enlightenment).put("karmalevel", level);
+    return true;
+  }
+
+  /** 스톤 [레벨 보너스]: 증가 각인 두 개의 세공 레벨 합이 5 이상이면 기본 공격력 1.5%(공식 가이드, 전투력 장비 모델과 같은 규칙). */
+  static final double STONE_BONUS = 1.5;
+
+  static final int STONE_BONUS_SUM = 5;
+
+  private static final Pattern STONE_LINE = Pattern.compile("(.+) Lv\\.(\\d+)");
+
+  /**
+   * 스톤 증가 각인 두 개의 세공 레벨을 levels로: 각인 행의 stone, 스톤 줄('이름 Lv.N'), 레벨 보너스(합 5 이상 1.5%). 지금 값이 서로 맞을 때만
+   * 바꾼다(각인 행의 stone = 스톤 줄 레벨, 지금 보너스 = 규칙 값).
+   */
+  static boolean stone(ObjectNode input, Map<String, Integer> levels) {
+    var current = stoneLevels(input);
+    if (current == null || levels == null || !current.keySet().equals(levels.keySet()))
+      return false;
+    var stone = (ObjectNode) input.path("armory").path("abilityStone");
+    int sum = current.values().stream().mapToInt(Integer::intValue).sum();
+    if (stone.path("attackbonus").asDouble(0) != (sum >= STONE_BONUS_SUM ? STONE_BONUS : 0))
+      return false;
+    var targets = new LinkedHashMap<String, ObjectNode>();
+    for (var row : input.path("engraving")) {
+      var name = row.path("name").asString(null);
+      if (!levels.containsKey(name)) continue;
+      if (row.path("stone").asInt(0) != current.get(name)) return false;
+      targets.put(name, (ObjectNode) row);
+    }
+    if (targets.size() != levels.size()) return false;
+    targets.forEach((name, row) -> row.put("stone", levels.get(name)));
+    var option = (ArrayNode) stone.path("option");
+    for (int i = 0; i < option.size(); i++) {
+      var m = STONE_LINE.matcher(option.get(i).asString(""));
+      if (m.matches() && levels.containsKey(m.group(1)))
+        option.set(i, F.stringNode(m.group(1) + " Lv." + levels.get(m.group(1))));
+    }
+    int next = levels.values().stream().mapToInt(Integer::intValue).sum();
+    stone.put("attackbonus", next >= STONE_BONUS_SUM ? STONE_BONUS : 0);
+    return true;
+  }
+
+  /** 스톤 줄의 앞 두 줄(증가 각인) 이름 → 세공 레벨, 스톤 줄 순서. 두 줄로 읽히지 않으면 null. */
+  static Map<String, Integer> stoneLevels(JsonNode input) {
+    var option = input.path("armory").path("abilityStone").path("option");
+    if (!option.isArray() || option.size() < 2) return null;
+    var levels = new LinkedHashMap<String, Integer>();
+    for (int i = 0; i < 2; i++) {
+      var m = STONE_LINE.matcher(option.get(i).asString(""));
+      if (!m.matches()) return null;
+      levels.put(m.group(1), Integer.parseInt(m.group(2)));
+    }
+    return levels.size() == 2 ? levels : null;
+  }
+
+  /** 장신구 한 부위의 연마 줄을 option으로(줄 글자는 툴팁과 같은 '이름 +값' 꼴). */
+  static boolean polish(ObjectNode input, String slot, List<String> option) {
+    if (slot == null || option == null) return false;
+    var item = input.path("armory").path("accessory").path(slot);
+    if (!item.isObject() || !item.path("option").isArray()) return false;
+    var lines = F.arrayNode();
+    option.forEach(lines::add);
+    ((ObjectNode) item).set("option", lines);
     return true;
   }
 }

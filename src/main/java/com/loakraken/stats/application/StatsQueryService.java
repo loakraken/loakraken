@@ -2,6 +2,7 @@ package com.loakraken.stats.application;
 
 import com.loakraken.common.api.BusinessException;
 import com.loakraken.stats.domain.ClassBuilds;
+import com.loakraken.stats.domain.ClassEngravingCatalog;
 import com.loakraken.stats.domain.GuildDetail;
 import com.loakraken.stats.domain.StatsConditions;
 import com.loakraken.stats.domain.StatsRules;
@@ -43,18 +44,32 @@ public class StatsQueryService {
    */
   private final int detailMinSample;
 
+  /**
+   * 팔찌·젬 효율 랭킹을 실 효율(캐릭터 응답 braceletEfficiency.real·arkGridEfficiency.real과 같은 정의)로 셀지. 기본은 꺼짐(전투력
+   * 기여 모델 열) — 실 효율 열은 배포 뒤 관측부터 채워지므로, 표본이 쌓이면 운영 설정으로 켠다.
+   */
+  private final boolean realEfficiencyRanking;
+
+  public StatsQueryService(StatsPort stats, StatsCache cache, Clock clock, int detailMinSample) {
+    this(stats, cache, clock, detailMinSample, false);
+  }
+
+  @org.springframework.beans.factory.annotation.Autowired
   public StatsQueryService(
       StatsPort stats,
       StatsCache cache,
       Clock clock,
       @org.springframework.beans.factory.annotation.Value(
               "${stats.class-builds.detail-min-sample:" + StatsRules.MIN_SAMPLE + "}")
-          int detailMinSample) {
+          int detailMinSample,
+      @org.springframework.beans.factory.annotation.Value("${stats.efficiency-ranking.real:false}")
+          boolean realEfficiencyRanking) {
     if (detailMinSample < 1) throw new IllegalArgumentException("detail-min-sample는 1 이상");
     this.stats = stats;
     this.cache = cache;
     this.clock = clock;
     this.detailMinSample = detailMinSample;
+    this.realEfficiencyRanking = realEfficiencyRanking;
   }
 
   public SummaryResult summary(StatsConditions conditions) {
@@ -485,8 +500,8 @@ public class StatsQueryService {
   }
 
   /**
-   * 수집품(내실) 랭킹(#295, 볼트 「랭킹 확장 설계 초안」 v1). 조건 중 server·activeDays만 쓴다. 모집단은 원정대(또는 캐릭터 행) 수이고, 30
-   * 미만이면 sampleStatus=COLLECTING이지만 값·순위는 그대로 준다(참고값 원칙).
+   * 수집품(내실) 랭킹(#295). 조건 중 server·activeDays만 쓴다. 모집단은 원정대(또는 캐릭터 행) 수이고, 30 미만이면
+   * sampleStatus=COLLECTING이지만 값·순위는 그대로 준다(참고값 원칙).
    */
   public CollectibleRankingResult collectibleRanking(
       StatsConditions conditions, boolean characterUnit, int page, int size) {
@@ -536,7 +551,7 @@ public class StatsQueryService {
   }
 
   /**
-   * 원정대 랭킹(#297, 볼트 「랭킹 확장 설계 초안」 v1 2절). 조건 중 server·activeDays만 쓴다. 모집단은 순위에 든 원정대 수이고, 30 미만이면
+   * 원정대 랭킹(#297). 조건 중 server·activeDays만 쓴다. 모집단은 순위에 든 원정대 수이고, 30 미만이면
    * sampleStatus=COLLECTING이지만 값·순위는 그대로 준다(참고값 원칙). 값은 소수 둘째 자리(HALF_UP)다.
    */
   public RosterRankingResult rosterRanking(
@@ -589,8 +604,7 @@ public class StatsQueryService {
   }
 
   /**
-   * 캐릭터 기준 수집품 순위(#303, 볼트 「수집품 순위·보유율 설계 메모」 1절). 순위 모집단은 수집품 랭킹과 같다. 30 미만이면 topPercent는 null(기존
-   * 순위 조회와 같음)이고 rank는 그대로 준다.
+   * 캐릭터 기준 수집품 순위(#303). 순위 모집단은 수집품 랭킹과 같다. 30 미만이면 topPercent는 null(기존 순위 조회와 같음)이고 rank는 그대로 준다.
    */
   public CollectibleStandingResult collectibleStanding(
       StatsConditions conditions, String characterName, boolean characterUnit) {
@@ -632,8 +646,8 @@ public class StatsQueryService {
   public static final int GUILD_MIN_MEMBERS = 5;
 
   /**
-   * 길드 랭킹(#301, 볼트 「랭킹 확장 설계 초안」 v1 3절). 조건 중 server·activeDays만 쓴다. 모집단은 순위에 든 길드 수이고, 30 미만이면
-   * sampleStatus=COLLECTING이지만 값·순위는 그대로 준다(참고값 원칙). 값은 소수 둘째 자리(HALF_UP)다.
+   * 길드 랭킹(#301). 조건 중 server·activeDays만 쓴다. 모집단은 순위에 든 길드 수이고, 30 미만이면 sampleStatus=COLLECTING이지만
+   * 값·순위는 그대로 준다(참고값 원칙). 값은 소수 둘째 자리(HALF_UP)다.
    */
   public GuildRankingResult guildRanking(
       StatsConditions conditions, StatsPort.GuildSort sort, int page, int size, String guild) {
@@ -641,7 +655,7 @@ public class StatsQueryService {
     if (offset > MAX_RANKING_OFFSET)
       throw new BusinessException(StatsErrorCode.STATS_INVALID_RANGE);
     return cached(
-        "guilds:"
+        "guilds:v2:"
             + sort
             + ":"
             + page
@@ -685,14 +699,21 @@ public class StatsQueryService {
                               row.combatPowerAvg() == null
                                   ? null
                                   : row.combatPowerAvg().setScale(2, RoundingMode.HALF_UP),
-                              row.combatPowerCount()))
+                              row.combatPowerCount(),
+                              row.combatPowerAvgTop() == null
+                                  ? null
+                                  : row.combatPowerAvgTop().setScale(2, RoundingMode.HALF_UP),
+                              row.combatPowerTopCount(),
+                              row.combatPowerTotal() == null
+                                  ? null
+                                  : row.combatPowerTotal().setScale(2, RoundingMode.HALF_UP)))
                   .toList());
         });
   }
 
   /**
-   * 수집품 항목별 보유율(#305, 볼트 「수집품 순위·보유율 설계 메모」 2절). 조건 중 server·activeDays만 쓴다. 분모 N은 관측 원정대 수이고, 30
-   * 미만이면 sampleStatus=COLLECTING이지만 비율은 그대로 준다(참고값). N이 0이면 비율은 null.
+   * 수집품 항목별 보유율(#305). 조건 중 server·activeDays만 쓴다. 분모 N은 관측 원정대 수이고, 30 미만이면
+   * sampleStatus=COLLECTING이지만 비율은 그대로 준다(참고값). N이 0이면 비율은 null.
    *
    * <p>전체 종류 결과 하나를 조건별로 캐시하고, type은 그 결과에서 고른다(type마다 다시 집계하지 않음). 기본 조건은 예열 작업이 캐시가 끝나기 전에 다시
    * 채운다(원정대 1만 개에서 전체 집계 약 0.4초, PM-백엔드 300ms 조건).
@@ -783,17 +804,35 @@ public class StatsQueryService {
         full.titles().stream().filter(row -> title.equals(row.title())).toList());
   }
 
-  public RankingResult ranking(StatsConditions conditions, Metric metric, int page, int size) {
+  /**
+   * classEngraving은 직업 각인 목록의 표기(컨트롤러가 검증)다. 주면 마지막 장비 요약의 직업 각인이 그 값인 캐릭터만 순위·모집단에 넣고(#618), 같은
+   * 조건에서 직업 각인을 모르는 캐릭터 수를 함께 준다.
+   */
+  public RankingResult ranking(
+      StatsConditions conditions, Metric metric, int page, int size, String classEngraving) {
     int offset = (page - 1) * size;
     if (offset > MAX_RANKING_OFFSET)
       throw new BusinessException(StatsErrorCode.STATS_INVALID_RANGE);
     return cached(
-        "ranking:" + metric + ":" + page + ":" + size + ":" + key(conditions),
+        "ranking:"
+            + metric
+            + ":"
+            + page
+            + ":"
+            + size
+            + ":"
+            + key(conditions)
+            + (classEngraving == null
+                ? ""
+                : ":ce=" + ClassEngravingCatalog.compact(classEngraving)),
         RankingResult.class,
         () -> {
           var now = clock.instant();
-          var result = stats.ranking(conditions, conditions.since(now), metric, offset, size);
+          var result =
+              stats.ranking(
+                  conditions, conditions.since(now), metric, offset, size, classEngraving);
           var meta = meta(conditions, result.total(), now);
+          Long unknown = classEngraving == null ? null : unknownOrNull(conditions);
           boolean ready = meta.sampleStatus() == SampleStatus.READY;
           return new RankingResult(
               meta,
@@ -818,7 +857,70 @@ public class StatsQueryService {
                             row.arkPassive(),
                             row.estherWeapon());
                       })
-                  .toList());
+                  .toList(),
+              classEngraving,
+              unknown);
+        });
+  }
+
+  /**
+   * 직업 각인 선택지(#618). 이름은 직업 각인 목록 파일 순서이고, count는 같은 조건 모집단에서 마지막 장비 요약의 직업 각인이 그 값(공백 무시)인 캐릭터 수다.
+   * 집계를 못 하면 이름만 주고 count는 null이다(선택지는 그대로 쓸 수 있게).
+   */
+  public ClassEngravingsResult classEngravings(StatsConditions conditions, List<String> names) {
+    key(conditions);
+    ClassEngravingCounts counts;
+    try {
+      counts = classEngravingCounts(conditions);
+    } catch (BusinessException exception) {
+      if (exception.errorCode() != StatsErrorCode.STATS_UNAVAILABLE) throw exception;
+      counts = null;
+    }
+    var rows = new ArrayList<ClassEngravingCount>();
+    for (var name : names) {
+      Long count = null;
+      if (counts != null) {
+        var target = ClassEngravingCatalog.compact(name);
+        count =
+            counts.titles().stream()
+                .filter(title -> ClassEngravingCatalog.compact(title.title()).equals(target))
+                .mapToLong(TitleCount::count)
+                .sum();
+      }
+      rows.add(new ClassEngravingCount(name, count));
+    }
+    return new ClassEngravingsResult(
+        conditions.className(),
+        rows,
+        counts == null ? null : counts.unknown(),
+        counts == null ? null : counts.aggregatedAt());
+  }
+
+  /** 랭킹의 '직업 각인을 모르는 수'. 세지 못하면(집계 시간 초과 등) 랭킹 전체를 503으로 만들지 않고 null(#618 코덱스 P2). */
+  private Long unknownOrNull(StatsConditions conditions) {
+    try {
+      return classEngravingCounts(conditions).unknown();
+    } catch (BusinessException exception) {
+      if (exception.errorCode() != StatsErrorCode.STATS_UNAVAILABLE) throw exception;
+      return null;
+    }
+  }
+
+  /** 모집단의 직업 각인(원문)별 수와 모르는 수. 조건마다 10분 캐시한다. */
+  private ClassEngravingCounts classEngravingCounts(StatsConditions conditions) {
+    return cached(
+        "class-engraving-counts:" + key(conditions),
+        ClassEngravingCounts.class,
+        () -> {
+          var now = clock.instant();
+          var counts = stats.classEngravingCounts(conditions, conditions.since(now));
+          var titles = new ArrayList<TitleCount>();
+          long unknown = 0;
+          for (var entry : counts.entrySet()) {
+            if (entry.getKey() == null) unknown += entry.getValue();
+            else titles.add(new TitleCount(entry.getKey(), entry.getValue()));
+          }
+          return new ClassEngravingCounts(titles, unknown, now);
         });
   }
 
@@ -831,13 +933,24 @@ public class StatsQueryService {
     int offset = (page - 1) * size;
     if (offset > MAX_RANKING_OFFSET)
       throw new BusinessException(StatsErrorCode.STATS_INVALID_RANGE);
+    var columns = kind.columns(realEfficiencyRanking);
+    // 열(정의)이 키에 들어가야 설정을 바꾼 뒤 옛 정의의 캐시 값을 내지 않는다.
     return cached(
-        "efficiency-ranking:" + kind + ":" + page + ":" + size + ":" + key(conditions),
+        "efficiency-ranking:"
+            + kind
+            + ":"
+            + columns.ruleVersion()
+            + ":"
+            + page
+            + ":"
+            + size
+            + ":"
+            + key(conditions),
         EfficiencyRankingResult.class,
         () -> {
           var now = clock.instant();
           var result =
-              stats.efficiencyRanking(conditions, conditions.since(now), kind, offset, size);
+              stats.efficiencyRanking(conditions, conditions.since(now), columns, offset, size);
           var meta = meta(conditions, result.total(), now);
           boolean ready = meta.sampleStatus() == SampleStatus.READY;
           return new EfficiencyRankingResult(
@@ -1262,7 +1375,10 @@ public class StatsQueryService {
       BigDecimal itemLevelAvg,
       BigDecimal itemLevelSum,
       BigDecimal combatPowerAvg,
-      long combatPowerCount) {}
+      long combatPowerCount,
+      BigDecimal combatPowerAvgTop,
+      long combatPowerTopCount,
+      BigDecimal combatPowerTotal) {}
 
   /** 수집품 항목별 보유율 결과(#305). type이 null이면 전체 종류. */
   public record CollectibleOwnershipResult(Meta meta, String type, List<OwnedItem> items) {}
@@ -1282,8 +1398,34 @@ public class StatsQueryService {
 
   public record EquippedTitle(String title, long equippedRosters, BigDecimal equippedPercent) {}
 
+  /**
+   * classEngraving은 요청한 직업 각인(없으면 null), classEngravingUnknown은 필터를 켰을 때 같은 조건에서 직업 각인을 모르는(마지막 장비
+   * 요약이 없는) 캐릭터 수(필터를 끄면 null)다(#618).
+   */
   public record RankingResult(
-      Meta meta, Metric metric, int page, int size, List<RankedCharacter> rows) {}
+      Meta meta,
+      Metric metric,
+      int page,
+      int size,
+      List<RankedCharacter> rows,
+      String classEngraving,
+      Long classEngravingUnknown) {}
+
+  public record TitleCount(String title, long count) {}
+
+  public record ClassEngravingCounts(List<TitleCount> titles, long unknown, Instant aggregatedAt) {
+    public ClassEngravingCounts {
+      titles = titles == null ? List.of() : List.copyOf(titles);
+    }
+  }
+
+  public record ClassEngravingCount(String name, Long count) {}
+
+  public record ClassEngravingsResult(
+      String className,
+      List<ClassEngravingCount> classEngravings,
+      Long unknown,
+      Instant aggregatedAt) {}
 
   public record EfficiencyRankedCharacter(
       long rank,

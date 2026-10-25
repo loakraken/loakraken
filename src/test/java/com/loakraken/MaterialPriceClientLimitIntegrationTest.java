@@ -33,8 +33,9 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * 재료 시세는 사람 클라이언트(내부 주소 면제 끔)도 429 없이 답한다. 예열 캐시에 있으면 공식 호출 0이고, 없으면 요청 1번을 재료 시세 버킷에 세고 안쪽 검색은
- * 클라이언트 공식 호출 한도(분당 20)에 매기지 않는다. 공식 API는 가짜 서버(분류 안 이름 부분 일치·10개씩)다.
+ * 재료 시세는 사람 클라이언트(내부 주소 면제 끔)도 429 없이 답한다. 예열 캐시에 있으면 공식 호출 0이고, 없으면 요청 1번을 재료 시세 버킷에 세고 안쪽 검색은 공식
+ * 호출마다 클라이언트 재료 검색 버킷(분당 15, 공식 호출 한도 20과 따로)에 센다 — 넘은 이름부터 지금 알 수 없음(보안 점검 10-18). 공식 API는 가짜
+ * 서버(분류 안 이름 부분 일치·10개씩)다.
  */
 @Import(TestcontainersConfiguration.class)
 @SpringBootTest(
@@ -135,32 +136,59 @@ class MaterialPriceClientLimitIntegrationTest {
   }
 
   @Test
-  void 예열_전에는_요청_한_번만_세고_안쪽_검색은_공식_호출_한도에_매기지_않아_20개와_25개가_429_없이_답한다() throws Exception {
+  void 예열_전에는_공식_검색을_클라이언트_재료_검색_버킷에_세고_넘은_이름부터_지금_알_수_없음이며_429가_없다() throws Exception {
     // 한도는 실제 시각 기준 1분 고정 창이다. 네 요청이 한 창 안에 들어야 네 번째가 429다(분 경계를 넘으면 새 창에서 허용).
     awaitMinuteWithAtLeast(Duration.ofSeconds(40));
-    // 첫 요청: 생활 18개 × 분류 2 + 2 ≈ 38번 검색(공식 호출 한도 20을 넘지만 429 없음).
-    var first = priced(post(CRAFT, "203.0.113.40"));
+    // 첫 요청: 생활 18개 × 분류 2 + 2 ≈ 38번 검색이 필요하지만 재료 검색 버킷(분당 15)까지만 공식 검색, 그 뒤 이름은 지금 알 수 없음(429 아님).
+    var firstResponse = post(CRAFT, "203.0.113.40");
+    // 보안 재확인 ④: 응답에 내부 키·클라이언트 키(HMAC)·주소가 들어가지 않는다.
+    assertThat(firstResponse.body())
+        .doesNotContain("203.0.113.40", "lostark:", "client-limit", "shared", "material_search")
+        .doesNotContainPattern("[0-9a-f]{32}");
+    var first = items(firstResponse);
     assertThat(first).hasSize(20);
-    assertThat(calls.get()).isGreaterThan(20);
+    assertThat(calls).hasValue(15);
+    assertThat(status(first, "PRICED")).isPositive();
+    assertThat(status(first, "PRICE_UNAVAILABLE")).isPositive();
+    assertThat(status(first, "PRICED") + status(first, "PRICE_UNAVAILABLE")).isEqualTo(20);
     assertThat(first.get(4).path("unitPriceGold").decimalValue()).isEqualByComparingTo("2.85");
+    // 한도로 부르지 못한 이름은 '시세 없음'과 구분되는 사유(RATE_LIMITED), 가격을 읽은 이름은 사유 null.
+    for (var item : first)
+      if ("PRICE_UNAVAILABLE".equals(item.path("status").asText()))
+        assertThat(item.path("unavailableReason").asText()).isEqualTo("RATE_LIMITED");
+      else assertThat(item.path("unavailableReason").isNull()).isTrue();
 
-    // 30초 캐시가 지난 뒤(캐시 비움) 두 번째: 찾은 분류부터 보므로 이름마다 1번.
+    // 같은 분 두 번째(검색 캐시 비움): 재료 검색 버킷을 다 써서 공식 검색 없이 모두 지금 알 수 없음, 429 아님.
     redis.delete(redis.keys("market:v1:*"));
     calls.set(0);
-    assertThat(priced(post(CRAFT, "203.0.113.40"))).hasSize(20);
-    assertThat(calls).hasValue(20);
+    var second = items(post(CRAFT, "203.0.113.40"));
+    assertThat(status(second, "PRICE_UNAVAILABLE")).isEqualTo(20);
+    assertThat(second)
+        .allMatch(item -> "RATE_LIMITED".equals(item.path("unavailableReason").asText()));
+    assertThat(calls).hasValue(0);
 
     // 생명의 기운 효율 25개(20 + 5): 세 번째 요청까지 재료 시세 한도(시험 3) 안.
     redis.delete(redis.keys("market:v1:*"));
     var rest = new ArrayList<>(CRAFT.subList(5, 20));
     rest.addAll(LIFE_EXTRA);
-    assertThat(priced(post(rest, "203.0.113.40"))).hasSize(20);
+    assertThat(items(post(rest, "203.0.113.40"))).hasSize(20);
     // 네 번째 캐시 미스 요청은 재료 시세 한도로 429다(공식 검색 전에 멈춤).
     redis.delete(redis.keys("market:v1:*"));
     calls.set(0);
     var limited = post(CRAFT.subList(0, 5), "203.0.113.40");
     assertThat(limited.statusCode()).isEqualTo(429);
     assertThat(calls).hasValue(0);
+  }
+
+  private List<JsonNode> items(HttpResponse<String> response) throws Exception {
+    assertThat(response.statusCode()).as(response.body()).isEqualTo(200);
+    var items = new ArrayList<JsonNode>();
+    MAPPER.readTree(response.body()).at("/data/items").forEach(items::add);
+    return items;
+  }
+
+  private static long status(List<JsonNode> items, String status) {
+    return items.stream().filter(item -> status.equals(item.path("status").asText())).count();
   }
 
   /** 지금 분(UTC 1분 창)에 남은 시간이 needed보다 짧으면 다음 분이 시작될 때까지 기다린다. */

@@ -4,6 +4,7 @@ import com.loakraken.stats.application.StatsPort;
 import com.loakraken.stats.application.StatsPort.GuildSort;
 import com.loakraken.stats.application.StatsPort.RosterAggregate;
 import com.loakraken.stats.application.StatsPort.RosterBasis;
+import com.loakraken.stats.domain.ClassEngravingCatalog;
 import com.loakraken.stats.domain.GuildDetail;
 import com.loakraken.stats.domain.StatsConditions;
 import com.loakraken.stats.domain.StatsRules.Metric;
@@ -539,7 +540,10 @@ class PostgresStatsRepository implements StatsPort {
         SELECT c.server_name, c.guild_name, COUNT(*) AS member_count, AVG(c.item_level) AS il_avg,
           SUM(c.item_level) AS il_sum,
           AVG(c.combat_power) FILTER (WHERE c.combat_power IS NOT NULL) AS cp_avg,
-          COUNT(c.combat_power) AS cp_count
+          COUNT(c.combat_power) AS cp_count,
+          AVG(c.combat_power) FILTER (WHERE c.combat_power IS NOT NULL AND c.item_level >= :topItemLevel) AS cp_avg_top,
+          COUNT(c.combat_power) FILTER (WHERE c.item_level >= :topItemLevel) AS cp_top_count,
+          SUM(c.combat_power) AS cp_sum
         FROM characters c
         WHERE c.guild_name IS NOT NULL AND c.item_level IS NOT NULL
           AND c.profile_refreshed_at >= :since
@@ -549,7 +553,7 @@ class PostgresStatsRepository implements StatsPort {
             WHERE e.character_name = c.character_name AND (e.server_name IS NULL OR e.server_name = c.server_name))
         GROUP BY c.server_name, c.guild_name),
       ranked AS (
-        SELECT g.*, RANK() OVER (ORDER BY ROUND(%ORDER%, 2) DESC) AS rank
+        SELECT g.*, RANK() OVER (ORDER BY ROUND(%ORDER%, 2) DESC NULLS LAST) AS rank
         FROM guilds g WHERE g.member_count >= :minMembers)
       """;
 
@@ -569,7 +573,15 @@ class PostgresStatsRepository implements StatsPort {
       int offset,
       int limit,
       String guild) {
-    String base = GUILD_RANKED.replace("%ORDER%", sort == GuildSort.SUM ? "g.il_sum" : "g.il_avg");
+    String base =
+        GUILD_RANKED.replace(
+            "%ORDER%",
+            switch (sort) {
+              case AVG -> "g.il_avg";
+              case SUM -> "g.il_sum";
+              case CP_AVG -> "g.cp_avg_top";
+              case CP_SUM -> "g.cp_sum";
+            });
     var counts = new long[] {0, 0, 0, 0};
     var rows =
         jdbc.sql(
@@ -586,6 +598,7 @@ class PostgresStatsRepository implements StatsPort {
             .param("since", since.atOffset(ZoneOffset.UTC))
             .param("server", server)
             .param("minMembers", minMembers)
+            .param("topItemLevel", com.loakraken.stats.domain.GuildDetail.TOP_ITEM_LEVEL)
             .param("guild", guild)
             .param("limit", limit)
             .param("offset", offset)
@@ -603,7 +616,10 @@ class PostgresStatsRepository implements StatsPort {
                       row.getBigDecimal("il_avg"),
                       row.getBigDecimal("il_sum"),
                       row.getBigDecimal("cp_avg"),
-                      row.getLong("cp_count"));
+                      row.getLong("cp_count"),
+                      row.getBigDecimal("cp_avg_top"),
+                      row.getLong("cp_top_count"),
+                      row.getBigDecimal("cp_sum"));
                 })
             .list();
     if (rows.isEmpty())
@@ -618,6 +634,7 @@ class PostgresStatsRepository implements StatsPort {
           .param("since", since.atOffset(ZoneOffset.UTC))
           .param("server", server)
           .param("minMembers", minMembers)
+          .param("topItemLevel", com.loakraken.stats.domain.GuildDetail.TOP_ITEM_LEVEL)
           .param("guild", guild)
           .query(
               (ResultSet row) -> {
@@ -836,14 +853,19 @@ class PostgresStatsRepository implements StatsPort {
 
   @Override
   public RankingPage ranking(
-      StatsConditions conditions, Instant since, Metric metric, int offset, int limit) {
+      StatsConditions conditions,
+      Instant since,
+      Metric metric,
+      int offset,
+      int limit,
+      String classEngraving) {
     String column = metric.column();
     String tie = metric == Metric.COMBAT_POWER ? "item_level" : "combat_power";
     var rows = new ArrayList<RankingRow>();
     long[] total = {0};
     String order = column + " DESC, " + tie + " DESC, character_name, server_name";
     // 순위를 먼저 매겨 한 페이지만 자른 뒤, 그 행에만 마지막 장비 요약(아크 패시브 K32)을 붙인다.
-    population(conditions, since)
+    population(conditions, since, classEngraving)
         .statement(
             ", ranked AS (SELECT character_id, character_name, server_name, class_name, position,"
                 + " item_level, combat_power, best_combat_power, RANK() OVER (ORDER BY "
@@ -884,11 +906,28 @@ class PostgresStatsRepository implements StatsPort {
     // 요청 페이지가 범위를 넘으면 행이 없어 total을 따로 센다.
     if (rows.isEmpty())
       total[0] =
-          population(conditions, since)
+          population(conditions, since, classEngraving)
               .statement("SELECT COUNT(*) FROM pop", jdbc)
               .query(Long.class)
               .single();
     return new RankingPage(total[0], rows);
+  }
+
+  @Override
+  public Map<String, Long> classEngravingCounts(StatsConditions conditions, Instant since) {
+    var counts = new HashMap<String, Long>();
+    population(conditions, since)
+        .statement(
+            "SELECT NULLIF(BTRIM(s.ark_passive_title), '') AS title, COUNT(*) AS n FROM pop p"
+                + " LEFT JOIN LATERAL (SELECT e.ark_passive_title FROM character_equipment_summary e"
+                + " WHERE e.character_id = p.character_id ORDER BY e.observed_at DESC LIMIT 1) s ON TRUE"
+                + " GROUP BY 1",
+            jdbc)
+        .query(
+            (ResultSet row) -> {
+              counts.merge(row.getString("title"), row.getLong("n"), Long::sum);
+            });
+    return counts;
   }
 
   /** 마지막 장비 요약의 아크 패시브(K32). 요약이 없거나 모든 값이 없으면 null. */
@@ -913,14 +952,20 @@ class PostgresStatsRepository implements StatsPort {
 
   @Override
   public EfficiencyPage efficiencyRanking(
-      StatsConditions conditions, Instant since, EfficiencyKind kind, int offset, int limit) {
-    String column = kind.column();
-    String versionColumn = kind.versionColumn();
+      StatsConditions conditions, Instant since, EfficiencyColumns columns, int offset, int limit) {
+    String column = columns.column();
+    String versionColumn = columns.versionColumn();
     // 지금 규칙 버전(공통 상수) 값만 센다. 모델이 바뀌면 다음 관측 때 다시 저장된 캐릭터부터 들어간다.
-    var version = kind.ruleVersion();
+    var version = columns.ruleVersion();
     var rows = new ArrayList<EfficiencyRow>();
     long[] total = {0};
-    String filter = " WHERE " + column + " IS NOT NULL AND " + versionColumn + " = :version";
+    String filter =
+        " WHERE "
+            + column
+            + " IS NOT NULL AND "
+            + versionColumn
+            + " = :version"
+            + (columns.dealersOnly() ? " AND position = 'DEALER'" : "");
     population(conditions, since)
         .statement(
             "SELECT character_name, server_name, class_name, position, item_level, combat_power, "
@@ -1084,6 +1129,14 @@ class PostgresStatsRepository implements StatsPort {
    * 처리정지 수를 거꾸로 셀 수 없다(M12 판정, 2026-10-09 '집계는 포함' 결정을 바꿈).
    */
   private static Population population(StatsConditions c, Instant since) {
+    return population(c, since, null);
+  }
+
+  /**
+   * classEngraving(공백을 뺀 값)이 있으면 마지막 장비 요약의 직업 각인이 같은(공백 무시) 캐릭터만 남긴다(#618). 요약이 없는 캐릭터는 빠진다. 장비 요약
+   * 인덱스(character_id, observed_at DESC)로 캐릭터마다 한 행만 읽는다.
+   */
+  private static Population population(StatsConditions c, Instant since, String classEngraving) {
     var where =
         new StringBuilder(
             "c.combat_power IS NOT NULL AND c.profile_refreshed_at >= :since AND c.item_level >= :ilMin");
@@ -1126,12 +1179,20 @@ class PostgresStatsRepository implements StatsPort {
              WHERE o.roster_key = c.roster_key AND o.server_name = c.server_name
                AND (o.item_level > c.item_level
                     OR (o.item_level = c.item_level AND o.character_name < c.character_name))))""");
+    if (classEngraving != null) {
+      where.append(
+          " AND REGEXP_REPLACE((SELECT e.ark_passive_title FROM character_equipment_summary e"
+              + " WHERE e.character_id = c.character_id ORDER BY e.observed_at DESC LIMIT 1),"
+              + " '\\s', '', 'g') = :classEngraving");
+      params.put("classEngraving", ClassEngravingCatalog.compact(classEngraving));
+    }
     where.append(" AND ").append(NOT_EXCLUDED);
     String cte =
         "WITH pop AS (SELECT c.character_id, c.character_name, c.server_name, c.class_name, c.item_level,"
             + " c.combat_power, c.best_combat_power, c.position, c.gem_mean_level, c.bracelet_efficiency_pct,"
             + " c.bracelet_rule_version, c.ark_grid_gem_pct, c.ark_grid_rule_version,"
-            + " c.efficiency_observed_at FROM characters c WHERE "
+            + " c.bracelet_real_pct, c.bracelet_real_rule_version, c.ark_grid_real_pct,"
+            + " c.ark_grid_real_rule_version, c.efficiency_observed_at FROM characters c WHERE "
             + where
             + ") ";
     return new Population(cte, params);

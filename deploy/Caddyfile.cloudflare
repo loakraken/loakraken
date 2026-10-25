@@ -35,10 +35,21 @@
 		X-Request-Id {http.request.uuid}
 	}
 
+	# /api/*(JSON만 오가는 경로) 요청 본문 상한. 넘으면 413으로 끊어 큰 본문이 web까지 오지 않게 한다. 화면·정적 파일 경로는 그대로.
+	request_body /api/* {
+		max_size 256KB
+	}
+
 	reverse_proxy web:3000 {
 		header_up X-Forwarded-For {client_ip}
+		# 신뢰 대역(Cloudflare)에서 온 X-Forwarded-Host는 Caddy가 그대로 넘긴다. web이 보는 값을 요청의 실제 Host로 고정한다.
+		header_up X-Forwarded-Host {host}
 		# 실제 IP는 위 한 줄로만 넘긴다. Cloudflare 밖에서 위조한 CF-Connecting-IP가 web까지 가지 않게 지운다.
 		header_up -CF-Connecting-IP
+		# web 컨테이너를 다시 만드는 동안(1초 안팎) 연결이 안 되면 502를 바로 주지 않고 10초까지 다시 시도한다.
+		# 요청이 web에 닿기 전의 연결 실패만 다시 시도하므로 POST도 두 번 처리되지 않는다.
+		lb_try_duration 10s
+		lb_try_interval 250ms
 	}
 }
 

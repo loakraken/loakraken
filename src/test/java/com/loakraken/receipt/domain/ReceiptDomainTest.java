@@ -218,6 +218,41 @@ class ReceiptDomainTest {
     // 실링 합: 340+380+410+460+490+540+580+630+670+720+770 = 5,990,000
     assertThat(stages.stream().mapToLong(EquipmentReceipt.StageCost::growthSilver).sum())
         .isEqualTo(5_990_000);
+    // 방어구 5부위가 모두 20→21을 넘으면(코드 리뷰 10-25): 21단계만 파편 360,000 · 실링 3,600,000 · 고통의 가시 75.
+    var five =
+        List.of(
+            item("투구", "+21 운명의 전율 머리장식", 21, 4),
+            item("상의", "+21 운명의 전율 상의", 21, 4),
+            item("하의", "+21 운명의 전율 하의", 21, 4),
+            item("장갑", "+21 운명의 전율 장갑", 21, 4),
+            item("어깨", "+21 운명의 전율 견갑", 21, 4));
+    var fiveWith = EquipmentReceipt.calculate(RULES, five, prices, false, growth);
+    var fiveWithout = EquipmentReceipt.calculate(RULES, five, prices, false, null);
+    assertThat(fiveWith.parts()).hasSize(5);
+    BigDecimal shard21 = BigDecimal.ZERO;
+    long silver21 = 0;
+    BigDecimal thorns21 = BigDecimal.ZERO;
+    for (int i = 0; i < 5; i++) {
+      var on = stage(fiveWith.parts().get(i), 21);
+      var off = stage(fiveWithout.parts().get(i), 21);
+      shard21 = shard21.add(on.gold().subtract(off.gold()));
+      silver21 += on.growthSilver();
+      for (var extra : on.growthExtras()) thorns21 = thorns21.add(extra.amount());
+    }
+    assertThat(shard21).isEqualByComparingTo("360000");
+    assertThat(silver21).isEqualTo(3_600_000);
+    assertThat(thorns21).isEqualByComparingTo("75");
+    // 영수증 합계 아래 수량(12~21단계 전체): 실링 5 × 5,220,000 = 26,100,000, 고통의 가시 75. 실링 먼저.
+    assertThat(EquipmentReceipt.nonGold(List.of(fiveWith)))
+        .containsExactly(
+            java.util.Map.entry(RefiningPlan.SILVER, new BigDecimal("26100000")),
+            java.util.Map.entry("고통의 가시", new BigDecimal("75")));
+    // 대기 캐릭터(null)는 건너뛴다.
+    var withPending = new java.util.ArrayList<EquipmentReceipt.Result>();
+    withPending.add(fiveWith);
+    withPending.add(null);
+    assertThat(EquipmentReceipt.nonGold(withPending))
+        .isEqualTo(EquipmentReceipt.nonGold(List.of(fiveWith)));
     // 성장 비용을 끄면 실링·가시도 없다.
     assertThat(without.parts().getFirst().stages())
         .allMatch(s -> s.growthSilver() == 0 && s.growthExtras().isEmpty());
@@ -296,6 +331,10 @@ class ReceiptDomainTest {
     var map = new HashMap<String, BigDecimal>();
     for (var name : EquipmentReceipt.materialNames(RULES, all)) map.put(name, each);
     return map;
+  }
+
+  private static EquipmentReceipt.StageCost stage(EquipmentReceipt.Part part, int stage) {
+    return part.stages().stream().filter(s -> s.stage() == stage).findFirst().orElseThrow();
   }
 
   private static CharacterLoadout.Equipment item(

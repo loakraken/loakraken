@@ -84,6 +84,26 @@ public final class EquipmentReceipt {
    * (UNSUPPORTED_STAGE), 장비 정보 자체가 없으면 false다 — gold는 센 부위만의 합이라 실제보다 작다. 완갑·상급 재련·한계 해방처럼 정해서 넣지
    * 않는 항목은 빠져도 complete다(영수증은 검증된 항목만 금액에 넣는다).
    */
+  /**
+   * 골드로 바꾸지 않은 비용(합계에 넣지 않음): 산정한 부위의 성장 실링, 한계 해방의 고통의 가시 등. 이름 → 수량, 실링 먼저. null 결과(대기 캐릭터)는
+   * 건너뛴다.
+   */
+  public static java.util.Map<String, BigDecimal> nonGold(List<Result> results) {
+    var totals = new java.util.LinkedHashMap<String, BigDecimal>();
+    for (var result : results) {
+      if (result == null) continue;
+      for (var part : result.parts())
+        for (var stage : part.stages()) {
+          if (stage.growthSilver() > 0)
+            totals.merge(
+                RefiningPlan.SILVER, BigDecimal.valueOf(stage.growthSilver()), BigDecimal::add);
+          for (var extra : stage.growthExtras())
+            totals.merge(extra.name(), extra.amount(), BigDecimal::add);
+        }
+    }
+    return totals;
+  }
+
   public record Result(
       List<Part> parts, List<Excluded> excluded, BigDecimal gold, boolean complete) {
     public Result(List<Part> parts, List<Excluded> excluded, BigDecimal gold) {

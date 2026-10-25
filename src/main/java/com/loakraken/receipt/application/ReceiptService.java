@@ -109,21 +109,8 @@ public class ReceiptService {
 
     /** 골드로 바꾸지 않은 비용(합계에 넣지 않음): 산정한 부위의 성장 실링, 한계 해방의 고통의 가시 등. 이름 → 수량, 실링 먼저. */
     public java.util.Map<String, BigDecimal> nonGold() {
-      var result = new java.util.LinkedHashMap<String, BigDecimal>();
-      for (var character : characters) {
-        if (character.equipment() == null) continue;
-        for (var part : character.equipment().parts())
-          for (var stage : part.stages()) {
-            if (stage.growthSilver() > 0)
-              result.merge(
-                  com.loakraken.refining.domain.RefiningPlan.SILVER,
-                  BigDecimal.valueOf(stage.growthSilver()),
-                  BigDecimal::add);
-            for (var extra : stage.growthExtras())
-              result.merge(extra.name(), extra.amount(), BigDecimal::add);
-          }
-      }
-      return result;
+      return EquipmentReceipt.nonGold(
+          characters.stream().map(CharacterReceipt::equipment).toList());
     }
 
     public TotalStatus totalStatus() {

@@ -66,6 +66,73 @@ class SpecUpKrakenIntegrationTest {
     var keys = redis.keys("character:v*크라켄*");
     if (keys != null && !keys.isEmpty()) redis.delete(keys);
     redis.delete("market:v1:relic-books");
+    redis.delete("market:v1:refining-materials");
+  }
+
+  @Test
+  void 완갑_비용은_단계마다_회차별_최적의_누적이고_줄_상세는_숨결까지_내역으로_보인다() throws Exception {
+    // PM 총괄 10-25: 일반 재련과 같은 회차별 최적(숨결을 사는 편이 싸면 삼). 시세는 계산 검증이 캡처한 같은 시각 값.
+    when(auctions.cachedGems()).thenReturn(gemCells());
+    marketCache.saveRefiningMaterials(
+        new com.loakraken.market.application.RefiningMaterialScan(
+            Instant.parse("2026-10-24T23:39:31Z"),
+            List.of(
+                material(1, "운명의 파괴석 결정", 100, "892"),
+                material(2, "운명의 수호석 결정", 100, "177"),
+                material(3, "위대한 운명의 돌파석", 1, "18"),
+                material(4, "상급 아비도스 융화 재료", 1, "268"),
+                material(5, "운명의 파편 주머니(소)", 1, "91"),
+                material(6, "빙하의 숨결", 1, "414"),
+                material(7, "용암의 숨결", 1, "476"))),
+        Duration.ofMinutes(5));
+    search();
+    var candidates = guide("&sort=KRAKEN&limit=200").path("candidates");
+    long previous = 0;
+    for (int level = 15; level <= 25; level++) {
+      var row = find(candidates, "EQUIPMENT_REFINE:16:" + level);
+      assertThat(row.at("/cost/code").asText()).as("+" + level).isEqualTo("ARM_GUARD_EXPECTED");
+      long amount = row.at("/cost/amount").asLong();
+      assertThat(amount).as("+" + level + " 누적").isGreaterThan(previous);
+      previous = amount;
+    }
+    // +14 → +15 한 단계 = 회차별 최적 풀이의 기대 비용(1골드 안, 목록은 기대 수량 × 단가를 더해 올림).
+    var rules =
+        mapper.readValue(
+            new ClassPathResource("refining/t4-vambrace-rules.json").getInputStream(),
+            com.loakraken.refining.domain.VambraceRules.class);
+    var prices =
+        java.util.Map.<String, Number>of(
+            "운명의 파괴석 결정", 8.92,
+            "운명의 수호석 결정", 1.77,
+            "위대한 운명의 돌파석", 18,
+            "상급 아비도스 융화 재료", 268,
+            "운명의 파편", 0.091,
+            "빙하의 숨결", 414,
+            "용암의 숨결", 476);
+    double one =
+        com.loakraken.refining.domain.RefiningOptimal.calculate(rules.stage(15), prices)
+            .expectedGold();
+    assertThat((double) find(candidates, "EQUIPMENT_REFINE:16:15").at("/cost/amount").asLong())
+        .isCloseTo(one, org.assertj.core.data.Offset.offset(1.0));
+    // 줄 상세: 재료·숨결 내역, 내역 합 = 목록 비용.
+    var detail =
+        get(
+            "/api/v1/characters/spec-up/candidates/EQUIPMENT_REFINE:16:17?characterName="
+                + encode(NAME));
+    assertThat(detail.statusCode()).as(detail.body()).isEqualTo(200);
+    var data = mapper.readTree(detail.body()).path("data");
+    assertThat(data.at("/refine/fromStage").asInt()).isEqualTo(14);
+    assertThat(data.at("/refine/toStage").asInt()).isEqualTo(17);
+    assertThat(data.at("/refine/breath").asText()).isEqualTo("OPTIMAL");
+    var names = new java.util.ArrayList<String>();
+    for (var row : data.path("materials")) names.add(row.path("name").asText());
+    assertThat(names).contains("운명의 파괴석 결정", "위대한 운명의 돌파석", "빙하의 숨결");
+  }
+
+  private static com.loakraken.market.domain.MarketPrice material(
+      long id, String name, int bundle, String currentMin) {
+    return new com.loakraken.market.domain.MarketPrice(
+        id, name, "영웅", null, bundle, null, null, null, new BigDecimal(currentMin));
   }
 
   @Test
@@ -169,7 +236,8 @@ class SpecUpKrakenIntegrationTest {
     assertThat(armGuard.at("/change/kind").asText()).isEqualTo("ARM_GUARD");
     assertThat(armGuard.at("/change/level").asInt()).isEqualTo(15);
     assertThat(armGuard.at("/change/grade").asText()).isEqualTo("전설");
-    assertThat(armGuard.at("/cost/code").asText()).isEqualTo("ARM_GUARD_COST_UNCONFIRMED");
+    // 재련 재료 시세가 아직 없으면 완갑 비용도 PENDING(시세가 있을 때는 아래 완갑 비용 테스트).
+    assertThat(armGuard.at("/cost/code").asText()).isEqualTo("PRICE_PENDING");
     // 여러 단계 줄(계산 검증 10-25: B는 지금 단계에서 목표 +25까지 줄을 낸다): +14 전설 → +16~20 유물, +21~25 고대.
     for (int level = 15; level <= 25; level++) {
       var row = find(candidates, "EQUIPMENT_REFINE:16:" + level);
@@ -191,7 +259,7 @@ class SpecUpKrakenIntegrationTest {
       else if (firstUnpriced == Integer.MAX_VALUE) firstUnpriced = i;
     }
     assertThat(lastPriced).isLessThan(firstUnpriced);
-    // 줄 상세: 완갑은 재련 계획 밖이라 단계만, 연마는 내역 없이 후보만.
+    // 줄 상세: 완갑은 시세가 없으면 단계만, 연마는 내역 없이 후보만.
     var detail =
         get(
             "/api/v1/characters/spec-up/candidates/EQUIPMENT_REFINE:16:15?characterName="

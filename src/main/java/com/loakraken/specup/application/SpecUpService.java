@@ -51,6 +51,7 @@ public class SpecUpService {
   private final SpecUpKrakenScore kraken;
   private final CombatPowerPolishValues polishValues;
   private final com.loakraken.refining.domain.OptimalStageCache optimalCache;
+  private final com.loakraken.refining.domain.VambraceRules vambrace;
   private final boolean enabled;
 
   /** 빈 칸 후보 레벨: 기본 공격력 %가 확인된 6~10레벨만(1~5레벨은 계수표에 근거가 없어 계산하지 않는다). */
@@ -66,6 +67,7 @@ public class SpecUpService {
       SpecUpKrakenScore kraken,
       CombatPowerPolishValues polishValues,
       com.loakraken.refining.domain.OptimalStageCache optimalCache,
+      com.loakraken.refining.domain.VambraceRules vambrace,
       @Value("${spec-up.enabled:false}") boolean enabled) {
     this.simulator = simulator;
     this.auctions = auctions;
@@ -76,6 +78,7 @@ public class SpecUpService {
     this.kraken = kraken;
     this.polishValues = polishValues;
     this.optimalCache = optimalCache;
+    this.vambrace = vambrace;
     this.enabled = enabled;
   }
 
@@ -226,7 +229,7 @@ public class SpecUpService {
     quality(loadout, planned);
     engravings(loadout, books::price, books::icon, pricesAt, planned);
     refines(loadout, materials.cached(), pricesAt, planned);
-    armGuard(loadout, planned);
+    armGuard(loadout, materials.cached(), pricesAt, planned);
     var krakenContext = kraken.context(snapshot);
     others(loadout, planned, krakenContext);
 
@@ -723,7 +726,11 @@ public class SpecUpService {
    * 팔 보호구 재련: 지금 단계 + 1 … 25 목표마다 한 줄(일반 재련 다단계 줄과 같은 규칙, 비교 기준 B도 지금 단계에서 목표까지 줄을 낸다). 목표가 등급의 끝을
    * 넘으면 승급한 등급으로 계산한다.
    */
-  private void armGuard(CharacterLoadout loadout, List<Planned> planned) {
+  private void armGuard(
+      CharacterLoadout loadout,
+      java.util.Optional<RefiningMaterialPriceService.Prices> prices,
+      Instant[] pricesAt,
+      List<Planned> planned) {
     var item = SpecUpKrakenScore.armGuardItem(loadout);
     if (item == null || item.detail() == null || item.detail().refineLevel() == null) return;
     int refine = item.detail().refineLevel();
@@ -731,7 +738,11 @@ public class SpecUpService {
     for (int target = refine + 1; target <= 25; target++) {
       var grade = kraken.armGuardGrade(item.grade(), target);
       if (grade == null) break;
-      planned.add(armGuardRow(loadout, item, refine, target, grade));
+      var breakdown = armGuardBreakdown(refine, target, prices);
+      if ("OK".equals(breakdown.cost().status())
+          && (pricesAt[0] == null || breakdown.prices().observedAt().isBefore(pricesAt[0])))
+        pricesAt[0] = breakdown.prices().observedAt();
+      planned.add(armGuardRow(loadout, item, refine, target, grade, breakdown.cost()));
     }
   }
 
@@ -740,7 +751,8 @@ public class SpecUpService {
       CharacterLoadout.Equipment item,
       int refine,
       int target,
-      String grade) {
+      String grade,
+      SpecUpCost cost) {
     return new Planned(
         "EQUIPMENT_REFINE:" + loadout.equipment().indexOf(item) + ":" + target,
         Kind.EQUIPMENT_REFINE.name(),
@@ -765,7 +777,119 @@ public class SpecUpService {
             null,
             null,
             null),
-        SpecUpCost.ARM_GUARD_COST_UNCONFIRMED);
+        cost);
+  }
+
+  /**
+   * 팔 보호구(완갑) 지금 단계 refine에서 target까지 누적 비용 내역. 단계마다 회차별 최적 전략(시도마다 쓸 숨결 수를 골라 기대 비용 최소, 용암·빙하는 싼
+   * 숨결부터, 장인의 기운·실패 횟수는 단계 시작에서 0)으로 풀고 단계 비용을 더한다(일반 재련과 같은 방식). PM 총괄 10-25: 숨결을 사는 편이 싸면 사는 비용을
+   * 낸다 — 비교 기준 B는 기본 설정에서 숨결을 사지 않아 조금 비싸게 나온다(증명된 차이). 성장 지원·책은 없다. 재료·파편·숨결 시세가 하나라도 없으면 PENDING.
+   */
+  RefineBreakdown armGuardBreakdown(
+      int refine, int target, java.util.Optional<RefiningMaterialPriceService.Prices> prices) {
+    if (refine < 0 || target <= refine || target > 25)
+      return new RefineBreakdown(null, false, null, SpecUpCost.ARM_GUARD_COST_UNCONFIRMED);
+    if (prices.isEmpty())
+      return new RefineBreakdown(null, false, null, SpecUpCost.REFINE_PRICE_PENDING);
+    var unitPrices = prices.get();
+    var stages = new ArrayList<RefiningPlan.StagePlan>();
+    var totals = new java.util.LinkedHashMap<String, BigDecimal>();
+    var gold = BigDecimal.ZERO;
+    boolean breath = false;
+    for (int stage = refine + 1; stage <= target; stage++) {
+      var rule = vambrace.stage(stage);
+      var stagePrices = vambracePrices(rule, unitPrices);
+      if (stagePrices == null)
+        return new RefineBreakdown(null, false, unitPrices, SpecUpCost.REFINE_PRICE_PENDING);
+      var optimal =
+          optimalCache
+              .get(
+                  vambraceKey(rule, stagePrices),
+                  () -> com.loakraken.refining.domain.RefiningOptimal.calculate(rule, stagePrices))
+              .orElse(null);
+      if (optimal == null)
+        return new RefineBreakdown(null, false, unitPrices, SpecUpCost.REFINE_PRICE_PENDING);
+      breath |= optimal.usesBreath();
+      double attempts = optimal.expectedAttempts();
+      var quantities = new ArrayList<RefiningPlan.Quantity>();
+      for (var material : rule.materials())
+        quantities.add(quantity(material.name(), material.count() * attempts, totals));
+      quantities.add(quantity(RefiningPlan.SHARD, rule.shard() * attempts, totals));
+      // 시도마다 싼 숨결부터 채우므로 싼 숨결 = 전체 - 비싼 숨결(풀이와 같은 순서: 값 오름차순).
+      var byPrice =
+          rule.breaths().stream()
+              .sorted(java.util.Comparator.comparing(b -> stagePrices.get(b.name())))
+              .toList();
+      double second = optimal.expectedSecondBreaths();
+      double first = optimal.expectedBreaths() - second;
+      if (first > 0) quantities.add(quantity(byPrice.get(0).name(), first, totals));
+      if (second > 0 && byPrice.size() > 1)
+        quantities.add(quantity(byPrice.get(1).name(), second, totals));
+      var stageGold = exact(rule.gold() * attempts);
+      gold = gold.add(stageGold);
+      stages.add(
+          new RefiningPlan.StagePlan(
+              stage,
+              optimal.firstRateBp(),
+              exact(attempts),
+              0,
+              0,
+              0,
+              quantities,
+              List.of(),
+              stageGold,
+              0,
+              null));
+    }
+    var expected = new ArrayList<RefiningPlan.Quantity>();
+    totals.forEach((name, amount) -> expected.add(new RefiningPlan.Quantity(name, amount)));
+    var plan = new RefiningPlan(stages, expected, List.of(), gold, 0);
+    var total = plan.expectedGold();
+    for (var quantity : plan.expectedMaterials()) {
+      if (quantity.amount().signum() == 0) continue;
+      var unit = unitPrices.unit(quantity.name()).orElse(null);
+      if (unit == null)
+        return new RefineBreakdown(null, false, unitPrices, SpecUpCost.REFINE_PRICE_PENDING);
+      total = total.add(quantity.amount().multiply(unit));
+    }
+    return new RefineBreakdown(
+        plan,
+        breath,
+        unitPrices,
+        SpecUpCost.armGuardExpected(total.setScale(0, RoundingMode.CEILING).longValue()));
+  }
+
+  /** 팔 보호구 단계 재료·파편·숨결 두 가지 1개 값. 하나라도 없으면 null(PENDING). */
+  private static java.util.Map<String, BigDecimal> vambracePrices(
+      com.loakraken.refining.domain.VambraceRules.Stage rule,
+      RefiningMaterialPriceService.Prices prices) {
+    var map = new java.util.HashMap<String, BigDecimal>();
+    for (var material : rule.materials()) {
+      if (material.count() == 0) continue;
+      var unit = prices.unit(material.name()).orElse(null);
+      if (unit == null) return null;
+      map.put(material.name(), unit);
+    }
+    if (rule.shard() > 0) {
+      var unit = prices.unit(RefiningPlan.SHARD).orElse(null);
+      if (unit == null) return null;
+      map.put(RefiningPlan.SHARD, unit);
+    }
+    for (var breath : rule.breaths()) {
+      var unit = prices.unit(breath.name()).orElse(null);
+      if (unit == null) return null;
+      map.put(breath.name(), unit);
+    }
+    return map;
+  }
+
+  private static String vambraceKey(
+      com.loakraken.refining.domain.VambraceRules.Stage rule,
+      java.util.Map<String, BigDecimal> prices) {
+    var key = new StringBuilder("spec-up:VAMBRACE:").append(rule.targetStage());
+    new java.util.TreeMap<>(prices)
+        .forEach((name, unit) -> key.append('|').append(name).append('=').append(unit));
+    return key.toString();
   }
 
   /**

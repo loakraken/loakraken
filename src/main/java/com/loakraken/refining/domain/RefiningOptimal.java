@@ -31,18 +31,24 @@ public final class RefiningOptimal {
       double expectedAttempts,
       double expectedBreaths,
       double expectedBooks,
-      int firstRateBp) {
+      int firstRateBp,
+      double expectedSecondBreaths) {
     /**
      * 기대 수량 없이(캐시 테스트 등). expectedAttempts·expectedBreaths·expectedBooks는 최적 정책의 기대 시도 수·숨결 개수·책
      * 권수로, 기대 골드 = 시도 × 기본 비용 + 숨결 × 숨결 값 + 책 × 책 값이다. firstRateBp는 첫 시도(기운 0, 실패 0)에 고른 선택의 성공
      * 확률(만분율)이다.
      */
     public Result(double expectedGold, boolean usesBreath, boolean usesBook, List<String> path) {
-      this(expectedGold, usesBreath, usesBook, path, Double.NaN, Double.NaN, Double.NaN, 0);
+      this(expectedGold, usesBreath, usesBook, path, Double.NaN, Double.NaN, Double.NaN, 0, 0);
     }
   }
 
-  private record Choice(int breaths, boolean book, double bonusBp, double extraGold) {
+  /** second: 두 번째(비싼) 숨결 개수 — 팔 보호구처럼 숨결이 두 가지일 때만, 아니면 0. */
+  private record Choice(int breaths, boolean book, double bonusBp, double extraGold, int second) {
+    Choice(int breaths, boolean book, double bonusBp, double extraGold) {
+      this(breaths, book, bonusBp, extraGold, 0);
+    }
+
     String label() {
       if (breaths == 0) return book ? "책" : "기본";
       return "숨결 " + breaths + (book ? "+책" : "");
@@ -110,7 +116,63 @@ public final class RefiningOptimal {
                     + (useBook ? book.rateBp() : 0),
                 (breaths == 0 ? 0 : breaths * breathPrice.doubleValue())
                     + (useBook ? bookPrice.doubleValue() : 0)));
+    return solve(rule.baseRateBp(), base, choices);
+  }
+
+  /**
+   * 팔 보호구(완갑) 한 단계(#724 후속). 숨결 두 가지(용암·빙하)는 증가량·최대 개수가 같아, 시도마다 쓸 숨결 수 k(0~두 최대의 합)를 고르고 같은 k면 싼
+   * 숨결부터 채운다(같은 확률에 가장 싼 조합). 책은 없다. 재료·파편 값이 없으면 null, 값이 없는 숨결은 쓰지 않는다. 증가량이 다른 숨결이 섞인 단계는 지원하지
+   * 않는다(IllegalArgumentException).
+   */
+  public static Result calculate(VambraceRules.Stage rule, Map<String, ? extends Number> prices) {
+    double base = rule.gold();
+    for (var material : rule.materials()) {
+      var price = prices.get(material.name());
+      if (price == null) {
+        if (material.count() == 0) continue;
+        return null;
+      }
+      base += material.count() * price.doubleValue();
+    }
+    if (rule.shard() > 0) {
+      var price = prices.get(RefiningPlan.SHARD);
+      if (price == null) return null;
+      base += rule.shard() * price.doubleValue();
+    }
+    var priced =
+        rule.breaths().stream()
+            .filter(breath -> prices.get(breath.name()) != null)
+            .sorted(
+                java.util.Comparator.comparingDouble(
+                    (VambraceRules.Breath breath) -> prices.get(breath.name()).doubleValue()))
+            .toList();
+    for (var breath : priced)
+      if (breath.rateBp() != priced.get(0).rateBp())
+        throw new IllegalArgumentException("증가량이 다른 숨결이 섞인 단계는 지원하지 않습니다.");
+    int total = priced.stream().mapToInt(VambraceRules.Breath::maxCount).sum();
+    var choices = new ArrayList<Choice>();
+    for (int breaths = 0; breaths <= total; breaths++) {
+      double extra = 0;
+      int left = breaths;
+      int second = 0;
+      for (int i = 0; i < priced.size(); i++) {
+        var breath = priced.get(i);
+        int used = Math.min(left, breath.maxCount());
+        extra += used * prices.get(breath.name()).doubleValue();
+        if (i > 0) second += used;
+        left -= used;
+      }
+      choices.add(
+          new Choice(
+              breaths, false, breaths == 0 ? 0 : priced.get(0).rateBp() * breaths, extra, second));
+    }
+    return solve(rule.baseRateBp(), base, choices);
+  }
+
+  /** 선택지 목록으로 회차별 최적을 푼다. 선택지는 127개까지(선택표가 byte). */
+  private static Result solve(double baseRateBp, double base, List<Choice> choices) {
     int size = choices.size();
+    if (size > Byte.MAX_VALUE) throw new IllegalArgumentException("선택지가 너무 많습니다: " + size);
     // 실패 n회마다 선택지별 실패 확률·비용·기운 증가는 기운과 무관하다.
     var fail = new double[BONUS_FAILURES + 1][size];
     var cost = new double[size];
@@ -118,7 +180,7 @@ public final class RefiningOptimal {
     for (int c = 0; c < size; c++) cost[c] = base + choices.get(c).extraGold();
     for (int n = 0; n <= BONUS_FAILURES; n++)
       for (int c = 0; c < size; c++) {
-        double rateBp = rule.baseRateBp() * (1 + 0.1 * n) + choices.get(c).bonusBp();
+        double rateBp = baseRateBp * (1 + 0.1 * n) + choices.get(c).bonusBp();
         double p = Math.min(10_000, rateBp) / 10_000;
         fail[n][c] = 1 - p;
         increment[n][c] =
@@ -198,6 +260,7 @@ public final class RefiningOptimal {
     double attempts = 0;
     double breaths = 0;
     double books = 0;
+    double seconds = 0;
     int firstRateBp = 0;
     while (energy < FULL && path.size() < 10_000) {
       int n = Math.min(failures, BONUS_FAILURES);
@@ -209,6 +272,7 @@ public final class RefiningOptimal {
       if (path.size() == 1) firstRateBp = (int) Math.round((1 - fail[n][c]) * 10_000);
       attempts += reach;
       breaths += reach * choice.breaths();
+      seconds += reach * choice.second();
       if (choice.book()) books += reach;
       if (fail[n][c] <= 0) {
         reach = 0;
@@ -223,6 +287,14 @@ public final class RefiningOptimal {
     double expected = current[0];
     POOL.offer(buffers);
     return new Result(
-        expected, usesBreath, usesBook, List.copyOf(path), attempts, breaths, books, firstRateBp);
+        expected,
+        usesBreath,
+        usesBook,
+        List.copyOf(path),
+        attempts,
+        breaths,
+        books,
+        firstRateBp,
+        seconds);
   }
 }

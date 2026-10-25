@@ -1,0 +1,910 @@
+{
+  "ruleVersion": "t4-vambrace-v1",
+  "source": {
+    "name": "4티어 팔 보호구(완갑) 재련 단계표",
+    "note": "단계별 성공률·실패 보너스(기본 성공률의 10%, 10회까지)·재료·파편·골드·숨결(용암·빙하, 같은 증가량·최대 개수). 비교 기준 원본 표와 계산 검증 대조(2026-10-18·10-25, 내부 기록). 실링은 넣지 않는다.",
+    "checkedAt": "2026-10-25"
+  },
+  "stages": [
+    {
+      "targetStage": 1,
+      "baseRateBp": 1500,
+      "materials": [
+        {
+          "name": "운명의 파괴석 결정",
+          "count": 600
+        },
+        {
+          "name": "운명의 수호석 결정",
+          "count": 1800
+        },
+        {
+          "name": "위대한 운명의 돌파석",
+          "count": 30
+        },
+        {
+          "name": "상급 아비도스 융화 재료",
+          "count": 22
+        }
+      ],
+      "shard": 14500,
+      "gold": 5200,
+      "breaths": [
+        {
+          "name": "용암의 숨결",
+          "maxCount": 20,
+          "rateBp": 37.5
+        },
+        {
+          "name": "빙하의 숨결",
+          "maxCount": 20,
+          "rateBp": 37.5
+        }
+      ]
+    },
+    {
+      "targetStage": 2,
+      "baseRateBp": 1500,
+      "materials": [
+        {
+          "name": "운명의 파괴석 결정",
+          "count": 620
+        },
+        {
+          "name": "운명의 수호석 결정",
+          "count": 1860
+        },
+        {
+          "name": "위대한 운명의 돌파석",
+          "count": 31
+        },
+        {
+          "name": "상급 아비도스 융화 재료",
+          "count": 23
+        }
+      ],
+      "shard": 15000,
+      "gold": 5400,
+      "breaths": [
+        {
+          "name": "용암의 숨결",
+          "maxCount": 20,
+          "rateBp": 37.5
+        },
+        {
+          "name": "빙하의 숨결",
+          "maxCount": 20,
+          "rateBp": 37.5
+        }
+      ]
+    },
+    {
+      "targetStage": 3,
+      "baseRateBp": 1500,
+      "materials": [
+        {
+          "name": "운명의 파괴석 결정",
+          "count": 640
+        },
+        {
+          "name": "운명의 수호석 결정",
+          "count": 1925
+        },
+        {
+          "name": "위대한 운명의 돌파석",
+          "count": 32
+        },
+        {
+          "name": "상급 아비도스 융화 재료",
+          "count": 24
+        }
+      ],
+      "shard": 15630,
+      "gold": 5610,
+      "breaths": [
+        {
+          "name": "용암의 숨결",
+          "maxCount": 20,
+          "rateBp": 37.5
+        },
+        {
+          "name": "빙하의 숨결",
+          "maxCount": 20,
+          "rateBp": 37.5
+        }
+      ]
+    },
+    {
+      "targetStage": 4,
+      "baseRateBp": 1500,
+      "materials": [
+        {
+          "name": "운명의 파괴석 결정",
+          "count": 660
+        },
+        {
+          "name": "운명의 수호석 결정",
+          "count": 1990
+        },
+        {
+          "name": "위대한 운명의 돌파석",
+          "count": 33
+        },
+        {
+          "name": "상급 아비도스 융화 재료",
+          "count": 25
+        }
+      ],
+      "shard": 16280,
+      "gold": 5830,
+      "breaths": [
+        {
+          "name": "용암의 숨결",
+          "maxCount": 20,
+          "rateBp": 37.5
+        },
+        {
+          "name": "빙하의 숨결",
+          "maxCount": 20,
+          "rateBp": 37.5
+        }
+      ]
+    },
+    {
+      "targetStage": 5,
+      "baseRateBp": 1500,
+      "materials": [
+        {
+          "name": "운명의 파괴석 결정",
+          "count": 680
+        },
+        {
+          "name": "운명의 수호석 결정",
+          "count": 2055
+        },
+        {
+          "name": "위대한 운명의 돌파석",
+          "count": 34
+        },
+        {
+          "name": "상급 아비도스 융화 재료",
+          "count": 26
+        }
+      ],
+      "shard": 16960,
+      "gold": 6060,
+      "breaths": [
+        {
+          "name": "용암의 숨결",
+          "maxCount": 20,
+          "rateBp": 37.5
+        },
+        {
+          "name": "빙하의 숨결",
+          "maxCount": 20,
+          "rateBp": 37.5
+        }
+      ]
+    },
+    {
+      "targetStage": 6,
+      "baseRateBp": 1000,
+      "materials": [
+        {
+          "name": "운명의 파괴석 결정",
+          "count": 700
+        },
+        {
+          "name": "운명의 수호석 결정",
+          "count": 2125
+        },
+        {
+          "name": "위대한 운명의 돌파석",
+          "count": 36
+        },
+        {
+          "name": "상급 아비도스 융화 재료",
+          "count": 27
+        }
+      ],
+      "shard": 17670,
+      "gold": 6300,
+      "breaths": [
+        {
+          "name": "용암의 숨결",
+          "maxCount": 25,
+          "rateBp": 20.0
+        },
+        {
+          "name": "빙하의 숨결",
+          "maxCount": 25,
+          "rateBp": 20.0
+        }
+      ]
+    },
+    {
+      "targetStage": 7,
+      "baseRateBp": 1000,
+      "materials": [
+        {
+          "name": "운명의 파괴석 결정",
+          "count": 720
+        },
+        {
+          "name": "운명의 수호석 결정",
+          "count": 2195
+        },
+        {
+          "name": "위대한 운명의 돌파석",
+          "count": 38
+        },
+        {
+          "name": "상급 아비도스 융화 재료",
+          "count": 28
+        }
+      ],
+      "shard": 18410,
+      "gold": 6550,
+      "breaths": [
+        {
+          "name": "용암의 숨결",
+          "maxCount": 25,
+          "rateBp": 20.0
+        },
+        {
+          "name": "빙하의 숨결",
+          "maxCount": 25,
+          "rateBp": 20.0
+        }
+      ]
+    },
+    {
+      "targetStage": 8,
+      "baseRateBp": 1000,
+      "materials": [
+        {
+          "name": "운명의 파괴석 결정",
+          "count": 745
+        },
+        {
+          "name": "운명의 수호석 결정",
+          "count": 2270
+        },
+        {
+          "name": "위대한 운명의 돌파석",
+          "count": 40
+        },
+        {
+          "name": "상급 아비도스 융화 재료",
+          "count": 29
+        }
+      ],
+      "shard": 19180,
+      "gold": 6810,
+      "breaths": [
+        {
+          "name": "용암의 숨결",
+          "maxCount": 25,
+          "rateBp": 20.0
+        },
+        {
+          "name": "빙하의 숨결",
+          "maxCount": 25,
+          "rateBp": 20.0
+        }
+      ]
+    },
+    {
+      "targetStage": 9,
+      "baseRateBp": 1000,
+      "materials": [
+        {
+          "name": "운명의 파괴석 결정",
+          "count": 770
+        },
+        {
+          "name": "운명의 수호석 결정",
+          "count": 2345
+        },
+        {
+          "name": "위대한 운명의 돌파석",
+          "count": 42
+        },
+        {
+          "name": "상급 아비도스 융화 재료",
+          "count": 30
+        }
+      ],
+      "shard": 19980,
+      "gold": 7080,
+      "breaths": [
+        {
+          "name": "용암의 숨결",
+          "maxCount": 25,
+          "rateBp": 20.0
+        },
+        {
+          "name": "빙하의 숨결",
+          "maxCount": 25,
+          "rateBp": 20.0
+        }
+      ]
+    },
+    {
+      "targetStage": 10,
+      "baseRateBp": 1000,
+      "materials": [
+        {
+          "name": "운명의 파괴석 결정",
+          "count": 795
+        },
+        {
+          "name": "운명의 수호석 결정",
+          "count": 2425
+        },
+        {
+          "name": "위대한 운명의 돌파석",
+          "count": 44
+        },
+        {
+          "name": "상급 아비도스 융화 재료",
+          "count": 31
+        }
+      ],
+      "shard": 20810,
+      "gold": 7360,
+      "breaths": [
+        {
+          "name": "용암의 숨결",
+          "maxCount": 25,
+          "rateBp": 20.0
+        },
+        {
+          "name": "빙하의 숨결",
+          "maxCount": 25,
+          "rateBp": 20.0
+        }
+      ]
+    },
+    {
+      "targetStage": 11,
+      "baseRateBp": 500,
+      "materials": [
+        {
+          "name": "운명의 파괴석 결정",
+          "count": 820
+        },
+        {
+          "name": "운명의 수호석 결정",
+          "count": 2505
+        },
+        {
+          "name": "위대한 운명의 돌파석",
+          "count": 46
+        },
+        {
+          "name": "상급 아비도스 융화 재료",
+          "count": 32
+        }
+      ],
+      "shard": 21680,
+      "gold": 7650,
+      "breaths": [
+        {
+          "name": "용암의 숨결",
+          "maxCount": 25,
+          "rateBp": 10.0
+        },
+        {
+          "name": "빙하의 숨결",
+          "maxCount": 25,
+          "rateBp": 10.0
+        }
+      ]
+    },
+    {
+      "targetStage": 12,
+      "baseRateBp": 500,
+      "materials": [
+        {
+          "name": "운명의 파괴석 결정",
+          "count": 845
+        },
+        {
+          "name": "운명의 수호석 결정",
+          "count": 2590
+        },
+        {
+          "name": "위대한 운명의 돌파석",
+          "count": 48
+        },
+        {
+          "name": "상급 아비도스 융화 재료",
+          "count": 33
+        }
+      ],
+      "shard": 22590,
+      "gold": 7950,
+      "breaths": [
+        {
+          "name": "용암의 숨결",
+          "maxCount": 25,
+          "rateBp": 10.0
+        },
+        {
+          "name": "빙하의 숨결",
+          "maxCount": 25,
+          "rateBp": 10.0
+        }
+      ]
+    },
+    {
+      "targetStage": 13,
+      "baseRateBp": 500,
+      "materials": [
+        {
+          "name": "운명의 파괴석 결정",
+          "count": 870
+        },
+        {
+          "name": "운명의 수호석 결정",
+          "count": 2680
+        },
+        {
+          "name": "위대한 운명의 돌파석",
+          "count": 50
+        },
+        {
+          "name": "상급 아비도스 융화 재료",
+          "count": 34
+        }
+      ],
+      "shard": 23530,
+      "gold": 8260,
+      "breaths": [
+        {
+          "name": "용암의 숨결",
+          "maxCount": 25,
+          "rateBp": 10.0
+        },
+        {
+          "name": "빙하의 숨결",
+          "maxCount": 25,
+          "rateBp": 10.0
+        }
+      ]
+    },
+    {
+      "targetStage": 14,
+      "baseRateBp": 500,
+      "materials": [
+        {
+          "name": "운명의 파괴석 결정",
+          "count": 900
+        },
+        {
+          "name": "운명의 수호석 결정",
+          "count": 2770
+        },
+        {
+          "name": "위대한 운명의 돌파석",
+          "count": 53
+        },
+        {
+          "name": "상급 아비도스 융화 재료",
+          "count": 36
+        }
+      ],
+      "shard": 24510,
+      "gold": 8590,
+      "breaths": [
+        {
+          "name": "용암의 숨결",
+          "maxCount": 25,
+          "rateBp": 10.0
+        },
+        {
+          "name": "빙하의 숨결",
+          "maxCount": 25,
+          "rateBp": 10.0
+        }
+      ]
+    },
+    {
+      "targetStage": 15,
+      "baseRateBp": 500,
+      "materials": [
+        {
+          "name": "운명의 파괴석 결정",
+          "count": 930
+        },
+        {
+          "name": "운명의 수호석 결정",
+          "count": 2865
+        },
+        {
+          "name": "위대한 운명의 돌파석",
+          "count": 56
+        },
+        {
+          "name": "상급 아비도스 융화 재료",
+          "count": 38
+        }
+      ],
+      "shard": 25530,
+      "gold": 8930,
+      "breaths": [
+        {
+          "name": "용암의 숨결",
+          "maxCount": 25,
+          "rateBp": 10.0
+        },
+        {
+          "name": "빙하의 숨결",
+          "maxCount": 25,
+          "rateBp": 10.0
+        }
+      ]
+    },
+    {
+      "targetStage": 16,
+      "baseRateBp": 300,
+      "materials": [
+        {
+          "name": "운명의 파괴석 결정",
+          "count": 960
+        },
+        {
+          "name": "운명의 수호석 결정",
+          "count": 2965
+        },
+        {
+          "name": "위대한 운명의 돌파석",
+          "count": 59
+        },
+        {
+          "name": "상급 아비도스 융화 재료",
+          "count": 40
+        }
+      ],
+      "shard": 26600,
+      "gold": 9280,
+      "breaths": [
+        {
+          "name": "용암의 숨결",
+          "maxCount": 30,
+          "rateBp": 5.0
+        },
+        {
+          "name": "빙하의 숨결",
+          "maxCount": 30,
+          "rateBp": 5.0
+        }
+      ]
+    },
+    {
+      "targetStage": 17,
+      "baseRateBp": 300,
+      "materials": [
+        {
+          "name": "운명의 파괴석 결정",
+          "count": 990
+        },
+        {
+          "name": "운명의 수호석 결정",
+          "count": 3065
+        },
+        {
+          "name": "위대한 운명의 돌파석",
+          "count": 62
+        },
+        {
+          "name": "상급 아비도스 융화 재료",
+          "count": 42
+        }
+      ],
+      "shard": 27710,
+      "gold": 9650,
+      "breaths": [
+        {
+          "name": "용암의 숨결",
+          "maxCount": 30,
+          "rateBp": 5.0
+        },
+        {
+          "name": "빙하의 숨결",
+          "maxCount": 30,
+          "rateBp": 5.0
+        }
+      ]
+    },
+    {
+      "targetStage": 18,
+      "baseRateBp": 300,
+      "materials": [
+        {
+          "name": "운명의 파괴석 결정",
+          "count": 1020
+        },
+        {
+          "name": "운명의 수호석 결정",
+          "count": 3170
+        },
+        {
+          "name": "위대한 운명의 돌파석",
+          "count": 65
+        },
+        {
+          "name": "상급 아비도스 융화 재료",
+          "count": 44
+        }
+      ],
+      "shard": 28870,
+      "gold": 10030,
+      "breaths": [
+        {
+          "name": "용암의 숨결",
+          "maxCount": 30,
+          "rateBp": 5.0
+        },
+        {
+          "name": "빙하의 숨결",
+          "maxCount": 30,
+          "rateBp": 5.0
+        }
+      ]
+    },
+    {
+      "targetStage": 19,
+      "baseRateBp": 300,
+      "materials": [
+        {
+          "name": "운명의 파괴석 결정",
+          "count": 1055
+        },
+        {
+          "name": "운명의 수호석 결정",
+          "count": 3280
+        },
+        {
+          "name": "위대한 운명의 돌파석",
+          "count": 68
+        },
+        {
+          "name": "상급 아비도스 융화 재료",
+          "count": 46
+        }
+      ],
+      "shard": 30080,
+      "gold": 10430,
+      "breaths": [
+        {
+          "name": "용암의 숨결",
+          "maxCount": 30,
+          "rateBp": 5.0
+        },
+        {
+          "name": "빙하의 숨결",
+          "maxCount": 30,
+          "rateBp": 5.0
+        }
+      ]
+    },
+    {
+      "targetStage": 20,
+      "baseRateBp": 300,
+      "materials": [
+        {
+          "name": "운명의 파괴석 결정",
+          "count": 1090
+        },
+        {
+          "name": "운명의 수호석 결정",
+          "count": 3390
+        },
+        {
+          "name": "위대한 운명의 돌파석",
+          "count": 72
+        },
+        {
+          "name": "상급 아비도스 융화 재료",
+          "count": 48
+        }
+      ],
+      "shard": 31340,
+      "gold": 10840,
+      "breaths": [
+        {
+          "name": "용암의 숨결",
+          "maxCount": 30,
+          "rateBp": 5.0
+        },
+        {
+          "name": "빙하의 숨결",
+          "maxCount": 30,
+          "rateBp": 5.0
+        }
+      ]
+    },
+    {
+      "targetStage": 21,
+      "baseRateBp": 150,
+      "materials": [
+        {
+          "name": "운명의 파괴석 결정",
+          "count": 1125
+        },
+        {
+          "name": "운명의 수호석 결정",
+          "count": 3505
+        },
+        {
+          "name": "위대한 운명의 돌파석",
+          "count": 76
+        },
+        {
+          "name": "상급 아비도스 융화 재료",
+          "count": 50
+        }
+      ],
+      "shard": 32650,
+      "gold": 11270,
+      "breaths": [
+        {
+          "name": "용암의 숨결",
+          "maxCount": 30,
+          "rateBp": 2.5
+        },
+        {
+          "name": "빙하의 숨결",
+          "maxCount": 30,
+          "rateBp": 2.5
+        }
+      ]
+    },
+    {
+      "targetStage": 22,
+      "baseRateBp": 150,
+      "materials": [
+        {
+          "name": "운명의 파괴석 결정",
+          "count": 1160
+        },
+        {
+          "name": "운명의 수호석 결정",
+          "count": 3625
+        },
+        {
+          "name": "위대한 운명의 돌파석",
+          "count": 80
+        },
+        {
+          "name": "상급 아비도스 융화 재료",
+          "count": 53
+        }
+      ],
+      "shard": 34020,
+      "gold": 11720,
+      "breaths": [
+        {
+          "name": "용암의 숨결",
+          "maxCount": 30,
+          "rateBp": 2.5
+        },
+        {
+          "name": "빙하의 숨결",
+          "maxCount": 30,
+          "rateBp": 2.5
+        }
+      ]
+    },
+    {
+      "targetStage": 23,
+      "baseRateBp": 150,
+      "materials": [
+        {
+          "name": "운명의 파괴석 결정",
+          "count": 1200
+        },
+        {
+          "name": "운명의 수호석 결정",
+          "count": 3750
+        },
+        {
+          "name": "위대한 운명의 돌파석",
+          "count": 84
+        },
+        {
+          "name": "상급 아비도스 융화 재료",
+          "count": 56
+        }
+      ],
+      "shard": 35440,
+      "gold": 12180,
+      "breaths": [
+        {
+          "name": "용암의 숨결",
+          "maxCount": 30,
+          "rateBp": 2.5
+        },
+        {
+          "name": "빙하의 숨결",
+          "maxCount": 30,
+          "rateBp": 2.5
+        }
+      ]
+    },
+    {
+      "targetStage": 24,
+      "baseRateBp": 150,
+      "materials": [
+        {
+          "name": "운명의 파괴석 결정",
+          "count": 1240
+        },
+        {
+          "name": "운명의 수호석 결정",
+          "count": 3880
+        },
+        {
+          "name": "위대한 운명의 돌파석",
+          "count": 89
+        },
+        {
+          "name": "상급 아비도스 융화 재료",
+          "count": 59
+        }
+      ],
+      "shard": 36920,
+      "gold": 12660,
+      "breaths": [
+        {
+          "name": "용암의 숨결",
+          "maxCount": 30,
+          "rateBp": 2.5
+        },
+        {
+          "name": "빙하의 숨결",
+          "maxCount": 30,
+          "rateBp": 2.5
+        }
+      ]
+    },
+    {
+      "targetStage": 25,
+      "baseRateBp": 150,
+      "materials": [
+        {
+          "name": "운명의 파괴석 결정",
+          "count": 1280
+        },
+        {
+          "name": "운명의 수호석 결정",
+          "count": 4015
+        },
+        {
+          "name": "위대한 운명의 돌파석",
+          "count": 94
+        },
+        {
+          "name": "상급 아비도스 융화 재료",
+          "count": 62
+        }
+      ],
+      "shard": 38470,
+      "gold": 13160,
+      "breaths": [
+        {
+          "name": "용암의 숨결",
+          "maxCount": 30,
+          "rateBp": 2.5
+        },
+        {
+          "name": "빙하의 숨결",
+          "maxCount": 30,
+          "rateBp": 2.5
+        }
+      ]
+    }
+  ]
+}

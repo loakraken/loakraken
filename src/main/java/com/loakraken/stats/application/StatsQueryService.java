@@ -1396,8 +1396,8 @@ public class StatsQueryService {
       List<StatsPort.RosterMember> composition) {}
 
   /**
-   * 캐릭터 기준 수집품 순위 결과(#303). reason이 있으면 rank·값은 null. 캐시를 쓸 때 그 캐릭터가 처리정지 목록에 들었으면 다시 센다(목록 캐릭터는 순위가
-   * 없다).
+   * 캐릭터 기준 수집품 순위 결과(#303). reason이 있으면 rank·값은 null. 캐시를 쓸 때 그 캐릭터가 처리정지 목록에 들었으면 다시 센다(목록 캐릭터는
+   * 순위가 없다).
    */
   public record CollectibleStandingResult(
       Meta meta,

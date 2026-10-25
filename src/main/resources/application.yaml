@@ -183,6 +183,9 @@ combat-power-sim:
 # 스펙업 가이드(#315): 꺼져 있으면 SPEC_UP_DISABLED(404). 시뮬레이터 계산식 검증 뒤 켠다.
 spec-up:
   enabled: ${SPEC_UP_ENABLED:false}
+  # 연마 교체 비용의 시세 칸을 요청에서 채우는가(요청마다 최대 5칸, 사용자 요청 한도 안). 꺼져 있으면 캐시된 칸만 쓰고 없으면 비용 미확정.
+  polish-price-fill:
+    enabled: ${SPEC_UP_POLISH_PRICE_FILL_ENABLED:false}
 
 home:
   cache:

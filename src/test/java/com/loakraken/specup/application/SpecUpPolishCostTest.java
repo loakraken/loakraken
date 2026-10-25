@@ -40,8 +40,7 @@ class SpecUpPolishCostTest {
   @Test
   void 키는_역할_옵션_줄만이고_고정값_공격력은_상이_둘일_때만_남긴다() {
     var dealer =
-        SpecUpPolishCost.keyLines(
-            false, List.of("무기 공격력 +1.80%", "공격력 +80", "공격력 +0.40%"), false);
+        SpecUpPolishCost.keyLines(false, List.of("무기 공격력 +1.80%", "공격력 +80", "공격력 +0.40%"), false);
     assertThat(dealer)
         .containsExactly(
             new PolishLine("무기 공격력", true, "+1.80%"), new PolishLine("공격력", true, "+0.40%"));
@@ -52,8 +51,7 @@ class SpecUpPolishCostTest {
             SpecUpPolishCost.keyLines(
                 true, List.of("무기 공격력 +3.00%", "공격력 +0.40%", "파티원 보호막 효과 +3.50%"), false))
         .containsExactly(
-            new PolishLine("무기 공격력", true, "+3.00%"),
-            new PolishLine("파티원 보호막 효과", true, "+3.50%"));
+            new PolishLine("무기 공격력", true, "+3.00%"), new PolishLine("파티원 보호막 효과", true, "+3.50%"));
     assertThat(SpecUpPolishCost.keyLines(false, List.of("낙인력 +8.00%"), false)).isNull();
   }
 
@@ -139,7 +137,9 @@ class SpecUpPolishCostTest {
               List.of("무기 공격력 +1.80%", "공격력 +0.95%"),
               values(),
               new Instant[1]);
-      assertThat(cost.code()).as("스위치 " + on).isEqualTo(on ? "PRICE_PENDING" : "POLISH_COST_UNCONFIRMED");
+      assertThat(cost.code())
+          .as("스위치 " + on)
+          .isEqualTo(on ? "PRICE_PENDING" : "POLISH_COST_UNCONFIRMED");
     }
     // 매물 없음
     when(auctions.polishPrice(any(), any(), any()))

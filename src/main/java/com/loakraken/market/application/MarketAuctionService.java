@@ -290,7 +290,10 @@ public class MarketAuctionService {
   /** 스펙업 연마 비용에 쓰는 연마 줄 하나(옵션 이름, % 줄인가, 값 글자 예: "+2.60%"). */
   public record PolishLine(String name, boolean percent, String value) {}
 
-  /** OK: 값 있음(minBuyPrice null이면 매물 없음), MISSING: 캐시에 없고 이번에 채우지 않음, UNSUPPORTED: 경매장 옵션으로 나타낼 수 없는 줄. */
+  /**
+   * OK: 값 있음(minBuyPrice null이면 매물 없음), MISSING: 캐시에 없고 이번에 채우지 않음, UNSUPPORTED: 경매장 옵션으로 나타낼 수 없는
+   * 줄.
+   */
   public enum PolishStatus {
     OK,
     MISSING,
@@ -323,8 +326,8 @@ public class MarketAuctionService {
 
   /**
    * 장신구 연마 옵션 조합의 즉시 구매 최저가(스펙업 연마 비용). 비교 기준 B와 같은 칸: 고대·4티어·품질 조건 없음, 그 연마 값들이 있는 매물(다른 줄 허용, 계산
-   * 검증 10-25 공식 경매장 대조). 캐시된 칸이 있으면 그 값, 없으면 fill 몫 안에서 사용자 요청 한도로 채운다(보석·장신구 표와 같은 게이트·몫). 줄이 1~3개가
-   * 아니거나, 경매장 연마 옵션이 아닌 줄(고정값·파티원 효과 등)이 있거나, 세 줄인데 모두 상이 아니면(B 키에 없는 조합) UNSUPPORTED.
+   * 검증 10-25 공식 경매장 대조). 캐시된 칸이 있으면 그 값, 없으면 fill 몫 안에서 사용자 요청 한도로 채운다(보석·장신구 표와 같은 게이트·몫). 줄이
+   * 1~3개가 아니거나, 경매장 연마 옵션이 아닌 줄(고정값·파티원 효과 등)이 있거나, 세 줄인데 모두 상이 아니면(B 키에 없는 조합) UNSUPPORTED.
    */
   public PolishPrice polishPrice(String part, List<PolishLine> lines, PolishFill fill) {
     var slot = slotOf(part);

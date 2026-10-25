@@ -1191,8 +1191,7 @@ public class SpecUpService {
       var fill = new MarketAuctionService.PolishFill(polishPriceFill);
       for (var row : polishRows)
         planned.add(row.withCost(polishCost(loadout, context, row, fill, pricesAt)));
-    }
-    else if (polish) planned.add(Planned.line(Kind.POLISH, "장신구 연마 효과"));
+    } else if (polish) planned.add(Planned.line(Kind.POLISH, "장신구 연마 효과"));
     if (loadout.arkGrid() != null && !loadout.arkGrid().slots().isEmpty())
       planned.add(Planned.line(Kind.ARK_GRID_CORE, "아크 그리드 코어"));
     if (loadout.arkPassive() != null && !loadout.arkPassive().points().isEmpty())

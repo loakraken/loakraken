@@ -93,9 +93,7 @@ final class SpecUpPolishCost {
         : SpecUpCost.POLISH_COST_UNCONFIRMED;
   }
 
-  /**
-   * B 매물 키의 줄: 그 역할 옵션 줄(표에 없는 줄 포함), 고정값 공격력·무기 공격력은 keepFlat일 때만. 줄이 없으면 null(B도 키가 없다).
-   */
+  /** B 매물 키의 줄: 그 역할 옵션 줄(표에 없는 줄 포함), 고정값 공격력·무기 공격력은 keepFlat일 때만. 줄이 없으면 null(B도 키가 없다). */
   static List<PolishLine> keyLines(boolean support, List<String> lines, boolean keepFlat) {
     var role = support ? SUPPORT : DEALER;
     var key = new ArrayList<PolishLine>();

@@ -425,6 +425,55 @@ class SpecUpKrakenScoreReferenceTest {
     throw new AssertionError(type + " 장비가 없습니다");
   }
 
+  @ParameterizedTest(name = "{0} 서폿 {1}")
+  @CsvSource({"l04, 5286.475085510006", "l07, 9972.379331813927"})
+  void 서포터는_서포터_점수식으로_지금_점수와_Δ를_낸다(String id, double expected) throws Exception {
+    // PM 총괄 10-25: 서포터 스펙업은 서포터 점수 기준(비교 기준 B는 역할에 따라 점수 키만 바꾼다). 고정 자료의 기대 점수는 B의 서폿 점수.
+    var raw =
+        MAPPER
+            .readTree(
+                new ClassPathResource("kraken-score/" + id + ".json")
+                    .getContentAsString(StandardCharsets.UTF_8))
+            .path("raw");
+    var input = KrakenScoreInputMapper.from(raw);
+    var profile =
+        new com.loakraken.character.domain.CharacterProfile(
+            "표본",
+            "서버",
+            raw.path("ArmoryProfile").path("CharacterClassName").asString(""),
+            70,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            List.of());
+    var snapshot =
+        new com.loakraken.character.application.CharacterResult(
+            com.loakraken.CharacterTestFixture.details(
+                profile, ArmoryRawFixtures.loadout(raw), List.of()),
+            java.time.Instant.EPOCH,
+            null,
+            input);
+    var scorer = new SpecUpKrakenScore(tables(), refine(), true);
+    var context = scorer.context(snapshot);
+    assertThat(context.available()).as(context.unavailable()).isTrue();
+    assertThat(context.support()).isTrue();
+    assertThat(context.before()).isCloseTo(expected, org.assertj.core.data.Offset.offset(1e-9));
+    // 카르마 +1: 같은 입력 사본에 레벨만 바꿔 서포터 점수식으로 다시 잰 차와 같다(딜러 점수식이 아님).
+    int karma = input.path("arkPassive").path("enlightenment").path("karmalevel").asInt();
+    var delta = scorer.delta(context, new SpecUpKrakenScore.Karma(karma + 1));
+    var copy = (ObjectNode) input.deepCopy();
+    ((ObjectNode) copy.path("arkPassive").path("enlightenment")).put("karmalevel", karma + 1);
+    double support =
+        com.loakraken.character.domain.KrakenScoreSupport.score(copy, tables()) - context.before();
+    if (karma < SpecUpScoreCandidates.KARMA_MAX) {
+      assertThat(delta).isNotNull();
+      assertThat(delta).isCloseTo(support, org.assertj.core.data.Offset.offset(1e-9));
+    }
+  }
+
   private static KrakenScoreEngine.Tables tables() throws Exception {
     var doc =
         MAPPER.readTree(

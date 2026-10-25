@@ -12,19 +12,24 @@ class RefiningPlanTest {
   private static final RefiningRules.Book BOOK = new RefiningRules.Book("재봉술 : 업화 [11-14]", 1000);
 
   @Test
-  void 장인의_기운은_성공률_곱하기_0_465를_0_01퍼센트포인트에서_버린다() {
-    // 게임 화면(계산 검증 캡처 10-25): 성공률 3.000% → +1.39%, 3.150% → +1.46%.
-    assertThat(RefiningPlan.artisanGainHundredths(0.03)).isEqualTo(139);
-    assertThat(RefiningPlan.artisanGainHundredths(0.0315)).isEqualTo(146);
-    // 정수 경계: 10% → 4.65%, 20% → 9.30%(부동소수 오차로 한 칸 낮아지지 않음).
-    assertThat(RefiningPlan.artisanGainHundredths(0.1)).isEqualTo(465);
-    assertThat(RefiningPlan.artisanGainHundredths(0.2)).isEqualTo(930);
-    assertThat(RefiningPlan.artisanGainHundredths(0.15)).isEqualTo(697);
+  void 장인의_기운은_성공률을_2_15로_나눠_0_01퍼센트포인트에서_버린다() {
+    // 실측 규칙(계산 검증 10-25), 게임 화면 캡처와 같음: 3.000% → +1.39%, 3.150% → +1.46%.
+    assertThat(RefiningPlan.artisanGainHundredths(300)).isEqualTo(139);
+    assertThat(RefiningPlan.artisanGainHundredths(315)).isEqualTo(146);
+    // × 0.465 근사와 갈리는 경계(정확히 나누어떨어짐): 0.860% → 0.40%, 6.450% → 3.00%, 8.600% → 4.00%.
+    assertThat(RefiningPlan.artisanGainHundredths(86)).isEqualTo(40);
+    assertThat(RefiningPlan.artisanGainHundredths(645)).isEqualTo(300);
+    assertThat(RefiningPlan.artisanGainHundredths(860)).isEqualTo(400);
+    // 부동소수 오차로 경계 바로 밑이 된 성공률도 같은 값(645 = 430 × 1.5).
+    assertThat(RefiningPlan.artisanGainHundredths(430 * 1.5)).isEqualTo(300);
+    assertThat(RefiningPlan.artisanGainHundredths(644.9999999999999)).isEqualTo(300);
+    // 6.3% 실패: +2.93%라 97.07%에서 정확히 100% → 다음 시도 확정 성공(× 0.465면 2.92%로 99.99%).
+    assertThat(9_707 + RefiningPlan.artisanGainHundredths(630)).isEqualTo(10_000);
   }
 
   @Test
   void 실패_보너스와_장인의_기운으로_시도_분포를_계산한다() {
-    // 50% → 55% → 60% → 65%, 장인의 기운 23.25 → 48.825 → 76.725 → 106.95%라 5번째가 확정이다.
+    // 50% → 55% → 60% → 65%, 장인의 기운(÷ 2.15, 0.01%p 버림) 23.25 → 48.83 → 76.73 → 106.96%라 5번째가 확정이다.
     var plan = plan(stage(11, 5000, null, null), options(10, 11, false, false, 0, 0));
     var stage = plan.stages().getFirst();
     assertThat(stage.firstAttemptSuccessRateBp()).isEqualTo(5000);

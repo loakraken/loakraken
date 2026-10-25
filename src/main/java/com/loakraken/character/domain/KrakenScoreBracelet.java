@@ -718,6 +718,16 @@ public final class KrakenScoreBracelet {
   private static final Pattern MAIN_STAT = Pattern.compile("(?:힘|민첩|지능)\\s*\\+[\\d,]+");
   private static final Pattern SUB_STAT = Pattern.compile("(?:치명|특화|신속)\\s*\\+[\\d,]+");
 
+  /** 피해에 영향이 없는 스탯 줄(체력·제압·인내·숙련). 원본도 배율 1로 지나가며, 실제 원문 33명에서 알아보지 못한 줄은 체력 +N뿐이었다(10-25). */
+  private static final Pattern ZERO_EFFECT_STAT = Pattern.compile("(?:체력|제압|인내|숙련)\\s*\\+[\\d,]+");
+
+  /**
+   * 피해에 영향이 없는 팔찌 줄: 아직 효과를 부여하지 않은 빈 칸("효과 부여 가능")과 회복만 하는 T3 옵션([긴급수혈]). 원본도 배율 1로 지나간다. 저장된 요약
+   * 746명 가운데 빈 칸 7명, 긴급수혈 1명(계산 검증 10-25).
+   */
+  private static final Pattern ZERO_EFFECT_LINE =
+      Pattern.compile("^\\s*(?:효과\\s*부여\\s*가능\\s*$|\\[긴급수혈\\])");
+
   private static double fallbackRatio(
       JsonNode e,
       KrakenScoreEngine.Tables tables,
@@ -785,6 +795,26 @@ public final class KrakenScoreBracelet {
   private static JsonNode bangle(JsonNode e) {
     var b = e.path("armory").path("accessory").path("bangle");
     return b.isMissingNode() || b.isNull() ? null : b;
+  }
+
+  /**
+   * 팔찌 옵션 가운데 총배율 계산식이 알아보지 못하는 줄(주 스탯·치명·특화·신속 줄도, 효과 없는 줄도 아니고 옵션 표·추가 공격 표에도 없음). 이런 줄은 원본처럼 배율
+   * 1로 지나가므로, 효율을 내기 전에 거른다(코드 리뷰 10-25).
+   */
+  public static List<String> unparsedOptions(JsonNode e, KrakenScoreEngine.Tables tables) {
+    var bangle = bangle(e);
+    if (bangle == null) return List.of();
+    var tier = bangle.path("tier");
+    var unparsed = new ArrayList<String>();
+    for (var option : strings(bangle.path("option")))
+      if (!MAIN_STAT.matcher(option).find()
+          && !SUB_STAT.matcher(option).find()
+          && !ZERO_EFFECT_STAT.matcher(option).find()
+          && !ZERO_EFFECT_LINE.matcher(option).find()
+          // 옵션 표(we)에 없어도 추가 공격 표에 있으면 총배율 계산식이 쓴다([반격]·[투자] 등, 계산 검증 10-25).
+          && !tables.get("braceletAddonAttack").has(option)
+          && entry(tables, tier, option) == null) unparsed.add(option);
+    return List.copyOf(unparsed);
   }
 
   /** 원본 y(tier, option): we[티어][옵션] 또는 공백을 뺀 옵션. 없으면 null. */

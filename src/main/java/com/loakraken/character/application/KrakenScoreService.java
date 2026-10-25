@@ -110,8 +110,11 @@ public class KrakenScoreService {
    * 두어 낮은 점수·등급이 나온다(코드 리뷰 10-25: 3977.02 GOLD가 2149.74 BRONZE).
    */
   public static boolean scorable(JsonNode input) {
+    var arkPassive = input.path("arkPassive");
     return input.path("armory").path("equipment").path("weapon").path("stat").isNumber()
-        && input.path("arkPassive").path("evolution").path("points").isNumber();
+        && arkPassive.path("evolution").path("points").isNumber()
+        && arkPassive.path("enlightenment").path("points").isNumber()
+        && arkPassive.path("leap").path("points").isNumber();
   }
 
   /** 켜진 상태에서 계산하지 못했을 때의 응답(UNSUPPORTED, CALC_FAILED). 컨트롤러의 마지막 안전망도 이 값을 쓴다. */

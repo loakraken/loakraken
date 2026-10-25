@@ -362,7 +362,11 @@ public class MarketAuctionService {
     var cached = auctions.findCell(query.key());
     if (cached.isPresent()) return price(cached.get());
     if (fill == null || !fill.take()) return PolishPrice.MISSING;
+    // 표 채우기와 같은 잠금: 동시에 같은 칸을 두 번 부르지 않게(잠금을 못 잡으면 이번엔 채우지 않음, 코드 리뷰 10-25).
+    if (!fillLock.tryLock()) return PolishPrice.MISSING;
     try {
+      var again = auctions.findCell(query.key());
+      if (again.isPresent()) return price(again.get());
       var cell = toCell(gate.withUserReserve(RESERVE, () -> search.search(query)));
       remember(query.key(), cell);
       return price(cell);
@@ -370,6 +374,8 @@ public class MarketAuctionService {
       fill.stop();
       log.debug("연마 시세 칸을 채우지 못했습니다. 코드={}", exception.errorCode().code());
       return PolishPrice.MISSING;
+    } finally {
+      fillLock.unlock();
     }
   }
 

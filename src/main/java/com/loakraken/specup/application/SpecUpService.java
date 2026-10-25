@@ -235,7 +235,8 @@ public class SpecUpService {
     refines(loadout, materials.cached(), pricesAt, planned);
     armGuard(loadout, materials.cached(), pricesAt, planned);
     var krakenContext = kraken.context(snapshot);
-    others(loadout, planned, krakenContext, pricesAt);
+    // 줄 상세(allRefineStages)는 목록이 이미 채운 연마 시세 칸만 쓴다 — 다시 만들기(최대 두 번)마다 채우기 몫을 새로 쓰지 않게(코드 리뷰 10-25).
+    others(loadout, planned, krakenContext, pricesAt, polishPriceFill && !allRefineStages);
 
     // 점수를 낼 수 없으면 KRAKEN도 효율 순으로 되돌리고 그 이유를 응답에 둔다.
     var sort = requested == Sort.KRAKEN && !krakenContext.available() ? Sort.EFFICIENCY : requested;
@@ -1162,7 +1163,8 @@ public class SpecUpService {
       CharacterLoadout loadout,
       List<Planned> planned,
       SpecUpKrakenScore.Context context,
-      Instant[] pricesAt) {
+      Instant[] pricesAt,
+      boolean fillPolishPrices) {
     boolean bracelet =
         loadout.equipment().stream()
             .anyMatch(
@@ -1188,7 +1190,7 @@ public class SpecUpService {
                 ? SpecUpSupportPolish.rows(kraken, context, loadout, polishValues)
                 : SpecUpScoreCandidates.polish(context.input(), loadout, polishValues);
     if (polishRows != null) {
-      var fill = new MarketAuctionService.PolishFill(polishPriceFill);
+      var fill = new MarketAuctionService.PolishFill(fillPolishPrices);
       for (var row : polishRows)
         planned.add(row.withCost(polishCost(loadout, context, row, fill, pricesAt)));
     } else if (polish) planned.add(Planned.line(Kind.POLISH, "장신구 연마 효과"));

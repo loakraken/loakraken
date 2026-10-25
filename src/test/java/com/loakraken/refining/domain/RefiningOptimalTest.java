@@ -122,7 +122,8 @@ class RefiningOptimalTest {
 
   @Test
   void 계산_검증_기준_전율_무기_18에서_19는_숨결_개수를_회차마다_고른다() {
-    // 계산 검증 #287 댓글(2026-10-11 10:08 단가): 숨결 0~20 × 책, 장인의 기운 0.001%p, 성장 파편 105,000 포함.
+    // 계산 검증 #287 댓글(2026-10-11 10:08 단가): 숨결 × 책, 성장 파편 105,000 포함. 숨결은 t4-refining-v4(2026-10-26)
+    // 0~25개 × 0.12%.
     var rule =
         RULES.track(RefiningRules.Grade.JEONYUL, RefiningRules.EquipmentType.WEAPON).stage(19);
     var prices =
@@ -141,15 +142,15 @@ class RefiningOptimalTest {
             new BigDecimal("14870"));
     double growth = 105_000 * 0.083;
     var withBook = RefiningOptimal.calculate(rule, 1, prices, true, true);
-    // 10-25: 장인의 기운을 게임처럼 0.01%p에서 버린 뒤 값(전에는 0.001%p 반올림으로 616,461.9·숨결 4). 기운이 조금 덜 쌓여
-    // 확정 성공 전 회차가 비싸진다.
+    // 2026-10-26 숨결 25개 × 0.12%(게임 화면): 최대 +3%는 같지만 숨결이 25개라 기대 비용이 오른다. 이전 값(20개 × 0.15%,
+    // 장인의 기운 0.01%p 버림): 책 616,506.9 · 20회째 숨결 5 · 책 없음 652,272.6. 새 값은 계산 검증이 따로 대조한다.
     assertThat(withBook.expectedGold() + growth)
-        .isCloseTo(616_506.9, org.assertj.core.data.Offset.offset(1.0));
-    // 20회째(실패 19번 뒤)는 숨결 5개만 쓴다.
-    assertThat(withBook.path().get(19)).isEqualTo("숨결 5");
+        .isCloseTo(636_911.5, org.assertj.core.data.Offset.offset(1.0));
+    // 20회째(실패 19번 뒤)는 숨결 6개만 쓴다(0.12%씩 고름).
+    assertThat(withBook.path().get(19)).isEqualTo("숨결 6");
     var withoutBook = RefiningOptimal.calculate(rule, 1, prices, true, false);
     assertThat(withoutBook.expectedGold() + growth)
-        .isCloseTo(652_272.6, org.assertj.core.data.Offset.offset(1.0));
+        .isCloseTo(679_559.7, org.assertj.core.data.Offset.offset(1.0));
     assertThat(withoutBook.usesBook()).isFalse();
   }
 

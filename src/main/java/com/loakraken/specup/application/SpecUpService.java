@@ -535,6 +535,8 @@ public class SpecUpService {
       return SpecUpCost.PRICE_PENDING;
     observed(pricesAt, nextCell);
     Long current = null;
+    var priceAt = nextCell.cell().observedAt();
+    boolean stale = nextCell.stale();
     if (!bound && level >= 1) {
       var currentCell = prices.get(kind + ":" + level);
       // 지금 레벨 매물 최저가가 없으면 뺄 값을 몰라 PRICE_PENDING이다(PM-백엔드 10-12 05:01 P2).
@@ -543,8 +545,11 @@ public class SpecUpService {
           || currentCell.cell().minBuyPrice() == null) return SpecUpCost.PRICE_PENDING;
       observed(pricesAt, currentCell);
       current = currentCell.cell().minBuyPrice();
+      var at = currentCell.cell().observedAt();
+      if (at != null && (priceAt == null || at.isBefore(priceAt))) priceAt = at;
+      stale |= currentCell.stale();
     }
-    return SpecUpCost.gem(nextCell.cell().minBuyPrice(), current, bound);
+    return SpecUpCost.gem(nextCell.cell().minBuyPrice(), current, bound).withPrice(priceAt, stale);
   }
 
   static void observed(Instant[] pricesAt, MarketAuctionService.GemCell cell) {

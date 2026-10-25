@@ -204,7 +204,7 @@ public record ReceiptResponse(
       @Schema(description = "아직 전투정보를 받지 못한 캐릭터 수(다시 요청하면 최대 2명씩 채움)") int pending,
       @Schema(
               description =
-                  "남은 캐릭터를 이어 받을 수 있는 시각. 상한으로 멈췄으면 지금, 공식 한도·장애로 멈췄으면 1분 뒤. 남은 사람이 없으면 null")
+                  "남은 캐릭터를 이어 받을 수 있는 시각. 요청당 상한으로 멈췄고 방문자의 분당 공식 호출 칸이 남았으면 지금, 칸이 모자라면 칸이 다시 차는 시각(분 경계), 공식 한도·장애로 멈췄으면 1분 뒤. 이 시각 전에 다시 요청하면 새로 받지 못할 수 있다. 남은 사람이 없으면 null")
           @NullableResponse
           Instant nextAvailableAt,
       @Schema(description = "캐릭터를 찾지 못해 받을 수 없는 수(UNAVAILABLE, 대기 수에 넣지 않음)") int unavailable) {}

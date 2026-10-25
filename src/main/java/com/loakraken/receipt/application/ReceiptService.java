@@ -10,6 +10,7 @@ import com.loakraken.character.application.SearchCharacterCommand;
 import com.loakraken.character.domain.CharacterLoadout;
 import com.loakraken.character.domain.CharacterSibling;
 import com.loakraken.common.api.BusinessException;
+import com.loakraken.common.lostark.LostArkRequestGate;
 import com.loakraken.market.application.MarketAuctionService;
 import com.loakraken.market.application.MaterialUnitPriceService;
 import com.loakraken.market.domain.MaterialPriceBasis;
@@ -33,6 +34,9 @@ import org.springframework.stereotype.Service;
  * <p>전투정보는 캐릭터 캐시(5분) → 영수증 입력 보관(receipt.input-ttl, 기본 5분 — 처리방침 문구가 바뀌면 늘림) 순서로 먼저 쓰고, 둘 다 없을 때만
  * 공식 armory를 부른다. 한 요청에 receipt.max-fetch명(기본 2)까지만 새로 부르고 나머지는 PENDING이다. 다시 요청하면 이어서 채운다. 캐릭터를 찾지
  * 못하면 UNAVAILABLE이고 대기 수에 넣지 않는다(다시 요청해도 받을 수 없음). 공식 원문은 저장하지 않는다.
+ *
+ * <p>새로 부를 때는 방문자의 분당 공식 호출 칸에 다른 조회 몫({@link LostArkRequestGate#BULK_KEEP_OFFICIAL})을 남긴다(원정대
+ * 전투력·카드 채우기와 같은 기준). 칸이 모자라면 부르지 않고, 이어 받을 시각은 칸이 다시 차는 때로 알린다.
  */
 @Service
 public class ReceiptService {
@@ -46,6 +50,7 @@ public class ReceiptService {
   private final MarketAuctionService auctions;
   private final OptimalStageCache optimalCache;
   private final CharacterStopList stopList;
+  private final LostArkRequestGate gate;
   private final Clock clock;
 
   public ReceiptService(
@@ -56,6 +61,7 @@ public class ReceiptService {
       MarketAuctionService auctions,
       OptimalStageCache optimalCache,
       CharacterStopList stopList,
+      LostArkRequestGate gate,
       Clock clock,
       ReceiptInputStore inputs,
       @org.springframework.beans.factory.annotation.Value("${receipt.max-fetch:2}") int maxFetch) {
@@ -69,6 +75,7 @@ public class ReceiptService {
     this.auctions = auctions;
     this.optimalCache = optimalCache;
     this.stopList = stopList;
+    this.gate = gate;
     this.clock = clock;
   }
 
@@ -171,6 +178,7 @@ public class ReceiptService {
     var unavailableNames = new java.util.HashSet<String>();
     int fetched = 0;
     boolean stopped = false;
+    boolean budgetLow = false;
     for (var sibling : roster) {
       String name = sibling.characterName();
       var cached = cached(name);
@@ -190,7 +198,12 @@ public class ReceiptService {
         unavailableNames.add(name);
         continue;
       }
-      if (stopped || fetched == maxFetch) continue;
+      if (stopped || budgetLow || fetched == maxFetch) continue;
+      // 방문자 칸에 다른 조회 몫을 남긴다. 모자라면 이번에는 부르지 않는다(한도 거절로 다른 조회가 막히지 않게).
+      if (!gate.bulkMayContinue()) {
+        budgetLow = true;
+        continue;
+      }
       fetched++;
       try {
         var input = input(characters.search(new SearchCharacterCommand(name, false)));
@@ -304,7 +317,7 @@ public class ReceiptService {
         roster.size(),
         ready,
         pending,
-        nextAvailableAt(pending, stopped),
+        nextAvailableAt(pending, stopped, budgetLow),
         assumeBook,
         unavailableNames.size());
   }
@@ -319,13 +332,19 @@ public class ReceiptService {
   }
 
   /**
-   * 남은 캐릭터를 이어 받을 수 있는 시각. 남은 사람이 없으면 null. 요청당 상한으로 멈췄으면 지금 바로, 공식 한도·장애로 멈췄으면 1분 뒤(클라이언트 공식 호출 창이
-   * 1분이다).
+   * 남은 캐릭터를 이어 받을 수 있는 시각. 남은 사람이 없으면 null. 공식 한도·장애로 멈췄으면 1분 뒤(클라이언트 공식 호출 창이 1분이다). 방문자 칸이 다음 한
+   * 번(요청당 상한만큼)을 다른 조회 몫을 남기고 부를 만큼 남지 않았으면 칸이 다시 차는 시각, 아니면 지금 바로.
    */
-  private Instant nextAvailableAt(int pending, boolean stopped) {
+  private Instant nextAvailableAt(int pending, boolean stopped, boolean budgetLow) {
     if (pending == 0) return null;
     var now = clock.instant();
-    return stopped ? now.plusSeconds(60) : now;
+    if (stopped) return now.plusSeconds(60);
+    long spare = (long) gate.remainingClientOfficial() - LostArkRequestGate.BULK_KEEP_OFFICIAL;
+    if (budgetLow || spare < maxFetch) {
+      var refill = gate.clientOfficialWindowEndsAt();
+      return refill.isAfter(now) ? refill : now;
+    }
+    return now;
   }
 
   public String refiningRuleVersion() {

@@ -2,6 +2,7 @@
 @org.springframework.modulith.ApplicationModule(
     allowedDependencies = {
       "common::api",
+      "common::lostark",
       "character::application",
       "character::domain",
       "market::application",

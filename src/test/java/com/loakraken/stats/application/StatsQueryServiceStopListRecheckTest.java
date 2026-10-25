@@ -97,4 +97,58 @@ class StatsQueryServiceStopListRecheckTest {
             value ->
                 assertThat(((StatsQueryService.EfficiencyRankingResult) value).rows()).isEmpty());
   }
+
+  @Test
+  void 원정대_랭킹은_대표뿐_아니라_구성_캐릭터도_다시_확인_대상이다() {
+    var result =
+        new StatsQueryService.RosterRankingResult(
+            null,
+            "ITEM_LEVEL",
+            "TOP6_AVG",
+            1,
+            50,
+            0,
+            List.of(
+                new StatsQueryService.RankedRoster(
+                    1,
+                    "대표캐",
+                    "서버",
+                    "블레이드",
+                    BigDecimal.TEN,
+                    null,
+                    2,
+                    2,
+                    BigDecimal.TEN,
+                    List.of(
+                        new StatsPort.RosterMember("대표캐", "블레이드", BigDecimal.TEN),
+                        new StatsPort.RosterMember("구성캐", "바드", BigDecimal.ONE)))));
+    assertThat(result.listedCharacters())
+        .contains(new StatsPort.Named("대표캐", "서버"), new StatsPort.Named("구성캐", "서버"));
+  }
+
+  @Test
+  void 캐시된_수집품_순위의_캐릭터가_처리정지_목록에_들면_다시_센다() {
+    var meta =
+        new StatsQueryService.Meta(
+            1,
+            conditions,
+            Instant.EPOCH,
+            null,
+            "stats-v1",
+            30,
+            StatsRules.SampleStatus.READY,
+            null);
+    stored =
+        new StatsQueryService.CollectibleStandingResult(
+            meta, "ROSTER", "정지캐", "서버", 1L, 40, null, null, 10L, 20L, null);
+    when(port.stopListed(any())).thenReturn(Set.of(new StatsPort.Named("정지캐", "서버")));
+    when(port.collectibleStanding(any(), any(), any(), org.mockito.ArgumentMatchers.anyBoolean()))
+        .thenReturn(
+            new StatsPort.CollectibleStanding("NOT_OBSERVED", "정지캐", null, null, 0, null, null));
+    var result = service.collectibleStanding(conditions, "정지캐", false);
+    assertThat(result.rank()).isNull();
+    assertThat(result.reason()).isEqualTo("NOT_OBSERVED");
+    verify(port)
+        .collectibleStanding(any(), any(), any(), org.mockito.ArgumentMatchers.anyBoolean());
+  }
 }

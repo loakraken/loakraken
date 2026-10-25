@@ -161,6 +161,30 @@ class CollectibleRankingIntegrationTest {
     assertThat(byCharacter.path("total").asLong()).isEqualTo(3);
   }
 
+  @Test
+  void 캐시가_있어도_나중에_제외_목록에_든_캐릭터는_수집품_랭킹과_순위에서_빠진다() throws Exception {
+    var a = roster(SERVER, "수집나중", 1760);
+    collectible(a, 1, "모코코 씨앗", 1480, 1480);
+    var b = roster(SERVER, "수집남는", 1750);
+    collectible(b, 1, "모코코 씨앗", 1000, 1480);
+
+    // 제외 전: 목록과 순위가 캐시된다.
+    var rankingPath = "/api/v1/rankings/collectibles?server=" + encode(SERVER);
+    assertThat(get(rankingPath).body()).contains("수집나중");
+    assertThat(standingReason("수집나중")).isNull();
+
+    jdbc.sql(
+            "INSERT INTO public_exclusion (character_name, server_name, reason_code) VALUES ('수집나중', :s, 'USER_REQUEST')")
+        .param("s", SERVER)
+        .update();
+
+    // 제외 뒤: 캐시가 남아 있어도 다시 세어 빠진다.
+    var ranking = get(rankingPath);
+    assertThat(ranking.statusCode()).isEqualTo(200);
+    assertThat(ranking.body()).contains("수집남는").doesNotContain("수집나중");
+    assertThat(standingReason("수집나중")).isEqualTo("NOT_OBSERVED");
+  }
+
   private String standingReason(String name) throws Exception {
     var node =
         mapper

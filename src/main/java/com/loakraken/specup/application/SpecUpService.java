@@ -719,39 +719,53 @@ public class SpecUpService {
    * 팔 보호구(완갑) 재련 +1(#575): kind는 EQUIPMENT_REFINE(index = 완갑 장비), 시뮬레이터 입력은 ARM_GUARD(목표 단계, 목표 단계의
    * 등급 — 지금 등급의 최대 단계를 넘으면 승급). 비용은 완갑 재련 규칙(확률·재료)을 아직 넣지 않아 UNKNOWN이다.
    */
+  /**
+   * 팔 보호구 재련: 지금 단계 + 1 … 25 목표마다 한 줄(일반 재련 다단계 줄과 같은 규칙, 비교 기준 B도 지금 단계에서 목표까지 줄을 낸다). 목표가 등급의 끝을
+   * 넘으면 승급한 등급으로 계산한다.
+   */
   private void armGuard(CharacterLoadout loadout, List<Planned> planned) {
     var item = SpecUpKrakenScore.armGuardItem(loadout);
     if (item == null || item.detail() == null || item.detail().refineLevel() == null) return;
     int refine = item.detail().refineLevel();
     if (refine < 0 || refine >= 25) return;
-    var grade = kraken.armGuardGrade(item.grade(), refine + 1);
-    if (grade == null) return;
-    planned.add(
-        new Planned(
-            "EQUIPMENT_REFINE:" + loadout.equipment().indexOf(item) + ":" + (refine + 1),
-            Kind.EQUIPMENT_REFINE.name(),
-            item.name(),
-            "+" + refine,
-            "+" + (refine + 1) + (grade.equals(item.grade()) ? "" : " " + grade),
-            item.icon(),
-            item.grade(),
+    for (int target = refine + 1; target <= 25; target++) {
+      var grade = kraken.armGuardGrade(item.grade(), target);
+      if (grade == null) break;
+      planned.add(armGuardRow(loadout, item, refine, target, grade));
+    }
+  }
+
+  private Planned armGuardRow(
+      CharacterLoadout loadout,
+      CharacterLoadout.Equipment item,
+      int refine,
+      int target,
+      String grade) {
+    return new Planned(
+        "EQUIPMENT_REFINE:" + loadout.equipment().indexOf(item) + ":" + target,
+        Kind.EQUIPMENT_REFINE.name(),
+        item.name(),
+        "+" + refine,
+        "+" + target + (grade.equals(item.grade()) ? "" : " " + grade),
+        item.icon(),
+        item.grade(),
+        null,
+        new Change(
+            Kind.ARM_GUARD,
             null,
-            new Change(
-                Kind.ARM_GUARD,
-                null,
-                null,
-                null,
-                refine + 1,
-                null,
-                null,
-                null,
-                grade,
-                null,
-                null,
-                null,
-                null,
-                null),
-            SpecUpCost.ARM_GUARD_COST_UNCONFIRMED));
+            null,
+            null,
+            target,
+            null,
+            null,
+            null,
+            grade,
+            null,
+            null,
+            null,
+            null,
+            null),
+        SpecUpCost.ARM_GUARD_COST_UNCONFIRMED);
   }
 
   /**
@@ -808,7 +822,9 @@ public class SpecUpService {
   /** 재련 +2 단계 이상 줄(목표 단계가 지금 단계 + 1보다 큼). */
   private static boolean laterRefineStage(Planned plan) {
     if (!Kind.EQUIPMENT_REFINE.name().equals(plan.kind()) || plan.change() == null) return false;
-    var target = plan.change().refine();
+    // 팔 보호구 줄은 목표 단계가 level에 있다.
+    var target =
+        plan.change().kind() == Kind.ARM_GUARD ? plan.change().level() : plan.change().refine();
     return target != null && !plan.from().equals("+" + (target - 1));
   }
 

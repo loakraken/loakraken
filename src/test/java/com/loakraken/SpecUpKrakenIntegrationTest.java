@@ -170,6 +170,16 @@ class SpecUpKrakenIntegrationTest {
     assertThat(armGuard.at("/change/level").asInt()).isEqualTo(15);
     assertThat(armGuard.at("/change/grade").asText()).isEqualTo("전설");
     assertThat(armGuard.at("/cost/code").asText()).isEqualTo("ARM_GUARD_COST_UNCONFIRMED");
+    // 여러 단계 줄(계산 검증 10-25: B는 지금 단계에서 목표 +25까지 줄을 낸다): +14 전설 → +16~20 유물, +21~25 고대.
+    for (int level = 15; level <= 25; level++) {
+      var row = find(candidates, "EQUIPMENT_REFINE:16:" + level);
+      assertThat(row.path("from").asText()).as("+" + level).isEqualTo("+14");
+      assertThat(row.at("/change/level").asInt()).isEqualTo(level);
+      assertThat(row.at("/change/grade").asText())
+          .as("+" + level)
+          .isEqualTo(level <= 15 ? "전설" : level <= 20 ? "유물" : "고대");
+      assertThat(row.path("deltaKrakenScore").isNull()).as("+" + level).isFalse();
+    }
     // 한 줄 알림은 계산 줄로 바뀐 종류만 빠진다.
     for (var candidate : candidates)
       assertThat(candidate.path("id").asText()).isNotIn("POLISH", "KARMA_LEVEL", "ABILITY_STONE");
@@ -190,6 +200,13 @@ class SpecUpKrakenIntegrationTest {
     var data = mapper.readTree(detail.body()).path("data");
     assertThat(data.at("/refine/fromStage").asInt()).isEqualTo(14);
     assertThat(data.at("/refine/toStage").asInt()).isEqualTo(15);
+    // 여러 단계 줄은 그 줄의 목표 단계(코드 리뷰 10-25: +25 줄 상세가 +15로 보였다).
+    var far =
+        get(
+            "/api/v1/characters/spec-up/candidates/EQUIPMENT_REFINE:16:25?characterName="
+                + encode(NAME));
+    assertThat(far.statusCode()).as(far.body()).isEqualTo(200);
+    assertThat(mapper.readTree(far.body()).at("/data/refine/toStage").asInt()).isEqualTo(25);
     assertThat(data.path("materials").isNull()).isTrue();
     var polishDetail =
         get("/api/v1/characters/spec-up/candidates/POLISH:7:MM?characterName=" + encode(NAME));

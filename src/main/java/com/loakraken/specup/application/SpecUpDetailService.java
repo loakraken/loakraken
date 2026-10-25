@@ -175,7 +175,7 @@ public class SpecUpDetailService {
         int from = item.detail().refineLevel();
         // 팔 보호구(완갑)는 재련 계획 밖이다(비용 UNKNOWN): 단계만 준다.
         if ("완갑".equals(item.type())) {
-          refine = new Refine(from, from + 1, null, null, null);
+          refine = new Refine(from, Integer.parseInt(parts[2]), null, null, null);
           break;
         }
         int to = Integer.parseInt(parts[2]);

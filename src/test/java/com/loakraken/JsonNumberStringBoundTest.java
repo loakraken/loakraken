@@ -55,7 +55,7 @@ class JsonNumberStringBoundTest {
               mapper,
               "{\"currentArtisanEnergy\":\"" + LONG_DIGITS + "\"}",
               RefiningPlanRequest.class);
-          // 숫자처럼 보이다가 끝에서 숫자가 아닌 값(숫자 모양 검사가 가장 오래 걸리는 꼴).
+          // 다른 꼴의 긴 값.
           boundedRead(
               mapper,
               "{\"currentArtisanEnergy\":\"" + LONG_DIGITS + "x\"}",

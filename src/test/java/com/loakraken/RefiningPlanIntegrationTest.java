@@ -83,6 +83,36 @@ class RefiningPlanIntegrationTest {
         .doesNotContain("야금술");
   }
 
+  @Test
+  void 전율_방어구_21단계_한계_해방은_파편을_재료에_더하고_실링과_가시는_nonGold로_보인다() throws Exception {
+    var off =
+        mapper.readTree(
+            request(
+                    "{\"grade\":\"JEONYUL\",\"equipmentType\":\"ARMOR\",\"fromStage\":20,\"toStage\":21}")
+                .body());
+    assertThat(off.at("/data/nonGold").isArray()).isTrue();
+    assertThat(off.at("/data/nonGold").size()).isZero();
+    var response =
+        request(
+            "{\"grade\":\"JEONYUL\",\"equipmentType\":\"ARMOR\",\"fromStage\":20,\"toStage\":21,\"growthCost\":true}");
+    assertThat(response.statusCode()).isEqualTo(200);
+    var json = mapper.readTree(response.body());
+    // 공식 공지 13339·게임 가이드 이미지(2026-10-25): 파편 72,000 · 실링 720,000 · 고통의 가시 15
+    var growth = json.at("/data/stages/0/growth");
+    assertThat(growth.path("shard").decimalValue()).isEqualByComparingTo("72000");
+    assertThat(growth.path("silver").asLong()).isEqualTo(720_000);
+    assertThat(growth.at("/extraMaterials/0/name").asText()).isEqualTo("고통의 가시");
+    assertThat(growth.at("/extraMaterials/0/amount").decimalValue()).isEqualByComparingTo("15");
+    var nonGold = json.at("/data/nonGold");
+    assertThat(nonGold.size()).isEqualTo(2);
+    assertThat(nonGold.at("/0/name").asText()).isEqualTo("실링");
+    assertThat(nonGold.at("/0/amount").decimalValue()).isEqualByComparingTo("720000");
+    assertThat(nonGold.at("/1/name").asText()).isEqualTo("고통의 가시");
+    assertThat(nonGold.at("/1/amount").decimalValue()).isEqualByComparingTo("15");
+    assertThat(json.at("/data/expectedMaterials").toString()).doesNotContain("고통의 가시");
+    assertThat(json.at("/data/worstCaseMaterials").toString()).doesNotContain("고통의 가시");
+  }
+
   @ParameterizedTest
   @ValueSource(
       strings = {

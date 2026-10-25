@@ -20,6 +20,7 @@ public record RefiningPlan(
     BigDecimal expectedGold,
     long worstCaseGold) {
   public static final String SHARD = "운명의 파편";
+  public static final String SILVER = "실링";
 
   /**
    * 실패 한 번에 쌓이는 장인의 기운(0.01%p 단위, 버림) = floor(시도 최종 성공률(만분율) × 100 ÷ 215), 정확한 십진 계산. 성공률 ÷ 2.15를
@@ -109,7 +110,12 @@ public record RefiningPlan(
    * 이 단계의 성장(경험치) 비용(단계당 1회). shard는 영지 연구 적용 뒤 값이고 재료 합계(운명의 파편)에도 들어간다. silver는 수량 표시용이라 합계에 넣지
    * 않는다. confirmed=false면 값이 갈려 계산에서 뺐다는 뜻이다(shard 0).
    */
-  public record Growth(BigDecimal shard, long silver, boolean confirmed, boolean research) {}
+  public record Growth(
+      BigDecimal shard, long silver, boolean confirmed, boolean research, List<Quantity> extras) {
+    public Growth {
+      extras = extras == null ? List.of() : List.copyOf(extras);
+    }
+  }
 
   public static RefiningPlan calculate(
       RefiningRules.Track track, RefiningRules.Grade grade, Options options) {
@@ -246,7 +252,7 @@ public record RefiningPlan(
       boolean expResearch) {
     var stage = costs.stage(grade, equipmentType, target).orElse(null);
     if (stage == null) return null;
-    if (!stage.confirmed()) return new Growth(BigDecimal.ZERO, 0, false, false);
+    if (!stage.confirmed()) return new Growth(BigDecimal.ZERO, 0, false, false, List.of());
     boolean research = expResearch && costs.researchApplies(grade, target);
     var shard =
         research
@@ -254,7 +260,10 @@ public record RefiningPlan(
                 .multiply(BigDecimal.valueOf(costs.research().rateBp()))
                 .divide(BigDecimal.valueOf(10_000), 2, RoundingMode.HALF_UP)
             : BigDecimal.valueOf(stage.shard()).setScale(2, RoundingMode.HALF_UP);
-    return new Growth(shard, stage.silver(), true, research);
+    var extras = new ArrayList<Quantity>();
+    for (var material : stage.extras())
+      extras.add(new Quantity(material.name(), BigDecimal.valueOf(material.count())));
+    return new Growth(shard, stage.silver(), true, research, extras);
   }
 
   private static Quantity quantity(String name, double amount) {

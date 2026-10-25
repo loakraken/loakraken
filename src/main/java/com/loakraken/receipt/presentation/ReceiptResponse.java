@@ -35,7 +35,12 @@ public record ReceiptResponse(
         receipt.computedAt(),
         receipt.priceObservedAt(),
         new ReceiptTotalResponse(
-            receipt.totalGold(), List.of("EQUIPMENT", "GEM"), receipt.totalStatus().name()),
+            receipt.totalGold(),
+            List.of("EQUIPMENT", "GEM"),
+            receipt.totalStatus().name(),
+            receipt.nonGold().entrySet().stream()
+                .map(entry -> new ReceiptQuantityResponse(entry.getKey(), entry.getValue()))
+                .toList()),
         new ReceiptEquipmentResponse(
             receipt.equipmentGold(),
             receipt.characters().stream().map(ReceiptCharacterResponse::from).toList()),
@@ -62,7 +67,15 @@ public record ReceiptResponse(
                   "합계 상태. COMPLETE: 원정대 전원을 받았고 산정 대상을 모두 셈. PARTIAL: 일부만 셈(대기 캐릭터, 시세 없는 부위·보석, 읽지 못한 재련 단계). "
                       + "UNAVAILABLE: 빠진 것이 있는데 센 금액이 없음(합계 0을 금액으로 보이지 말 것)",
               allowableValues = {"COMPLETE", "PARTIAL", "UNAVAILABLE"})
-          String status) {}
+          String status,
+      @Schema(
+              description =
+                  "골드로 바꾸지 않아 gold에 넣지 않은 비용(산정한 부위의 성장 실링, 전율 방어구 21단계 한계 해방의 고통의 가시 등). 이름과 수량, 없으면 빈 목록")
+          List<ReceiptQuantityResponse> nonGold) {}
+
+  public record ReceiptQuantityResponse(
+      @Schema(description = "이름(예: 실링, 고통의 가시)") String name,
+      @Schema(description = "수량") BigDecimal amount) {}
 
   public record ReceiptEquipmentResponse(
       BigDecimal gold, List<ReceiptCharacterResponse> characters) {}

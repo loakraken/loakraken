@@ -17,6 +17,7 @@ public class CharacterQueryService {
   private final CharacterCardService cards;
   private final CharacterStopList stopList;
   private final ArkGridRealService arkGridReal;
+  private final StopListLookups lookups;
   private final SingleFlight<CharacterResult> searches = new SingleFlight<>();
   private final SingleFlight<CharacterSiblingsResult> siblingQueries = new SingleFlight<>();
 
@@ -33,7 +34,6 @@ public class CharacterQueryService {
     this(detailsPort, cache, clock, snapshots, metrics, history, cards, stopList, null);
   }
 
-  @org.springframework.beans.factory.annotation.Autowired
   public CharacterQueryService(
       CharacterDetailsPort detailsPort,
       CharacterCache cache,
@@ -44,6 +44,32 @@ public class CharacterQueryService {
       CharacterCardService cards,
       CharacterStopList stopList,
       ArkGridRealService arkGridReal) {
+    this(
+        detailsPort,
+        cache,
+        clock,
+        snapshots,
+        metrics,
+        history,
+        cards,
+        stopList,
+        arkGridReal,
+        StopListLookups.allow());
+  }
+
+  @org.springframework.beans.factory.annotation.Autowired
+  public CharacterQueryService(
+      CharacterDetailsPort detailsPort,
+      CharacterCache cache,
+      Clock clock,
+      CharacterSnapshotCommandService snapshots,
+      CharacterMetrics metrics,
+      CharacterHistoryService history,
+      CharacterCardService cards,
+      CharacterStopList stopList,
+      ArkGridRealService arkGridReal,
+      StopListLookups lookups) {
+    this.lookups = lookups;
     this.arkGridReal = arkGridReal;
     this.detailsPort = detailsPort;
     this.cache = cache;
@@ -62,6 +88,9 @@ public class CharacterQueryService {
           command.includeSiblings()
               ? searchWithSiblings(command.characterName())
               : searchArmory(command.characterName());
+      // character.stop-list.lookups=HIDE면 제외 목록 캐릭터는 없는 캐릭터와 같다(기본 ALLOW는 그대로).
+      var profile = result.details().profile();
+      lookups.requireVisible(profile.characterName(), profile.serverName());
       success = true;
       return result;
     } finally {
@@ -70,7 +99,20 @@ public class CharacterQueryService {
   }
 
   public CharacterSiblingsResult siblings(SearchCharacterCommand command) {
-    String name = command.characterName();
+    var result = loadSiblings(command.characterName());
+    if (lookups.mode() == StopListLookups.Mode.ALLOW) return result;
+    // HIDE: 찾은 캐릭터가 목록에 있으면 없는 캐릭터와 같고, 목록 캐릭터는 원정대에서 뺀다.
+    for (var sibling : result.siblings())
+      if (command.characterName().equalsIgnoreCase(sibling.characterName()))
+        lookups.requireVisible(sibling.characterName(), sibling.serverName());
+    return new CharacterSiblingsResult(
+        result.characterName(),
+        lookups.visible(result.siblings()),
+        result.fetchedAt(),
+        result.refreshAvailableAt());
+  }
+
+  private CharacterSiblingsResult loadSiblings(String name) {
     var cached = cache.findSiblings(name);
     if (cached.isPresent()) return cached.get();
     rejectMissing(name);

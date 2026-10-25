@@ -14,10 +14,13 @@ import org.springframework.stereotype.Service;
 public class CharacterPublicSummaryService {
   private final CharacterCache cache;
   private final CharacterPublicSummaryPort stored;
+  private final StopListLookups lookups;
 
-  public CharacterPublicSummaryService(CharacterCache cache, CharacterPublicSummaryPort stored) {
+  public CharacterPublicSummaryService(
+      CharacterCache cache, CharacterPublicSummaryPort stored, StopListLookups lookups) {
     this.cache = cache;
     this.stored = stored;
+    this.lookups = lookups;
   }
 
   public enum DataSource {
@@ -101,6 +104,8 @@ public class CharacterPublicSummaryService {
     }
     if (result == null) return null;
     var profile = result.details().profile();
+    // character.stop-list.lookups=HIDE면 제외 목록 캐릭터는 실시간 캐시로도 보이지 않는다(기록 없는 이름과 같은 응답).
+    if (lookups.hidden(profile.characterName(), profile.serverName())) return null;
     var passive = result.details().loadout().arkPassive();
     return new Summary(
         profile.characterName(),

@@ -220,6 +220,20 @@ class SpecUpKrakenScoreReferenceTest {
   }
 
   @Test
+  void 팔_보호구_목표_등급은_등급_끝을_넘을_때마다_이어서_올린다() throws Exception {
+    var scorer = new SpecUpKrakenScore(tables(), refine(), true);
+    // 영웅 0~10, 전설 10~15, 유물 15~20, 고대 20~25
+    assertThat(scorer.armGuardGrade("전설", 15)).isEqualTo("전설");
+    assertThat(scorer.armGuardGrade("전설", 16)).isEqualTo("유물");
+    assertThat(scorer.armGuardGrade("전설", 21)).isEqualTo("고대");
+    assertThat(scorer.armGuardGrade("영웅", 11)).isEqualTo("전설");
+    assertThat(scorer.armGuardGrade("영웅", 25)).isEqualTo("고대");
+    assertThat(scorer.armGuardGrade("고대", 25)).isEqualTo("고대");
+    assertThat(scorer.armGuardGrade("고대", 26)).isNull();
+    assertThat(scorer.armGuardGrade("모름", 15)).isNull();
+  }
+
+  @Test
   void 수치표와_다른_레벨_장신구는_연마_후보를_만들지_않는다() throws Exception {
     // 코드 리뷰 10-25: 점수에 안 쓰이는 줄만 있는 다른 레벨 장신구도 1680 표로 후보가 생겼다. 시뮬레이터와 같은 규칙으로 막는다.
     // 기준 캐릭터 1의 첫 귀걸이를 거래 제한 아이템 레벨 1540 장신구로 바꾸면 그 귀걸이 5줄만 빠진다.

@@ -170,6 +170,16 @@ class SpecUpKrakenIntegrationTest {
     assertThat(armGuard.at("/change/level").asInt()).isEqualTo(15);
     assertThat(armGuard.at("/change/grade").asText()).isEqualTo("전설");
     assertThat(armGuard.at("/cost/code").asText()).isEqualTo("ARM_GUARD_COST_UNCONFIRMED");
+    // 여러 단계 줄(계산 검증 10-25: B는 지금 단계에서 목표 +25까지 줄을 낸다): +14 전설 → +16~20 유물, +21~25 고대.
+    for (int level = 15; level <= 25; level++) {
+      var row = find(candidates, "EQUIPMENT_REFINE:16:" + level);
+      assertThat(row.path("from").asText()).as("+" + level).isEqualTo("+14");
+      assertThat(row.at("/change/level").asInt()).isEqualTo(level);
+      assertThat(row.at("/change/grade").asText())
+          .as("+" + level)
+          .isEqualTo(level <= 15 ? "전설" : level <= 20 ? "유물" : "고대");
+      assertThat(row.path("deltaKrakenScore").isNull()).as("+" + level).isFalse();
+    }
     // 한 줄 알림은 계산 줄로 바뀐 종류만 빠진다.
     for (var candidate : candidates)
       assertThat(candidate.path("id").asText()).isNotIn("POLISH", "KARMA_LEVEL", "ABILITY_STONE");

@@ -197,6 +197,41 @@ class SpecUpKrakenIntegrationTest {
   }
 
   @Test
+  void 서포터는_서포터_점수식으로_Δ를_내고_전투력은_역할_이유로_비우며_연마는_한_줄로_남긴다() throws Exception {
+    // PM 총괄 10-25: 서포터 스펙업은 서포터 점수 기준(비교 기준 B도 역할에 따라 점수 키만 바꾸고 후보는 같게 만든다). 전투력은 계산하지 않는다.
+    when(auctions.cachedGems()).thenReturn(gemCells());
+    marketCache.saveRelicBooks(books(), Duration.ofMinutes(5));
+    var raw =
+        mapper
+            .readTree(
+                new ClassPathResource("kraken-score/l07.json")
+                    .getContentAsString(StandardCharsets.UTF_8))
+            .path("raw");
+    search("l07", raw.path("ArmoryProfile").path("CharacterClassName").asString());
+    var data = guide("&sort=KRAKEN&limit=200");
+    assertThat(data.path("sort").asText()).isEqualTo("KRAKEN");
+    assertThat(data.path("krakenSortUnavailableReason").isNull()).isTrue();
+    // 지금 점수 = 고정 자료의 비교 기준 서폿 점수 9972.379331813927(소수 둘째 자리)
+    assertThat(data.path("krakenScore").decimalValue()).isEqualByComparingTo("9972.38");
+    var candidates = data.path("candidates");
+    int scored = 0;
+    for (var candidate : candidates) {
+      // 전투력은 서포터라 계산하지 않는다(역할 이유, 기존 값 그대로).
+      assertThat(candidate.path("status").asText())
+          .as(candidate.path("id").asText())
+          .isEqualTo("UNSUPPORTED");
+      if (!candidate.path("deltaKrakenScore").isNull()) scored++;
+    }
+    assertThat(scored).as("Δ서포터 점수가 있는 후보").isPositive();
+    // 서포터 연마 후보는 역할별 옵션 표를 확인하기 전이라 한 줄 알림(Δ 없음).
+    for (var candidate : candidates)
+      if ("POLISH".equals(candidate.path("kind").asText()))
+        assertThat(candidate.path("deltaKrakenScore").isNull())
+            .as(candidate.path("id").asText())
+            .isTrue();
+  }
+
+  @Test
   void 작열_포함은_정렬과_따로_고르고_다른_정렬은_기본으로_넣는다() throws Exception {
     when(auctions.cachedGems()).thenReturn(gemCells());
     search();
@@ -287,17 +322,21 @@ class SpecUpKrakenIntegrationTest {
   }
 
   private void search() throws Exception {
+    search("l01", "블레이드");
+  }
+
+  private void search(String id, String className) throws Exception {
     var raw =
         mapper
             .readTree(
-                new ClassPathResource("kraken-score/l01.json")
+                new ClassPathResource("kraken-score/" + id + ".json")
                     .getContentAsString(StandardCharsets.UTF_8))
             .path("raw");
     var profile =
         new CharacterProfile(
             NAME,
             SERVER,
-            "블레이드",
+            className,
             70,
             new BigDecimal("1770.00"),
             new BigDecimal("4070.75"),

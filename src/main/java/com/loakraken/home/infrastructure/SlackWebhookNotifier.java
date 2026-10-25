@@ -22,6 +22,7 @@ import org.springframework.web.client.RestClientException;
 @Component
 class SlackWebhookNotifier implements ShopNoticeNotifier {
   static final String SLACK_PREFIX = "https://hooks.slack.com/";
+  static final String SLACK_HOST = "hooks.slack.com";
 
   private final ShopNoticePolicy policy;
   private final RestClient client;
@@ -51,13 +52,22 @@ class SlackWebhookNotifier implements ShopNoticeNotifier {
     }
   }
 
-  /** 주소 형식이 틀리면 URI 예외 문장에 주소가 그대로 들어가므로, 문장·원인 없이 새 예외로 바꾼다. */
+  /**
+   * 주소 형식이 틀리면 URI 예외 문장에 주소가 그대로 들어가므로, 문장·원인 없이 새 예외로 바꾼다. 읽은 주소도 https·hooks.slack.com·사용자 정보
+   * 없음·기본 포트인지 다시 확인한다(앞부분 검사만으로 다른 곳에 보내지 않게, 코드 리뷰 10-25).
+   */
   static URI uri(String url) {
+    URI uri;
     try {
-      return URI.create(url);
+      uri = URI.create(url);
     } catch (IllegalArgumentException exception) {
       throw new IllegalStateException("Slack 웹훅 파일 내용이 올바른 주소가 아닙니다.");
     }
+    if (!"https".equals(uri.getScheme())
+        || !SLACK_HOST.equals(uri.getHost())
+        || uri.getRawUserInfo() != null
+        || uri.getPort() != -1) throw new IllegalStateException("Slack 웹훅 파일 내용이 Slack 주소가 아닙니다.");
+    return uri;
   }
 
   /** 비밀 파일의 첫 줄(앞뒤 공백 제외). 경로가 비었거나 읽지 못하거나 Slack 주소가 아니면 예외(주소는 문장에 넣지 않음). */

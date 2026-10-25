@@ -71,6 +71,49 @@ class SpecUpGoalServiceTest {
     assertThat(store.saved).hasSize(2);
   }
 
+  /**
+   * 지금 시세로 만든 경로가 캐시에 있어도, 같은 칸이 이전 시세(마지막 관측 값, 관측 시각 그대로)가 되면 다시 계산해 stale=true로 준다(코드 리뷰 10-25
+   * P1). 다시 지금 시세가 되면 그 키의 캐시를 다시 쓴다.
+   */
+  @Test
+  void 보석_칸이_이전_시세가_되면_캐시를_쓰지_않고_stale로_다시_계산한다() {
+    var service = service(System::nanoTime);
+    var at = Instant.parse("2026-10-25T12:00:00Z");
+    when(auctions.cachedGems()).thenReturn(gemCells(at, false));
+    var fresh = service.goal("목표테스트", new BigDecimal("3002"));
+    assertThat(store.saved).hasSize(1);
+    assertThat(fresh.steps()).isNotEmpty();
+    assertThat(fresh.steps().getFirst().cost().stale()).isFalse();
+
+    // 3분 칸이 만료돼 같은 관측 값이 이전 시세로 보인다(관측 시각은 그대로).
+    when(auctions.cachedGems()).thenReturn(gemCells(at, true));
+    var stale = service.goal("목표테스트", new BigDecimal("3002"));
+    assertThat(store.saved).hasSize(2);
+    assertThat(stale.steps().getFirst().cost().stale()).isTrue();
+    assertThat(stale.steps().getFirst().cost().priceObservedAt()).isEqualTo(at);
+
+    // 다시 지금 시세면 처음 키의 캐시를 쓴다.
+    when(auctions.cachedGems()).thenReturn(gemCells(at, false));
+    assertThat(service.goal("목표테스트", new BigDecimal("3002"))).isEqualTo(fresh);
+    assertThat(store.saved).hasSize(2);
+  }
+
+  /** 겁화 1~10레벨 칸(값은 레벨 × 1,000골드), 같은 관측 시각. */
+  private static List<MarketAuctionService.GemCell> gemCells(Instant at, boolean stale) {
+    var cells = new java.util.ArrayList<MarketAuctionService.GemCell>();
+    for (int level = 1; level <= 10; level++)
+      cells.add(
+          new MarketAuctionService.GemCell(
+              "겁화",
+              level,
+              level + "레벨 겁화의 보석",
+              new com.loakraken.market.application.AuctionPort.AuctionCell(level * 1_000L, 5, at),
+              null,
+              MarketAuctionService.Status.READY,
+              stale));
+    return cells;
+  }
+
   private final RelicBookPriceService books = mock(RelicBookPriceService.class);
 
   private SpecUpGoalService service(LongSupplier nanoTime) {

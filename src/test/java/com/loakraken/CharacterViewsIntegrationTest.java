@@ -108,6 +108,38 @@ class CharacterViewsIntegrationTest {
   }
 
   @Test
+  void 제외_목록에_들면_저장된_조회수는_기록이_없는_캐릭터와_같은_0이다() throws Exception {
+    var today = LocalDate.now(ZoneId.of("Asia/Seoul"));
+    jdbc.sql(
+            "INSERT INTO character_view_daily (character_name, view_date, view_count) VALUES (:n, :d, 5)")
+        .param("n", NAME)
+        .param("d", today)
+        .update();
+    assertThat(
+            mapper
+                .readTree(
+                    get("/api/v1/characters/views?days=7&characterName=" + encode(NAME)).body())
+                .at("/data/total")
+                .asLong())
+        .isEqualTo(5);
+    jdbc.sql(
+            "INSERT INTO public_exclusion (character_name, server_name, reason_code) VALUES (:n, '어느서버', 'PRIVACY_STOP')")
+        .param("n", NAME)
+        .update();
+    try {
+      var json =
+          mapper.readTree(
+              get("/api/v1/characters/views?days=7&characterName=" + encode(NAME)).body());
+      assertThat(json.path("code").asText()).isEqualTo("CHARACTER_VIEWS_SUCCESS");
+      assertThat(json.at("/data/total").asLong()).isZero();
+      assertThat(json.at("/data/rangeTotal").asLong()).isZero();
+      assertThat(json.at("/data/days/6/count").asLong()).isZero();
+    } finally {
+      jdbc.sql("DELETE FROM public_exclusion WHERE character_name = :n").param("n", NAME).update();
+    }
+  }
+
+  @Test
   void 조회_기록이_없는_캐릭터는_0으로_채운다() throws Exception {
     var json =
         mapper.readTree(

@@ -161,4 +161,18 @@ class ArkGridRealServiceTest {
     var empty = KrakenScoreInputMapper.from(MAPPER.readTree("{}"));
     assertThat(SERVICE.compute(details(raw), empty).reasonCode()).isEqualTo("UNAVAILABLE");
   }
+
+  @Test
+  void 젬_효과_수치가_비면_0퍼센트_대신_계산하지_않는다() throws IOException {
+    // 코드 리뷰 10-25: 젬 효과가 비면 그 옵션이 0%로 나왔다(실제 예: 공격력 Lv.28 = 1.02%).
+    var raw = read("l01").path("raw");
+    var input = KrakenScoreInputMapper.from(raw);
+    assertThat(SERVICE.compute(details(raw), input).status())
+        .isEqualTo(ArkGridRealEfficiency.Status.OK);
+    ((tools.jackson.databind.node.ObjectNode) input.path("arkGrid").path("gemEffects").path(0))
+        .putNull("effect");
+    var missing = SERVICE.compute(details(raw), input);
+    assertThat(missing.reasonCode()).isEqualTo("UNAVAILABLE");
+    assertThat(missing.percent()).isNull();
+  }
 }

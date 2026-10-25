@@ -127,6 +127,31 @@ class CardCollectionRefreshIntegrationTest {
   }
 
   @Test
+  void 제외_목록에_든_원정대_동료는_채우지도_세지도_않는다() throws Exception {
+    var roster = new ArrayList<CharacterSibling>();
+    for (int i = 0; i < 3; i++)
+      roster.add(new CharacterSibling(names.get(i), SERVER, "바드", 70, new BigDecimal(1700 - i)));
+    when(detailsPort.fetchSiblings(MAIN)).thenReturn(roster);
+    when(detailsPort.fetchArmory(anyString()))
+        .thenAnswer(invocation -> character(invocation.getArgument(0)));
+    jdbc.sql(
+            "INSERT INTO public_exclusion (character_name, server_name, reason_code) VALUES ('채우기부캐1', :s, 'PRIVACY_STOP')")
+        .param("s", SERVER)
+        .update();
+    try {
+      var response =
+          post("/api/v1/characters/card-collection/refresh?characterName=" + encode(MAIN));
+      assertThat(response.statusCode()).as(response.body()).isEqualTo(200);
+      var data = mapper.readTree(response.body()).path("data");
+      assertThat(data.path("rosterCharacters").asInt()).isEqualTo(2);
+      assertThat(data.path("refreshed").asInt()).isEqualTo(2);
+      verify(detailsPort, never()).fetchArmory("채우기부캐1");
+    } finally {
+      jdbc.sql("DELETE FROM public_exclusion WHERE character_name = '채우기부캐1'").update();
+    }
+  }
+
+  @Test
   void 공식_호출_한도를_만나면_멈추고_남은_수로_돌려준다() throws Exception {
     var roster = new ArrayList<CharacterSibling>();
     for (int i = 0; i < 4; i++)

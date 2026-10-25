@@ -42,13 +42,18 @@ import tools.jackson.databind.json.JsonMapper;
 @Import(TestcontainersConfiguration.class)
 @SpringBootTest(
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-    properties = {"ranking.guilds.enabled=true", "ranking.guilds.list.enabled=true"})
+    properties = {
+      "ranking.guilds.enabled=true",
+      "ranking.guilds.list.enabled=true",
+      "ranking.rosters.enabled=true"
+    })
 class StopListPathsIntegrationTest {
   private static final String SERVER = "정지경로서버";
   private static final String GUILD = "정지경로길드";
   private static final String NORMAL = "정지경로일반";
   private static final String STOPPED = "정지경로대상";
   private static final String SEARCHED = "정지경로검색";
+  private static final String LATER = "정지경로나중";
   @LocalServerPort int port;
   @Autowired JdbcClient jdbc;
   @Autowired StringRedisTemplate redis;
@@ -115,6 +120,39 @@ class StopListPathsIntegrationTest {
   }
 
   @Test
+  void 캐시가_있어도_나중에_처리정지된_캐릭터는_랭킹_원정대_구성_인기에서_빠진다() throws Exception {
+    // 같은 원정대의 대표(일반)와 구성 캐릭터(나중에 처리정지). 길드원 넷은 원정대 없이.
+    var roster = UUID.randomUUID();
+    for (int i = 0; i < 4; i++) member("정지경로길드원" + i, 1700, "3000.00");
+    member(NORMAL, 1710, "3100.00", roster);
+    member(LATER, 1705, "3500.00", roster);
+    var hour = Instant.now().truncatedTo(ChronoUnit.HOURS);
+    popular(NORMAL, hour, 40);
+    popular(LATER, hour, 90);
+
+    // 처리정지 전: 각 목록에 나오고 캐시가 채워진다.
+    var rankingPath = "/api/v1/rankings?metric=COMBAT_POWER&server=" + encode(SERVER);
+    var rosterPath = "/api/v1/rankings/rosters?basis=ITEM_LEVEL&server=" + encode(SERVER);
+    assertThat(get(rankingPath).body()).contains(LATER);
+    assertThat(get(rosterPath).body()).contains(LATER);
+    assertThat(names(data(get("/api/v1/characters/popular")))).contains(LATER);
+
+    // 처리정지 뒤: 캐시가 남아 있어도 다시 세어 빠진다.
+    stop(LATER);
+    var ranking = get(rankingPath);
+    assertThat(ranking.statusCode()).isEqualTo(200);
+    assertThat(ranking.body()).contains(NORMAL).doesNotContain(LATER);
+    var rosters = get(rosterPath);
+    assertThat(rosters.statusCode()).isEqualTo(200);
+    assertThat(rosters.body()).contains(NORMAL).doesNotContain(LATER);
+    var popularList = get("/api/v1/characters/popular");
+    assertThat(popularList.statusCode()).isEqualTo(200);
+    assertThat(names(mapper.readTree(popularList.body()).path("data")))
+        .contains(NORMAL)
+        .doesNotContain(LATER);
+  }
+
+  @Test
   void 처리정지_캐릭터는_검색해도_기록을_남기지_않고_공개_요약은_색인하지_않는다() throws Exception {
     when(detailsPort.fetch(anyString())).thenReturn(character(SEARCHED));
     stop(SEARCHED);
@@ -135,13 +173,18 @@ class StopListPathsIntegrationTest {
   }
 
   private void member(String name, int itemLevel, String combatPower) {
+    member(name, itemLevel, combatPower, null);
+  }
+
+  private void member(String name, int itemLevel, String combatPower, UUID roster) {
     var now = Instant.now().atOffset(ZoneOffset.UTC);
     jdbc.sql(
             """
             INSERT INTO characters (character_id, character_name, server_name, class_name, item_level,
-              combat_power, guild_name, last_synced_at, profile_refreshed_at)
-            VALUES (:id, :name, :server, '블레이드', :level, :cp, :guild, :at, :at)
+              combat_power, guild_name, roster_key, last_synced_at, profile_refreshed_at)
+            VALUES (:id, :name, :server, '블레이드', :level, :cp, :guild, :roster, :at, :at)
             """)
+        .param("roster", roster)
         .param("id", UUID.randomUUID())
         .param("name", name)
         .param("server", SERVER)

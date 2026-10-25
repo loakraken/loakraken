@@ -102,6 +102,20 @@ public record SpecUpCost(
           "ARM_GUARD_COST_UNCONFIRMED",
           "팔 보호구 재련 비용(확률·재료)을 아직 확인하지 않아 비용을 계산하지 않았습니다.");
 
+  /**
+   * 팔 보호구(완갑) 재련 기대 비용: 단계마다 회차별 최적 전략(시도마다 쓸 숨결 수를 골라 기대 비용 최소, 용암·빙하는 싼 숨결부터)의 기대 소모 × 재료 1개 즉시
+   * 구매 최저가 + 기대 골드의 합. 성장 지원·책은 없다.
+   */
+  public static SpecUpCost armGuardExpected(long amount) {
+    return new SpecUpCost(
+        "GOLD",
+        amount,
+        "OK",
+        "ARM_GUARD_EXPECTED",
+        "단계마다 시도마다 숨결(용암·빙하) 사용 개수를 골라 기대 비용이 가장 작은 방법(장인의 기운·실패 횟수는 각 단계 0에서 시작)의 기대 소모에 재료 1개 즉시 구매 최저가를 곱하고 골드를 더한 값입니다."
+            + " 장비 성장(경험치) 비용과 실링은 넣지 않았습니다.");
+  }
+
   /** 재련 재료 시세 예열 전이거나 필요한 재료 시세가 없을 때. code·status는 보석과 같은 PRICE_PENDING(새 값 없음). */
   public static final SpecUpCost REFINE_PRICE_PENDING =
       new SpecUpCost(

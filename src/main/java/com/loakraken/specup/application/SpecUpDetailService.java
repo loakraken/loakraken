@@ -173,13 +173,12 @@ public class SpecUpDetailService {
         var index = Integer.parseInt(parts[1]);
         var item = loadout.equipment().get(index);
         int from = item.detail().refineLevel();
-        // 팔 보호구(완갑)는 재련 계획 밖이다(비용 UNKNOWN): 단계만 준다.
-        if ("완갑".equals(item.type())) {
-          refine = new Refine(from, Integer.parseInt(parts[2]), null, null, null);
-          break;
-        }
         int to = Integer.parseInt(parts[2]);
-        var breakdown = specUp.refineBreakdown(item, from, to, materials.cached());
+        // 팔 보호구(완갑)는 완갑 단계표로 같은 회차별 최적 내역을 만든다(숨결 두 가지).
+        var breakdown =
+            "완갑".equals(item.type())
+                ? specUp.armGuardBreakdown(from, to, materials.cached())
+                : specUp.refineBreakdown(item, from, to, materials.cached());
         var plan = breakdown.plan();
         if (plan != null) {
           materialRows = materialRows(plan, breakdown.prices());

@@ -16,6 +16,7 @@ import com.loakraken.market.domain.GemSkillCatalog;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.ArrayList;
@@ -284,6 +285,120 @@ public class MarketAuctionService {
     } catch (DataAccessException exception) {
       log.warn("경매장 일별 최저가를 남기지 못했습니다. 예외 유형={}", exception.getClass().getSimpleName());
     }
+  }
+
+  /** 스펙업 연마 비용에 쓰는 연마 줄 하나(옵션 이름, % 줄인가, 값 글자 예: "+2.60%"). */
+  public record PolishLine(String name, boolean percent, String value) {}
+
+  /** OK: 값 있음(minBuyPrice null이면 매물 없음), MISSING: 캐시에 없고 이번에 채우지 않음, UNSUPPORTED: 경매장 옵션으로 나타낼 수 없는 줄. */
+  public enum PolishStatus {
+    OK,
+    MISSING,
+    UNSUPPORTED
+  }
+
+  public record PolishPrice(PolishStatus status, Long minBuyPrice, Instant observedAt) {
+    static final PolishPrice MISSING = new PolishPrice(PolishStatus.MISSING, null, null);
+    static final PolishPrice UNSUPPORTED = new PolishPrice(PolishStatus.UNSUPPORTED, null, null);
+  }
+
+  /** 요청 하나의 연마 시세 채우기 몫. 스위치가 꺼져 있으면 0칸(캐시만 읽음). 공식 호출이 한도·장애로 실패하면 남은 몫을 쓰지 않는다. */
+  public static final class PolishFill {
+    private int left;
+
+    public PolishFill(boolean enabled) {
+      this.left = enabled ? MAX_FETCH_PER_REQUEST : 0;
+    }
+
+    boolean take() {
+      if (left <= 0) return false;
+      left--;
+      return true;
+    }
+
+    void stop() {
+      left = 0;
+    }
+  }
+
+  /**
+   * 장신구 연마 옵션 조합의 즉시 구매 최저가(스펙업 연마 비용). 비교 기준 B와 같은 칸: 고대·4티어·품질 조건 없음, 그 연마 값들이 있는 매물(다른 줄 허용, 계산
+   * 검증 10-25 공식 경매장 대조). 캐시된 칸이 있으면 그 값, 없으면 fill 몫 안에서 사용자 요청 한도로 채운다(보석·장신구 표와 같은 게이트·몫). 줄이 1~3개가
+   * 아니거나, 경매장 연마 옵션이 아닌 줄(고정값·파티원 효과 등)이 있거나, 세 줄인데 모두 상이 아니면(B 키에 없는 조합) UNSUPPORTED.
+   */
+  public PolishPrice polishPrice(String part, List<PolishLine> lines, PolishFill fill) {
+    var slot = slotOf(part);
+    if (slot == null || lines == null || lines.isEmpty() || lines.size() > 3)
+      return PolishPrice.UNSUPPORTED;
+    var pairs = new ArrayList<java.util.Map.Entry<PolishOption, Level>>();
+    for (var line : lines) {
+      var option = line.percent() ? POLISH_OPTIONS.get(line.name()) : null;
+      if (option == null || !AuctionCatalog.fits(slot, option)) return PolishPrice.UNSUPPORTED;
+      BigDecimal value;
+      try {
+        value = new BigDecimal(line.value().replace("+", "").replace("%", "").strip());
+      } catch (NumberFormatException exception) {
+        return PolishPrice.UNSUPPORTED;
+      }
+      var level = option.levelOf(value).orElse(null);
+      if (level == null) return PolishPrice.UNSUPPORTED;
+      pairs.add(java.util.Map.entry(option, level));
+    }
+    if (pairs.size() == 3 && pairs.stream().anyMatch(pair -> pair.getValue() != Level.HIGH))
+      return PolishPrice.UNSUPPORTED;
+    // 보석·장신구 표 칸과 같은 키가 되게 표의 옵션 순서(딜러 → 서포터 → 코드)로 줄을 세운다.
+    pairs.sort(java.util.Comparator.comparingInt(pair -> boardOrder(slot, pair.getKey())));
+    var query =
+        accessoryQuery(
+            Grade.ANCIENT,
+            slot,
+            pairs.stream().map(java.util.Map.Entry::getKey).toList(),
+            pairs.stream().map(java.util.Map.Entry::getValue).toList(),
+            null,
+            1);
+    var cached = auctions.findCell(query.key());
+    if (cached.isPresent()) return price(cached.get());
+    if (fill == null || !fill.take()) return PolishPrice.MISSING;
+    try {
+      var cell = toCell(gate.withUserReserve(RESERVE, () -> search.search(query)));
+      remember(query.key(), cell);
+      return price(cell);
+    } catch (BusinessException exception) {
+      fill.stop();
+      log.debug("연마 시세 칸을 채우지 못했습니다. 코드={}", exception.errorCode().code());
+      return PolishPrice.MISSING;
+    }
+  }
+
+  private static PolishPrice price(AuctionCell cell) {
+    return new PolishPrice(PolishStatus.OK, cell.minBuyPrice(), cell.observedAt());
+  }
+
+  /** 연마 줄 이름(% 줄) → 경매장 연마 옵션. */
+  private static final Map<String, PolishOption> POLISH_OPTIONS =
+      Map.of(
+          "추가 피해", PolishOption.ADDITIONAL_DAMAGE,
+          "적에게 주는 피해", PolishOption.ENEMY_DAMAGE,
+          "무기 공격력", PolishOption.WEAPON_ATTACK_PERCENT,
+          "공격력", PolishOption.ATTACK_PERCENT,
+          "치명타 피해", PolishOption.CRIT_DAMAGE,
+          "치명타 적중률", PolishOption.CRIT_RATE,
+          "낙인력", PolishOption.BRAND,
+          "세레나데, 신앙, 조화 게이지 획득량", PolishOption.IDENTITY_GAUGE,
+          "아군 피해량 강화 효과", PolishOption.ALLY_DAMAGE,
+          "아군 공격력 강화 효과", PolishOption.ALLY_ATTACK);
+
+  private static Slot slotOf(String part) {
+    for (var slot : Slot.values()) if (slot.label().equals(part)) return slot;
+    return null;
+  }
+
+  private static int boardOrder(Slot slot, PolishOption option) {
+    int dealer = AuctionCatalog.options(Role.DEALER, slot).indexOf(option);
+    if (dealer >= 0) return dealer;
+    int support = AuctionCatalog.options(Role.SUPPORT, slot).indexOf(option);
+    if (support >= 0) return 10 + support;
+    return 100 + option.code();
   }
 
   private AuctionCell toCell(AuctionPage page) {

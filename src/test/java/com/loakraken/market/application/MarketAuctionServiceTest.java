@@ -232,6 +232,74 @@ class MarketAuctionServiceTest {
         return used.getAndSet(true) ? then : first;
       }
     };
+  void 연마_시세는_표와_같은_키의_캐시를_쓰고_스위치가_꺼져_있으면_채우지_않는다() {
+    // 귀걸이 무공% 중 · 공% 중 = 표 칸(고대, 품질 조건 없음)과 같은 키. 줄 순서가 달라도 같은 칸.
+    var key =
+        MarketAuctionService.accessoryQuery(
+                Grade.ANCIENT,
+                Slot.EARRING,
+                List.of(
+                    AuctionCatalog.PolishOption.WEAPON_ATTACK_PERCENT,
+                    AuctionCatalog.PolishOption.ATTACK_PERCENT),
+                List.of(Level.MID, Level.MID),
+                null,
+                1)
+            .key();
+    port.cells.put(key, new AuctionCell(6_000L, 3, NOW));
+    var lines =
+        List.of(
+            new MarketAuctionService.PolishLine("공격력", true, "+0.95%"),
+            new MarketAuctionService.PolishLine("무기 공격력", true, "+1.80%"));
+    var off = new MarketAuctionService.PolishFill(false);
+    var hit = service.polishPrice("귀걸이", lines, off);
+    assertThat(hit.status()).isEqualTo(MarketAuctionService.PolishStatus.OK);
+    assertThat(hit.minBuyPrice()).isEqualTo(6_000L);
+    var other =
+        List.of(
+            new MarketAuctionService.PolishLine("공격력", true, "+0.40%"),
+            new MarketAuctionService.PolishLine("무기 공격력", true, "+1.80%"));
+    assertThat(service.polishPrice("귀걸이", other, off).status())
+        .isEqualTo(MarketAuctionService.PolishStatus.MISSING);
+    assertThat(port.searches).isZero();
+  }
+
+  @Test
+  void 연마_시세_채우기는_요청마다_5칸까지다() {
+    var fill = new MarketAuctionService.PolishFill(true);
+    var levels = List.of("+0.40%", "+0.95%", "+1.55%");
+    int ok = 0;
+    for (var a : levels)
+      for (var b : List.of("+0.80%", "+1.80%")) {
+        var price =
+            service.polishPrice(
+                "귀걸이",
+                List.of(
+                    new MarketAuctionService.PolishLine("공격력", true, a),
+                    new MarketAuctionService.PolishLine("무기 공격력", true, b)),
+                fill);
+        if (price.status() == MarketAuctionService.PolishStatus.OK) ok++;
+      }
+    assertThat(ok).isEqualTo(5);
+    assertThat(port.searches).isEqualTo(5);
+  }
+
+  @Test
+  void 경매장_옵션으로_나타낼_수_없는_연마_줄은_시세를_찾지_않는다() {
+    var fill = new MarketAuctionService.PolishFill(true);
+    // 고정값 줄, 그 부위에 붙지 않는 옵션, 세 줄인데 모두 상이 아님, 표에 없는 값
+    for (var lines :
+        List.of(
+            List.of(new MarketAuctionService.PolishLine("공격력", false, "+80")),
+            List.of(new MarketAuctionService.PolishLine("치명타 적중률", true, "+0.95%")),
+            List.of(
+                new MarketAuctionService.PolishLine("공격력", true, "+1.55%"),
+                new MarketAuctionService.PolishLine("무기 공격력", true, "+3.00%"),
+                new MarketAuctionService.PolishLine("공격력", true, "+0.40%")),
+            List.of(new MarketAuctionService.PolishLine("공격력", true, "+0.41%"))))
+      assertThat(service.polishPrice("귀걸이", lines, fill).status())
+          .as(lines.toString())
+          .isEqualTo(MarketAuctionService.PolishStatus.UNSUPPORTED);
+    assertThat(port.searches).isZero();
   }
 
   private final class FakeAuctions implements AuctionPort, AuctionSearchPort {

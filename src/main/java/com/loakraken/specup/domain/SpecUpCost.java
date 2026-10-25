@@ -75,6 +75,36 @@ public record SpecUpCost(
           "POLISH_COST_UNCONFIRMED",
           "연마 옵션을 바꾼 장신구의 매물 시세를 아직 받지 않아 비용을 계산하지 않았습니다.");
 
+  /**
+   * 장신구 연마 교체 비용(비교 기준 B와 같은 규칙): 목표 연마 조합 장신구의 즉시 구매 최저가 − 지금 장신구 조합의 즉시 구매 최저가(지금 장신구가 거래 가능할
+   * 때만), 0보다 작으면 0. 시세 칸은 고대·4티어·품질 조건 없음, 그 연마 값들이 있는 매물(다른 줄 허용).
+   */
+  public static SpecUpCost polish(long amount, boolean currentSubtracted) {
+    return currentSubtracted
+        ? new SpecUpCost(
+            "GOLD",
+            amount,
+            "OK",
+            "POLISH_UPGRADE",
+            "목표 연마 조합 장신구의 즉시 구매 최저가에서 지금 장신구 조합의 즉시 구매 최저가를 뺐습니다(품질 조건 없음, 판매 수수료는 빼지 않음).")
+        : new SpecUpCost(
+            "GOLD",
+            amount,
+            "OK",
+            "POLISH_BUY",
+            "목표 연마 조합 장신구의 즉시 구매 최저가입니다(품질 조건 없음). 지금 장신구는 거래할 수 없어 빼지 않았습니다.");
+  }
+
+  /** 연마 조합 시세 칸을 아직 채우지 못했을 때(채우기 스위치가 켜져 있을 때만). */
+  public static final SpecUpCost POLISH_PRICE_PENDING =
+      new SpecUpCost(
+          "GOLD", null, "PENDING", "PRICE_PENDING", "장신구 매물 시세를 아직 받지 못했습니다. 잠시 뒤 다시 확인해 주세요.");
+
+  /** 목표 연마 조합 매물이 지금 없을 때. */
+  public static final SpecUpCost POLISH_NO_LISTING =
+      new SpecUpCost(
+          "GOLD", null, "UNKNOWN", "POLISH_NO_LISTING", "이 연마 조합의 장신구 매물이 지금 없어 비용을 계산하지 않았습니다.");
+
   /** 어빌리티 스톤(#575): 목표 조합까지의 기대 세공 비용을 아직 넣지 않았다. */
   public static final SpecUpCost STONE_COST_UNCONFIRMED =
       new SpecUpCost(

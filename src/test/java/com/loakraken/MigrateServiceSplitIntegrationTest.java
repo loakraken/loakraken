@@ -228,6 +228,37 @@ class MigrateServiceSplitIntegrationTest {
         .noneMatch(source -> source.contains("secrets"))
         .noneMatch(source -> source.contains("db_password"))
         .noneMatch(source -> secretFile.startsWith(source));
+    // 비밀값 폴더를 품은 상위 폴더 연결도 없다(스택 예시 파일의 실제 SECRETS_DIR 기준).
+    for (var secretsDir : secretsDirs())
+      assertThat(mounts)
+          .as("SECRETS_DIR=" + secretsDir)
+          .noneMatch(source -> contains(source, secretsDir + "/db_password"));
+    // 같은 파일을 가리키는 다른 이름의 비밀값(별칭)도 api에 붙지 않는다.
+    var ownerSecrets = ownerSecretNames(secretFile);
+    assertThat(ownerSecrets).contains("db_password");
+    assertThat(secrets(api).keySet()).doesNotContainAnyElementsOf(ownerSecrets);
+    // 실행 명령을 바꾸거나 설정을 끼워 넣어 Flyway를 다시 켜는 길이 없다: 이미지 기본 실행 그대로, JVM·Spring 설정 주입 변수 없음,
+    // Flyway를 말하는 환경 값은 끄는 것 하나뿐.
+    assertThat(api).doesNotContainKey("command").doesNotContainKey("entrypoint");
+    assertThat(environment(api))
+        .doesNotContainKeys("SPRING_APPLICATION_JSON", "JDK_JAVA_OPTIONS", "_JAVA_OPTIONS");
+    // JVM 옵션은 메모리 옵션만: 기본값과 스택 예시 값에 시스템 속성(-D, 환경 변수보다 앞선다)이 없다.
+    var jvmOptions = String.valueOf(environment(api).getOrDefault("JAVA_TOOL_OPTIONS", ""));
+    assertThat(jvmOptions).doesNotContain("-D").doesNotContainIgnoringCase("spring");
+    for (var example : stackExamples())
+      for (var line : Files.readAllLines(example, StandardCharsets.UTF_8))
+        if (line.startsWith("API_JAVA_OPTS="))
+          assertThat(line).as(example.toString()).doesNotContain("-D");
+    assertThat(environment(api).entrySet())
+        .filteredOn(
+            e ->
+                e.getKey().toLowerCase().contains("flyway")
+                    || String.valueOf(e.getValue()).toLowerCase().contains("flyway"))
+        .containsExactly(Map.entry("SPRING_FLYWAY_ENABLED", "false"));
+    assertThat(Files.readString(Path.of("Dockerfile"), StandardCharsets.UTF_8))
+        .contains("ENTRYPOINT [\"java\", \"org.springframework.boot.loader.launch.JarLauncher\"]")
+        .doesNotContainIgnoringCase("flyway")
+        .doesNotContain(MigrateCommand.NAME);
     var dependsOn = (Map<String, Object>) api.get("depends_on");
     assertThat((Map<String, Object>) dependsOn.get("migrate"))
         .containsEntry("condition", "service_completed_successfully");
@@ -256,6 +287,64 @@ class MigrateServiceSplitIntegrationTest {
                 .sorted()
                 .toList();
     assertThat(owners).containsExactly("migrate", "postgres");
+    var aliasOwners =
+        ((Map<String, Object>) compose.get("services"))
+            .entrySet().stream()
+                .filter(
+                    e ->
+                        secrets((Map<String, Object>) e.getValue()).keySet().stream()
+                            .anyMatch(ownerSecrets::contains))
+                .map(Map.Entry::getKey)
+                .sorted()
+                .toList();
+    assertThat(aliasOwners).containsExactly("migrate", "postgres");
+  }
+
+  /** 소유 역할 비밀번호 파일을 가리키는 모든 최상위 비밀값 이름(${VAR:?...}·${VAR:-...}는 ${VAR}로 맞춰 비교). */
+  @SuppressWarnings("unchecked")
+  private static java.util.Set<String> ownerSecretNames(String secretFile) throws IOException {
+    var target = normalize(secretFile);
+    var names = new java.util.TreeSet<String>();
+    for (var entry : ((Map<String, Object>) compose().get("secrets")).entrySet())
+      if (entry.getValue() instanceof Map<?, ?> map
+          && map.get("file") != null
+          && normalize(String.valueOf(map.get("file"))).equals(target)) names.add(entry.getKey());
+    return names;
+  }
+
+  private static String normalize(String path) {
+    return path.replaceAll("\\$\\{(\\w+)[^}]*}", "\\${$1}").replaceAll("/+$", "");
+  }
+
+  /** 스택 예시 파일(deploy/stack.*.env.example). */
+  private static List<Path> stackExamples() throws IOException {
+    try (var files = Files.list(Path.of("deploy"))) {
+      var examples =
+          files
+              .filter(f -> f.getFileName().toString().matches("stack\\..+\\.env\\.example"))
+              .toList();
+      assertThat(examples).isNotEmpty();
+      return examples;
+    }
+  }
+
+  /** 스택 예시 파일의 SECRETS_DIR 값. */
+  private static List<String> secretsDirs() throws IOException {
+    var dirs = new java.util.ArrayList<String>();
+    for (var file : stackExamples())
+      for (var line : Files.readAllLines(file, StandardCharsets.UTF_8))
+        if (line.startsWith("SECRETS_DIR=")) dirs.add(normalize(line.substring(12).trim()));
+    assertThat(dirs).isNotEmpty();
+    return dirs;
+  }
+
+  /** 연결 원본 폴더(source)가 그 경로를 품는가(같거나 상위 폴더). */
+  private static boolean contains(String source, String path) {
+    var dir = normalize(source);
+    if (dir.isEmpty() || dir.equals("/")) return path.startsWith("/");
+    // 스택 폴더 자체(.)나 그 위(..)는 비밀값 폴더를 품을 수 있어 막는다. ./seed 같은 하위 폴더만 허용.
+    if (dir.equals(".") || dir.equals("..") || dir.startsWith("../")) return true;
+    return path.equals(dir) || path.startsWith(dir + "/");
   }
 
   @Test

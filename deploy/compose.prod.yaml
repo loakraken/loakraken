@@ -208,6 +208,8 @@ services:
       # 시세 예열 세부(MARKET_WARMUP_ENABLED가 켜진 인스턴스에서만 돈다). 재련 재료·유물 각인서는 켜면 공식 호출이 늘어 수집기와 게이트를 나눈다.
       MARKET_WARMUP_REFINING_MATERIALS_ENABLED: ${MARKET_WARMUP_REFINING_MATERIALS_ENABLED:-false}
       MARKET_WARMUP_RELIC_BOOKS_ENABLED: ${MARKET_WARMUP_RELIC_BOOKS_ENABLED:-false}
+      # 보석 시세 표 칸 예열(스펙업 보석 비용, 10분마다 20칸 = 분당 공식 호출 2회).
+      MARKET_WARMUP_GEMS_ENABLED: ${MARKET_WARMUP_GEMS_ENABLED:-false}
       API_DOCS_ENABLED: "false"
       # 관리(actuator) 포트를 앱 포트와 나누고, metrics망의 api 주소에만 묶는다(prometheus만 닿음, internal·data망의 다른 컨테이너는 닿지 않음).
       MANAGEMENT_SERVER_PORT: "9090"

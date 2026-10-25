@@ -38,6 +38,13 @@ public interface MarketCache {
 
   default void saveRelicBooks(RelicBookScan scan, java.time.Duration ttl) {}
 
+  /** 유물 각인서 아이콘(이름 공백 뺀 값 → 공식 아이콘 주소). 만료 없이 둔다 — 시세 캐시가 비어도 각인 그림은 보이게(PM 총괄 10-25). */
+  default java.util.Map<String, String> findRelicBookIcons() {
+    return java.util.Map.of();
+  }
+
+  default void saveRelicBookIcons(java.util.Map<String, String> icons) {}
+
   /** T4 재련 재료 시세 스캔(L30 후속). 키 TTL이 지났으면 없다. */
   default Optional<RefiningMaterialScan> findRefiningMaterials() {
     return Optional.empty();

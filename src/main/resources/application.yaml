@@ -103,6 +103,10 @@ market:
       enabled: ${MARKET_WARMUP_REFINING_MATERIALS_ENABLED:false}
       interval: ${MARKET_WARMUP_REFINING_MATERIALS_INTERVAL:10m}
       max-pages-per-tab: ${MARKET_WARMUP_REFINING_MATERIALS_MAX_PAGES:5}
+    # 보석 시세 표 20칸(스펙업 보석 비용). interval마다 한 바퀴, 1분마다 오래된 칸부터 ceil(20 ÷ 분)칸(10분 = 분당 2회).
+    gems:
+      enabled: ${MARKET_WARMUP_GEMS_ENABLED:false}
+      interval: ${MARKET_WARMUP_GEMS_INTERVAL:10m}
   # 악세 경매 검색기(N13). 기능 몫은 모든 사용자 합 분당 공식 호출 수, reserve는 사용자 경로 몫(docs/accessory-auction-search.md).
   auction-search:
     quota-per-minute: ${MARKET_AUCTION_SEARCH_QUOTA:20}

@@ -46,6 +46,28 @@ class RelicBookPriceServiceTest {
   }
 
   @Test
+  void 시세_스캔이_없으면_마지막으로_본_아이콘을_쓰고_스캔을_저장할_때마다_아이콘을_남긴다() {
+    // PM 총괄 10-25: 각인 그림이 시세 예열에 기대지 않게(예열이 꺼지거나 만료돼도 그림은 보임).
+    when(cache.findRelicBooks()).thenReturn(Optional.empty());
+    when(cache.findRelicBookIcons())
+        .thenReturn(java.util.Map.of("유물원한각인서", "https://cdn.example/a.png"));
+    assertThat(service.icon("원한")).contains("https://cdn.example/a.png");
+    assertThat(service.icon("아드레날린")).isEmpty();
+    service.save(
+        new RelicBookScan(
+            at,
+            2,
+            List.of(
+                new MarketPrice(
+                    1, "유물 실드관통 각인서", "유물", "https://cdn.example/s.png", 1, null, null, null, null),
+                new MarketPrice(
+                    2, "전설 원한 각인서", "전설", "https://cdn.example/x.png", 1, null, null, null, null))),
+        java.time.Duration.ofMinutes(90));
+    org.mockito.Mockito.verify(cache)
+        .saveRelicBookIcons(java.util.Map.of("유물실드관통각인서", "https://cdn.example/s.png"));
+  }
+
+  @Test
   void 아이콘은_같은_이름_유물_각인서의_공식_아이콘이고_시세가_없어도_쓴다() {
     when(cache.findRelicBooks())
         .thenReturn(

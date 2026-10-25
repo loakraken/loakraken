@@ -8,10 +8,30 @@ import java.math.RoundingMode;
  * 아직 관측하지 못함), UNKNOWN(비용 근거가 없음). 같은 code는 늘 같은 basis 문장이다.
  */
 public record SpecUpCost(
-    String unit, Long amount, String status, String code, String basis, Double exact) {
+    String unit,
+    Long amount,
+    String status,
+    String code,
+    String basis,
+    Double exact,
+    java.time.Instant priceObservedAt,
+    Boolean stale) {
   /** exact는 반올림 전 금액(카르마·스톤 기대 골드처럼 정수가 아닌 비용). 정수 비용이면 amount와 같다. 효율은 이 값으로 나눈다. */
   public SpecUpCost(String unit, Long amount, String status, String code, String basis) {
     this(unit, amount, status, code, basis, amount == null ? null : amount.doubleValue());
+  }
+
+  public SpecUpCost(
+      String unit, Long amount, String status, String code, String basis, Double exact) {
+    this(unit, amount, status, code, basis, exact, null, null);
+  }
+
+  /**
+   * 보석 비용에 쓴 시세의 관측 시각(목표·지금 가운데 이른 쪽)과 마지막 관측 값을 썼는지(stale — 3분 칸이 없어 이전 시세를 씀, 지금 시세처럼 보이면 안
+   * 된다, PM 총괄 10-25).
+   */
+  public SpecUpCost withPrice(java.time.Instant observedAt, boolean stale) {
+    return new SpecUpCost(unit, amount, status, code, basis, exact, observedAt, stale);
   }
 
   /** 깨달음 카르마 레벨 기대 골드(반올림 전 값으로 효율 계산). */

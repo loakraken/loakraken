@@ -433,11 +433,26 @@ public class SpecUpController {
       @Schema(description = "OK·PENDING·UNKNOWN(문자열, 모르는 값은 UNKNOWN으로)", example = "OK")
           String status,
       @Schema(description = "비용 근거 코드(문자열, 값이 늘 수 있음)", example = "GEM_UPGRADE") String code,
-      @Schema(description = "화면용 비용 근거 문장(같은 코드는 같은 문장)") String basis) {
+      @Schema(description = "화면용 비용 근거 문장(같은 코드는 같은 문장)") String basis,
+      @Schema(description = "비용에 쓴 시세 관측 시각(보석 비용만, 목표·지금 가운데 이른 쪽). 그 밖은 null")
+          @NullableResponse
+          java.time.Instant priceObservedAt,
+      @Schema(
+              description =
+                  "보석 비용만: true면 지금(3분 안) 시세가 없어 마지막으로 관측한 이전 시세를 썼다 — 지금 시세처럼 보이지 말고 priceObservedAt과 함께 보인다. 그 밖은 null")
+          @NullableResponse
+          Boolean stale) {
     static CostResponse from(SpecUpCost cost) {
       return cost == null
           ? null
-          : new CostResponse(cost.unit(), cost.amount(), cost.status(), cost.code(), cost.basis());
+          : new CostResponse(
+              cost.unit(),
+              cost.amount(),
+              cost.status(),
+              cost.code(),
+              cost.basis(),
+              cost.priceObservedAt(),
+              cost.stale());
     }
   }
 

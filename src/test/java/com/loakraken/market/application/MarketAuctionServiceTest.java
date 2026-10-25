@@ -377,6 +377,46 @@ class MarketAuctionServiceTest {
     assertThat(port.searches).isZero();
   }
 
+  @Test
+  void 스펙업_보석_시세는_3분_칸이_없으면_마지막_값을_stale로_준다() {
+    // PM 총괄 10-25: 이전 시세는 그 관측 시각과 함께 stale로만(지금 시세처럼 보이지 않게).
+    service.gems();
+    port.cells.clear();
+    var cells = service.cachedGems();
+    var stale = cells.stream().filter(MarketAuctionService.GemCell::stale).toList();
+    assertThat(stale)
+        .hasSize(5)
+        .allMatch(cell -> cell.status() == MarketAuctionService.Status.READY)
+        .allMatch(cell -> cell.cell().observedAt().equals(NOW));
+    assertThat(cells.stream().filter(cell -> cell.status() == MarketAuctionService.Status.PENDING))
+        .hasSize(15);
+    // 3분 칸이 있으면 그 칸(stale 아님)
+    service.gems();
+    assertThat(service.cachedGems().stream().filter(cell -> cell.cell() != null && !cell.stale()))
+        .isNotEmpty();
+  }
+
+  @Test
+  void 보석_칸_예열은_오래된_칸부터_정한_칸_수만_받고_한도에서_멈춘다() {
+    var calls = new java.util.concurrent.atomic.AtomicInteger();
+    var first = service.warmGems(2, () -> true, search -> {
+      calls.incrementAndGet();
+      return search.get();
+    });
+    assertThat(first.refreshed()).isEqualTo(2);
+    assertThat(first.outcome()).isEqualTo("refreshed");
+    assertThat(port.last).hasSize(2);
+    // 이미 받은 칸은 뒤로 — 다음 예열은 다른 칸부터
+    var second = service.warmGems(2, () -> true, search -> search.get());
+    assertThat(second.refreshed()).isEqualTo(2);
+    assertThat(port.last).hasSize(4);
+    // 분당 상한
+    var capped = service.warmGems(2, () -> false, search -> search.get());
+    assertThat(capped.outcome()).isEqualTo("capped");
+    assertThat(capped.refreshed()).isZero();
+    assertThat(MarketAuctionService.GEM_CELLS).isEqualTo(20);
+  }
+
   private final class FakeAuctions implements AuctionPort, AuctionSearchPort {
     int searches;
     final Map<String, AuctionCell> cells = new HashMap<>();

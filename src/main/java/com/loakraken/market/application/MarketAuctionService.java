@@ -149,15 +149,19 @@ public class MarketAuctionService {
     var result = new ArrayList<GemCell>();
     for (var kind : AuctionCatalog.GEM_KINDS)
       for (int level = AuctionCatalog.MAX_GEM_LEVEL; level >= 1; level--) {
-        var cell = auctions.findCell(gemQuery(kind, level, 1).key()).orElse(null);
+        var key = gemQuery(kind, level, 1).key();
+        var cell = auctions.findCell(key).orElse(null);
+        // 3분 칸이 없으면 마지막 관측 값을 stale로(그 관측 시각과 함께 — 지금 시세처럼 보이지 않게, PM 총괄 10-25).
+        var last = cell == null ? auctions.findLastCell(key).orElse(null) : null;
         result.add(
             new GemCell(
                 kind,
                 level,
                 AuctionCatalog.gemName(kind, level),
-                cell,
+                cell != null ? cell : last,
                 null,
-                cell == null ? Status.PENDING : Status.READY));
+                cell == null && last == null ? Status.PENDING : Status.READY,
+                last != null));
       }
     return result;
   }
@@ -267,6 +271,47 @@ public class MarketAuctionService {
     } catch (DataAccessException exception) {
       return Map.of();
     }
+  }
+
+  /** 보석 시세 표 칸 수(겁화·작열 × 1~10레벨). */
+  public static final int GEM_CELLS = AuctionCatalog.GEM_KINDS.size() * AuctionCatalog.MAX_GEM_LEVEL;
+
+  /** 예열 한 번의 결과. outcome: refreshed·capped·failed·idle(지표 태그). */
+  public record GemWarm(int refreshed, String outcome) {}
+
+  /**
+   * 보석 시세 표 칸 예열: 마지막 관측이 오래된 칸(없는 칸이 먼저)부터 count칸을 공식 경매장에서 다시 받아 칸(3분)·마지막 값·일별 기록에 남긴다(표 채우기와
+   * 같은 저장 경로). allow는 예열 전체 분당 상한, call은 예열 게이트로 공식 호출을 감싼다. 한도·실패면 거기서 멈춘다.
+   */
+  public GemWarm warmGems(
+      int count,
+      java.util.function.BooleanSupplier allow,
+      java.util.function.Function<java.util.function.Supplier<AuctionPage>, AuctionPage> call) {
+    var queries = new ArrayList<AuctionQuery>();
+    for (var kind : AuctionCatalog.GEM_KINDS)
+      for (int level = AuctionCatalog.MAX_GEM_LEVEL; level >= 1; level--)
+        queries.add(gemQuery(kind, level, 1));
+    queries.sort(
+        java.util.Comparator.comparing(
+            (AuctionQuery query) ->
+                auctions
+                    .findLastCell(query.key())
+                    .map(AuctionCell::observedAt)
+                    .orElse(Instant.EPOCH)));
+    int refreshed = 0;
+    for (var query : queries) {
+      if (refreshed >= count) break;
+      if (!allow.getAsBoolean()) return new GemWarm(refreshed, "capped");
+      try {
+        var cell = toCell(call.apply(() -> search.search(query)));
+        remember(query.key(), cell);
+        refreshed++;
+      } catch (BusinessException exception) {
+        log.debug("보석 시세 칸 예열 실패. 코드={}", exception.errorCode().code());
+        return new GemWarm(refreshed, "failed");
+      }
+    }
+    return new GemWarm(refreshed, refreshed > 0 ? "refreshed" : "idle");
   }
 
   /** 보석 시세 표 20칸의 키(마지막 값을 남기는 칸). */

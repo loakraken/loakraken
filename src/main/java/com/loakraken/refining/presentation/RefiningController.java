@@ -18,10 +18,28 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping(value = "/api/v1/refining", produces = MediaType.APPLICATION_JSON_VALUE)
 @Tag(name = "재련", description = "티어 4 장비 재련 기대 비용")
 class RefiningController {
-  private final RefiningPlanService service;
+  /** 시세 예열 주기보다 짧게(다시 요청하면 그사이 채워졌을 수 있다). */
+  static final java.time.Duration RETRY_AFTER = java.time.Duration.ofSeconds(60);
 
-  RefiningController(RefiningPlanService service) {
+  private final RefiningPlanService service;
+  private final com.loakraken.market.application.RefiningMaterialPriceService materials;
+  private final org.springframework.core.env.Environment environment;
+
+  RefiningController(
+      RefiningPlanService service,
+      com.loakraken.market.application.RefiningMaterialPriceService materials,
+      org.springframework.core.env.Environment environment) {
     this.service = service;
+    this.materials = materials;
+    this.environment = environment;
+  }
+
+  /**
+   * OPTIMAL 스위치(refining.optimal.enabled, 기본 꺼짐 — 화면이 v0.3.4에 붙을 때 켠다, 코드 리뷰 10-25). 요청마다 읽는다. 꺼져
+   * 있으면 breath=OPTIMAL은 400이다(다른 방식으로 바꿔 계산하면 요청한 것과 다른 방법의 값을 주게 된다).
+   */
+  boolean optimalEnabled() {
+    return environment.getProperty("refining.optimal.enabled", Boolean.class, false);
   }
 
   @PostMapping(value = "/plans", consumes = MediaType.APPLICATION_JSON_VALUE)
@@ -36,7 +54,18 @@ class RefiningController {
         description = "REFINING_PLAN_SUCCESS"),
     @io.swagger.v3.oas.annotations.responses.ApiResponse(
         responseCode = "400",
-        description = "INVALID_REQUEST: 단계 범위·장인의 기운·실패 횟수 오류",
+        description =
+            "INVALID_REQUEST: 단계 범위·장인의 기운·실패 횟수 오류, useBreath와 breath가 어긋남, OPTIMAL 스위치가 꺼져 있는데 breath=OPTIMAL",
+        content = @Content(schema = @Schema(ref = "#/components/schemas/ErrorResponse"))),
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(
+        responseCode = "409",
+        description =
+            "REFINING_PRICE_PENDING: breath=OPTIMAL인데 필요한 재료 시세가 아직 없음(Retry-After 초). 다른 방식으로 대신 계산하지 않는다",
+        content = @Content(schema = @Schema(ref = "#/components/schemas/ErrorResponse"))),
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(
+        responseCode = "429",
+        description =
+            "REFINING_SOLVE_BUSY: breath=OPTIMAL인데 서버의 최적 풀이 자리가 모두 차 있음(기다리지 않음, Retry-After 초 뒤 다시)",
         content = @Content(schema = @Schema(ref = "#/components/schemas/ErrorResponse"))),
     @io.swagger.v3.oas.annotations.responses.ApiResponse(
         responseCode = "406",
@@ -52,6 +81,40 @@ class RefiningController {
         content = @Content(schema = @Schema(ref = "#/components/schemas/ErrorResponse")))
   })
   public ApiResponse<RefiningPlanResponse> plan(@Valid @RequestBody RefiningPlanRequest request) {
+    if (request.effectiveBreath() == RefiningPlanRequest.Breath.OPTIMAL) {
+      if (!optimalEnabled())
+        // 400 INVALID_REQUEST(새 오류 코드 없음, 다른 400과 같은 처리)
+        throw new org.springframework.web.server.ResponseStatusException(
+            org.springframework.http.HttpStatus.BAD_REQUEST);
+      // 시세 캐시만 읽는다(공식 호출 없음). 시세가 없으면 숨결 없음·최대로 바꿔 계산하지 않는다.
+      var prices =
+          materials
+              .cached()
+              .orElseThrow(
+                  () ->
+                      new com.loakraken.common.api.BusinessException(
+                          com.loakraken.refining.application.RefiningErrorCode
+                              .REFINING_PRICE_PENDING,
+                          RETRY_AFTER));
+      var optimal =
+          service.optimal(
+              request.grade(), request.equipmentType(), request.toOptions(), prices.unitPrices());
+      if (optimal == null)
+        throw new com.loakraken.common.api.BusinessException(
+            com.loakraken.refining.application.RefiningErrorCode.REFINING_PRICE_PENDING,
+            RETRY_AFTER);
+      return ApiResponse.of(
+          RefiningSuccessCode.REFINING_PLAN_SUCCESS,
+          RefiningPlanResponse.from(
+              service.rules(),
+              service.growthCosts(),
+              request.grade(),
+              request.equipmentType(),
+              request,
+              optimal.plan(),
+              optimal.stages(),
+              prices.observedAt()));
+    }
     var plan = service.plan(request.grade(), request.equipmentType(), request.toOptions());
     return ApiResponse.of(
         RefiningSuccessCode.REFINING_PLAN_SUCCESS,

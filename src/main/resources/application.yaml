@@ -190,6 +190,13 @@ spec-up:
   arm-guard:
     enabled: ${SPEC_UP_ARM_GUARD_ENABLED:true}
 
+# 재련 계획 숨결 OPTIMAL(#754): 화면이 붙을 때(v0.3.4)까지 꺼짐. 꺼져 있으면 breath=OPTIMAL은 400. 캐시에 없는 단계 풀이는 동시에
+# max-concurrent-solves개까지(넘으면 바로 429).
+refining:
+  optimal:
+    enabled: ${REFINING_OPTIMAL_ENABLED:false}
+    max-concurrent-solves: ${REFINING_OPTIMAL_MAX_CONCURRENT_SOLVES:2}
+
 home:
   cache:
     calendar-ttl: ${HOME_CALENDAR_CACHE_TTL:30m}

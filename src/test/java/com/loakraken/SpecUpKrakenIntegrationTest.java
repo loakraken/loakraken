@@ -197,7 +197,7 @@ class SpecUpKrakenIntegrationTest {
   }
 
   @Test
-  void 서포터는_서포터_점수식으로_Δ를_내고_전투력은_역할_이유로_비우며_연마는_한_줄로_남긴다() throws Exception {
+  void 서포터는_서포터_점수식으로_Δ를_내고_전투력은_역할_이유로_비우며_연마는_서포터_옵션으로_만든다() throws Exception {
     // PM 총괄 10-25: 서포터 스펙업은 서포터 점수 기준(비교 기준 B도 역할에 따라 점수 키만 바꾸고 후보는 같게 만든다). 전투력은 계산하지 않는다.
     when(auctions.cachedGems()).thenReturn(gemCells());
     marketCache.saveRelicBooks(books(), Duration.ofMinutes(5));
@@ -223,12 +223,15 @@ class SpecUpKrakenIntegrationTest {
       if (!candidate.path("deltaKrakenScore").isNull()) scored++;
     }
     assertThat(scored).as("Δ서포터 점수가 있는 후보").isPositive();
-    // 서포터 연마 후보는 역할별 옵션 표를 확인하기 전이라 한 줄 알림(Δ 없음).
+    // 서포터 연마 후보: 서포터 옵션 표 규칙의 줄(코드 S…), Δ서포터 점수가 0보다 큰 것만(비교 기준 B와 같음).
+    int polish = 0;
     for (var candidate : candidates)
-      if ("POLISH".equals(candidate.path("kind").asText()))
-        assertThat(candidate.path("deltaKrakenScore").isNull())
-            .as(candidate.path("id").asText())
-            .isTrue();
+      if ("POLISH".equals(candidate.path("kind").asText())) {
+        polish++;
+        assertThat(candidate.path("id").asText()).matches("POLISH:\\d+:S[LMHNX]+(\\+[BVP][LMH])?");
+        assertThat(candidate.path("deltaKrakenScore").decimalValue()).isPositive();
+      }
+    assertThat(polish).as("서포터 연마 후보").isPositive();
   }
 
   @Test

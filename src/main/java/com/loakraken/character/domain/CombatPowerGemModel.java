@@ -196,7 +196,10 @@ public final class CombatPowerGemModel {
       for (var skill : gems.effects().skills())
         if (skill != null && skill.gemSlot() != null) options.put(skill.gemSlot(), skill.option());
     for (var gem : gems.items()) {
-      if (gem == null || gem.slot() == null || gem.level() == null) continue;
+      if (gem == null || gem.slot() == null) continue;
+      // 보석이 있는데 레벨을 읽지 못하면 빈 칸처럼 넘기지 않는다(그 보석이 빠진 값으로 OK가 나옴, 코드 리뷰 10-25).
+      if (gem.level() == null)
+        return new Model(slots, BigDecimal.ZERO, "보석(" + gem.name() + ")의 레벨을 읽지 못했습니다.");
       var kind = match(GEM_KIND, gem.name());
       var tier = kind == null ? null : coefficients.tierOf(kind);
       if (tier == null)

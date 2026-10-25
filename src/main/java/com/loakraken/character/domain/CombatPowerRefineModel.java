@@ -362,8 +362,11 @@ public final class CombatPowerRefineModel {
     var none = new WeaponCore(BigDecimal.ZERO, BigDecimal.ZERO, null);
     if (loadout.arkGrid() == null) return none;
     for (var slot : loadout.arkGrid().slots()) {
-      if (slot == null || slot.name() == null || !slot.name().strip().startsWith(WEAPON_CORE))
-        continue;
+      if (slot == null) continue;
+      // 이름을 읽지 못한 코어는 무기 코어인지 알 수 없어 0으로 두지 않는다(코드 리뷰 10-25).
+      if (slot.name() == null)
+        return new WeaponCore(BigDecimal.ZERO, BigDecimal.ZERO, "아크 그리드 코어 이름을 읽지 못해 계산하지 않았습니다.");
+      if (!slot.name().strip().startsWith(WEAPON_CORE)) continue;
       if (slot.point() == null || slot.grade() == null)
         return new WeaponCore(BigDecimal.ZERO, BigDecimal.ZERO, "무기 코어의 등급·포인트를 읽지 못해 계산하지 않았습니다.");
       var table =

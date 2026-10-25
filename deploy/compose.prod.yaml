@@ -153,6 +153,8 @@ services:
       CLIENT_LIMIT_OFFICIAL: ${CLIENT_LIMIT_OFFICIAL:-20}
       # 요청 본문 크기 상한(기본 64KB). 앞단 프록시 상한(256KB)보다 작게 둔다.
       HTTP_MAX_REQUEST_BODY: ${HTTP_MAX_REQUEST_BODY:-64KB}
+      # 검색봇 표시 요청 전체가 분당 일으킬 수 있는 공식 호출 수(기본 20). 캐릭터 페이지 색인을 켤 때만 낮춘다.
+      CLIENT_LIMIT_BOT_OFFICIAL: ${CLIENT_LIMIT_BOT_OFFICIAL:-20}
       # 시드 목록(#255): 쉼표 구분 이름. 값은 운영 서버 stack.env에만 둔다(저장소 커밋 금지).
       STATS_SEED_ENABLED: ${STATS_SEED_ENABLED:-false}
       STATS_SEED_NAMES: ${STATS_SEED_NAMES:-}

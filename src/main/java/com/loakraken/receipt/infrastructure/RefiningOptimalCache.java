@@ -1,6 +1,6 @@
 package com.loakraken.receipt.infrastructure;
 
-import com.loakraken.receipt.domain.OptimalStageCache;
+import com.loakraken.refining.domain.OptimalStageCache;
 import com.loakraken.refining.domain.RefiningOptimal;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Gauge;

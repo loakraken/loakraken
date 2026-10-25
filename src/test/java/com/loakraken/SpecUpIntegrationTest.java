@@ -1,6 +1,7 @@
 package com.loakraken;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.within;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
 
@@ -297,19 +298,7 @@ class SpecUpIntegrationTest {
             // 파편은 주머니 가운데 1개당 가장 싼 값: (대) 219 ÷ 3000 = 0.073 < (소) 87 ÷ 1000.
             "운명의 파편", new BigDecimal("0.073"),
             "용암의 숨결", new BigDecimal("459"));
-    long expected = Long.MAX_VALUE;
-    for (boolean breath : new boolean[] {false, true}) {
-      var plan =
-          plans.plan(
-              com.loakraken.refining.domain.RefiningRules.Grade.UPHWA,
-              com.loakraken.refining.domain.RefiningRules.EquipmentType.WEAPON,
-              new com.loakraken.refining.domain.RefiningPlan.Options(
-                  20, 21, breath, false, true, 0, 0));
-      var total = plan.expectedGold();
-      for (var quantity : plan.expectedMaterials())
-        total = total.add(quantity.amount().multiply(units.get(quantity.name())));
-      expected = Math.min(expected, total.setScale(0, java.math.RoundingMode.CEILING).longValue());
-    }
+    long expected = refineExpected(units, 20, 21);
     var response = get("/api/v1/characters/spec-up?characterName=" + encode("스펙업화"));
     assertThat(response.statusCode()).isEqualTo(200);
     ApiContractFixture.write("character-spec-up-refine-cost.json", response.body());
@@ -317,16 +306,101 @@ class SpecUpIntegrationTest {
     var refine = find(data.path("candidates"), "EQUIPMENT_REFINE:0:21");
     assertThat(refine.at("/cost/status").asText()).isEqualTo("OK");
     assertThat(refine.at("/cost/code").asText()).isEqualTo("REFINE_EXPECTED");
-    assertThat(refine.at("/cost/amount").asLong()).isEqualTo(expected);
+    assertThat(refine.at("/cost/amount").asLong()).isCloseTo(expected, within(1L));
     assertThat(expected).isPositive();
     // 가장 이른 시세 관측 시각이 보석 표 시각보다 이르면 그 시각이다.
     assertThat(Instant.parse(data.path("pricesAt").asText())).isBeforeOrEqualTo(observedAt);
     SiteNames.assertAbsent(response.body());
+    // #585: 다음 단계부터 재련 계획 최대 단계까지 줄마다 따로, 비용은 한 번의 계획(지금 → 목표) 누적.
+    int max =
+        plans
+            .rules()
+            .track(
+                com.loakraken.refining.domain.RefiningRules.Grade.UPHWA,
+                com.loakraken.refining.domain.RefiningRules.EquipmentType.WEAPON)
+            .maxTargetStage();
+    assertThat(max).isGreaterThan(21);
+    long previous = 0;
+    for (int target = 21; target <= Math.min(25, max); target++) {
+      var row = find(data.path("candidates"), "EQUIPMENT_REFINE:0:" + target);
+      assertThat(row.path("from").asText()).isEqualTo("+20");
+      assertThat(row.path("to").asText()).isEqualTo("+" + target);
+      assertThat(row.at("/change/refine").asInt()).isEqualTo(target);
+      long cost = refineExpected(units, 20, target);
+      assertThat(row.at("/cost/amount").asLong()).as("+" + target).isCloseTo(cost, within(1L));
+      assertThat(cost).isGreaterThan(previous);
+      previous = cost;
+    }
+    // 줄 상세도 같은 범위·같은 금액(내역 합 = 목록 비용), 기대 시도는 단계마다의 합.
+    var detail = mapper.readTree(detail("EQUIPMENT_REFINE:0:23", "스펙업화").body()).path("data");
+    assertThat(detail.at("/refine/fromStage").asInt()).isEqualTo(20);
+    assertThat(detail.at("/refine/toStage").asInt()).isEqualTo(23);
+    assertThat(detail.at("/candidate/cost/amount").asLong())
+        .isCloseTo(refineExpected(units, 20, 23), within(1L));
+    assertThat(detail.at("/refine/expectedAttempts").decimalValue())
+        .isGreaterThan(
+            mapper
+                .readTree(detail("EQUIPMENT_REFINE:0:21", "스펙업화").body())
+                .at("/data/refine/expectedAttempts")
+                .decimalValue());
     org.mockito.Mockito.reset(simulator);
+  }
+
+  @Test
+  void 숨결_시세가_없으면_숨결_없이_풀지_않고_PENDING이다() throws Exception {
+    // PM 판정 10-25: 예열 중 숨결 시세만 빠지면 숨결 없는 비용이 최적으로 순위에 들어 비교 기준과 달라진다 — PENDING으로 둔다.
+    stubRefineOk();
+    when(auctions.cachedGems()).thenReturn(gemCells(true));
+    search("스펙업화");
+    marketCache.saveRefiningMaterials(
+        new com.loakraken.market.application.RefiningMaterialScan(
+            Instant.parse("2026-10-12T02:00:00Z"),
+            List.of(
+                material(1, "운명의 파괴석", 100, "152"),
+                material(2, "운명의 돌파석", 1, "4"),
+                material(3, "아비도스 융화 재료", 1, "210"),
+                material(4, "운명의 파편 주머니(소)", 1, "87"),
+                material(5, "운명의 파편 주머니(대)", 1, "219"))),
+        java.time.Duration.ofMinutes(5));
+    var candidates =
+        mapper
+            .readTree(get("/api/v1/characters/spec-up?characterName=" + encode("스펙업화")).body())
+            .at("/data/candidates");
+    var refine = find(candidates, "EQUIPMENT_REFINE:0:21");
+    assertThat(refine.at("/cost/status").asText()).isEqualTo("PENDING");
+    assertThat(refine.at("/cost/code").asText()).isEqualTo("PRICE_PENDING");
+    org.mockito.Mockito.reset(simulator);
+  }
+
+  /**
+   * 지금 from에서 to까지 업화 무기 재련 기대 비용: 단계마다 회차별 최적 전략(시도마다 숨결·책 선택 — 이 시세표에는 책 값이 없어 숨결만, 업화 18단계까지 골드
+   * 20% 할인)의 기대 골드 합(비교 기준 B와 같은 방식). 목록은 기대 수량 × 단가를 더해 올림하므로 1골드 안에서 같다.
+   */
+  private long refineExpected(java.util.Map<String, BigDecimal> units, int from, int to) {
+    var track =
+        plans
+            .rules()
+            .track(
+                com.loakraken.refining.domain.RefiningRules.Grade.UPHWA,
+                com.loakraken.refining.domain.RefiningRules.EquipmentType.WEAPON);
+    double total = 0;
+    for (int stage = from + 1; stage <= to; stage++) {
+      var rule = track.stage(stage);
+      total +=
+          com.loakraken.refining.domain.RefiningOptimal.calculate(
+                  rule, stage <= 18 ? 0.8 : 1, units, true, true)
+              .expectedGold();
+    }
+    return (long) Math.ceil(total);
   }
 
   /** 재련 후보만 시뮬레이터가 OK(Δ+12.34)를 내게 한다. 나머지 후보는 실제 계산. 테스트 끝에 reset(simulator). */
   private void stubRefineOk() {
+    stubRefine(true);
+  }
+
+  /** 재련 후보의 전투력 계산 결과만 바꾼다(ok=false면 계산식 확인 중 UNSUPPORTED). */
+  private void stubRefine(boolean okStatus) {
     org.mockito.Mockito.doAnswer(
             invocation -> {
               List<com.loakraken.character.application.CombatPowerSimulationService.Change>
@@ -341,10 +415,14 @@ class SpecUpIntegrationTest {
                       "무기",
                       "+20",
                       "+21",
-                      new BigDecimal("12.34"),
-                      com.loakraken.character.application.CombatPowerSimulationService.Status.OK,
+                      okStatus ? new BigDecimal("12.34") : null,
+                      okStatus
+                          ? com.loakraken.character.application.CombatPowerSimulationService.Status
+                              .OK
+                          : com.loakraken.character.application.CombatPowerSimulationService.Status
+                              .UNSUPPORTED,
                       "재련",
-                      null);
+                      okStatus ? null : "MODEL_UNCONFIRMED");
               return new com.loakraken.character.application.CombatPowerSimulationService.Result(
                   "스펙재련",
                   Instant.now(),
@@ -363,6 +441,30 @@ class SpecUpIntegrationTest {
             org.mockito.ArgumentMatchers.any(
                 com.loakraken.character.application.CharacterResult.class),
             org.mockito.ArgumentMatchers.anyList());
+  }
+
+  @Test
+  void 순위_밖_재련_줄은_목록에_다음_단계_하나만_두고_줄_상세는_모든_단계를_찾는다() throws Exception {
+    // #585: 전투력 계산식 확인 중(UNSUPPORTED)인 재련 줄은 limit 밖에 모두 붙으므로 +1 줄만 둔다. 줄 상세는 정렬과 상관없이 찾는다.
+    stubRefine(false);
+    when(auctions.cachedGems()).thenReturn(gemCells(true));
+    search("스펙업화");
+    for (var sort : List.of("EFFICIENCY", "DELTA")) {
+      var ids = new ArrayList<String>();
+      for (var candidate :
+          mapper
+              .readTree(
+                  get("/api/v1/characters/spec-up?characterName="
+                          + encode("스펙업화")
+                          + "&sort="
+                          + sort)
+                      .body())
+              .at("/data/candidates")) ids.add(candidate.path("id").asText());
+      assertThat(ids).as(sort).contains("EQUIPMENT_REFINE:0:21");
+      assertThat(ids).as(sort).noneMatch(id -> id.matches("EQUIPMENT_REFINE:0:2[2-5]"));
+    }
+    assertThat(detail("EQUIPMENT_REFINE:0:23", "스펙업화").statusCode()).isEqualTo(200);
+    org.mockito.Mockito.reset(simulator);
   }
 
   @Test
@@ -985,7 +1087,7 @@ class SpecUpIntegrationTest {
     var data = mapper.readTree(response.body()).path("data");
     assertThat(data.path("candidate")).isEqualTo(find(list, "EQUIPMENT_REFINE:0:21"));
     assertThat(data.path("combatPowerAfter").decimalValue()).isEqualByComparingTo("3012.34");
-    assertThat(data.at("/refine/breath").asText()).isIn("NONE", "MAX");
+    assertThat(data.at("/refine/breath").asText()).isIn("NONE", "OPTIMAL");
     assertThat(data.at("/refine/expectedAttempts").decimalValue()).isPositive();
     assertThat(data.at("/refine/firstAttemptSuccessRateBp").asInt()).isPositive();
     var sum = data.path("goldFee").decimalValue();

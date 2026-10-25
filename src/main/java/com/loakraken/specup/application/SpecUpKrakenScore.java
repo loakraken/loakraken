@@ -7,6 +7,7 @@ import com.loakraken.character.domain.CharacterPosition;
 import com.loakraken.character.domain.CombatPowerRefineModel;
 import com.loakraken.character.domain.GemBaseAttack;
 import com.loakraken.character.domain.KrakenScoreEngine;
+import com.loakraken.character.domain.KrakenScoreSupport;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.ArrayList;
@@ -56,10 +57,14 @@ public class SpecUpKrakenScore {
 
   /**
    * 캐릭터 하나의 계산 기준. unavailable이 있으면 모든 후보의 Δ점수는 null이고 KRAKEN 정렬은 효율 순으로 되돌린다. unavailable 값:
-   * DISABLED(점수 기능 꺼짐), INPUT_PENDING(점수 입력이 없는 이전 조회), ROLE_UNKNOWN, SUPPORTER_PENDING(서포터는 준비 중),
-   * SCORE_UNAVAILABLE(지금 점수를 낼 수 없음).
+   * DISABLED(점수 기능 꺼짐), INPUT_PENDING(점수 입력이 없는 이전 조회), ROLE_UNKNOWN, SCORE_UNAVAILABLE(지금 점수를 낼 수
+   * 없음). support = 서포터 점수식(서폿 스펙 포인트)으로 계산했는가 — 비교 기준 B도 역할에 따라 점수 키만 바꾸고 후보는 같게 만든다.
    */
-  public record Context(JsonNode input, double before, String unavailable) {
+  public record Context(JsonNode input, double before, String unavailable, boolean support) {
+    Context(JsonNode input, double before, String unavailable) {
+      this(input, before, unavailable, false);
+    }
+
     boolean available() {
       return unavailable == null;
     }
@@ -78,15 +83,15 @@ public class SpecUpKrakenScore {
     var position =
         CharacterPosition.judge(details.profile().className(), details.loadout().arkPassive());
     if (position.role() == null) return new Context(null, Double.NaN, "ROLE_UNKNOWN");
-    if (position.role() == CharacterPosition.Role.SUPPORT)
-      return new Context(null, Double.NaN, "SUPPORTER_PENDING");
+    // 서포터는 서포터 점수식(점수 API와 같은 KrakenScoreSupport.score). 후보·바꾸는 필드는 딜러와 같다(PM 총괄 10-25: 서포터 점수 기준
+    // 줄).
+    boolean support = position.role() == CharacterPosition.Role.SUPPORT;
     // 점수 서비스와 같은 조건: 무기·아크 패시브가 비면 엔진 기본값으로 0점이 나온다.
-    if (!input.path("armory").path("equipment").path("weapon").path("stat").isNumber()
-        || !input.path("arkPassive").path("evolution").isObject())
-      return new Context(null, Double.NaN, "SCORE_UNAVAILABLE");
-    double before = score(input);
-    if (!usable(before)) return new Context(null, Double.NaN, "SCORE_UNAVAILABLE");
-    return new Context(input, before, null);
+    if (!com.loakraken.character.application.KrakenScoreService.scorable(input))
+      return new Context(null, Double.NaN, "SCORE_UNAVAILABLE", support);
+    double before = score(input, support);
+    if (!usable(before)) return new Context(null, Double.NaN, "SCORE_UNAVAILABLE", support);
+    return new Context(input, before, null, support);
   }
 
   /**
@@ -133,13 +138,15 @@ public class SpecUpKrakenScore {
 
   private Double rescore(Context context, ObjectNode copy, boolean applied) {
     if (!applied) return null;
-    double after = score(copy);
+    double after = score(copy, context.support());
     return usable(after) ? after - context.before() : null;
   }
 
-  private double score(JsonNode input) {
+  private double score(JsonNode input, boolean support) {
     try {
-      return KrakenScoreEngine.dealerScore(input, tables);
+      return support
+          ? KrakenScoreSupport.score(input, tables)
+          : KrakenScoreEngine.dealerScore(input, tables);
     } catch (RuntimeException exception) {
       return Double.NaN;
     }
@@ -149,8 +156,17 @@ public class SpecUpKrakenScore {
     return Double.isFinite(value) && value > 0;
   }
 
+  /** 점수·Δ 표시: 비교 기준 B 원본의 ▲Δ toFixed(2)와 같이 배정밀도 정확값에서 반올림(1.005 → 1.00, 이진값이 1.00499…). */
   static BigDecimal round2(double value) {
     return new BigDecimal(value).setScale(2, RoundingMode.HALF_UP);
+  }
+
+  /**
+   * 효율 표시: 비교 기준 B 원본의 효율은 Intl.NumberFormat(소수 둘째 자리)이라 가장 짧은 십진 표기에서 반올림한다(1.005 → 1.01). Δ
+   * 표시(toFixed)와 규칙이 다르다.
+   */
+  static BigDecimal roundEfficiency(double value) {
+    return BigDecimal.valueOf(value).setScale(2, RoundingMode.HALF_UP);
   }
 
   /**

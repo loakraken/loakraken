@@ -2,6 +2,7 @@ package com.loakraken.receipt.domain;
 
 import com.loakraken.character.domain.CharacterLoadout;
 import com.loakraken.refining.domain.GrowthCosts;
+import com.loakraken.refining.domain.OptimalStageCache;
 import com.loakraken.refining.domain.RefiningOptimal;
 import com.loakraken.refining.domain.RefiningPlan;
 import com.loakraken.refining.domain.RefiningRules;

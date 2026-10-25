@@ -67,7 +67,11 @@ public record CritSpeedResponse(
                 .toList(),
             crit.critStatPerPercent(),
             new CritSpeedCritDamageResponse(
-                crit.damage().base(), crit.damage().observed(), crit.damage().total())),
+                crit.damage().base(),
+                crit.damage().observed(),
+                crit.damage().total(),
+                crit.damage().assumed()),
+            crit.unavailableReason()),
         new CritSpeedSpeedResponse(
             speed.swiftnessStat(),
             speed.cap(),
@@ -97,7 +101,8 @@ public record CritSpeedResponse(
                             row.supersonicEvolutionDamage(),
                             row.current(),
                             row.optimal()))
-                .toList()),
+                .toList(),
+            speed.unavailableReason()),
         result.limitations(),
         result.skills().stream().map(CritSpeedSkillResponse::from).toList(),
         result.toggles().stream().map(CritSpeedToggleResponse::from).toList());
@@ -207,12 +212,18 @@ public record CritSpeedResponse(
           List<CritSpeedTargetResponse> targets,
       @Schema(description = "치명타 적중률 1%당 치명 스탯(27.944)") BigDecimal critStatPerPercent,
       @Schema(description = "치명타 피해(%). 기본 200 + 관측 출처(axis=CRIT_DAMAGE) 합. 스킬 한정 문구 제외")
-          CritSpeedCritDamageResponse damage) {}
+          CritSpeedCritDamageResponse damage,
+      @Schema(
+              description =
+                  "치명 스탯(수치·Tooltip)을 읽지 못해 치명타 적중률을 계산하지 않았을 때 이유. 있으면 적중률·목표·스킬별 치명타 적중률은 스탯이 빠진 값이라 표시하지 않는다. 계산했으면 null")
+          @NullableResponse
+          String unavailableReason) {}
 
   public record CritSpeedCritDamageResponse(
       @Schema(description = "기본 치명타 피해(200)") BigDecimal base,
       @Schema(description = "관측 출처 합") BigDecimal observed,
-      @Schema(description = "base + observed") BigDecimal total) {}
+      @Schema(description = "base + observed + assumed(켠 토글 등 가정 출처)") BigDecimal total,
+      @Schema(description = "가정 출처 합(켠 치명타 피해 토글 등, 없으면 0)") BigDecimal assumed) {}
 
   public record CritSpeedBluntThornResponse(
       @Schema(description = "EQUIPPED_NODE: 장착 노드 공식 문구, REFERENCE_LEVEL_2: 미장착이라 공식 Lv.2 문구 기준")
@@ -242,7 +253,12 @@ public record CritSpeedResponse(
       CritSpeedSupersonicResponse supersonic,
       @Schema(description = "공격·이동 속도 1%당 신속 스탯(58.22)") BigDecimal swiftnessPerPercent,
       @Schema(description = "신속 스탯별 공이속 표. 0부터 200 간격, 현재값·최적값 행 포함(최대 4000)")
-          List<CritSpeedSwiftnessRowResponse> swiftnessTable) {}
+          List<CritSpeedSwiftnessRowResponse> swiftnessTable,
+      @Schema(
+              description =
+                  "신속 스탯(수치·Tooltip)을 읽지 못해 공격·이동 속도를 계산하지 않았을 때 이유. 있으면 속도·음속 돌파 값은 스탯이 빠진 값이라 표시하지 않는다. 계산했으면 null")
+          @NullableResponse
+          String unavailableReason) {}
 
   public record CritSpeedSwiftnessRowResponse(
       int swiftness,

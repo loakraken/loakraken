@@ -209,11 +209,19 @@ class CardCollectionIntegrationTest {
     awaitCards(DEALER, 6);
     awaitCards(ALT, 3);
     jdbc.sql(
+            "UPDATE characters SET position = 'SUPPORT' WHERE server_name = :s AND character_name = :n")
+        .param("s", SERVER)
+        .param("n", ALT)
+        .update();
+    assertThat(altPosition().asText()).isEqualTo("SUPPORT");
+    jdbc.sql(
             "INSERT INTO public_exclusion (character_name, server_name, reason_code) VALUES (:n, :s, 'PRIVACY_STOP')")
         .param("n", ALT)
         .param("s", SERVER)
         .update();
     try {
+      // 그 캐릭터 자신의 수집 화면에서도 저장된 역할은 기록이 없는 캐릭터와 같은 null이다.
+      assertThat(altPosition().isNull()).isTrue();
       var data =
           mapper
               .readTree(
@@ -225,6 +233,12 @@ class CardCollectionIntegrationTest {
     } finally {
       jdbc.sql("DELETE FROM public_exclusion WHERE character_name = :n").param("n", ALT).update();
     }
+  }
+
+  private tools.jackson.databind.JsonNode altPosition() throws Exception {
+    var response = get("/api/v1/characters/card-collection?characterName=" + encode(ALT));
+    assertThat(response.statusCode()).as(response.body()).isEqualTo(200);
+    return mapper.readTree(response.body()).at("/data/position");
   }
 
   @Test

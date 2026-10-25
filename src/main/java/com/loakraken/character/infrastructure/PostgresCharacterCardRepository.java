@@ -310,10 +310,12 @@ class PostgresCharacterCardRepository implements CharacterCardPort {
     return result;
   }
 
+  /** 저장된 역할. 제외 목록 캐릭터면 저장된 값이 있어도 null(기록이 없는 캐릭터와 같음). */
   @Override
   public String position(String serverName, String characterName) {
     return jdbc.sql(
-            "SELECT position FROM characters WHERE server_name = :server AND character_name = :name")
+            "SELECT c.position FROM characters c WHERE c.server_name = :server AND c.character_name = :name"
+                + NOT_EXCLUDED)
         .param("server", serverName)
         .param("name", characterName)
         .query(String.class)

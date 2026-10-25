@@ -19,6 +19,14 @@ import org.springframework.transaction.TransactionException;
  * </ul>
  *
  * HIDE에서 목록을 확인하지 못하면 응답을 내지 않는다(503).
+ *
+ * <p><b>HIDE는 아직 켜지 않는다(운영 기본 ALLOW).</b> 다음 두 곳이 HIDE를 따르지 않아, 켜기 전에 먼저 고쳐야 한다.
+ *
+ * <ul>
+ *   <li>원정대 포함 검색(includeSiblings=true): 찾은 캐릭터만 확인하고, 응답 안의 원정대 목록은 걸러지지 않는다(캐시 적중 포함).
+ *   <li>캐시를 바로 읽는 조회(아이템 툴팁, 전투력 시뮬레이션·기여도, 스펙업, 빌드 캐릭터, 전투정보실 페이지): requireVisible을 거치지 않아, 목록에 들기
+ *       전에 캐시된 캐릭터는 그대로 답한다.
+ * </ul>
  */
 @Component
 public class StopListLookups {

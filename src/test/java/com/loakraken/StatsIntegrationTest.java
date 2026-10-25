@@ -48,7 +48,7 @@ class StatsIntegrationTest {
   void 정리() {
     var keys = redis.keys("stats:v1:*");
     if (keys != null && !keys.isEmpty()) redis.delete(keys);
-    jdbc.sql("DELETE FROM characters WHERE server_name = :s").param("s", SERVER).update();
+    jdbc.sql("DELETE FROM characters WHERE server_name LIKE :s").param("s", SERVER + "%").update();
   }
 
   /**
@@ -242,6 +242,121 @@ class StatsIntegrationTest {
     assertThat(server.at("/combatPower/p50").decimalValue())
         .isEqualByComparingTo(server.path("combatPowerMedian").decimalValue());
     assertThat(server.at("/combatPower/p90").isNull()).isFalse();
+  }
+
+  @Test
+  void 상위_N퍼센트_기준값은_표본_30부터이고_동률이_경계에_걸쳐도_내_위치와_맞으며_서버_행은_빈_역할과_작은_서버도_맞다() throws Exception {
+    // 30명 중 29명: 전투력 1위 6000, 2~4위 동률 5000, 5위부터 4000 - 10×i(서로 다름). 역할은 모두 미판정, 아이템 레벨 1700 + i.
+    for (int i = 0; i < 29; i++) 경계캐(i);
+    var small = data("/api/v1/stats/distribution?metric=COMBAT_POWER&server=" + encode(SERVER));
+    assertThat(small.path("topPercentCutoffs").isNull()).isTrue();
+    var smallRow = data("/api/v1/stats/servers?server=" + encode(SERVER)).at("/rows/0");
+    assertThat(smallRow.path("sampleStatus").asText()).isNotEqualTo("READY");
+    assertThat(smallRow.path("combatPower").isNull()).isTrue();
+    assertThat(smallRow.path("itemLevelMean").decimalValue()).isEqualByComparingTo("1714");
+
+    // 30번째가 들어오면(표본 READY) 기준값이 생긴다. 캐시는 비운다.
+    경계캐(29);
+    var keys = redis.keys("stats:v1:*");
+    if (keys != null && !keys.isEmpty()) redis.delete(keys);
+    var cutoffs =
+        data("/api/v1/stats/distribution?metric=COMBAT_POWER&server=" + encode(SERVER))
+            .path("topPercentCutoffs");
+    // K = ⌊N×30/100⌋: 1%는 0이라 빠지고 5·10·25·50·75% = 1·3·7·15·22위. 10%의 3위는 2~4위 동률 안이다.
+    String[][] expected = {
+      {"5", "1", "6000"},
+      {"10", "3", "5000"},
+      {"25", "7", "3940"},
+      {"50", "15", "3860"},
+      {"75", "22", "3790"}
+    };
+    assertThat(cutoffs.size()).isEqualTo(expected.length);
+    for (int i = 0; i < expected.length; i++) {
+      assertThat(cutoffs.get(i).path("topPercent").asInt())
+          .isEqualTo(Integer.parseInt(expected[i][0]));
+      assertThat(cutoffs.get(i).path("rank").asLong()).isEqualTo(Long.parseLong(expected[i][1]));
+      assertThat(cutoffs.get(i).path("value").decimalValue()).isEqualByComparingTo(expected[i][2]);
+    }
+    // 동률 값 5000은 큰 값이 하나라 2위(6.67%)로 10% 이내, 바로 아래 4999.99는 큰 값이 넷이라 5위(16.67%)로 10% 밖이다.
+    assertThat(percentileOf("5000")).isLessThanOrEqualTo(new BigDecimal("10"));
+    assertThat(percentileOf("4999.99")).isGreaterThan(new BigDecimal("10"));
+
+    // 서버 행: 역할이 모두 미판정이면 딜러·서포터 0, 미판정 30. 분위수는 READY라 있다.
+    var row = data("/api/v1/stats/servers?server=" + encode(SERVER)).at("/rows/0");
+    assertThat(row.path("sampleStatus").asText()).isEqualTo("READY");
+    assertThat(row.path("dealers").asLong()).isZero();
+    assertThat(row.path("supports").asLong()).isZero();
+    assertThat(row.path("unknownRole").asLong()).isEqualTo(30);
+    assertThat(row.path("itemLevelMean").decimalValue()).isEqualByComparingTo("1714.5");
+    assertThat(row.at("/combatPower/p50").isNull()).isFalse();
+
+    // 한 명뿐인 서버: 평균·역할 수는 주고 분위수는 null.
+    String single = SERVER + "한명";
+    insert(
+        single,
+        "통계한명캐",
+        MAIN_CLASS,
+        new BigDecimal("1690"),
+        new BigDecimal("3000"),
+        "DEALER",
+        null,
+        null,
+        now.minus(1, ChronoUnit.DAYS));
+    var singleRows = data("/api/v1/stats/servers?server=" + encode(single)).path("rows");
+    assertThat(singleRows.size()).isEqualTo(1);
+    assertThat(singleRows.at("/0/dealers").asLong()).isEqualTo(1);
+    assertThat(singleRows.at("/0/supports").asLong()).isZero();
+    assertThat(singleRows.at("/0/unknownRole").asLong()).isZero();
+    assertThat(singleRows.at("/0/itemLevelMean").decimalValue()).isEqualByComparingTo("1690");
+    assertThat(singleRows.at("/0/combatPower").isNull()).isTrue();
+    assertThat(singleRows.at("/0/sampleStatus").asText()).isNotEqualTo("READY");
+
+    // 모집단 밖(40일 전) 캐릭터만 있는 서버도 아는 캐릭터 수를 보여 주는 빈 행이 있다: 표본 0, 역할 수 0, 평균·분위수 null.
+    String stale = SERVER + "오래됨";
+    insert(
+        stale,
+        "통계오래됨캐",
+        MAIN_CLASS,
+        new BigDecimal("1690"),
+        new BigDecimal("3000"),
+        "DEALER",
+        null,
+        null,
+        now.minus(40, ChronoUnit.DAYS));
+    var staleRows = data("/api/v1/stats/servers?server=" + encode(stale)).path("rows");
+    assertThat(staleRows.size()).isEqualTo(1);
+    var empty = staleRows.get(0);
+    assertThat(empty.path("count").asLong()).isZero();
+    assertThat(empty.path("knownCharacters").asLong()).isEqualTo(1);
+    assertThat(empty.path("share").isNull()).isTrue();
+    assertThat(empty.path("dealers").asLong()).isZero();
+    assertThat(empty.path("supports").asLong()).isZero();
+    assertThat(empty.path("unknownRole").asLong()).isZero();
+    assertThat(empty.path("itemLevelMean").isNull()).isTrue();
+    assertThat(empty.path("combatPower").isNull()).isTrue();
+    assertThat(empty.path("sampleStatus").asText()).isNotEqualTo("READY");
+  }
+
+  private void 경계캐(int i) {
+    var combatPower = i == 0 ? 6000 : i <= 3 ? 5000 : 4000 - 10 * i;
+    insert(
+        "통계경계캐" + i,
+        MAIN_CLASS,
+        new BigDecimal(1700 + i),
+        new BigDecimal(combatPower),
+        null,
+        null,
+        null,
+        now.minus(1, ChronoUnit.DAYS));
+  }
+
+  private BigDecimal percentileOf(String value) throws Exception {
+    return data("/api/v1/stats/distribution?metric=COMBAT_POWER&percentileOf="
+            + value
+            + "&server="
+            + encode(SERVER))
+        .at("/percentileOf/topPercent")
+        .decimalValue();
   }
 
   @Test
@@ -854,6 +969,19 @@ class StatsIntegrationTest {
       BigDecimal gem,
       UUID roster,
       Instant refreshed) {
+    insert(SERVER, name, className, itemLevel, combatPower, position, gem, roster, refreshed);
+  }
+
+  private void insert(
+      String server,
+      String name,
+      String className,
+      BigDecimal itemLevel,
+      BigDecimal combatPower,
+      String position,
+      BigDecimal gem,
+      UUID roster,
+      Instant refreshed) {
     jdbc.sql(
             """
         INSERT INTO characters (character_id, character_name, server_name, class_name, item_level,
@@ -862,7 +990,7 @@ class StatsIntegrationTest {
         """)
         .param("id", UUID.randomUUID())
         .param("name", name)
-        .param("server", SERVER)
+        .param("server", server)
         .param("className", className)
         .param("itemLevel", itemLevel)
         .param("combatPower", combatPower)

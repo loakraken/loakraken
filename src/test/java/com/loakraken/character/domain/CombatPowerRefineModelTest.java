@@ -127,6 +127,22 @@ class CombatPowerRefineModelTest {
     assertThat(core(9, "고대").flat()).isZero();
     assertThat(core(17, "전설").reason()).contains("전설");
     assertThat(core(null, "고대").reason()).isNotNull();
+    // 이름을 읽지 못한 코어는 무기 코어인지 몰라 0으로 두지 않는다(코드 리뷰 10-25 P2).
+    var unnamed =
+        CombatPowerRefineModel.weaponCore(
+            new CharacterLoadout(
+                List.of(),
+                null,
+                null,
+                null,
+                null,
+                new CharacterLoadout.ArkGrid(
+                    List.of(new CharacterLoadout.GridSlot(0, null, null, 17, "고대", List.of())),
+                    List.of()),
+                List.of(),
+                List.of(),
+                List.of()));
+    assertThat(unnamed.reason()).contains("코어 이름");
   }
 
   private static CombatPowerRefineModel.WeaponCore core(Integer point, String grade) {

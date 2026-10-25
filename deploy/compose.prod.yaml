@@ -188,6 +188,8 @@ services:
       RANKING_TITLES_ENABLED: ${RANKING_TITLES_ENABLED:-false}
       # 나머지 기능 스위치(오픈 준비 A3). 기본값은 앱 기본값과 같다 — 넘기기만 하고 동작은 바꾸지 않는다.
       SPEC_UP_ENABLED: ${SPEC_UP_ENABLED:-false}
+      # 스펙업 완갑 재련 줄. 기본 켬, 끄면 목록·줄 상세에서 뺀다.
+      SPEC_UP_ARM_GUARD_ENABLED: ${SPEC_UP_ARM_GUARD_ENABLED:-true}
       FEATURE_AUCTION_SEARCH: ${FEATURE_AUCTION_SEARCH:-false}
       MARKET_GEM_FILTER_ENABLED: ${MARKET_GEM_FILTER_ENABLED:-true}
       MARKET_GEM_FILTER_QUOTA: ${MARKET_GEM_FILTER_QUOTA:-10}

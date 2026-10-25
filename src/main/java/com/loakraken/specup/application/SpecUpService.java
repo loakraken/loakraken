@@ -55,6 +55,12 @@ public class SpecUpService {
   private final boolean polishPriceFill;
   private final boolean enabled;
 
+  /**
+   * 팔 보호구(완갑) 재련 줄을 낼지(spec-up.arm-guard.enabled, 기본 켬). 끄면 목록·줄 상세 모두 완갑 줄이 없다(되돌리기 없이 숨기는 스위치,
+   * PM-프론트 10-25). 요청마다 설정을 읽어, 이미 채워진 캐시(캐릭터·시세·목표 경로·회차별 최적)가 있어도 꺼진 뒤 첫 요청부터 빠진다.
+   */
+  private final org.springframework.core.env.Environment environment;
+
   /** 빈 칸 후보 레벨: 기본 공격력 %가 확인된 6~10레벨만(1~5레벨은 계수표에 근거가 없어 계산하지 않는다). */
   static final int EMPTY_SLOT_MIN_LEVEL = 6;
 
@@ -71,7 +77,8 @@ public class SpecUpService {
       com.loakraken.refining.domain.VambraceRules vambrace,
       @Value("${spec-up.enabled:false}") boolean enabled,
       // 연마 시세 칸을 요청에서 채우는가(PM 총괄 10-25: 기본 꺼짐 — 꺼져 있으면 캐시된 칸만 쓰고 없으면 비용 미확정).
-      @Value("${spec-up.polish-price-fill.enabled:false}") boolean polishPriceFill) {
+      @Value("${spec-up.polish-price-fill.enabled:false}") boolean polishPriceFill,
+      org.springframework.core.env.Environment environment) {
     this.simulator = simulator;
     this.auctions = auctions;
     this.books = books;
@@ -84,6 +91,11 @@ public class SpecUpService {
     this.vambrace = vambrace;
     this.polishPriceFill = polishPriceFill;
     this.enabled = enabled;
+    this.environment = environment;
+  }
+
+  boolean armGuardEnabled() {
+    return environment.getProperty("spec-up.arm-guard.enabled", Boolean.class, true);
   }
 
   /** KRAKEN: Δ크라켄 점수 ÷ 비용(비교 기준 B 스펙업 추천과 같은 순서). 점수를 낼 수 없으면 EFFICIENCY로 되돌린다. */
@@ -233,7 +245,7 @@ public class SpecUpService {
     quality(loadout, planned);
     engravings(loadout, books::price, books::icon, pricesAt, planned);
     refines(loadout, materials.cached(), pricesAt, planned);
-    armGuard(loadout, materials.cached(), pricesAt, planned);
+    if (armGuardEnabled()) armGuard(loadout, materials.cached(), pricesAt, planned);
     var krakenContext = kraken.context(snapshot);
     // 줄 상세(allRefineStages)는 목록이 이미 채운 연마 시세 칸만 쓴다 — 다시 만들기(최대 두 번)마다 채우기 몫을 새로 쓰지 않게(코드 리뷰 10-25).
     others(loadout, planned, krakenContext, pricesAt, polishPriceFill && !allRefineStages);

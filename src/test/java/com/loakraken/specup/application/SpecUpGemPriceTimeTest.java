@@ -10,7 +10,8 @@ import org.junit.jupiter.api.Test;
 
 /** 보석 비용은 쓴 시세의 관측 시각과, 이전 시세(마지막 값)를 썼는지를 함께 낸다(PM 총괄 10-25). */
 class SpecUpGemPriceTimeTest {
-  private static MarketAuctionService.GemCell cell(int level, long price, Instant at, boolean stale) {
+  private static MarketAuctionService.GemCell cell(
+      int level, long price, Instant at, boolean stale) {
     return new MarketAuctionService.GemCell(
         "겁화",
         level,
@@ -25,7 +26,8 @@ class SpecUpGemPriceTimeTest {
   void 지금_시세면_stale_false이고_관측_시각은_목표와_지금_가운데_이른_쪽이다() {
     var old = Instant.parse("2026-10-25T09:00:00Z");
     var fresh = Instant.parse("2026-10-25T09:02:00Z");
-    var prices = Map.of("겁화:8", cell(8, 900_000, fresh, false), "겁화:7", cell(7, 300_000, old, false));
+    var prices =
+        Map.of("겁화:8", cell(8, 900_000, fresh, false), "겁화:7", cell(7, 300_000, old, false));
     var cost = SpecUpService.gemCost(prices, new Instant[1], "겁화", 7, 8, false);
     assertThat(cost.code()).isEqualTo("GEM_UPGRADE");
     assertThat(cost.amount()).isEqualTo(600_000L);

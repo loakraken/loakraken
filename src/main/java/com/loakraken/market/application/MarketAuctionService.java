@@ -274,14 +274,15 @@ public class MarketAuctionService {
   }
 
   /** 보석 시세 표 칸 수(겁화·작열 × 1~10레벨). */
-  public static final int GEM_CELLS = AuctionCatalog.GEM_KINDS.size() * AuctionCatalog.MAX_GEM_LEVEL;
+  public static final int GEM_CELLS =
+      AuctionCatalog.GEM_KINDS.size() * AuctionCatalog.MAX_GEM_LEVEL;
 
   /** 예열 한 번의 결과. outcome: refreshed·capped·failed·idle(지표 태그). */
   public record GemWarm(int refreshed, String outcome) {}
 
   /**
-   * 보석 시세 표 칸 예열: 마지막 관측이 오래된 칸(없는 칸이 먼저)부터 count칸을 공식 경매장에서 다시 받아 칸(3분)·마지막 값·일별 기록에 남긴다(표 채우기와
-   * 같은 저장 경로). allow는 예열 전체 분당 상한, call은 예열 게이트로 공식 호출을 감싼다. 한도·실패면 거기서 멈춘다.
+   * 보석 시세 표 칸 예열: 마지막 관측이 오래된 칸(없는 칸이 먼저)부터 count칸을 공식 경매장에서 다시 받아 칸(3분)·마지막 값·일별 기록에 남긴다(표 채우기와 같은
+   * 저장 경로). allow는 예열 전체 분당 상한, call은 예열 게이트로 공식 호출을 감싼다. 한도·실패면 거기서 멈춘다.
    */
   public GemWarm warmGems(
       int count,

@@ -27,8 +27,8 @@ public record SpecUpCost(
   }
 
   /**
-   * 보석 비용에 쓴 시세의 관측 시각(목표·지금 가운데 이른 쪽)과 마지막 관측 값을 썼는지(stale — 3분 칸이 없어 이전 시세를 씀, 지금 시세처럼 보이면 안
-   * 된다, PM 총괄 10-25).
+   * 보석 비용에 쓴 시세의 관측 시각(목표·지금 가운데 이른 쪽)과 마지막 관측 값을 썼는지(stale — 3분 칸이 없어 이전 시세를 씀, 지금 시세처럼 보이면 안 된다,
+   * PM 총괄 10-25).
    */
   public SpecUpCost withPrice(java.time.Instant observedAt, boolean stale) {
     return new SpecUpCost(unit, amount, status, code, basis, exact, observedAt, stale);

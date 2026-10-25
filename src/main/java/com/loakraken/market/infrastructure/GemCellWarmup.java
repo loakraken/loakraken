@@ -12,8 +12,8 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 /**
- * 보석 시세 표 칸 예열(스펙업 보석 비용, PM 총괄 10-25). 1분마다 오래된 칸부터 몇 칸을 공식 경매장에서 다시 받는다(칸 3분 캐시 + 마지막 값 저장은 표와
- * 같은 경로). 시세 예열과 같은 게이트·예열 전체 분당 상한·리더 잠금을 쓴다.
+ * 보석 시세 표 칸 예열(스펙업 보석 비용, PM 총괄 10-25). 1분마다 오래된 칸부터 몇 칸을 공식 경매장에서 다시 받는다(칸 3분 캐시 + 마지막 값 저장은 표와 같은
+ * 경로). 시세 예열과 같은 게이트·예열 전체 분당 상한·리더 잠금을 쓴다.
  */
 @Component
 @ConditionalOnProperty(prefix = "market.warmup", name = "enabled", havingValue = "true")
@@ -21,6 +21,7 @@ class GemCellWarmup {
   private final MarketAuctionService auctions;
   private final MarketHistoryWarmup warmup;
   private final GemWarmupProperties properties;
+  private final MarketWarmupProperties warmupProperties;
   private final LostArkProperties lostArk;
   private final LostArkRequestGate gate;
   private final LeaderLease lease;
@@ -32,6 +33,7 @@ class GemCellWarmup {
       MarketAuctionService auctions,
       MarketHistoryWarmup warmup,
       GemWarmupProperties properties,
+      MarketWarmupProperties warmupProperties,
       LostArkProperties lostArk,
       LostArkRequestGate gate,
       LeaderLease lease,
@@ -40,6 +42,7 @@ class GemCellWarmup {
     this.auctions = auctions;
     this.warmup = warmup;
     this.properties = properties;
+    this.warmupProperties = warmupProperties;
     this.lostArk = lostArk;
     this.gate = gate;
     this.lease = lease;
@@ -60,7 +63,8 @@ class GemCellWarmup {
 
   void warmGemCells() {
     if (!properties.enabled() || lostArk.apiKey().isBlank()) return;
-    if (!lease.hold(MarketHistoryWarmup.LEASE, java.time.Duration.ofMinutes(2))) return;
+    // 다른 예열과 같은 임대·같은 길이로 잡는다(짧게 잡아 다른 예열의 임대를 줄이지 않게).
+    if (!lease.hold(MarketHistoryWarmup.LEASE, warmupProperties.interval().plusMinutes(1))) return;
     int count = properties.cellsPerMinute(MarketAuctionService.GEM_CELLS);
     var result =
         auctions.warmGems(

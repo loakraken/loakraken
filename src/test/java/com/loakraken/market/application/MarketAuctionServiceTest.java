@@ -399,10 +399,14 @@ class MarketAuctionServiceTest {
   @Test
   void 보석_칸_예열은_오래된_칸부터_정한_칸_수만_받고_한도에서_멈춘다() {
     var calls = new java.util.concurrent.atomic.AtomicInteger();
-    var first = service.warmGems(2, () -> true, search -> {
-      calls.incrementAndGet();
-      return search.get();
-    });
+    var first =
+        service.warmGems(
+            2,
+            () -> true,
+            search -> {
+              calls.incrementAndGet();
+              return search.get();
+            });
     assertThat(first.refreshed()).isEqualTo(2);
     assertThat(first.outcome()).isEqualTo("refreshed");
     assertThat(port.last).hasSize(2);

@@ -434,8 +434,7 @@ public class SpecUpController {
           String status,
       @Schema(description = "비용 근거 코드(문자열, 값이 늘 수 있음)", example = "GEM_UPGRADE") String code,
       @Schema(description = "화면용 비용 근거 문장(같은 코드는 같은 문장)") String basis,
-      @Schema(description = "비용에 쓴 시세 관측 시각(보석 비용만, 목표·지금 가운데 이른 쪽). 그 밖은 null")
-          @NullableResponse
+      @Schema(description = "비용에 쓴 시세 관측 시각(보석 비용만, 목표·지금 가운데 이른 쪽). 그 밖은 null") @NullableResponse
           java.time.Instant priceObservedAt,
       @Schema(
               description =

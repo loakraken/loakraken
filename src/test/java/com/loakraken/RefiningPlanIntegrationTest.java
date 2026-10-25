@@ -41,7 +41,7 @@ class RefiningPlanIntegrationTest {
     SiteNames.assertAbsent(response.body());
     var json = mapper.readTree(response.body());
     assertThat(json.path("code").asText()).isEqualTo("REFINING_PLAN_SUCCESS");
-    assertThat(json.at("/data/ruleVersion").asText()).isEqualTo("t4-refining-v3");
+    assertThat(json.at("/data/ruleVersion").asText()).isEqualTo("t4-refining-v4");
     assertThat(json.at("/data/source/license").asText()).startsWith("MIT");
     // 책은 생략하면 켬(#279, PM 총괄 10-11 결정), false를 명시하면 끔.
     var omitted =

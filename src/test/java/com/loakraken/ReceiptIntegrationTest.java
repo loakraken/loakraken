@@ -106,7 +106,7 @@ class ReceiptIntegrationTest {
     assertThat(first.statusCode()).as(first.body()).isEqualTo(200);
     var data = mapper.readTree(first.body()).path("data");
     assertThat(data.path("ruleVersion").asText()).isEqualTo("receipt-v2");
-    assertThat(data.path("refiningRuleVersion").asText()).isEqualTo("t4-refining-v3");
+    assertThat(data.path("refiningRuleVersion").asText()).isEqualTo("t4-refining-v4");
     assertThat(data.at("/coverage/rosterCharacters").asInt()).isEqualTo(10);
     assertThat(data.at("/coverage/ready").asInt()).isEqualTo(8);
     assertThat(data.at("/coverage/pending").asInt()).isEqualTo(2);

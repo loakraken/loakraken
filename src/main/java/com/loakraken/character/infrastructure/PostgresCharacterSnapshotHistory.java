@@ -37,7 +37,8 @@ class PostgresCharacterSnapshotHistory implements CharacterSnapshotHistoryPort {
           SELECT s.fetched_at, s.snapshot_sequence
           FROM character_snapshot s JOIN characters c USING (character_id)
           WHERE s.snapshot_id = :cursor AND c.character_name = :name AND c.server_name = :server
-          """)
+          """
+                      + StopListSql.NOT_EXCLUDED)
               .param("cursor", query.cursor())
               .param("name", query.characterName())
               .param("server", query.serverName())
@@ -62,6 +63,7 @@ class PostgresCharacterSnapshotHistory implements CharacterSnapshotHistoryPort {
         FROM character_snapshot s JOIN characters c USING (character_id)
         WHERE c.character_name = :name AND c.server_name = :server
         """
+                    + StopListSql.NOT_EXCLUDED
                     + cursorClause
                     + " ORDER BY s.fetched_at DESC, s.snapshot_sequence DESC LIMIT :size")
             .param("name", query.characterName())

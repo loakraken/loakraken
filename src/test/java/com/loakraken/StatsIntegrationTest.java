@@ -540,6 +540,22 @@ class StatsIntegrationTest {
   }
 
   @Test
+  void 랭킹_행은_저장된_캐릭터_이미지_주소를_그대로_준다() throws Exception {
+    표본();
+    String url = "https://img.lostark.co.kr/armory/test/ranking.png";
+    jdbc.sql(
+            "UPDATE characters SET image_url = :url WHERE server_name = :s AND character_name = '통계캐34'")
+        .param("url", url)
+        .param("s", SERVER)
+        .update();
+    var ranking = data("/api/v1/rankings?size=2&server=" + encode(SERVER));
+    assertThat(ranking.at("/rows/0/characterName").asText()).isEqualTo("통계캐34");
+    assertThat(ranking.at("/rows/0/imageUrl").asText()).isEqualTo(url);
+    // 받은 적이 없으면 null이다.
+    assertThat(ranking.at("/rows/1/imageUrl").isNull()).isTrue();
+  }
+
+  @Test
   void 직업_각인별_통계는_직업_표와_같은_값을_직업_각인으로_나누고_모르는_캐릭터는_미확인_수로_준다() throws Exception {
     표본();
     // MAIN_CLASS 35명 중 3명은 버스트(1명은 옛 요약이 다른 칭호 → 마지막 요약 기준), 1명은 잔재된 기운, 나머지 31명은 요약 없음.

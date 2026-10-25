@@ -1173,11 +1173,13 @@ public class SpecUpService {
                         && !item.detail().polishEffects().isEmpty());
     if (bracelet) planned.add(Planned.line(Kind.BRACELET_EFFECT, "팔찌 효과"));
     var scored = context.available();
-    // 서포터 연마 후보는 비교 기준 B의 역할별 옵션 표(서포터 옵션·등급 사다리)를 확인한 뒤에 만든다 — 그때까지 한 줄 알림.
+    // 서포터 연마 후보는 비교 기준 B의 서포터 옵션 표·등급 사다리로 만든다(딜러와 규칙이 다름).
     var polishRows =
-        scored && !context.support()
-            ? SpecUpScoreCandidates.polish(context.input(), loadout, polishValues)
-            : null;
+        !scored
+            ? null
+            : context.support()
+                ? SpecUpSupportPolish.rows(kraken, context, loadout, polishValues)
+                : SpecUpScoreCandidates.polish(context.input(), loadout, polishValues);
     if (polishRows != null) planned.addAll(polishRows);
     else if (polish) planned.add(Planned.line(Kind.POLISH, "장신구 연마 효과"));
     if (loadout.arkGrid() != null && !loadout.arkGrid().slots().isEmpty())

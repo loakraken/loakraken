@@ -181,7 +181,8 @@ public class CollectibleRankingController {
                                   type ->
                                       new CollectibleTypeResponse(
                                           type.type(), type.point(), type.maxPoint()))
-                              .toList()))
+                              .toList(),
+                          row.imageUrl()))
               .toList());
     }
   }
@@ -200,8 +201,9 @@ public class CollectibleRankingController {
       @Schema(description = "원정대 수집품 Point 합") long point,
       @Schema(description = "원정대 수집품 MaxPoint 합") long maxPoint,
       @Schema(description = "이 원정대 수집품을 마지막으로 관측한 시각") Instant observedAt,
-      @Schema(description = "공식 수집품 종류(공식 순서, 종류가 늘 수 있는 배열)")
-          List<CollectibleTypeResponse> types) {}
+      @Schema(description = "공식 수집품 종류(공식 순서, 종류가 늘 수 있는 배열)") List<CollectibleTypeResponse> types,
+      @NullableResponse @Schema(description = "characterName 캐릭터의 " + StatsResponses.IMAGE_URL)
+          String imageUrl) {}
 
   public record CollectibleTypeResponse(
       @Schema(description = "공식 Type 문자열", example = "모코코 씨앗") String type,

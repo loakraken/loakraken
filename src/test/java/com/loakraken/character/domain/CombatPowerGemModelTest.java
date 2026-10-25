@@ -213,6 +213,27 @@ class CombatPowerGemModelTest {
         .setScale(2, RoundingMode.HALF_UP);
   }
 
+  @Test
+  void 보석_레벨을_읽지_못하면_빈_칸처럼_넘기지_않고_계산하지_않는다() {
+    // 코드 리뷰 10-25: 레벨이 빈 보석을 빈 칸처럼 건너뛰어 그 보석이 빠진 값으로 OK가 나왔다.
+    var base = loadout(6, "0.45", extraLines());
+    var gems = new ArrayList<>(base.gems().items());
+    var first = gems.getFirst();
+    gems.set(
+        0, new CharacterLoadout.Gem(first.slot(), first.name(), first.icon(), null, first.grade()));
+    var broken =
+        new CharacterLoadout(
+            base.equipment(),
+            null,
+            new CharacterLoadout.Gems(gems, base.gems().effects()),
+            null,
+            null,
+            null,
+            List.of());
+    var model = CombatPowerGemModel.of(COEFFICIENTS, broken);
+    assertThat(model.unsupportedReason()).contains("레벨을 읽지 못했습니다");
+  }
+
   private static CharacterLoadout loadout(
       int level, String option, List<CharacterLoadout.Equipment> equipment) {
     var items = new ArrayList<CharacterLoadout.Gem>();

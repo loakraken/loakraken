@@ -176,6 +176,33 @@ class KrakenScoreServiceTest {
     assertThat(empty.score()).isNull();
   }
 
+  @Test
+  void 진화_포인트가_숫자가_아니거나_없으면_틀린_등급_대신_계산하지_않는다() throws IOException {
+    // 코드 리뷰 10-25: 진화 points가 없으면 엔진이 진화 배율을 1로 두어 3977.02 GOLD가 2149.74 BRONZE로 나온다.
+    var service = new KrakenScoreService(TABLE, ENGINE, true, new SimpleMeterRegistry());
+    assertThat(service.score(withInput(fixtureInput("l01"))).status())
+        .isEqualTo(KrakenScoreService.Status.OK);
+    var doc =
+        MAPPER.readTree(
+            new ClassPathResource("kraken-score/l01.json")
+                .getContentAsString(StandardCharsets.UTF_8));
+    // 깨달음·도약 포인트도 같은 조건(코드 리뷰 10-25 P2).
+    for (var tree : new String[] {"진화", "깨달음", "도약"})
+      for (var bad : new String[] {"null", "\"?\"", "remove"}) {
+        var raw = doc.path("raw").deepCopy();
+        for (var point : raw.path("ArkPassive").path("Points"))
+          if (tree.equals(point.path("Name").asString(""))) {
+            var node = (tools.jackson.databind.node.ObjectNode) point;
+            if (bad.equals("remove")) node.remove("Value");
+            else node.set("Value", MAPPER.readTree(bad));
+          }
+        var score = service.score(withInput(KrakenScoreInputMapper.from(raw)));
+        assertThat(score.status()).as(bad).isEqualTo(KrakenScoreService.Status.UNSUPPORTED);
+        assertThat(score.reason()).as(bad).isEqualTo(KrakenScoreService.Reason.SCORE_UNAVAILABLE);
+        assertThat(score.tier()).as(bad).isNull();
+      }
+  }
+
   private static JsonNode fixtureInput(String id) throws IOException {
     var doc =
         MAPPER.readTree(

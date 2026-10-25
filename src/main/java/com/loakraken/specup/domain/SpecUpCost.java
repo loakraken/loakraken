@@ -7,7 +7,35 @@ import java.math.RoundingMode;
  * 후보 비용(#315). unit은 금액 단위(문자열, 지금은 GOLD뿐, 스톤 등 개수 단위가 들어올 수 있음). status: OK(금액 있음), PENDING(시세 칸을
  * 아직 관측하지 못함), UNKNOWN(비용 근거가 없음). 같은 code는 늘 같은 basis 문장이다.
  */
-public record SpecUpCost(String unit, Long amount, String status, String code, String basis) {
+public record SpecUpCost(
+    String unit, Long amount, String status, String code, String basis, Double exact) {
+  /** exact는 반올림 전 금액(카르마·스톤 기대 골드처럼 정수가 아닌 비용). 정수 비용이면 amount와 같다. 효율은 이 값으로 나눈다. */
+  public SpecUpCost(String unit, Long amount, String status, String code, String basis) {
+    this(unit, amount, status, code, basis, amount == null ? null : amount.doubleValue());
+  }
+
+  /** 깨달음 카르마 레벨 기대 골드(반올림 전 값으로 효율 계산). */
+  public static SpecUpCost karma(double gold) {
+    return new SpecUpCost(
+        "GOLD",
+        Math.round(gold),
+        "OK",
+        "KARMA_EXPECTED",
+        "단계마다 성공 확률과 실패 시 장인의 기운(천장)으로 구한 기대 시도 수에 시도당 900골드를 곱해 더한 값입니다.",
+        gold);
+  }
+
+  /** 어빌리티 스톤 목표 조합 기대 골드 = 기대 키트 수(1 ÷ 목표 조합 확률) × 돌 1개 50골드(반올림 전 값으로 효율 계산). */
+  public static SpecUpCost stone(double gold) {
+    return new SpecUpCost(
+        "GOLD",
+        Math.round(gold),
+        "OK",
+        "STONE_EXPECTED_KITS",
+        "목표 조합이 나올 확률로 구한 기대 돌(키트) 수에 돌 1개 50골드를 곱한 값입니다(페온 제외).",
+        gold);
+  }
+
   public static final SpecUpCost PRICE_PENDING =
       new SpecUpCost(
           "GOLD", null, "PENDING", "PRICE_PENDING", "보석 시세를 아직 받지 못했습니다. 잠시 뒤 다시 확인해 주세요.");
@@ -79,15 +107,19 @@ public record SpecUpCost(String unit, Long amount, String status, String code, S
       new SpecUpCost(
           "GOLD", null, "PENDING", "PRICE_PENDING", "재련 재료 시세를 아직 받지 못했습니다. 잠시 뒤 다시 확인해 주세요.");
 
-  /** 일반 재련 +1 기대 비용(L30 후속): 재련 계획의 기대 소모 × 재료 1개 즉시 구매 최저가 + 기대 골드. 숨결 없음과 최대 사용 중 작은 쪽이다. */
+  /**
+   * 일반 재련 기대 비용: 단계마다 회차별 최적 전략(시도마다 숨결·책 사용을 골라 기대 비용 최소, 장인의 기운·실패 횟수는 각 단계 0에서 시작)의 기대 소모 × 재료
+   * 1개 즉시 구매 최저가 + 기대 골드의 합. 업화(티어 4) 1~18단계는 성장 지원으로 재련 돌파 골드 20% 감소(재료·실링은 그대로) — 공식 공지 13307
+   * (2025-12-10)과 게임 가이드 '재련'(2026-07-14 수정, 10-25 확인)의 현재 규칙.
+   */
   public static SpecUpCost refineExpected(long amount) {
     return new SpecUpCost(
         "GOLD",
         amount,
         "OK",
         "REFINE_EXPECTED",
-        "재련 계획의 기대 소모(장인의 기운·실패 횟수 0에서 시작, 숨결을 쓰지 않을 때와 최대로 쓸 때 중 기대 비용이 작은 쪽, 업화 18단계까지 성장 지원 골드 20% 할인)에"
-            + " 재료 1개 즉시 구매 최저가를 곱하고 골드를 더한 값입니다. 장비 성장(경험치) 비용은 넣지 않았습니다.");
+        "단계마다 시도마다 숨결·책 사용을 골라 기대 비용이 가장 작은 방법(장인의 기운·실패 횟수는 각 단계 0에서 시작)의 기대 소모에 재료 1개 즉시 구매 최저가를 곱하고 골드를 더한 값입니다."
+            + " 업화 18단계까지는 성장 지원 20% 적용(재련 골드만). 장비 성장(경험치) 비용은 넣지 않았습니다.");
   }
 
   /**

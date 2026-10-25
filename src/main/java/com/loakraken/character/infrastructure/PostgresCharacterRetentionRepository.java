@@ -16,9 +16,18 @@ class PostgresCharacterRetentionRepository implements CharacterRetentionPort {
     this.jdbc = jdbc;
   }
 
+  /**
+   * 정리 배치는 하위 표까지 함께 지워(ON DELETE CASCADE) 운영 DB 실행 역할의 문장 한도(기본 15초)보다 길 수 있다. 이 트랜잭션 안에서만 앱 한도와
+   * 같은 30초로 둔다.
+   */
+  private void allowBatchStatementTime() {
+    jdbc.sql("SET LOCAL statement_timeout = '30s'").update();
+  }
+
   @Override
   @Transactional(timeout = 30)
   public int deleteUnobservedCharacters(Instant cutoff, int limit) {
+    allowBatchStatementTime();
     return jdbc.sql(
             """
         DELETE FROM characters WHERE character_id IN (
@@ -34,6 +43,7 @@ class PostgresCharacterRetentionRepository implements CharacterRetentionPort {
   @Override
   @Transactional(timeout = 30)
   public int deleteViewsBefore(LocalDate cutoff, int limit) {
+    allowBatchStatementTime();
     return jdbc.sql(
             """
         DELETE FROM character_view_daily WHERE ctid IN (

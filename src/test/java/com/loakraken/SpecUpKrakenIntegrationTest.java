@@ -97,11 +97,13 @@ class SpecUpKrakenIntegrationTest {
     var burst7 = byTarget(candidates, "블레이드 버스트", "7레벨");
     assertThat(burst7.path("deltaKrakenScore").decimalValue()).isEqualByComparingTo("98.81");
     long cost = burst7.at("/cost/amount").asLong();
+    // 10만 골드당은 반올림 전 Δ ÷ 비용 × 10⁵(B와 같은 순서)라 반올림한 ▲로 나눈 값과 0.01 안.
     assertThat(burst7.path("krakenScorePer100kGold").decimalValue())
-        .isEqualByComparingTo(
+        .isCloseTo(
             new BigDecimal("98.81")
                 .multiply(BigDecimal.valueOf(100_000))
-                .divide(BigDecimal.valueOf(cost), 2, java.math.RoundingMode.HALF_UP));
+                .divide(BigDecimal.valueOf(cost), 2, java.math.RoundingMode.HALF_UP),
+            org.assertj.core.data.Offset.offset(new BigDecimal("0.01")));
     assertThat(byTarget(candidates, "블레이드 버스트", "10레벨").path("deltaKrakenScore").decimalValue())
         .isEqualByComparingTo("402.75");
     // 각인 다단계 줄: 기습의 대가 X0 → X1·X4, 비용은 5권 × 올리는 레벨 수.
@@ -130,15 +132,37 @@ class SpecUpKrakenIntegrationTest {
     assertThat(polish.path("to").asText()).isEqualTo("무기 공격력 +1.80%(중) · 공격력 +0.95%(중)");
     assertThat(polish.path("change").isNull()).isTrue();
     assertThat(polish.path("status").asText()).isEqualTo("UNSUPPORTED");
+    // 크라켄 점수로만 비교하는 종류: 오류가 아니라 전투력을 계산하지 않는 종류라는 이유.
+    assertThat(polish.path("reasonCode").asText()).isEqualTo("SCORE_ONLY");
     assertThat(polish.at("/cost/code").asText()).isEqualTo("POLISH_COST_UNCONFIRMED");
     assertThat(polish.path("krakenScorePer100kGold").isNull()).isTrue();
     var stone = find(candidates, "ABILITY_STONE:2:3");
     assertThat(stone.path("deltaKrakenScore").decimalValue()).isEqualByComparingTo("0.91");
     assertThat(stone.path("to").asText()).isEqualTo("97돌 아드레날린 Lv.2 · 원한 Lv.3");
-    assertThat(stone.at("/cost/code").asText()).isEqualTo("STONE_COST_UNCONFIRMED");
+    // B1 비용(비교 기준 B 원본 식): 스톤 = 1 ÷ 목표 조합 확률 키트 × 50골드, 10만 골드당은 B 화면 값과 같다(같은 시각 레퍼런스 표).
+    assertThat(stone.at("/cost/code").asText()).isEqualTo("STONE_EXPECTED_KITS");
+    assertThat(stone.at("/cost/amount").asLong()).isEqualTo(36_765L); // 735.29개 × 50
+    var stones =
+        Map.of(
+            "ABILITY_STONE:2:3", "2.47",
+            "ABILITY_STONE:1:4", "2.47",
+            "ABILITY_STONE:2:4", "1.94",
+            "ABILITY_STONE:3:3", "0.32",
+            "ABILITY_STONE:3:4", "0.02",
+            "ABILITY_STONE:4:4", "0.00");
+    stones.forEach(
+        (id, per100k) ->
+            assertThat(find(candidates, id).path("krakenScorePer100kGold").decimalValue())
+                .as(id)
+                .isEqualByComparingTo(per100k));
+    assertThat(find(candidates, "ABILITY_STONE:4:4").at("/cost/amount").asLong())
+        .isEqualTo(31_446_540_881L); // 6.29억개 × 50
     var karma = find(candidates, "KARMA_LEVEL:30");
     assertThat(karma.path("deltaKrakenScore").decimalValue()).isEqualByComparingTo("1.84");
-    assertThat(karma.at("/cost/code").asText()).isEqualTo("KARMA_COST_UNCONFIRMED");
+    // 카르마 29 → 30: 기대 시도 × 900 = 41.32만, 10만 골드당 0.44(B 화면 값).
+    assertThat(karma.at("/cost/code").asText()).isEqualTo("KARMA_EXPECTED");
+    assertThat(karma.at("/cost/amount").asLong()).isEqualTo(413_228L);
+    assertThat(karma.path("krakenScorePer100kGold").decimalValue()).isEqualByComparingTo("0.44");
     var armGuard = find(candidates, "EQUIPMENT_REFINE:16:15");
     assertThat(armGuard.path("kind").asText()).isEqualTo("EQUIPMENT_REFINE");
     assertThat(armGuard.path("deltaKrakenScore").decimalValue()).isEqualByComparingTo("37.02");
@@ -170,6 +194,41 @@ class SpecUpKrakenIntegrationTest {
     var polishDetail =
         get("/api/v1/characters/spec-up/candidates/POLISH:7:MM?characterName=" + encode(NAME));
     assertThat(polishDetail.statusCode()).as(polishDetail.body()).isEqualTo(200);
+  }
+
+  @Test
+  void 서포터는_서포터_점수식으로_Δ를_내고_전투력은_역할_이유로_비우며_연마는_한_줄로_남긴다() throws Exception {
+    // PM 총괄 10-25: 서포터 스펙업은 서포터 점수 기준(비교 기준 B도 역할에 따라 점수 키만 바꾸고 후보는 같게 만든다). 전투력은 계산하지 않는다.
+    when(auctions.cachedGems()).thenReturn(gemCells());
+    marketCache.saveRelicBooks(books(), Duration.ofMinutes(5));
+    var raw =
+        mapper
+            .readTree(
+                new ClassPathResource("kraken-score/l07.json")
+                    .getContentAsString(StandardCharsets.UTF_8))
+            .path("raw");
+    search("l07", raw.path("ArmoryProfile").path("CharacterClassName").asString());
+    var data = guide("&sort=KRAKEN&limit=200");
+    assertThat(data.path("sort").asText()).isEqualTo("KRAKEN");
+    assertThat(data.path("krakenSortUnavailableReason").isNull()).isTrue();
+    // 지금 점수 = 고정 자료의 비교 기준 서폿 점수 9972.379331813927(소수 둘째 자리)
+    assertThat(data.path("krakenScore").decimalValue()).isEqualByComparingTo("9972.38");
+    var candidates = data.path("candidates");
+    int scored = 0;
+    for (var candidate : candidates) {
+      // 전투력은 서포터라 계산하지 않는다(역할 이유, 기존 값 그대로).
+      assertThat(candidate.path("status").asText())
+          .as(candidate.path("id").asText())
+          .isEqualTo("UNSUPPORTED");
+      if (!candidate.path("deltaKrakenScore").isNull()) scored++;
+    }
+    assertThat(scored).as("Δ서포터 점수가 있는 후보").isPositive();
+    // 서포터 연마 후보는 역할별 옵션 표를 확인하기 전이라 한 줄 알림(Δ 없음).
+    for (var candidate : candidates)
+      if ("POLISH".equals(candidate.path("kind").asText()))
+        assertThat(candidate.path("deltaKrakenScore").isNull())
+            .as(candidate.path("id").asText())
+            .isTrue();
   }
 
   @Test
@@ -263,17 +322,21 @@ class SpecUpKrakenIntegrationTest {
   }
 
   private void search() throws Exception {
+    search("l01", "블레이드");
+  }
+
+  private void search(String id, String className) throws Exception {
     var raw =
         mapper
             .readTree(
-                new ClassPathResource("kraken-score/l01.json")
+                new ClassPathResource("kraken-score/" + id + ".json")
                     .getContentAsString(StandardCharsets.UTF_8))
             .path("raw");
     var profile =
         new CharacterProfile(
             NAME,
             SERVER,
-            "블레이드",
+            className,
             70,
             new BigDecimal("1770.00"),
             new BigDecimal("4070.75"),

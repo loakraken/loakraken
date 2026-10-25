@@ -6,8 +6,8 @@ import java.util.Optional;
 
 /**
  * 장비 성장(경험치) 비용(#200). 재련 전에 단계마다 한 번 장비 경험치를 채우는 운명의 파편·실링이다. 공식 단계표가 없어 계산 검증이 비교 기준 2곳의 단계별 실측과
- * 구간 합으로 맞춘 값을 고정했다(2026-10-10). confirmed=false인 단계는 계산에서 빼고 미확정으로 알린다(2026-10-10 기준 없음: 전율 목표
- * 21단계는 공지 13339로 일반 성장 0 확정, 한계 해방 비용은 별도). 실링은 비교 기준 한 곳 값만 있어 수량 표시용이다.
+ * 구간 합으로 맞춘 값을 고정했다(2026-10-10). confirmed=false인 단계는 계산에서 빼고 미확정으로 알린다. 전율 목표 21단계는 일반 성장 대신 한계
+ * 해방이고, 방어구는 그 해방 비용(파편·실링·고통의 가시, 공식 이미지 2026-10-25)을 이 단계에 둔다. 무기는 공식 확인 전이라 0. 실링은 수량 표시용이다.
  */
 public record GrowthCosts(
     String ruleVersion, Source source, Research research, List<Track> tracks) {
@@ -47,5 +47,21 @@ public record GrowthCosts(
     }
   }
 
-  public record Stage(int targetStage, long shard, long silver, boolean confirmed) {}
+  /**
+   * extras: 파편·실링 말고 그 단계에 함께 드는 재료(전율 21단계 한계 해방의 고통의 가시 — 거래 불가라 골드로 바꾸지 않고 수량만 보인다). 없으면 빈 목록.
+   */
+  public record Stage(
+      int targetStage,
+      long shard,
+      long silver,
+      boolean confirmed,
+      List<RefiningRules.Material> extras) {
+    public Stage {
+      extras = extras == null ? List.of() : List.copyOf(extras);
+    }
+
+    public Stage(int targetStage, long shard, long silver, boolean confirmed) {
+      this(targetStage, shard, silver, confirmed, List.of());
+    }
+  }
 }

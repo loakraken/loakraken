@@ -138,13 +138,13 @@ services:
     logging: *default-logging
     environment:
       SPRING_PROFILES_ACTIVE: prod
-      # /run/secrets의 파일 이름을 설정 키로 읽는다(DB_PASSWORD, spring.flyway.password, LOSTARK_API_KEY, spring.data.redis.password).
+      # /run/secrets의 파일 이름을 설정 키로 읽는다(DB_PASSWORD, LOSTARK_API_KEY, spring.data.redis.password).
       SPRING_CONFIG_IMPORT: optional:configtree:/run/secrets/
       DB_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-loakraken}
       # 실행 중 접속은 데이터 읽기·쓰기 전용 역할(deploy/sql/db-app-role.sql, 배포 전에 서버에서 만든다).
       DB_USERNAME: loakraken_app
-      # 스키마 변경(Flyway)만 소유자 역할로 따로 접속한다(같은 DB_URL).
-      SPRING_FLYWAY_USER: ${POSTGRES_USER:-loakraken}
+      # 스키마 변경은 migrate 서비스가 먼저 끝낸다. api는 Flyway를 돌리지 않고 소유자 비밀번호도 갖지 않는다.
+      SPRING_FLYWAY_ENABLED: "false"
       VALKEY_HOST: valkey
       VALKEY_PORT: "6379"
       # valkey의 앱 전용 사용자(기본 사용자는 꺼져 있다). 암호는 비밀 파일 spring.data.redis.password.
@@ -188,6 +188,10 @@ services:
       RANKING_TITLES_ENABLED: ${RANKING_TITLES_ENABLED:-false}
       # 나머지 기능 스위치(오픈 준비 A3). 기본값은 앱 기본값과 같다 — 넘기기만 하고 동작은 바꾸지 않는다.
       SPEC_UP_ENABLED: ${SPEC_UP_ENABLED:-false}
+      # 스펙업 완갑 재련 줄. 기본 켬, 끄면 목록·줄 상세에서 뺀다.
+      SPEC_UP_ARM_GUARD_ENABLED: ${SPEC_UP_ARM_GUARD_ENABLED:-true}
+      # 재련 계획 숨결 OPTIMAL. 웹 화면(v0.3.4)과 같이 켠다.
+      REFINING_OPTIMAL_ENABLED: ${REFINING_OPTIMAL_ENABLED:-false}
       FEATURE_AUCTION_SEARCH: ${FEATURE_AUCTION_SEARCH:-false}
       MARKET_GEM_FILTER_ENABLED: ${MARKET_GEM_FILTER_ENABLED:-true}
       MARKET_GEM_FILTER_QUOTA: ${MARKET_GEM_FILTER_QUOTA:-10}
@@ -220,8 +224,6 @@ services:
     secrets:
       - source: db_app_password
         target: DB_PASSWORD
-      - source: db_password
-        target: spring.flyway.password
       - source: valkey_password
         target: spring.data.redis.password
       - source: lostark_api_key
@@ -237,6 +239,9 @@ services:
         condition: service_healthy
       valkey:
         condition: service_healthy
+      # 스키마 변경이 성공한 뒤에만 뜬다(migrate가 실패하면 api를 띄우지 않아 배포가 직전 판으로 되돌아간다).
+      migrate:
+        condition: service_completed_successfully
     healthcheck:
       # 운영 이미지에는 curl·wget이 없어 bash /dev/tcp로 health를 확인한다.
       test:
@@ -258,6 +263,41 @@ services:
       # 모니터링 수집용(prometheus만 함께 있는 망). 프로필을 끈 서버에서도 망만 있고 다른 컨테이너는 없다. 주소를 고정해 관리 포트를 여기에만 묶는다.
       metrics:
         ipv4_address: ${API_METRICS_IP:?API_METRICS_IP가 필요합니다(env 예시 참고)}
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+  # 스키마 변경(Flyway)만 하고 끝나는 일회성 단계. api와 같은 이미지·설정 파일로 'migrate' 명령을 돌린다(성공 0, 실패 1).
+  # DB 소유자 역할 비밀번호(db_password)는 여기에만 붙는다. 배포(up)마다 다시 돌고, 적용할 것이 없으면 바로 끝난다.
+  migrate:
+    image: "${API_IMAGE:?API_IMAGE가 필요합니다}"
+    command: ["migrate"]
+    restart: "no"
+    logging: *default-logging
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      # /run/secrets의 파일 이름을 설정 키로 읽는다(DB_PASSWORD = 소유자 역할 비밀번호).
+      SPRING_CONFIG_IMPORT: optional:configtree:/run/secrets/
+      DB_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-loakraken}
+      DB_USERNAME: ${POSTGRES_USER:-loakraken}
+      LOGGING_STRUCTURED_FORMAT_CONSOLE: ecs
+      JAVA_TOOL_OPTIONS: "-XX:MaxRAMPercentage=65 -XX:+ExitOnOutOfMemoryError"
+    secrets:
+      - source: db_password
+        target: DB_PASSWORD
+    depends_on:
+      postgres:
+        condition: service_healthy
+    # 이미지 루트는 읽기 전용. JVM이 쓰는 /tmp만 메모리에.
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,nosuid
+    mem_limit: ${MIGRATE_MEM_LIMIT:-384m}
+    pids_limit: 256
+    # DB 망만(바깥 통신·다른 서비스 없음).
+    networks:
+      - data
     security_opt:
       - no-new-privileges:true
     cap_drop:

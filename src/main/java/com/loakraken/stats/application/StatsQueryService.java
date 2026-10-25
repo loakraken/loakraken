@@ -399,31 +399,61 @@ public class StatsQueryService {
           var rows = stats.classes(conditions, conditions.since(now));
           long population = rows.stream().mapToLong(StatsPort.ClassRow::count).sum();
           var result = new ArrayList<ClassStat>();
-          for (var row : rows) {
-            var status = SampleStatus.of(row.count());
-            boolean ready = status == SampleStatus.READY;
-            var p = row.combatPowerPercentiles();
-            long known = row.dealers() + row.supports();
-            result.add(
-                new ClassStat(
-                    row.className(),
-                    row.count(),
-                    population == 0 ? null : share(row.count(), population),
-                    row.dealers(),
-                    row.supports(),
-                    row.count() - known,
-                    known > 0 && StatsRules.SUPPORT_CLASSES.contains(row.className())
-                        ? share(row.supports(), known)
-                        : null,
-                    row.itemLevelMean(),
-                    row.gemMeanLevel(),
-                    ready && p.size() == 5
-                        ? new Percentiles(p.get(0), p.get(1), p.get(2), p.get(3), p.get(4))
-                        : null,
-                    status));
-          }
+          for (var row : rows) result.add(classStat(row, population));
           return new ClassesResult(meta(conditions, population, now), result);
         });
+  }
+
+  /**
+   * 직업 각인별 통계(직업 표의 직업 각인 보기). 행 모양은 직업별 통계와 같고(비율은 같은 모집단 대비), 직업 각인을 모르는 캐릭터는 행 대신 직업별 미확인 수로 준다.
+   */
+  public ClassEngravingTableResult classEngravingTable(StatsConditions conditions) {
+    return cached(
+        "class-engraving-table:" + key(conditions),
+        ClassEngravingTableResult.class,
+        () -> {
+          var now = clock.instant();
+          var rows = stats.classEngravingTable(conditions, conditions.since(now));
+          long population = rows.stream().mapToLong(row -> row.stats().count()).sum();
+          var result = new ArrayList<ClassEngravingStat>();
+          var unknown = new java.util.LinkedHashMap<String, Long>();
+          for (var row : rows) {
+            if (row.classEngraving() == null)
+              unknown.merge(row.stats().className(), row.stats().count(), Long::sum);
+            else
+              result.add(
+                  new ClassEngravingStat(row.classEngraving(), classStat(row.stats(), population)));
+          }
+          return new ClassEngravingTableResult(
+              meta(conditions, population, now),
+              result,
+              unknown.entrySet().stream()
+                  .map(entry -> new ClassCount(entry.getKey(), entry.getValue()))
+                  .toList());
+        });
+  }
+
+  private ClassStat classStat(StatsPort.ClassRow row, long population) {
+    var status = SampleStatus.of(row.count());
+    boolean ready = status == SampleStatus.READY;
+    var p = row.combatPowerPercentiles();
+    long known = row.dealers() + row.supports();
+    return new ClassStat(
+        row.className(),
+        row.count(),
+        population == 0 ? null : share(row.count(), population),
+        row.dealers(),
+        row.supports(),
+        row.count() - known,
+        known > 0 && StatsRules.SUPPORT_CLASSES.contains(row.className())
+            ? share(row.supports(), known)
+            : null,
+        row.itemLevelMean(),
+        row.gemMeanLevel(),
+        ready && p.size() == 5
+            ? new Percentiles(p.get(0), p.get(1), p.get(2), p.get(3), p.get(4))
+            : null,
+        status);
   }
 
   public ServersResult servers(StatsConditions conditions) {
@@ -592,7 +622,8 @@ public class StatsQueryService {
                               row.point(),
                               row.maxPoint(),
                               row.observedAt(),
-                              types.getOrDefault(row.rosterKey(), List.of())))
+                              types.getOrDefault(row.rosterKey(), List.of()),
+                              row.imageUrl()))
                   .toList());
         });
   }
@@ -645,7 +676,8 @@ public class StatsQueryService {
                               row.characterCount(),
                               row.usedCharacters(),
                               row.score().setScale(2, RoundingMode.HALF_UP),
-                              composition.getOrDefault(row.rosterKey(), List.of())))
+                              composition.getOrDefault(row.rosterKey(), List.of()),
+                              row.imageUrl()))
                   .toList());
         });
   }
@@ -902,7 +934,8 @@ public class StatsQueryService {
                             top == null ? null : Tier.of(top),
                             row.bestCombatPower(),
                             row.arkPassive(),
-                            row.estherWeapon());
+                            row.estherWeapon(),
+                            row.imageUrl());
                       })
                   .toList(),
               classEngraving,
@@ -1021,7 +1054,8 @@ public class StatsQueryService {
                             row.value(),
                             row.observedAt(),
                             top,
-                            top == null ? null : Tier.of(top));
+                            top == null ? null : Tier.of(top),
+                            row.imageUrl());
                       })
                   .toList());
         });
@@ -1287,6 +1321,15 @@ public class StatsQueryService {
 
   public record ClassesResult(Meta meta, List<ClassStat> rows) {}
 
+  /** 직업 각인 한 행: 직업 각인(공식 칭호 원문)과 직업별 통계와 같은 값. */
+  public record ClassEngravingStat(String classEngraving, ClassStat stats) {}
+
+  /** 직업별 직업 각인 미확인 수(장비 요약이 없거나 칭호가 빈 캐릭터). */
+  public record ClassCount(String className, long count) {}
+
+  public record ClassEngravingTableResult(
+      Meta meta, List<ClassEngravingStat> rows, List<ClassCount> unknownByClass) {}
+
   /** 길드 탭 결과. guildName은 저장된 철자. */
   public record GuildDetailResult(
       String serverName,
@@ -1388,7 +1431,8 @@ public class StatsQueryService {
       Tier tier,
       BigDecimal bestCombatPower,
       StatsPort.ArkPassiveSummary arkPassive,
-      StatsPort.EstherWeapon estherWeapon) {}
+      StatsPort.EstherWeapon estherWeapon,
+      String imageUrl) {}
 
   /** 수집품 랭킹 결과(#295). unit은 ROSTER·CHARACTER(응답에서는 문자열). */
   public record CollectibleRankingResult(
@@ -1413,7 +1457,8 @@ public class StatsQueryService {
       long point,
       long maxPoint,
       Instant observedAt,
-      List<StatsPort.CollectibleType> types) {}
+      List<StatsPort.CollectibleType> types,
+      String imageUrl) {}
 
   /** 원정대 랭킹 결과(#297). basis·aggregate는 응답에서 문자열. */
   public record RosterRankingResult(
@@ -1450,7 +1495,8 @@ public class StatsQueryService {
       long characterCount,
       long usedCharacters,
       BigDecimal value,
-      List<StatsPort.RosterMember> composition) {}
+      List<StatsPort.RosterMember> composition,
+      String imageUrl) {}
 
   /**
    * 캐릭터 기준 수집품 순위 결과(#303). reason이 있으면 rank·값은 null. 캐시를 쓸 때 그 캐릭터가 처리정지 목록에 들었으면 다시 센다(목록 캐릭터는
@@ -1568,7 +1614,8 @@ public class StatsQueryService {
       BigDecimal value,
       java.time.Instant observedAt,
       BigDecimal topPercent,
-      Tier tier) {}
+      Tier tier,
+      String imageUrl) {}
 
   public record EfficiencyRankingResult(
       Meta meta,

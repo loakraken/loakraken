@@ -234,8 +234,7 @@ class RefiningOptimalTest {
         .isLessThan(without.expectedGold());
     assertThat(withBreath.expectedBreaths())
         .isCloseTo(9.127639, org.assertj.core.data.Offset.offset(1e-5));
-    assertThat(withBreath.expectedSecondBreaths())
-        .isBetween(0.0, withBreath.expectedBreaths());
+    assertThat(withBreath.expectedSecondBreaths()).isBetween(0.0, withBreath.expectedBreaths());
     double total = 0;
     for (int stage = 17; stage <= 21; stage++)
       total += RefiningOptimal.calculate(rules.stage(stage), vambracePrices(true)).expectedGold();

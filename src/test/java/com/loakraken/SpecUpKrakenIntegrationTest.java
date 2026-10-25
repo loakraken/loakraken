@@ -125,7 +125,7 @@ class SpecUpKrakenIntegrationTest {
     assertThat(data.at("/refine/toStage").asInt()).isEqualTo(17);
     assertThat(data.at("/refine/breath").asText()).isEqualTo("OPTIMAL");
     var names = new java.util.ArrayList<String>();
-    for (var row : data.path("materials")) names.add(row.path("name").asText());
+    for (var row : data.path("materials")) names.add(row.path("itemName").asText());
     assertThat(names).contains("운명의 파괴석 결정", "위대한 운명의 돌파석", "빙하의 숨결");
   }
 

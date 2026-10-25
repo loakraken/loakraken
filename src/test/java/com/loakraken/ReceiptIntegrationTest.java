@@ -38,7 +38,7 @@ import tools.jackson.databind.json.JsonMapper;
 @Import(TestcontainersConfiguration.class)
 @SpringBootTest(
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-    properties = "receipt.enabled=true")
+    properties = {"receipt.enabled=true", "receipt.max-fetch=8"})
 class ReceiptIntegrationTest {
   private static final String SERVER = "영수증테스트서버";
   private static final String MAIN = "영수증본캐";
@@ -97,6 +97,8 @@ class ReceiptIntegrationTest {
   void 정리() {
     var keys = redis.keys("character:v*영수증*");
     if (keys != null && !keys.isEmpty()) redis.delete(keys);
+    var inputs = redis.keys("receipt:v1:input:*영수증*");
+    if (inputs != null && !inputs.isEmpty()) redis.delete(inputs);
     jdbc.sql("DELETE FROM characters WHERE server_name = :s").param("s", SERVER).update();
   }
 

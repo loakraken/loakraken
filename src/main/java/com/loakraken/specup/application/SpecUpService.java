@@ -883,6 +883,7 @@ public class SpecUpService {
     return map;
   }
 
+  /** 팔 보호구 단계표는 하나뿐이고(등급별 표 없음) 성장 지원이 없어 골드 비율이 늘 1이라, 키는 단계와 그 단계 시세면 된다. */
   private static String vambraceKey(
       com.loakraken.refining.domain.VambraceRules.Stage rule,
       java.util.Map<String, BigDecimal> prices) {

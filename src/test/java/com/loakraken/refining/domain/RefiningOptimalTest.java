@@ -259,6 +259,31 @@ class RefiningOptimalTest {
         .isInstanceOf(IllegalArgumentException.class);
   }
 
+  @Test
+  void 팔_보호구_단계표가_모자라거나_숨결_증가량이_다르면_읽지_않는다() {
+    var full = vambraceRules();
+    var missing = full.stages().subList(0, 24);
+    org.assertj.core.api.Assertions.assertThatThrownBy(
+            () -> new VambraceRules(full.ruleVersion(), full.source(), missing))
+        .isInstanceOf(IllegalArgumentException.class);
+    var stage = full.stage(17);
+    var odd = new java.util.ArrayList<>(full.stages());
+    odd.set(
+        16,
+        new VambraceRules.Stage(
+            stage.targetStage(),
+            stage.baseRateBp(),
+            stage.materials(),
+            stage.shard(),
+            stage.gold(),
+            java.util.List.of(
+                new VambraceRules.Breath("용암의 숨결", 30, 5),
+                new VambraceRules.Breath("빙하의 숨결", 30, 10))));
+    org.assertj.core.api.Assertions.assertThatThrownBy(
+            () -> new VambraceRules(full.ruleVersion(), full.source(), odd))
+        .isInstanceOf(IllegalArgumentException.class);
+  }
+
   private static VambraceRules vambraceRules() {
     try (var input =
         RefiningOptimalTest.class.getResourceAsStream("/refining/t4-vambrace-rules.json")) {

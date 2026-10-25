@@ -80,6 +80,12 @@ public interface StatsPort {
   /** 처리정지 목록(public_exclusion)에 있는가. */
   boolean excluded(Target target);
 
+  /** characters 중 처리정지 목록에 있는 것(서버를 비운 항목은 모든 서버). 한 번의 조회다. */
+  java.util.Set<Named> stopListed(java.util.Collection<Named> characters);
+
+  /** 캐릭터 이름과 서버. */
+  record Named(String characterName, String serverName) {}
+
   /** target이 조건의 모집단(처리정지 목록 제외)에 들어가는가. */
   boolean contains(StatsConditions conditions, Instant since, Target target);
 

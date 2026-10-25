@@ -108,11 +108,19 @@ class PostgresCharacterCardRepository implements CharacterCardPort {
     if (characterId.isPresent()) {
       jdbc.sql(
               """
-          UPDATE characters SET position = COALESCE(:position, position),
+          UPDATE characters SET
+            position = CASE WHEN CAST(:position AS VARCHAR) IS NOT NULL
+                AND (position_observed_at IS NULL OR position_observed_at <= :at)
+              THEN CAST(:position AS VARCHAR) ELSE position END,
+            position_observed_at = CASE WHEN CAST(:position AS VARCHAR) IS NOT NULL
+                AND (position_observed_at IS NULL OR position_observed_at <= :at)
+              THEN :at ELSE position_observed_at END,
             gem_mean_level = CASE WHEN :gemsObserved THEN CAST(:gem AS NUMERIC) ELSE gem_mean_level END
           WHERE character_id = :id
           """)
+          // 포지션은 더 늦은 관측이 이미 정했으면 덮지 않는다(관측 기록이 비동기라 순서가 뒤바뀔 수 있음).
           .param("position", observation.position())
+          .param("at", at)
           .param("gem", observation.gemMeanLevel())
           .param("gemsObserved", observation.gemsObserved())
           .param("id", characterId.get())

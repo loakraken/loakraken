@@ -7,6 +7,10 @@ server:
     mime-types: application/json
     min-response-size: 2KB
 
+# 요청 본문 크기 상한(413 REQUEST_TOO_LARGE). 앞단 프록시 상한보다 작게 둔다.
+http:
+  max-request-body: ${HTTP_MAX_REQUEST_BODY:64KB}
+
 spring:
   application:
     name: loakraken

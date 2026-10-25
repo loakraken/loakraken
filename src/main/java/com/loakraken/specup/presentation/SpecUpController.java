@@ -301,8 +301,8 @@ public class SpecUpController {
           boolean cooldownGemsIncluded,
       @Schema(
               description =
-                  "Δ크라켄 점수를 낼 수 없는 이유(문자열, 값이 늘 수 있음): DISABLED·INPUT_PENDING·ROLE_UNKNOWN·SUPPORTER_PENDING·SCORE_UNAVAILABLE. 이때 KRAKEN도 효율 순. 낼 수 있으면 null",
-              example = "SUPPORTER_PENDING")
+                  "Δ크라켄 점수를 낼 수 없는 이유(문자열, 값이 늘 수 있음): DISABLED·INPUT_PENDING·ROLE_UNKNOWN·SCORE_UNAVAILABLE(예전 SUPPORTER_PENDING은 더 내지 않음 — 서포터는 서포터 점수식으로 Δ를 낸다). 이때 KRAKEN도 효율 순. 낼 수 있으면 null",
+              example = "INPUT_PENDING")
           @NullableResponse
           String krakenSortUnavailableReason) {
     static SpecUpResponse from(SpecUpService.Guide guide) {

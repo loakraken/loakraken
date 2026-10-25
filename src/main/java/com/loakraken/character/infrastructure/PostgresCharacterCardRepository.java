@@ -23,6 +23,7 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 @Repository
 class PostgresCharacterCardRepository implements CharacterCardPort {
   private static final int KNOWN_LIMIT = 10_000;
+  private static final String NOT_EXCLUDED = StopListSql.NOT_EXCLUDED;
   private final JdbcClient jdbc;
   // 학습한 구성원·효과는 거의 바뀌지 않으므로 이미 쓴 것은 다시 쓰지 않는다.
   private final Set<Object> known = ConcurrentHashMap.newKeySet();
@@ -231,6 +232,10 @@ class PostgresCharacterCardRepository implements CharacterCardPort {
                    cc.awake_total, cc.observed_at, c.character_name
             FROM character_card cc JOIN characters c ON c.character_id = cc.character_id
             WHERE c.server_name = :server AND c.character_name IN (:names)
+            """
+                    + NOT_EXCLUDED
+                    + """
+
             ORDER BY cc.card_name, cc.awake_count DESC, cc.observed_at DESC
             """)
             .param("server", serverName)
@@ -252,7 +257,8 @@ class PostgresCharacterCardRepository implements CharacterCardPort {
             SELECT COUNT(DISTINCT cc.character_id)
             FROM character_card cc JOIN characters c ON c.character_id = cc.character_id
             WHERE c.server_name = :server AND c.character_name IN (:names)
-            """)
+            """
+                    + NOT_EXCLUDED)
             .param("server", serverName)
             .param("names", List.copyOf(characterNames))
             .query(Integer.class)

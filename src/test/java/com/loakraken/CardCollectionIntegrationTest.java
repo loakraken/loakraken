@@ -193,6 +193,41 @@ class CardCollectionIntegrationTest {
   }
 
   @Test
+  void 제외_목록에_든_원정대_동료의_저장된_카드는_보이지_않는다() throws Exception {
+    var roster = List.of(sibling(DEALER, SERVER, "블레이드"), sibling(ALT, SERVER, "소서리스"));
+    for (var name : List.of(DEALER, ALT)) when(detailsPort.fetchSiblings(name)).thenReturn(roster);
+    when(detailsPort.fetchArmory(DEALER))
+        .thenReturn(
+            character(
+                DEALER, SERVER, "블레이드", cards(LIGHT, new int[] {5, 5, 5, 5, 5, 5}), lightSet()));
+    when(detailsPort.fetchArmory(ALT))
+        .thenReturn(
+            character(
+                ALT, SERVER, "소서리스", cards(LEGION.subList(0, 3), new int[] {4, 5, 5}), List.of()));
+    for (var name : List.of(DEALER, ALT))
+      get("/api/v1/characters/search?includeSiblings=false&characterName=" + encode(name));
+    awaitCards(DEALER, 6);
+    awaitCards(ALT, 3);
+    jdbc.sql(
+            "INSERT INTO public_exclusion (character_name, server_name, reason_code) VALUES (:n, :s, 'PRIVACY_STOP')")
+        .param("n", ALT)
+        .param("s", SERVER)
+        .update();
+    try {
+      var data =
+          mapper
+              .readTree(
+                  get("/api/v1/characters/card-collection?characterName=" + encode(DEALER)).body())
+              .path("data");
+      assertThat(data.path("observedCharacters").asInt()).isEqualTo(1);
+      assertThat(data.path("cards").size()).isEqualTo(6);
+      assertThat(data.toString()).doesNotContain(ALT).doesNotContain("발탄");
+    } finally {
+      jdbc.sql("DELETE FROM public_exclusion WHERE character_name = :n").param("n", ALT).update();
+    }
+  }
+
+  @Test
   void 기록이_없는_원정대도_200이고_칸은_비어_있다() throws Exception {
     when(detailsPort.fetchSiblings(EMPTY)).thenReturn(List.of(sibling(EMPTY, SERVER, "워로드")));
     var response = get("/api/v1/characters/card-collection?characterName=" + encode(EMPTY));

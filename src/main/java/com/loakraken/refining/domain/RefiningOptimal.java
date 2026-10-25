@@ -121,7 +121,8 @@ public final class RefiningOptimal {
         double rateBp = rule.baseRateBp() * (1 + 0.1 * n) + choices.get(c).bonusBp();
         double p = Math.min(10_000, rateBp) / 10_000;
         fail[n][c] = 1 - p;
-        increment[n][c] = RefiningPlan.artisanGainHundredths(p) * (FULL / 10_000);
+        increment[n][c] =
+            RefiningPlan.artisanGainHundredths(Math.min(10_000, rateBp)) * (FULL / 10_000);
       }
     // 두 줄과 선택표는 풀에서 빌려 다시 쓴다(#287 P1·#292). 매번 모든 칸을 새로 채운다.
     var buffers = borrow();

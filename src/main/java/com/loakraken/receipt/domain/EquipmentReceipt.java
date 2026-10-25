@@ -42,15 +42,31 @@ public final class EquipmentReceipt {
     PRICE_UNAVAILABLE,
     /** 성장(경험치) 비용 값이 비교 기준마다 갈려 그 단계만 빼고 계산한 부위. 2026-10-10 전율 21단계 확정 뒤로 쓰지 않는다(계약 호환으로 남김). */
     GROWTH_COST_UNCONFIRMED,
-    /** 전율 20→21단계 한계 해방(고통의 가시·해방 비용). 공식 수치가 없어 산정하지 않은 부위. */
+    /** 전율 무기 20→21단계 한계 해방(고통의 가시·해방 비용). 공식 수치를 확인하기 전이라 산정하지 않은 부위(방어구는 2026-10-25부터 산정). */
     LIMIT_BREAK_UNPRICED
   }
 
   /** 전율은 20단계 도달 뒤 한계 해방으로 21단계가 된다(공지 13339, 2026-01-07). */
   static final int JEONYUL_LIMIT_BREAK_STAGE = 21;
 
+  /** growthSilver·growthExtras는 골드로 바꾸지 않는 성장 비용(실링, 한계 해방의 고통의 가시) — 영수증 합계 아래에 수량으로만 보인다. */
   public record StageCost(
-      int stage, BigDecimal gold, boolean breath, boolean book, boolean growthSupport) {}
+      int stage,
+      BigDecimal gold,
+      boolean breath,
+      boolean book,
+      boolean growthSupport,
+      long growthSilver,
+      List<RefiningPlan.Quantity> growthExtras) {
+    public StageCost {
+      growthExtras = growthExtras == null ? List.of() : List.copyOf(growthExtras);
+    }
+
+    public StageCost(
+        int stage, BigDecimal gold, boolean breath, boolean book, boolean growthSupport) {
+      this(stage, gold, breath, book, growthSupport, 0, List.of());
+    }
+  }
 
   public record Part(
       String slot,
@@ -243,7 +259,9 @@ public final class EquipmentReceipt {
                         + String.format("%,d", growthStage.get().shard())
                         + " 파편 또는 0) 게임 확인 전까지 빼고 계산했습니다."));
         }
+      // 방어구 한계 해방 비용은 성장 비용 표에 들어 있다(2026-10-25). 무기는 공식 확인 전이라 따로 알린다.
       if (grade == RefiningRules.Grade.JEONYUL
+          && WEAPON.equals(item.type())
           && from < JEONYUL_LIMIT_BREAK_STAGE
           && stage >= JEONYUL_LIMIT_BREAK_STAGE)
         excluded.add(
@@ -251,7 +269,9 @@ public final class EquipmentReceipt {
                 item.type(),
                 item.name(),
                 Reason.LIMIT_BREAK_UNPRICED,
-                "「" + item.name() + "」: 21단계 한계 해방 비용(고통의 가시·해방 비용)은 공식 수치가 없어 산정하지 않았습니다."));
+                "「"
+                    + item.name()
+                    + "」: 무기 21단계 한계 해방 비용(고통의 가시·해방 비용)은 공식 수치를 확인하기 전이라 산정하지 않았습니다."));
     }
     // 상급 재련: 공식 Tooltip "[상급 재련] N단계"(equipment-tooltip-v5)로 부위마다 알린다. 단계를 모르는 이전 캐시 부위가 있으면
     // 캐릭터마다 한 줄로 알린다. 비용은 재련 v2 전까지 산정하지 않는다.
@@ -319,6 +339,8 @@ public final class EquipmentReceipt {
             .orElse(null);
     if (optimal == null) return null;
     var gold = BigDecimal.valueOf(optimal.expectedGold());
+    long silver = 0;
+    List<RefiningPlan.Quantity> extras = List.of();
     if (growthCosts != null) {
       var plan =
           RefiningPlan.calculate(
@@ -327,6 +349,10 @@ public final class EquipmentReceipt {
               new RefiningPlan.Options(stage - 1, stage, false, false, growth, 0, 0, true, true),
               growthCosts);
       var stageGrowth = plan.stages().getFirst().growth();
+      if (stageGrowth != null) {
+        silver = stageGrowth.silver();
+        extras = stageGrowth.extras();
+      }
       if (stageGrowth != null && stageGrowth.shard().signum() > 0) {
         var shardPrice = unitPrices.get(RefiningPlan.SHARD);
         if (shardPrice == null) return null;
@@ -338,7 +364,9 @@ public final class EquipmentReceipt {
         gold.setScale(0, RoundingMode.HALF_UP),
         optimal.usesBreath(),
         optimal.usesBook(),
-        growth);
+        growth,
+        silver,
+        extras);
   }
 
   private record Target(RefiningRules.Track track, int toStage) {}

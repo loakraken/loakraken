@@ -28,6 +28,10 @@ public record RefiningPlanResponse(
     @Schema(description = "모든 단계가 최대 시도 수까지 간 경우의 소모량") List<QuantityResponse> worstCaseMaterials,
     BigDecimal expectedGold,
     long worstCaseGold,
+    @Schema(
+            description =
+                "골드로 바꾸지 않고 재료 합계에도 넣지 않은 성장 비용의 합(실링, 전율 방어구 21단계 한계 해방의 고통의 가시). 단계마다 한 번 들어 기대·최악이 같다. growthCost=false거나 없으면 빈 목록")
+        List<QuantityResponse> nonGold,
     @Schema(description = "계산 가정과 제외 항목") List<String> assumptions) {
   static RefiningPlanResponse from(
       RefiningRules rules,
@@ -65,19 +69,36 @@ public record RefiningPlanResponse(
         quantities(plan.worstCaseMaterials()),
         plan.expectedGold(),
         plan.worstCaseGold(),
+        nonGold(plan),
         List.of(
             "실패할 때마다 기본 확률의 10%가 오르며 최대 10회까지 누적합니다.",
             "장인의 기운은 시도 최종 성공률(숨결·책 포함) ÷ 2.15(0.01%p에서 버림)만큼 쌓이고 100%면 다음 시도가 확정 성공입니다.",
             "현재 장인의 기운·실패 횟수는 첫 단계에만 적용하고 이후 단계는 0에서 시작합니다.",
             options.growthCost()
-                ? "장비 성장(경험치) 비용은 단계마다 한 번 드는 운명의 파편을 재료에 더합니다(2026-10-10 확인). 실링은 수량만 보여 주고 합계에 넣지 않습니다."
+                ? "장비 성장(경험치) 비용은 단계마다 한 번 드는 운명의 파편을 재료에 더합니다(2026-10-10 확인). 실링·한계 해방의 고통의 가시는 골드로 바꾸지 않고 수량으로만 보여 줍니다."
                 : "장비 성장(경험치) 비용은 넣지 않았습니다.",
             options.growthCost() && options.expResearch()
                 ? "영지 연구 '" + growthCosts.research().text() + "'를 적용했습니다. 이 연구를 하지 않았으면 끄고 계산하세요."
                 : "영지 연구(성장 경험치 감소)는 적용하지 않았습니다.",
-            "전율 목표 21단계는 일반 성장 대신 한계 해방(고통의 가시·해방 비용)으로 올라가 성장 비용이 0이고, 한계 해방 비용은 공식 수치가 없어 넣지 않습니다(공지 13339).",
+            "전율 목표 21단계는 일반 성장 대신 한계 해방으로 올라갑니다. 방어구는 해방 비용(운명의 파편 72,000·실링 720,000·고통의 가시 15, 공지 13339·게임 가이드)을 그 단계 성장 비용으로 넣고, 무기는 공식 수치를 확인하기 전이라 넣지 않습니다.",
             "강화 재봉술·야금술, 운명의 전율 책, 이벤트·익스프레스 추가 확률, 특수 재련은 계산하지 않습니다.",
             "골드 환산 시세는 포함하지 않습니다. 재료 견적 API로 기대·최악 수량을 환산할 수 있습니다."));
+  }
+
+  /** 단계 성장 비용의 실링·한계 해방 재료를 이름별로 더한다(실링 먼저). */
+  private static List<QuantityResponse> nonGold(RefiningPlan plan) {
+    var totals = new java.util.LinkedHashMap<String, BigDecimal>();
+    for (var stage : plan.stages()) {
+      if (stage.growth() == null) continue;
+      if (stage.growth().silver() > 0)
+        totals.merge(
+            RefiningPlan.SILVER, BigDecimal.valueOf(stage.growth().silver()), BigDecimal::add);
+      for (var extra : stage.growth().extras())
+        totals.merge(extra.name(), extra.amount(), BigDecimal::add);
+    }
+    return totals.entrySet().stream()
+        .map(entry -> new QuantityResponse(entry.getKey(), entry.getValue()))
+        .toList();
   }
 
   private static List<QuantityResponse> quantities(List<RefiningPlan.Quantity> values) {
@@ -125,7 +146,8 @@ public record RefiningPlanResponse(
                   stage.growth().shard(),
                   stage.growth().silver(),
                   stage.growth().confirmed(),
-                  stage.growth().research()));
+                  stage.growth().research(),
+                  quantities(stage.growth().extras())));
     }
   }
 
@@ -134,7 +156,11 @@ public record RefiningPlanResponse(
       @Schema(description = "성장 실링(수량 표시용, 합계에 넣지 않음)") long silver,
       @Schema(description = "false면 값이 확정되지 않아 계산에서 뺀 단계(shard 0). 2026-10-10 기준 해당 단계 없음")
           boolean confirmed,
-      @Schema(description = "영지 연구(× 0.8)를 적용했는지") boolean research) {}
+      @Schema(description = "영지 연구(× 0.8)를 적용했는지") boolean research,
+      @Schema(
+              description =
+                  "파편·실링 말고 이 단계에 드는 재료(전율 방어구 21단계 한계 해방의 고통의 가시 15 — 거래 불가, 골드로 바꾸지 않고 재료 합계에도 넣지 않음). 없으면 빈 목록")
+          List<QuantityResponse> extraMaterials) {}
 
   public record GrowthSourceResponse(
       String ruleVersion,

@@ -257,7 +257,13 @@ public final class StatsResponses {
       @NullableResponse BigDecimal combatPowerMedian,
       @Schema(description = "필터와 무관하게 이 서버에서 알고 있는 전체 캐릭터 수(원정대로 발견한 캐릭터 포함)") long knownCharacters,
       @Schema(description = "이 서버에서 수집한 원정대 수(roster_key 기준)") long rosters,
-      @Schema(allowableValues = {"COLLECTING", "READY"}) String sampleStatus) {}
+      @Schema(allowableValues = {"COLLECTING", "READY"}) String sampleStatus,
+      @Schema(description = "딜러 수(직업 행과 같은 판정)") long dealers,
+      @Schema(description = "서포터 수") long supports,
+      @Schema(description = "역할을 판정하지 못한 수") long unknownRole,
+      @NullableResponse @Schema(description = "평균 아이템 레벨, 소수 둘째 자리") BigDecimal itemLevelMean,
+      @NullableResponse @Schema(description = "전투력 분위수(직업 행과 같음). 표본 30 미만이면 null")
+          StatsPercentilesResponse combatPower) {}
 
   public record StatsServersResponse(StatsMetaResponse meta, List<StatsServerRowResponse> rows) {
     static StatsServersResponse from(StatsQueryService.ServersResult result) {
@@ -274,7 +280,19 @@ public final class StatsResponses {
                           row.combatPowerMedian(),
                           row.knownCharacters(),
                           row.rosters(),
-                          row.sampleStatus().name()))
+                          row.sampleStatus().name(),
+                          row.dealers(),
+                          row.supports(),
+                          row.unknownRole(),
+                          row.itemLevelMean(),
+                          row.combatPower() == null
+                              ? null
+                              : new StatsPercentilesResponse(
+                                  row.combatPower().p10(),
+                                  row.combatPower().p25(),
+                                  row.combatPower().p50(),
+                                  row.combatPower().p75(),
+                                  row.combatPower().p90())))
               .toList());
     }
   }
@@ -297,9 +315,15 @@ public final class StatsResponses {
       BigDecimal width,
       @Schema(description = "관측값이 있는 구간만(오름차순). 빈 구간은 생략합니다") List<StatsBinResponse> bins,
       @NullableResponse @Schema(description = "percentileOf를 줬을 때만")
-          StatsPercentileOfResponse percentileOf) {
+          StatsPercentileOfResponse percentileOf,
+      @NullableResponse
+          @Schema(
+              description =
+                  "'상위 N%' 기준값(N = 1·5·10·25·50·75 오름차순). rank = ⌊N × 모집단 / 100⌋, value = 그 순위(내림차순)의 값 — 이 값 이상이면 percentileOf.topPercent ≤ N. COMBAT_POWER만, 표본이 READY가 아니면 null, rank가 0인 항목은 빠짐")
+          List<StatsTopPercentCutoffResponse> topPercentCutoffs) {
     static StatsDistributionResponse from(StatsQueryService.DistributionResult result) {
       var of = result.percentileOf();
+      var cutoffs = result.topPercentCutoffs();
       return new StatsDistributionResponse(
           StatsMetaResponse.from(result.meta()),
           result.metric().name(),
@@ -314,9 +338,22 @@ public final class StatsResponses {
                   of.rank(),
                   of.total(),
                   of.topPercent(),
-                  of.tier() == null ? null : of.tier().name()));
+                  of.tier() == null ? null : of.tier().name()),
+          cutoffs == null
+              ? null
+              : cutoffs.stream()
+                  .map(
+                      cutoff ->
+                          new StatsTopPercentCutoffResponse(
+                              cutoff.topPercent(), cutoff.rank(), cutoff.value()))
+                  .toList());
     }
   }
+
+  public record StatsTopPercentCutoffResponse(
+      @Schema(description = "상위 몇 %인지(1·5·10·25·50·75)") int topPercent,
+      @Schema(description = "기준 순위(내림차순)") long rank,
+      @Schema(description = "그 순위의 값") BigDecimal value) {}
 
   public record StatsSnapshotResponse(String snapshot, Instant aggregatedAt, long population) {}
 

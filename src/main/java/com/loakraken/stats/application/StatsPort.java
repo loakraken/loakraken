@@ -53,6 +53,10 @@ public interface StatsPort {
    */
   BigDecimal nthHighest(StatsConditions conditions, Instant since, Metric metric, long k);
 
+  /** 여러 순위의 값을 한 번에(각 값은 {@link #nthHighest}와 같음). 모집단보다 큰 순위는 빠진다. 순위 오름차순. */
+  List<RankValue> valuesAtRanks(
+      StatsConditions conditions, Instant since, Metric metric, java.util.Collection<Long> ranks);
+
   /** classEngraving이 있으면 모집단을 마지막 장비 요약의 직업 각인이 그 값(공백 무시)인 캐릭터로 좁힌다(#618). 요약이 없는 캐릭터는 빠진다. */
   RankingPage ranking(
       StatsConditions conditions,
@@ -118,14 +122,25 @@ public interface StatsPort {
   /** 직업 표의 한 행을 직업 각인까지 나눈 것. classEngraving이 null이면 직업 각인을 모르는 캐릭터다. */
   record ClassEngravingRow(String classEngraving, ClassRow stats) {}
 
-  /** knownCharacters·rosters는 필터와 무관하게 그 서버에서 알고 있는 전체 캐릭터 수와 원정대 수다. */
+  /**
+   * knownCharacters·rosters는 필터와 무관하게 그 서버에서 알고 있는 전체 캐릭터 수와 원정대 수다.
+   * dealers·supports·itemLevelMean· combatPowerPercentiles(p10·p25·p50·p75·p90)는 직업 행(ClassRow)과 같은
+   * 계산이다.
+   */
   record ServerRow(
       String serverName,
       long count,
       BigDecimal itemLevelMedian,
       BigDecimal combatPowerMedian,
       long knownCharacters,
-      long rosters) {}
+      long rosters,
+      long dealers,
+      long supports,
+      BigDecimal itemLevelMean,
+      List<BigDecimal> combatPowerPercentiles) {}
+
+  /** 내림차순 rank번째 값. */
+  record RankValue(long rank, BigDecimal value) {}
 
   record Range(long count, BigDecimal min, BigDecimal max) {}
 

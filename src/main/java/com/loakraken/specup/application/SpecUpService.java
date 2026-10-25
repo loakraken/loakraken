@@ -52,6 +52,7 @@ public class SpecUpService {
   private final CombatPowerPolishValues polishValues;
   private final com.loakraken.refining.domain.OptimalStageCache optimalCache;
   private final com.loakraken.refining.domain.VambraceRules vambrace;
+  private final boolean polishPriceFill;
   private final boolean enabled;
 
   /** 빈 칸 후보 레벨: 기본 공격력 %가 확인된 6~10레벨만(1~5레벨은 계수표에 근거가 없어 계산하지 않는다). */
@@ -68,7 +69,9 @@ public class SpecUpService {
       CombatPowerPolishValues polishValues,
       com.loakraken.refining.domain.OptimalStageCache optimalCache,
       com.loakraken.refining.domain.VambraceRules vambrace,
-      @Value("${spec-up.enabled:false}") boolean enabled) {
+      @Value("${spec-up.enabled:false}") boolean enabled,
+      // 연마 시세 칸을 요청에서 채우는가(PM 총괄 10-25: 기본 꺼짐 — 꺼져 있으면 캐시된 칸만 쓰고 없으면 비용 미확정).
+      @Value("${spec-up.polish-price-fill.enabled:false}") boolean polishPriceFill) {
     this.simulator = simulator;
     this.auctions = auctions;
     this.books = books;
@@ -79,6 +82,7 @@ public class SpecUpService {
     this.polishValues = polishValues;
     this.optimalCache = optimalCache;
     this.vambrace = vambrace;
+    this.polishPriceFill = polishPriceFill;
     this.enabled = enabled;
   }
 
@@ -231,7 +235,8 @@ public class SpecUpService {
     refines(loadout, materials.cached(), pricesAt, planned);
     armGuard(loadout, materials.cached(), pricesAt, planned);
     var krakenContext = kraken.context(snapshot);
-    others(loadout, planned, krakenContext);
+    // 줄 상세(allRefineStages)는 목록이 이미 채운 연마 시세 칸만 쓴다 — 다시 만들기(최대 두 번)마다 채우기 몫을 새로 쓰지 않게(코드 리뷰 10-25).
+    others(loadout, planned, krakenContext, pricesAt, polishPriceFill && !allRefineStages);
 
     // 점수를 낼 수 없으면 KRAKEN도 효율 순으로 되돌리고 그 이유를 응답에 둔다.
     var sort = requested == Sort.KRAKEN && !krakenContext.available() ? Sort.EFFICIENCY : requested;
@@ -1155,7 +1160,11 @@ public class SpecUpService {
    * #575), 그럴 수 없으면 종류마다 한 줄로 알린다(지원 현황표: 계산식 미확정). 팔찌·아크 그리드·아크 패시브는 한 줄 그대로.
    */
   private void others(
-      CharacterLoadout loadout, List<Planned> planned, SpecUpKrakenScore.Context context) {
+      CharacterLoadout loadout,
+      List<Planned> planned,
+      SpecUpKrakenScore.Context context,
+      Instant[] pricesAt,
+      boolean fillPolishPrices) {
     boolean bracelet =
         loadout.equipment().stream()
             .anyMatch(
@@ -1180,8 +1189,11 @@ public class SpecUpService {
             : context.support()
                 ? SpecUpSupportPolish.rows(kraken, context, loadout, polishValues)
                 : SpecUpScoreCandidates.polish(context.input(), loadout, polishValues);
-    if (polishRows != null) planned.addAll(polishRows);
-    else if (polish) planned.add(Planned.line(Kind.POLISH, "장신구 연마 효과"));
+    if (polishRows != null) {
+      var fill = new MarketAuctionService.PolishFill(fillPolishPrices);
+      for (var row : polishRows)
+        planned.add(row.withCost(polishCost(loadout, context, row, fill, pricesAt)));
+    } else if (polish) planned.add(Planned.line(Kind.POLISH, "장신구 연마 효과"));
     if (loadout.arkGrid() != null && !loadout.arkGrid().slots().isEmpty())
       planned.add(Planned.line(Kind.ARK_GRID_CORE, "아크 그리드 코어"));
     if (loadout.arkPassive() != null && !loadout.arkPassive().points().isEmpty())
@@ -1193,6 +1205,36 @@ public class SpecUpService {
     var stoneRows = scored ? SpecUpScoreCandidates.stone(kraken, context, loadout) : null;
     if (stoneRows != null) planned.addAll(stoneRows);
     else planned.add(Planned.line("ABILITY_STONE", "어빌리티 스톤 교체"));
+  }
+
+  /** 연마 교체 줄의 비용(비교 기준 B: 목표 조합 시세 − 지금 조합 시세(거래 가능할 때)). 계산할 수 없으면 미확정, 채우는 중이면 PENDING. */
+  private SpecUpCost polishCost(
+      CharacterLoadout loadout,
+      SpecUpKrakenScore.Context context,
+      Planned row,
+      MarketAuctionService.PolishFill fill,
+      Instant[] pricesAt) {
+    if (!(row.kraken() instanceof SpecUpKrakenScore.Polish polish)) return row.cost();
+    int index = Integer.parseInt(row.id().split(":")[1]);
+    var item = loadout.equipment().get(index);
+    var current = new ArrayList<String>();
+    context
+        .input()
+        .path("armory")
+        .path("accessory")
+        .path(polish.slot())
+        .path("option")
+        .forEach(line -> current.add(line.asString("")));
+    return SpecUpPolishCost.cost(
+        auctions,
+        fill,
+        polishPriceFill,
+        context.support(),
+        item,
+        current,
+        polish.option(),
+        polishValues,
+        pricesAt);
   }
 
   private static Change change(
@@ -1309,6 +1351,25 @@ public class SpecUpService {
         SpecUpKrakenScore.Edit kraken) {
       return new Planned(
           id, kind, target, from, to, icon, grade, null, null, cost, null, null, null, null,
+          kraken);
+    }
+
+    Planned withCost(SpecUpCost next) {
+      return new Planned(
+          id,
+          kind,
+          target,
+          from,
+          to,
+          icon,
+          grade,
+          skillName,
+          change,
+          next,
+          emptySlot,
+          baseAttackPctFrom,
+          baseAttackPctTo,
+          gemType,
           kraken);
     }
 

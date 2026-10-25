@@ -10,6 +10,9 @@ import java.util.ArrayList;
 import java.util.List;
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.boot.web.server.context.WebServerApplicationContext;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.scheduling.TaskScheduler;
@@ -20,6 +23,7 @@ import org.testcontainers.utility.DockerImageName;
  * 운영 일회성 마이그레이션 명령(F3b): 소유 역할로 Flyway만 돌리고 성공 0·실패 1로 끝난다. 데이터베이스 연결과 Flyway만 뜨고 웹 서버·관리
  * 포트·Valkey· 스케줄러는 없다. 설정은 api와 같은 Spring Boot 설정(명령줄·환경 변수)으로 받는다.
  */
+@ExtendWith(OutputCaptureExtension.class)
 class MigrateCommandIntegrationTest {
   static final PostgreSQLContainer POSTGRES =
       new PostgreSQLContainer(DockerImageName.parse("postgres:18.6"))
@@ -83,12 +87,13 @@ class MigrateCommandIntegrationTest {
   }
 
   @Test
-  void 모든_마이그레이션을_적용하고_다시_돌리면_바뀌는_것_없이_성공한다() throws Exception {
+  void 모든_마이그레이션을_적용하고_다시_돌리면_바뀌는_것_없이_성공한다(CapturedOutput output) throws Exception {
     createDatabase("migrate_ok");
     assertThat(MigrateCommand.run(args("migrate_ok"))).isZero();
     assertThat(applied("migrate_ok")).isEqualTo(migrationFiles());
     assertThat(MigrateCommand.run(args("migrate_ok"))).isZero();
     assertThat(applied("migrate_ok")).isEqualTo(migrationFiles());
+    assertThat(output).contains("마이그레이션 완료").doesNotContain(POSTGRES.getPassword());
   }
 
   @Test
@@ -99,6 +104,13 @@ class MigrateCommandIntegrationTest {
       assertThat(context.getBeanProvider(Flyway.class).getIfAvailable()).isNotNull();
       assertThat(context.getBeanNamesForType(RedisConnectionFactory.class)).isEmpty();
       assertThat(context.getBeanNamesForType(TaskScheduler.class)).isEmpty();
+      // 앱 빈(수집기·공식 API 클라이언트·스케줄 작업 등)은 하나도 없다. 마이그레이션 설정 하나뿐.
+      assertThat(
+              java.util.Arrays.stream(context.getBeanDefinitionNames())
+                  .<Class<?>>map(context::getType)
+                  .filter(type -> type != null && type.getName().startsWith("com.loakraken."))
+                  .toList())
+          .containsExactly(MigrateCommand.MigrateOnly.class);
       assertThat(
               context.containsBean(
                   "org.springframework.context.annotation.internalScheduledAnnotationProcessor"))
@@ -107,7 +119,7 @@ class MigrateCommandIntegrationTest {
   }
 
   @Test
-  void 마이그레이션이_실패하면_1로_끝난다() throws Exception {
+  void 마이그레이션이_실패하면_1로_끝나고_로그에_비밀번호가_없다(CapturedOutput output) throws Exception {
     createDatabase("migrate_broken");
     assertThat(
             MigrateCommand.run(
@@ -115,6 +127,22 @@ class MigrateCommandIntegrationTest {
                     "migrate_broken",
                     "--spring.flyway.locations=classpath:db/migration,classpath:migrate-broken")))
         .isEqualTo(1);
+    assertThat(output).contains("마이그레이션 실패").doesNotContain(POSTGRES.getPassword());
+  }
+
+  @Test
+  void 접속에_실패하면_1로_끝나고_로그에_넘긴_비밀번호가_없다(CapturedOutput output) {
+    var wrong = "wrong-owner-password-for-log-check";
+    assertThat(
+            MigrateCommand.run(
+                "--spring.datasource.url=" + url("loakraken"),
+                "--spring.datasource.username=" + POSTGRES.getUsername(),
+                "--spring.datasource.password=" + wrong))
+        .isEqualTo(1);
+    assertThat(output)
+        .contains("마이그레이션 실패")
+        .doesNotContain(wrong)
+        .doesNotContain(POSTGRES.getPassword());
   }
 
   @Test

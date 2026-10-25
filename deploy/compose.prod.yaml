@@ -119,6 +119,11 @@ services:
       timeout: 5s
       start_period: 30s
       retries: 5
+    # 이미지 루트는 읽기 전용. 실행 중 쓰는 곳(Next 캐시, 임시 파일)만 메모리에 연다(node 사용자 uid 1000).
+    read_only: true
+    tmpfs:
+      - /app/.next/cache:size=32m,uid=1000,gid=1000,noexec,nosuid
+      - /tmp:size=16m,noexec,nosuid
     mem_limit: ${WEB_MEM_LIMIT:-384m}
     # 프로세스 수 상한(포크 폭주가 서버 전체로 번지지 않게). Node 한 프로세스(스레드 10여 개).
     pids_limit: 256
@@ -240,6 +245,11 @@ services:
       timeout: 5s
       start_period: 90s
       retries: 5
+    # 이미지 루트는 읽기 전용. JVM 성능 파일·Tomcat 작업 폴더가 쓰는 /tmp만 메모리에 연다.
+    # noexec는 두지 않는다(Netty 등 네이티브 라이브러리를 /tmp에 풀어 올리는 경우가 있다).
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,nosuid
     mem_limit: ${API_MEM_LIMIT:-768m}
     # 프로세스 수 상한(포크 폭주가 서버 전체로 번지지 않게). JVM 스레드도 pid로 센다(Tomcat 최대 200 + 풀·GC·배경 작업).
     pids_limit: 1024

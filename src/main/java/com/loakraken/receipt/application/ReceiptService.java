@@ -179,13 +179,15 @@ public class ReceiptService {
     int fetched = 0;
     boolean stopped = false;
     boolean budgetLow = false;
+    // 보관은 요청 끝에서 처리정지 목록을 한 번 더 확인한 뒤에 한다(받는 동안 목록에 든 캐릭터를 남기지 않게).
+    var toSave = new java.util.LinkedHashMap<String, ReceiptInputStore.Input>();
     for (var sibling : roster) {
       String name = sibling.characterName();
       var cached = cached(name);
       if (cached.isPresent()) {
         var input = input(cached.get());
         loadouts.put(name, input);
-        inputs.save(name, input);
+        toSave.put(name, input);
         continue;
       }
       var kept = inputs.find(name);
@@ -208,13 +210,25 @@ public class ReceiptService {
       try {
         var input = input(characters.search(new SearchCharacterCommand(name, false)));
         loadouts.put(name, input);
-        inputs.save(name, input);
+        toSave.put(name, input);
       } catch (BusinessException exception) {
         // 없는 캐릭터는 받을 수 없음으로 두고(대기 수에서 뺌), 한도·장애면 나머지를 다음 요청으로 넘긴다.
         if (exception.errorCode() == CharacterErrorCode.CHARACTER_NOT_FOUND)
           unavailableNames.add(name);
         else stopped = true;
       }
+    }
+    // 이 요청이 받는 동안 처리정지 목록에 든 캐릭터는 보관하지 않고 영수증에서도 뺀다. 확인하지 못하면 503(보관도 하지 않음).
+    if (!toSave.isEmpty()) {
+      var lateListed =
+          listed(
+              roster.stream().filter(s -> toSave.containsKey(s.characterName())).toList(), server);
+      if (!lateListed.isEmpty()) {
+        lateListed.forEach(toSave::remove);
+        lateListed.forEach(loadouts::remove);
+        roster = roster.stream().filter(s -> !lateListed.contains(s.characterName())).toList();
+      }
+      toSave.forEach(inputs::save);
     }
 
     var rules = refining.rules();

@@ -170,6 +170,30 @@ class ReceiptFanoutIntegrationTest {
     }
   }
 
+  @Test
+  void 받는_동안_처리정지_목록에_든_캐릭터는_보관하지_않고_영수증에서_뺀다() throws Exception {
+    // 부캐1을 공식에서 받는 사이에 목록에 든다(요청 시작 때 확인은 이미 지났다).
+    doAnswer(
+            invocation -> {
+              jdbc.sql(
+                      "INSERT INTO public_exclusion (character_name, server_name, reason_code) VALUES ('영수증호출부캐1', :s, 'REQUEST')")
+                  .param("s", SERVER)
+                  .update();
+              return character(invocation.getArgument(0));
+            })
+        .when(detailsPort)
+        .fetchArmory("영수증호출부캐1");
+    try {
+      var first = receipt();
+      assertThat(redis.hasKey("receipt:v1:input:영수증호출부캐1")).isFalse();
+      assertThat(redis.hasKey("receipt:v1:input:" + MAIN)).isTrue();
+      assertThat(first.at("/coverage/rosterCharacters").asInt()).isEqualTo(4);
+      assertThat(first.at("/equipment/characters").toString()).doesNotContain("영수증호출부캐1\"");
+    } finally {
+      jdbc.sql("DELETE FROM public_exclusion WHERE server_name = :s").param("s", SERVER).update();
+    }
+  }
+
   private JsonNode receipt() throws Exception {
     var response = get("/api/v1/characters/receipt?characterName=" + encode(MAIN));
     assertThat(response.statusCode()).as(response.body()).isEqualTo(200);

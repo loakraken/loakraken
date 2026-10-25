@@ -97,7 +97,8 @@ public final class StatsRules {
   }
 
   /** 분포 위 '상위 N%' 기준값을 주는 N(오름차순). */
-  public static final java.util.List<Integer> TOP_PERCENT_CUTOFFS = java.util.List.of(1, 5, 10, 25, 50, 75);
+  public static final java.util.List<Integer> TOP_PERCENT_CUTOFFS =
+      java.util.List.of(1, 5, 10, 25, 50, 75);
 
   /**
    * 상위 p% 기준 순위 K = ⌊p × total / 100⌋(티어 경계와 같은 규칙). K번째로 높은 값 이상이면 topPercent ≤ p다. 0이면 누구도 닿을 수

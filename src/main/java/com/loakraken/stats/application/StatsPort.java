@@ -114,8 +114,9 @@ public interface StatsPort {
       List<BigDecimal> combatPowerPercentiles) {}
 
   /**
-   * knownCharacters·rosters는 필터와 무관하게 그 서버에서 알고 있는 전체 캐릭터 수와 원정대 수다. dealers·supports·itemLevelMean·
-   * combatPowerPercentiles(p10·p25·p50·p75·p90)는 직업 행(ClassRow)과 같은 계산이다.
+   * knownCharacters·rosters는 필터와 무관하게 그 서버에서 알고 있는 전체 캐릭터 수와 원정대 수다.
+   * dealers·supports·itemLevelMean· combatPowerPercentiles(p10·p25·p50·p75·p90)는 직업 행(ClassRow)과 같은
+   * 계산이다.
    */
   record ServerRow(
       String serverName,

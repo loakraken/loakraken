@@ -512,8 +512,8 @@ public class StatsQueryService {
   }
 
   /**
-   * '상위 N%' 기준값(전투력만, 표본 READY일 때만). 기준 순위 K = ⌊N × total / 100⌋, 값 = 내림차순 K번째 — 다음 티어 경계와 같은 규칙이라 이
-   * 값 이상인 캐릭터의 percentileOf.topPercent는 N 이하다. K = 0이면 그 항목은 빠진다.
+   * '상위 N%' 기준값(전투력만, 표본 READY일 때만). 기준 순위 K = ⌊N × total / 100⌋, 값 = 내림차순 K번째 — 다음 티어 경계와 같은 규칙이라
+   * 이 값 이상인 캐릭터의 percentileOf.topPercent는 N 이하다. K = 0이면 그 항목은 빠진다.
    */
   private List<TopPercentCutoff> topPercentCutoffs(
       StatsConditions conditions, Instant since, Metric metric, long total) {
@@ -524,7 +524,8 @@ public class StatsQueryService {
       if (k > 0) ranks.put(percent, k);
     }
     var values = new java.util.HashMap<Long, BigDecimal>();
-    for (var row : stats.valuesAtRanks(conditions, since, metric, new java.util.TreeSet<>(ranks.values())))
+    for (var row :
+        stats.valuesAtRanks(conditions, since, metric, new java.util.TreeSet<>(ranks.values())))
       values.put(row.rank(), row.value());
     var result = new ArrayList<TopPercentCutoff>();
     ranks.forEach(
@@ -1333,7 +1334,10 @@ public class StatsQueryService {
       ClassBuilds.Result builds,
       ClassBuilds.Details details) {}
 
-  /** dealers·supports·unknownRole·itemLevelMean·combatPower는 직업 행(ClassStat)과 같은 계산이다(표본 30 미만이면 combatPower null). */
+  /**
+   * dealers·supports·unknownRole·itemLevelMean·combatPower는 직업 행(ClassStat)과 같은 계산이다(표본 30 미만이면
+   * combatPower null).
+   */
   public record ServerStat(
       String serverName,
       long count,

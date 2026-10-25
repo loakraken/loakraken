@@ -190,13 +190,17 @@ class StatsIntegrationTest {
   @Test
   void 분포의_상위_N퍼센트_기준값은_내_위치와_맞고_서버_행은_직업_행과_같은_값을_준다() throws Exception {
     표본();
-    // 모집단 40명(전투력 3000~3340 10씩 35명 + 2000 5명). K = ⌊N×40/100⌋: 1%는 0이라 빠지고 5·10·25·50·75% = 2·4·10·20·30위.
+    // 모집단 40명(전투력 3000~3340 10씩 35명 + 2000 5명). K = ⌊N×40/100⌋: 1%는 0이라 빠지고 5·10·25·50·75% =
+    // 2·4·10·20·30위.
     var distribution =
         data("/api/v1/stats/distribution?metric=COMBAT_POWER&server=" + encode(SERVER));
     var cutoffs = distribution.path("topPercentCutoffs");
     assertThat(cutoffs.size()).isEqualTo(5);
     String[][] expected = {
-      {"5", "2", "3330"}, {"10", "4", "3310"}, {"25", "10", "3250"}, {"50", "20", "3150"},
+      {"5", "2", "3330"},
+      {"10", "4", "3310"},
+      {"25", "10", "3250"},
+      {"50", "20", "3150"},
       {"75", "30", "3050"}
     };
     for (int i = 0; i < expected.length; i++) {
@@ -222,9 +226,8 @@ class StatsIntegrationTest {
                 .isNull())
         .isTrue();
     assertThat(
-            data(
-                    "/api/v1/stats/distribution?metric=COMBAT_POWER&role=SUPPORT&itemLevelMin=1710&server="
-                        + encode(SERVER))
+            data("/api/v1/stats/distribution?metric=COMBAT_POWER&role=SUPPORT&itemLevelMin=1710&server="
+                    + encode(SERVER))
                 .path("topPercentCutoffs")
                 .isNull())
         .isTrue();

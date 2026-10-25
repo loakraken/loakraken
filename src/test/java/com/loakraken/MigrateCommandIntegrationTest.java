@@ -87,8 +87,7 @@ class MigrateCommandIntegrationTest {
   }
 
   @Test
-  void 모든_마이그레이션을_적용하고_다시_돌리면_바뀌는_것_없이_성공한다(CapturedOutput output)
-      throws Exception {
+  void 모든_마이그레이션을_적용하고_다시_돌리면_바뀌는_것_없이_성공한다(CapturedOutput output) throws Exception {
     createDatabase("migrate_ok");
     assertThat(MigrateCommand.run(args("migrate_ok"))).isZero();
     assertThat(applied("migrate_ok")).isEqualTo(migrationFiles());

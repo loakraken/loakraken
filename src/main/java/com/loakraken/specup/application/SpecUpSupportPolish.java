@@ -16,8 +16,8 @@ import tools.jackson.databind.JsonNode;
  * <ul>
  *   <li>줄마다 상태: 서포터 옵션(고정값 공격력·무기 공격력 제외)은 지금 등급과 같은 계열의 더 높은 등급들, 고정값 공격력·무기 공격력 줄은 서포터 옵션 중 상이 두
  *       개 이상일 때만 남기고(서포터 옵션인 고정값 무기 공격력은 더 높은 등급으로도 바꿔 봄) 아니면 목표에서 뺌, 그 밖의 줄은 그대로.
- *   <li>모든 줄 상태 조합 가운데 바뀐 줄이 있는 것. 서포터 주옵션이 하나뿐이면 부위별 추가 옵션(목걸이 낙인력, 귀걸이 최대 생명력·최대 마나)을 붙인 조합도 —
- *       B는 옵션 이름을 표의 처음 이름(initial)으로 견주어, 처음 이름이 다른 세레나데·아군 강화 옵션은 붙이지 않는다.
+ *   <li>모든 줄 상태 조합 가운데 바뀐 줄이 있는 것. 서포터 주옵션이 하나뿐이면 부위별 추가 옵션(목걸이 낙인력, 귀걸이 최대 생명력·최대 마나)을 붙인 조합도 — B는
+ *       옵션 이름을 표의 처음 이름(initial)으로 견주어, 처음 이름이 다른 세레나데·아군 강화 옵션은 붙이지 않는다.
  *   <li>Δ서포터 점수가 0보다 큰 후보만(B와 같음).
  * </ul>
  *
@@ -27,7 +27,13 @@ final class SpecUpSupportPolish {
   private SpecUpSupportPolish() {}
 
   /** 표 한 줄: 옵션 글자, 등급(0 하·1 중·2 상), 계열(같은 계열 안에서만 등급을 올림), 서포터 옵션인가, 고정값 공격력·무기 공격력인가, 처음 이름. */
-  record Option(String line, int grade, String family, boolean support, boolean flatAttack, String initialName) {}
+  record Option(
+      String line,
+      int grade,
+      String family,
+      boolean support,
+      boolean flatAttack,
+      String initialName) {}
 
   /** B 옵션 표의 4티어 고대 줄(표 순서). 최대 마나 +6은 유물·고대 공통 줄이라 계열이 따로다(올릴 등급이 없음). */
   static final List<Option> TABLE = table();
@@ -96,7 +102,8 @@ final class SpecUpSupportPolish {
   private record State(List<String> values, boolean omitted, boolean main, String family) {}
 
   /**
-   * 서포터 연마 후보(장신구 부위마다). 계산할 수 있는 부위가 하나도 없으면 null(종류 한 줄 알림). scorer·context는 Δ가 0보다 큰 후보만 남기려고 쓴다.
+   * 서포터 연마 후보(장신구 부위마다). 계산할 수 있는 부위가 하나도 없으면 null(종류 한 줄 알림). scorer·context는 Δ가 0보다 큰 후보만 남기려고
+   * 쓴다.
    */
   static List<SpecUpService.Planned> rows(
       SpecUpKrakenScore scorer,
@@ -163,7 +170,8 @@ final class SpecUpSupportPolish {
     walk(states, 0, new String[states.size()], combos);
     var result = new ArrayList<Next>();
     for (var combo : combos)
-      if (changed(states, combo)) result.add(new Next(next(states, combo), code(states, combo, null)));
+      if (changed(states, combo))
+        result.add(new Next(next(states, combo), code(states, combo, null)));
     var mains = states.stream().filter(State::main).toList();
     if (mains.size() != 1) return result;
     var exclude = mains.get(0).family();

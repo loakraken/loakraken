@@ -25,8 +25,7 @@ class SpecUpSupportPolishTest {
         SpecUpSupportPolish.candidates(
             "necklace", lines("낙인력 +4.80%", "세레나데, 신앙, 조화 게이지 획득량 +6.00%", "공격력 +80"));
     assertThat(codes(next)).containsExactly("SHHN");
-    assertThat(next.get(0).lines())
-        .containsExactly("낙인력 +8.00%", "세레나데, 신앙, 조화 게이지 획득량 +6.00%");
+    assertThat(next.get(0).lines()).containsExactly("낙인력 +8.00%", "세레나데, 신앙, 조화 게이지 획득량 +6.00%");
   }
 
   @Test
@@ -38,17 +37,8 @@ class SpecUpSupportPolishTest {
     // 등급 올리기 2(중·상) + (지금·중·상 3) × 최대 마나 3(+6은 따로 계열) = 11
     assertThat(codes(next))
         .containsExactly(
-            "SMLN",
-            "SHLN",
-            "SLLN+PL",
-            "SLLN+PM",
-            "SLLN+PH",
-            "SMLN+PL",
-            "SMLN+PM",
-            "SMLN+PH",
-            "SHLN+PL",
-            "SHLN+PM",
-            "SHLN+PH");
+            "SMLN", "SHLN", "SLLN+PL", "SLLN+PM", "SLLN+PH", "SMLN+PL", "SMLN+PM", "SMLN+PH",
+            "SHLN+PL", "SHLN+PM", "SHLN+PH");
     assertThat(next.get(2).lines()).containsExactly("최대 생명력 +1300", "공격력 +0.40%", "최대 마나 +6");
   }
 
@@ -74,8 +64,7 @@ class SpecUpSupportPolishTest {
   @Test
   void 최대_마나_6은_유물_고대_공통_줄이라_더_올릴_등급이_없다() {
     var next =
-        SpecUpSupportPolish.candidates(
-            "earing2", lines("최대 마나 +6", "최대 생명력 +3250", "공격력 +0.95%"));
+        SpecUpSupportPolish.candidates("earing2", lines("최대 마나 +6", "최대 생명력 +3250", "공격력 +0.95%"));
     // 최대 마나 +6은 그대로, 최대 생명력 중 → 상만. 주옵션이 둘이라 붙이지 않음.
     assertThat(codes(next)).containsExactly("SLHM");
   }

@@ -34,11 +34,14 @@ class MarketAuctionServiceTest {
   private final Clock clock = Clock.fixed(NOW, ZoneOffset.UTC);
   private LostArkRequestGate gate = gate(90);
   private final FakeAuctions port = new FakeAuctions();
+  private final io.micrometer.core.instrument.simple.SimpleMeterRegistry meters =
+      new io.micrometer.core.instrument.simple.SimpleMeterRegistry();
   private MarketAuctionService service = service();
 
   /** 일별 기록은 테스트에서 같은 스레드로 바로 쓴다. */
   private MarketAuctionService service() {
-    return new MarketAuctionService(port, port, gate, clock, Runnable::run);
+    return new MarketAuctionService(
+        port, port, gate, clock, new MarketMetrics(meters), Runnable::run);
   }
 
   /** 실제 메모리 게이트. 가짜 검색이 실제 클라이언트처럼 호출마다 acquire한다. */
@@ -203,6 +206,7 @@ class MarketAuctionServiceTest {
             port,
             gate,
             ticking(Instant.parse("2026-10-09T14:59:59Z"), Instant.parse("2026-10-09T15:00:01Z")),
+            new MarketMetrics(meters),
             Runnable::run);
     crossing.gems();
     assertThat(port.previousDays).hasSize(2).containsOnly(LocalDate.parse("2026-10-09"));
@@ -232,6 +236,9 @@ class MarketAuctionServiceTest {
         return used.getAndSet(true) ? then : first;
       }
     };
+  }
+
+  @Test
   void 연마_시세는_표와_같은_키의_캐시를_쓰고_스위치가_꺼져_있으면_채우지_않는다() {
     // 귀걸이 무공% 중 · 공% 중 = 표 칸(고대, 품질 조건 없음)과 같은 키. 줄 순서가 달라도 같은 칸.
     var key =
@@ -281,6 +288,74 @@ class MarketAuctionServiceTest {
       }
     assertThat(ok).isEqualTo(5);
     assertThat(port.searches).isEqualTo(5);
+    // 지표: 5칸 채움, 6번째는 몫이 없어 no_budget
+    assertThat(polishEvents("filled")).isEqualTo(5);
+    assertThat(polishEvents("no_budget")).isEqualTo(1);
+  }
+
+  /** 연마 시세 지표 사건(observability 10-25): 캐시·꺼짐·잠금·공식 실패·표현 불가를 나눠 센다. 잠금을 못 잡으면 몫을 쓰지 않는다. */
+  @Test
+  void 연마_시세_지표는_사건마다_세고_잠금을_못_잡으면_몫을_쓰지_않는다() throws Exception {
+    var lines =
+        List.of(
+            new MarketAuctionService.PolishLine("공격력", true, "+0.95%"),
+            new MarketAuctionService.PolishLine("무기 공격력", true, "+1.80%"));
+    service.polishPrice("귀걸이", lines, new MarketAuctionService.PolishFill(false));
+    assertThat(polishEvents("fill_off")).isEqualTo(1);
+    service.polishPrice(
+        "귀걸이",
+        List.of(new MarketAuctionService.PolishLine("공격력", false, "+80")),
+        new MarketAuctionService.PolishFill(true));
+    assertThat(polishEvents("unsupported")).isEqualTo(1);
+    // 다른 스레드가 채우기 잠금을 잡고 있으면 lock_busy, 몫은 그대로 5칸
+    var lock = MarketAuctionService.class.getDeclaredField("fillLock");
+    lock.setAccessible(true);
+    var fillLock = (java.util.concurrent.locks.ReentrantLock) lock.get(service);
+    var held = new java.util.concurrent.CountDownLatch(1);
+    var release = new java.util.concurrent.CountDownLatch(1);
+    var holder =
+        new Thread(
+            () -> {
+              fillLock.lock();
+              held.countDown();
+              try {
+                release.await();
+              } catch (InterruptedException exception) {
+                Thread.currentThread().interrupt();
+              } finally {
+                fillLock.unlock();
+              }
+            });
+    holder.start();
+    held.await();
+    var fill = new MarketAuctionService.PolishFill(true);
+    assertThat(service.polishPrice("귀걸이", lines, fill).status())
+        .isEqualTo(MarketAuctionService.PolishStatus.MISSING);
+    assertThat(polishEvents("lock_busy")).isEqualTo(1);
+    release.countDown();
+    holder.join();
+    assertThat(service.polishPrice("귀걸이", lines, fill).status())
+        .isEqualTo(MarketAuctionService.PolishStatus.OK);
+    assertThat(polishEvents("filled")).isEqualTo(1);
+    // 이제 캐시에 있다
+    service.polishPrice("귀걸이", lines, new MarketAuctionService.PolishFill(false));
+    assertThat(polishEvents("cache_hit")).isEqualTo(1);
+    // 공식 호출 한도면 official_failed, 그 요청은 더 채우지 않는다
+    gate = gate(10);
+    service = service();
+    var other =
+        List.of(
+            new MarketAuctionService.PolishLine("공격력", true, "+0.40%"),
+            new MarketAuctionService.PolishLine("무기 공격력", true, "+1.80%"));
+    var limited = new MarketAuctionService.PolishFill(true);
+    assertThat(service.polishPrice("귀걸이", other, limited).status())
+        .isEqualTo(MarketAuctionService.PolishStatus.MISSING);
+    assertThat(polishEvents("official_failed")).isEqualTo(1);
+  }
+
+  private double polishEvents(String event) {
+    var counter = meters.find("loakraken.market.polish_fill").tag("event", event).counter();
+    return counter == null ? 0 : counter.count();
   }
 
   @Test

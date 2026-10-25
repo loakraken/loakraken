@@ -52,18 +52,24 @@ public class MarketAuctionService {
   private final LostArkRequestGate gate;
   private final Clock clock;
   private final ReentrantLock fillLock = new ReentrantLock();
+  private final MarketMetrics metrics;
 
   // 일별 최저가 기록(최대 24회)은 요청 밖 단일 작업자가 쓴다(PM-백엔드 #139 P2). 대기열이 차면 버리고 다음 관측에서 다시 쓴다.
   private final java.util.concurrent.Executor dailyWriter;
 
   @org.springframework.beans.factory.annotation.Autowired
   public MarketAuctionService(
-      AuctionPort auctions, AuctionSearchPort search, LostArkRequestGate gate, Clock clock) {
+      AuctionPort auctions,
+      AuctionSearchPort search,
+      LostArkRequestGate gate,
+      Clock clock,
+      MarketMetrics metrics) {
     this(
         auctions,
         search,
         gate,
         clock,
+        metrics,
         new java.util.concurrent.ThreadPoolExecutor(
             1,
             1,
@@ -85,8 +91,10 @@ public class MarketAuctionService {
       AuctionSearchPort search,
       LostArkRequestGate gate,
       Clock clock,
+      MarketMetrics metrics,
       java.util.concurrent.Executor dailyWriter) {
     this.dailyWriter = dailyWriter;
+    this.metrics = metrics;
     this.auctions = auctions;
     this.search = search;
     this.gate = gate;
@@ -307,10 +315,17 @@ public class MarketAuctionService {
 
   /** 요청 하나의 연마 시세 채우기 몫. 스위치가 꺼져 있으면 0칸(캐시만 읽음). 공식 호출이 한도·장애로 실패하면 남은 몫을 쓰지 않는다. */
   public static final class PolishFill {
+    private final boolean enabled;
     private int left;
 
     public PolishFill(boolean enabled) {
+      this.enabled = enabled;
       this.left = enabled ? MAX_FETCH_PER_REQUEST : 0;
+    }
+
+    /** 스위치가 켜져 있었는가(몫을 다 써도 true). */
+    boolean enabled() {
+      return enabled;
     }
 
     boolean take() {
@@ -330,25 +345,33 @@ public class MarketAuctionService {
    * 1~3개가 아니거나, 경매장 연마 옵션이 아닌 줄(고정값·파티원 효과 등)이 있거나, 세 줄인데 모두 상이 아니면(B 키에 없는 조합) UNSUPPORTED.
    */
   public PolishPrice polishPrice(String part, List<PolishLine> lines, PolishFill fill) {
-    var slot = slotOf(part);
-    if (slot == null || lines == null || lines.isEmpty() || lines.size() > 3)
-      return PolishPrice.UNSUPPORTED;
+    var result = lookupPolish(slotOf(part), lines, fill);
+    metrics.polishFill(result.event());
+    return result.price();
+  }
+
+  /** 연마 시세를 찾은 결과와 지표 사건 이름(MarketMetrics.polishFill). */
+  private record PolishLookup(PolishPrice price, String event) {}
+
+  private PolishLookup lookupPolish(Slot slot, List<PolishLine> lines, PolishFill fill) {
+    var unsupported = new PolishLookup(PolishPrice.UNSUPPORTED, "unsupported");
+    if (slot == null || lines == null || lines.isEmpty() || lines.size() > 3) return unsupported;
     var pairs = new ArrayList<java.util.Map.Entry<PolishOption, Level>>();
     for (var line : lines) {
       var option = line.percent() ? POLISH_OPTIONS.get(line.name()) : null;
-      if (option == null || !AuctionCatalog.fits(slot, option)) return PolishPrice.UNSUPPORTED;
+      if (option == null || !AuctionCatalog.fits(slot, option)) return unsupported;
       BigDecimal value;
       try {
         value = new BigDecimal(line.value().replace("+", "").replace("%", "").strip());
       } catch (NumberFormatException exception) {
-        return PolishPrice.UNSUPPORTED;
+        return unsupported;
       }
       var level = option.levelOf(value).orElse(null);
-      if (level == null) return PolishPrice.UNSUPPORTED;
+      if (level == null) return unsupported;
       pairs.add(java.util.Map.entry(option, level));
     }
     if (pairs.size() == 3 && pairs.stream().anyMatch(pair -> pair.getValue() != Level.HIGH))
-      return PolishPrice.UNSUPPORTED;
+      return unsupported;
     // 보석·장신구 표 칸과 같은 키가 되게 표의 옵션 순서(딜러 → 서포터 → 코드)로 줄을 세운다.
     pairs.sort(java.util.Comparator.comparingInt(pair -> boardOrder(slot, pair.getKey())));
     var query =
@@ -360,20 +383,24 @@ public class MarketAuctionService {
             null,
             1);
     var cached = auctions.findCell(query.key());
-    if (cached.isPresent()) return price(cached.get());
-    if (fill == null || !fill.take()) return PolishPrice.MISSING;
-    // 표 채우기와 같은 잠금: 동시에 같은 칸을 두 번 부르지 않게(잠금을 못 잡으면 이번엔 채우지 않음, 코드 리뷰 10-25).
-    if (!fillLock.tryLock()) return PolishPrice.MISSING;
+    if (cached.isPresent()) return new PolishLookup(price(cached.get()), "cache_hit");
+    if (fill == null || !fill.enabled()) return new PolishLookup(PolishPrice.MISSING, "fill_off");
+    // 표 채우기와 같은 잠금: 동시에 같은 칸을 두 번 부르지 않게(잠금을 못 잡으면 이번엔 채우지 않음, 코드 리뷰 10-25). 몫은 잠금을 잡은 뒤에만
+    // 쓴다(잠금을 못 잡아 몫만 버리지 않게).
+    if (!fillLock.tryLock()) return new PolishLookup(PolishPrice.MISSING, "lock_busy");
     try {
       var again = auctions.findCell(query.key());
-      if (again.isPresent()) return price(again.get());
+      if (again.isPresent()) return new PolishLookup(price(again.get()), "cache_hit");
+      if (!fill.take()) return new PolishLookup(PolishPrice.MISSING, "no_budget");
       var cell = toCell(gate.withUserReserve(RESERVE, () -> search.search(query)));
       remember(query.key(), cell);
-      return price(cell);
+      return new PolishLookup(price(cell), "filled");
     } catch (BusinessException exception) {
       fill.stop();
-      log.debug("연마 시세 칸을 채우지 못했습니다. 코드={}", exception.errorCode().code());
-      return PolishPrice.MISSING;
+      log.info(
+          "event=polish_fill_failed code={} 연마 시세 칸을 채우지 못했습니다(이번 요청은 더 채우지 않음)",
+          exception.errorCode().code());
+      return new PolishLookup(PolishPrice.MISSING, "official_failed");
     } finally {
       fillLock.unlock();
     }

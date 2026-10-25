@@ -522,7 +522,7 @@ public final class CritSpeedCalculation {
                         .add(sum(sources, Kind.OBSERVED, Axis.CRIT_DAMAGE))
                         .add(sum(sources, Kind.ASSUMED, Axis.CRIT_DAMAGE))),
                 scale(sum(sources, Kind.ASSUMED, Axis.CRIT_DAMAGE))),
-            critRead ? null : "치명 스탯을 읽지 못해 치명타 적중률을 계산하지 않았습니다.");
+            critRead ? null : "치명 스탯을 읽지 못해 치명타 적중률을 계산하지 않았어요.");
 
     var attack = axis(sources, Axis.ATTACK_SPEED);
     var move = axis(sources, Axis.MOVE_SPEED);
@@ -558,7 +558,7 @@ public final class CritSpeedCalculation {
                 swiftness,
                 requiredSwiftness,
                 supersonicRule),
-            speedRead ? null : "신속 스탯을 읽지 못해 공격·이동 속도를 계산하지 않았습니다.");
+            speedRead ? null : "신속 스탯을 읽지 못해 공격·이동 속도를 계산하지 않았어요.");
     limitations.add("아크 그리드 코어·젬, 스킬 룬·트라이포드의 치명타·속도 효과는 공식 원문 문구가 없어 가정 입력으로만 반영합니다.");
     limitations.add("특정 스킬·조건 한정 효과(예: '…의 치명타 적중률', 백어택 한정)는 자동 합산하지 않습니다.");
     limitations.add(

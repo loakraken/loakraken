@@ -742,30 +742,30 @@ public class SpecUpService {
       int target,
       String grade) {
     return new Planned(
-            "EQUIPMENT_REFINE:" + loadout.equipment().indexOf(item) + ":" + target,
-            Kind.EQUIPMENT_REFINE.name(),
-            item.name(),
-            "+" + refine,
-            "+" + target + (grade.equals(item.grade()) ? "" : " " + grade),
-            item.icon(),
-            item.grade(),
+        "EQUIPMENT_REFINE:" + loadout.equipment().indexOf(item) + ":" + target,
+        Kind.EQUIPMENT_REFINE.name(),
+        item.name(),
+        "+" + refine,
+        "+" + target + (grade.equals(item.grade()) ? "" : " " + grade),
+        item.icon(),
+        item.grade(),
+        null,
+        new Change(
+            Kind.ARM_GUARD,
             null,
-            new Change(
-                Kind.ARM_GUARD,
-                null,
-                null,
-                null,
-                target,
-                null,
-                null,
-                null,
-                grade,
-                null,
-                null,
-                null,
-                null,
-                null),
-            SpecUpCost.ARM_GUARD_COST_UNCONFIRMED);
+            null,
+            null,
+            target,
+            null,
+            null,
+            null,
+            grade,
+            null,
+            null,
+            null,
+            null,
+            null),
+        SpecUpCost.ARM_GUARD_COST_UNCONFIRMED);
   }
 
   /**

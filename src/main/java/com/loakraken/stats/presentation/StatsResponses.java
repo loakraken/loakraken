@@ -195,28 +195,56 @@ public final class StatsResponses {
     static StatsClassesResponse from(StatsQueryService.ClassesResult result) {
       return new StatsClassesResponse(
           StatsMetaResponse.from(result.meta()),
+          result.rows().stream().map(StatsClassesResponse::row).toList());
+    }
+
+    static StatsClassRowResponse row(StatsQueryService.ClassStat row) {
+      return new StatsClassRowResponse(
+          row.className(),
+          row.count(),
+          row.share(),
+          row.dealers(),
+          row.supports(),
+          row.unknownRole(),
+          row.supportShare(),
+          row.itemLevelMean(),
+          row.gemMeanLevel(),
+          row.combatPower() == null
+              ? null
+              : new StatsPercentilesResponse(
+                  row.combatPower().p10(),
+                  row.combatPower().p25(),
+                  row.combatPower().p50(),
+                  row.combatPower().p75(),
+                  row.combatPower().p90()),
+          row.sampleStatus().name());
+    }
+  }
+
+  public record StatsClassEngravingRowResponse(
+      @Schema(description = "직업 각인(공식 아크 패시브 칭호 원문, 랭킹 직업 각인 필터와 같은 표기)") String classEngraving,
+      @Schema(description = "직업별 통계와 같은 값(share는 같은 모집단 대비)") StatsClassRowResponse stats) {}
+
+  public record StatsClassCountResponse(String className, long count) {}
+
+  public record StatsClassEngravingTableResponse(
+      StatsMetaResponse meta,
+      @Schema(description = "직업 각인별, 인원 많은 순(같으면 직업·직업 각인 이름순)")
+          List<StatsClassEngravingRowResponse> rows,
+      @Schema(description = "직업별 직업 각인 미확인 수(장비를 관측하지 않았거나 직업 각인이 없는 캐릭터). 행에는 들어가지 않습니다")
+          List<StatsClassCountResponse> unknownByClass) {
+    static StatsClassEngravingTableResponse from(
+        StatsQueryService.ClassEngravingTableResult result) {
+      return new StatsClassEngravingTableResponse(
+          StatsMetaResponse.from(result.meta()),
           result.rows().stream()
               .map(
                   row ->
-                      new StatsClassRowResponse(
-                          row.className(),
-                          row.count(),
-                          row.share(),
-                          row.dealers(),
-                          row.supports(),
-                          row.unknownRole(),
-                          row.supportShare(),
-                          row.itemLevelMean(),
-                          row.gemMeanLevel(),
-                          row.combatPower() == null
-                              ? null
-                              : new StatsPercentilesResponse(
-                                  row.combatPower().p10(),
-                                  row.combatPower().p25(),
-                                  row.combatPower().p50(),
-                                  row.combatPower().p75(),
-                                  row.combatPower().p90()),
-                          row.sampleStatus().name()))
+                      new StatsClassEngravingRowResponse(
+                          row.classEngraving(), StatsClassesResponse.row(row.stats())))
+              .toList(),
+          result.unknownByClass().stream()
+              .map(count -> new StatsClassCountResponse(count.className(), count.count()))
               .toList());
     }
   }

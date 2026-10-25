@@ -556,6 +556,43 @@ class StatsIntegrationTest {
   }
 
   @Test
+  void 직업_각인별_통계는_직업_표와_같은_값을_직업_각인으로_나누고_모르는_캐릭터는_미확인_수로_준다() throws Exception {
+    표본();
+    // MAIN_CLASS 35명 중 3명은 버스트(1명은 옛 요약이 다른 칭호 → 마지막 요약 기준), 1명은 잔재된 기운, 나머지 31명은 요약 없음.
+    var ids = new java.util.HashMap<String, UUID>();
+    jdbc.sql("SELECT character_name, character_id FROM characters WHERE server_name = :s")
+        .param("s", SERVER)
+        .query(
+            (java.sql.ResultSet row) -> {
+              ids.put(row.getString(1), row.getObject(2, UUID.class));
+            });
+    summary(ids.get("통계캐1"), "버스트", 2, "a1");
+    summary(ids.get("통계캐3"), "버스트", 2, "a3");
+    summary(ids.get("통계캐5"), "잔재된 기운", 5, "a5");
+    summary(ids.get("통계캐5"), "버스트", 1, "a6");
+    summary(ids.get("통계캐7"), "잔재된 기운", 2, "a7");
+
+    var table = data("/api/v1/stats/class-engravings?server=" + encode(SERVER));
+    var classes = data("/api/v1/stats/classes?server=" + encode(SERVER));
+    assertThat(table.at("/meta/population").asLong())
+        .isEqualTo(classes.at("/meta/population").asLong());
+    assertThat(table.at("/rows/0/classEngraving").asText()).isEqualTo("버스트");
+    assertThat(table.at("/rows/0/stats/className").asText()).isEqualTo(MAIN_CLASS);
+    assertThat(table.at("/rows/0/stats/count").asLong()).isEqualTo(3);
+    // 1·3·5번은 홀수라 딜러(표본 규칙).
+    assertThat(table.at("/rows/0/stats/dealers").asLong()).isEqualTo(3);
+    assertThat(table.at("/rows/0/stats/sampleStatus").asText()).isEqualTo("COLLECTING");
+    assertThat(table.at("/rows/0/stats/combatPower").isNull()).isTrue();
+    assertThat(table.at("/rows/1/classEngraving").asText()).isEqualTo("잔재된 기운");
+    assertThat(table.at("/rows/1/stats/count").asLong()).isEqualTo(1);
+    var unknown = new java.util.HashMap<String, Long>();
+    table
+        .path("unknownByClass")
+        .forEach(row -> unknown.put(row.path("className").asText(), row.path("count").asLong()));
+    assertThat(unknown).containsEntry(MAIN_CLASS, 31L).containsEntry(SMALL_CLASS, 5L);
+  }
+
+  @Test
   void 저장된_효율이_없으면_빈_랭킹이다() throws Exception {
     표본();
     var empty = data("/api/v1/rankings/ark-grid-gems?server=" + encode(SERVER));

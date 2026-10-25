@@ -223,7 +223,15 @@ public class StatsQueryService {
       SampleStatus status,
       long sampleSize,
       BigDecimal braceletItemLevelMin,
-      List<ClassBuildTopRow> rows) {}
+      List<ClassBuildTopRow> rows)
+      implements ListsCharacters {
+    @Override
+    public List<StatsPort.Named> listedCharacters() {
+      return rows == null
+          ? List.of()
+          : rows.stream().map(r -> new StatsPort.Named(r.characterName(), r.serverName())).toList();
+    }
+  }
 
   /** rank는 이 응답 안에서 1부터(관측 전투력 내림차순, 같으면 아이템 레벨·이름순). */
   public record ClassBuildTopRow(
@@ -1138,10 +1146,23 @@ public class StatsQueryService {
 
   private <T> T cached(String key, Class<T> type, Supplier<T> loader) {
     var hit = cache.find(key, type);
-    if (hit.isPresent()) return hit.get();
+    // 캐릭터를 나열하는 결과는 캐시 뒤 처리정지 목록에 든 캐릭터가 있으면 다시 센다(집계 SQL이 목록을 뺀다). 목록 추가는 운영자가 DB에 직접
+    // 하므로 지울 시점을 알 수 없어, 캐시를 쓸 때마다 한 번 확인한다.
+    if (hit.isPresent() && !(hit.get() instanceof ListsCharacters rows && stopListed(rows)))
+      return hit.get();
     var value = guard(loader);
     cache.save(key, value);
     return value;
+  }
+
+  private boolean stopListed(ListsCharacters rows) {
+    var names = rows.listedCharacters();
+    return !names.isEmpty() && !guard(() -> stats.stopListed(names)).isEmpty();
+  }
+
+  /** 캐릭터를 나열하는 결과. 캐시를 쓸 때 처리정지 목록을 다시 확인하는 대상이다. */
+  interface ListsCharacters {
+    List<StatsPort.Named> listedCharacters();
   }
 
   private static <T> T guard(Supplier<T> loader) {
@@ -1233,7 +1254,17 @@ public class StatsQueryService {
       String guildName,
       int activeDays,
       Instant aggregatedAt,
-      GuildDetail.Result detail) {}
+      GuildDetail.Result detail)
+      implements ListsCharacters {
+    @Override
+    public List<StatsPort.Named> listedCharacters() {
+      return detail == null || detail.members() == null
+          ? List.of()
+          : detail.members().stream()
+              .map(m -> new StatsPort.Named(m.characterName(), serverName))
+              .toList();
+    }
+  }
 
   /** className은 전체 줄이면 null. 30 미만이면 mean·max·percentiles는 null. */
   public record BestCombatPowerStat(
@@ -1304,7 +1335,15 @@ public class StatsQueryService {
 
   /** 수집품 랭킹 결과(#295). unit은 ROSTER·CHARACTER(응답에서는 문자열). */
   public record CollectibleRankingResult(
-      Meta meta, String unit, int page, int size, List<RankedCollectible> rows) {}
+      Meta meta, String unit, int page, int size, List<RankedCollectible> rows)
+      implements ListsCharacters {
+    @Override
+    public List<StatsPort.Named> listedCharacters() {
+      return rows == null
+          ? List.of()
+          : rows.stream().map(r -> new StatsPort.Named(r.characterName(), r.serverName())).toList();
+    }
+  }
 
   public record RankedCollectible(
       long rank,
@@ -1327,7 +1366,15 @@ public class StatsQueryService {
       int page,
       int size,
       long excludedRosters,
-      List<RankedRoster> rows) {}
+      List<RankedRoster> rows)
+      implements ListsCharacters {
+    @Override
+    public List<StatsPort.Named> listedCharacters() {
+      return rows == null
+          ? List.of()
+          : rows.stream().map(r -> new StatsPort.Named(r.characterName(), r.serverName())).toList();
+    }
+  }
 
   public record RankedRoster(
       long rank,
@@ -1409,7 +1456,15 @@ public class StatsQueryService {
       int size,
       List<RankedCharacter> rows,
       String classEngraving,
-      Long classEngravingUnknown) {}
+      Long classEngravingUnknown)
+      implements ListsCharacters {
+    @Override
+    public List<StatsPort.Named> listedCharacters() {
+      return rows == null
+          ? List.of()
+          : rows.stream().map(r -> new StatsPort.Named(r.characterName(), r.serverName())).toList();
+    }
+  }
 
   public record TitleCount(String title, long count) {}
 
@@ -1446,7 +1501,15 @@ public class StatsQueryService {
       String ruleVersion,
       int page,
       int size,
-      List<EfficiencyRankedCharacter> rows) {}
+      List<EfficiencyRankedCharacter> rows)
+      implements ListsCharacters {
+    @Override
+    public List<StatsPort.Named> listedCharacters() {
+      return rows == null
+          ? List.of()
+          : rows.stream().map(r -> new StatsPort.Named(r.characterName(), r.serverName())).toList();
+    }
+  }
 
   public record RankEntry(
       Metric metric,

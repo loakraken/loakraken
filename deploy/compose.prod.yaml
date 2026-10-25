@@ -147,6 +147,8 @@ services:
       SPRING_FLYWAY_USER: ${POSTGRES_USER:-loakraken}
       VALKEY_HOST: valkey
       VALKEY_PORT: "6379"
+      # valkey의 앱 전용 사용자(기본 사용자는 꺼져 있다). 암호는 비밀 파일 spring.data.redis.password.
+      SPRING_DATA_REDIS_USERNAME: app
       # 공식 API 호출 한도를 쓰는 백그라운드 작업은 스택마다 명시한다(운영 1곳만 true).
       STATS_COLLECTOR_ENABLED: ${STATS_COLLECTOR_ENABLED:-false}
       # 수집기 속도. 기본 3s·예약분 40(사용자 요청 몫). 공개 전 한시로 1s·25까지 허용(PM-백엔드 10-10 23:26), 도메인 공개 전 기본으로 되돌린다.
@@ -154,6 +156,8 @@ services:
       STATS_COLLECTOR_RESERVE: ${STATS_COLLECTOR_RESERVE:-40}
       # 방문자 한 명이 분당 일으킬 수 있는 공식 호출 수(기본 20). 접속이 몰려 예산 거절이 이어질 때만 낮춘다(부하 대응 2단계).
       CLIENT_LIMIT_OFFICIAL: ${CLIENT_LIMIT_OFFICIAL:-20}
+      # 요청 본문 크기 상한(기본 64KB). 앞단 프록시 상한(256KB)보다 작게 둔다.
+      HTTP_MAX_REQUEST_BODY: ${HTTP_MAX_REQUEST_BODY:-64KB}
       # 검색봇 표시 요청 전체가 분당 일으킬 수 있는 공식 호출 수(기본 20). 캐릭터 페이지 색인을 켤 때만 낮춘다.
       CLIENT_LIMIT_BOT_OFFICIAL: ${CLIENT_LIMIT_BOT_OFFICIAL:-20}
       # 시드 목록(#255): 쉼표 구분 이름. 값은 운영 서버 stack.env에만 둔다(저장소 커밋 금지).
@@ -304,6 +308,8 @@ services:
     # 암호를 프로세스 인자에 넣지 않는다. 컨테이너 안 설정 파일(valkey 그룹만 읽기)에 쓰고,
     # 이미지 진입 스크립트에 .conf를 넘겨 valkey 사용자로 권한을 낮춰 실행한다(sh로 바로 실행하면 root로 돈다).
     # maxmemory를 컨테이너 한도보다 작게 둬, 캐시가 커져도 OOM으로 죽지 않고 만료 시간이 있는 키부터 덜 쓴 순서로 지운다.
+    # 사용자별 권한: 기본 사용자는 끄고 앱 전용 사용자 app만 둔다. 위험 명령(CONFIG·FLUSH·KEYS 등)은 빼고 헬스 체크용 INFO만 남긴다.
+    # api는 같은 암호에 사용자 이름 app으로 접속한다(api의 SPRING_DATA_REDIS_USERNAME).
     entrypoint:
       - tini
       - --
@@ -311,7 +317,7 @@ services:
       - -c
       - >-
         umask 027 &&
-        printf 'requirepass %s\n' "$$(cat /run/secrets/valkey_password)" > /tmp/valkey.conf &&
+        printf 'user default off\nuser app on >%s ~* &* +@all -@dangerous +info\n' "$$(cat /run/secrets/valkey_password)" > /tmp/valkey.conf &&
         chgrp valkey /tmp/valkey.conf &&
         exec docker-entrypoint.sh /tmp/valkey.conf --appendonly yes
         --maxmemory ${VALKEY_MAXMEMORY:-96mb} --maxmemory-policy volatile-lru --maxmemory-samples 10
@@ -323,7 +329,7 @@ services:
       # 인증은 인자(-a) 대신 환경 변수로 넘겨 프로세스 목록에 암호가 남지 않게 한다.
       test:
         - CMD-SHELL
-        - VALKEYCLI_AUTH="$$(cat /run/secrets/valkey_password)" valkey-cli ping | grep -q PONG
+        - VALKEYCLI_AUTH="$$(cat /run/secrets/valkey_password)" valkey-cli --no-auth-warning --user app ping | grep -q PONG
       interval: 5s
       timeout: 3s
       retries: 10

@@ -58,7 +58,7 @@ valkey_id="$(docker ps -q --filter "label=com.docker.compose.project=${STACK_NAM
 evicted=-1
 if [[ -n "$valkey_id" ]]; then
   # shellcheck disable=SC2016  # 변수는 valkey 컨테이너 안에서 펼친다.
-  evicted="$(docker exec "$valkey_id" sh -c 'VALKEYCLI_AUTH="$(cat /run/secrets/valkey_password)" valkey-cli info stats' 2>/dev/null \
+  evicted="$(docker exec "$valkey_id" sh -c 'VALKEYCLI_AUTH="$(cat /run/secrets/valkey_password)" valkey-cli --no-auth-warning --user app info stats' 2>/dev/null \
     | tr -d '\r' | sed -n 's/^evicted_keys://p')"
   evicted="${evicted:--1}"
 fi

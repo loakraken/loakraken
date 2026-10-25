@@ -83,7 +83,8 @@ public class SpecUpKrakenScore {
     var position =
         CharacterPosition.judge(details.profile().className(), details.loadout().arkPassive());
     if (position.role() == null) return new Context(null, Double.NaN, "ROLE_UNKNOWN");
-    // 서포터는 서포터 점수식(점수 API와 같은 KrakenScoreSupport.score). 후보·바꾸는 필드는 딜러와 같다(PM 총괄 10-25: 서포터 점수 기준 줄).
+    // 서포터는 서포터 점수식(점수 API와 같은 KrakenScoreSupport.score). 후보·바꾸는 필드는 딜러와 같다(PM 총괄 10-25: 서포터 점수 기준
+    // 줄).
     boolean support = position.role() == CharacterPosition.Role.SUPPORT;
     // 점수 서비스와 같은 조건: 무기·아크 패시브가 비면 엔진 기본값으로 0점이 나온다.
     if (!com.loakraken.character.application.KrakenScoreService.scorable(input))

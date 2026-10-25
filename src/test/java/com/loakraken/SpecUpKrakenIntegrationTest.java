@@ -254,6 +254,18 @@ class SpecUpKrakenIntegrationTest {
             java.util.Map.entry("SHMH", "80.77"),
             java.util.Map.entry("SHLH", "84.72"),
             java.util.Map.entry("SHHL", "84.72"));
+    // 목록 id 그대로 줄 상세를 부를 수 있다(코드 리뷰 10-25).
+    for (var candidate : candidates)
+      if ("POLISH".equals(candidate.path("kind").asText())) {
+        var id = candidate.path("id").asText();
+        var detail =
+            get(
+                "/api/v1/characters/spec-up/candidates/"
+                    + encode(id)
+                    + "?characterName="
+                    + encode(NAME));
+        assertThat(detail.statusCode()).as(id + " " + detail.body()).isEqualTo(200);
+      }
   }
 
   @Test

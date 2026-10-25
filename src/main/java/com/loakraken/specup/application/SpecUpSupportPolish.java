@@ -137,7 +137,10 @@ final class SpecUpSupportPolish {
     return any ? planned : null;
   }
 
-  /** 목표 줄 목록과 후보 코드(줄마다 L·M·H, 빠진 줄 N, 붙인 옵션은 +이름 첫 글자와 등급). */
+  /**
+   * 목표 줄 목록과 후보 코드(줄마다 L·M·H, 빠진 줄 N, 붙인 옵션은 A 뒤에 B 낙인력·V 최대 생명력·P 최대 마나와 등급). 줄 상세 id 모양(글자·숫자)에
+   * 맞춘다.
+   */
   record Next(List<String> lines, String code) {}
 
   static List<Next> candidates(String slot, JsonNode option) {
@@ -264,7 +267,7 @@ final class SpecUpSupportPolish {
       code.append(known == null ? 'X' : "LMH".charAt(known.grade()));
     }
     if (extra != null)
-      code.append('+')
+      code.append('A')
           .append(
               switch (extra.initialName()) {
                 case "낙인력" -> 'B';

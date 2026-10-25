@@ -37,9 +37,21 @@ class SpecUpSupportPolishTest {
     // 등급 올리기 2(중·상) + (지금·중·상 3) × 최대 마나 3(+6은 따로 계열) = 11
     assertThat(codes(next))
         .containsExactly(
-            "SMLN", "SHLN", "SLLN+PL", "SLLN+PM", "SLLN+PH", "SMLN+PL", "SMLN+PM", "SMLN+PH",
-            "SHLN+PL", "SHLN+PM", "SHLN+PH");
+            "SMLN", "SHLN", "SLLNAPL", "SLLNAPM", "SLLNAPH", "SMLNAPL", "SMLNAPM", "SMLNAPH",
+            "SHLNAPL", "SHLNAPM", "SHLNAPH");
     assertThat(next.get(2).lines()).containsExactly("최대 생명력 +1300", "공격력 +0.40%", "최대 마나 +6");
+  }
+
+  @Test
+  void 후보_id는_줄_상세_id_모양에_맞는다() {
+    // 코드 리뷰 10-25: 붙인 옵션 구분자 '+'가 줄 상세 id 모양에 없어 상세가 400이었다. 목록 id 그대로 상세를 부를 수 있어야 한다.
+    var next =
+        SpecUpSupportPolish.candidates(
+            "earing1", lines("최대 생명력 +1300", "공격력 +0.40%", "무기 공격력 +195"));
+    assertThat(next).isNotEmpty();
+    for (var candidate : next)
+      assertThat("POLISH:7:" + candidate.code())
+          .matches(com.loakraken.specup.presentation.SpecUpDetailController.CANDIDATE_ID);
   }
 
   @Test

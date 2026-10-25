@@ -1113,6 +1113,33 @@ class PostgresStatsRepository implements StatsPort {
   }
 
   @Override
+  public java.util.Set<Named> stopListed(java.util.Collection<Named> characters) {
+    var names =
+        characters.stream()
+            .map(Named::characterName)
+            .filter(java.util.Objects::nonNull)
+            .distinct()
+            .toList();
+    if (names.isEmpty()) return java.util.Set.of();
+    var listed = new java.util.ArrayList<Named>();
+    jdbc.sql(
+            "SELECT character_name, server_name FROM public_exclusion WHERE character_name IN (:names)")
+        .param("names", names)
+        .query(
+            (ResultSet row) -> {
+              listed.add(new Named(row.getString("character_name"), row.getString("server_name")));
+            });
+    // 서버를 비운 항목은 모든 서버의 같은 이름이다.
+    var hits = new java.util.HashSet<Named>();
+    for (var character : characters)
+      for (var entry : listed)
+        if (entry.characterName().equals(character.characterName())
+            && (entry.serverName() == null || entry.serverName().equals(character.serverName())))
+          hits.add(character);
+    return java.util.Set.copyOf(hits);
+  }
+
+  @Override
   public boolean contains(StatsConditions conditions, Instant since, Target target) {
     return population(conditions, since)
         .statement(

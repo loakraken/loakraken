@@ -30,7 +30,7 @@ import org.springframework.stereotype.Service;
 /**
  * 원정대 영수증(receipt-v1, #173). 같은 서버 원정대의 전투정보로 장비 재련 기대 비용과 거래 가능 보석 시세를 더한다.
  *
- * <p>전투정보는 캐릭터 캐시(5분) → 영수증 입력 보관(receipt.input-ttl, 기본 30분) 순서로 먼저 쓰고, 둘 다 없을 때만 공식 armory를 부른다. 한
+ * <p>전투정보는 캐릭터 캐시(5분) → 영수증 입력 보관(receipt.input-ttl, 기본 5분 — 처리방침 문구가 바뀌면 늘림) 순서로 먼저 쓰고, 둘 다 없을 때만 공식 armory를 부른다. 한
  * 요청에 receipt.max-fetch명(기본 2)까지만 새로 부르고 나머지는 PENDING이다. 다시 요청하면 이어서 채운다. 캐릭터를 찾지 못하면 UNAVAILABLE이고
  * 대기 수에 넣지 않는다(다시 요청해도 받을 수 없음). 공식 원문은 저장하지 않는다.
  */
@@ -149,6 +149,8 @@ public class ReceiptService {
             .orElseThrow(() -> new CharacterException(CharacterErrorCode.CHARACTER_NOT_FOUND));
     String server = self.serverName();
     var listed = listed(siblings, server);
+    // 목록 조회가 성공했을 때만 여기 온다(실패하면 위에서 503). 목록에 들기 전에 보관된 입력도 지운다.
+    inputs.delete(listed);
     // 처리정지 목록 캐릭터는 영수증에 넣지 않고 전투정보도 부르지 않는다(PM 2026-10-25). 원정대 수도 뺀 수로 센다.
     var roster =
         siblings.stream()

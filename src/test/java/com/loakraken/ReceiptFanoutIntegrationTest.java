@@ -36,8 +36,9 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * 영수증 공식 호출 줄이기(기본 설정): 한 번 열 때 새로 받는 전투정보는 2명까지, 받은 입력은 캐릭터 캐시가 지나도 영수증 입력 보관(30분)에서 다시
- * 쓴다. 찾지 못한 캐릭터는 UNAVAILABLE로 대기 수에서 빠지고 다시 부르지 않는다. 공식 API·시세는 모두 대역이다.
+ * 영수증 공식 호출 줄이기(기본 설정): 한 번 열 때 새로 받는 전투정보는 2명까지, 받은 입력은 캐릭터 캐시가 지나도 영수증 입력 보관에서 다시
+ * 쓴다. 찾지 못한 캐릭터는 UNAVAILABLE로 대기 수에서 빠지고 다시 부르지 않는다. 처리정지 목록 캐릭터의 보관 입력은 지운다. 공식 API·시세는 모두
+ * 대역이다.
  */
 @Import(TestcontainersConfiguration.class)
 @SpringBootTest(
@@ -50,6 +51,7 @@ class ReceiptFanoutIntegrationTest {
   private static final Instant OBSERVED = Instant.parse("2026-10-09T08:00:00Z");
   @LocalServerPort int port;
   @Autowired StringRedisTemplate redis;
+  @Autowired org.springframework.jdbc.core.simple.JdbcClient jdbc;
   @MockitoBean CharacterDetailsPort detailsPort;
   @MockitoBean MaterialUnitPriceService materials;
   @MockitoBean MarketAuctionService auctions;
@@ -149,6 +151,24 @@ class ReceiptFanoutIntegrationTest {
     assertThat(again.at("/coverage/pending").asInt()).isZero();
     assertThat(again.at("/equipment/characters/0/observedAt").asText()).isEqualTo(observedAt);
     verify(detailsPort, times(5)).fetchArmory(anyString());
+  }
+
+  @Test
+  void 처리정지_목록에_든_캐릭터의_보관_입력은_지우고_영수증에서_뺀다() throws Exception {
+    receipt();
+    assertThat(redis.hasKey("receipt:v1:input:영수증호출부캐1")).isTrue();
+    jdbc.sql(
+            "INSERT INTO public_exclusion (character_name, server_name, reason_code) VALUES ('영수증호출부캐1', :s, 'REQUEST')")
+        .param("s", SERVER)
+        .update();
+    try {
+      var after = receipt();
+      assertThat(redis.hasKey("receipt:v1:input:영수증호출부캐1")).isFalse();
+      assertThat(after.at("/coverage/rosterCharacters").asInt()).isEqualTo(4);
+      assertThat(after.at("/equipment/characters").toString()).doesNotContain("영수증호출부캐1\"");
+    } finally {
+      jdbc.sql("DELETE FROM public_exclusion WHERE server_name = :s").param("s", SERVER).update();
+    }
   }
 
   private JsonNode receipt() throws Exception {

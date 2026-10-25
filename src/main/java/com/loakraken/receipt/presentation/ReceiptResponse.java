@@ -84,7 +84,7 @@ public record ReceiptResponse(
                   "산정 대상 부위를 모두 셌는가. false면 gold는 센 부위만의 합(시세 없음·재련 단계를 읽지 못함·장비 정보 없음). READY가 아니면 null")
           @NullableResponse
           Boolean complete,
-      @Schema(description = "계산에 쓴 장비를 관측한 시각(최대 30분 전 관측을 다시 씀). READY가 아니면 null")
+      @Schema(description = "계산에 쓴 장비를 관측한 시각(조금 전 관측을 다시 쓸 수 있음). READY가 아니면 null")
           @NullableResponse
           Instant observedAt) {
     static ReceiptCharacterResponse from(ReceiptService.CharacterReceipt receipt) {

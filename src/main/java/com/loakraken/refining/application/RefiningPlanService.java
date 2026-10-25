@@ -7,7 +7,9 @@ import com.loakraken.refining.domain.RefiningOptimal;
 import com.loakraken.refining.domain.RefiningPlan;
 import com.loakraken.refining.domain.RefiningRules;
 import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
 import java.time.Duration;
 import java.util.concurrent.Semaphore;
 import java.util.function.Supplier;
@@ -30,7 +32,18 @@ public class RefiningPlanService {
    */
   private final Semaphore solves;
 
+  private final int maxSolves;
+
+  /**
+   * 지표(운영에서 물을 것: OPTIMAL이 얼마나 자주 자리가 없어 거절되나, 캐시에 없는 단계 풀이가 얼마나 걸리나, 자리가 얼마나 찼나). 거절은 {@code
+   * loakraken.refining.optimal.rejected}, 풀이 시간은 {@code
+   * loakraken.refining.optimal.solve}(p50·p95·p99), 지금 풀이 수는 {@code
+   * loakraken.refining.optimal.solving}(최대는 {@code ...solving.max}). 라벨 없음. 거절마다 로그는 남기지 않는다(몰릴 때
+   * 로그가 넘치지 않게, 수는 지표로).
+   */
   private final Counter rejected;
+
+  private final Timer solveTime;
 
   @Autowired
   public RefiningPlanService(
@@ -42,8 +55,28 @@ public class RefiningPlanService {
     this.rules = rules;
     this.growthCosts = growthCosts;
     this.cache = cache;
-    this.solves = new Semaphore(Math.max(1, maxConcurrentSolves));
-    this.rejected = registry.counter("loakraken.refining.optimal.rejected");
+    this.maxSolves = Math.max(1, maxConcurrentSolves);
+    this.solves = new Semaphore(maxSolves);
+    this.rejected =
+        Counter.builder("loakraken.refining.optimal.rejected")
+            .description("OPTIMAL 단계 풀이 자리가 없어 429 REFINING_SOLVE_BUSY로 돌려준 수")
+            .register(registry);
+    this.solveTime =
+        Timer.builder("loakraken.refining.optimal.solve")
+            .description("캐시에 없는 OPTIMAL 단계 풀이 하나에 걸린 시간")
+            .publishPercentiles(0.5, 0.95, 0.99)
+            .register(registry);
+    Gauge.builder("loakraken.refining.optimal.solving", this, RefiningPlanService::solving)
+        .description("지금 진행 중인 OPTIMAL 단계 풀이 수")
+        .register(registry);
+    Gauge.builder("loakraken.refining.optimal.solving.max", this, service -> service.maxSolves)
+        .description("동시에 할 수 있는 OPTIMAL 단계 풀이 수(refining.optimal.max-concurrent-solves)")
+        .register(registry);
+  }
+
+  /** 지금 풀이 중인 자리 수. */
+  int solving() {
+    return maxSolves - solves.availablePermits();
   }
 
   public RefiningPlanService(RefiningRules rules, GrowthCosts growthCosts) {
@@ -84,9 +117,11 @@ public class RefiningPlanService {
       rejected.increment();
       throw new BusinessException(RefiningErrorCode.REFINING_SOLVE_BUSY, RETRY_AFTER);
     }
+    var sample = Timer.start();
     try {
       return compute.get();
     } finally {
+      sample.stop(solveTime);
       solves.release();
     }
   }

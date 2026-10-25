@@ -40,6 +40,9 @@ class RefiningPlanServiceBoundTest {
                     }));
     holder.start();
     assertThat(started.await(5, TimeUnit.SECONDS)).isTrue();
+    // 자리가 찬 동안 지금 풀이 수 1 / 최대 1
+    assertThat(registry.get("loakraken.refining.optimal.solving").gauge().value()).isEqualTo(1);
+    assertThat(registry.get("loakraken.refining.optimal.solving.max").gauge().value()).isEqualTo(1);
     long begin = System.nanoTime();
     assertThatThrownBy(() -> service.bounded(() -> null))
         .isInstanceOf(BusinessException.class)
@@ -54,5 +57,8 @@ class RefiningPlanServiceBoundTest {
     release.countDown();
     holder.join(5_000);
     assertThat(service.bounded(() -> null)).isNull();
+    // 풀이 시간은 끝난 풀이마다(거절은 세지 않음): 잡고 있던 것 + 마지막 것 = 2
+    assertThat(registry.get("loakraken.refining.optimal.solve").timer().count()).isEqualTo(2);
+    assertThat(registry.get("loakraken.refining.optimal.solving").gauge().value()).isZero();
   }
 }

@@ -248,14 +248,42 @@ class ValkeyAclIntegrationTest {
             List.of("SADD", "s", "a"),
             List.of("SMEMBERS", "s"))) {
       assertThat(dryRun(command.toArray(String[]::new)))
-          .as(String.join(" ", command))
+          // 실패 메시지에 비밀번호를 남기지 않는다(명령 이름만).
+          .as(command.getFirst())
           .isEqualTo("OK");
     }
     // 앱은 KEYS를 쓰지 않는다(위험 분류라 막힘). SCAN은 위험 분류가 아니라 허용되지만 앱 코드에 쓰는 곳이 없다.
     assertThat(dryRun("KEYS", "*")).contains("no permissions");
     assertThat(dryRun("SCAN", "0")).isEqualTo("OK");
-    assertThat(dryRun("FLUSHALL")).contains("no permissions");
-    assertThat(dryRun("CONFIG", "GET", "*")).contains("no permissions");
+    // 관리·위험 명령(데이터 전체 삭제, 설정·접근 규칙 변경, 엿보기, 서버 끄기)은 앱 사용자에게 막혀 있다.
+    for (var command :
+        List.of(
+            List.of("FLUSHALL"),
+            List.of("FLUSHDB"),
+            List.of("CONFIG", "GET", "*"),
+            List.of("CONFIG", "SET", "maxmemory", "1"),
+            List.of("ACL", "SETUSER", "x", "on"),
+            List.of("ACL", "LIST"),
+            List.of("MONITOR"),
+            List.of("DEBUG", "SLEEP", "0"),
+            List.of("SHUTDOWN"),
+            List.of("MIGRATE", "h", "1", "k", "0", "1"),
+            List.of("REPLICAOF", "NO", "ONE")))
+      assertThat(dryRun(command.toArray(String[]::new)))
+          .as(String.join(" ", command))
+          .contains("no permissions");
+  }
+
+  @Test
+  @Order(4)
+  void 기본_사용자는_꺼져_있어_비밀번호_없이는_아무_명령도_못_쓴다() throws Exception {
+    // 운영 규칙의 'user default off': 사용자 없이 붙으면 인증 전 명령이 거부된다.
+    var result = VALKEY.execInContainer("valkey-cli", "--no-auth-warning", "PING");
+    assertThat(result.getStdout() + result.getStderr()).contains("NOAUTH").doesNotContain("PONG");
+    var defaultUser =
+        VALKEY.execInContainer(
+            "valkey-cli", "--user", "default", "--pass", "", "--no-auth-warning", "PING");
+    assertThat(defaultUser.getStdout() + defaultUser.getStderr()).doesNotContain("PONG");
   }
 
   @Test

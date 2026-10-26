@@ -34,6 +34,26 @@ class SlackWebhookNotifierTest {
   }
 
   @Test
+  void 읽은_주소도_https_hooks_slack_com_사용자_정보_없음_기본_포트만_통과한다() {
+    // 코드 리뷰 10-25: 앞부분 검사가 먼저 막아 uri()의 다시 확인이 테스트에서 한 번도 돌지 않았다. uri()를 바로 부른다.
+    for (var value :
+        java.util.List.of(
+            "https://evil.example/services/T0/B0/x",
+            "http://hooks.slack.com/services/T0/B0/x",
+            "https://user@hooks.slack.com/services/T0/B0/x",
+            "https://hooks.slack.com:8443/services/T0/B0/x",
+            "https://hooks.slack.com.evil.example/services/T0/B0/x"))
+      assertThatThrownBy(() -> SlackWebhookNotifier.uri(value))
+          .as(value)
+          .isInstanceOf(IllegalStateException.class)
+          .hasNoCause()
+          .hasMessageNotContaining("evil.example")
+          .hasMessageNotContaining("T0/B0");
+    assertThat(SlackWebhookNotifier.uri("https://hooks.slack.com/services/T0/B0/x").getHost())
+        .isEqualTo("hooks.slack.com");
+  }
+
+  @Test
   void 앞부분을_흉내_낸_주소와_빈_파일과_줄바꿈은_주소를_드러내지_않고_거절한다() throws Exception {
     // 코드 리뷰 10-25: 앞부분 검사를 비켜 가는 경우(다른 호스트·사용자 정보·http·빈 파일·중간 공백·줄바꿈)
     var values =

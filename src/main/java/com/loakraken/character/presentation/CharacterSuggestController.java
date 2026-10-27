@@ -11,7 +11,6 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import java.math.BigDecimal;
-import java.time.Duration;
 import java.util.List;
 import org.springframework.http.CacheControl;
 import org.springframework.http.MediaType;
@@ -35,7 +34,7 @@ public class CharacterSuggestController {
       description =
           "LOAKraken에 기록된 캐릭터 중 이름이 q로 시작하는 캐릭터를 아이템 레벨 높은 순으로 최대 8개 줍니다. 공식 API를 부르지 않고, 검색한 사람과 입력은 기록하지 않습니다. "
               + "q는 앞뒤 공백을 지우고 NFC로 맞춥니다. 한글 완성형 글자만이면 1자부터, 그 밖에는 2자부터 찾고, 짧거나 12자를 넘으면 빈 목록입니다. "
-              + "대소문자를 구분합니다. 응답은 60초 동안 브라우저 캐시할 수 있습니다.")
+              + "대소문자를 구분합니다. 응답은 공유 캐시에 남기지 않습니다(private, no-cache).")
   @ApiResponses({
     @io.swagger.v3.oas.annotations.responses.ApiResponse(
         responseCode = "200",
@@ -53,7 +52,8 @@ public class CharacterSuggestController {
       @Parameter(description = "이름 앞부분", example = "언새") @RequestParam(required = false) String q) {
     var items = suggestions.suggest(q).stream().map(CharacterSuggestItemResponse::from).toList();
     return ResponseEntity.ok()
-        .cacheControl(CacheControl.maxAge(Duration.ofSeconds(60)).cachePublic())
+        // 제외 목록이 바뀌면 바로 반영되게 공유 캐시·브라우저가 다시 쓰지 않게 한다.
+        .cacheControl(CacheControl.noCache().cachePrivate())
         .body(
             ApiResponse.of(
                 CharacterSuccessCode.CHARACTER_SUGGEST_SUCCESS,

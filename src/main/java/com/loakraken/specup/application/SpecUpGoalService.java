@@ -151,6 +151,9 @@ public class SpecUpGoalService {
             goal.toPlainString(),
             String.valueOf(snapshot.fetchedAt() == null ? 0 : snapshot.fetchedAt().toEpochMilli()),
             String.valueOf(latest(gems)),
+            // 이전 시세(stale)로 바뀐 칸은 관측 시각이 그대로라, 어느 칸이 이전 시세인지도 키에 넣는다(코드 리뷰 10-25 P1: 지금 시세로 만든 경로를
+            // 이전 시세가 된 뒤에도 stale=false로 주지 않게).
+            staleSignature(gems),
             String.valueOf(refinePrices.map(p -> p.observedAt().toEpochMilli()).orElse(0L)),
             // 각인서 시세가 바뀌면 각인 비용이 달라지므로 다시 계산한다(시세가 그대로면 캐시 그대로).
             String.valueOf(books.observedAt().map(Instant::toEpochMilli).orElse(0L)),
@@ -539,6 +542,16 @@ public class SpecUpGoalService {
       if (cell.cell() != null && cell.cell().observedAt() != null)
         latest = Math.max(latest, cell.cell().observedAt().toEpochMilli());
     return latest;
+  }
+
+  /** 이전 시세 칸 수와 어느 칸인지(정렬한 칸 이름의 해시). 이전 시세가 없으면 "0". */
+  static String staleSignature(Map<String, MarketAuctionService.GemCell> gems) {
+    var stale = new java.util.TreeSet<String>();
+    for (var entry : gems.entrySet())
+      if (entry.getValue().stale() && entry.getValue().cell() != null) stale.add(entry.getKey());
+    return stale.isEmpty()
+        ? "0"
+        : stale.size() + "-" + Integer.toHexString(String.join(",", stale).hashCode());
   }
 
   private Goal single(String key, java.util.function.Supplier<Goal> loader) {

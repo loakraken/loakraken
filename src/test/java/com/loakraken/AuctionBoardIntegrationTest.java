@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
+import com.loakraken.market.application.AuctionPort.AuctionCell;
 import com.loakraken.market.application.AuctionPort.AuctionListing;
 import com.loakraken.market.application.AuctionPort.AuctionPage;
 import com.loakraken.market.application.AuctionPort.AuctionQuery;
@@ -58,6 +59,30 @@ class AuctionBoardIntegrationTest {
     jdbc.sql("DELETE FROM auction_price_daily").update();
   }
 
+  @Autowired com.loakraken.market.application.AuctionPort auctions;
+
+  @Test
+  void 마지막_값은_늦게_끝난_옛_관측이_새_값을_덮지_않는다() {
+    // 코드 리뷰 10-25: 무조건 덮어써서, 늦게 끝난 옛 관측이 새 값을 지우면 3분 칸이 빈 뒤 옛 시세가 보였다.
+    var key = "gem:test-last";
+    var newer = new AuctionCell(1_200_000L, 5, Instant.parse("2026-10-25T03:00:00Z"));
+    var older = new AuctionCell(900_000L, 4, Instant.parse("2026-10-25T02:59:00Z"));
+    auctions.saveLastCell(key, newer);
+    auctions.saveLastCell(key, older);
+    assertThat(auctions.findLastCell(key)).contains(newer);
+    // 같은 시각이나 더 새 관측은 바꾼다
+    var same = new AuctionCell(1_100_000L, 6, newer.observedAt());
+    auctions.saveLastCell(key, same);
+    assertThat(auctions.findLastCell(key)).contains(same);
+    var latest = new AuctionCell(1_000_000L, 7, Instant.parse("2026-10-25T03:05:00Z"));
+    auctions.saveLastCell(key, latest);
+    assertThat(auctions.findLastCell(key)).contains(latest);
+    // 관측 시각 없는 칸은 남기지 않고, 마지막 값 키는 만료가 없다
+    auctions.saveLastCell(key, new AuctionCell(1L, 1, null));
+    assertThat(auctions.findLastCell(key)).contains(latest);
+    assertThat(redis.getExpire("market:v1:auction-last:" + key)).isEqualTo(-1L);
+  }
+
   @Test
   void 보석_표는_칸을_채워_캐시하고_전날_관측과_비교한다() throws Exception {
     when(search.search(any())).thenAnswer(invocation -> page(invocation.getArgument(0)));
@@ -93,8 +118,17 @@ class AuctionBoardIntegrationTest {
     assertThat(first.path("previousDayChangeRate").decimalValue()).isEqualByComparingTo("25.0");
     assertThat(data.at("/cells/1/previousDayChangeRate").isNull()).isTrue();
     assertThat(first.path("status").asText()).isEqualTo("READY");
+    assertThat(first.path("stale").asBoolean(true)).isFalse();
     ApiContractFixture.write("auction-gems.json", get("/api/v1/markets/auctions/gems").body());
     verify(search, times(20)).search(any());
+    // 3분 칸만 지우면(만료) 다음 요청은 앞 5칸만 다시 채우고, 나머지는 마지막 관측 값을 stale=true로 준다(관측 시각 그대로).
+    var observed = data.at("/cells/10/observedAt").asText();
+    redis.delete(redis.keys("market:v1:auction-cell:*"));
+    var again = mapper.readTree(get("/api/v1/markets/auctions/gems").body()).at("/data/cells/10");
+    assertThat(again.path("status").asText()).isEqualTo("READY");
+    assertThat(again.path("stale").asBoolean()).isTrue();
+    assertThat(again.path("observedAt").asText()).isEqualTo(observed);
+    verify(search, org.mockito.Mockito.atMost(25)).search(any());
     assertThat(
             jdbc.sql("SELECT COUNT(*) FROM auction_price_daily WHERE kst_date = :d")
                 .param("d", LocalDate.now(ZoneId.of("Asia/Seoul")))

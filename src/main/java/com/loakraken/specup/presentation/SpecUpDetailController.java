@@ -33,6 +33,9 @@ import org.springframework.web.bind.annotation.RestController;
 @Validated
 @Tag(name = "캐릭터", description = "캐릭터 검색 및 전투정보 조회")
 public class SpecUpDetailController {
+  /** 후보 id 모양(목록 후보 id와 같아야 한다 — 목록에서 받은 id로 줄 상세를 부른다). */
+  public static final String CANDIDATE_ID = "[A-Z_]{1,40}(:[\\p{L}\\p{N} ]{1,30}){0,2}";
+
   private final SpecUpDetailService details;
 
   public SpecUpDetailController(SpecUpDetailService details) {
@@ -77,7 +80,7 @@ public class SpecUpDetailController {
       @Parameter(description = "스펙업 가이드 후보 id", example = "GEM_LEVEL:3:8")
           @PathVariable
           @Size(min = 1, max = 80)
-          @Pattern(regexp = "[A-Z_]{1,40}(:[\\p{L}\\p{N} ]{1,30}){0,2}")
+          @Pattern(regexp = CANDIDATE_ID)
           String candidateId,
       @Parameter(description = "캐릭터명", required = true)
           @RequestParam

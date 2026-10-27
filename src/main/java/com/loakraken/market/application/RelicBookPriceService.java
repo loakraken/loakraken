@@ -68,14 +68,22 @@ public class RelicBookPriceService {
       return Optional.empty();
     }
     var target = compact(GRADE + " " + engravingName + " 각인서");
-    return scan.flatMap(
-        value ->
-            value.items().stream()
-                .filter(item -> target.equals(compact(item.name())))
-                .filter(item -> item.grade() == null || GRADE.equals(item.grade()))
-                .map(MarketPrice::icon)
-                .filter(icon -> icon != null && !icon.isBlank())
-                .findFirst());
+    var fromScan =
+        scan.flatMap(
+            value ->
+                value.items().stream()
+                    .filter(item -> target.equals(compact(item.name())))
+                    .filter(item -> item.grade() == null || GRADE.equals(item.grade()))
+                    .map(MarketPrice::icon)
+                    .filter(icon -> icon != null && !icon.isBlank())
+                    .findFirst());
+    if (fromScan.isPresent()) return fromScan;
+    // 시세 스캔이 없거나(예열 꺼짐·만료) 그 품목이 없으면 마지막으로 본 아이콘(만료 없음).
+    try {
+      return Optional.ofNullable(cache.findRelicBookIcons().get(target));
+    } catch (RuntimeException exception) {
+      return Optional.empty();
+    }
   }
 
   /** 캐시된 유물 각인서 시세의 관측 시각. 캐시가 없거나 읽지 못하면 빈 값(공식 호출 없음). 결과 캐시 키에 넣어 시세가 바뀌면 다시 계산하게 한다. */
@@ -95,6 +103,12 @@ public class RelicBookPriceService {
   /** 예열용: 다 모은 스캔을 저장한다. ttl은 예열 주기보다 넉넉하게 준다. */
   public void save(RelicBookScan scan, Duration ttl) {
     cache.saveRelicBooks(scan, ttl);
+    var icons = new java.util.HashMap<String, String>();
+    for (var item : scan.items())
+      if ((item.grade() == null || GRADE.equals(item.grade()))
+          && item.icon() != null
+          && !item.icon().isBlank()) icons.put(compact(item.name()), item.icon());
+    cache.saveRelicBookIcons(icons);
   }
 
   public static MarketSearch search(int page) {

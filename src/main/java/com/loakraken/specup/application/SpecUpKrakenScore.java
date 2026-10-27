@@ -330,14 +330,18 @@ public class SpecUpKrakenScore {
   static final List<String> ARM_GUARD_GRADES = List.of("영웅", "전설", "유물", "고대");
 
   /**
-   * 목표 단계의 팔 보호구 등급: 지금 등급의 최대 단계(armGuardGradeRange 끝)를 넘으면 다음 등급(승급), 아니면 지금 등급. 모르는 등급이면 null.
+   * 목표 단계의 팔 보호구 등급: 지금 등급의 최대 단계(armGuardGradeRange 끝)를 넘으면 다음 등급(승급), 목표가 그 등급의 끝도 넘으면 그다음 등급까지
+   * 이어서 올린다(여러 단계 줄, 예: 유물 +15 → +21은 고대). 모르는 등급이거나 마지막 등급을 넘으면 null.
    */
   String armGuardGrade(String current, int target) {
     int at = ARM_GUARD_GRADES.indexOf(current);
-    var range = refine.armGuardGradeRange().get(current);
-    if (at < 0 || range == null || range.size() < 2) return null;
-    if (target <= range.get(1)) return current;
-    return at + 1 < ARM_GUARD_GRADES.size() ? ARM_GUARD_GRADES.get(at + 1) : null;
+    if (at < 0) return null;
+    for (; at < ARM_GUARD_GRADES.size(); at++) {
+      var range = refine.armGuardGradeRange().get(ARM_GUARD_GRADES.get(at));
+      if (range == null || range.size() < 2) return null;
+      if (target <= range.get(1)) return ARM_GUARD_GRADES.get(at);
+    }
+    return null;
   }
 
   static CharacterLoadout.Equipment armGuardItem(CharacterLoadout loadout) {

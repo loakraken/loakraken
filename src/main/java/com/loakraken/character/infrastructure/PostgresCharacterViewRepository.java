@@ -36,8 +36,9 @@ class PostgresCharacterViewRepository implements CharacterViewPort {
             """
         SELECT view_date, view_count FROM character_view_daily
         WHERE character_name = :name AND view_date BETWEEN :from AND :to
-        ORDER BY view_date
-        """)
+        """
+                + NOT_EXCLUDED
+                + " ORDER BY view_date")
         .param("name", characterName)
         .param("from", from)
         .param("to", to)
@@ -52,9 +53,14 @@ class PostgresCharacterViewRepository implements CharacterViewPort {
   @Override
   public long total(String characterName) {
     return jdbc.sql(
-            "SELECT COALESCE(SUM(view_count), 0) FROM character_view_daily WHERE character_name = :name")
+            "SELECT COALESCE(SUM(view_count), 0) FROM character_view_daily WHERE character_name = :name"
+                + NOT_EXCLUDED)
         .param("name", characterName)
         .query(Long.class)
         .single();
   }
+
+  /** 조회수는 이름만으로 쌓으므로 어느 서버에서든 그 이름이 제외 목록에 있으면 읽지 않는다(없는 캐릭터와 같은 0). */
+  private static final String NOT_EXCLUDED =
+      " AND NOT EXISTS (SELECT 1 FROM public_exclusion e WHERE e.character_name = :name)";
 }

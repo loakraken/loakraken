@@ -93,7 +93,19 @@ public final class StatsRules {
    * {@code ceil₂(rank×100/total) ≤ U ⇔ rank ≤ K}다. 0이면 인원이 적어 누구도 그 티어에 닿을 수 없다.
    */
   public static long tierRank(Tier tier, long total) {
-    return tier.upperPercent() * total / 100;
+    return cutoffRank(tier.upperPercent(), total);
+  }
+
+  /** 분포 위 '상위 N%' 기준값을 주는 N(오름차순). */
+  public static final java.util.List<Integer> TOP_PERCENT_CUTOFFS =
+      java.util.List.of(1, 5, 10, 25, 50, 75);
+
+  /**
+   * 상위 p% 기준 순위 K = ⌊p × total / 100⌋(티어 경계와 같은 규칙). K번째로 높은 값 이상이면 topPercent ≤ p다. 0이면 누구도 닿을 수
+   * 없다.
+   */
+  public static long cutoffRank(int topPercent, long total) {
+    return (long) topPercent * total / 100;
   }
 
   /** 상위 몇 %인가. 1위/100명이면 1.00이다. 소수 둘째 자리 올림이라 상위 1%를 넘는 값이 1%로 보이지 않는다. */

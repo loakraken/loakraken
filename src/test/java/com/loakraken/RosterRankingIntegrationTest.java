@@ -236,6 +236,22 @@ class RosterRankingIntegrationTest {
   }
 
   @Test
+  void 행은_대표_캐릭터의_저장된_이미지_주소를_준다() throws Exception {
+    var roster = UUID.randomUUID();
+    member(TIE_SERVER, roster, "원정이미지가", 1700);
+    String url = "https://img.lostark.co.kr/armory/test/roster.png";
+    jdbc.sql("UPDATE characters SET image_url = :url WHERE character_name = '원정이미지가'")
+        .param("url", url)
+        .update();
+    var rows =
+        mapper
+            .readTree(get("/api/v1/rankings/rosters?server=" + encode(TIE_SERVER)).body())
+            .at("/data/rows");
+    assertThat(rows.at("/0/characterName").asText()).isEqualTo("원정이미지가");
+    assertThat(rows.at("/0/imageUrl").asText()).isEqualTo(url);
+  }
+
+  @Test
   void 값이_같으면_같은_순위다() throws Exception {
     var a = UUID.randomUUID();
     member(TIE_SERVER, a, "원정동률가", 1700);

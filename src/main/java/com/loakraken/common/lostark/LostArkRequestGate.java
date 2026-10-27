@@ -254,6 +254,11 @@ public class LostArkRequestGate {
     return clients.remainingOfficial();
   }
 
+  /** 방문자의 공식 호출 칸이 다시 차는 시각(1분 고정 창이 끝나는 때). 이어 받기 시각 안내에 쓴다. */
+  public java.time.Instant clientOfficialWindowEndsAt() {
+    return clients.officialWindowEndsAt();
+  }
+
   /** 일괄 불러오기(원정대 전투력·카드 수집)가 방문자 칸에 남겨 두는 공식 호출 수 — 그 분 안의 다른 조회가 거절되지 않게(#614). */
   public static final int BULK_KEEP_OFFICIAL = 6;
 

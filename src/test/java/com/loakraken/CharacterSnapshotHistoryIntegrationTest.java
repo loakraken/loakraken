@@ -96,6 +96,34 @@ class CharacterSnapshotHistoryIntegrationTest {
   }
 
   @Test
+  void 제외_목록에_들면_저장된_스냅샷과_커서는_기록이_없는_캐릭터와_같다() throws Exception {
+    save("루페온", "1700", null, TIME);
+    save("루페온", "1710", null, TIME.plusSeconds(60));
+    var before = body("루페온", "&limit=1");
+    String cursor = before.at("/data/nextCursor").asText();
+    assertThat(before.at("/data/items").size()).isEqualTo(1);
+    jdbc.sql(
+            "INSERT INTO public_exclusion (character_name, server_name, reason_code) VALUES (:n, '루페온', 'PRIVACY_STOP')")
+        .param("n", NAME)
+        .update();
+    try {
+      var after = request("루페온", "");
+      assertThat(after.statusCode()).isEqualTo(200);
+      var data = mapper.readTree(after.body());
+      assertThat(data.at("/data/items").size()).isZero();
+      assertThat(data.at("/data/nextCursor").isNull()).isTrue();
+      // 예전 커서도 모르는 커서와 같은 응답이다.
+      var withCursor = request("루페온", "&cursor=" + cursor);
+      var unknownCursor = request("루페온", "&cursor=" + java.util.UUID.randomUUID());
+      assertThat(withCursor.statusCode()).isEqualTo(unknownCursor.statusCode());
+      assertThat(mapper.readTree(withCursor.body()).path("code").asText())
+          .isEqualTo(mapper.readTree(unknownCursor.body()).path("code").asText());
+    } finally {
+      jdbc.sql("DELETE FROM public_exclusion WHERE character_name = :n").param("n", NAME).update();
+    }
+  }
+
+  @Test
   void 동일_원본의_재조회는_이력을_늘리거나_과거_시각을_바꾸지_않는다() throws Exception {
     save("루페온", "1700", null, TIME);
     save("루페온", "1700", null, TIME.plusSeconds(60));

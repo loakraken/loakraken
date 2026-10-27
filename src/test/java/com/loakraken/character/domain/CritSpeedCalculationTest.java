@@ -539,6 +539,9 @@ class CritSpeedCalculationTest {
             null);
     assertThat(noStats.crit().unavailableReason()).contains("치명 스탯을 읽지 못해");
     assertThat(noStats.speed().unavailableReason()).contains("신속 스탯을 읽지 못해");
+    // 화면에 그대로 보이는 문장이라 해요체(프론트 요청 10-25).
+    assertThat(noStats.crit().unavailableReason()).endsWith("계산하지 않았어요.");
+    assertThat(noStats.speed().unavailableReason()).endsWith("계산하지 않았어요.");
 
     // 수치가 숫자가 아니고 Tooltip도 없음 → 이유. 신속은 수치로 환산되니 계산함
     var unreadCrit =

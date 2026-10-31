@@ -1217,7 +1217,9 @@ public class StatsQueryService {
         cached("coverage", StatsPort.Coverage.class, stats::coverage));
   }
 
-  private <T> T cached(String key, Class<T> type, Supplier<T> loader) {
+  private <T> T cached(String baseKey, Class<T> type, Supplier<T> loader) {
+    // 처리정지 목록이 바뀌면 집계(수·순서)도 바로 새로 센다: 목록 내용 값을 키에 넣는다(#757).
+    var key = baseKey + ":x" + guard(stats::exclusionRevision);
     var hit = cache.find(key, type);
     // 캐릭터를 나열하는 결과는 캐시 뒤 처리정지 목록에 든 캐릭터가 있으면 다시 센다(집계 SQL이 목록을 뺀다). 목록 추가는 운영자가 DB에 직접
     // 하므로 지울 시점을 알 수 없어, 캐시를 쓸 때마다 한 번 확인한다.

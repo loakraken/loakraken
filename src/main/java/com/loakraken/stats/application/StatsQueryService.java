@@ -223,7 +223,15 @@ public class StatsQueryService {
       SampleStatus status,
       long sampleSize,
       BigDecimal braceletItemLevelMin,
-      List<ClassBuildTopRow> rows) {}
+      List<ClassBuildTopRow> rows)
+      implements ListsCharacters {
+    @Override
+    public List<StatsPort.Named> listedCharacters() {
+      return rows == null
+          ? List.of()
+          : rows.stream().map(r -> new StatsPort.Named(r.characterName(), r.serverName())).toList();
+    }
+  }
 
   /** rank는 이 응답 안에서 1부터(관측 전투력 내림차순, 같으면 아이템 레벨·이름순). */
   public record ClassBuildTopRow(
@@ -391,36 +399,66 @@ public class StatsQueryService {
           var rows = stats.classes(conditions, conditions.since(now));
           long population = rows.stream().mapToLong(StatsPort.ClassRow::count).sum();
           var result = new ArrayList<ClassStat>();
-          for (var row : rows) {
-            var status = SampleStatus.of(row.count());
-            boolean ready = status == SampleStatus.READY;
-            var p = row.combatPowerPercentiles();
-            long known = row.dealers() + row.supports();
-            result.add(
-                new ClassStat(
-                    row.className(),
-                    row.count(),
-                    population == 0 ? null : share(row.count(), population),
-                    row.dealers(),
-                    row.supports(),
-                    row.count() - known,
-                    known > 0 && StatsRules.SUPPORT_CLASSES.contains(row.className())
-                        ? share(row.supports(), known)
-                        : null,
-                    row.itemLevelMean(),
-                    row.gemMeanLevel(),
-                    ready && p.size() == 5
-                        ? new Percentiles(p.get(0), p.get(1), p.get(2), p.get(3), p.get(4))
-                        : null,
-                    status));
-          }
+          for (var row : rows) result.add(classStat(row, population));
           return new ClassesResult(meta(conditions, population, now), result);
         });
   }
 
+  /**
+   * 직업 각인별 통계(직업 표의 직업 각인 보기). 행 모양은 직업별 통계와 같고(비율은 같은 모집단 대비), 직업 각인을 모르는 캐릭터는 행 대신 직업별 미확인 수로 준다.
+   */
+  public ClassEngravingTableResult classEngravingTable(StatsConditions conditions) {
+    return cached(
+        "class-engraving-table:" + key(conditions),
+        ClassEngravingTableResult.class,
+        () -> {
+          var now = clock.instant();
+          var rows = stats.classEngravingTable(conditions, conditions.since(now));
+          long population = rows.stream().mapToLong(row -> row.stats().count()).sum();
+          var result = new ArrayList<ClassEngravingStat>();
+          var unknown = new java.util.LinkedHashMap<String, Long>();
+          for (var row : rows) {
+            if (row.classEngraving() == null)
+              unknown.merge(row.stats().className(), row.stats().count(), Long::sum);
+            else
+              result.add(
+                  new ClassEngravingStat(row.classEngraving(), classStat(row.stats(), population)));
+          }
+          return new ClassEngravingTableResult(
+              meta(conditions, population, now),
+              result,
+              unknown.entrySet().stream()
+                  .map(entry -> new ClassCount(entry.getKey(), entry.getValue()))
+                  .toList());
+        });
+  }
+
+  private ClassStat classStat(StatsPort.ClassRow row, long population) {
+    var status = SampleStatus.of(row.count());
+    boolean ready = status == SampleStatus.READY;
+    var p = row.combatPowerPercentiles();
+    long known = row.dealers() + row.supports();
+    return new ClassStat(
+        row.className(),
+        row.count(),
+        population == 0 ? null : share(row.count(), population),
+        row.dealers(),
+        row.supports(),
+        row.count() - known,
+        known > 0 && StatsRules.SUPPORT_CLASSES.contains(row.className())
+            ? share(row.supports(), known)
+            : null,
+        row.itemLevelMean(),
+        row.gemMeanLevel(),
+        ready && p.size() == 5
+            ? new Percentiles(p.get(0), p.get(1), p.get(2), p.get(3), p.get(4))
+            : null,
+        status);
+  }
+
   public ServersResult servers(StatsConditions conditions) {
     return cached(
-        "servers:" + key(conditions),
+        "servers:v2:" + key(conditions),
         ServersResult.class,
         () -> {
           var now = clock.instant();
@@ -433,6 +471,7 @@ public class StatsQueryService {
                       row -> {
                         var status = SampleStatus.of(row.count());
                         boolean ready = status == SampleStatus.READY;
+                        var p = row.combatPowerPercentiles();
                         return new ServerStat(
                             row.serverName(),
                             row.count(),
@@ -441,7 +480,14 @@ public class StatsQueryService {
                             row.combatPowerMedian(),
                             row.knownCharacters(),
                             row.rosters(),
-                            status);
+                            status,
+                            row.dealers(),
+                            row.supports(),
+                            row.count() - row.dealers() - row.supports(),
+                            row.itemLevelMean(),
+                            ready && p.size() == 5
+                                ? new Percentiles(p.get(0), p.get(1), p.get(2), p.get(3), p.get(4))
+                                : null);
                       })
                   .toList());
         });
@@ -452,7 +498,7 @@ public class StatsQueryService {
     var binWidth = width == null ? defaultWidth(metric) : StatsConditions.strip(width);
     var distribution =
         cached(
-            "distribution:" + metric + ":" + binWidth.toPlainString() + ":" + key(conditions),
+            "distribution:v2:" + metric + ":" + binWidth.toPlainString() + ":" + key(conditions),
             DistributionResult.class,
             () -> {
               var now = clock.instant();
@@ -474,7 +520,12 @@ public class StatsQueryService {
                           .map(bin -> new Bin(bin.from(), bin.from().add(binWidth), bin.count()))
                           .toList();
               return new DistributionResult(
-                  meta(conditions, range.count(), now), metric, binWidth, bins, null);
+                  meta(conditions, range.count(), now),
+                  metric,
+                  binWidth,
+                  bins,
+                  null,
+                  topPercentCutoffs(conditions, since, metric, range.count()));
             });
     if (percentileOf == null) return distribution;
     return new DistributionResult(
@@ -486,7 +537,33 @@ public class StatsQueryService {
             conditions,
             metric,
             StatsConditions.strip(percentileOf),
-            distribution.meta().aggregatedAt()));
+            distribution.meta().aggregatedAt()),
+        distribution.topPercentCutoffs());
+  }
+
+  /**
+   * '상위 N%' 기준값(전투력만, 표본 READY일 때만). 기준 순위 K = ⌊N × total / 100⌋, 값 = 내림차순 K번째 — 다음 티어 경계와 같은 규칙이라
+   * 이 값 이상인 캐릭터의 percentileOf.topPercent는 N 이하다. K = 0이면 그 항목은 빠진다.
+   */
+  private List<TopPercentCutoff> topPercentCutoffs(
+      StatsConditions conditions, Instant since, Metric metric, long total) {
+    if (metric != Metric.COMBAT_POWER || SampleStatus.of(total) != SampleStatus.READY) return null;
+    var ranks = new java.util.LinkedHashMap<Integer, Long>();
+    for (int percent : StatsRules.TOP_PERCENT_CUTOFFS) {
+      long k = StatsRules.cutoffRank(percent, total);
+      if (k > 0) ranks.put(percent, k);
+    }
+    var values = new java.util.HashMap<Long, BigDecimal>();
+    for (var row :
+        stats.valuesAtRanks(conditions, since, metric, new java.util.TreeSet<>(ranks.values())))
+      values.put(row.rank(), row.value());
+    var result = new ArrayList<TopPercentCutoff>();
+    ranks.forEach(
+        (percent, k) -> {
+          var value = values.get(k);
+          if (value != null) result.add(new TopPercentCutoff(percent, k, value));
+        });
+    return List.copyOf(result);
   }
 
   public SnapshotsResult snapshots() {
@@ -545,7 +622,8 @@ public class StatsQueryService {
                               row.point(),
                               row.maxPoint(),
                               row.observedAt(),
-                              types.getOrDefault(row.rosterKey(), List.of())))
+                              types.getOrDefault(row.rosterKey(), List.of()),
+                              row.imageUrl()))
                   .toList());
         });
   }
@@ -598,7 +676,8 @@ public class StatsQueryService {
                               row.characterCount(),
                               row.usedCharacters(),
                               row.score().setScale(2, RoundingMode.HALF_UP),
-                              composition.getOrDefault(row.rosterKey(), List.of())))
+                              composition.getOrDefault(row.rosterKey(), List.of()),
+                              row.imageUrl()))
                   .toList());
         });
   }
@@ -900,7 +979,8 @@ public class StatsQueryService {
                             top == null ? null : Tier.of(top),
                             row.bestCombatPower(),
                             row.arkPassive(),
-                            row.estherWeapon());
+                            row.estherWeapon(),
+                            row.imageUrl());
                       })
                   .toList(),
               classEngraving,
@@ -1019,7 +1099,8 @@ public class StatsQueryService {
                             row.value(),
                             row.observedAt(),
                             top,
-                            top == null ? null : Tier.of(top));
+                            top == null ? null : Tier.of(top),
+                            row.imageUrl());
                       })
                   .toList());
         });
@@ -1181,12 +1262,27 @@ public class StatsQueryService {
         cached("coverage", StatsPort.Coverage.class, stats::coverage));
   }
 
-  private <T> T cached(String key, Class<T> type, Supplier<T> loader) {
+  private <T> T cached(String baseKey, Class<T> type, Supplier<T> loader) {
+    // 처리정지 목록이 바뀌면 집계(수·순서)도 바로 새로 센다: 목록 내용 값을 키에 넣는다(#757).
+    var key = baseKey + ":x" + guard(stats::exclusionRevision);
     var hit = cache.find(key, type);
-    if (hit.isPresent()) return hit.get();
+    // 캐릭터를 나열하는 결과는 캐시 뒤 처리정지 목록에 든 캐릭터가 있으면 다시 센다(집계 SQL이 목록을 뺀다). 목록 추가는 운영자가 DB에 직접
+    // 하므로 지울 시점을 알 수 없어, 캐시를 쓸 때마다 한 번 확인한다.
+    if (hit.isPresent() && !(hit.get() instanceof ListsCharacters rows && stopListed(rows)))
+      return hit.get();
     var value = guard(loader);
     cache.save(key, value);
     return value;
+  }
+
+  private boolean stopListed(ListsCharacters rows) {
+    var names = rows.listedCharacters();
+    return !names.isEmpty() && !guard(() -> stats.stopListed(names)).isEmpty();
+  }
+
+  /** 캐릭터를 나열하는 결과. 캐시를 쓸 때 처리정지 목록을 다시 확인하는 대상이다. */
+  interface ListsCharacters {
+    List<StatsPort.Named> listedCharacters();
   }
 
   private static <T> T guard(Supplier<T> loader) {
@@ -1272,13 +1368,32 @@ public class StatsQueryService {
 
   public record ClassesResult(Meta meta, List<ClassStat> rows) {}
 
+  /** 직업 각인 한 행: 직업 각인(공식 칭호 원문)과 직업별 통계와 같은 값. */
+  public record ClassEngravingStat(String classEngraving, ClassStat stats) {}
+
+  /** 직업별 직업 각인 미확인 수(장비 요약이 없거나 칭호가 빈 캐릭터). */
+  public record ClassCount(String className, long count) {}
+
+  public record ClassEngravingTableResult(
+      Meta meta, List<ClassEngravingStat> rows, List<ClassCount> unknownByClass) {}
+
   /** 길드 탭 결과. guildName은 저장된 철자. */
   public record GuildDetailResult(
       String serverName,
       String guildName,
       int activeDays,
       Instant aggregatedAt,
-      GuildDetail.Result detail) {}
+      GuildDetail.Result detail)
+      implements ListsCharacters {
+    @Override
+    public List<StatsPort.Named> listedCharacters() {
+      return detail == null || detail.members() == null
+          ? List.of()
+          : detail.members().stream()
+              .map(m -> new StatsPort.Named(m.characterName(), serverName))
+              .toList();
+    }
+  }
 
   /** className은 전체 줄이면 null. 30 미만이면 mean·max·percentiles는 null. */
   public record BestCombatPowerStat(
@@ -1309,6 +1424,10 @@ public class StatsQueryService {
       ClassBuilds.Result builds,
       ClassBuilds.Details details) {}
 
+  /**
+   * dealers·supports·unknownRole·itemLevelMean·combatPower는 직업 행(ClassStat)과 같은 계산이다(표본 30 미만이면
+   * combatPower null).
+   */
   public record ServerStat(
       String serverName,
       long count,
@@ -1317,7 +1436,15 @@ public class StatsQueryService {
       BigDecimal combatPowerMedian,
       long knownCharacters,
       long rosters,
-      SampleStatus sampleStatus) {}
+      SampleStatus sampleStatus,
+      long dealers,
+      long supports,
+      long unknownRole,
+      BigDecimal itemLevelMean,
+      Percentiles combatPower) {}
+
+  /** 분포 위 '상위 topPercent%' 기준값: 내림차순 rank번째 값. 이 값 이상이면 percentileOf.topPercent ≤ topPercent다. */
+  public record TopPercentCutoff(int topPercent, long rank, BigDecimal value) {}
 
   public record ServersResult(Meta meta, List<ServerStat> rows) {}
 
@@ -1326,8 +1453,14 @@ public class StatsQueryService {
   public record PercentileOf(
       BigDecimal value, long rank, long total, BigDecimal topPercent, Tier tier) {}
 
+  /** topPercentCutoffs: 전투력 분포만, 표본이 READY일 때만(아니면 null). 기준 순위가 0인 항목은 빠진다. */
   public record DistributionResult(
-      Meta meta, Metric metric, BigDecimal width, List<Bin> bins, PercentileOf percentileOf) {}
+      Meta meta,
+      Metric metric,
+      BigDecimal width,
+      List<Bin> bins,
+      PercentileOf percentileOf,
+      List<TopPercentCutoff> topPercentCutoffs) {}
 
   public record SnapshotInfo(String snapshot, Instant aggregatedAt, long population) {}
 
@@ -1345,11 +1478,20 @@ public class StatsQueryService {
       Tier tier,
       BigDecimal bestCombatPower,
       StatsPort.ArkPassiveSummary arkPassive,
-      StatsPort.EstherWeapon estherWeapon) {}
+      StatsPort.EstherWeapon estherWeapon,
+      String imageUrl) {}
 
   /** 수집품 랭킹 결과(#295). unit은 ROSTER·CHARACTER(응답에서는 문자열). */
   public record CollectibleRankingResult(
-      Meta meta, String unit, int page, int size, List<RankedCollectible> rows) {}
+      Meta meta, String unit, int page, int size, List<RankedCollectible> rows)
+      implements ListsCharacters {
+    @Override
+    public List<StatsPort.Named> listedCharacters() {
+      return rows == null
+          ? List.of()
+          : rows.stream().map(r -> new StatsPort.Named(r.characterName(), r.serverName())).toList();
+    }
+  }
 
   public record RankedCollectible(
       long rank,
@@ -1362,7 +1504,8 @@ public class StatsQueryService {
       long point,
       long maxPoint,
       Instant observedAt,
-      List<StatsPort.CollectibleType> types) {}
+      List<StatsPort.CollectibleType> types,
+      String imageUrl) {}
 
   /** 원정대 랭킹 결과(#297). basis·aggregate는 응답에서 문자열. */
   public record RosterRankingResult(
@@ -1372,7 +1515,22 @@ public class StatsQueryService {
       int page,
       int size,
       long excludedRosters,
-      List<RankedRoster> rows) {}
+      List<RankedRoster> rows)
+      implements ListsCharacters {
+    /** 대표와 구성(composition) 캐릭터 모두. 구성은 대표 서버의 캐릭터만이라 서버는 행의 서버다. */
+    @Override
+    public List<StatsPort.Named> listedCharacters() {
+      if (rows == null) return List.of();
+      var names = new ArrayList<StatsPort.Named>();
+      for (var row : rows) {
+        names.add(new StatsPort.Named(row.characterName(), row.serverName()));
+        if (row.composition() != null)
+          for (var member : row.composition())
+            names.add(new StatsPort.Named(member.characterName(), row.serverName()));
+      }
+      return List.copyOf(names);
+    }
+  }
 
   public record RankedRoster(
       long rank,
@@ -1384,9 +1542,13 @@ public class StatsQueryService {
       long characterCount,
       long usedCharacters,
       BigDecimal value,
-      List<StatsPort.RosterMember> composition) {}
+      List<StatsPort.RosterMember> composition,
+      String imageUrl) {}
 
-  /** 캐릭터 기준 수집품 순위 결과(#303). reason이 있으면 rank·값은 null. */
+  /**
+   * 캐릭터 기준 수집품 순위 결과(#303). reason이 있으면 rank·값은 null. 캐시를 쓸 때 그 캐릭터가 처리정지 목록에 들었으면 다시 센다(목록 캐릭터는
+   * 순위가 없다).
+   */
   public record CollectibleStandingResult(
       Meta meta,
       String unit,
@@ -1398,7 +1560,15 @@ public class StatsQueryService {
       BigDecimal progressPercent,
       Long point,
       Long maxPoint,
-      String reason) {}
+      String reason)
+      implements ListsCharacters {
+    @Override
+    public List<StatsPort.Named> listedCharacters() {
+      return characterName == null
+          ? List.of()
+          : List.of(new StatsPort.Named(characterName, serverName));
+    }
+  }
 
   /** 길드 랭킹 결과(#301). sort는 응답에서 문자열. */
   public record GuildRankingResult(
@@ -1461,7 +1631,15 @@ public class StatsQueryService {
       int size,
       List<RankedCharacter> rows,
       String classEngraving,
-      Long classEngravingUnknown) {}
+      Long classEngravingUnknown)
+      implements ListsCharacters {
+    @Override
+    public List<StatsPort.Named> listedCharacters() {
+      return rows == null
+          ? List.of()
+          : rows.stream().map(r -> new StatsPort.Named(r.characterName(), r.serverName())).toList();
+    }
+  }
 
   public record TitleCount(String title, long count) {}
 
@@ -1490,7 +1668,8 @@ public class StatsQueryService {
       BigDecimal value,
       java.time.Instant observedAt,
       BigDecimal topPercent,
-      Tier tier) {}
+      Tier tier,
+      String imageUrl) {}
 
   public record EfficiencyRankingResult(
       Meta meta,
@@ -1498,7 +1677,15 @@ public class StatsQueryService {
       String ruleVersion,
       int page,
       int size,
-      List<EfficiencyRankedCharacter> rows) {}
+      List<EfficiencyRankedCharacter> rows)
+      implements ListsCharacters {
+    @Override
+    public List<StatsPort.Named> listedCharacters() {
+      return rows == null
+          ? List.of()
+          : rows.stream().map(r -> new StatsPort.Named(r.characterName(), r.serverName())).toList();
+    }
+  }
 
   public record RankEntry(
       Metric metric,

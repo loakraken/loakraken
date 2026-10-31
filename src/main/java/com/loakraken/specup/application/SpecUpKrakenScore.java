@@ -7,6 +7,7 @@ import com.loakraken.character.domain.CharacterPosition;
 import com.loakraken.character.domain.CombatPowerRefineModel;
 import com.loakraken.character.domain.GemBaseAttack;
 import com.loakraken.character.domain.KrakenScoreEngine;
+import com.loakraken.character.domain.KrakenScoreSupport;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.ArrayList;
@@ -56,10 +57,14 @@ public class SpecUpKrakenScore {
 
   /**
    * 캐릭터 하나의 계산 기준. unavailable이 있으면 모든 후보의 Δ점수는 null이고 KRAKEN 정렬은 효율 순으로 되돌린다. unavailable 값:
-   * DISABLED(점수 기능 꺼짐), INPUT_PENDING(점수 입력이 없는 이전 조회), ROLE_UNKNOWN, SUPPORTER_PENDING(서포터는 준비 중),
-   * SCORE_UNAVAILABLE(지금 점수를 낼 수 없음).
+   * DISABLED(점수 기능 꺼짐), INPUT_PENDING(점수 입력이 없는 이전 조회), ROLE_UNKNOWN, SCORE_UNAVAILABLE(지금 점수를 낼 수
+   * 없음). support = 서포터 점수식(서폿 스펙 포인트)으로 계산했는가 — 비교 기준 B도 역할에 따라 점수 키만 바꾸고 후보는 같게 만든다.
    */
-  public record Context(JsonNode input, double before, String unavailable) {
+  public record Context(JsonNode input, double before, String unavailable, boolean support) {
+    Context(JsonNode input, double before, String unavailable) {
+      this(input, before, unavailable, false);
+    }
+
     boolean available() {
       return unavailable == null;
     }
@@ -78,14 +83,15 @@ public class SpecUpKrakenScore {
     var position =
         CharacterPosition.judge(details.profile().className(), details.loadout().arkPassive());
     if (position.role() == null) return new Context(null, Double.NaN, "ROLE_UNKNOWN");
-    if (position.role() == CharacterPosition.Role.SUPPORT)
-      return new Context(null, Double.NaN, "SUPPORTER_PENDING");
+    // 서포터는 서포터 점수식(점수 API와 같은 KrakenScoreSupport.score). 후보·바꾸는 필드는 딜러와 같다(PM 총괄 10-25: 서포터 점수 기준
+    // 줄).
+    boolean support = position.role() == CharacterPosition.Role.SUPPORT;
     // 점수 서비스와 같은 조건: 무기·아크 패시브가 비면 엔진 기본값으로 0점이 나온다.
     if (!com.loakraken.character.application.KrakenScoreService.scorable(input))
-      return new Context(null, Double.NaN, "SCORE_UNAVAILABLE");
-    double before = score(input);
-    if (!usable(before)) return new Context(null, Double.NaN, "SCORE_UNAVAILABLE");
-    return new Context(input, before, null);
+      return new Context(null, Double.NaN, "SCORE_UNAVAILABLE", support);
+    double before = score(input, support);
+    if (!usable(before)) return new Context(null, Double.NaN, "SCORE_UNAVAILABLE", support);
+    return new Context(input, before, null, support);
   }
 
   /**
@@ -132,13 +138,15 @@ public class SpecUpKrakenScore {
 
   private Double rescore(Context context, ObjectNode copy, boolean applied) {
     if (!applied) return null;
-    double after = score(copy);
+    double after = score(copy, context.support());
     return usable(after) ? after - context.before() : null;
   }
 
-  private double score(JsonNode input) {
+  private double score(JsonNode input, boolean support) {
     try {
-      return KrakenScoreEngine.dealerScore(input, tables);
+      return support
+          ? KrakenScoreSupport.score(input, tables)
+          : KrakenScoreEngine.dealerScore(input, tables);
     } catch (RuntimeException exception) {
       return Double.NaN;
     }
@@ -322,14 +330,18 @@ public class SpecUpKrakenScore {
   static final List<String> ARM_GUARD_GRADES = List.of("영웅", "전설", "유물", "고대");
 
   /**
-   * 목표 단계의 팔 보호구 등급: 지금 등급의 최대 단계(armGuardGradeRange 끝)를 넘으면 다음 등급(승급), 아니면 지금 등급. 모르는 등급이면 null.
+   * 목표 단계의 팔 보호구 등급: 지금 등급의 최대 단계(armGuardGradeRange 끝)를 넘으면 다음 등급(승급), 목표가 그 등급의 끝도 넘으면 그다음 등급까지
+   * 이어서 올린다(여러 단계 줄, 예: 유물 +15 → +21은 고대). 모르는 등급이거나 마지막 등급을 넘으면 null.
    */
   String armGuardGrade(String current, int target) {
     int at = ARM_GUARD_GRADES.indexOf(current);
-    var range = refine.armGuardGradeRange().get(current);
-    if (at < 0 || range == null || range.size() < 2) return null;
-    if (target <= range.get(1)) return current;
-    return at + 1 < ARM_GUARD_GRADES.size() ? ARM_GUARD_GRADES.get(at + 1) : null;
+    if (at < 0) return null;
+    for (; at < ARM_GUARD_GRADES.size(); at++) {
+      var range = refine.armGuardGradeRange().get(ARM_GUARD_GRADES.get(at));
+      if (range == null || range.size() < 2) return null;
+      if (target <= range.get(1)) return ARM_GUARD_GRADES.get(at);
+    }
+    return null;
   }
 
   static CharacterLoadout.Equipment armGuardItem(CharacterLoadout loadout) {

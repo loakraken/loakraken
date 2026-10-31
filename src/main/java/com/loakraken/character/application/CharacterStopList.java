@@ -31,6 +31,11 @@ public class CharacterStopList {
     return summaries.excludedNames(names, serverName);
   }
 
+  /** 목록의 지금 내용을 나타내는 짧은 값(목록이 바뀌면 달라짐). 집계 캐시 키에 넣는다. 확인 실패는 예외를 그대로 던진다. */
+  public String revision() {
+    return summaries.exclusionRevision();
+  }
+
   /** 기록해도 되는가. 확인에 실패하면 기록하지 않는다. */
   public boolean recordable(String characterName, String serverName) {
     try {

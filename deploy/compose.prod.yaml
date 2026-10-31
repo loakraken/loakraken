@@ -141,9 +141,14 @@ services:
       # /run/secrets의 파일 이름을 설정 키로 읽는다(DB_PASSWORD, LOSTARK_API_KEY, spring.data.redis.password).
       SPRING_CONFIG_IMPORT: optional:configtree:/run/secrets/
       DB_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-loakraken}
-      DB_USERNAME: ${POSTGRES_USER:-loakraken}
+      # 실행 중 접속은 데이터 읽기·쓰기 전용 역할(deploy/sql/db-app-role.sql, 배포 전에 서버에서 만든다).
+      DB_USERNAME: loakraken_app
+      # 스키마 변경은 migrate 서비스가 먼저 끝낸다. api는 Flyway를 돌리지 않고 소유자 비밀번호도 갖지 않는다.
+      SPRING_FLYWAY_ENABLED: "false"
       VALKEY_HOST: valkey
       VALKEY_PORT: "6379"
+      # valkey의 앱 전용 사용자(기본 사용자는 꺼져 있다). 암호는 비밀 파일 spring.data.redis.password.
+      SPRING_DATA_REDIS_USERNAME: app
       # 공식 API 호출 한도를 쓰는 백그라운드 작업은 스택마다 명시한다(운영 1곳만 true).
       STATS_COLLECTOR_ENABLED: ${STATS_COLLECTOR_ENABLED:-false}
       # 수집기 속도. 기본 3s·예약분 40(사용자 요청 몫). 공개 전 한시로 1s·25까지 허용(PM-백엔드 10-10 23:26), 도메인 공개 전 기본으로 되돌린다.
@@ -151,8 +156,15 @@ services:
       STATS_COLLECTOR_RESERVE: ${STATS_COLLECTOR_RESERVE:-40}
       # 방문자 한 명이 분당 일으킬 수 있는 공식 호출 수(기본 20). 접속이 몰려 예산 거절이 이어질 때만 낮춘다(부하 대응 2단계).
       CLIENT_LIMIT_OFFICIAL: ${CLIENT_LIMIT_OFFICIAL:-20}
+      # 요청 본문 크기 상한(기본 64KB). 앞단 프록시 상한(256KB)보다 작게 둔다.
+      HTTP_MAX_REQUEST_BODY: ${HTTP_MAX_REQUEST_BODY:-64KB}
       # 검색봇 표시 요청 전체가 분당 일으킬 수 있는 공식 호출 수(기본 20). 캐릭터 페이지 색인을 켤 때만 낮춘다.
       CLIENT_LIMIT_BOT_OFFICIAL: ${CLIENT_LIMIT_BOT_OFFICIAL:-20}
+      # 상점 공지 알림 배치(#640): 하루 한 번 공식 공지를 읽어 새 상점·패키지 공지를 Slack에 알린다. 기본 꺼짐.
+      # 웹훅 주소는 상점 공지 전용 비밀 파일(감시 알림 웹훅과 분리)에서 보낼 때마다 읽는다.
+      SHOP_NOTICE_ENABLED: ${SHOP_NOTICE_ENABLED:-false}
+      SHOP_NOTICE_CRON: "${SHOP_NOTICE_CRON:-0 10 10 * * *}"
+      SHOP_NOTICE_SLACK_WEBHOOK_FILE: /run/secrets/slack_webhook_shop
       # 시드 목록(#255): 쉼표 구분 이름. 값은 운영 서버 stack.env에만 둔다(저장소 커밋 금지).
       STATS_SEED_ENABLED: ${STATS_SEED_ENABLED:-false}
       STATS_SEED_NAMES: ${STATS_SEED_NAMES:-}
@@ -181,6 +193,10 @@ services:
       RANKING_TITLES_ENABLED: ${RANKING_TITLES_ENABLED:-false}
       # 나머지 기능 스위치(오픈 준비 A3). 기본값은 앱 기본값과 같다 — 넘기기만 하고 동작은 바꾸지 않는다.
       SPEC_UP_ENABLED: ${SPEC_UP_ENABLED:-false}
+      # 스펙업 완갑 재련 줄. 기본 켬, 끄면 목록·줄 상세에서 뺀다.
+      SPEC_UP_ARM_GUARD_ENABLED: ${SPEC_UP_ARM_GUARD_ENABLED:-true}
+      # 재련 계획 숨결 OPTIMAL. 웹 화면(v0.3.4)과 같이 켠다.
+      REFINING_OPTIMAL_ENABLED: ${REFINING_OPTIMAL_ENABLED:-false}
       FEATURE_AUCTION_SEARCH: ${FEATURE_AUCTION_SEARCH:-false}
       MARKET_GEM_FILTER_ENABLED: ${MARKET_GEM_FILTER_ENABLED:-true}
       MARKET_GEM_FILTER_QUOTA: ${MARKET_GEM_FILTER_QUOTA:-10}
@@ -197,6 +213,8 @@ services:
       # 시세 예열 세부(MARKET_WARMUP_ENABLED가 켜진 인스턴스에서만 돈다). 재련 재료·유물 각인서는 켜면 공식 호출이 늘어 수집기와 게이트를 나눈다.
       MARKET_WARMUP_REFINING_MATERIALS_ENABLED: ${MARKET_WARMUP_REFINING_MATERIALS_ENABLED:-false}
       MARKET_WARMUP_RELIC_BOOKS_ENABLED: ${MARKET_WARMUP_RELIC_BOOKS_ENABLED:-false}
+      # 보석 시세 표 칸 예열(스펙업 보석 비용, 10분마다 20칸 = 분당 공식 호출 2회).
+      MARKET_WARMUP_GEMS_ENABLED: ${MARKET_WARMUP_GEMS_ENABLED:-false}
       API_DOCS_ENABLED: "false"
       # 관리(actuator) 포트를 앱 포트와 나누고, metrics망의 api 주소에만 묶는다(prometheus만 닿음, internal·data망의 다른 컨테이너는 닿지 않음).
       MANAGEMENT_SERVER_PORT: "9090"
@@ -211,7 +229,7 @@ services:
       # 클라이언트 IP 헤더를 믿는 프록시를 web 한 곳으로 한정한다(Tomcat RemoteIpValve 정규식). 사설 대역 전체를 믿지 않는다.
       SERVER_TOMCAT_REMOTEIP_INTERNALPROXIES: ${TRUSTED_PROXY_REGEX:-172\.31\.250\.10}
     secrets:
-      - source: db_password
+      - source: db_app_password
         target: DB_PASSWORD
       - source: valkey_password
         target: spring.data.redis.password
@@ -220,6 +238,8 @@ services:
       # 원정대 전투력 불러오기의 표시 키 비밀값(16자 이상). 없으면 불러오기가 404다.
       - source: roster_marker_secret
         target: character.roster-combat-power.marker-secret
+      # 상점 공지 알림 전용 Slack 웹훅(파일 이름 그대로 /run/secrets/slack_webhook_shop). 끈 동안은 빈 파일이어도 된다.
+      - slack_webhook_shop
     volumes:
       # 통계 시드 파일(#271). 저장소에 커밋하지 않는다. 디렉터리가 없어도 기동한다(파일이 없으면 시드 없이 수집).
       - ./seed:/seed:ro
@@ -228,6 +248,9 @@ services:
         condition: service_healthy
       valkey:
         condition: service_healthy
+      # 스키마 변경이 성공한 뒤에만 뜬다(migrate가 실패하면 api를 띄우지 않아 배포가 직전 판으로 되돌아간다).
+      migrate:
+        condition: service_completed_successfully
     healthcheck:
       # 운영 이미지에는 curl·wget이 없어 bash /dev/tcp로 health를 확인한다.
       test:
@@ -249,6 +272,41 @@ services:
       # 모니터링 수집용(prometheus만 함께 있는 망). 프로필을 끈 서버에서도 망만 있고 다른 컨테이너는 없다. 주소를 고정해 관리 포트를 여기에만 묶는다.
       metrics:
         ipv4_address: ${API_METRICS_IP:?API_METRICS_IP가 필요합니다(env 예시 참고)}
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+  # 스키마 변경(Flyway)만 하고 끝나는 일회성 단계. api와 같은 이미지·설정 파일로 'migrate' 명령을 돌린다(성공 0, 실패 1).
+  # DB 소유자 역할 비밀번호(db_password)는 여기에만 붙는다. 배포(up)마다 다시 돌고, 적용할 것이 없으면 바로 끝난다.
+  migrate:
+    image: "${API_IMAGE:?API_IMAGE가 필요합니다}"
+    command: ["migrate"]
+    restart: "no"
+    logging: *default-logging
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      # /run/secrets의 파일 이름을 설정 키로 읽는다(DB_PASSWORD = 소유자 역할 비밀번호).
+      SPRING_CONFIG_IMPORT: optional:configtree:/run/secrets/
+      DB_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-loakraken}
+      DB_USERNAME: ${POSTGRES_USER:-loakraken}
+      LOGGING_STRUCTURED_FORMAT_CONSOLE: ecs
+      JAVA_TOOL_OPTIONS: "-XX:MaxRAMPercentage=65 -XX:+ExitOnOutOfMemoryError"
+    secrets:
+      - source: db_password
+        target: DB_PASSWORD
+    depends_on:
+      postgres:
+        condition: service_healthy
+    # 이미지 루트는 읽기 전용. JVM이 쓰는 /tmp만 메모리에.
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,nosuid
+    mem_limit: ${MIGRATE_MEM_LIMIT:-384m}
+    pids_limit: 256
+    # DB 망만(바깥 통신·다른 서비스 없음).
+    networks:
+      - data
     security_opt:
       - no-new-privileges:true
     cap_drop:
@@ -299,6 +357,8 @@ services:
     # 암호를 프로세스 인자에 넣지 않는다. 컨테이너 안 설정 파일(valkey 그룹만 읽기)에 쓰고,
     # 이미지 진입 스크립트에 .conf를 넘겨 valkey 사용자로 권한을 낮춰 실행한다(sh로 바로 실행하면 root로 돈다).
     # maxmemory를 컨테이너 한도보다 작게 둬, 캐시가 커져도 OOM으로 죽지 않고 만료 시간이 있는 키부터 덜 쓴 순서로 지운다.
+    # 사용자별 권한: 기본 사용자는 끄고 앱 전용 사용자 app만 둔다. 위험 명령(CONFIG·FLUSH·KEYS 등)은 빼고 헬스 체크용 INFO만 남긴다.
+    # api는 같은 암호에 사용자 이름 app으로 접속한다(api의 SPRING_DATA_REDIS_USERNAME).
     entrypoint:
       - tini
       - --
@@ -306,7 +366,7 @@ services:
       - -c
       - >-
         umask 027 &&
-        printf 'requirepass %s\n' "$$(cat /run/secrets/valkey_password)" > /tmp/valkey.conf &&
+        printf 'user default off\nuser app on >%s ~* &* +@all -@dangerous +info\n' "$$(cat /run/secrets/valkey_password)" > /tmp/valkey.conf &&
         chgrp valkey /tmp/valkey.conf &&
         exec docker-entrypoint.sh /tmp/valkey.conf --appendonly yes
         --maxmemory ${VALKEY_MAXMEMORY:-96mb} --maxmemory-policy volatile-lru --maxmemory-samples 10
@@ -318,7 +378,7 @@ services:
       # 인증은 인자(-a) 대신 환경 변수로 넘겨 프로세스 목록에 암호가 남지 않게 한다.
       test:
         - CMD-SHELL
-        - VALKEYCLI_AUTH="$$(cat /run/secrets/valkey_password)" valkey-cli ping | grep -q PONG
+        - VALKEYCLI_AUTH="$$(cat /run/secrets/valkey_password)" valkey-cli --no-auth-warning --user app ping | grep -q PONG
       interval: 5s
       timeout: 3s
       retries: 10
@@ -497,12 +557,18 @@ services:
 secrets:
   db_password:
     file: ${SECRETS_DIR:?SECRETS_DIR가 필요합니다(스택별 경로, 예 /opt/loakraken/production/secrets)}/db_password
+  # api 실행 역할(loakraken_app) 암호. 배포 전에 서버에서 만들고 역할에 같은 값을 넣는다.
+  db_app_password:
+    file: ${SECRETS_DIR:?SECRETS_DIR가 필요합니다}/db_app_password
   valkey_password:
     file: ${SECRETS_DIR:?SECRETS_DIR가 필요합니다}/valkey_password
   lostark_api_key:
     file: ${SECRETS_DIR:?SECRETS_DIR가 필요합니다}/lostark_api_key
   roster_marker_secret:
     file: ${SECRETS_DIR:?SECRETS_DIR가 필요합니다}/roster_marker_secret
+  # 상점 공지 알림 Slack 웹훅. api가 쓰므로 파일이 있어야 compose가 올라간다(끈 동안은 빈 파일, 444).
+  slack_webhook_shop:
+    file: ${SECRETS_DIR:?SECRETS_DIR가 필요합니다}/slack_webhook_shop
   # 모니터링(프로필 monitor)만 쓴다. 프로필을 켜지 않은 서버는 이 파일이 없어도 된다.
   grafana_admin_password:
     file: ${SECRETS_DIR:?SECRETS_DIR가 필요합니다}/grafana_admin_password

@@ -530,6 +530,57 @@ class CritSpeedCalculationTest {
     assertThat(CritSpeedCalculation.classState("피냄새 Lv.3", "혼돈 게이지 획득량이 50.0% 증가한다.")).isNull();
   }
 
+  @Test
+  void 치명_신속_스탯을_읽지_못하면_0퍼센트_대신_이유를_낸다() {
+    var noStats =
+        CritSpeedCalculation.calculate(
+            statsOnly(List.of()),
+            new CharacterLoadout(List.of(), null, null, null, null, null),
+            null);
+    assertThat(noStats.crit().unavailableReason()).contains("치명 스탯을 읽지 못해");
+    assertThat(noStats.speed().unavailableReason()).contains("신속 스탯을 읽지 못해");
+    // 화면에 그대로 보이는 문장이라 해요체(프론트 요청 10-25).
+    assertThat(noStats.crit().unavailableReason()).endsWith("계산하지 않았어요.");
+    assertThat(noStats.speed().unavailableReason()).endsWith("계산하지 않았어요.");
+
+    // 수치가 숫자가 아니고 Tooltip도 없음 → 이유. 신속은 수치로 환산되니 계산함
+    var unreadCrit =
+        CritSpeedCalculation.calculate(
+            statsOnly(
+                List.of(
+                    new CharacterProfile.Stat("치명", "-"),
+                    new CharacterProfile.Stat("신속", "1,000"))),
+            new CharacterLoadout(List.of(), null, null, null, null, null),
+            null);
+    assertThat(unreadCrit.crit().unavailableReason()).isNotNull();
+    assertThat(unreadCrit.speed().unavailableReason()).isNull();
+    assertThat(unreadCrit.speed().attack().observed()).isEqualByComparingTo("17.17");
+
+    // 스탯 0도 읽은 값이라 0%를 그대로 낸다
+    var zero =
+        CritSpeedCalculation.calculate(
+            statsOnly(
+                List.of(
+                    new CharacterProfile.Stat("치명", "0"), new CharacterProfile.Stat("신속", "0"))),
+            new CharacterLoadout(List.of(), null, null, null, null, null),
+            null);
+    assertThat(zero.crit().unavailableReason()).isNull();
+    assertThat(zero.speed().unavailableReason()).isNull();
+
+    var normal =
+        CritSpeedCalculation.calculate(
+            profile("576", "77"),
+            new CharacterLoadout(List.of(), null, null, null, null, null),
+            null);
+    assertThat(normal.crit().unavailableReason()).isNull();
+    assertThat(normal.speed().unavailableReason()).isNull();
+  }
+
+  private static CharacterProfile statsOnly(List<CharacterProfile.Stat> stats) {
+    return new CharacterProfile(
+        "기준캐릭터", "카단", "블레이드", 70, null, null, null, null, null, null, stats);
+  }
+
   private static CharacterProfile profile(String crit, String swiftness) {
     return new CharacterProfile(
         "기준캐릭터",

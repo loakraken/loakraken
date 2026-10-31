@@ -15,6 +15,12 @@ public interface StatsPort {
 
   List<ClassRow> classes(StatsConditions conditions, Instant since);
 
+  /**
+   * 직업 각인별 통계(직업 표의 직업 각인 보기). 모집단(처리정지 제외)을 직업과 마지막 장비 요약의 직업 각인(공식 칭호 원문)으로 나눈다. 요약이 없거나 칭호가 비면
+   * classEngraving이 null인 행이다(직업별 미확인 수).
+   */
+  List<ClassEngravingRow> classEngravingTable(StatsConditions conditions, Instant since);
+
   List<ServerRow> servers(StatsConditions conditions, Instant since);
 
   /**
@@ -46,6 +52,10 @@ public interface StatsPort {
    * 구해 캐시한다.
    */
   BigDecimal nthHighest(StatsConditions conditions, Instant since, Metric metric, long k);
+
+  /** 여러 순위의 값을 한 번에(각 값은 {@link #nthHighest}와 같음). 모집단보다 큰 순위는 빠진다. 순위 오름차순. */
+  List<RankValue> valuesAtRanks(
+      StatsConditions conditions, Instant since, Metric metric, java.util.Collection<Long> ranks);
 
   /** classEngraving이 있으면 모집단을 마지막 장비 요약의 직업 각인이 그 값(공백 무시)인 캐릭터로 좁힌다(#618). 요약이 없는 캐릭터는 빠진다. */
   RankingPage ranking(
@@ -80,6 +90,15 @@ public interface StatsPort {
   /** 처리정지 목록(public_exclusion)에 있는가. */
   boolean excluded(Target target);
 
+  /** characters 중 처리정지 목록에 있는 것(서버를 비운 항목은 모든 서버). 한 번의 조회다. */
+  java.util.Set<Named> stopListed(java.util.Collection<Named> characters);
+
+  /** 처리정지 목록의 지금 내용을 나타내는 짧은 값. 목록이 바뀌면 달라진다(집계 캐시 키에 넣는다). 한 번의 조회다. */
+  String exclusionRevision();
+
+  /** 캐릭터 이름과 서버. */
+  record Named(String characterName, String serverName) {}
+
   /** target이 조건의 모집단(처리정지 목록 제외)에 들어가는가. */
   boolean contains(StatsConditions conditions, Instant since, Target target);
 
@@ -103,14 +122,28 @@ public interface StatsPort {
       BigDecimal gemMeanLevel,
       List<BigDecimal> combatPowerPercentiles) {}
 
-  /** knownCharacters·rosters는 필터와 무관하게 그 서버에서 알고 있는 전체 캐릭터 수와 원정대 수다. */
+  /** 직업 표의 한 행을 직업 각인까지 나눈 것. classEngraving이 null이면 직업 각인을 모르는 캐릭터다. */
+  record ClassEngravingRow(String classEngraving, ClassRow stats) {}
+
+  /**
+   * knownCharacters·rosters는 필터와 무관하게 그 서버에서 알고 있는 전체 캐릭터 수와 원정대 수다.
+   * dealers·supports·itemLevelMean· combatPowerPercentiles(p10·p25·p50·p75·p90)는 직업 행(ClassRow)과 같은
+   * 계산이다.
+   */
   record ServerRow(
       String serverName,
       long count,
       BigDecimal itemLevelMedian,
       BigDecimal combatPowerMedian,
       long knownCharacters,
-      long rosters) {}
+      long rosters,
+      long dealers,
+      long supports,
+      BigDecimal itemLevelMean,
+      List<BigDecimal> combatPowerPercentiles) {}
+
+  /** 내림차순 rank번째 값. */
+  record RankValue(long rank, BigDecimal value) {}
 
   record Range(long count, BigDecimal min, BigDecimal max) {}
 
@@ -133,7 +166,8 @@ public interface StatsPort {
       BigDecimal combatPower,
       BigDecimal bestCombatPower,
       ArkPassiveSummary arkPassive,
-      EstherWeapon estherWeapon) {}
+      EstherWeapon estherWeapon,
+      String imageUrl) {}
 
   /** 아크 패시브 진화·깨달음·도약 포인트와 직업 각인(공식 ArkPassive.Title). 못 읽은 값은 null. */
   record ArkPassiveSummary(
@@ -201,7 +235,8 @@ public interface StatsPort {
       BigDecimal itemLevel,
       BigDecimal combatPower,
       BigDecimal value,
-      Instant observedAt) {}
+      Instant observedAt,
+      String imageUrl) {}
 
   record EfficiencyPage(long total, String ruleVersion, List<EfficiencyRow> rows) {}
 
@@ -219,7 +254,8 @@ public interface StatsPort {
       long characterCount,
       long point,
       long maxPoint,
-      Instant observedAt) {}
+      Instant observedAt,
+      String imageUrl) {}
 
   record CollectiblePage(long total, List<CollectibleRow> rows) {}
 
@@ -289,7 +325,8 @@ public interface StatsPort {
       BigDecimal combatPower,
       long characterCount,
       long usedCharacters,
-      BigDecimal score) {}
+      BigDecimal score,
+      String imageUrl) {}
 
   /** excluded: COMBAT_POWER에서 전투력 관측 누락으로 뺀 원정대 수(다른 기준은 0). */
   record RosterPage(long total, long excluded, List<RosterRow> rows) {}

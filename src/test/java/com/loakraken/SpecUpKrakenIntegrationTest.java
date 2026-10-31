@@ -66,6 +66,73 @@ class SpecUpKrakenIntegrationTest {
     var keys = redis.keys("character:v*크라켄*");
     if (keys != null && !keys.isEmpty()) redis.delete(keys);
     redis.delete("market:v1:relic-books");
+    redis.delete("market:v1:refining-materials");
+  }
+
+  @Test
+  void 완갑_비용은_단계마다_회차별_최적의_누적이고_줄_상세는_숨결까지_내역으로_보인다() throws Exception {
+    // PM 총괄 10-25: 일반 재련과 같은 회차별 최적(숨결을 사는 편이 싸면 삼). 시세는 계산 검증이 캡처한 같은 시각 값.
+    when(auctions.cachedGems()).thenReturn(gemCells());
+    marketCache.saveRefiningMaterials(
+        new com.loakraken.market.application.RefiningMaterialScan(
+            Instant.parse("2026-10-24T23:39:31Z"),
+            List.of(
+                material(1, "운명의 파괴석 결정", 100, "892"),
+                material(2, "운명의 수호석 결정", 100, "177"),
+                material(3, "위대한 운명의 돌파석", 1, "18"),
+                material(4, "상급 아비도스 융화 재료", 1, "268"),
+                material(5, "운명의 파편 주머니(소)", 1, "91"),
+                material(6, "빙하의 숨결", 1, "414"),
+                material(7, "용암의 숨결", 1, "476"))),
+        Duration.ofMinutes(5));
+    search();
+    var candidates = guide("&sort=KRAKEN&limit=200").path("candidates");
+    long previous = 0;
+    for (int level = 15; level <= 25; level++) {
+      var row = find(candidates, "EQUIPMENT_REFINE:16:" + level);
+      assertThat(row.at("/cost/code").asText()).as("+" + level).isEqualTo("ARM_GUARD_EXPECTED");
+      long amount = row.at("/cost/amount").asLong();
+      assertThat(amount).as("+" + level + " 누적").isGreaterThan(previous);
+      previous = amount;
+    }
+    // +14 → +15 한 단계 = 회차별 최적 풀이의 기대 비용(1골드 안, 목록은 기대 수량 × 단가를 더해 올림).
+    var rules =
+        mapper.readValue(
+            new ClassPathResource("refining/t4-vambrace-rules.json").getInputStream(),
+            com.loakraken.refining.domain.VambraceRules.class);
+    var prices =
+        java.util.Map.<String, Number>of(
+            "운명의 파괴석 결정", 8.92,
+            "운명의 수호석 결정", 1.77,
+            "위대한 운명의 돌파석", 18,
+            "상급 아비도스 융화 재료", 268,
+            "운명의 파편", 0.091,
+            "빙하의 숨결", 414,
+            "용암의 숨결", 476);
+    double one =
+        com.loakraken.refining.domain.RefiningOptimal.calculate(rules.stage(15), prices)
+            .expectedGold();
+    assertThat((double) find(candidates, "EQUIPMENT_REFINE:16:15").at("/cost/amount").asLong())
+        .isCloseTo(one, org.assertj.core.data.Offset.offset(1.0));
+    // 줄 상세: 재료·숨결 내역, 내역 합 = 목록 비용.
+    var detail =
+        get(
+            "/api/v1/characters/spec-up/candidates/EQUIPMENT_REFINE:16:17?characterName="
+                + encode(NAME));
+    assertThat(detail.statusCode()).as(detail.body()).isEqualTo(200);
+    var data = mapper.readTree(detail.body()).path("data");
+    assertThat(data.at("/refine/fromStage").asInt()).isEqualTo(14);
+    assertThat(data.at("/refine/toStage").asInt()).isEqualTo(17);
+    assertThat(data.at("/refine/breath").asText()).isEqualTo("OPTIMAL");
+    var names = new java.util.ArrayList<String>();
+    for (var row : data.path("materials")) names.add(row.path("itemName").asText());
+    assertThat(names).contains("운명의 파괴석 결정", "위대한 운명의 돌파석", "빙하의 숨결");
+  }
+
+  private static com.loakraken.market.domain.MarketPrice material(
+      long id, String name, int bundle, String currentMin) {
+    return new com.loakraken.market.domain.MarketPrice(
+        id, name, "영웅", null, bundle, null, null, null, new BigDecimal(currentMin));
   }
 
   @Test
@@ -169,7 +236,18 @@ class SpecUpKrakenIntegrationTest {
     assertThat(armGuard.at("/change/kind").asText()).isEqualTo("ARM_GUARD");
     assertThat(armGuard.at("/change/level").asInt()).isEqualTo(15);
     assertThat(armGuard.at("/change/grade").asText()).isEqualTo("전설");
-    assertThat(armGuard.at("/cost/code").asText()).isEqualTo("ARM_GUARD_COST_UNCONFIRMED");
+    // 재련 재료 시세가 아직 없으면 완갑 비용도 PENDING(시세가 있을 때는 아래 완갑 비용 테스트).
+    assertThat(armGuard.at("/cost/code").asText()).isEqualTo("PRICE_PENDING");
+    // 여러 단계 줄(계산 검증 10-25: B는 지금 단계에서 목표 +25까지 줄을 낸다): +14 전설 → +16~20 유물, +21~25 고대.
+    for (int level = 15; level <= 25; level++) {
+      var row = find(candidates, "EQUIPMENT_REFINE:16:" + level);
+      assertThat(row.path("from").asText()).as("+" + level).isEqualTo("+14");
+      assertThat(row.at("/change/level").asInt()).isEqualTo(level);
+      assertThat(row.at("/change/grade").asText())
+          .as("+" + level)
+          .isEqualTo(level <= 15 ? "전설" : level <= 20 ? "유물" : "고대");
+      assertThat(row.path("deltaKrakenScore").isNull()).as("+" + level).isFalse();
+    }
     // 한 줄 알림은 계산 줄로 바뀐 종류만 빠진다.
     for (var candidate : candidates)
       assertThat(candidate.path("id").asText()).isNotIn("POLISH", "KARMA_LEVEL", "ABILITY_STONE");
@@ -181,7 +259,7 @@ class SpecUpKrakenIntegrationTest {
       else if (firstUnpriced == Integer.MAX_VALUE) firstUnpriced = i;
     }
     assertThat(lastPriced).isLessThan(firstUnpriced);
-    // 줄 상세: 완갑은 재련 계획 밖이라 단계만, 연마는 내역 없이 후보만.
+    // 줄 상세: 완갑은 시세가 없으면 단계만, 연마는 내역 없이 후보만.
     var detail =
         get(
             "/api/v1/characters/spec-up/candidates/EQUIPMENT_REFINE:16:15?characterName="
@@ -190,10 +268,89 @@ class SpecUpKrakenIntegrationTest {
     var data = mapper.readTree(detail.body()).path("data");
     assertThat(data.at("/refine/fromStage").asInt()).isEqualTo(14);
     assertThat(data.at("/refine/toStage").asInt()).isEqualTo(15);
+    // 여러 단계 줄은 그 줄의 목표 단계(코드 리뷰 10-25: +25 줄 상세가 +15로 보였다).
+    var far =
+        get(
+            "/api/v1/characters/spec-up/candidates/EQUIPMENT_REFINE:16:25?characterName="
+                + encode(NAME));
+    assertThat(far.statusCode()).as(far.body()).isEqualTo(200);
+    assertThat(mapper.readTree(far.body()).at("/data/refine/toStage").asInt()).isEqualTo(25);
     assertThat(data.path("materials").isNull()).isTrue();
     var polishDetail =
         get("/api/v1/characters/spec-up/candidates/POLISH:7:MM?characterName=" + encode(NAME));
     assertThat(polishDetail.statusCode()).as(polishDetail.body()).isEqualTo(200);
+  }
+
+  @Test
+  void 서포터는_서포터_점수식으로_Δ를_내고_전투력은_역할_이유로_비우며_연마는_서포터_옵션으로_만든다() throws Exception {
+    // PM 총괄 10-25: 서포터 스펙업은 서포터 점수 기준(비교 기준 B도 역할에 따라 점수 키만 바꾸고 후보는 같게 만든다). 전투력은 계산하지 않는다.
+    when(auctions.cachedGems()).thenReturn(gemCells());
+    marketCache.saveRelicBooks(books(), Duration.ofMinutes(5));
+    var raw =
+        mapper
+            .readTree(
+                new ClassPathResource("kraken-score/l07.json")
+                    .getContentAsString(StandardCharsets.UTF_8))
+            .path("raw");
+    search("l07", raw.path("ArmoryProfile").path("CharacterClassName").asString());
+    var data = guide("&sort=KRAKEN&limit=200");
+    assertThat(data.path("sort").asText()).isEqualTo("KRAKEN");
+    assertThat(data.path("krakenSortUnavailableReason").isNull()).isTrue();
+    // 지금 점수 = 고정 자료의 비교 기준 서폿 점수 9972.379331813927(소수 둘째 자리)
+    assertThat(data.path("krakenScore").decimalValue()).isEqualByComparingTo("9972.38");
+    var candidates = data.path("candidates");
+    int scored = 0;
+    for (var candidate : candidates) {
+      // 전투력은 서포터라 계산하지 않는다(역할 이유, 기존 값 그대로).
+      assertThat(candidate.path("status").asText())
+          .as(candidate.path("id").asText())
+          .isEqualTo("UNSUPPORTED");
+      if (!candidate.path("deltaKrakenScore").isNull()) scored++;
+    }
+    assertThat(scored).as("Δ서포터 점수가 있는 후보").isPositive();
+    // 서포터 연마 후보는 Δ서포터 점수가 0보다 큰 것만(비교 기준 B와 같음). 이 고정 자료는 주옵션이 모두 상이거나, 바꾸면 고정값 무기 공격력 줄이 빠져
+    // 점수가 내려가 후보가 없다.
+    for (var candidate : candidates)
+      assertThat(candidate.path("kind").asText())
+          .as(candidate.path("id").asText())
+          .isNotEqualTo("POLISH");
+  }
+
+  @Test
+  void 서포터_연마_후보는_서포터_옵션_표로_만들고_Δ가_오르는_것만_낸다() throws Exception {
+    when(auctions.cachedGems()).thenReturn(gemCells());
+    var raw =
+        mapper
+            .readTree(
+                new ClassPathResource("kraken-score/l04.json")
+                    .getContentAsString(StandardCharsets.UTF_8))
+            .path("raw");
+    search("l04", raw.path("ArmoryProfile").path("CharacterClassName").asString());
+    var candidates = guide("&sort=KRAKEN&limit=200").path("candidates");
+    var polish = new java.util.LinkedHashMap<String, String>();
+    for (var candidate : candidates)
+      if ("POLISH".equals(candidate.path("kind").asText()))
+        polish.put(
+            candidate.path("id").asText().replaceFirst("^POLISH:\\d+:", ""),
+            candidate.path("deltaKrakenScore").decimalValue().toPlainString());
+    // 목걸이 세레나데 중 → 상, 반지 둘 아군 공격력 강화 중 → 상. 다른 조합은 점수가 오르지 않는다.
+    assertThat(polish)
+        .containsOnly(
+            java.util.Map.entry("SHMH", "80.77"),
+            java.util.Map.entry("SHLH", "84.72"),
+            java.util.Map.entry("SHHL", "84.72"));
+    // 목록 id 그대로 줄 상세를 부를 수 있다(코드 리뷰 10-25).
+    for (var candidate : candidates)
+      if ("POLISH".equals(candidate.path("kind").asText())) {
+        var id = candidate.path("id").asText();
+        var detail =
+            get(
+                "/api/v1/characters/spec-up/candidates/"
+                    + encode(id)
+                    + "?characterName="
+                    + encode(NAME));
+        assertThat(detail.statusCode()).as(id + " " + detail.body()).isEqualTo(200);
+      }
   }
 
   @Test
@@ -287,17 +444,21 @@ class SpecUpKrakenIntegrationTest {
   }
 
   private void search() throws Exception {
+    search("l01", "블레이드");
+  }
+
+  private void search(String id, String className) throws Exception {
     var raw =
         mapper
             .readTree(
-                new ClassPathResource("kraken-score/l01.json")
+                new ClassPathResource("kraken-score/" + id + ".json")
                     .getContentAsString(StandardCharsets.UTF_8))
             .path("raw");
     var profile =
         new CharacterProfile(
             NAME,
             SERVER,
-            "블레이드",
+            className,
             70,
             new BigDecimal("1770.00"),
             new BigDecimal("4070.75"),

@@ -71,7 +71,12 @@ class CharacterSuggestIntegrationTest {
 
     var response = get("자동완성");
     assertThat(response.statusCode()).isEqualTo(200);
-    assertThat(response.headers().firstValue("Cache-Control").orElse("")).contains("max-age=60");
+    // 제외 목록이 바뀌면 바로 반영되게 공유 캐시·브라우저가 다시 쓰지 않는다.
+    assertThat(response.headers().firstValue("Cache-Control").orElse(""))
+        .contains("no-cache")
+        .contains("private")
+        .doesNotContain("max-age=60")
+        .doesNotContain("public");
     var data = mapper.readTree(response.body()).path("data");
     ApiContractFixture.write("character-suggest.json", response.body());
     assertThat(names(data))

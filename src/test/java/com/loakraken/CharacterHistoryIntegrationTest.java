@@ -92,6 +92,26 @@ class CharacterHistoryIntegrationTest {
   }
 
   @Test
+  void 제외_목록에_들면_저장된_이력과_칭호는_기록이_없는_캐릭터와_같다() throws Exception {
+    history.record(profile("1700.00", "4000.00", 260, "이클립스"), TIME);
+    assertThat(mapper.readTree(request("").body()).at("/data/points").size()).isEqualTo(1);
+    jdbc.sql(
+            "INSERT INTO public_exclusion (character_name, server_name, reason_code) VALUES (:n, '루페온', 'PRIVACY_STOP')")
+        .param("n", NAME)
+        .update();
+    try {
+      var response = request("&limit=10");
+      assertThat(response.statusCode()).isEqualTo(200);
+      var body = mapper.readTree(response.body());
+      assertThat(body.path("code").asText()).isEqualTo("CHARACTER_HISTORY_SUCCESS");
+      assertThat(body.at("/data/points").size()).isZero();
+      assertThat(body.at("/data/titles").size()).isZero();
+    } finally {
+      jdbc.sql("DELETE FROM public_exclusion WHERE character_name = :n").param("n", NAME).update();
+    }
+  }
+
+  @Test
   void 기록이_없으면_빈_목록이고_잘못된_limit은_400이다() throws Exception {
     var empty = request("");
     assertThat(empty.statusCode()).isEqualTo(200);

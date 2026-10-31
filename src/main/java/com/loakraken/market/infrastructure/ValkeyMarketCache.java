@@ -28,6 +28,7 @@ import tools.jackson.databind.json.JsonMapper;
 class ValkeyMarketCache implements MarketCache {
   private static final String OPTIONS_KEY = "market:v1:options";
   private static final String RELIC_BOOKS_KEY = "market:v1:relic-books";
+  private static final String RELIC_BOOK_ICONS_KEY = "market:v1:relic-book-icons";
   private static final String REFINING_MATERIALS_KEY = "market:v1:refining-materials";
 
   /** 뒤에 분류 코드를 붙인다(생활 90000·전투 용품 60000). */
@@ -156,6 +157,31 @@ class ValkeyMarketCache implements MarketCache {
   @Override
   public void saveRelicBooks(RelicBookScan scan, Duration ttl) {
     write(RELIC_BOOKS_KEY, scan, ttl, Kind.RELIC_BOOKS);
+  }
+
+  /** 만료 없는 해시(volatile-lru에서 지워지지 않음). 읽지 못하면 빈 값. */
+  @Override
+  public java.util.Map<String, String> findRelicBookIcons() {
+    try {
+      var result = new java.util.HashMap<String, String>();
+      redis
+          .opsForHash()
+          .entries(RELIC_BOOK_ICONS_KEY)
+          .forEach((name, icon) -> result.put(name.toString(), icon.toString()));
+      return result;
+    } catch (DataAccessException exception) {
+      return java.util.Map.of();
+    }
+  }
+
+  @Override
+  public void saveRelicBookIcons(java.util.Map<String, String> icons) {
+    if (icons.isEmpty()) return;
+    try {
+      redis.opsForHash().putAll(RELIC_BOOK_ICONS_KEY, icons);
+    } catch (DataAccessException exception) {
+      // 아이콘 저장 실패는 시세에 영향이 없다(다음 스캔에서 다시 씀).
+    }
   }
 
   @Override

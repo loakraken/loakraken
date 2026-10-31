@@ -56,7 +56,34 @@ class GrowthCostTest {
   }
 
   @Test
-  void 전율_21단계는_한계_해방이라_일반_성장_비용이_0으로_확정이다() throws IOException {
+  void 전율_방어구_21단계는_한계_해방_비용을_성장_비용으로_더하고_가시는_재료_합계에_넣지_않는다() throws IOException {
+    var rules = read("/refining/t4-refining-rules.json", RefiningRules.class);
+    var growth = read("/refining/t4-growth-costs.json", GrowthCosts.class);
+    var track = rules.track(RefiningRules.Grade.JEONYUL, RefiningRules.EquipmentType.ARMOR);
+    var none =
+        RefiningPlan.calculate(
+            track, RefiningRules.Grade.JEONYUL, options(20, 21, false, false), growth);
+    var plan =
+        RefiningPlan.calculate(
+            track, RefiningRules.Grade.JEONYUL, options(20, 21, true, true), growth);
+    // 공식 공지 13339·게임 가이드 이미지(2026-10-25): 방어구 한계 해방 = 파편 72,000 · 실링 720,000 · 고통의 가시 15
+    var stage21 = plan.stages().getFirst().growth();
+    assertThat(stage21.confirmed()).isTrue();
+    assertThat(stage21.shard()).isEqualByComparingTo("72000");
+    assertThat(stage21.silver()).isEqualTo(720_000);
+    assertThat(stage21.research()).isFalse();
+    assertThat(stage21.extras())
+        .containsExactly(new RefiningPlan.Quantity("고통의 가시", BigDecimal.valueOf(15)));
+    // 파편은 기대·최악 재료에 한 번씩, 가시(거래 불가)는 재료 합계에 넣지 않는다.
+    assertThat(shard(plan).subtract(shard(none))).isEqualByComparingTo("72000");
+    assertThat(worstShard(plan).subtract(worstShard(none))).isEqualByComparingTo("72000");
+    assertThat(plan.expectedMaterials()).noneMatch(q -> q.name().equals("고통의 가시"));
+    assertThat(plan.worstCaseMaterials()).noneMatch(q -> q.name().equals("고통의 가시"));
+    assertThat(plan.expectedGold()).isEqualByComparingTo(none.expectedGold());
+  }
+
+  @Test
+  void 전율_무기_21단계는_한계_해방_비용을_확인하기_전이라_0이다() throws IOException {
     var rules = read("/refining/t4-refining-rules.json", RefiningRules.class);
     var growth = read("/refining/t4-growth-costs.json", GrowthCosts.class);
     var track = rules.track(RefiningRules.Grade.JEONYUL, RefiningRules.EquipmentType.WEAPON);
@@ -64,9 +91,10 @@ class GrowthCostTest {
         RefiningPlan.calculate(
             track, RefiningRules.Grade.JEONYUL, options(20, 22, true, true), growth);
     var stage21 = plan.stages().getFirst().growth();
-    // 공지 13339(2026-01-07): 20단계 도달 뒤 한계 해방으로 성장 완료 → 일반 성장 비용 0(확정)
+    // 공지 13339(2026-01-07): 20단계 도달 뒤 한계 해방으로 성장 완료. 무기 해방 비용은 공식 확인 전이라 0(영수증은 따로 알림)
     assertThat(stage21.confirmed()).isTrue();
     assertThat(stage21.shard()).isEqualByComparingTo(BigDecimal.ZERO);
+    assertThat(stage21.extras()).isEmpty();
     var stage22 = plan.stages().getLast().growth();
     assertThat(stage22.confirmed()).isTrue();
     assertThat(stage22.shard()).isEqualByComparingTo("128000");

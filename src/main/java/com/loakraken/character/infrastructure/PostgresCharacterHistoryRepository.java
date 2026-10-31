@@ -143,8 +143,9 @@ class PostgresCharacterHistoryRepository implements CharacterHistoryPort {
         o.combat_power, o.expedition_level
       FROM character_observation o JOIN characters c ON c.character_id = o.character_id
       WHERE c.server_name = :server AND c.character_name = :name
-      ORDER BY o.observed_at DESC, o.observation_sequence DESC LIMIT :limit
-      """)
+      """
+                    + StopListSql.NOT_EXCLUDED
+                    + " ORDER BY o.observed_at DESC, o.observation_sequence DESC LIMIT :limit")
             .param("server", serverName)
             .param("name", characterName)
             .param("limit", limit)
@@ -177,6 +178,10 @@ class PostgresCharacterHistoryRepository implements CharacterHistoryPort {
           ROW_NUMBER() OVER (PARTITION BY t.title ORDER BY t.first_observed_at, c.character_name) AS rn
         FROM character_title_observation t JOIN characters c ON c.character_id = t.character_id
         WHERE c.server_name = :server AND c.character_name IN (:names)
+      """
+                + StopListSql.NOT_EXCLUDED
+                + """
+
       ) x WHERE rn = 1
       ORDER BY first_observed_at, title
       """)
@@ -201,7 +206,8 @@ class PostgresCharacterHistoryRepository implements CharacterHistoryPort {
       SELECT COUNT(DISTINCT t.character_id)
       FROM character_title_observation t JOIN characters c ON c.character_id = t.character_id
       WHERE c.server_name = :server AND c.character_name IN (:names)
-      """)
+      """
+                + StopListSql.NOT_EXCLUDED)
         .param("server", serverName)
         .param("names", List.copyOf(characterNames))
         .query(Integer.class)
@@ -215,8 +221,9 @@ class PostgresCharacterHistoryRepository implements CharacterHistoryPort {
       SELECT t.title, t.first_observed_at, t.last_observed_at
       FROM character_title_observation t JOIN characters c ON c.character_id = t.character_id
       WHERE c.server_name = :server AND c.character_name = :name
-      ORDER BY t.first_observed_at, t.title
-      """)
+      """
+                + StopListSql.NOT_EXCLUDED
+                + " ORDER BY t.first_observed_at, t.title")
         .param("server", serverName)
         .param("name", characterName)
         .query(

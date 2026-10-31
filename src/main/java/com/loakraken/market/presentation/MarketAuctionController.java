@@ -32,10 +32,15 @@ import org.springframework.web.bind.annotation.RestController;
 public class MarketAuctionController {
   private final MarketAuctionService auctions;
   private final GemSkillFilterService gemSkills;
+  private final io.micrometer.core.instrument.MeterRegistry meters;
 
-  public MarketAuctionController(MarketAuctionService auctions, GemSkillFilterService gemSkills) {
+  public MarketAuctionController(
+      MarketAuctionService auctions,
+      GemSkillFilterService gemSkills,
+      io.micrometer.core.instrument.MeterRegistry meters) {
     this.auctions = auctions;
     this.gemSkills = gemSkills;
+    this.meters = meters;
   }
 
   @GetMapping("/gems/skills")
@@ -53,12 +58,25 @@ public class MarketAuctionController {
   @GetMapping("/gems")
   @Operation(
       summary = "T4 보석 시세 표",
-      description = "겁화·작열 1~10레벨의 즉시 구매 최저가와 매물 수, 전일 대비. 빈 칸은 PENDING이며 잠시 뒤 다시 조회하면 채워집니다.")
+      description =
+          "겁화·작열 1~10레벨의 즉시 구매 최저가와 매물 수, 전일 대비. 최근 3분 안의 값이 없으면 마지막으로 관측한 값을 그 시각과 함께 주고(stale=true),"
+              + " 한 번도 관측하지 못한 칸만 PENDING입니다. 잠시 뒤 다시 조회하면 새 값으로 채워집니다.")
   @StandardErrors
   public ApiResponse<AuctionResponses.AuctionGemBoardResponse> gems() {
+    var cells = auctions.gems();
+    // 칸 상태별 응답 수(운영에서 '집계 중'·마지막 값이 얼마나 보이는지): fresh·stale·pending.
+    for (var cell : cells)
+      meters
+          .counter(
+              "loakraken.market.gem_board.cells",
+              "state",
+              cell.status() == MarketAuctionService.Status.PENDING
+                  ? "pending"
+                  : cell.stale() ? "stale" : "fresh")
+          .increment();
     return ApiResponse.of(
         MarketSuccessCode.AUCTION_GEMS_SUCCESS,
-        AuctionResponses.AuctionGemBoardResponse.from(auctions.gems()));
+        AuctionResponses.AuctionGemBoardResponse.from(cells));
   }
 
   @GetMapping("/gems/listings")

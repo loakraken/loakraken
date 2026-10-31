@@ -138,7 +138,8 @@ public class SpecUpDetailService {
             snapshot,
             SpecUpService.Sort.DELTA,
             Integer.MAX_VALUE,
-            includeCooldownGems == null ? Boolean.TRUE : includeCooldownGems);
+            includeCooldownGems == null ? Boolean.TRUE : includeCooldownGems,
+            true);
     var candidate =
         guide.candidates().stream()
             .filter(item -> item.id().equals(candidateId))
@@ -172,12 +173,12 @@ public class SpecUpDetailService {
         var index = Integer.parseInt(parts[1]);
         var item = loadout.equipment().get(index);
         int from = item.detail().refineLevel();
-        // 팔 보호구(완갑)는 재련 계획 밖이다(비용 UNKNOWN): 단계만 준다.
-        if ("완갑".equals(item.type())) {
-          refine = new Refine(from, from + 1, null, null, null);
-          break;
-        }
-        var breakdown = specUp.refineBreakdown(item, from, materials.cached());
+        int to = Integer.parseInt(parts[2]);
+        // 팔 보호구(완갑)는 완갑 단계표로 같은 회차별 최적 내역을 만든다(숨결 두 가지).
+        var breakdown =
+            "완갑".equals(item.type())
+                ? specUp.armGuardBreakdown(from, to, materials.cached())
+                : specUp.refineBreakdown(item, from, to, materials.cached());
         var plan = breakdown.plan();
         if (plan != null) {
           materialRows = materialRows(plan, breakdown.prices());
@@ -185,12 +186,19 @@ public class SpecUpDetailService {
           consistent = matches(candidate.cost(), breakdown.cost().amount());
         }
         var stage = plan == null || plan.stages().isEmpty() ? null : plan.stages().getFirst();
+        // 여러 단계 줄이면 기대 시도는 단계마다의 합, 첫 시도 확률은 첫 단계(#585).
+        BigDecimal attempts = null;
+        if (plan != null && !plan.stages().isEmpty()) {
+          attempts = BigDecimal.ZERO;
+          for (var each : plan.stages()) attempts = attempts.add(each.expectedAttempts());
+          attempts = attempts.setScale(2, RoundingMode.HALF_UP);
+        }
         refine =
             new Refine(
                 from,
-                from + 1,
-                plan == null ? null : breakdown.breath() ? "MAX" : "NONE",
-                stage == null ? null : stage.expectedAttempts().setScale(2, RoundingMode.HALF_UP),
+                to,
+                plan == null ? null : breakdown.breath() ? "OPTIMAL" : "NONE",
+                attempts,
                 stage == null ? null : stage.firstAttemptSuccessRateBp());
       }
       default -> {}

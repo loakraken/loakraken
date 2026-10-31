@@ -13,6 +13,7 @@ import com.loakraken.market.application.MarketAuctionService;
 import com.loakraken.market.application.RefiningMaterialPriceService;
 import com.loakraken.market.application.RelicBookPriceService;
 import com.loakraken.refining.application.RefiningPlanService;
+import com.loakraken.refining.domain.RefiningOptimal;
 import com.loakraken.refining.domain.RefiningPlan;
 import com.loakraken.refining.domain.RefiningRules;
 import com.loakraken.specup.domain.SpecUpCost;
@@ -49,7 +50,16 @@ public class SpecUpService {
   private final CombatPowerGemModel.Coefficients gemCoefficients;
   private final SpecUpKrakenScore kraken;
   private final CombatPowerPolishValues polishValues;
+  private final com.loakraken.refining.domain.OptimalStageCache optimalCache;
+  private final com.loakraken.refining.domain.VambraceRules vambrace;
+  private final boolean polishPriceFill;
   private final boolean enabled;
+
+  /**
+   * 팔 보호구(완갑) 재련 줄을 낼지(spec-up.arm-guard.enabled, 기본 켬). 끄면 목록·줄 상세 모두 완갑 줄이 없다(되돌리기 없이 숨기는 스위치,
+   * PM-프론트 10-25). 요청마다 설정을 읽어, 이미 채워진 캐시(캐릭터·시세·목표 경로·회차별 최적)가 있어도 꺼진 뒤 첫 요청부터 빠진다.
+   */
+  private final org.springframework.core.env.Environment environment;
 
   /** 빈 칸 후보 레벨: 기본 공격력 %가 확인된 6~10레벨만(1~5레벨은 계수표에 근거가 없어 계산하지 않는다). */
   static final int EMPTY_SLOT_MIN_LEVEL = 6;
@@ -63,7 +73,12 @@ public class SpecUpService {
       CombatPowerGemModel.Coefficients gemCoefficients,
       SpecUpKrakenScore kraken,
       CombatPowerPolishValues polishValues,
-      @Value("${spec-up.enabled:false}") boolean enabled) {
+      com.loakraken.refining.domain.OptimalStageCache optimalCache,
+      com.loakraken.refining.domain.VambraceRules vambrace,
+      @Value("${spec-up.enabled:false}") boolean enabled,
+      // 연마 시세 칸을 요청에서 채우는가(PM 총괄 10-25: 기본 꺼짐 — 꺼져 있으면 캐시된 칸만 쓰고 없으면 비용 미확정).
+      @Value("${spec-up.polish-price-fill.enabled:false}") boolean polishPriceFill,
+      org.springframework.core.env.Environment environment) {
     this.simulator = simulator;
     this.auctions = auctions;
     this.books = books;
@@ -72,7 +87,15 @@ public class SpecUpService {
     this.gemCoefficients = gemCoefficients;
     this.kraken = kraken;
     this.polishValues = polishValues;
+    this.optimalCache = optimalCache;
+    this.vambrace = vambrace;
+    this.polishPriceFill = polishPriceFill;
     this.enabled = enabled;
+    this.environment = environment;
+  }
+
+  boolean armGuardEnabled() {
+    return environment.getProperty("spec-up.arm-guard.enabled", Boolean.class, true);
   }
 
   /** KRAKEN: Δ크라켄 점수 ÷ 비용(비교 기준 B 스펙업 추천과 같은 순서). 점수를 낼 수 없으면 EFFICIENCY로 되돌린다. */
@@ -199,6 +222,19 @@ public class SpecUpService {
   }
 
   Guide guide(CharacterResult snapshot, Sort requested, int limit, Boolean includeCooldownGems) {
+    return guide(snapshot, requested, limit, includeCooldownGems, false);
+  }
+
+  /**
+   * allRefineStages=false(목록)면 재련 +2 단계 이상 줄은 순위에 들 때만 낸다. 순위 밖 줄(전투력 계산식 확인 중 등)은 limit 밖에 모두 붙어
+   * 단계 수만큼 목록·응답이 늘고, Δ가 없어 +1 줄 하나와 알려 주는 것이 같다(#585). 줄 상세는 어느 정렬 목록의 id든 찾도록 모든 단계를 본다.
+   */
+  Guide guide(
+      CharacterResult snapshot,
+      Sort requested,
+      int limit,
+      Boolean includeCooldownGems,
+      boolean allRefineStages) {
     var profile = snapshot.details().profile();
     var loadout = snapshot.details().loadout();
     var prices = new HashMap<String, MarketAuctionService.GemCell>();
@@ -209,9 +245,10 @@ public class SpecUpService {
     quality(loadout, planned);
     engravings(loadout, books::price, books::icon, pricesAt, planned);
     refines(loadout, materials.cached(), pricesAt, planned);
-    armGuard(loadout, planned);
+    if (armGuardEnabled()) armGuard(loadout, materials.cached(), pricesAt, planned);
     var krakenContext = kraken.context(snapshot);
-    others(loadout, planned, krakenContext);
+    // 줄 상세(allRefineStages)는 목록이 이미 채운 연마 시세 칸만 쓴다 — 다시 만들기(최대 두 번)마다 채우기 몫을 새로 쓰지 않게(코드 리뷰 10-25).
+    others(loadout, planned, krakenContext, pricesAt, polishPriceFill && !allRefineStages);
 
     // 점수를 낼 수 없으면 KRAKEN도 효율 순으로 되돌리고 그 이유를 응답에 둔다.
     var sort = requested == Sort.KRAKEN && !krakenContext.available() ? Sort.EFFICIENCY : requested;
@@ -242,6 +279,7 @@ public class SpecUpService {
       boolean ranked =
           "OK".equals(candidate.status())
               || (sort == Sort.KRAKEN && candidate.deltaKrakenScore() != null);
+      if (!ranked && !allRefineStages && sort != Sort.KRAKEN && laterRefineStage(plan)) continue;
       (ranked ? ok : unsupported).add(candidate);
     }
     ok.sort(order(sort));
@@ -497,6 +535,8 @@ public class SpecUpService {
       return SpecUpCost.PRICE_PENDING;
     observed(pricesAt, nextCell);
     Long current = null;
+    var priceAt = nextCell.cell().observedAt();
+    boolean stale = nextCell.stale();
     if (!bound && level >= 1) {
       var currentCell = prices.get(kind + ":" + level);
       // 지금 레벨 매물 최저가가 없으면 뺄 값을 몰라 PRICE_PENDING이다(PM-백엔드 10-12 05:01 P2).
@@ -505,8 +545,11 @@ public class SpecUpService {
           || currentCell.cell().minBuyPrice() == null) return SpecUpCost.PRICE_PENDING;
       observed(pricesAt, currentCell);
       current = currentCell.cell().minBuyPrice();
+      var at = currentCell.cell().observedAt();
+      if (at != null && (priceAt == null || at.isBefore(priceAt))) priceAt = at;
+      stale |= currentCell.stale();
     }
-    return SpecUpCost.gem(nextCell.cell().minBuyPrice(), current, bound);
+    return SpecUpCost.gem(nextCell.cell().minBuyPrice(), current, bound).withPrice(priceAt, stale);
   }
 
   static void observed(Instant[] pricesAt, MarketAuctionService.GemCell cell) {
@@ -649,32 +692,34 @@ public class SpecUpService {
       if (item == null || !WEAPON_ARMOR.contains(item.type()) || item.detail() == null) continue;
       var refine = item.detail().refineLevel();
       if (refine != null && refine >= 10 && refine < 25)
-        planned.add(
-            new Planned(
-                "EQUIPMENT_REFINE:" + index + ":" + (refine + 1),
-                Kind.EQUIPMENT_REFINE.name(),
-                item.name(),
-                "+" + refine,
-                "+" + (refine + 1),
-                item.icon(),
-                item.grade(),
-                null,
-                new Change(
-                    Kind.EQUIPMENT_REFINE,
-                    null,
-                    index,
-                    null,
-                    null,
-                    refine + 1,
-                    null,
-                    null,
-                    null,
-                    null,
-                    null,
-                    null,
-                    null,
-                    null),
-                refineCost(item, refine, prices, pricesAt)));
+        // 다음 단계부터 재련 계획 최대 단계까지 줄마다 따로(누적 Δ·누적 비용, #585). 계획이 다루지 않는 장비는 +1 줄 하나.
+        for (int target = refine + 1; target <= refineMaxTarget(item, refine); target++)
+          planned.add(
+              new Planned(
+                  "EQUIPMENT_REFINE:" + index + ":" + target,
+                  Kind.EQUIPMENT_REFINE.name(),
+                  item.name(),
+                  "+" + refine,
+                  "+" + target,
+                  item.icon(),
+                  item.grade(),
+                  null,
+                  new Change(
+                      Kind.EQUIPMENT_REFINE,
+                      null,
+                      index,
+                      null,
+                      null,
+                      target,
+                      null,
+                      null,
+                      null,
+                      null,
+                      null,
+                      null,
+                      null,
+                      null),
+                  refineCost(item, refine, target, prices, pricesAt)));
       var advanced = item.detail().advancedRefineLevel();
       // 전율 장비에는 상급 재련이 없다(E21). 후보를 만들지 않는다.
       if (advanced != null
@@ -699,39 +744,175 @@ public class SpecUpService {
    * 팔 보호구(완갑) 재련 +1(#575): kind는 EQUIPMENT_REFINE(index = 완갑 장비), 시뮬레이터 입력은 ARM_GUARD(목표 단계, 목표 단계의
    * 등급 — 지금 등급의 최대 단계를 넘으면 승급). 비용은 완갑 재련 규칙(확률·재료)을 아직 넣지 않아 UNKNOWN이다.
    */
-  private void armGuard(CharacterLoadout loadout, List<Planned> planned) {
+  /**
+   * 팔 보호구 재련: 지금 단계 + 1 … 25 목표마다 한 줄(일반 재련 다단계 줄과 같은 규칙, 비교 기준 B도 지금 단계에서 목표까지 줄을 낸다). 목표가 등급의 끝을
+   * 넘으면 승급한 등급으로 계산한다.
+   */
+  private void armGuard(
+      CharacterLoadout loadout,
+      java.util.Optional<RefiningMaterialPriceService.Prices> prices,
+      Instant[] pricesAt,
+      List<Planned> planned) {
     var item = SpecUpKrakenScore.armGuardItem(loadout);
     if (item == null || item.detail() == null || item.detail().refineLevel() == null) return;
     int refine = item.detail().refineLevel();
     if (refine < 0 || refine >= 25) return;
-    var grade = kraken.armGuardGrade(item.grade(), refine + 1);
-    if (grade == null) return;
-    planned.add(
-        new Planned(
-            "EQUIPMENT_REFINE:" + loadout.equipment().indexOf(item) + ":" + (refine + 1),
-            Kind.EQUIPMENT_REFINE.name(),
-            item.name(),
-            "+" + refine,
-            "+" + (refine + 1) + (grade.equals(item.grade()) ? "" : " " + grade),
-            item.icon(),
-            item.grade(),
+    for (int target = refine + 1; target <= 25; target++) {
+      var grade = kraken.armGuardGrade(item.grade(), target);
+      if (grade == null) break;
+      var breakdown = armGuardBreakdown(refine, target, prices);
+      if ("OK".equals(breakdown.cost().status())
+          && (pricesAt[0] == null || breakdown.prices().observedAt().isBefore(pricesAt[0])))
+        pricesAt[0] = breakdown.prices().observedAt();
+      planned.add(armGuardRow(loadout, item, refine, target, grade, breakdown.cost()));
+    }
+  }
+
+  private Planned armGuardRow(
+      CharacterLoadout loadout,
+      CharacterLoadout.Equipment item,
+      int refine,
+      int target,
+      String grade,
+      SpecUpCost cost) {
+    return new Planned(
+        "EQUIPMENT_REFINE:" + loadout.equipment().indexOf(item) + ":" + target,
+        Kind.EQUIPMENT_REFINE.name(),
+        item.name(),
+        "+" + refine,
+        "+" + target + (grade.equals(item.grade()) ? "" : " " + grade),
+        item.icon(),
+        item.grade(),
+        null,
+        new Change(
+            Kind.ARM_GUARD,
             null,
-            new Change(
-                Kind.ARM_GUARD,
-                null,
-                null,
-                null,
-                refine + 1,
-                null,
-                null,
-                null,
-                grade,
-                null,
-                null,
-                null,
-                null,
-                null),
-            SpecUpCost.ARM_GUARD_COST_UNCONFIRMED));
+            null,
+            null,
+            target,
+            null,
+            null,
+            null,
+            grade,
+            null,
+            null,
+            null,
+            null,
+            null),
+        cost);
+  }
+
+  /**
+   * 팔 보호구(완갑) 지금 단계 refine에서 target까지 누적 비용 내역. 단계마다 회차별 최적 전략(시도마다 쓸 숨결 수를 골라 기대 비용 최소, 용암·빙하는 싼
+   * 숨결부터, 장인의 기운·실패 횟수는 단계 시작에서 0)으로 풀고 단계 비용을 더한다(일반 재련과 같은 방식). PM 총괄 10-25: 숨결을 사는 편이 싸면 사는 비용을
+   * 낸다 — 비교 기준 B는 기본 설정에서 숨결을 사지 않아 조금 비싸게 나온다(증명된 차이). 성장 지원·책은 없다. 재료·파편·숨결 시세가 하나라도 없으면 PENDING.
+   */
+  RefineBreakdown armGuardBreakdown(
+      int refine, int target, java.util.Optional<RefiningMaterialPriceService.Prices> prices) {
+    if (refine < 0 || target <= refine || target > 25)
+      return new RefineBreakdown(null, false, null, SpecUpCost.ARM_GUARD_COST_UNCONFIRMED);
+    if (prices.isEmpty())
+      return new RefineBreakdown(null, false, null, SpecUpCost.REFINE_PRICE_PENDING);
+    var unitPrices = prices.get();
+    var stages = new ArrayList<RefiningPlan.StagePlan>();
+    var totals = new java.util.LinkedHashMap<String, BigDecimal>();
+    var gold = BigDecimal.ZERO;
+    boolean breath = false;
+    for (int stage = refine + 1; stage <= target; stage++) {
+      var rule = vambrace.stage(stage);
+      var stagePrices = vambracePrices(rule, unitPrices);
+      if (stagePrices == null)
+        return new RefineBreakdown(null, false, unitPrices, SpecUpCost.REFINE_PRICE_PENDING);
+      var optimal =
+          optimalCache
+              .get(
+                  vambraceKey(rule, stagePrices),
+                  () -> com.loakraken.refining.domain.RefiningOptimal.calculate(rule, stagePrices))
+              .orElse(null);
+      if (optimal == null)
+        return new RefineBreakdown(null, false, unitPrices, SpecUpCost.REFINE_PRICE_PENDING);
+      breath |= optimal.usesBreath();
+      double attempts = optimal.expectedAttempts();
+      var quantities = new ArrayList<RefiningPlan.Quantity>();
+      for (var material : rule.materials())
+        quantities.add(quantity(material.name(), material.count() * attempts, totals));
+      quantities.add(quantity(RefiningPlan.SHARD, rule.shard() * attempts, totals));
+      // 시도마다 싼 숨결부터 채우므로 싼 숨결 = 전체 - 비싼 숨결(풀이와 같은 순서: 값 오름차순).
+      var byPrice =
+          rule.breaths().stream()
+              .sorted(java.util.Comparator.comparing(b -> stagePrices.get(b.name())))
+              .toList();
+      double second = optimal.expectedSecondBreaths();
+      double first = optimal.expectedBreaths() - second;
+      if (first > 0) quantities.add(quantity(byPrice.get(0).name(), first, totals));
+      if (second > 0 && byPrice.size() > 1)
+        quantities.add(quantity(byPrice.get(1).name(), second, totals));
+      var stageGold = exact(rule.gold() * attempts);
+      gold = gold.add(stageGold);
+      stages.add(
+          new RefiningPlan.StagePlan(
+              stage,
+              optimal.firstRateBp(),
+              exact(attempts),
+              0,
+              0,
+              0,
+              quantities,
+              List.of(),
+              stageGold,
+              0,
+              null));
+    }
+    var expected = new ArrayList<RefiningPlan.Quantity>();
+    totals.forEach((name, amount) -> expected.add(new RefiningPlan.Quantity(name, amount)));
+    var plan = new RefiningPlan(stages, expected, List.of(), gold, 0);
+    var total = plan.expectedGold();
+    for (var quantity : plan.expectedMaterials()) {
+      if (quantity.amount().signum() == 0) continue;
+      var unit = unitPrices.unit(quantity.name()).orElse(null);
+      if (unit == null)
+        return new RefineBreakdown(null, false, unitPrices, SpecUpCost.REFINE_PRICE_PENDING);
+      total = total.add(quantity.amount().multiply(unit));
+    }
+    return new RefineBreakdown(
+        plan,
+        breath,
+        unitPrices,
+        SpecUpCost.armGuardExpected(total.setScale(0, RoundingMode.CEILING).longValue()));
+  }
+
+  /** 팔 보호구 단계 재료·파편·숨결 두 가지 1개 값. 하나라도 없으면 null(PENDING). */
+  private static java.util.Map<String, BigDecimal> vambracePrices(
+      com.loakraken.refining.domain.VambraceRules.Stage rule,
+      RefiningMaterialPriceService.Prices prices) {
+    var map = new java.util.HashMap<String, BigDecimal>();
+    for (var material : rule.materials()) {
+      if (material.count() == 0) continue;
+      var unit = prices.unit(material.name()).orElse(null);
+      if (unit == null) return null;
+      map.put(material.name(), unit);
+    }
+    if (rule.shard() > 0) {
+      var unit = prices.unit(RefiningPlan.SHARD).orElse(null);
+      if (unit == null) return null;
+      map.put(RefiningPlan.SHARD, unit);
+    }
+    for (var breath : rule.breaths()) {
+      var unit = prices.unit(breath.name()).orElse(null);
+      if (unit == null) return null;
+      map.put(breath.name(), unit);
+    }
+    return map;
+  }
+
+  /** 팔 보호구 단계표는 하나뿐이고(등급별 표 없음) 성장 지원이 없어 골드 비율이 늘 1이라, 키는 단계와 그 단계 시세면 된다. */
+  private static String vambraceKey(
+      com.loakraken.refining.domain.VambraceRules.Stage rule,
+      java.util.Map<String, BigDecimal> prices) {
+    var key = new StringBuilder("spec-up:VAMBRACE:").append(rule.targetStage());
+    new java.util.TreeMap<>(prices)
+        .forEach((name, unit) -> key.append('|').append(name).append('=').append(unit));
+    return key.toString();
   }
 
   /**
@@ -743,7 +924,17 @@ public class SpecUpService {
       int refine,
       java.util.Optional<RefiningMaterialPriceService.Prices> prices,
       Instant[] pricesAt) {
-    var breakdown = refineBreakdown(item, refine, prices);
+    return refineCost(item, refine, refine + 1, prices, pricesAt);
+  }
+
+  /** 지금 단계 refine에서 target까지 누적 기대 비용(한 번의 재련 계획). */
+  SpecUpCost refineCost(
+      CharacterLoadout.Equipment item,
+      int refine,
+      int target,
+      java.util.Optional<RefiningMaterialPriceService.Prices> prices,
+      Instant[] pricesAt) {
+    var breakdown = refineBreakdown(item, refine, target, prices);
     if ("OK".equals(breakdown.cost().status())
         && (pricesAt[0] == null || breakdown.prices().observedAt().isBefore(pricesAt[0])))
       pricesAt[0] = breakdown.prices().observedAt();
@@ -768,6 +959,47 @@ public class SpecUpService {
       CharacterLoadout.Equipment item,
       int refine,
       java.util.Optional<RefiningMaterialPriceService.Prices> prices) {
+    return refineBreakdown(item, refine, refine + 1, prices);
+  }
+
+  /**
+   * 재련 후보로 낼 마지막 단계: 재련 계획(계열·부위 단계표)의 최대 목표 단계, 25 이하. 계획이 다루지 않는 장비(계열을 모름 등)는 다음 단계 하나(+1 줄만, 비용
+   * UNCONFIRMED).
+   */
+  /** 재련 +2 단계 이상 줄(목표 단계가 지금 단계 + 1보다 큼). */
+  private static boolean laterRefineStage(Planned plan) {
+    if (!Kind.EQUIPMENT_REFINE.name().equals(plan.kind()) || plan.change() == null) return false;
+    // 팔 보호구 줄은 목표 단계가 level에 있다.
+    var target =
+        plan.change().kind() == Kind.ARM_GUARD ? plan.change().level() : plan.change().refine();
+    return target != null && !plan.from().equals("+" + (target - 1));
+  }
+
+  int refineMaxTarget(CharacterLoadout.Equipment item, int refine) {
+    var grade = refineGrade(item.name());
+    if (grade == null) return refine + 1;
+    var type =
+        "무기".equals(item.type())
+            ? RefiningRules.EquipmentType.WEAPON
+            : RefiningRules.EquipmentType.ARMOR;
+    try {
+      var track = plans.rules().track(grade, type);
+      return Math.max(refine + 1, Math.min(25, track.maxTargetStage()));
+    } catch (IllegalArgumentException exception) {
+      return refine + 1;
+    }
+  }
+
+  /**
+   * 지금 단계 refine에서 target까지 누적 비용 내역. 단계마다 회차별 최적 전략(#284 — 시도마다 숨결 개수를 골라 기대 비용 최소, 장인의 기운·실패 횟수는
+   * 그 단계 시작에서 0)으로 풀고 단계 비용을 더한다(비교 기준 B와 같은 방식: 시도 상태마다 선택, 여러 단계는 단계 풀이의 합). 업화 18단계까지는 성장 지원 골드
+   * 20% 할인. 책은 시세가 있으면 숨결처럼 시도마다 고른다(비교 기준 B 기본과 같음). plan은 최적 정책의 기대 시도·재료로 만든 내역이다(내역 합 = 목록 비용).
+   */
+  RefineBreakdown refineBreakdown(
+      CharacterLoadout.Equipment item,
+      int refine,
+      int target,
+      java.util.Optional<RefiningMaterialPriceService.Prices> prices) {
     var grade = refineGrade(item.name());
     if (grade == null)
       return new RefineBreakdown(null, false, null, SpecUpCost.REFINE_COST_UNCONFIRMED);
@@ -781,40 +1013,146 @@ public class SpecUpService {
     } catch (IllegalArgumentException exception) {
       return new RefineBreakdown(null, false, null, SpecUpCost.REFINE_COST_UNCONFIRMED);
     }
-    int target = refine + 1;
-    if (target < track.minTargetStage() || target > track.maxTargetStage())
+    if (target <= refine || target < track.minTargetStage() || target > track.maxTargetStage())
       return new RefineBreakdown(null, false, null, SpecUpCost.REFINE_COST_UNCONFIRMED);
-    var withoutBreath =
-        plans.plan(grade, type, new RefiningPlan.Options(refine, target, false, false, true, 0, 0));
     if (prices.isEmpty())
-      return new RefineBreakdown(withoutBreath, false, null, SpecUpCost.REFINE_PRICE_PENDING);
+      return new RefineBreakdown(
+          plans.plan(
+              grade, type, new RefiningPlan.Options(refine, target, false, false, true, 0, 0)),
+          false,
+          null,
+          SpecUpCost.REFINE_PRICE_PENDING);
     var unitPrices = prices.get();
-    RefiningPlan bestPlan = null;
-    boolean bestBreath = false;
-    Long best = null;
-    for (boolean breath : new boolean[] {false, true}) {
-      var plan =
-          breath
-              ? plans.plan(
-                  grade, type, new RefiningPlan.Options(refine, target, true, false, true, 0, 0))
-              : withoutBreath;
-      var total = plan.expectedGold();
-      for (var quantity : plan.expectedMaterials()) {
-        if (quantity.amount().signum() == 0) continue;
-        var unit = unitPrices.unit(quantity.name()).orElse(null);
-        if (unit == null)
-          return new RefineBreakdown(
-              withoutBreath, false, unitPrices, SpecUpCost.REFINE_PRICE_PENDING);
-        total = total.add(quantity.amount().multiply(unit));
-      }
-      long amount = total.setScale(0, RoundingMode.CEILING).longValue();
-      if (best == null || amount < best) {
-        best = amount;
-        bestPlan = plan;
-        bestBreath = breath;
-      }
+    var stages = new ArrayList<RefiningPlan.StagePlan>();
+    var totals = new java.util.LinkedHashMap<String, BigDecimal>();
+    var gold = BigDecimal.ZERO;
+    boolean breath = false;
+    for (int stage = refine + 1; stage <= target; stage++) {
+      var rule = track.stage(stage);
+      double goldRate =
+          grade == RefiningRules.Grade.UPHWA && stage <= GROWTH_SUPPORT_MAX_STAGE ? 0.8 : 1;
+      var stagePrices = stagePrices(rule, unitPrices);
+      if (stagePrices == null) return pending(grade, type, refine, target, unitPrices);
+      var optimal =
+          optimalCache
+              .get(
+                  optimalKey(grade, type, rule, goldRate, stagePrices),
+                  () ->
+                      RefiningOptimal.calculate(
+                          rule, goldRate, stagePrices, rule.breath() != null, rule.book() != null))
+              .orElse(null);
+      if (optimal == null) return pending(grade, type, refine, target, unitPrices);
+      breath |= optimal.usesBreath();
+      double attempts = optimal.expectedAttempts();
+      var quantities = new ArrayList<RefiningPlan.Quantity>();
+      for (var material : rule.materials())
+        quantities.add(quantity(material.name(), material.count() * attempts, totals));
+      quantities.add(quantity(RefiningPlan.SHARD, rule.shard() * attempts, totals));
+      if (rule.breath() != null && optimal.expectedBreaths() > 0)
+        quantities.add(quantity(rule.breath().name(), optimal.expectedBreaths(), totals));
+      if (rule.book() != null && optimal.expectedBooks() > 0)
+        quantities.add(quantity(rule.book().name(), optimal.expectedBooks(), totals));
+      var stageGold = exact(rule.gold() * goldRate * attempts);
+      gold = gold.add(stageGold);
+      stages.add(
+          new RefiningPlan.StagePlan(
+              stage,
+              optimal.firstRateBp(),
+              exact(attempts),
+              0,
+              0,
+              0,
+              quantities,
+              List.of(),
+              stageGold,
+              0,
+              null));
     }
-    return new RefineBreakdown(bestPlan, bestBreath, unitPrices, SpecUpCost.refineExpected(best));
+    var expected = new ArrayList<RefiningPlan.Quantity>();
+    totals.forEach((name, amount) -> expected.add(new RefiningPlan.Quantity(name, amount)));
+    var plan = new RefiningPlan(stages, expected, List.of(), gold, 0);
+    var total = plan.expectedGold();
+    for (var quantity : plan.expectedMaterials()) {
+      if (quantity.amount().signum() == 0) continue;
+      var unit = unitPrices.unit(quantity.name()).orElse(null);
+      if (unit == null) return pending(grade, type, refine, target, unitPrices);
+      total = total.add(quantity.amount().multiply(unit));
+    }
+    return new RefineBreakdown(
+        plan,
+        breath,
+        unitPrices,
+        SpecUpCost.refineExpected(total.setScale(0, RoundingMode.CEILING).longValue()));
+  }
+
+  /** 업화 성장 지원(골드 20% 할인)이 붙는 마지막 단계(재련 계획과 같음). */
+  static final int GROWTH_SUPPORT_MAX_STAGE = 18;
+
+  private RefineBreakdown pending(
+      RefiningRules.Grade grade,
+      RefiningRules.EquipmentType type,
+      int refine,
+      int target,
+      RefiningMaterialPriceService.Prices unitPrices) {
+    return new RefineBreakdown(
+        plans.plan(grade, type, new RefiningPlan.Options(refine, target, false, false, true, 0, 0)),
+        false,
+        unitPrices,
+        SpecUpCost.REFINE_PRICE_PENDING);
+  }
+
+  /** 단계 계산에 쓰는 재료 1개 값. 기본 재료·파편·숨결·책(그 단계에 있으면) 값이 하나라도 없으면 null(PENDING). */
+  private static java.util.Map<String, BigDecimal> stagePrices(
+      RefiningRules.Stage rule, RefiningMaterialPriceService.Prices prices) {
+    var map = new java.util.HashMap<String, BigDecimal>();
+    for (var material : rule.materials()) {
+      if (material.count() == 0) continue;
+      var unit = prices.unit(material.name()).orElse(null);
+      if (unit == null) return null;
+      map.put(material.name(), unit);
+    }
+    if (rule.shard() > 0) {
+      var unit = prices.unit(RefiningPlan.SHARD).orElse(null);
+      if (unit == null) return null;
+      map.put(RefiningPlan.SHARD, unit);
+    }
+    // 숨결·책 시세가 없으면 그 선택지 없이 풀지 않고 PENDING이다: 예열 중 숨결 없는 비용이 최적으로 순위에 들면 비교 기준과 달라진다(PM 판정 10-25).
+    for (var auxiliary :
+        new String[] {
+          rule.breath() == null ? null : rule.breath().name(),
+          rule.book() == null ? null : rule.book().name()
+        }) {
+      if (auxiliary == null) continue;
+      var unit = prices.unit(auxiliary).orElse(null);
+      if (unit == null) return null;
+      map.put(auxiliary, unit);
+    }
+    return map;
+  }
+
+  private static String optimalKey(
+      RefiningRules.Grade grade,
+      RefiningRules.EquipmentType type,
+      RefiningRules.Stage rule,
+      double goldRate,
+      java.util.Map<String, BigDecimal> prices) {
+    var key = new StringBuilder("spec-up:");
+    key.append(grade).append(':').append(type).append(':').append(rule.targetStage());
+    key.append(':').append(goldRate);
+    new java.util.TreeMap<>(prices)
+        .forEach((name, unit) -> key.append('|').append(name).append('=').append(unit));
+    return key.toString();
+  }
+
+  private static RefiningPlan.Quantity quantity(
+      String name, double amount, java.util.Map<String, BigDecimal> totals) {
+    var value = exact(amount);
+    totals.merge(name, value, BigDecimal::add);
+    return new RefiningPlan.Quantity(name, value);
+  }
+
+  private static BigDecimal exact(double value) {
+    return BigDecimal.valueOf(value).setScale(6, RoundingMode.HALF_UP);
   }
 
   /**
@@ -839,7 +1177,11 @@ public class SpecUpService {
    * #575), 그럴 수 없으면 종류마다 한 줄로 알린다(지원 현황표: 계산식 미확정). 팔찌·아크 그리드·아크 패시브는 한 줄 그대로.
    */
   private void others(
-      CharacterLoadout loadout, List<Planned> planned, SpecUpKrakenScore.Context context) {
+      CharacterLoadout loadout,
+      List<Planned> planned,
+      SpecUpKrakenScore.Context context,
+      Instant[] pricesAt,
+      boolean fillPolishPrices) {
     boolean bracelet =
         loadout.equipment().stream()
             .anyMatch(
@@ -857,10 +1199,18 @@ public class SpecUpService {
                         && !item.detail().polishEffects().isEmpty());
     if (bracelet) planned.add(Planned.line(Kind.BRACELET_EFFECT, "팔찌 효과"));
     var scored = context.available();
+    // 서포터 연마 후보는 비교 기준 B의 서포터 옵션 표·등급 사다리로 만든다(딜러와 규칙이 다름).
     var polishRows =
-        scored ? SpecUpScoreCandidates.polish(context.input(), loadout, polishValues) : null;
-    if (polishRows != null) planned.addAll(polishRows);
-    else if (polish) planned.add(Planned.line(Kind.POLISH, "장신구 연마 효과"));
+        !scored
+            ? null
+            : context.support()
+                ? SpecUpSupportPolish.rows(kraken, context, loadout, polishValues)
+                : SpecUpScoreCandidates.polish(context.input(), loadout, polishValues);
+    if (polishRows != null) {
+      var fill = new MarketAuctionService.PolishFill(fillPolishPrices);
+      for (var row : polishRows)
+        planned.add(row.withCost(polishCost(loadout, context, row, fill, pricesAt)));
+    } else if (polish) planned.add(Planned.line(Kind.POLISH, "장신구 연마 효과"));
     if (loadout.arkGrid() != null && !loadout.arkGrid().slots().isEmpty())
       planned.add(Planned.line(Kind.ARK_GRID_CORE, "아크 그리드 코어"));
     if (loadout.arkPassive() != null && !loadout.arkPassive().points().isEmpty())
@@ -872,6 +1222,36 @@ public class SpecUpService {
     var stoneRows = scored ? SpecUpScoreCandidates.stone(kraken, context, loadout) : null;
     if (stoneRows != null) planned.addAll(stoneRows);
     else planned.add(Planned.line("ABILITY_STONE", "어빌리티 스톤 교체"));
+  }
+
+  /** 연마 교체 줄의 비용(비교 기준 B: 목표 조합 시세 − 지금 조합 시세(거래 가능할 때)). 계산할 수 없으면 미확정, 채우는 중이면 PENDING. */
+  private SpecUpCost polishCost(
+      CharacterLoadout loadout,
+      SpecUpKrakenScore.Context context,
+      Planned row,
+      MarketAuctionService.PolishFill fill,
+      Instant[] pricesAt) {
+    if (!(row.kraken() instanceof SpecUpKrakenScore.Polish polish)) return row.cost();
+    int index = Integer.parseInt(row.id().split(":")[1]);
+    var item = loadout.equipment().get(index);
+    var current = new ArrayList<String>();
+    context
+        .input()
+        .path("armory")
+        .path("accessory")
+        .path(polish.slot())
+        .path("option")
+        .forEach(line -> current.add(line.asString("")));
+    return SpecUpPolishCost.cost(
+        auctions,
+        fill,
+        polishPriceFill,
+        context.support(),
+        item,
+        current,
+        polish.option(),
+        polishValues,
+        pricesAt);
   }
 
   private static Change change(
@@ -988,6 +1368,25 @@ public class SpecUpService {
         SpecUpKrakenScore.Edit kraken) {
       return new Planned(
           id, kind, target, from, to, icon, grade, null, null, cost, null, null, null, null,
+          kraken);
+    }
+
+    Planned withCost(SpecUpCost next) {
+      return new Planned(
+          id,
+          kind,
+          target,
+          from,
+          to,
+          icon,
+          grade,
+          skillName,
+          change,
+          next,
+          emptySlot,
+          baseAttackPctFrom,
+          baseAttackPctTo,
+          gemType,
           kraken);
     }
 

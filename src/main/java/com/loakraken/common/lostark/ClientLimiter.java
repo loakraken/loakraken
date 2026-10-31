@@ -177,6 +177,12 @@ public class ClientLimiter {
     }
   }
 
+  /** 지금 공식 호출 창(1분 고정 창)이 끝나 클라이언트 칸이 다시 차는 시각. */
+  java.time.Instant officialWindowEndsAt() {
+    long size = WINDOW.toMillis();
+    return java.time.Instant.ofEpochMilli((clock.millis() / size + 1) * size);
+  }
+
   /** 로그용 클라이언트 표시: HMAC 키 앞 6자리(봇은 'bot:' + 앞 6자리, 봇 전체 상한은 'bot-all'). */
   static String shortKey(String clientKey) {
     if (clientKey == null) return "-";

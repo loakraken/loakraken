@@ -33,7 +33,8 @@ public final class AuctionResponses {
                           cell.cell() == null ? null : cell.cell().totalCount(),
                           cell.previousDayChangeRate(),
                           cell.cell() == null ? null : cell.cell().observedAt(),
-                          cell.status().name()))
+                          cell.status().name(),
+                          cell.stale()))
               .toList());
     }
   }
@@ -48,7 +49,11 @@ public final class AuctionResponses {
       @NullableResponse @Schema(description = "전날 마지막 관측 최저가 대비(%). 우리 관측 기준")
           BigDecimal previousDayChangeRate,
       @NullableResponse Instant observedAt,
-      @Schema(allowableValues = {"READY", "PENDING"}) String status) {}
+      @Schema(allowableValues = {"READY", "PENDING"}) String status,
+      @Schema(
+              description =
+                  "true면 최근 3분 안의 값이 아직 없어 마지막으로 관측한 값을 보입니다(observedAt이 그 시각, status는 READY). 다음 조회에서 새 값으로 바뀝니다")
+          boolean stale) {}
 
   public record AuctionAccessoryBoardResponse(
       @Schema(example = "auction-board-v1") String ruleVersion,

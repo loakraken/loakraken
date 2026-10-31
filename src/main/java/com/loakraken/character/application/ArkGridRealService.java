@@ -40,9 +40,12 @@ public class ArkGridRealService {
         CharacterPosition.judge(details.profile().className(), details.loadout().arkPassive());
     if (position.role() == null)
       return ArkGridRealEfficiency.unsupported(ROLE_UNKNOWN, "딜러·서포터를 판정하지 못해 계산하지 않았습니다.");
-    if (!input.path("armory").path("equipment").path("weapon").path("stat").isNumber()
-        || !input.path("arkPassive").path("evolution").isObject())
+    if (!KrakenScoreService.scorable(input))
       return ArkGridRealEfficiency.unsupported(UNAVAILABLE, "무기나 아크 패시브 정보가 없어 계산하지 않았습니다.");
+    // 젬 효과 수치가 비면 엔진이 0으로 계산해 그 옵션이 0%로 나온다 — 그 값을 내지 않는다(코드 리뷰 10-25).
+    for (var effect : input.path("arkGrid").path("gemEffects"))
+      if (!effect.path("effect").isNumber())
+        return ArkGridRealEfficiency.unsupported(UNAVAILABLE, "젬 효과 수치를 읽지 못해 계산하지 않았습니다.");
     ToDoubleFunction<JsonNode> score =
         position.role() == CharacterPosition.Role.SUPPORT
             ? e -> KrakenScoreSupport.gemScore(e, tables)

@@ -102,6 +102,31 @@ class RosterTitlesIntegrationTest {
   }
 
   @Test
+  void 제외_목록에_든_원정대_동료의_저장된_칭호는_보이지_않는다() throws Exception {
+    var roster = List.of(sibling(MAIN, SERVER), sibling(ALT, SERVER));
+    for (var name : List.of(MAIN, ALT)) when(detailsPort.fetchSiblings(name)).thenReturn(roster);
+    history.record(profile(ALT, SERVER, "별을 제패한 자"), Instant.parse("2026-10-01T00:00:00Z"));
+    history.record(profile(MAIN, SERVER, "이클립스"), Instant.parse("2026-10-03T00:00:00Z"));
+    jdbc.sql(
+            "INSERT INTO public_exclusion (character_name, server_name, reason_code) VALUES (:n, :s, 'PRIVACY_STOP')")
+        .param("n", ALT)
+        .param("s", SERVER)
+        .update();
+    try {
+      var data =
+          mapper
+              .readTree(get("/api/v1/characters/titles?characterName=" + encode(MAIN)).body())
+              .path("data");
+      assertThat(data.path("observedCharacters").asInt()).isEqualTo(1);
+      assertThat(data.path("titles").size()).isEqualTo(1);
+      assertThat(data.at("/titles/0/title").asText()).isEqualTo("이클립스");
+      assertThat(data.toString()).doesNotContain(ALT).doesNotContain("별을 제패한 자");
+    } finally {
+      jdbc.sql("DELETE FROM public_exclusion WHERE character_name = :n").param("n", ALT).update();
+    }
+  }
+
+  @Test
   void 잘못된_이름은_400이다() throws Exception {
     assertThat(get("/api/v1/characters/titles?characterName=a-b").statusCode()).isEqualTo(400);
   }

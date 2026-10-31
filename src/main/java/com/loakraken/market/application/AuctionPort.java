@@ -17,6 +17,14 @@ public interface AuctionPort {
 
   void saveCell(String key, AuctionCell cell);
 
+  /** 보석 시세 표 칸의 마지막 관측 값(만료 없음, 보석 20칸만). 3분 칸이 비었을 때 '집계 중' 대신 관측 시각과 함께 보인다. 저장소를 쓰지 못하면 빈 값. */
+  default Optional<AuctionCell> findLastCell(String key) {
+    return Optional.empty();
+  }
+
+  /** 보석 시세 표 칸의 마지막 관측 값을 남긴다(만료 없음 — 키는 보석 20칸으로 고정돼 늘지 않음). */
+  default void saveLastCell(String key, AuctionCell cell) {}
+
   Optional<AuctionPage> findListings(String key);
 
   void saveListings(String key, AuctionPage page);

@@ -21,6 +21,9 @@ repositories {
 
 ext {
     set('springModulithVersion', '2.1.1')
+    // 의존성 보안 업데이트: Spring Boot 기본(3.1.5)보다 높은 Jackson 3 패치. Spring Boot가 이 판 이상을 기본으로 올리면 지운다.
+    set('jackson-bom.version', '3.1.7')
+    set('jackson-2-bom.version', '2.21.7')
 }
 
 dependencies {

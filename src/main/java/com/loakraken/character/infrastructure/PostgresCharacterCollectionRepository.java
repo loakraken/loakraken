@@ -178,7 +178,11 @@ class PostgresCharacterCollectionRepository implements CharacterCollectionPort {
   public void markProfileRefreshed(Target target, String position, Instant now) {
     jdbc.sql(
             """
-        UPDATE characters SET profile_refreshed_at = :now, profile_checked_at = :now, position = :position
+        UPDATE characters SET profile_refreshed_at = :now, profile_checked_at = :now,
+          position = CASE WHEN position_observed_at IS NULL OR position_observed_at <= :now
+            THEN CAST(:position AS VARCHAR) ELSE position END,
+          position_observed_at = CASE WHEN position_observed_at IS NULL OR position_observed_at <= :now
+            THEN :now ELSE position_observed_at END
         WHERE server_name = :server AND character_name = :name
         """)
         .param("now", utc(now))

@@ -136,7 +136,8 @@ public class CharacterPopularService {
     String cacheKey = period.key() + ":" + limit;
     try {
       var cached = popular.findCached(cacheKey);
-      if (cached.isPresent()) return cached.get();
+      // 캐시 뒤 처리정지 목록에 든 캐릭터가 있으면 캐시를 쓰지 않고 다시 센다(집계 SQL이 목록을 뺀다).
+      if (cached.isPresent() && !stopListed(cached.get())) return cached.get();
     } catch (DataAccessException exception) {
       // 캐시 장애는 집계로 대신한다.
     }
@@ -168,6 +169,23 @@ public class CharacterPopularService {
     return result;
   }
 
+  /** 캐시된 인기 목록에 처리정지 목록 캐릭터가 있는가. 확인하지 못하면 목록을 내지 않는다(503). */
+  private boolean stopListed(PopularResult result) {
+    var byServer = new java.util.HashMap<String, java.util.List<String>>();
+    for (var item : result.items())
+      if (item.characterName() != null && item.serverName() != null)
+        byServer
+            .computeIfAbsent(item.serverName(), server -> new ArrayList<>())
+            .add(item.characterName());
+    try {
+      for (var entry : byServer.entrySet())
+        if (!stopList.listed(entry.getValue(), entry.getKey()).isEmpty()) return true;
+      return false;
+    } catch (DataAccessException | TransactionException exception) {
+      throw new CharacterException(CharacterErrorCode.CHARACTER_POPULAR_UNAVAILABLE);
+    }
+  }
+
   /**
    * 인기 길드(M21, popular-guild-v1). 순위 기준은 집계 시점 길드원 캐릭터들의 고유 조회 합이고(인기 캐릭터와 같은 원천·하루 1회 규칙), 숫자는
    * 공개하지 않는다. 같은 합은 1,2,3 차례(길드 이름순)다. 최소 조회 수와 표본 기준은 인기 캐릭터와 같다. serverName이 null이면 모든 서버.
@@ -175,7 +193,21 @@ public class CharacterPopularService {
   public PopularGuildResult popularGuilds(Period period, String serverName, int limit) {
     if (!policy.enabled())
       throw new CharacterException(CharacterErrorCode.CHARACTER_POPULAR_DISABLED);
-    String cacheKey = period.key() + ":" + (serverName == null ? "-" : serverName) + ":" + limit;
+    // 처리정지 목록이 바뀌면 길드 순서도 바로 새로 센다: 목록 내용 값을 키에 넣는다(#757). 확인하지 못하면 집계도 못 하므로 503.
+    String revision;
+    try {
+      revision = stopList.revision();
+    } catch (DataAccessException | TransactionException exception) {
+      throw new CharacterException(CharacterErrorCode.CHARACTER_POPULAR_UNAVAILABLE);
+    }
+    String cacheKey =
+        period.key()
+            + ":"
+            + (serverName == null ? "-" : serverName)
+            + ":"
+            + limit
+            + ":x"
+            + revision;
     try {
       var cached = popular.findCachedGuilds(cacheKey);
       if (cached.isPresent()) return cached.get();

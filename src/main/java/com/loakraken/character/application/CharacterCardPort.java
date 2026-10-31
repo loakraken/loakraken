@@ -99,8 +99,8 @@ public interface CharacterCardPort {
   }
 
   /**
-   * 팔찌 효율·젬 효율(L38·L39 랭킹). 계산된(OK) 값만 있고, 못 하면 null이다. 규칙 버전은 값이 있을 때만 있다. 이 레코드가 null이면(장비를 관측하지
-   * 않음) 저장된 효율 열을 바꾸지 않는다.
+   * 팔찌 효율·젬 효율(L38·L39 랭킹). 계산된(OK) 값만 있고, 못 하면 null이다. 규칙 버전은 값이 있을 때만 있다. 이 레코드가 null이면 저장된 효율 열을
+   * 바꾸지 않는다(장비가 빈 관측은 모든 값이 null인 레코드로 비운다).
    */
   record Efficiency(
       BigDecimal braceletPct,

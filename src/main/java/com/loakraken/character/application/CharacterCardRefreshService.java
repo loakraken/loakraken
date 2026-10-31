@@ -42,6 +42,7 @@ public class CharacterCardRefreshService {
   private final CharacterHistoryPolicy policy;
   private final Clock clock;
   private final com.loakraken.common.lostark.LostArkRequestGate gate;
+  private final CharacterStopList stopList;
 
   public CharacterCardRefreshService(
       CharacterQueryService queries,
@@ -49,7 +50,9 @@ public class CharacterCardRefreshService {
       CardRefreshCooldownPort cooldown,
       CharacterHistoryPolicy policy,
       Clock clock,
-      com.loakraken.common.lostark.LostArkRequestGate gate) {
+      com.loakraken.common.lostark.LostArkRequestGate gate,
+      CharacterStopList stopList) {
+    this.stopList = stopList;
     this.gate = gate;
     this.queries = queries;
     this.cards = cards;
@@ -72,6 +75,12 @@ public class CharacterCardRefreshService {
     for (var sibling : siblings)
       if (server.equals(sibling.serverName()) && sibling.characterName() != null)
         roster.put(sibling.characterName(), sibling);
+    // 제외 목록 캐릭터는 채우지도(공식 호출) 세지도 않는다. 확인하지 못하면 진행하지 않는다.
+    try {
+      roster.keySet().removeAll(stopList.listed(roster.keySet(), server));
+    } catch (DataAccessException | TransactionException exception) {
+      throw new CharacterException(CharacterErrorCode.CARD_COLLECTION_UNAVAILABLE);
+    }
 
     String key = rosterKey(server, roster.keySet());
     var wait = cooldown.acquire(key, COOLDOWN);

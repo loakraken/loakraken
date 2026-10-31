@@ -119,7 +119,7 @@ class CharacterCardServiceRealEfficiencyTest {
   }
 
   @Test
-  void 점수_입력이_없으면_실_효율만_비고_장비를_관측하지_않았으면_저장값을_바꾸지_않는다() throws IOException {
+  void 점수_입력이_없으면_실_효율만_비고_장비가_빈_관측이면_모든_값을_비운다() throws IOException {
     var raw = read("l01").path("raw");
     var pending = service.efficiency(details(raw, true), null, Instant.EPOCH);
     assertThat(pending).isNotNull();
@@ -128,9 +128,11 @@ class CharacterCardServiceRealEfficiencyTest {
     assertThat(pending.arkGridRealPct()).isNull();
     assertThat(pending.arkGridRealRuleVersion()).isNull();
 
+    // 옛 효율이 랭킹에 남지 않게, 장비가 빈 관측은 null이 아니라 모든 값이 빈 레코드다(저장 시 비움).
     assertThat(
             service.efficiency(
                 details(raw, false), KrakenScoreInputMapper.from(raw), Instant.EPOCH))
-        .isNull();
+        .isEqualTo(
+            new CharacterCardPort.Efficiency(null, null, null, null, null, null, null, null));
   }
 }

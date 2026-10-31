@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.loakraken.character.domain.CharacterLoadout;
 import com.loakraken.refining.domain.GrowthCosts;
+import com.loakraken.refining.domain.RefiningPlan;
 import com.loakraken.refining.domain.RefiningRules;
 import java.math.BigDecimal;
 import java.util.HashMap;
@@ -12,7 +13,7 @@ import java.util.Map;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.json.JsonMapper;
 
-/** 원정대 영수증 계산 규칙. 재련 규칙은 실제 리소스(t4-refining-v3)를 쓴다. */
+/** 원정대 영수증 계산 규칙. 재련 규칙은 실제 리소스(t4-refining-v4)를 쓴다. */
 class ReceiptDomainTest {
   private static final RefiningRules RULES =
       JsonMapper.builder()
@@ -177,7 +178,84 @@ class ReceiptDomainTest {
     assertThat(with.excluded())
         .filteredOn(e -> e.reason() == EquipmentReceipt.Reason.LIMIT_BREAK_UNPRICED)
         .extracting(EquipmentReceipt.Excluded::message)
-        .containsExactly("「+22 운명의 전율 검」: 21단계 한계 해방 비용(고통의 가시·해방 비용)은 공식 수치가 없어 산정하지 않았습니다.");
+        .containsExactly(
+            "「+22 운명의 전율 검」: 무기 21단계 한계 해방 비용(고통의 가시·해방 비용)은 공식 수치를 확인하기 전이라 산정하지 않았습니다.");
+    // 무기 21단계는 실링·가시도 없다.
+    var weapon21 =
+        with.parts().getFirst().stages().stream()
+            .filter(s -> s.stage() == 21)
+            .findFirst()
+            .orElseThrow();
+    assertThat(weapon21.growthSilver()).isZero();
+    assertThat(weapon21.growthExtras()).isEmpty();
+  }
+
+  /** 전율 방어구 21단계 한계 해방(공식 이미지 2026-10-25): 파편은 시세로 더하고, 실링·고통의 가시는 골드 없이 수량으로 남긴다. */
+  @Test
+  void 전율_방어구_21단계_한계_해방은_파편을_시세로_더하고_실링과_가시는_수량으로_남긴다() throws Exception {
+    GrowthCosts growth;
+    try (var input =
+        ReceiptDomainTest.class.getResourceAsStream("/refining/t4-growth-costs.json")) {
+      growth =
+          tools.jackson.databind.json.JsonMapper.builder()
+              .build()
+              .readValue(input, GrowthCosts.class);
+    }
+    var items = List.of(item("투구", "+22 운명의 전율 머리장식", 22, 4));
+    var prices = prices(BigDecimal.ONE);
+    var without = EquipmentReceipt.calculate(RULES, items, prices, false, null);
+    var with = EquipmentReceipt.calculate(RULES, items, prices, false, growth);
+    // 전율 방어구 성장 파편 12~22단계: 34+38+41+46+49+54+58+63+67+72+77 = 599,000(21단계 해방 72,000 포함), 파편 1개 1G
+    assertThat(with.gold().subtract(without.gold())).isEqualByComparingTo("599000");
+    assertThat(with.excluded())
+        .extracting(EquipmentReceipt.Excluded::reason)
+        .doesNotContain(EquipmentReceipt.Reason.LIMIT_BREAK_UNPRICED);
+    var stages = with.parts().getFirst().stages();
+    var armor21 = stages.stream().filter(s -> s.stage() == 21).findFirst().orElseThrow();
+    assertThat(armor21.growthSilver()).isEqualTo(720_000);
+    assertThat(armor21.growthExtras())
+        .containsExactly(new RefiningPlan.Quantity("고통의 가시", BigDecimal.valueOf(15)));
+    // 실링 합: 340+380+410+460+490+540+580+630+670+720+770 = 5,990,000
+    assertThat(stages.stream().mapToLong(EquipmentReceipt.StageCost::growthSilver).sum())
+        .isEqualTo(5_990_000);
+    // 방어구 5부위가 모두 20→21을 넘으면(코드 리뷰 10-25): 21단계만 파편 360,000 · 실링 3,600,000 · 고통의 가시 75.
+    var five =
+        List.of(
+            item("투구", "+21 운명의 전율 머리장식", 21, 4),
+            item("상의", "+21 운명의 전율 상의", 21, 4),
+            item("하의", "+21 운명의 전율 하의", 21, 4),
+            item("장갑", "+21 운명의 전율 장갑", 21, 4),
+            item("어깨", "+21 운명의 전율 견갑", 21, 4));
+    var fiveWith = EquipmentReceipt.calculate(RULES, five, prices, false, growth);
+    var fiveWithout = EquipmentReceipt.calculate(RULES, five, prices, false, null);
+    assertThat(fiveWith.parts()).hasSize(5);
+    BigDecimal shard21 = BigDecimal.ZERO;
+    long silver21 = 0;
+    BigDecimal thorns21 = BigDecimal.ZERO;
+    for (int i = 0; i < 5; i++) {
+      var on = stage(fiveWith.parts().get(i), 21);
+      var off = stage(fiveWithout.parts().get(i), 21);
+      shard21 = shard21.add(on.gold().subtract(off.gold()));
+      silver21 += on.growthSilver();
+      for (var extra : on.growthExtras()) thorns21 = thorns21.add(extra.amount());
+    }
+    assertThat(shard21).isEqualByComparingTo("360000");
+    assertThat(silver21).isEqualTo(3_600_000);
+    assertThat(thorns21).isEqualByComparingTo("75");
+    // 영수증 합계 아래 수량(12~21단계 전체): 실링 5 × 5,220,000 = 26,100,000, 고통의 가시 75. 실링 먼저.
+    assertThat(EquipmentReceipt.nonGold(List.of(fiveWith)))
+        .containsExactly(
+            java.util.Map.entry(RefiningPlan.SILVER, new BigDecimal("26100000")),
+            java.util.Map.entry("고통의 가시", new BigDecimal("75")));
+    // 대기 캐릭터(null)는 건너뛴다.
+    var withPending = new java.util.ArrayList<EquipmentReceipt.Result>();
+    withPending.add(fiveWith);
+    withPending.add(null);
+    assertThat(EquipmentReceipt.nonGold(withPending))
+        .isEqualTo(EquipmentReceipt.nonGold(List.of(fiveWith)));
+    // 성장 비용을 끄면 실링·가시도 없다.
+    assertThat(without.parts().getFirst().stages())
+        .allMatch(s -> s.growthSilver() == 0 && s.growthExtras().isEmpty());
   }
 
   /** 공식 Tooltip "[상급 재련] N단계"(equipment-tooltip-v6). 1단계 이상이면 부위마다, 모르는 이전 캐시면 캐릭터마다 한 줄. */
@@ -253,6 +331,10 @@ class ReceiptDomainTest {
     var map = new HashMap<String, BigDecimal>();
     for (var name : EquipmentReceipt.materialNames(RULES, all)) map.put(name, each);
     return map;
+  }
+
+  private static EquipmentReceipt.StageCost stage(EquipmentReceipt.Part part, int stage) {
+    return part.stages().stream().filter(s -> s.stage() == stage).findFirst().orElseThrow();
   }
 
   private static CharacterLoadout.Equipment item(

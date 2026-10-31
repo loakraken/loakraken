@@ -129,7 +129,7 @@ public record EquipmentSummary(
   private static final Pattern ADD_DAMAGE = Pattern.compile("^추가 피해 \\+([\\d.]+)%$");
   private static final Pattern STONE_BONUS = Pattern.compile("\\[레벨 보너스\\] 기본 공격력 \\+([\\d.]+)%");
   private static final Pattern ELLA = Pattern.compile("엘라 부여\\s*(\\d+)\\s*단계");
-  private static final Pattern ORB = Pattern.compile("최대 낙원력 : (\\d+)");
+  private static final Pattern ORB = Pattern.compile("최대 낙원력\\s*:\\s*(\\d[\\d,]*)");
   private static final Pattern CORE = Pattern.compile("^(질서|혼돈)의 (해|달|별) 코어");
   private static final Pattern CARD_SET =
       Pattern.compile("^(.+?)\\s+(\\d+)세트(?:\\s*\\((\\d+)각성합계\\))?$");
@@ -388,10 +388,17 @@ public record EquipmentSummary(
 
   private static Long orb(List<CharacterLoadout.Equipment> equipment) {
     var orb = first(equipment, "보주");
-    if (orb == null || orb.detail() == null) return null;
-    for (var line : lines(orb.detail())) {
+    return orb == null ? null : paradisePower(orb.detail());
+  }
+
+  /**
+   * 보주 Tooltip의 "(시즌N) 달성 최대 낙원력 : N"(숫자만, 쉼표는 뺌). 효과 줄 어디에 있어도 찾는다. 없으면 null(보주가 아니거나 문구가 없는 보주).
+   */
+  public static Long paradisePower(CharacterLoadout.EquipmentDetail detail) {
+    if (detail == null) return null;
+    for (var line : lines(detail)) {
       var value = match(ORB, line);
-      if (value != null) return Long.valueOf(value);
+      if (value != null) return Long.valueOf(value.replace(",", ""));
     }
     return null;
   }

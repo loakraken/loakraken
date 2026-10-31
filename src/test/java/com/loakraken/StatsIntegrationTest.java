@@ -48,7 +48,7 @@ class StatsIntegrationTest {
   void 정리() {
     var keys = redis.keys("stats:v1:*");
     if (keys != null && !keys.isEmpty()) redis.delete(keys);
-    jdbc.sql("DELETE FROM characters WHERE server_name = :s").param("s", SERVER).update();
+    jdbc.sql("DELETE FROM characters WHERE server_name LIKE :s").param("s", SERVER + "%").update();
   }
 
   /**
@@ -185,6 +185,349 @@ class StatsIntegrationTest {
     assertThat(supportsOnly.path("itemLevelMedian").isNull()).isFalse();
     assertThat(supportsOnly.path("itemLevelMean").isNull()).isFalse();
     assertThat(supportsOnly.path("combatPowerP90").isNull()).isTrue();
+  }
+
+  /**
+   * 구성 블록(B4): 겸용 직업(바드)은 판정한 역할대로, 아닌 직업(버서커)은 역할을 몰라도 딜러로 센다. 네 값의 합은 표본이고, 겸용 직업 행의 딜러·서포터·미확인과
+   * 같다.
+   */
+  @Test
+  void 구성_블록은_겸용_직업을_역할로_나누고_합이_표본이다() throws Exception {
+    var at = now.minus(1, ChronoUnit.DAYS);
+    String[] bard = {"SUPPORT", "SUPPORT", "SUPPORT", "DEALER", "DEALER", null};
+    for (int i = 0; i < bard.length; i++)
+      insert(
+          "구성바드" + i,
+          "바드",
+          new BigDecimal("1700"),
+          new BigDecimal("3000"),
+          bard[i],
+          null,
+          null,
+          at);
+    String[] berserker = {"DEALER", "DEALER", "DEALER", "DEALER", null};
+    for (int i = 0; i < berserker.length; i++)
+      insert(
+          "구성버서커" + i,
+          "버서커",
+          new BigDecimal("1700"),
+          new BigDecimal("3000"),
+          berserker[i],
+          null,
+          null,
+          at);
+    var classes = data("/api/v1/stats/classes?server=" + encode(SERVER));
+    var composition = classes.path("composition");
+    assertThat(composition.path("dealer").asLong()).isEqualTo(5);
+    assertThat(composition.path("supportClassDealer").asLong()).isEqualTo(2);
+    assertThat(composition.path("support").asLong()).isEqualTo(3);
+    assertThat(composition.path("unknownRole").asLong()).isEqualTo(1);
+    long sum = 0;
+    for (var field : java.util.List.of("dealer", "supportClassDealer", "support", "unknownRole"))
+      sum += composition.path(field).asLong();
+    assertThat(sum).isEqualTo(classes.at("/meta/population").asLong()).isEqualTo(11);
+    // 겸용 직업 행의 역할 수와 같다(서포터 직업의 딜러·서포터 선택).
+    for (var row : classes.path("rows"))
+      if (row.path("className").asText().equals("바드")) {
+        assertThat(row.path("dealers").asLong()).isEqualTo(2);
+        assertThat(row.path("supports").asLong()).isEqualTo(3);
+        assertThat(row.path("unknownRole").asLong()).isEqualTo(1);
+      }
+    ApiContractFixture.write(
+        "stats-classes-composition.json",
+        get("/api/v1/stats/classes?server=" + encode(SERVER)).body());
+  }
+
+  /** 보석 레벨 분포(B2): 5 미만·0.5 단위·10.0 구간, 빈 구간은 0, 합은 보석을 관측한 표본(모집단보다 작음). */
+  @Test
+  void 보석_레벨_분포는_구간_합이_보석_표본이고_빈_구간도_준다() throws Exception {
+    var at = now.minus(1, ChronoUnit.DAYS);
+    String[] gems = {null, "4.50", "5.00", "5.25", "7.50", "9.99", "10.00"};
+    for (int i = 0; i < gems.length; i++)
+      insert(
+          "보석분포" + i,
+          "버서커",
+          new BigDecimal("1700"),
+          new BigDecimal("3000"),
+          "DEALER",
+          gems[i] == null ? null : new BigDecimal(gems[i]),
+          null,
+          at);
+    var data = data("/api/v1/stats/gem-levels?server=" + encode(SERVER));
+    assertThat(data.at("/meta/population").asLong()).isEqualTo(7);
+    assertThat(data.path("gemSample").asLong()).isEqualTo(6);
+    var bins = data.path("bins");
+    assertThat(bins.size()).isEqualTo(12); // 5 미만 + 5.0~9.5(10개) + 10.0
+    assertThat(bins.get(0).path("from").isNull()).isTrue();
+    assertThat(bins.get(0).path("to").decimalValue()).isEqualByComparingTo("5.0");
+    assertThat(bins.get(0).path("count").asLong()).isEqualTo(1); // 4.50
+    assertThat(bins.get(1).path("from").decimalValue()).isEqualByComparingTo("5.0");
+    assertThat(bins.get(1).path("to").decimalValue()).isEqualByComparingTo("5.5");
+    assertThat(bins.get(1).path("count").asLong()).isEqualTo(2); // 5.00, 5.25
+    assertThat(bins.get(6).path("from").decimalValue()).isEqualByComparingTo("7.5");
+    assertThat(bins.get(6).path("count").asLong()).isEqualTo(1);
+    assertThat(bins.get(10).path("from").decimalValue()).isEqualByComparingTo("9.5");
+    assertThat(bins.get(10).path("count").asLong()).isEqualTo(1); // 9.99
+    assertThat(bins.get(11).path("from").decimalValue()).isEqualByComparingTo("10.0");
+    assertThat(bins.get(11).path("to").isNull()).isTrue();
+    assertThat(bins.get(11).path("count").asLong()).isEqualTo(1);
+    long sum = 0;
+    for (var bin : bins) sum += bin.path("count").asLong();
+    assertThat(sum).isEqualTo(data.path("gemSample").asLong());
+    assertThat(bins.get(3).path("count").asLong()).isZero(); // 6.0 빈 구간
+    ApiContractFixture.write(
+        "stats-gem-levels.json", get("/api/v1/stats/gem-levels?server=" + encode(SERVER)).body());
+  }
+
+  /** 레벨별 전투력(B3): 아이템 레벨 5 단위 구간, 30명 이상 구간만 중앙값. 같은 표본(그 구간만 거른 요약)의 전투력 중앙값과 같다. */
+  @Test
+  void 레벨별_전투력은_5레벨_구간마다_30명_이상만_중앙값이고_요약_중앙값과_같다() throws Exception {
+    var at = now.minus(1, ChronoUnit.DAYS);
+    for (int i = 0; i < 31; i++)
+      insert(
+          "레벨전투" + i,
+          "버서커",
+          new BigDecimal("1721.5"),
+          new BigDecimal(3000 + 10 * i),
+          "DEALER",
+          null,
+          null,
+          at);
+    for (int i = 0; i < 2; i++)
+      insert(
+          "레벨전투작은" + i,
+          "버서커",
+          new BigDecimal("1652"),
+          new BigDecimal("2000"),
+          "DEALER",
+          null,
+          null,
+          at);
+    var data = data("/api/v1/stats/level-combat-power?server=" + encode(SERVER));
+    var buckets = data.path("buckets");
+    assertThat(buckets.size()).isEqualTo(2);
+    assertThat(buckets.get(0).path("from").decimalValue()).isEqualByComparingTo("1650");
+    assertThat(buckets.get(0).path("to").decimalValue()).isEqualByComparingTo("1655");
+    assertThat(buckets.get(0).path("count").asLong()).isEqualTo(2);
+    assertThat(buckets.get(0).path("median").isNull()).isTrue(); // 30명 미만
+    assertThat(buckets.get(1).path("from").decimalValue()).isEqualByComparingTo("1720");
+    assertThat(buckets.get(1).path("count").asLong()).isEqualTo(31);
+    // 3000..3300(10씩) 31개의 16번째 = 3150
+    assertThat(buckets.get(1).path("median").decimalValue()).isEqualByComparingTo("3150");
+    assertThat(data.at("/meta/population").asLong()).isEqualTo(33);
+    // 같은 표본(1720~1724.99)의 요약 중앙값과 같다.
+    var summary =
+        data(
+            "/api/v1/stats/summary?server="
+                + encode(SERVER)
+                + "&itemLevelMin=1720&itemLevelMax=1724.99");
+    assertThat(buckets.get(1).path("median").decimalValue())
+        .isEqualByComparingTo(summary.path("combatPowerMedian").decimalValue());
+    ApiContractFixture.write(
+        "stats-level-combat-power.json",
+        get("/api/v1/stats/level-combat-power?server=" + encode(SERVER)).body());
+  }
+
+  @Test
+  void 분포의_상위_N퍼센트_기준값은_내_위치와_맞고_서버_행은_직업_행과_같은_값을_준다() throws Exception {
+    표본();
+    // 모집단 40명(전투력 3000~3340 10씩 35명 + 2000 5명). K = ⌊N×40/100⌋: 1%는 0이라 빠지고 5·10·25·50·75% =
+    // 2·4·10·20·30위.
+    var distribution =
+        data("/api/v1/stats/distribution?metric=COMBAT_POWER&server=" + encode(SERVER));
+    var cutoffs = distribution.path("topPercentCutoffs");
+    assertThat(cutoffs.size()).isEqualTo(5);
+    String[][] expected = {
+      {"5", "2", "3330"},
+      {"10", "4", "3310"},
+      {"25", "10", "3250"},
+      {"50", "20", "3150"},
+      {"75", "30", "3050"}
+    };
+    for (int i = 0; i < expected.length; i++) {
+      var cutoff = cutoffs.get(i);
+      assertThat(cutoff.path("topPercent").asInt()).isEqualTo(Integer.parseInt(expected[i][0]));
+      assertThat(cutoff.path("rank").asLong()).isEqualTo(Long.parseLong(expected[i][1]));
+      assertThat(cutoff.path("value").decimalValue()).isEqualByComparingTo(expected[i][2]);
+      // 기준값의 '내 위치'는 그 N% 이내다(같은 순위 규칙).
+      var standing =
+          data(
+              "/api/v1/stats/distribution?metric=COMBAT_POWER&percentileOf="
+                  + expected[i][2]
+                  + "&server="
+                  + encode(SERVER));
+      assertThat(standing.at("/percentileOf/topPercent").decimalValue())
+          .isLessThanOrEqualTo(new BigDecimal(expected[i][0]));
+      assertThat(standing.path("topPercentCutoffs").size()).isEqualTo(5);
+    }
+    // 아이템 레벨 분포와 작은 표본에는 주지 않는다.
+    assertThat(
+            data("/api/v1/stats/distribution?metric=ITEM_LEVEL&server=" + encode(SERVER))
+                .path("topPercentCutoffs")
+                .isNull())
+        .isTrue();
+    assertThat(
+            data("/api/v1/stats/distribution?metric=COMBAT_POWER&role=SUPPORT&itemLevelMin=1710&server="
+                    + encode(SERVER))
+                .path("topPercentCutoffs")
+                .isNull())
+        .isTrue();
+
+    // 서버 행: 직업 행과 같은 역할 수·평균 레벨·전투력 분위수.
+    var server = data("/api/v1/stats/servers?server=" + encode(SERVER)).at("/rows/0");
+    assertThat(server.path("dealers").asLong()).isEqualTo(17);
+    assertThat(server.path("supports").asLong()).isEqualTo(18);
+    assertThat(server.path("unknownRole").asLong()).isEqualTo(5);
+    // (1650×5 + 1700..1734 합) / 40 = 1708.625
+    assertThat(server.path("itemLevelMean").decimalValue()).isEqualByComparingTo("1708.63");
+    assertThat(server.at("/combatPower/p50").decimalValue())
+        .isEqualByComparingTo(server.path("combatPowerMedian").decimalValue());
+    assertThat(server.at("/combatPower/p90").isNull()).isFalse();
+  }
+
+  @Test
+  void 상위_N퍼센트_기준값은_표본_30부터이고_동률이_경계에_걸쳐도_내_위치와_맞으며_서버_행은_빈_역할과_작은_서버도_맞다() throws Exception {
+    // 30명 중 29명: 전투력 1위 6000, 2~4위 동률 5000, 5위부터 4000 - 10×i(서로 다름). 역할은 모두 미판정, 아이템 레벨 1700 + i.
+    for (int i = 0; i < 29; i++) 경계캐(i);
+    var small = data("/api/v1/stats/distribution?metric=COMBAT_POWER&server=" + encode(SERVER));
+    assertThat(small.path("topPercentCutoffs").isNull()).isTrue();
+    var smallRow = data("/api/v1/stats/servers?server=" + encode(SERVER)).at("/rows/0");
+    assertThat(smallRow.path("sampleStatus").asText()).isNotEqualTo("READY");
+    assertThat(smallRow.path("combatPower").isNull()).isTrue();
+    assertThat(smallRow.path("itemLevelMean").decimalValue()).isEqualByComparingTo("1714");
+
+    // 30번째가 들어오면(표본 READY) 기준값이 생긴다. 캐시는 비운다.
+    경계캐(29);
+    var keys = redis.keys("stats:v1:*");
+    if (keys != null && !keys.isEmpty()) redis.delete(keys);
+    var cutoffs =
+        data("/api/v1/stats/distribution?metric=COMBAT_POWER&server=" + encode(SERVER))
+            .path("topPercentCutoffs");
+    // K = ⌊N×30/100⌋: 1%는 0이라 빠지고 5·10·25·50·75% = 1·3·7·15·22위. 10%의 3위는 2~4위 동률 안이다.
+    String[][] expected = {
+      {"5", "1", "6000"},
+      {"10", "3", "5000"},
+      {"25", "7", "3940"},
+      {"50", "15", "3860"},
+      {"75", "22", "3790"}
+    };
+    assertThat(cutoffs.size()).isEqualTo(expected.length);
+    for (int i = 0; i < expected.length; i++) {
+      assertThat(cutoffs.get(i).path("topPercent").asInt())
+          .isEqualTo(Integer.parseInt(expected[i][0]));
+      assertThat(cutoffs.get(i).path("rank").asLong()).isEqualTo(Long.parseLong(expected[i][1]));
+      assertThat(cutoffs.get(i).path("value").decimalValue()).isEqualByComparingTo(expected[i][2]);
+    }
+    // 동률 값 5000은 큰 값이 하나라 2위(6.67%)로 10% 이내, 바로 아래 4999.99는 큰 값이 넷이라 5위(16.67%)로 10% 밖이다.
+    assertThat(percentileOf("5000")).isLessThanOrEqualTo(new BigDecimal("10"));
+    assertThat(percentileOf("4999.99")).isGreaterThan(new BigDecimal("10"));
+
+    // 서버 행: 역할이 모두 미판정이면 딜러·서포터 0, 미판정 30. 분위수는 READY라 있다.
+    var row = data("/api/v1/stats/servers?server=" + encode(SERVER)).at("/rows/0");
+    assertThat(row.path("sampleStatus").asText()).isEqualTo("READY");
+    assertThat(row.path("dealers").asLong()).isZero();
+    assertThat(row.path("supports").asLong()).isZero();
+    assertThat(row.path("unknownRole").asLong()).isEqualTo(30);
+    assertThat(row.path("itemLevelMean").decimalValue()).isEqualByComparingTo("1714.5");
+    assertThat(row.at("/combatPower/p50").isNull()).isFalse();
+
+    // 한 명뿐인 서버: 평균·역할 수는 주고 분위수는 null.
+    String single = SERVER + "한명";
+    insert(
+        single,
+        "통계한명캐",
+        MAIN_CLASS,
+        new BigDecimal("1690"),
+        new BigDecimal("3000"),
+        "DEALER",
+        null,
+        null,
+        now.minus(1, ChronoUnit.DAYS));
+    var singleRows = data("/api/v1/stats/servers?server=" + encode(single)).path("rows");
+    assertThat(singleRows.size()).isEqualTo(1);
+    assertThat(singleRows.at("/0/dealers").asLong()).isEqualTo(1);
+    assertThat(singleRows.at("/0/supports").asLong()).isZero();
+    assertThat(singleRows.at("/0/unknownRole").asLong()).isZero();
+    assertThat(singleRows.at("/0/itemLevelMean").decimalValue()).isEqualByComparingTo("1690");
+    assertThat(singleRows.at("/0/combatPower").isNull()).isTrue();
+    assertThat(singleRows.at("/0/sampleStatus").asText()).isNotEqualTo("READY");
+
+    // 모집단 밖(40일 전) 캐릭터만 있는 서버도 아는 캐릭터 수를 보여 주는 빈 행이 있다: 표본 0, 역할 수 0, 평균·분위수 null.
+    String stale = SERVER + "오래됨";
+    insert(
+        stale,
+        "통계오래됨캐",
+        MAIN_CLASS,
+        new BigDecimal("1690"),
+        new BigDecimal("3000"),
+        "DEALER",
+        null,
+        null,
+        now.minus(40, ChronoUnit.DAYS));
+    var staleRows = data("/api/v1/stats/servers?server=" + encode(stale)).path("rows");
+    assertThat(staleRows.size()).isEqualTo(1);
+    var empty = staleRows.get(0);
+    assertThat(empty.path("count").asLong()).isZero();
+    assertThat(empty.path("knownCharacters").asLong()).isEqualTo(1);
+    assertThat(empty.path("share").isNull()).isTrue();
+    assertThat(empty.path("dealers").asLong()).isZero();
+    assertThat(empty.path("supports").asLong()).isZero();
+    assertThat(empty.path("unknownRole").asLong()).isZero();
+    assertThat(empty.path("itemLevelMean").isNull()).isTrue();
+    assertThat(empty.path("combatPower").isNull()).isTrue();
+    assertThat(empty.path("sampleStatus").asText()).isNotEqualTo("READY");
+  }
+
+  private void 경계캐(int i) {
+    var combatPower = i == 0 ? 6000 : i <= 3 ? 5000 : 4000 - 10 * i;
+    insert(
+        "통계경계캐" + i,
+        MAIN_CLASS,
+        new BigDecimal(1700 + i),
+        new BigDecimal(combatPower),
+        null,
+        null,
+        null,
+        now.minus(1, ChronoUnit.DAYS));
+  }
+
+  private BigDecimal percentileOf(String value) throws Exception {
+    return data("/api/v1/stats/distribution?metric=COMBAT_POWER&percentileOf="
+            + value
+            + "&server="
+            + encode(SERVER))
+        .at("/percentileOf/topPercent")
+        .decimalValue();
+  }
+
+  @Test
+  void 처리정지_목록이_바뀌면_집계_캐시를_비우지_않아도_바로_새로_세고_대표가_목록에_들면_다음_캐릭터가_대표다() throws Exception {
+    표본();
+    var all = "/api/v1/stats/summary?server=" + encode(SERVER);
+    var representative = "/api/v1/stats/summary?representativeOnly=true&server=" + encode(SERVER);
+    assertThat(data(all).at("/meta/population").asLong()).isEqualTo(40);
+    // 원정대(1700·1701·1790) 대표는 1790(전투력 없어 모집단 밖)이라 1700·1701이 둘 다 빠진다.
+    assertThat(data(representative).at("/meta/population").asLong()).isEqualTo(38);
+    try {
+      // 캐시는 그대로 두고 목록만 바꾼다.
+      jdbc.sql(
+              "INSERT INTO public_exclusion (character_name, server_name, reason_code) VALUES ('통계캐5', :s, 'PRIVACY_STOP')")
+          .param("s", SERVER)
+          .update();
+      assertThat(data(all).at("/meta/population").asLong()).isEqualTo(39);
+
+      // 원정대 대표(1790)가 목록에 들면 다음으로 높은 1701이 대표가 된다: 1700과 목록의 통계캐5만 빠져 40 − 2 = 38
+      // (고치기 전이면 1701도 빠져 37).
+      jdbc.sql(
+              "INSERT INTO public_exclusion (character_name, server_name, reason_code) VALUES ('통계발견만', :s, 'PRIVACY_STOP')")
+          .param("s", SERVER)
+          .update();
+      assertThat(data(representative).at("/meta/population").asLong()).isEqualTo(38);
+    } finally {
+      jdbc.sql("DELETE FROM public_exclusion WHERE server_name = :s").param("s", SERVER).update();
+    }
+    // 목록에서 빠지면 다시 처음 값(캐시 키가 다시 바뀜).
+    assertThat(data(all).at("/meta/population").asLong()).isEqualTo(40);
   }
 
   @Test
@@ -540,6 +883,59 @@ class StatsIntegrationTest {
   }
 
   @Test
+  void 랭킹_행은_저장된_캐릭터_이미지_주소를_그대로_준다() throws Exception {
+    표본();
+    String url = "https://img.lostark.co.kr/armory/test/ranking.png";
+    jdbc.sql(
+            "UPDATE characters SET image_url = :url WHERE server_name = :s AND character_name = '통계캐34'")
+        .param("url", url)
+        .param("s", SERVER)
+        .update();
+    var ranking = data("/api/v1/rankings?size=2&server=" + encode(SERVER));
+    assertThat(ranking.at("/rows/0/characterName").asText()).isEqualTo("통계캐34");
+    assertThat(ranking.at("/rows/0/imageUrl").asText()).isEqualTo(url);
+    // 받은 적이 없으면 null이다.
+    assertThat(ranking.at("/rows/1/imageUrl").isNull()).isTrue();
+  }
+
+  @Test
+  void 직업_각인별_통계는_직업_표와_같은_값을_직업_각인으로_나누고_모르는_캐릭터는_미확인_수로_준다() throws Exception {
+    표본();
+    // MAIN_CLASS 35명 중 3명은 버스트(1명은 옛 요약이 다른 칭호 → 마지막 요약 기준), 1명은 잔재된 기운, 나머지 31명은 요약 없음.
+    var ids = new java.util.HashMap<String, UUID>();
+    jdbc.sql("SELECT character_name, character_id FROM characters WHERE server_name = :s")
+        .param("s", SERVER)
+        .query(
+            (java.sql.ResultSet row) -> {
+              ids.put(row.getString(1), row.getObject(2, UUID.class));
+            });
+    summary(ids.get("통계캐1"), "버스트", 2, "a1");
+    summary(ids.get("통계캐3"), "버스트", 2, "a3");
+    summary(ids.get("통계캐5"), "잔재된 기운", 5, "a5");
+    summary(ids.get("통계캐5"), "버스트", 1, "a6");
+    summary(ids.get("통계캐7"), "잔재된 기운", 2, "a7");
+
+    var table = data("/api/v1/stats/class-engravings?server=" + encode(SERVER));
+    var classes = data("/api/v1/stats/classes?server=" + encode(SERVER));
+    assertThat(table.at("/meta/population").asLong())
+        .isEqualTo(classes.at("/meta/population").asLong());
+    assertThat(table.at("/rows/0/classEngraving").asText()).isEqualTo("버스트");
+    assertThat(table.at("/rows/0/stats/className").asText()).isEqualTo(MAIN_CLASS);
+    assertThat(table.at("/rows/0/stats/count").asLong()).isEqualTo(3);
+    // 1·3·5번은 홀수라 딜러(표본 규칙).
+    assertThat(table.at("/rows/0/stats/dealers").asLong()).isEqualTo(3);
+    assertThat(table.at("/rows/0/stats/sampleStatus").asText()).isEqualTo("COLLECTING");
+    assertThat(table.at("/rows/0/stats/combatPower").isNull()).isTrue();
+    assertThat(table.at("/rows/1/classEngraving").asText()).isEqualTo("잔재된 기운");
+    assertThat(table.at("/rows/1/stats/count").asLong()).isEqualTo(1);
+    var unknown = new java.util.HashMap<String, Long>();
+    table
+        .path("unknownByClass")
+        .forEach(row -> unknown.put(row.path("className").asText(), row.path("count").asLong()));
+    assertThat(unknown).containsEntry(MAIN_CLASS, 31L).containsEntry(SMALL_CLASS, 5L);
+  }
+
+  @Test
   void 저장된_효율이_없으면_빈_랭킹이다() throws Exception {
     표본();
     var empty = data("/api/v1/rankings/ark-grid-gems?server=" + encode(SERVER));
@@ -797,6 +1193,19 @@ class StatsIntegrationTest {
       BigDecimal gem,
       UUID roster,
       Instant refreshed) {
+    insert(SERVER, name, className, itemLevel, combatPower, position, gem, roster, refreshed);
+  }
+
+  private void insert(
+      String server,
+      String name,
+      String className,
+      BigDecimal itemLevel,
+      BigDecimal combatPower,
+      String position,
+      BigDecimal gem,
+      UUID roster,
+      Instant refreshed) {
     jdbc.sql(
             """
         INSERT INTO characters (character_id, character_name, server_name, class_name, item_level,
@@ -805,7 +1214,7 @@ class StatsIntegrationTest {
         """)
         .param("id", UUID.randomUUID())
         .param("name", name)
-        .param("server", SERVER)
+        .param("server", server)
         .param("className", className)
         .param("itemLevel", itemLevel)
         .param("combatPower", combatPower)

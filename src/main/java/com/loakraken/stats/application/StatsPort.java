@@ -15,6 +15,12 @@ public interface StatsPort {
 
   List<ClassRow> classes(StatsConditions conditions, Instant since);
 
+  /**
+   * 직업 각인별 통계(직업 표의 직업 각인 보기). 모집단(처리정지 제외)을 직업과 마지막 장비 요약의 직업 각인(공식 칭호 원문)으로 나눈다. 요약이 없거나 칭호가 비면
+   * classEngraving이 null인 행이다(직업별 미확인 수).
+   */
+  List<ClassEngravingRow> classEngravingTable(StatsConditions conditions, Instant since);
+
   List<ServerRow> servers(StatsConditions conditions, Instant since);
 
   /**
@@ -38,6 +44,22 @@ public interface StatsPort {
 
   List<Bin> histogram(StatsConditions conditions, Instant since, Metric metric, BigDecimal width);
 
+  /**
+   * 보석 레벨 분포(B2). 모집단을 4티어 보석 평균 레벨(gem_mean_level)로 나눈 수. bucket: -1 = 보석을 관측하지 못함, 0 = 5 미만,
+   * 10~20 = 0.5 단위 하한 × 2(10 = 5.0, 20 = 10.0). 수가 0인 bucket은 없다.
+   */
+  List<GemLevelCount> gemLevels(StatsConditions conditions, Instant since);
+
+  record GemLevelCount(int bucket, long count) {}
+
+  /**
+   * 레벨별 전투력(B3). 모집단을 아이템 레벨 5 단위(하한 = FLOOR(아이템 레벨 / 5) × 5)로 나눠, 전투력이 있는 캐릭터 수와 전투력 중앙값
+   * (percentile_cont, 요약의 중앙값과 같은 함수). 아이템 레벨 오름차순.
+   */
+  List<LevelCombatPowerRow> levelCombatPower(StatsConditions conditions, Instant since);
+
+  record LevelCombatPowerRow(BigDecimal from, long count, BigDecimal median) {}
+
   /** value보다 큰 캐릭터 수와 모집단 수. 처리정지 목록은 모집단에서 뺀다. */
   Standing standing(StatsConditions conditions, Instant since, Metric metric, BigDecimal value);
 
@@ -46,6 +68,10 @@ public interface StatsPort {
    * 구해 캐시한다.
    */
   BigDecimal nthHighest(StatsConditions conditions, Instant since, Metric metric, long k);
+
+  /** 여러 순위의 값을 한 번에(각 값은 {@link #nthHighest}와 같음). 모집단보다 큰 순위는 빠진다. 순위 오름차순. */
+  List<RankValue> valuesAtRanks(
+      StatsConditions conditions, Instant since, Metric metric, java.util.Collection<Long> ranks);
 
   /** classEngraving이 있으면 모집단을 마지막 장비 요약의 직업 각인이 그 값(공백 무시)인 캐릭터로 좁힌다(#618). 요약이 없는 캐릭터는 빠진다. */
   RankingPage ranking(
@@ -80,6 +106,15 @@ public interface StatsPort {
   /** 처리정지 목록(public_exclusion)에 있는가. */
   boolean excluded(Target target);
 
+  /** characters 중 처리정지 목록에 있는 것(서버를 비운 항목은 모든 서버). 한 번의 조회다. */
+  java.util.Set<Named> stopListed(java.util.Collection<Named> characters);
+
+  /** 처리정지 목록의 지금 내용을 나타내는 짧은 값. 목록이 바뀌면 달라진다(집계 캐시 키에 넣는다). 한 번의 조회다. */
+  String exclusionRevision();
+
+  /** 캐릭터 이름과 서버. */
+  record Named(String characterName, String serverName) {}
+
   /** target이 조건의 모집단(처리정지 목록 제외)에 들어가는가. */
   boolean contains(StatsConditions conditions, Instant since, Target target);
 
@@ -103,14 +138,28 @@ public interface StatsPort {
       BigDecimal gemMeanLevel,
       List<BigDecimal> combatPowerPercentiles) {}
 
-  /** knownCharacters·rosters는 필터와 무관하게 그 서버에서 알고 있는 전체 캐릭터 수와 원정대 수다. */
+  /** 직업 표의 한 행을 직업 각인까지 나눈 것. classEngraving이 null이면 직업 각인을 모르는 캐릭터다. */
+  record ClassEngravingRow(String classEngraving, ClassRow stats) {}
+
+  /**
+   * knownCharacters·rosters는 필터와 무관하게 그 서버에서 알고 있는 전체 캐릭터 수와 원정대 수다.
+   * dealers·supports·itemLevelMean· combatPowerPercentiles(p10·p25·p50·p75·p90)는 직업 행(ClassRow)과 같은
+   * 계산이다.
+   */
   record ServerRow(
       String serverName,
       long count,
       BigDecimal itemLevelMedian,
       BigDecimal combatPowerMedian,
       long knownCharacters,
-      long rosters) {}
+      long rosters,
+      long dealers,
+      long supports,
+      BigDecimal itemLevelMean,
+      List<BigDecimal> combatPowerPercentiles) {}
+
+  /** 내림차순 rank번째 값. */
+  record RankValue(long rank, BigDecimal value) {}
 
   record Range(long count, BigDecimal min, BigDecimal max) {}
 
@@ -133,7 +182,8 @@ public interface StatsPort {
       BigDecimal combatPower,
       BigDecimal bestCombatPower,
       ArkPassiveSummary arkPassive,
-      EstherWeapon estherWeapon) {}
+      EstherWeapon estherWeapon,
+      String imageUrl) {}
 
   /** 아크 패시브 진화·깨달음·도약 포인트와 직업 각인(공식 ArkPassive.Title). 못 읽은 값은 null. */
   record ArkPassiveSummary(
@@ -201,7 +251,8 @@ public interface StatsPort {
       BigDecimal itemLevel,
       BigDecimal combatPower,
       BigDecimal value,
-      Instant observedAt) {}
+      Instant observedAt,
+      String imageUrl) {}
 
   record EfficiencyPage(long total, String ruleVersion, List<EfficiencyRow> rows) {}
 
@@ -219,7 +270,8 @@ public interface StatsPort {
       long characterCount,
       long point,
       long maxPoint,
-      Instant observedAt) {}
+      Instant observedAt,
+      String imageUrl) {}
 
   record CollectiblePage(long total, List<CollectibleRow> rows) {}
 
@@ -289,7 +341,8 @@ public interface StatsPort {
       BigDecimal combatPower,
       long characterCount,
       long usedCharacters,
-      BigDecimal score) {}
+      BigDecimal score,
+      String imageUrl) {}
 
   /** excluded: COMBAT_POWER에서 전투력 관측 누락으로 뺀 원정대 수(다른 기준은 0). */
   record RosterPage(long total, long excluded, List<RosterRow> rows) {}
@@ -419,15 +472,30 @@ public interface StatsPort {
   /** 수집품 항목을 관측한 원정대의 서버 이름(예열 대상, #305). */
   List<String> collectibleServers();
 
-  /** 칭호 하나의 장착 확인 원정대 수(#311). */
-  record TitleEquipRow(String title, long rosters) {}
+  /**
+   * 칭호 하나(#311). rosters: since 뒤에 장착이 확인된 원정대 수. observedRosters: 같은 모집단 원정대 가운데 그 칭호 장착이 한 번이라도
+   * 기록된 원정대 수(기간 무관, 보유의 하한). newRosters: 그 원정대에서 이 칭호를 처음 기록한 때가 recentSince 뒤인 원정대 수.
+   * observedCharacters: 그 원정대들에서 이 칭호 장착이 기록된 서로 다른 공개 캐릭터 수(희소도 보기의 표본 기준).
+   */
+  record TitleEquipRow(
+      String title, long rosters, long observedRosters, long newRosters, long observedCharacters) {}
 
   /** population: 조건에 맞는 관측 원정대 수(분모 N). */
   record TitleEquip(long population, List<TitleEquipRow> titles) {}
 
   /**
    * 칭호 장착 확인(#311). 분모는 since 뒤에 프로필(칭호가 보이는 관측)을 받은 공개 캐릭터가 있는 원정대, 분자는 그 가운데 since 뒤에 그 칭호를 장착한
-   * 공개 캐릭터가 확인된 원정대다. 공식 프로필에는 장착 칭호만 있어 보유 여부는 알 수 없다. title이 있으면 그 칭호만.
+   * 공개 캐릭터가 확인된 원정대다. 공식 프로필에는 장착 칭호만 있어 보유 여부는 알 수 없다. title이 있으면 그 칭호만. 기록이 한 번이라도 있으면 기간 밖 장착만
+   * 있어도 행이 있다(rosters 0).
    */
-  TitleEquip titleEquip(String server, Instant since, String title);
+  TitleEquip titleEquip(String server, Instant since, Instant recentSince, String title);
+
+  /** 휘장 하나: 공식 아이콘 주소(묶음 기준)와 그 휘장을 장착한 공개 캐릭터 수. */
+  record EmblemRow(String iconUrl, long characters) {}
+
+  /** population: since 뒤에 프로필과 휘장 정보를 관측한 공개 캐릭터 수. withoutEmblem: 그중 휘장이 없는 캐릭터 수. */
+  record EmblemEquip(long population, long withoutEmblem, List<EmblemRow> emblems) {}
+
+  /** 휘장 장착 분포. 캐릭터 단위(휘장은 캐릭터 프로필마다 있다). 공식 호출 없음. */
+  EmblemEquip emblemEquip(String server, Instant since);
 }

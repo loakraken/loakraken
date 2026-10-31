@@ -6,6 +6,7 @@ import com.loakraken.market.application.MarketQueryService;
 import com.loakraken.market.application.MarketSource;
 import com.loakraken.market.application.MaterialQuoteService;
 import com.loakraken.market.application.MaterialUnitPriceService;
+import com.loakraken.market.application.RelicBookPriceService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -59,16 +60,19 @@ public class MarketController {
   private final MaterialQuoteService quotes;
   private final MaterialUnitPriceService unitPrices;
   private final MarketBoardService board;
+  private final RelicBookPriceService relicBooks;
 
   public MarketController(
       MarketQueryService service,
       MaterialQuoteService quotes,
       MaterialUnitPriceService unitPrices,
-      MarketBoardService board) {
+      MarketBoardService board,
+      RelicBookPriceService relicBooks) {
     this.service = service;
     this.quotes = quotes;
     this.unitPrices = unitPrices;
     this.board = board;
+    this.relicBooks = relicBooks;
   }
 
   @GetMapping("/items")
@@ -95,6 +99,16 @@ public class MarketController {
     return ApiResponse.of(
         MarketSuccessCode.MARKET_SEARCH_SUCCESS,
         MarketPriceResponse.from(service.search(source, request.toSearch())));
+  }
+
+  @GetMapping("/engraving-icons")
+  @Operation(
+      summary = "각인 그림 목록",
+      description =
+          "공백을 뺀 각인 이름 → 유물 각인서 공식 아이콘 주소. 저장해 둔 시세(예열)에서만 만들며 공식 호출이 없습니다. 예열 전이면 빈 목록일 수 있습니다.")
+  public ApiResponse<EngravingIconsResponse> engravingIcons() {
+    return ApiResponse.of(
+        MarketSuccessCode.ENGRAVING_ICONS_SUCCESS, EngravingIconsResponse.from(relicBooks.icons()));
   }
 
   @GetMapping("/tabs")

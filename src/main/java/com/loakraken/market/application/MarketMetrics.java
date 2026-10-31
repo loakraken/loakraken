@@ -38,6 +38,15 @@ public class MarketMetrics {
     registry.counter("loakraken.market.gem_filter", "event", event).increment();
   }
 
+  /**
+   * 스펙업 연마 시세(#741) 사건: cache_hit(캐시된 칸), filled(공식 검색 1회로 채움), fill_off(채우기 스위치 꺼짐), lock_busy(다른
+   * 채우기가 잠금을 잡음), no_budget(이 요청의 채우기 몫을 다 씀), official_failed(공식 호출 한도·장애), unsupported(경매장 옵션으로
+   * 나타낼 수 없는 줄). 값은 이 일곱 개뿐이다.
+   */
+  public void polishFill(String event) {
+    registry.counter("loakraken.market.polish_fill", "event", event).increment();
+  }
+
   public enum Kind {
     PRICES,
     OPTIONS,

@@ -23,6 +23,7 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 @Repository
 class PostgresCharacterCardRepository implements CharacterCardPort {
   private static final int KNOWN_LIMIT = 10_000;
+  private static final String NOT_EXCLUDED = StopListSql.NOT_EXCLUDED;
   private final JdbcClient jdbc;
   // 학습한 구성원·효과는 거의 바뀌지 않으므로 이미 쓴 것은 다시 쓰지 않는다.
   private final Set<Object> known = ConcurrentHashMap.newKeySet();
@@ -163,11 +164,19 @@ class PostgresCharacterCardRepository implements CharacterCardPort {
     if (characterId.isPresent()) {
       jdbc.sql(
               """
-          UPDATE characters SET position = COALESCE(:position, position),
+          UPDATE characters SET
+            position = CASE WHEN CAST(:position AS VARCHAR) IS NOT NULL
+                AND (position_observed_at IS NULL OR position_observed_at <= :at)
+              THEN CAST(:position AS VARCHAR) ELSE position END,
+            position_observed_at = CASE WHEN CAST(:position AS VARCHAR) IS NOT NULL
+                AND (position_observed_at IS NULL OR position_observed_at <= :at)
+              THEN :at ELSE position_observed_at END,
             gem_mean_level = CASE WHEN :gemsObserved THEN CAST(:gem AS NUMERIC) ELSE gem_mean_level END
           WHERE character_id = :id
           """)
+          // 포지션은 더 늦은 관측이 이미 정했으면 덮지 않는다(관측 기록이 비동기라 순서가 뒤바뀔 수 있음).
           .param("position", observation.position())
+          .param("at", at)
           .param("gem", observation.gemMeanLevel())
           .param("gemsObserved", observation.gemsObserved())
           .param("id", characterId.get())
@@ -278,6 +287,10 @@ class PostgresCharacterCardRepository implements CharacterCardPort {
                    cc.awake_total, cc.observed_at, c.character_name
             FROM character_card cc JOIN characters c ON c.character_id = cc.character_id
             WHERE c.server_name = :server AND c.character_name IN (:names)
+            """
+                    + NOT_EXCLUDED
+                    + """
+
             ORDER BY cc.card_name, cc.awake_count DESC, cc.observed_at DESC
             """)
             .param("server", serverName)
@@ -299,7 +312,8 @@ class PostgresCharacterCardRepository implements CharacterCardPort {
             SELECT COUNT(DISTINCT cc.character_id)
             FROM character_card cc JOIN characters c ON c.character_id = cc.character_id
             WHERE c.server_name = :server AND c.character_name IN (:names)
-            """)
+            """
+                    + NOT_EXCLUDED)
             .param("server", serverName)
             .param("names", List.copyOf(characterNames))
             .query(Integer.class)
@@ -351,10 +365,12 @@ class PostgresCharacterCardRepository implements CharacterCardPort {
     return result;
   }
 
+  /** 저장된 역할. 제외 목록 캐릭터면 저장된 값이 있어도 null(기록이 없는 캐릭터와 같음). */
   @Override
   public String position(String serverName, String characterName) {
     return jdbc.sql(
-            "SELECT position FROM characters WHERE server_name = :server AND character_name = :name")
+            "SELECT c.position FROM characters c WHERE c.server_name = :server AND c.character_name = :name"
+                + NOT_EXCLUDED)
         .param("server", serverName)
         .param("name", characterName)
         .query(String.class)

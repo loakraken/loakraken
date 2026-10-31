@@ -99,13 +99,15 @@ public class CharacterCardService {
   }
 
   /**
-   * 팔찌 효율·젬 효율(L38·L39): 검색 응답과 같은 모델로 메모리에서 계산한다(공식 호출 없음). 장비를 관측하지 않았으면 null(저장값 유지), 계산이 실패하거나
-   * OK가 아니면 그 값만 null이다(B8: 관측 저장은 그대로). 실 효율(팔찌·젬)은 캐릭터 응답의
+   * 팔찌 효율·젬 효율(L38·L39): 검색 응답과 같은 모델로 메모리에서 계산한다(공식 호출 없음). 장비가 빈 관측이면 모든 값이 null(저장값을 비움), 계산이
+   * 실패하거나 OK가 아니면 그 값만 null이다(B8: 관측 저장은 그대로). 실 효율(팔찌·젬)은 캐릭터 응답의
    * braceletEfficiency.real·arkGridEfficiency.real과 같은 서비스·같은 입력으로 내서 랭킹 값이 캐릭터 화면 값과 같다.
    */
   CharacterCardPort.Efficiency efficiency(
       CharacterDetails details, JsonNode krakenScoreInput, Instant observedAt) {
-    if (details.loadout().equipment().isEmpty()) return null;
+    // 장비가 비어 있는 관측도 그 시점의 전투정보다. 옛 효율이 랭킹에 남지 않게 값을 비운다(저장은 더 늦은 관측이 없을 때만).
+    if (details.loadout().equipment().isEmpty())
+      return new CharacterCardPort.Efficiency(null, null, null, null, null, null, null, null);
     var result = new CharacterResult(details, observedAt, null, krakenScoreInput);
     java.math.BigDecimal bracelet = null;
     String braceletVersion = null;

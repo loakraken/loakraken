@@ -8,10 +8,30 @@ import java.math.RoundingMode;
  * 아직 관측하지 못함), UNKNOWN(비용 근거가 없음). 같은 code는 늘 같은 basis 문장이다.
  */
 public record SpecUpCost(
-    String unit, Long amount, String status, String code, String basis, Double exact) {
+    String unit,
+    Long amount,
+    String status,
+    String code,
+    String basis,
+    Double exact,
+    java.time.Instant priceObservedAt,
+    Boolean stale) {
   /** exact는 반올림 전 금액(카르마·스톤 기대 골드처럼 정수가 아닌 비용). 정수 비용이면 amount와 같다. 효율은 이 값으로 나눈다. */
   public SpecUpCost(String unit, Long amount, String status, String code, String basis) {
     this(unit, amount, status, code, basis, amount == null ? null : amount.doubleValue());
+  }
+
+  public SpecUpCost(
+      String unit, Long amount, String status, String code, String basis, Double exact) {
+    this(unit, amount, status, code, basis, exact, null, null);
+  }
+
+  /**
+   * 보석 비용에 쓴 시세의 관측 시각(목표·지금 가운데 이른 쪽)과 마지막 관측 값을 썼는지(stale — 3분 칸이 없어 이전 시세를 씀, 지금 시세처럼 보이면 안 된다,
+   * PM 총괄 10-25).
+   */
+  public SpecUpCost withPrice(java.time.Instant observedAt, boolean stale) {
+    return new SpecUpCost(unit, amount, status, code, basis, exact, observedAt, stale);
   }
 
   /** 깨달음 카르마 레벨 기대 골드(반올림 전 값으로 효율 계산). */
@@ -75,6 +95,36 @@ public record SpecUpCost(
           "POLISH_COST_UNCONFIRMED",
           "연마 옵션을 바꾼 장신구의 매물 시세를 아직 받지 않아 비용을 계산하지 않았습니다.");
 
+  /**
+   * 장신구 연마 교체 비용(비교 기준 B와 같은 규칙): 목표 연마 조합 장신구의 즉시 구매 최저가 − 지금 장신구 조합의 즉시 구매 최저가(지금 장신구가 거래 가능할
+   * 때만), 0보다 작으면 0. 시세 칸은 고대·4티어·품질 조건 없음, 그 연마 값들이 있는 매물(다른 줄 허용).
+   */
+  public static SpecUpCost polish(long amount, boolean currentSubtracted) {
+    return currentSubtracted
+        ? new SpecUpCost(
+            "GOLD",
+            amount,
+            "OK",
+            "POLISH_UPGRADE",
+            "목표 연마 조합 장신구의 즉시 구매 최저가에서 지금 장신구 조합의 즉시 구매 최저가를 뺐습니다(품질 조건 없음, 판매 수수료는 빼지 않음).")
+        : new SpecUpCost(
+            "GOLD",
+            amount,
+            "OK",
+            "POLISH_BUY",
+            "목표 연마 조합 장신구의 즉시 구매 최저가입니다(품질 조건 없음). 지금 장신구는 거래할 수 없어 빼지 않았습니다.");
+  }
+
+  /** 연마 조합 시세 칸을 아직 채우지 못했을 때(채우기 스위치가 켜져 있을 때만). */
+  public static final SpecUpCost POLISH_PRICE_PENDING =
+      new SpecUpCost(
+          "GOLD", null, "PENDING", "PRICE_PENDING", "장신구 매물 시세를 아직 받지 못했습니다. 잠시 뒤 다시 확인해 주세요.");
+
+  /** 목표 연마 조합 매물이 지금 없을 때. */
+  public static final SpecUpCost POLISH_NO_LISTING =
+      new SpecUpCost(
+          "GOLD", null, "UNKNOWN", "POLISH_NO_LISTING", "이 연마 조합의 장신구 매물이 지금 없어 비용을 계산하지 않았습니다.");
+
   /** 어빌리티 스톤(#575): 목표 조합까지의 기대 세공 비용을 아직 넣지 않았다. */
   public static final SpecUpCost STONE_COST_UNCONFIRMED =
       new SpecUpCost(
@@ -101,6 +151,20 @@ public record SpecUpCost(
           "UNKNOWN",
           "ARM_GUARD_COST_UNCONFIRMED",
           "팔 보호구 재련 비용(확률·재료)을 아직 확인하지 않아 비용을 계산하지 않았습니다.");
+
+  /**
+   * 팔 보호구(완갑) 재련 기대 비용: 단계마다 회차별 최적 전략(시도마다 쓸 숨결 수를 골라 기대 비용 최소, 용암·빙하는 싼 숨결부터)의 기대 소모 × 재료 1개 즉시
+   * 구매 최저가 + 기대 골드의 합. 성장 지원·책은 없다.
+   */
+  public static SpecUpCost armGuardExpected(long amount) {
+    return new SpecUpCost(
+        "GOLD",
+        amount,
+        "OK",
+        "ARM_GUARD_EXPECTED",
+        "단계마다 시도마다 숨결(용암·빙하) 사용 개수를 골라 기대 비용이 가장 작은 방법(장인의 기운·실패 횟수는 각 단계 0에서 시작)의 기대 소모에 재료 1개 즉시 구매 최저가를 곱하고 골드를 더한 값입니다."
+            + " 장비 성장(경험치) 비용과 실링은 넣지 않았습니다.");
+  }
 
   /** 재련 재료 시세 예열 전이거나 필요한 재료 시세가 없을 때. code·status는 보석과 같은 PRICE_PENDING(새 값 없음). */
   public static final SpecUpCost REFINE_PRICE_PENDING =

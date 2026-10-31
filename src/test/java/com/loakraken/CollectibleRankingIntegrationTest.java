@@ -161,6 +161,30 @@ class CollectibleRankingIntegrationTest {
     assertThat(byCharacter.path("total").asLong()).isEqualTo(3);
   }
 
+  @Test
+  void 캐시가_있어도_나중에_제외_목록에_든_캐릭터는_수집품_랭킹과_순위에서_빠진다() throws Exception {
+    var a = roster(SERVER, "수집나중", 1760);
+    collectible(a, 1, "모코코 씨앗", 1480, 1480);
+    var b = roster(SERVER, "수집남는", 1750);
+    collectible(b, 1, "모코코 씨앗", 1000, 1480);
+
+    // 제외 전: 목록과 순위가 캐시된다.
+    var rankingPath = "/api/v1/rankings/collectibles?server=" + encode(SERVER);
+    assertThat(get(rankingPath).body()).contains("수집나중");
+    assertThat(standingReason("수집나중")).isNull();
+
+    jdbc.sql(
+            "INSERT INTO public_exclusion (character_name, server_name, reason_code) VALUES ('수집나중', :s, 'USER_REQUEST')")
+        .param("s", SERVER)
+        .update();
+
+    // 제외 뒤: 캐시가 남아 있어도 다시 세어 빠진다.
+    var ranking = get(rankingPath);
+    assertThat(ranking.statusCode()).isEqualTo(200);
+    assertThat(ranking.body()).contains("수집남는").doesNotContain("수집나중");
+    assertThat(standingReason("수집나중")).isEqualTo("NOT_OBSERVED");
+  }
+
   private String standingReason(String name) throws Exception {
     var node =
         mapper
@@ -189,6 +213,22 @@ class CollectibleRankingIntegrationTest {
     assertThat(rows.at("/0/rank").asLong()).isEqualTo(1);
     assertThat(rows.at("/1/rank").asLong()).isEqualTo(2);
     assertThat(rows.at("/2/rank").asLong()).isEqualTo(2);
+  }
+
+  @Test
+  void 행은_대표_캐릭터의_저장된_이미지_주소를_준다() throws Exception {
+    var a = roster(TIE_SERVER, "수집이미지가", 1750);
+    collectible(a, 1, "모코코 씨앗", 740, 1480);
+    String url = "https://img.lostark.co.kr/armory/test/collectible.png";
+    jdbc.sql("UPDATE characters SET image_url = :url WHERE character_name = '수집이미지가'")
+        .param("url", url)
+        .update();
+    JsonNode rows =
+        mapper
+            .readTree(get("/api/v1/rankings/collectibles?server=" + encode(TIE_SERVER)).body())
+            .at("/data/rows");
+    assertThat(rows.at("/0/characterName").asText()).isEqualTo("수집이미지가");
+    assertThat(rows.at("/0/imageUrl").asText()).isEqualTo(url);
   }
 
   @Test

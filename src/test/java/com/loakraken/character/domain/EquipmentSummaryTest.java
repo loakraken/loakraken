@@ -312,6 +312,30 @@ class EquipmentSummaryTest {
                 "기본 스킬", null, 1, null, null, null, List.of(), null, List.of(), AttackType.NONE)));
   }
 
+  @org.junit.jupiter.api.Test
+  void 보주_낙원력은_효과_줄_어디에_있어도_숫자만_읽고_쉼표를_뺀다() {
+    // 실제 응답처럼 특수 효과 문장 끝에 붙어 있는 경우.
+    assertThat(
+            EquipmentSummary.paradisePower(
+                detail(
+                    null,
+                    null,
+                    List.of(
+                        group(
+                            "특수 효과",
+                            "[맥스웰 맥시마] 피해를 줍니다.(재사용 대기시간 20초)시즌2에 달성한 최대 낙원력에 따라 특수 효과 수치가 변동됩니다.시즌2 달성 최대 낙원력 : 18145692")))))
+        .isEqualTo(18145692L);
+    assertThat(
+            EquipmentSummary.paradisePower(
+                detail(null, null, List.of(group("특수 효과", "시즌3 달성 최대 낙원력 : 35,647,915")))))
+        .isEqualTo(35647915L);
+    assertThat(
+            EquipmentSummary.paradisePower(
+                detail(null, null, List.of(group("특수 효과", "최대 낙원력에 따라 변동됩니다.")))))
+        .isNull();
+    assertThat(EquipmentSummary.paradisePower(null)).isNull();
+  }
+
   private static Equipment equipment(String type, EquipmentDetail detail) {
     return new Equipment(type, type, null, "고대", detail);
   }

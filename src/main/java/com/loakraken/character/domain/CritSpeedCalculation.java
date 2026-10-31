@@ -303,7 +303,9 @@ public final class CritSpeedCalculation {
       BluntThorn bluntThorn,
       List<CritTarget> targets,
       BigDecimal critStatPerPercent,
-      CritDamage damage) {}
+      CritDamage damage,
+      // 치명 스탯(수치·Tooltip)을 읽지 못하면 이유. 그때 적중률은 스탯을 뺀 값이라 표시하지 않는다(코드 리뷰 10-25).
+      String unavailableReason) {}
 
   /**
    * 치명타 피해(%). total = base 200 + 관측 출처 합(observed) + 가정 출처 합(assumed, 켠 토글 등). 스킬·조건 한정 문구는 더하지
@@ -330,7 +332,9 @@ public final class CritSpeedCalculation {
       SpeedAxis move,
       Supersonic supersonic,
       BigDecimal swiftnessPerPercent,
-      List<SwiftnessRow> swiftnessTable) {}
+      List<SwiftnessRow> swiftnessTable,
+      // 신속 스탯(수치·Tooltip)을 읽지 못하면 이유. 그때 공격·이동 속도는 스탯을 뺀 값이라 표시하지 않는다.
+      String unavailableReason) {}
 
   /** 신속 스탯이 swiftness일 때 공격·이동 속도와 음속 돌파 진화형 피해. 신속 외 출처(관측+가정)는 그대로 둔다. */
   public record SwiftnessRow(
@@ -413,6 +417,10 @@ public final class CritSpeedCalculation {
     Integer critStat = statValue(profile, "치명");
     Integer swiftness = statValue(profile, "신속");
     BigDecimal critFromStat = statSources(profile, critStat, swiftness, sources, limitations);
+    // 스탯 출처가 없으면 0%로 두지 않고 이유를 낸다(스탯이 없거나 숫자가 아니고 Tooltip도 없음).
+    boolean critRead = hasStatSource(sources, Axis.CRIT);
+    boolean speedRead =
+        hasStatSource(sources, Axis.ATTACK_SPEED) && hasStatSource(sources, Axis.MOVE_SPEED);
     var conditional = new ArrayList<String>();
     var conditionalRate = new ArrayList<String>();
     var unclassified = new ArrayList<String>();
@@ -513,7 +521,8 @@ public final class CritSpeedCalculation {
                     BASE_CRIT_DAMAGE
                         .add(sum(sources, Kind.OBSERVED, Axis.CRIT_DAMAGE))
                         .add(sum(sources, Kind.ASSUMED, Axis.CRIT_DAMAGE))),
-                scale(sum(sources, Kind.ASSUMED, Axis.CRIT_DAMAGE))));
+                scale(sum(sources, Kind.ASSUMED, Axis.CRIT_DAMAGE))),
+            critRead ? null : "치명 스탯을 읽지 못해 치명타 적중률을 계산하지 않았어요.");
 
     var attack = axis(sources, Axis.ATTACK_SPEED);
     var move = axis(sources, Axis.MOVE_SPEED);
@@ -548,7 +557,8 @@ public final class CritSpeedCalculation {
                 move.total().subtract(swiftnessSpeed.move()),
                 swiftness,
                 requiredSwiftness,
-                supersonicRule));
+                supersonicRule),
+            speedRead ? null : "신속 스탯을 읽지 못해 공격·이동 속도를 계산하지 않았어요.");
     limitations.add("아크 그리드 코어·젬, 스킬 룬·트라이포드의 치명타·속도 효과는 공식 원문 문구가 없어 가정 입력으로만 반영합니다.");
     limitations.add("특정 스킬·조건 한정 효과(예: '…의 치명타 적중률', 백어택 한정)는 자동 합산하지 않습니다.");
     limitations.add(
@@ -1812,6 +1822,11 @@ public final class CritSpeedCalculation {
         .filter(source -> source.kind() == kind && source.axis() == axis)
         .map(Source::value)
         .reduce(BigDecimal.ZERO, BigDecimal::add);
+  }
+
+  private static boolean hasStatSource(List<Source> sources, Axis axis) {
+    return sources.stream()
+        .anyMatch(source -> source.category() == Category.STAT && source.axis() == axis);
   }
 
   private static Integer statValue(CharacterProfile profile, String type) {

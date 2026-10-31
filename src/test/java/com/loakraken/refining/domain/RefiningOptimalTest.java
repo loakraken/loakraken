@@ -122,7 +122,8 @@ class RefiningOptimalTest {
 
   @Test
   void 계산_검증_기준_전율_무기_18에서_19는_숨결_개수를_회차마다_고른다() {
-    // 계산 검증 #287 댓글(2026-10-11 10:08 단가): 숨결 0~20 × 책, 장인의 기운 0.001%p, 성장 파편 105,000 포함.
+    // 계산 검증 #287 댓글(2026-10-11 10:08 단가): 숨결 × 책, 성장 파편 105,000 포함. 숨결은 t4-refining-v4(2026-10-26)
+    // 0~25개 × 0.12%.
     var rule =
         RULES.track(RefiningRules.Grade.JEONYUL, RefiningRules.EquipmentType.WEAPON).stage(19);
     var prices =
@@ -141,15 +142,15 @@ class RefiningOptimalTest {
             new BigDecimal("14870"));
     double growth = 105_000 * 0.083;
     var withBook = RefiningOptimal.calculate(rule, 1, prices, true, true);
-    // 10-25: 장인의 기운을 게임처럼 0.01%p에서 버린 뒤 값(전에는 0.001%p 반올림으로 616,461.9·숨결 4). 기운이 조금 덜 쌓여
-    // 확정 성공 전 회차가 비싸진다.
+    // 2026-10-26 숨결 25개 × 0.12%(게임 화면): 최대 +3%는 같지만 숨결이 25개라 기대 비용이 오른다. 이전 값(20개 × 0.15%,
+    // 장인의 기운 0.01%p 버림): 책 616,506.9 · 20회째 숨결 5 · 책 없음 652,272.6. 새 값은 계산 검증이 따로 대조한다.
     assertThat(withBook.expectedGold() + growth)
-        .isCloseTo(616_506.9, org.assertj.core.data.Offset.offset(1.0));
-    // 20회째(실패 19번 뒤)는 숨결 5개만 쓴다.
-    assertThat(withBook.path().get(19)).isEqualTo("숨결 5");
+        .isCloseTo(636_911.5, org.assertj.core.data.Offset.offset(1.0));
+    // 20회째(실패 19번 뒤)는 숨결 6개만 쓴다(0.12%씩 고름).
+    assertThat(withBook.path().get(19)).isEqualTo("숨결 6");
     var withoutBook = RefiningOptimal.calculate(rule, 1, prices, true, false);
     assertThat(withoutBook.expectedGold() + growth)
-        .isCloseTo(652_272.6, org.assertj.core.data.Offset.offset(1.0));
+        .isCloseTo(679_559.7, org.assertj.core.data.Offset.offset(1.0));
     assertThat(withoutBook.usesBook()).isFalse();
   }
 
@@ -188,6 +189,109 @@ class RefiningOptimalTest {
       prices.put(rule.breath().name(), BigDecimal.valueOf(400 * breathScale));
     if (rule.book() != null) prices.put(rule.book().name(), BigDecimal.valueOf(20_000));
     return prices;
+  }
+
+  /** 비교 기준 B 화면과 같은 시각의 재료 1개 값(계산 검증 캡처 2026-10-24T23:39:31Z). */
+  private static Map<String, Number> vambracePrices(boolean breaths) {
+    var prices = new HashMap<String, Number>();
+    prices.put("운명의 파괴석 결정", 8.92);
+    prices.put("운명의 수호석 결정", 1.77);
+    prices.put("위대한 운명의 돌파석", 18);
+    prices.put("상급 아비도스 융화 재료", 268);
+    prices.put(RefiningPlan.SHARD, 0.091);
+    if (breaths) {
+      prices.put("빙하의 숨결", 414);
+      prices.put("용암의 숨결", 476);
+    }
+    return prices;
+  }
+
+  @Test
+  void 팔_보호구는_숨결을_사지_않으면_비교_기준과_단계마다_같다() {
+    // 계산 검증 10-25: B의 기본(보유 재료 미반영)은 숨결을 사지 않는다. 같은 시세에서 16 → 21 단계 합 4,340,891(B 화면 434.09만).
+    var rules = vambraceRules();
+    double[] expected = {677_956, 704_673, 732_753, 761_402, 1_464_107};
+    double total = 0;
+    for (int stage = 17; stage <= 21; stage++) {
+      var result = RefiningOptimal.calculate(rules.stage(stage), vambracePrices(false));
+      assertThat(result.usesBreath()).isFalse();
+      assertThat(result.expectedGold())
+          .as("%d단계", stage)
+          .isCloseTo(expected[stage - 17], org.assertj.core.data.Offset.offset(0.5));
+      total += result.expectedGold();
+    }
+    assertThat(Math.round(total)).isEqualTo(4_340_891L);
+  }
+
+  @Test
+  void 팔_보호구는_시도마다_싼_숨결부터_골라_더_싸게_푼다() {
+    // PM 총괄 10-25: 숨결을 사는 편이 싸면 산다(증명된 차이). 빙하 414 < 용암 476이라 빙하부터.
+    var rules = vambraceRules();
+    var withBreath = RefiningOptimal.calculate(rules.stage(17), vambracePrices(true));
+    var without = RefiningOptimal.calculate(rules.stage(17), vambracePrices(false));
+    assertThat(withBreath.usesBreath()).isTrue();
+    assertThat(withBreath.expectedGold())
+        .isCloseTo(677_293.26, org.assertj.core.data.Offset.offset(0.01))
+        .isLessThan(without.expectedGold());
+    assertThat(withBreath.expectedBreaths())
+        .isCloseTo(9.127639, org.assertj.core.data.Offset.offset(1e-5));
+    assertThat(withBreath.expectedSecondBreaths()).isBetween(0.0, withBreath.expectedBreaths());
+    double total = 0;
+    for (int stage = 17; stage <= 21; stage++)
+      total += RefiningOptimal.calculate(rules.stage(stage), vambracePrices(true)).expectedGold();
+    assertThat(total).isCloseTo(4_335_693.74, org.assertj.core.data.Offset.offset(0.05));
+  }
+
+  @Test
+  void 팔_보호구_숨결_증가량이_다르면_풀지_않는다() {
+    var stage = vambraceRules().stage(17);
+    var odd =
+        new VambraceRules.Stage(
+            stage.targetStage(),
+            stage.baseRateBp(),
+            stage.materials(),
+            stage.shard(),
+            stage.gold(),
+            java.util.List.of(
+                new VambraceRules.Breath("용암의 숨결", 30, 5),
+                new VambraceRules.Breath("빙하의 숨결", 30, 10)));
+    org.assertj.core.api.Assertions.assertThatThrownBy(
+            () -> RefiningOptimal.calculate(odd, vambracePrices(true)))
+        .isInstanceOf(IllegalArgumentException.class);
+  }
+
+  @Test
+  void 팔_보호구_단계표가_모자라거나_숨결_증가량이_다르면_읽지_않는다() {
+    var full = vambraceRules();
+    var missing = full.stages().subList(0, 24);
+    org.assertj.core.api.Assertions.assertThatThrownBy(
+            () -> new VambraceRules(full.ruleVersion(), full.source(), missing))
+        .isInstanceOf(IllegalArgumentException.class);
+    var stage = full.stage(17);
+    var odd = new java.util.ArrayList<>(full.stages());
+    odd.set(
+        16,
+        new VambraceRules.Stage(
+            stage.targetStage(),
+            stage.baseRateBp(),
+            stage.materials(),
+            stage.shard(),
+            stage.gold(),
+            java.util.List.of(
+                new VambraceRules.Breath("용암의 숨결", 30, 5),
+                new VambraceRules.Breath("빙하의 숨결", 30, 10))));
+    org.assertj.core.api.Assertions.assertThatThrownBy(
+            () -> new VambraceRules(full.ruleVersion(), full.source(), odd))
+        .isInstanceOf(IllegalArgumentException.class);
+  }
+
+  private static VambraceRules vambraceRules() {
+    try (var input =
+        RefiningOptimalTest.class.getResourceAsStream("/refining/t4-vambrace-rules.json")) {
+      return JsonMapper.builder().build().readValue(input, VambraceRules.class);
+    } catch (IOException exception) {
+      throw new IllegalStateException(exception);
+    }
   }
 
   private static RefiningRules rules() {

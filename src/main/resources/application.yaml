@@ -7,6 +7,10 @@ server:
     mime-types: application/json
     min-response-size: 2KB
 
+# 요청 본문 크기 상한(413 REQUEST_TOO_LARGE). 앞단 프록시 상한보다 작게 둔다.
+http:
+  max-request-body: ${HTTP_MAX_REQUEST_BODY:64KB}
+
 spring:
   application:
     name: loakraken
@@ -99,6 +103,10 @@ market:
       enabled: ${MARKET_WARMUP_REFINING_MATERIALS_ENABLED:false}
       interval: ${MARKET_WARMUP_REFINING_MATERIALS_INTERVAL:10m}
       max-pages-per-tab: ${MARKET_WARMUP_REFINING_MATERIALS_MAX_PAGES:5}
+    # 보석 시세 표 20칸(스펙업 보석 비용). interval마다 한 바퀴, 1분마다 오래된 칸부터 ceil(20 ÷ 분)칸(10분 = 분당 2회).
+    gems:
+      enabled: ${MARKET_WARMUP_GEMS_ENABLED:false}
+      interval: ${MARKET_WARMUP_GEMS_INTERVAL:10m}
   # 악세 경매 검색기(N13). 기능 몫은 모든 사용자 합 분당 공식 호출 수, reserve는 사용자 경로 몫(docs/accessory-auction-search.md).
   auction-search:
     quota-per-minute: ${MARKET_AUCTION_SEARCH_QUOTA:20}
@@ -140,6 +148,10 @@ stats:
     enabled: ${STATS_SEED_ENABLED:false}
     names: ${STATS_SEED_NAMES:}
     file: ${STATS_SEED_FILE:}
+  # 전체 인구 주간 스냅샷(통계 묶음 B5): 기동 2분 뒤와 매일 cron에 보고, 없거나 7일 지났으면 새로 만든다(공식 호출 없음). 웹 전체 인구 탭과 함께 켠다.
+  population-snapshot:
+    enabled: ${STATS_POPULATION_SNAPSHOT_ENABLED:false}
+    cron: ${STATS_POPULATION_SNAPSHOT_CRON:0 10 5 * * *}
 
 # 수집품(내실) 랭킹(#295): 웹 화면이 준비될 때까지 기본 꺼짐
 ranking:
@@ -179,6 +191,19 @@ combat-power-sim:
 # 스펙업 가이드(#315): 꺼져 있으면 SPEC_UP_DISABLED(404). 시뮬레이터 계산식 검증 뒤 켠다.
 spec-up:
   enabled: ${SPEC_UP_ENABLED:false}
+  # 연마 교체 비용의 시세 칸을 요청에서 채우는가(요청마다 최대 5칸, 사용자 요청 한도 안). 꺼져 있으면 캐시된 칸만 쓰고 없으면 비용 미확정.
+  polish-price-fill:
+    enabled: ${SPEC_UP_POLISH_PRICE_FILL_ENABLED:false}
+  # 팔 보호구(완갑) 재련 줄: 기본 켬. 끄면 목록과 줄 상세에서 완갑 줄을 뺀다(되돌리기 없이 숨김).
+  arm-guard:
+    enabled: ${SPEC_UP_ARM_GUARD_ENABLED:true}
+
+# 재련 계획 숨결 OPTIMAL(#754): 화면이 붙을 때(v0.3.4)까지 꺼짐. 꺼져 있으면 breath=OPTIMAL은 400. 캐시에 없는 단계 풀이는 동시에
+# max-concurrent-solves개까지(넘으면 바로 429).
+refining:
+  optimal:
+    enabled: ${REFINING_OPTIMAL_ENABLED:false}
+    max-concurrent-solves: ${REFINING_OPTIMAL_MAX_CONCURRENT_SOLVES:2}
 
 home:
   cache:

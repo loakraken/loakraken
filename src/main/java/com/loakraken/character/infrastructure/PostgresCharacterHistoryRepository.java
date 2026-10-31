@@ -101,6 +101,9 @@ class PostgresCharacterHistoryRepository implements CharacterHistoryPort {
           .param("title", profile.title().strip())
           .param("at", at)
           .update();
+    // 휘장: 응답에 장식 구역이 있을 때만 그 시점의 집합으로 바꾼다(구역이 없으면 모르는 것이라 그대로 둔다).
+    if (profile.inner() != null && profile.inner().decorations() != null)
+      recordEmblems(characterId.get(), profile.inner().decorations().emblems(), at);
     if (latest.isPresent() && latest.get().values().sameAs(current)) {
       jdbc.sql(
               """
@@ -140,8 +143,9 @@ class PostgresCharacterHistoryRepository implements CharacterHistoryPort {
         o.combat_power, o.expedition_level
       FROM character_observation o JOIN characters c ON c.character_id = o.character_id
       WHERE c.server_name = :server AND c.character_name = :name
-      ORDER BY o.observed_at DESC, o.observation_sequence DESC LIMIT :limit
-      """)
+      """
+                    + StopListSql.NOT_EXCLUDED
+                    + " ORDER BY o.observed_at DESC, o.observation_sequence DESC LIMIT :limit")
             .param("server", serverName)
             .param("name", characterName)
             .param("limit", limit)
@@ -174,6 +178,10 @@ class PostgresCharacterHistoryRepository implements CharacterHistoryPort {
           ROW_NUMBER() OVER (PARTITION BY t.title ORDER BY t.first_observed_at, c.character_name) AS rn
         FROM character_title_observation t JOIN characters c ON c.character_id = t.character_id
         WHERE c.server_name = :server AND c.character_name IN (:names)
+      """
+                + StopListSql.NOT_EXCLUDED
+                + """
+
       ) x WHERE rn = 1
       ORDER BY first_observed_at, title
       """)
@@ -198,7 +206,8 @@ class PostgresCharacterHistoryRepository implements CharacterHistoryPort {
       SELECT COUNT(DISTINCT t.character_id)
       FROM character_title_observation t JOIN characters c ON c.character_id = t.character_id
       WHERE c.server_name = :server AND c.character_name IN (:names)
-      """)
+      """
+                + StopListSql.NOT_EXCLUDED)
         .param("server", serverName)
         .param("names", List.copyOf(characterNames))
         .query(Integer.class)
@@ -212,8 +221,9 @@ class PostgresCharacterHistoryRepository implements CharacterHistoryPort {
       SELECT t.title, t.first_observed_at, t.last_observed_at
       FROM character_title_observation t JOIN characters c ON c.character_id = t.character_id
       WHERE c.server_name = :server AND c.character_name = :name
-      ORDER BY t.first_observed_at, t.title
-      """)
+      """
+                + StopListSql.NOT_EXCLUDED
+                + " ORDER BY t.first_observed_at, t.title")
         .param("server", serverName)
         .param("name", characterName)
         .query(
@@ -263,6 +273,45 @@ class PostgresCharacterHistoryRepository implements CharacterHistoryPort {
   }
 
   /** 자동완성 초상(#369). https 주소만 512자까지 저장한다. */
+  private void recordEmblems(UUID characterId, List<String> emblems, OffsetDateTime at) {
+    jdbc.sql("DELETE FROM character_emblem WHERE character_id = :id")
+        .param("id", characterId)
+        .update();
+    var urls = new java.util.LinkedHashSet<String>();
+    for (var emblem : emblems) {
+      var url = emblemUrl(emblem);
+      if (url != null) urls.add(url);
+    }
+    for (var url : urls)
+      jdbc.sql("INSERT INTO character_emblem (character_id, icon_url) VALUES (:id, :url)")
+          .param("id", characterId)
+          .param("url", url)
+          .update();
+    jdbc.sql("UPDATE characters SET emblems_observed_at = :at WHERE character_id = :id")
+        .param("at", at)
+        .param("id", characterId)
+        .update();
+  }
+
+  /** 공식 이미지 서버 주소만(https, 호스트 소문자), 쿼리·조각을 뺀다. 묶음 기준이라 같은 그림은 같은 문자열이 된다. 그 밖은 null. */
+  static String emblemUrl(String value) {
+    if (value == null || value.isBlank()) return null;
+    try {
+      var uri = java.net.URI.create(value.strip());
+      var host = uri.getHost() == null ? null : uri.getHost().toLowerCase(java.util.Locale.ROOT);
+      if (!"https".equalsIgnoreCase(uri.getScheme()) || !OFFICIAL_IMAGE_HOST.equals(host))
+        return null;
+      if (uri.getPort() != -1 || uri.getRawPath() == null || uri.getRawPath().isEmpty())
+        return null;
+      var url = "https://" + host + uri.getRawPath();
+      return url.length() <= 512 ? url : null;
+    } catch (IllegalArgumentException exception) {
+      return null;
+    }
+  }
+
+  static final String OFFICIAL_IMAGE_HOST = "cdn-lostark.game.onstove.com";
+
   private static String imageUrl(String value) {
     if (value == null || value.isBlank()) return null;
     var url = value.strip();

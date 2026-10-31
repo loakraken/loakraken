@@ -134,6 +134,12 @@ public class CharacterCollectorService {
             gate.withReserve(
                 policy.reserve(), () -> details.fetchArmory(target.get().characterName()));
         var profile = fetched.details().profile();
+        // 대상 고르기는 처리정지 목록을 이미 뺀다. 공식 응답을 받는 사이에 목록에 들었으면 아무것도 남기지 않는다(관측 이력·카드·갱신 표시).
+        // 확인하지 못하면(저장소 장애) 예외로 아래 기록 전에 멈춘다.
+        if (stored.excluded(profile.characterName(), profile.serverName())) {
+          record(task, "excluded");
+          return true;
+        }
         history.record(profile, now);
         cards.record(fetched.details(), fetched.krakenScoreInput(), now);
         var position =

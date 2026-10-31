@@ -38,7 +38,7 @@ import tools.jackson.databind.json.JsonMapper;
 @Import(TestcontainersConfiguration.class)
 @SpringBootTest(
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-    properties = "receipt.enabled=true")
+    properties = {"receipt.enabled=true", "receipt.max-fetch=8"})
 class ReceiptIntegrationTest {
   private static final String SERVER = "영수증테스트서버";
   private static final String MAIN = "영수증본캐";
@@ -97,6 +97,8 @@ class ReceiptIntegrationTest {
   void 정리() {
     var keys = redis.keys("character:v*영수증*");
     if (keys != null && !keys.isEmpty()) redis.delete(keys);
+    var inputs = redis.keys("receipt:v1:input:*영수증*");
+    if (inputs != null && !inputs.isEmpty()) redis.delete(inputs);
     jdbc.sql("DELETE FROM characters WHERE server_name = :s").param("s", SERVER).update();
   }
 
@@ -106,7 +108,7 @@ class ReceiptIntegrationTest {
     assertThat(first.statusCode()).as(first.body()).isEqualTo(200);
     var data = mapper.readTree(first.body()).path("data");
     assertThat(data.path("ruleVersion").asText()).isEqualTo("receipt-v2");
-    assertThat(data.path("refiningRuleVersion").asText()).isEqualTo("t4-refining-v3");
+    assertThat(data.path("refiningRuleVersion").asText()).isEqualTo("t4-refining-v4");
     assertThat(data.at("/coverage/rosterCharacters").asInt()).isEqualTo(10);
     assertThat(data.at("/coverage/ready").asInt()).isEqualTo(8);
     assertThat(data.at("/coverage/pending").asInt()).isEqualTo(2);
@@ -130,6 +132,9 @@ class ReceiptIntegrationTest {
     assertThat(data.path("priceObservedAt").asText()).isEqualTo("2026-10-09T07:59:30Z");
     // 2명이 대기라 합계는 일부만 센 값이다. 받은 캐릭터는 산정 대상을 모두 셌다.
     assertThat(data.at("/total/status").asText()).isEqualTo("PARTIAL");
+    // 성장 실링은 골드로 바꾸지 않고 합계 아래에 수량으로(받은 캐릭터 부위의 합, 2026-10-25).
+    assertThat(data.at("/total/nonGold/0/name").asText()).isEqualTo("실링");
+    assertThat(data.at("/total/nonGold/0/amount").decimalValue()).isPositive();
     assertThat(main.path("complete").asBoolean()).isTrue();
     assertThat(data.at("/equipment/characters/9/complete").isNull()).isTrue();
     assertThat(data.path("notIncluded").toString()).contains("ARK_GRID_GEM", "VERIFYING");
@@ -187,6 +192,8 @@ class ReceiptIntegrationTest {
     assertThat(data.at("/coverage/pending").asInt()).isZero();
     assertThat(data.at("/total/gold").decimalValue()).isZero();
     assertThat(data.at("/total/status").asText()).isEqualTo("UNAVAILABLE");
+    assertThat(data.at("/total/nonGold").isArray()).isTrue();
+    assertThat(data.at("/total/nonGold").size()).isZero();
     assertThat(data.at("/equipment/characters/0/complete").asBoolean()).isFalse();
     assertThat(data.at("/equipment/characters/0/excluded").toString())
         .contains("PRICE_UNAVAILABLE");

@@ -27,4 +27,7 @@ public interface CharacterPublicSummaryPort {
 
   /** names 중 그 서버에서 처리정지 목록에 있는 이름(서버 생략 제외는 모든 서버). 한 번의 조회다. */
   java.util.Set<String> excludedNames(java.util.Collection<String> names, String serverName);
+
+  /** 처리정지 목록의 지금 내용을 나타내는 짧은 값. 목록이 바뀌면 달라진다. */
+  String exclusionRevision();
 }

@@ -1,6 +1,7 @@
 package com.loakraken.character.presentation;
 
 import com.loakraken.character.domain.CharacterLoadout;
+import com.loakraken.character.domain.EquipmentSummary;
 import com.loakraken.character.domain.GemBaseAttack;
 import com.loakraken.character.domain.SkillCooldown;
 import com.loakraken.common.api.NullableResponse;
@@ -44,7 +45,7 @@ public record CharacterLoadoutResponse(
           value.name(),
           value.icon(),
           value.grade(),
-          EquipmentDetailResponse.from(value.detail()));
+          EquipmentDetailResponse.from(value.detail(), "보주".equals(value.type())));
     }
   }
 
@@ -76,8 +77,13 @@ public record CharacterLoadoutResponse(
               description =
                   "상급 재련 단계. 공식 Tooltip \"[상급 재련] N단계\"(1단계 이상일 때만 나옴), 재련 단계가 있는 4티어 장비에 문구가 없으면 0, 그 밖·이전 캐시면 null")
           @NullableResponse
-          Integer advancedRefineLevel) {
-    static EquipmentDetailResponse from(CharacterLoadout.EquipmentDetail value) {
+          Integer advancedRefineLevel,
+      @Schema(
+              description = "보주만: 공식 Tooltip의 '달성 최대 낙원력' 숫자(쉼표 없음). 보주가 아니거나 문구가 없으면 null",
+              example = "18145692")
+          @NullableResponse
+          Long paradisePower) {
+    static EquipmentDetailResponse from(CharacterLoadout.EquipmentDetail value, boolean orb) {
       if (value == null) return null;
       return new EquipmentDetailResponse(
           CharacterLoadout.EquipmentDetail.PARSER_VERSION,
@@ -95,7 +101,8 @@ public record CharacterLoadoutResponse(
           value.refineExp() == null
               ? null
               : new RefineExpResponse(value.refineExp().current(), value.refineExp().max()),
-          value.advancedRefineLevel());
+          value.advancedRefineLevel(),
+          orb ? EquipmentSummary.paradisePower(value) : null);
     }
   }
 
@@ -393,7 +400,13 @@ public record CharacterLoadoutResponse(
               description =
                   "보석 반영 쿨타임(공식 재사용 대기시간과 장착 보석의 재사용 대기시간 감소만 반영). 제목 줄에 재사용 대기시간이 없으면(갱신 전 캐시 등) null")
           @NullableResponse
-          SkillCooldownResponse cooldown) {
+          SkillCooldownResponse cooldown,
+      @Schema(
+              description =
+                  "공식 SkillType 코드 그대로(정수). 지금까지 본 값: 0 일반 스킬, 1 각성기, 100·101 초각성 두 종류. 다른 값이 와도 그대로 주므로 모르는 값은 일반 스킬처럼 다룹니다. 갱신 전 캐시(최대 5분)면 null",
+              example = "1")
+          @NullableResponse
+          Integer skillType) {
     static SkillResponse from(CharacterLoadout.Skill value) {
       return new SkillResponse(
           value.name(),
@@ -423,7 +436,8 @@ public record CharacterLoadoutResponse(
               .map(effect -> new SkillGemEffectResponse(effect.text(), effect.kind()))
               .toList(),
           value.attackType() == null ? null : value.attackType().name(),
-          SkillCooldownResponse.from(SkillCooldown.of(value)));
+          SkillCooldownResponse.from(SkillCooldown.of(value)),
+          value.skillType());
     }
   }
 

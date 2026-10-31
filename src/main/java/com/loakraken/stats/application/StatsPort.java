@@ -52,6 +52,14 @@ public interface StatsPort {
 
   record GemLevelCount(int bucket, long count) {}
 
+  /**
+   * 레벨별 전투력(B3). 모집단을 아이템 레벨 5 단위(하한 = FLOOR(아이템 레벨 / 5) × 5)로 나눠, 전투력이 있는 캐릭터 수와 전투력 중앙값
+   * (percentile_cont, 요약의 중앙값과 같은 함수). 아이템 레벨 오름차순.
+   */
+  List<LevelCombatPowerRow> levelCombatPower(StatsConditions conditions, Instant since);
+
+  record LevelCombatPowerRow(BigDecimal from, long count, BigDecimal median) {}
+
   /** value보다 큰 캐릭터 수와 모집단 수. 처리정지 목록은 모집단에서 뺀다. */
   Standing standing(StatsConditions conditions, Instant since, Metric metric, BigDecimal value);
 

@@ -20,7 +20,8 @@ enum StatsSuccessCode implements SuccessCode {
   STATS_CLASS_BUILDS_SUCCESS,
   GUILD_DETAIL_SUCCESS,
   STATS_BEST_COMBAT_POWER_SUCCESS,
-  STATS_GEM_LEVELS_SUCCESS;
+  STATS_GEM_LEVELS_SUCCESS,
+  STATS_LEVEL_COMBAT_POWER_SUCCESS;
 
   public HttpStatus httpStatus() {
     return HttpStatus.OK;
@@ -44,6 +45,7 @@ enum StatsSuccessCode implements SuccessCode {
       case GUILD_DETAIL_SUCCESS -> "길드 집계 조회에 성공했습니다.";
       case STATS_BEST_COMBAT_POWER_SUCCESS -> "최고 전투력 통계 조회에 성공했습니다.";
       case STATS_GEM_LEVELS_SUCCESS -> "보석 레벨 분포 조회에 성공했습니다.";
+      case STATS_LEVEL_COMBAT_POWER_SUCCESS -> "레벨별 전투력 조회에 성공했습니다.";
       default -> "통계 조회에 성공했습니다.";
     };
   }

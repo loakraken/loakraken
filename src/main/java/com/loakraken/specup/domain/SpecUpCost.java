@@ -245,6 +245,17 @@ public record SpecUpCost(
   }
 
   /** 1만 골드당 전투력(소수 둘째 자리). 비용이 없거나 0 이하면 null. */
+  /**
+   * 정렬·고르기용 효율: Δ × 10,000 ÷ 비용(반올림 없음, 소수 12자리). 화면 값(efficiency, 둘째 자리)으로 고르면 0.6476·0.6517이 같아져
+   * 뒤 기준(id)으로 갈린다(계산 검증 11-01). 비용이 0 이하이거나 모르면 null(efficiency와 같은 조건).
+   */
+  public static BigDecimal rankEfficiency(BigDecimal delta, Long amount) {
+    if (delta == null || amount == null || amount <= 0) return null;
+    return delta
+        .multiply(BigDecimal.valueOf(10_000))
+        .divide(BigDecimal.valueOf(amount), 12, RoundingMode.HALF_UP);
+  }
+
   public static BigDecimal efficiency(BigDecimal delta, Long amount) {
     if (delta == null || amount == null || amount <= 0) return null;
     return delta

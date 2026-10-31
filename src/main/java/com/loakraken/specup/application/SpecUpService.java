@@ -206,6 +206,19 @@ public class SpecUpService {
     return enabled;
   }
 
+  /**
+   * 단계 비용에 쓰는 규칙 버전(스펙업·재련·성장 비용·완갑). 목표 경로·추천 순서 캐시 키에 넣어 규칙이 바뀌면 이전 규칙으로 만든 값을 다시 주지 않는다(코드 리뷰
+   * 11-01 P3).
+   */
+  String costRuleVersions() {
+    return String.join(
+        "+",
+        RULE_VERSION,
+        plans.rules().ruleVersion(),
+        plans.growthCosts().ruleVersion(),
+        vambrace == null ? "-" : vambrace.ruleVersion());
+  }
+
   public Guide guide(String characterName, Sort sort, int limit) {
     return guide(characterName, sort, limit, null);
   }
@@ -344,12 +357,20 @@ public class SpecUpService {
               Candidate::deltaKrakenScore, Comparator.nullsLast(Comparator.reverseOrder()))
           .thenComparing(order(Sort.EFFICIENCY));
     }
+    // 효율 순은 화면 값(둘째 자리)이 아니라 반올림 전 비율로 가른다(계산 검증 11-01: 둘째 자리에서 같아지면 Δ·id로 갈렸다). 효율이 있는 줄만 같은
+    // Δ·비용으로 다시 잰다.
     return Comparator.comparing(
             (Candidate candidate) -> candidate.combatPowerPer10kGold() == null ? 1 : 0)
         .thenComparing(
-            Candidate::combatPowerPer10kGold, Comparator.nullsLast(Comparator.reverseOrder()))
+            SpecUpService::rankEfficiency, Comparator.nullsLast(Comparator.reverseOrder()))
         .thenComparing(byDelta)
         .thenComparing(tail);
+  }
+
+  static BigDecimal rankEfficiency(Candidate candidate) {
+    if (candidate.combatPowerPer10kGold() == null) return null;
+    return SpecUpCost.rankEfficiency(
+        candidate.deltaCombatPower(), candidate.cost() == null ? null : candidate.cost().amount());
   }
 
   private Candidate evaluate(CharacterResult snapshot, Planned plan) {

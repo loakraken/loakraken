@@ -134,6 +134,7 @@ class SpecUpGoalServiceTest {
     assertThat(path.totalCost()).isEqualTo(previous);
     // 같은 입력이면 같은 순서(캐시를 비워도)
     store.saved.clear();
+    store.paths.clear();
     var again = service.path("목표테스트", SpecUpGoalService.Pick.EFFICIENCY, 5);
     assertThat(again.steps().stream().map(SpecUpGoalService.Step::candidateId).toList())
         .isEqualTo(path.steps().stream().map(SpecUpGoalService.Step::candidateId).toList());
@@ -161,6 +162,30 @@ class SpecUpGoalServiceTest {
         .allMatch(item -> item.cost() == null || item.cost().amount() == null)
         .allMatch(item -> item.deltaCombatPower().signum() > 0);
     assertThat(path.totalCost()).isEqualTo(0L);
+  }
+
+  /** 비용 규칙 버전(재련·성장 비용 등)이 바뀌면 같은 캐릭터·시세라도 캐시를 쓰지 않고 다시 계산한다(코드 리뷰 11-01 P3). */
+  @Test
+  void 비용_규칙_버전이_바뀌면_추천_순서_캐시를_다시_쓰지_않는다() {
+    var service = service(System::nanoTime);
+    when(auctions.cachedGems()).thenReturn(gemCells(Instant.parse("2026-10-31T12:00:00Z"), false));
+    when(specUp.costRuleVersions()).thenReturn("spec-up-v1+t4-refining-v4");
+    service.path("목표테스트", SpecUpGoalService.Pick.EFFICIENCY, 3);
+    service.path("목표테스트", SpecUpGoalService.Pick.EFFICIENCY, 3);
+    assertThat(meters.counter("loakraken.spec_up.path", "outcome", "computed").count())
+        .isEqualTo(1);
+    assertThat(meters.counter("loakraken.spec_up.path", "outcome", "cache_hit").count())
+        .isEqualTo(1);
+    when(specUp.costRuleVersions()).thenReturn("spec-up-v1+t4-refining-v5");
+    service.path("목표테스트", SpecUpGoalService.Pick.EFFICIENCY, 3);
+    assertThat(meters.counter("loakraken.spec_up.path", "outcome", "computed").count())
+        .isEqualTo(2);
+    // 목표 경로도 같은 키 규칙
+    service.goal("목표테스트", new BigDecimal("3010"));
+    var goals = store.saved.size();
+    when(specUp.costRuleVersions()).thenReturn("spec-up-v1+t4-refining-v6");
+    service.goal("목표테스트", new BigDecimal("3010"));
+    assertThat(store.saved).hasSize(goals + 1);
   }
 
   /** 계산 자리가 모두 차 있으면 기다리지 않고 429 SPEC_UP_BUSY(캐시에 없는 계산만 자리를 씀). */
@@ -270,6 +295,18 @@ class SpecUpGoalServiceTest {
     @Override
     public void save(String key, SpecUpGoalService.Goal goal, Duration ttl) {
       saved.put(key, goal);
+    }
+
+    final Map<String, SpecUpGoalService.Path> paths = new HashMap<>();
+
+    @Override
+    public Optional<SpecUpGoalService.Path> findPath(String key) {
+      return Optional.ofNullable(paths.get(key));
+    }
+
+    @Override
+    public void savePath(String key, SpecUpGoalService.Path path, Duration ttl) {
+      paths.put(key, path);
     }
   }
 }

@@ -189,7 +189,8 @@ public class SpecUpGoalService {
             String.valueOf(refinePrices.map(p -> p.observedAt().toEpochMilli()).orElse(0L)),
             String.valueOf(books.observedAt().map(Instant::toEpochMilli).orElse(0L)),
             PATH_RULE_VERSION,
-            CombatPowerSimulationService.RULE_VERSION);
+            CombatPowerSimulationService.RULE_VERSION,
+            String.valueOf(specUp.costRuleVersions()));
     var cached = store.findPath(key);
     if (cached.isPresent()) {
       pathOutcome("cache_hit");
@@ -385,7 +386,8 @@ public class SpecUpGoalService {
             // 각인서 시세가 바뀌면 각인 비용이 달라지므로 다시 계산한다(시세가 그대로면 캐시 그대로).
             String.valueOf(books.observedAt().map(Instant::toEpochMilli).orElse(0L)),
             RULE_VERSION,
-            CombatPowerSimulationService.RULE_VERSION);
+            CombatPowerSimulationService.RULE_VERSION,
+            String.valueOf(specUp.costRuleVersions()));
     var cached = store.find(key);
     if (cached.isPresent()) return cached.get();
     return single(
@@ -499,8 +501,8 @@ public class SpecUpGoalService {
         if (simulated.unsupportedCount() > 0 || simulated.after() == null) continue;
         var delta = simulated.after().subtract(current);
         if (delta.signum() <= 0) continue;
-        var scored =
-            option.scored(delta, simulated.after(), SpecUpCost.efficiency(delta, marginal));
+        // 고르기는 반올림하지 않은 비율로(소수 둘째 자리에서 같아져 id 순으로 갈리지 않게, 계산 검증 11-01). 화면 값은 단계를 만들 때 따로 반올림한다.
+        var scored = option.scored(delta, simulated.after(), rank(delta, marginal));
         boolean free = free(marginal);
         if (best == null
             || (pick == Pick.DELTA
@@ -540,7 +542,7 @@ public class SpecUpGoalService {
               best.after(),
               best.cost(),
               cumulative,
-              best.efficiency(),
+              SpecUpCost.efficiency(best.delta(), bestMarginal),
               bestMarginal));
     }
     return new Chain(List.copyOf(steps), stop, cumulative, unpriced, current, pricesAt[0]);
@@ -617,6 +619,14 @@ public class SpecUpGoalService {
     long sum = others;
     for (var value : gemTotals.values()) sum += value;
     return sum;
+  }
+
+  /**
+   * 고르는 효율: Δ × 10,000 ÷ 더 드는 비용(반올림 없음, 소수 12자리). 더 드는 비용이 0 이하이거나 모르면 null. 화면 값은
+   * SpecUpCost.efficiency.
+   */
+  static BigDecimal rank(BigDecimal delta, Long marginal) {
+    return SpecUpCost.rankEfficiency(delta, marginal);
   }
 
   static final Comparator<Option> ORDER =

@@ -317,6 +317,28 @@ public final class StatsResponses {
   @Schema(description = "구간 [from, to)")
   public record StatsBinResponse(BigDecimal from, BigDecimal to, long count) {}
 
+  public record StatsGemLevelsResponse(
+      StatsMetaResponse meta,
+      @Schema(description = "보석을 관측한 표본 = 구간 수의 합(모집단 meta.population보다 작을 수 있음)") long gemSample,
+      @Schema(
+              description =
+                  "'5 미만'(from null, to 5.0), 5.0~9.5(0.5 단위, to 미포함), 10.0(to null) 순. 빈 구간은 0")
+          List<StatsGemLevelBinResponse> bins) {
+    static StatsGemLevelsResponse from(StatsQueryService.GemLevelsResult result) {
+      return new StatsGemLevelsResponse(
+          StatsMetaResponse.from(result.meta()),
+          result.gemSample(),
+          result.bins().stream()
+              .map(bin -> new StatsGemLevelBinResponse(bin.from(), bin.to(), bin.count()))
+              .toList());
+    }
+  }
+
+  public record StatsGemLevelBinResponse(
+      @Schema(description = "구간 하한(포함). '5 미만' 구간은 null") @NullableResponse BigDecimal from,
+      @Schema(description = "구간 상한(미포함). 10.0 구간은 null") @NullableResponse BigDecimal to,
+      long count) {}
+
   public record StatsPercentileOfResponse(
       BigDecimal value,
       @Schema(description = "이 값보다 큰 캐릭터 수 + 1") long rank,

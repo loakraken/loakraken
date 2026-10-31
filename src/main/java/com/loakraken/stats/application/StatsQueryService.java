@@ -478,6 +478,39 @@ public class StatsQueryService {
         status);
   }
 
+  /**
+   * 보석 레벨 분포(B2): 4티어 보석 평균 레벨을 '5 미만', 5.0~9.5(0.5 단위), 10.0 구간으로 센다. 구간 수의 합은 보석을 관측한
+   * 표본(gemSample)이고 모집단 전체가 아니다(보석을 못 본 캐릭터는 빠짐). 빈 구간도 0으로 준다.
+   */
+  public GemLevelsResult gemLevels(StatsConditions conditions) {
+    return cached(
+        "gem-levels:v1:" + key(conditions),
+        GemLevelsResult.class,
+        () -> {
+          var now = clock.instant();
+          var counts = new java.util.HashMap<Integer, Long>();
+          long population = 0;
+          for (var row : stats.gemLevels(conditions, conditions.since(now))) {
+            population += row.count();
+            counts.merge(row.bucket(), row.count(), Long::sum);
+          }
+          var bins = new ArrayList<GemLevelBin>();
+          long gemSample = 0;
+          bins.add(new GemLevelBin(null, GEM_LEVEL_FLOOR, counts.getOrDefault(0, 0L)));
+          for (int bucket = 10; bucket <= 20; bucket++) {
+            // bucket = 하한 × 2 → 하한 = bucket × 0.5(소수 한 자리).
+            var from = BigDecimal.valueOf(bucket * 5L, 1);
+            var to = bucket == 20 ? null : from.add(GEM_LEVEL_STEP);
+            bins.add(new GemLevelBin(from, to, counts.getOrDefault(bucket, 0L)));
+          }
+          for (var bin : bins) gemSample += bin.count();
+          return new GemLevelsResult(meta(conditions, population, now), gemSample, bins);
+        });
+  }
+
+  static final BigDecimal GEM_LEVEL_FLOOR = new BigDecimal("5.0");
+  static final BigDecimal GEM_LEVEL_STEP = new BigDecimal("0.5");
+
   public ServersResult servers(StatsConditions conditions) {
     return cached(
         "servers:v2:" + key(conditions),
@@ -1389,6 +1422,12 @@ public class StatsQueryService {
       SampleStatus sampleStatus) {}
 
   public record ClassesResult(Meta meta, List<ClassStat> rows, Composition composition) {}
+
+  /** from이 null이면 '5 미만', to가 null이면 10.0(마지막). to는 그 값을 넣지 않는다. */
+  public record GemLevelBin(BigDecimal from, BigDecimal to, long count) {}
+
+  /** gemSample = 구간 수의 합(보석을 관측한 캐릭터). meta.population은 모집단 전체. */
+  public record GemLevelsResult(Meta meta, long gemSample, List<GemLevelBin> bins) {}
 
   /** 구성 블록(B4). dealer + supportClassDealer + support + unknownRole = 표본. */
   public record Composition(long dealer, long supportClassDealer, long support, long unknownRole) {}

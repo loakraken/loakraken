@@ -19,6 +19,7 @@ class StatsOpenApiConfiguration {
               StatsResponses.StatsBestCombatPowerResponse.class,
               StatsResponses.StatsServersResponse.class,
               StatsResponses.StatsDistributionResponse.class,
+              StatsResponses.StatsGemLevelsResponse.class,
               StatsResponses.StatsSnapshotsResponse.class,
               StatsResponses.StatsRankingResponse.class,
               StatsResponses.StatsEfficiencyRankingResponse.class,

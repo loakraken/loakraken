@@ -51,11 +51,11 @@ class ReceiptIntegrationTest {
   @MockitoBean MarketAuctionService auctions;
   @Autowired io.micrometer.core.instrument.MeterRegistry registry;
   private final JsonMapper mapper = new JsonMapper();
+  private final List<String> names = new ArrayList<>();
 
   private double skipped(String reason) {
     return registry.counter("loakraken.receipt.fetch.skipped", "reason", reason).count();
   }
-  private final List<String> names = new ArrayList<>();
 
   @BeforeEach
   void 준비() {

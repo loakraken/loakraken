@@ -147,6 +147,9 @@ class TitleEquipIntegrationTest {
     assertThat(rows.get("X 칭호").path("equippedRosters").asLong()).isEqualTo(1);
     assertThat(rows.get("X 칭호").path("observedRosters").asLong()).isEqualTo(1);
     assertThat(rows.get("X 칭호").path("observedCharacters").asLong()).isEqualTo(2);
+    // 표본 기준(30명) 미만이면 보유율·희소도는 참고값이다.
+    assertThat(rows.get("X 칭호").path("sampleReady").isBoolean()).isTrue();
+    assertThat(rows.get("X 칭호").path("sampleReady").asBoolean()).isFalse();
     assertThat(rows.get("X 칭호").path("newRosters30d").asLong()).isZero();
     // Y: 지금 처음 기록 → 최근 30일.
     assertThat(rows.get("Y 칭호").path("newRosters30d").asLong()).isEqualTo(1);

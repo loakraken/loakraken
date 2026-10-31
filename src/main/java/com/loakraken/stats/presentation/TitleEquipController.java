@@ -5,6 +5,7 @@ import com.loakraken.common.api.NullableResponse;
 import com.loakraken.common.api.ResponseContracts;
 import com.loakraken.stats.application.StatsQueryService;
 import com.loakraken.stats.domain.StatsConditions;
+import com.loakraken.stats.domain.StatsRules;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -76,7 +77,8 @@ public class TitleEquipController {
                             row.observedRosters(),
                             row.observedPercent(),
                             row.newRosters30d(),
-                            row.observedCharacters()))
+                            row.observedCharacters(),
+                            row.observedCharacters() >= StatsRules.MIN_SAMPLE))
                 .toList()));
   }
 
@@ -150,7 +152,11 @@ public class TitleEquipController {
       @Schema(
               description =
                   "observedRosters의 원정대들에서 이 칭호 장착이 기록된 서로 다른 공개 캐릭터 수. 희소도 보기·가장 드문 칭호 목록은 이 값이 30 이상인 칭호만 넣는다(운영 판정)")
-          long observedCharacters) {}
+          long observedCharacters,
+      @Schema(
+              description =
+                  "표본 기준을 넘었는지: observedCharacters가 30 이상이면 true. false면 보유율·희소도는 참고값(가장 드문 칭호 같은 순위에는 넣지 않음)")
+          boolean sampleReady) {}
 
   @Configuration(proxyBeanMethods = false)
   @ConditionalOnProperty(prefix = "ranking.titles", name = "enabled", havingValue = "true")

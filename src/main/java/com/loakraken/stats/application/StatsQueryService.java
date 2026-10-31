@@ -860,11 +860,17 @@ public class StatsQueryService {
   public TitleEquipResult titleEquip(StatsConditions conditions, String title) {
     var full =
         cached(
-            "titles:" + key(conditions),
+            // v2: 관측(기간 무관)·최근 30일 첫 기록 수가 들어간 결과. 옛 결과를 읽지 않게 키를 바꾼다.
+            "titles:v2:" + key(conditions),
             TitleEquipResult.class,
             () -> {
               var now = clock.instant();
-              var result = stats.titleEquip(conditions.server(), conditions.since(now), null);
+              var result =
+                  stats.titleEquip(
+                      conditions.server(),
+                      conditions.since(now),
+                      now.minus(java.time.Duration.ofDays(TITLE_RECENT_DAYS)),
+                      null);
               long population = result.population();
               return new TitleEquipResult(
                   meta(conditions, population, now),
@@ -873,7 +879,13 @@ public class StatsQueryService {
                       .map(
                           row ->
                               new EquippedTitle(
-                                  row.title(), row.rosters(), percent(row.rosters(), population)))
+                                  row.title(),
+                                  row.rosters(),
+                                  percent(row.rosters(), population),
+                                  row.observedRosters(),
+                                  percent(row.observedRosters(), population),
+                                  row.newRosters(),
+                                  row.observedCharacters()))
                       .toList());
             });
     if (title == null) return full;
@@ -882,6 +894,39 @@ public class StatsQueryService {
         title,
         full.titles().stream().filter(row -> title.equals(row.title())).toList());
   }
+
+  /** '최근 많이 기록된 칭호'의 기간(일). activeDays와 무관하다. */
+  static final int TITLE_RECENT_DAYS = 30;
+
+  /**
+   * 휘장 장착 분포. 조건 중 server·activeDays만 쓴다. 캐릭터 단위이고 휘장 정보를 관측한 캐릭터만 모집단이다. 공식 프로필에는 휘장 이름이 없어 아이콘
+   * 주소가 묶음 기준이다. 30 미만이면 COLLECTING이지만 비율은 그대로(참고값).
+   */
+  public EmblemEquipResult emblemEquip(StatsConditions conditions) {
+    return cached(
+        "emblems:" + key(conditions),
+        EmblemEquipResult.class,
+        () -> {
+          var now = clock.instant();
+          var result = stats.emblemEquip(conditions.server(), conditions.since(now));
+          long population = result.population();
+          return new EmblemEquipResult(
+              meta(conditions, population, now),
+              result.withoutEmblem(),
+              result.emblems().stream()
+                  .map(
+                      row ->
+                          new EquippedEmblem(
+                              row.iconUrl(),
+                              row.characters(),
+                              percent(row.characters(), population)))
+                  .toList());
+        });
+  }
+
+  public record EmblemEquipResult(Meta meta, long withoutEmblem, List<EquippedEmblem> emblems) {}
+
+  public record EquippedEmblem(String iconUrl, long characters, BigDecimal percent) {}
 
   /**
    * classEngraving은 직업 각인 목록의 표기(컨트롤러가 검증)다. 주면 마지막 장비 요약의 직업 각인이 그 값인 캐릭터만 순위·모집단에 넣고(#618), 같은
@@ -1566,7 +1611,14 @@ public class StatsQueryService {
   /** 칭호 장착 확인 비율 결과(#311). title이 null이면 전체 칭호. */
   public record TitleEquipResult(Meta meta, String title, List<EquippedTitle> titles) {}
 
-  public record EquippedTitle(String title, long equippedRosters, BigDecimal equippedPercent) {}
+  public record EquippedTitle(
+      String title,
+      long equippedRosters,
+      BigDecimal equippedPercent,
+      long observedRosters,
+      BigDecimal observedPercent,
+      long newRosters30d,
+      long observedCharacters) {}
 
   /**
    * classEngraving은 요청한 직업 각인(없으면 null), classEngravingUnknown은 필터를 켰을 때 같은 조건에서 직업 각인을 모르는(마지막 장비

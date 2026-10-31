@@ -870,29 +870,93 @@ class PostgresStatsRepository implements StatsPort {
       """;
 
   @Override
-  public TitleEquip titleEquip(String server, Instant since, String title) {
+  public TitleEquip titleEquip(String server, Instant since, Instant recentSince, String title) {
     long population =
         jdbc.sql(TITLE_MEMBERS + "SELECT COUNT(DISTINCT roster_key) FROM members")
             .param("since", since.atOffset(ZoneOffset.UTC))
             .param("server", server)
             .query(Long.class)
             .single();
+    // 모집단 원정대(members)의 모든 공개 캐릭터 기록으로 원정대·칭호마다 기간 안 장착 여부, 처음 기록한 때를 모은다.
     var titles =
         jdbc.sql(
                 TITLE_MEMBERS
                     + """
-                SELECT t.title, COUNT(DISTINCT m.roster_key) AS rosters
-                FROM character_title_observation t JOIN members m ON m.character_id = t.character_id
-                WHERE t.last_observed_at >= :since
-                  AND (CAST(:title AS VARCHAR) IS NULL OR t.title = CAST(:title AS VARCHAR))
-                GROUP BY t.title ORDER BY rosters DESC, t.title COLLATE "C"
+                , rosters AS (SELECT DISTINCT roster_key FROM members),
+                roster_titles AS (
+                  SELECT c.roster_key, t.title,
+                    BOOL_OR(m.character_id IS NOT NULL AND t.last_observed_at >= :since) AS equipped,
+                    MIN(t.first_observed_at) AS first_at, COUNT(DISTINCT t.character_id) AS chars
+                  FROM character_title_observation t
+                  JOIN characters c ON c.character_id = t.character_id
+                  JOIN rosters r ON r.roster_key = c.roster_key
+                  LEFT JOIN members m ON m.character_id = t.character_id
+                  WHERE (CAST(:title AS VARCHAR) IS NULL OR t.title = CAST(:title AS VARCHAR))
+                    AND NOT EXISTS (
+                      SELECT 1 FROM public_exclusion e
+                      WHERE e.character_name = c.character_name AND (e.server_name IS NULL OR e.server_name = c.server_name))
+                  GROUP BY c.roster_key, t.title)
+                SELECT title, COUNT(*) FILTER (WHERE equipped) AS rosters, COUNT(*) AS observed,
+                  COUNT(*) FILTER (WHERE first_at >= :recent) AS recent, SUM(chars) AS characters
+                FROM roster_titles GROUP BY title
+                ORDER BY rosters DESC, observed DESC, title COLLATE "C"
+                """)
+            .param("since", since.atOffset(ZoneOffset.UTC))
+            .param("recent", recentSince.atOffset(ZoneOffset.UTC))
+            .param("server", server)
+            .param("title", title)
+            .query(
+                (row, index) ->
+                    new TitleEquipRow(
+                        row.getString(1),
+                        row.getLong(2),
+                        row.getLong(3),
+                        row.getLong(4),
+                        row.getLong(5)))
+            .list();
+    return new TitleEquip(population, titles);
+  }
+
+  @Override
+  public EmblemEquip emblemEquip(String server, Instant since) {
+    // 휘장 정보를 관측한(emblems_observed_at) 공개 캐릭터 중 since 뒤에 프로필을 받은 캐릭터가 모집단이다.
+    String base =
+        """
+        WITH members AS (
+          SELECT c.character_id FROM characters c
+          WHERE c.emblems_observed_at IS NOT NULL AND c.profile_refreshed_at >= :since
+            AND (CAST(:server AS VARCHAR) IS NULL OR c.server_name = CAST(:server AS VARCHAR))
+            AND NOT EXISTS (
+              SELECT 1 FROM public_exclusion e
+              WHERE e.character_name = c.character_name AND (e.server_name IS NULL OR e.server_name = c.server_name)))
+        """;
+    long[] counts = {0, 0};
+    jdbc.sql(
+            base
+                + """
+            SELECT COUNT(*),
+              COUNT(*) FILTER (WHERE NOT EXISTS (SELECT 1 FROM character_emblem x WHERE x.character_id = m.character_id))
+            FROM members m
+            """)
+        .param("since", since.atOffset(ZoneOffset.UTC))
+        .param("server", server)
+        .query(
+            (ResultSet row) -> {
+              counts[0] = row.getLong(1);
+              counts[1] = row.getLong(2);
+            });
+    var emblems =
+        jdbc.sql(
+                base
+                    + """
+                SELECT x.icon_url, COUNT(*) AS n FROM character_emblem x JOIN members m ON m.character_id = x.character_id
+                GROUP BY x.icon_url ORDER BY n DESC, x.icon_url COLLATE "C"
                 """)
             .param("since", since.atOffset(ZoneOffset.UTC))
             .param("server", server)
-            .param("title", title)
-            .query((row, index) -> new TitleEquipRow(row.getString(1), row.getLong(2)))
+            .query((row, index) -> new EmblemRow(row.getString(1), row.getLong(2)))
             .list();
-    return new TitleEquip(population, titles);
+    return new EmblemEquip(counts[0], counts[1], emblems);
   }
 
   @Override

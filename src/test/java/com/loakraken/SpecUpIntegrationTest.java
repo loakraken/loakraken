@@ -855,6 +855,57 @@ class SpecUpIntegrationTest {
   }
 
   @Test
+  void 추천_순서는_시세가_있는_보석_단계만_잇고_품질은_unpriced로_따로_준다() throws Exception {
+    when(auctions.cachedGems()).thenReturn(gemCells(true));
+    search("스펙순서");
+    var response = get("/api/v1/characters/spec-up/path?characterName=" + encode("스펙순서"));
+    assertThat(response.statusCode()).as(response.body()).isEqualTo(200);
+    ApiContractFixture.write("character-spec-up-path.json", response.body());
+    SiteNames.assertAbsent(response.body());
+    var data = mapper.readTree(response.body()).path("data");
+    assertThat(data.path("ruleVersion").asText()).isEqualTo("spec-up-path-v1");
+    assertThat(data.path("sort").asText()).isEqualTo("EFFICIENCY");
+    assertThat(data.path("limit").asInt()).isEqualTo(30);
+    var steps = data.path("steps");
+    assertThat(steps.size()).isEqualTo(2);
+    assertThat(steps.get(0).path("candidateId").asText()).isEqualTo("GEM_LEVEL:0:9");
+    assertThat(steps.get(1).path("candidateId").asText()).isEqualTo("GEM_LEVEL:0:10");
+    assertThat(steps.get(1).path("cumulativeCost").asLong()).isEqualTo(2_600_000);
+    assertThat(data.path("totalCost").asLong()).isEqualTo(2_600_000);
+    assertThat(data.path("finalCombatPower").decimalValue()).isEqualByComparingTo("3048.07");
+    assertThat(data.path("stopReasonCode").asText()).isEqualTo("NO_CANDIDATE");
+    var unpriced = data.path("unpriced");
+    var ids = new java.util.ArrayList<String>();
+    for (var excluded : unpriced) ids.add(excluded.path("candidateId").asText());
+    assertThat(ids).contains("EQUIPMENT_QUALITY:0:100");
+    for (var excluded : unpriced) {
+      assertThat(excluded.at("/cost/amount").isNull()).isTrue();
+      assertThat(excluded.path("deltaCombatPower").decimalValue()).isPositive();
+    }
+
+    var one =
+        mapper
+            .readTree(
+                get("/api/v1/characters/spec-up/path?sort=DELTA&limit=1&characterName="
+                        + encode("스펙순서"))
+                    .body())
+            .path("data");
+    assertThat(one.path("sort").asText()).isEqualTo("DELTA");
+    assertThat(one.path("steps").size()).isEqualTo(1);
+    assertThat(one.path("stopReasonCode").asText()).isEqualTo("STEP_LIMIT");
+
+    for (var query : List.of("sort=GOLD", "limit=0", "limit=31", "limit=abc"))
+      assertThat(
+              get("/api/v1/characters/spec-up/path?" + query + "&characterName=" + encode("스펙순서"))
+                  .statusCode())
+          .as(query)
+          .isEqualTo(400);
+    var missing = get("/api/v1/characters/spec-up/path?characterName=" + encode("스펙없음"));
+    assertThat(missing.statusCode()).isEqualTo(404);
+    assertThat(missing.body()).contains("CHARACTER_NOT_CACHED");
+  }
+
+  @Test
   void 목표가_지금_이하면_빈_경로이고_2배를_넘거나_형식이_틀리면_400이다() throws Exception {
     when(auctions.cachedGems()).thenReturn(gemCells(true));
     search("스펙목표셋");

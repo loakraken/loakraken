@@ -130,7 +130,12 @@ public class SpecUpService {
       BigDecimal baseAttackPctTo,
       BigDecimal deltaKrakenScore,
       BigDecimal krakenScorePer100kGold,
-      String gemType) {
+      String gemType,
+      /**
+       * KRAKEN 정렬 키: 반올림 전 10만 골드당(raw ÷ 비용 × 10만). 비교 기준 B 원본도 반올림 전 값으로 정렬하고 표시만 둘째 자리다(계산 검증 11-01). 응답에는
+       * 내지 않는다(화면 값은 krakenScorePer100kGold).
+       */
+      Double krakenRank) {
     /**
      * Δ크라켄 점수와 10만 골드당 점수를 붙인다. 10만 골드당은 같은 Δ에서 만든다(정렬 키 = 보이는 값). 전투력 계산이 UNSUPPORTED라 비용이 비었어도
      * Δ크라켄 점수가 있으면 계획한 비용(planned)을 준다 — 그래야 KRAKEN 정렬에서 비용으로 나눌 수 있다.
@@ -146,6 +151,7 @@ public class SpecUpService {
     Candidate withKraken(BigDecimal delta, Double raw, SpecUpCost planned) {
       var cost = this.cost == null && delta != null ? planned : this.cost;
       BigDecimal per100k = null;
+      Double rank = null;
       if (delta != null
           && delta.signum() > 0
           && raw != null
@@ -154,7 +160,10 @@ public class SpecUpService {
           && cost.exact() != null
           && cost.exact() > 0) {
         double value = raw / cost.exact() * 100_000;
-        if (Double.isFinite(value) && value > 0) per100k = SpecUpKrakenScore.roundEfficiency(value);
+        if (Double.isFinite(value) && value > 0) {
+          per100k = SpecUpKrakenScore.roundEfficiency(value);
+          rank = value;
+        }
       }
       return new Candidate(
           id,
@@ -180,7 +189,8 @@ public class SpecUpService {
           baseAttackPctTo,
           delta,
           per100k,
-          gemType);
+          gemType,
+          rank);
     }
   }
 
@@ -351,8 +361,7 @@ public class SpecUpService {
                 return 2;
               });
       return group
-          .thenComparing(
-              Candidate::krakenScorePer100kGold, Comparator.nullsLast(Comparator.reverseOrder()))
+          .thenComparing(SpecUpService::krakenRank, Comparator.nullsLast(Comparator.reverseOrder()))
           .thenComparing(
               Candidate::deltaKrakenScore, Comparator.nullsLast(Comparator.reverseOrder()))
           .thenComparing(order(Sort.EFFICIENCY));
@@ -365,6 +374,14 @@ public class SpecUpService {
             SpecUpService::rankEfficiency, Comparator.nullsLast(Comparator.reverseOrder()))
         .thenComparing(byDelta)
         .thenComparing(tail);
+  }
+
+  /** KRAKEN ① 묶음 정렬 키: 반올림 전 값(없으면, 예: 이전 캐시 값이면 화면 값). 화면 값이 없으면 null. */
+  static Double krakenRank(Candidate candidate) {
+    if (candidate.krakenScorePer100kGold() == null) return null;
+    return candidate.krakenRank() != null
+        ? candidate.krakenRank()
+        : candidate.krakenScorePer100kGold().doubleValue();
   }
 
   static BigDecimal rankEfficiency(Candidate candidate) {
@@ -1451,7 +1468,8 @@ public class SpecUpService {
           baseAttackPctTo,
           null,
           null,
-          gemType);
+          gemType,
+          null);
     }
   }
 }

@@ -98,6 +98,8 @@ services:
       GUILD_TAB: "${GUILD_TAB:-}"
       SPEC_UP_GUIDE: "${SPEC_UP_GUIDE:-}"
       TITLE_STATS: "${TITLE_STATS:-}"
+      # 통계 전체 인구 탭(통계 B5). api STATS_POPULATION_SNAPSHOT_ENABLED와 함께 켠다(api 먼저 — 기동 2분 뒤 첫 스냅샷).
+      POPULATION_STATS: "${POPULATION_STATS:-}"
       # 이 둘은 비우면 어디서나 꺼짐(on일 때만 켜짐): 검색엔진 색인, 시세 알림 화면.
       CHARACTER_INDEXING: "${CHARACTER_INDEXING:-}"
       PRICE_ALERTS: "${PRICE_ALERTS:-}"

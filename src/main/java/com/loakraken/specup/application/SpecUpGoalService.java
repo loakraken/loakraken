@@ -12,6 +12,8 @@ import com.loakraken.market.application.RefiningMaterialPriceService;
 import com.loakraken.market.application.RelicBookPriceService;
 import com.loakraken.refining.domain.RefiningRules;
 import com.loakraken.specup.domain.SpecUpCost;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Duration;
@@ -27,6 +29,8 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.LongSupplier;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -77,8 +81,9 @@ public class SpecUpGoalService {
       MarketAuctionService auctions,
       RelicBookPriceService books,
       RefiningMaterialPriceService materials,
-      SpecUpGoalStorePort store) {
-    this(specUp, simulator, auctions, books, materials, store, System::nanoTime);
+      SpecUpGoalStorePort store,
+      MeterRegistry meters) {
+    this(specUp, simulator, auctions, books, materials, store, meters, System::nanoTime);
   }
 
   SpecUpGoalService(
@@ -88,6 +93,7 @@ public class SpecUpGoalService {
       RelicBookPriceService books,
       RefiningMaterialPriceService materials,
       SpecUpGoalStorePort store,
+      MeterRegistry meters,
       LongSupplier nanoTime) {
     this.specUp = specUp;
     this.simulator = simulator;
@@ -96,7 +102,21 @@ public class SpecUpGoalService {
     this.materials = materials;
     this.store = store;
     this.nanoTime = nanoTime;
+    this.meters = meters;
     this.pathSolves = new java.util.concurrent.Semaphore(PATH_MAX_CONCURRENT);
+  }
+
+  private static final Logger log = LoggerFactory.getLogger(SpecUpGoalService.class);
+
+  /**
+   * 추천 순서 운영 지표. loakraken.spec_up.path{outcome=cache_hit|computed|busy}: 캐시 적중·계산·자리 부족(429) 비율.
+   * loakraken.spec_up.path_compute{pick, stop}: 캐시에 없을 때 계산 시간(p95·p99), stop은 멈춘 이유 코드(작은 고정 집합).
+   * 캐릭터 이름은 태그·로그에 넣지 않는다.
+   */
+  private final MeterRegistry meters;
+
+  private void pathOutcome(String outcome) {
+    meters.counter("loakraken.spec_up.path", "outcome", outcome).increment();
   }
 
   public static final String PATH_RULE_VERSION = "spec-up-path-v1";
@@ -171,16 +191,41 @@ public class SpecUpGoalService {
             PATH_RULE_VERSION,
             CombatPowerSimulationService.RULE_VERSION);
     var cached = store.findPath(key);
-    if (cached.isPresent()) return cached.get();
+    if (cached.isPresent()) {
+      pathOutcome("cache_hit");
+      return cached.get();
+    }
     return single(
         "path:" + key,
         () -> {
-          if (!pathSolves.tryAcquire())
+          if (!pathSolves.tryAcquire()) {
+            pathOutcome("busy");
+            log.warn(
+                "event=spec_up_path_busy pick={} limit={} slots={}",
+                pick,
+                limit,
+                PATH_MAX_CONCURRENT);
             throw new BusinessException(SpecUpErrorCode.SPEC_UP_BUSY, PATH_RETRY_AFTER);
+          }
           try {
+            long started = nanoTime.getAsLong();
             var result = computePath(snapshot, before, pick, limit, gems, refinePrices);
-            if (!TIME_LIMITED.equals(result.stopReasonCode()))
-              store.savePath(key, result, CACHE_TTL);
+            long elapsed = nanoTime.getAsLong() - started;
+            pathOutcome("computed");
+            Timer.builder("loakraken.spec_up.path_compute")
+                .tag("pick", pick.name())
+                .tag("stop", result.stopReasonCode())
+                .publishPercentiles(0.5, 0.95, 0.99)
+                .register(meters)
+                .record(Duration.ofNanos(elapsed));
+            if (TIME_LIMITED.equals(result.stopReasonCode()))
+              log.warn(
+                  "event=spec_up_path_time_limit pick={} limit={} steps={} elapsedMs={}",
+                  pick,
+                  limit,
+                  result.steps().size(),
+                  elapsed / 1_000_000);
+            else store.savePath(key, result, CACHE_TTL);
             return result;
           } finally {
             pathSolves.release();
@@ -291,7 +336,8 @@ public class SpecUpGoalService {
       BigDecimal combatPowerAfter,
       SpecUpCost cost,
       Long cumulativeCost,
-      BigDecimal combatPowerPer10kGold) {}
+      BigDecimal combatPowerPer10kGold,
+      Long extraCost) {}
 
   public record Goal(
       String characterName,
@@ -441,6 +487,7 @@ public class SpecUpGoalService {
       }
       Option best = null;
       boolean bestFree = false;
+      Long bestMarginal = null;
       for (var option : options(state, gems, refinePrices, pricesAt)) {
         // 고르는 효율은 이 단계에 더 드는 비용(보석은 누적 차이)으로: 같은 칸을 이어서 올릴 때 이미 낸 비용을 다시 세지 않는다.
         var marginal = marginal(option, gemTotals);
@@ -461,6 +508,7 @@ public class SpecUpGoalService {
                 : preferred(scored, free, best, bestFree))) {
           best = scored;
           bestFree = free;
+          bestMarginal = marginal;
         }
       }
       if (best == null) {
@@ -492,7 +540,8 @@ public class SpecUpGoalService {
               best.after(),
               best.cost(),
               cumulative,
-              best.efficiency()));
+              best.efficiency(),
+              bestMarginal));
     }
     return new Chain(List.copyOf(steps), stop, cumulative, unpriced, current, pricesAt[0]);
   }

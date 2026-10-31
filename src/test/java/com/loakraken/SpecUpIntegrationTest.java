@@ -70,7 +70,7 @@ class SpecUpIntegrationTest {
     var keys = redis.keys("character:v*스펙*");
     if (keys != null && !keys.isEmpty()) redis.delete(keys);
     redis.delete("market:v1:refining-materials");
-    var goals = redis.keys("spec-up:v1:goal:*");
+    var goals = redis.keys("spec-up:v2:goal:*");
     if (goals != null && !goals.isEmpty()) redis.delete(goals);
   }
 
@@ -871,6 +871,9 @@ class SpecUpIntegrationTest {
     assertThat(steps.get(0).path("candidateId").asText()).isEqualTo("GEM_LEVEL:0:9");
     assertThat(steps.get(1).path("candidateId").asText()).isEqualTo("GEM_LEVEL:0:10");
     assertThat(steps.get(1).path("cumulativeCost").asLong()).isEqualTo(2_600_000);
+    // 줄 비용(누적)과 달리 extraCost는 더 드는 비용: 600,000 + 2,000,000 = cumulativeCost.
+    assertThat(steps.get(0).path("extraCost").asLong()).isEqualTo(600_000);
+    assertThat(steps.get(1).path("extraCost").asLong()).isEqualTo(2_000_000);
     assertThat(data.path("totalCost").asLong()).isEqualTo(2_600_000);
     assertThat(data.path("finalCombatPower").decimalValue()).isEqualByComparingTo("3048.07");
     assertThat(data.path("stopReasonCode").asText()).isEqualTo("NO_CANDIDATE");

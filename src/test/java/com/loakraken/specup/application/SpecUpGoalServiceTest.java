@@ -32,6 +32,8 @@ class SpecUpGoalServiceTest {
   private final RefiningMaterialPriceService materials = mock(RefiningMaterialPriceService.class);
   private final SpecUpService specUp = mock(SpecUpService.class);
   private final MemoryStore store = new MemoryStore();
+  private final io.micrometer.core.instrument.simple.SimpleMeterRegistry meters =
+      new io.micrometer.core.instrument.simple.SimpleMeterRegistry();
 
   @Test
   void 단계가_30개를_넘으면_STEP_LIMIT으로_멈추고_시세가_없으면_누적_비용은_null이다() {
@@ -120,6 +122,8 @@ class SpecUpGoalServiceTest {
       deltas = deltas.add(step.deltaCombatPower());
       assertThat(step.cost().amount()).isNotNull();
       assertThat(step.cumulativeCost()).isGreaterThanOrEqualTo(previous);
+      // 이 단계에 더 드는 비용 = 경로 합계가 늘어난 만큼(보석은 같은 칸 누적 차이)
+      assertThat(step.extraCost()).isEqualTo(step.cumulativeCost() - previous);
       previous = step.cumulativeCost();
       // 그 단계까지의 change를 처음부터 시뮬레이터에 넣은 값 = 그 단계 전투력
       var fresh =
@@ -133,6 +137,15 @@ class SpecUpGoalServiceTest {
     var again = service.path("목표테스트", SpecUpGoalService.Pick.EFFICIENCY, 5);
     assertThat(again.steps().stream().map(SpecUpGoalService.Step::candidateId).toList())
         .isEqualTo(path.steps().stream().map(SpecUpGoalService.Step::candidateId).toList());
+    assertThat(meters.counter("loakraken.spec_up.path", "outcome", "computed").count())
+        .isEqualTo(2);
+    assertThat(
+            meters
+                .get("loakraken.spec_up.path_compute")
+                .tags("pick", "EFFICIENCY", "stop", "STEP_LIMIT")
+                .timer()
+                .count())
+        .isEqualTo(2);
   }
 
   /** 시세가 없는 단계는 고르지 않고 unpriced에 따로(지금 상태 기준, 전투력이 오르는 것만). 비용을 추측하지 않는다. */
@@ -165,6 +178,7 @@ class SpecUpGoalServiceTest {
             e ->
                 assertThat(((com.loakraken.common.api.BusinessException) e).errorCode())
                     .isEqualTo(SpecUpErrorCode.SPEC_UP_BUSY));
+    assertThat(meters.counter("loakraken.spec_up.path", "outcome", "busy").count()).isEqualTo(1);
   }
 
   /** 겁화 1~10레벨 칸(값은 레벨 × 1,000골드), 같은 관측 시각. */
@@ -241,7 +255,8 @@ class SpecUpGoalServiceTest {
                   0,
                   List.of());
             });
-    return new SpecUpGoalService(specUp, simulator, auctions, books, materials, store, nanoTime);
+    return new SpecUpGoalService(
+        specUp, simulator, auctions, books, materials, store, meters, nanoTime);
   }
 
   private static final class MemoryStore implements SpecUpGoalStorePort {

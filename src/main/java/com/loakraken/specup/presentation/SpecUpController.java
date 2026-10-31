@@ -308,7 +308,12 @@ public class SpecUpController {
               description =
                   "1만 골드당 전투력(소수 둘째 자리) = 이 단계 Δ ÷ 이 단계에 더 드는 비용(보석은 누적 차이). 더 드는 비용이 0 이하이거나 모르면 null")
           @NullableResponse
-          BigDecimal combatPowerPer10kGold) {
+          BigDecimal combatPowerPer10kGold,
+      @Schema(
+              description =
+                  "이 단계에 더 드는 비용(골드) = 이 단계를 넣어 늘어난 경로 합계. 보석은 같은 칸에서 이미 낸 누적을 뺀 값(거꾸로 시세면 0 이하일 수 있음), 그 밖은 cost.amount와 같음. 1만 골드당 전투력의 분모이고, 단계마다 더하면 cumulativeCost와 같다. 모르면 null")
+          @NullableResponse
+          Long extraCost) {
     static SpecUpGoalStepResponse from(SpecUpGoalService.Step step) {
       return new SpecUpGoalStepResponse(
           step.order(),
@@ -325,7 +330,8 @@ public class SpecUpController {
           step.combatPowerAfter(),
           CostResponse.from(step.cost()),
           step.cumulativeCost(),
-          step.combatPowerPer10kGold());
+          step.combatPowerPer10kGold(),
+          step.extraCost());
     }
   }
 

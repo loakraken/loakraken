@@ -1,6 +1,7 @@
 package com.loakraken.character.presentation;
 
 import com.loakraken.character.domain.CharacterLoadout;
+import com.loakraken.character.domain.EquipmentSummary;
 import com.loakraken.character.domain.GemBaseAttack;
 import com.loakraken.character.domain.SkillCooldown;
 import com.loakraken.common.api.NullableResponse;
@@ -44,7 +45,7 @@ public record CharacterLoadoutResponse(
           value.name(),
           value.icon(),
           value.grade(),
-          EquipmentDetailResponse.from(value.detail()));
+          EquipmentDetailResponse.from(value.detail(), "보주".equals(value.type())));
     }
   }
 
@@ -76,8 +77,13 @@ public record CharacterLoadoutResponse(
               description =
                   "상급 재련 단계. 공식 Tooltip \"[상급 재련] N단계\"(1단계 이상일 때만 나옴), 재련 단계가 있는 4티어 장비에 문구가 없으면 0, 그 밖·이전 캐시면 null")
           @NullableResponse
-          Integer advancedRefineLevel) {
-    static EquipmentDetailResponse from(CharacterLoadout.EquipmentDetail value) {
+          Integer advancedRefineLevel,
+      @Schema(
+              description = "보주만: 공식 Tooltip의 '달성 최대 낙원력' 숫자(쉼표 없음). 보주가 아니거나 문구가 없으면 null",
+              example = "18145692")
+          @NullableResponse
+          Long paradisePower) {
+    static EquipmentDetailResponse from(CharacterLoadout.EquipmentDetail value, boolean orb) {
       if (value == null) return null;
       return new EquipmentDetailResponse(
           CharacterLoadout.EquipmentDetail.PARSER_VERSION,
@@ -95,7 +101,8 @@ public record CharacterLoadoutResponse(
           value.refineExp() == null
               ? null
               : new RefineExpResponse(value.refineExp().current(), value.refineExp().max()),
-          value.advancedRefineLevel());
+          value.advancedRefineLevel(),
+          orb ? EquipmentSummary.paradisePower(value) : null);
     }
   }
 

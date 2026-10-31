@@ -279,6 +279,55 @@ class StatsIntegrationTest {
         "stats-gem-levels.json", get("/api/v1/stats/gem-levels?server=" + encode(SERVER)).body());
   }
 
+  /** 레벨별 전투력(B3): 아이템 레벨 5 단위 구간, 30명 이상 구간만 중앙값. 같은 표본(그 구간만 거른 요약)의 전투력 중앙값과 같다. */
+  @Test
+  void 레벨별_전투력은_5레벨_구간마다_30명_이상만_중앙값이고_요약_중앙값과_같다() throws Exception {
+    var at = now.minus(1, ChronoUnit.DAYS);
+    for (int i = 0; i < 31; i++)
+      insert(
+          "레벨전투" + i,
+          "버서커",
+          new BigDecimal("1721.5"),
+          new BigDecimal(3000 + 10 * i),
+          "DEALER",
+          null,
+          null,
+          at);
+    for (int i = 0; i < 2; i++)
+      insert(
+          "레벨전투작은" + i,
+          "버서커",
+          new BigDecimal("1652"),
+          new BigDecimal("2000"),
+          "DEALER",
+          null,
+          null,
+          at);
+    var data = data("/api/v1/stats/level-combat-power?server=" + encode(SERVER));
+    var buckets = data.path("buckets");
+    assertThat(buckets.size()).isEqualTo(2);
+    assertThat(buckets.get(0).path("from").decimalValue()).isEqualByComparingTo("1650");
+    assertThat(buckets.get(0).path("to").decimalValue()).isEqualByComparingTo("1655");
+    assertThat(buckets.get(0).path("count").asLong()).isEqualTo(2);
+    assertThat(buckets.get(0).path("median").isNull()).isTrue(); // 30명 미만
+    assertThat(buckets.get(1).path("from").decimalValue()).isEqualByComparingTo("1720");
+    assertThat(buckets.get(1).path("count").asLong()).isEqualTo(31);
+    // 3000..3300(10씩) 31개의 16번째 = 3150
+    assertThat(buckets.get(1).path("median").decimalValue()).isEqualByComparingTo("3150");
+    assertThat(data.at("/meta/population").asLong()).isEqualTo(33);
+    // 같은 표본(1720~1724.99)의 요약 중앙값과 같다.
+    var summary =
+        data(
+            "/api/v1/stats/summary?server="
+                + encode(SERVER)
+                + "&itemLevelMin=1720&itemLevelMax=1724.99");
+    assertThat(buckets.get(1).path("median").decimalValue())
+        .isEqualByComparingTo(summary.path("combatPowerMedian").decimalValue());
+    ApiContractFixture.write(
+        "stats-level-combat-power.json",
+        get("/api/v1/stats/level-combat-power?server=" + encode(SERVER)).body());
+  }
+
   @Test
   void 분포의_상위_N퍼센트_기준값은_내_위치와_맞고_서버_행은_직업_행과_같은_값을_준다() throws Exception {
     표본();

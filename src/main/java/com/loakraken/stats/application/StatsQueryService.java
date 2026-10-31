@@ -508,6 +508,35 @@ public class StatsQueryService {
         });
   }
 
+  /**
+   * 레벨별 전투력(B3): 아이템 레벨 5 단위 구간마다 전투력이 있는 캐릭터 수와 중앙값. 중앙값은 그 구간이 30명 이상일 때만(아니면 null, 화면은 그리지 않음).
+   * 같은 표본이면 요약의 전투력 중앙값과 같은 값이다.
+   */
+  public LevelCombatPowerResult levelCombatPower(StatsConditions conditions) {
+    return cached(
+        "level-combat-power:v1:" + key(conditions),
+        LevelCombatPowerResult.class,
+        () -> {
+          var now = clock.instant();
+          var rows = stats.levelCombatPower(conditions, conditions.since(now));
+          long population = 0;
+          var buckets = new ArrayList<LevelCombatPowerBucket>();
+          for (var row : rows) {
+            population += row.count();
+            if (row.count() == 0) continue;
+            buckets.add(
+                new LevelCombatPowerBucket(
+                    row.from(),
+                    row.from().add(LEVEL_BUCKET),
+                    row.count(),
+                    row.count() >= StatsRules.MIN_SAMPLE ? row.median() : null));
+          }
+          return new LevelCombatPowerResult(meta(conditions, population, now), buckets);
+        });
+  }
+
+  static final BigDecimal LEVEL_BUCKET = BigDecimal.valueOf(5);
+
   static final BigDecimal GEM_LEVEL_FLOOR = new BigDecimal("5.0");
   static final BigDecimal GEM_LEVEL_STEP = new BigDecimal("0.5");
 
@@ -1428,6 +1457,13 @@ public class StatsQueryService {
 
   /** gemSample = 구간 수의 합(보석을 관측한 캐릭터). meta.population은 모집단 전체. */
   public record GemLevelsResult(Meta meta, long gemSample, List<GemLevelBin> bins) {}
+
+  /** to는 넣지 않는다. median은 count가 30 이상일 때만. */
+  public record LevelCombatPowerBucket(
+      BigDecimal from, BigDecimal to, long count, BigDecimal median) {}
+
+  /** meta.population은 전투력이 있는 캐릭터 수(구간 수의 합). */
+  public record LevelCombatPowerResult(Meta meta, List<LevelCombatPowerBucket> buckets) {}
 
   /** 구성 블록(B4). dealer + supportClassDealer + support + unknownRole = 표본. */
   public record Composition(long dealer, long supportClassDealer, long support, long unknownRole) {}

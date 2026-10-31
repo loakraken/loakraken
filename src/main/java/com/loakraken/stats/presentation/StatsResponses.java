@@ -334,6 +334,31 @@ public final class StatsResponses {
     }
   }
 
+  public record StatsLevelCombatPowerResponse(
+      @Schema(description = "meta.population = 전투력이 있는 캐릭터 수(구간 count의 합)") StatsMetaResponse meta,
+      @Schema(
+              description =
+                  "아이템 레벨 5 단위 구간(오름차순, 사람이 있는 구간만). median은 count가 meta.minSample(30) 이상일 때만")
+          List<StatsLevelCombatPowerBucketResponse> buckets) {
+    static StatsLevelCombatPowerResponse from(StatsQueryService.LevelCombatPowerResult result) {
+      return new StatsLevelCombatPowerResponse(
+          StatsMetaResponse.from(result.meta()),
+          result.buckets().stream()
+              .map(
+                  bucket ->
+                      new StatsLevelCombatPowerBucketResponse(
+                          bucket.from(), bucket.to(), bucket.count(), bucket.median()))
+              .toList());
+    }
+  }
+
+  public record StatsLevelCombatPowerBucketResponse(
+      @Schema(description = "아이템 레벨 하한(포함)") BigDecimal from,
+      @Schema(description = "아이템 레벨 상한(미포함, 하한 + 5)") BigDecimal to,
+      @Schema(description = "전투력이 있는 캐릭터 수") long count,
+      @Schema(description = "전투력 중앙값(요약 중앙값과 같은 계산). count가 30 미만이면 null") @NullableResponse
+          BigDecimal median) {}
+
   public record StatsGemLevelBinResponse(
       @Schema(description = "구간 하한(포함). '5 미만' 구간은 null") @NullableResponse BigDecimal from,
       @Schema(description = "구간 상한(미포함). 10.0 구간은 null") @NullableResponse BigDecimal to,

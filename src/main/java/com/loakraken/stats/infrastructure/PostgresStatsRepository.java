@@ -268,6 +268,25 @@ class PostgresStatsRepository implements StatsPort {
   }
 
   @Override
+  public List<LevelCombatPowerRow> levelCombatPower(StatsConditions conditions, Instant since) {
+    return population(conditions, since)
+        .statement(
+            """
+            SELECT FLOOR(item_level / 5) * 5 AS lower_bound, COUNT(combat_power) AS n,
+                   percentile_cont(0.5) WITHIN GROUP (ORDER BY combat_power) AS median
+            FROM pop GROUP BY 1 ORDER BY 1
+            """,
+            jdbc)
+        .query(
+            (row, index) ->
+                new LevelCombatPowerRow(
+                    row.getBigDecimal("lower_bound").stripTrailingZeros(),
+                    row.getLong("n"),
+                    percentile(row.getBigDecimal("median"))))
+        .list();
+  }
+
+  @Override
   public Standing standing(
       StatsConditions conditions, Instant since, Metric metric, BigDecimal value) {
     String column = metric.column();

@@ -155,6 +155,21 @@ public class StatsController {
         StatsResponses.StatsGemLevelsResponse.from(stats.gemLevels(filter.toConditions())));
   }
 
+  @GetMapping(
+      value = "/api/v1/stats/level-combat-power",
+      produces = MediaType.APPLICATION_JSON_VALUE)
+  @Operation(
+      summary = "레벨별 전투력",
+      description = "아이템 레벨 5 단위 구간마다 전투력이 있는 캐릭터 수와 전투력 중앙값. 중앙값은 그 구간이 30명 이상일 때만 줍니다. " + ERRORS)
+  @StandardErrors
+  public ApiResponse<StatsResponses.StatsLevelCombatPowerResponse> levelCombatPower(
+      @Valid @ModelAttribute @ParameterObject StatsFilterRequest filter) {
+    return ApiResponse.of(
+        StatsSuccessCode.STATS_LEVEL_COMBAT_POWER_SUCCESS,
+        StatsResponses.StatsLevelCombatPowerResponse.from(
+            stats.levelCombatPower(filter.toConditions())));
+  }
+
   @GetMapping(value = "/api/v1/stats/snapshots", produces = MediaType.APPLICATION_JSON_VALUE)
   @Operation(
       summary = "기준일 목록",

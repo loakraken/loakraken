@@ -93,8 +93,13 @@ public class StatsPopulationService {
       var today = java.time.LocalDate.now(clock.withZone(KST));
       try {
         snapshots.build(today, today.minusWeeks(KEEP_WEEKS));
+        log.info("event=population_snapshot_built trigger=stop_list date={}", today);
       } catch (DataAccessException | TransactionException exception) {
         rebuildBlockedUntil = clock.instant().plus(REBUILD_BACKOFF);
+        log.warn(
+            "event=population_snapshot_failed trigger=stop_list 처리정지 목록이 바뀐 스냅샷을 다시 만들지 못했습니다. {}초 동안 503. 예외 유형={}",
+            REBUILD_BACKOFF.toSeconds(),
+            exception.getClass().getSimpleName());
         throw exception;
       }
       return snapshots.latest().orElse(null);

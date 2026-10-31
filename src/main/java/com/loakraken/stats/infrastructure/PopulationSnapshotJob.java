@@ -57,7 +57,7 @@ class PopulationSnapshotJob {
 
   @Scheduled(cron = "${stats.population-snapshot.cron:0 10 5 * * *}", zone = "Asia/Seoul")
   void tick() {
-    run();
+    run("schedule");
   }
 
   /**
@@ -68,11 +68,19 @@ class PopulationSnapshotJob {
       initialDelayString = "${stats.population-snapshot.startup-delay:2m}",
       fixedDelay = Long.MAX_VALUE)
   void afterStartup() {
-    run();
+    run("startup");
   }
 
   /** 만들었으면 true. */
   boolean run() {
+    return run("schedule");
+  }
+
+  /**
+   * trigger = 이 실행을 연 곳(schedule·startup). 같은 스냅샷 만들기를 읽기 쪽(처리정지 목록이 바뀜, stop_list)도 부르므로 로그에 어디서
+   * 만들었는지 남긴다.
+   */
+  boolean run(String trigger) {
     var today = LocalDate.now(clock.withZone(KST));
     var latest = snapshots.latest().map(PopulationSnapshotPort.Latest::date).orElse(null);
     if (latest != null && latest.isAfter(today.minusDays(INTERVAL_DAYS))) return false;
@@ -81,11 +89,12 @@ class PopulationSnapshotJob {
     try {
       snapshots.build(today, today.minusWeeks(KEEP_WEEKS));
       lastSuccess.set(clock.instant().getEpochSecond());
-      log.info("event=population_snapshot_built date={}", today);
+      log.info("event=population_snapshot_built trigger={} date={}", trigger, today);
       return true;
     } catch (org.springframework.dao.DataAccessException exception) {
       log.warn(
-          "event=population_snapshot_failed 전체 인구 스냅샷을 만들지 못했습니다. 다음 날 다시 합니다. 예외 유형={}",
+          "event=population_snapshot_failed trigger={} 전체 인구 스냅샷을 만들지 못했습니다. 다음 날 다시 합니다. 예외 유형={}",
+          trigger,
           exception.getClass().getSimpleName());
       return false;
     } finally {

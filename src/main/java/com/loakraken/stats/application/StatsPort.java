@@ -44,6 +44,14 @@ public interface StatsPort {
 
   List<Bin> histogram(StatsConditions conditions, Instant since, Metric metric, BigDecimal width);
 
+  /**
+   * 보석 레벨 분포(B2). 모집단을 4티어 보석 평균 레벨(gem_mean_level)로 나눈 수. bucket: -1 = 보석을 관측하지 못함, 0 = 5 미만,
+   * 10~20 = 0.5 단위 하한 × 2(10 = 5.0, 20 = 10.0). 수가 0인 bucket은 없다.
+   */
+  List<GemLevelCount> gemLevels(StatsConditions conditions, Instant since);
+
+  record GemLevelCount(int bucket, long count) {}
+
   /** value보다 큰 캐릭터 수와 모집단 수. 처리정지 목록은 모집단에서 뺀다. */
   Standing standing(StatsConditions conditions, Instant since, Metric metric, BigDecimal value);
 

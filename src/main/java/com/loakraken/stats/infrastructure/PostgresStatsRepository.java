@@ -252,6 +252,22 @@ class PostgresStatsRepository implements StatsPort {
   }
 
   @Override
+  public List<GemLevelCount> gemLevels(StatsConditions conditions, Instant since) {
+    return population(conditions, since)
+        .statement(
+            """
+            SELECT CASE WHEN gem_mean_level IS NULL THEN -1
+                        WHEN gem_mean_level < 5 THEN 0
+                        ELSE LEAST(FLOOR(gem_mean_level * 2), 20) END AS bucket,
+                   COUNT(*) AS n
+            FROM pop GROUP BY 1 ORDER BY 1
+            """,
+            jdbc)
+        .query((row, index) -> new GemLevelCount(row.getInt("bucket"), row.getLong("n")))
+        .list();
+  }
+
+  @Override
   public Standing standing(
       StatsConditions conditions, Instant since, Metric metric, BigDecimal value) {
     String column = metric.column();

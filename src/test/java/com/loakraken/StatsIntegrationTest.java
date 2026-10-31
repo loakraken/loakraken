@@ -238,6 +238,47 @@ class StatsIntegrationTest {
         get("/api/v1/stats/classes?server=" + encode(SERVER)).body());
   }
 
+  /** 보석 레벨 분포(B2): 5 미만·0.5 단위·10.0 구간, 빈 구간은 0, 합은 보석을 관측한 표본(모집단보다 작음). */
+  @Test
+  void 보석_레벨_분포는_구간_합이_보석_표본이고_빈_구간도_준다() throws Exception {
+    var at = now.minus(1, ChronoUnit.DAYS);
+    String[] gems = {null, "4.50", "5.00", "5.25", "7.50", "9.99", "10.00"};
+    for (int i = 0; i < gems.length; i++)
+      insert(
+          "보석분포" + i,
+          "버서커",
+          new BigDecimal("1700"),
+          new BigDecimal("3000"),
+          "DEALER",
+          gems[i] == null ? null : new BigDecimal(gems[i]),
+          null,
+          at);
+    var data = data("/api/v1/stats/gem-levels?server=" + encode(SERVER));
+    assertThat(data.at("/meta/population").asLong()).isEqualTo(7);
+    assertThat(data.path("gemSample").asLong()).isEqualTo(6);
+    var bins = data.path("bins");
+    assertThat(bins.size()).isEqualTo(12); // 5 미만 + 5.0~9.5(10개) + 10.0
+    assertThat(bins.get(0).path("from").isNull()).isTrue();
+    assertThat(bins.get(0).path("to").decimalValue()).isEqualByComparingTo("5.0");
+    assertThat(bins.get(0).path("count").asLong()).isEqualTo(1); // 4.50
+    assertThat(bins.get(1).path("from").decimalValue()).isEqualByComparingTo("5.0");
+    assertThat(bins.get(1).path("to").decimalValue()).isEqualByComparingTo("5.5");
+    assertThat(bins.get(1).path("count").asLong()).isEqualTo(2); // 5.00, 5.25
+    assertThat(bins.get(6).path("from").decimalValue()).isEqualByComparingTo("7.5");
+    assertThat(bins.get(6).path("count").asLong()).isEqualTo(1);
+    assertThat(bins.get(10).path("from").decimalValue()).isEqualByComparingTo("9.5");
+    assertThat(bins.get(10).path("count").asLong()).isEqualTo(1); // 9.99
+    assertThat(bins.get(11).path("from").decimalValue()).isEqualByComparingTo("10.0");
+    assertThat(bins.get(11).path("to").isNull()).isTrue();
+    assertThat(bins.get(11).path("count").asLong()).isEqualTo(1);
+    long sum = 0;
+    for (var bin : bins) sum += bin.path("count").asLong();
+    assertThat(sum).isEqualTo(data.path("gemSample").asLong());
+    assertThat(bins.get(3).path("count").asLong()).isZero(); // 6.0 빈 구간
+    ApiContractFixture.write(
+        "stats-gem-levels.json", get("/api/v1/stats/gem-levels?server=" + encode(SERVER)).body());
+  }
+
   @Test
   void 분포의_상위_N퍼센트_기준값은_내_위치와_맞고_서버_행은_직업_행과_같은_값을_준다() throws Exception {
     표본();

@@ -141,6 +141,20 @@ public class StatsController {
             stats.distribution(filter.toConditions(), metric, width, percentileOf)));
   }
 
+  @GetMapping(value = "/api/v1/stats/gem-levels", produces = MediaType.APPLICATION_JSON_VALUE)
+  @Operation(
+      summary = "보석 레벨 분포",
+      description =
+          "4티어 보석 평균 레벨 분포: '5 미만', 5.0~9.5(0.5 단위), 10.0. 구간 수의 합은 보석을 관측한 표본(gemSample)이며 모집단보다 작을 수 있습니다. "
+              + ERRORS)
+  @StandardErrors
+  public ApiResponse<StatsResponses.StatsGemLevelsResponse> gemLevels(
+      @Valid @ModelAttribute @ParameterObject StatsFilterRequest filter) {
+    return ApiResponse.of(
+        StatsSuccessCode.STATS_GEM_LEVELS_SUCCESS,
+        StatsResponses.StatsGemLevelsResponse.from(stats.gemLevels(filter.toConditions())));
+  }
+
   @GetMapping(value = "/api/v1/stats/snapshots", produces = MediaType.APPLICATION_JSON_VALUE)
   @Operation(
       summary = "기준일 목록",

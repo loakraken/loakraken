@@ -259,7 +259,7 @@ public class CharacterCardService {
       cards.recordPolishLines(
           observation.serverName(), observation.characterName(), lines, observation.observedAt());
     } catch (DataAccessException | TransactionException exception) {
-      log.warn("연마 효과 줄 저장에 실패했습니다. 예외 유형={}", exception.getClass().getSimpleName());
+      log.warn("event=polish_lines_save_failed type={}", exception.getClass().getSimpleName());
     }
   }
 

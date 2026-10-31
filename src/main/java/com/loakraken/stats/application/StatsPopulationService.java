@@ -1,10 +1,17 @@
 package com.loakraken.stats.application;
 
+import com.loakraken.common.api.BusinessException;
+import java.time.Duration;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataAccessException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.TransactionException;
 
 /**
  * 전체 인구 탭(통계 묶음 B5): 가장 최근 주간 스냅샷의 서버별·직업별·레벨별 캐릭터 수. 조건(기간·레벨·전투력)이 없고, 스냅샷이 아직 없으면 날짜 null·빈
@@ -18,17 +25,34 @@ public class StatsPopulationService {
   /** 이보다 오래된 스냅샷은 만들 때 지운다. */
   public static final int KEEP_WEEKS = 12;
 
+  /** 다시 만들기가 실패하면 이 인스턴스는 이 시간 동안 다시 시도하지 않고 503을 준다(DB가 아플 때 요청마다 다시 만들지 않게, 코드 리뷰 10-31). */
+  static final Duration REBUILD_BACKOFF = Duration.ofSeconds(60);
+
+  private static final Logger log = LoggerFactory.getLogger(StatsPopulationService.class);
   private final PopulationSnapshotPort snapshots;
   private final java.time.Clock clock;
   private final Object rebuild = new Object();
+  private volatile Instant rebuildBlockedUntil = Instant.MIN;
 
   public StatsPopulationService(PopulationSnapshotPort snapshots, java.time.Clock clock) {
     this.snapshots = snapshots;
     this.clock = clock;
   }
 
-  /** server가 null이면 전체, 있으면 그 서버의 직업·레벨 분포(서버 목록은 늘 전체). */
+  /**
+   * server가 null이면 전체, 있으면 그 서버의 직업·레벨 분포(서버 목록은 늘 전체). 저장소 장애면 다른 통계처럼 503 STATS_UNAVAILABLE이다(지난
+   * 값을 대신 주지 않음).
+   */
   public Population population(String server) {
+    try {
+      return read(server);
+    } catch (DataAccessException | TransactionException exception) {
+      log.warn("전체 인구를 읽지 못했습니다. 예외 유형={}", exception.getClass().getSimpleName());
+      throw new BusinessException(StatsErrorCode.STATS_UNAVAILABLE);
+    }
+  }
+
+  private Population read(String server) {
     var latest = current();
     if (latest == null) return new Population(null, server, 0, List.of(), List.of(), List.of());
     var date = latest.date();
@@ -63,8 +87,16 @@ public class StatsPopulationService {
       latest = snapshots.latest().orElse(null);
       if (latest != null && latest.exclusionRevision().equals(snapshots.exclusionRevision()))
         return latest;
+      // 직전 다시 만들기가 실패했으면 잠시 시도하지 않는다. 그 사이에도 목록이 바뀐 스냅샷(빠져야 할 캐릭터가 든 값)은 주지 않는다.
+      if (clock.instant().isBefore(rebuildBlockedUntil))
+        throw new BusinessException(StatsErrorCode.STATS_UNAVAILABLE);
       var today = java.time.LocalDate.now(clock.withZone(KST));
-      snapshots.build(today, today.minusWeeks(KEEP_WEEKS));
+      try {
+        snapshots.build(today, today.minusWeeks(KEEP_WEEKS));
+      } catch (DataAccessException | TransactionException exception) {
+        rebuildBlockedUntil = clock.instant().plus(REBUILD_BACKOFF);
+        throw exception;
+      }
       return snapshots.latest().orElse(null);
     }
   }

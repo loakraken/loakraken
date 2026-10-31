@@ -413,4 +413,65 @@ class MigrateServiceSplitIntegrationTest {
         .rootCause()
         .hasMessageContaining("permission denied");
   }
+
+  @Test
+  void 실행_역할은_모든_표와_시퀀스를_쓸_수_있고_역할_SQL_뒤에_만든_표도_기본_권한으로_쓸_수_있다() throws Exception {
+    // 운영 순서: 역할 SQL은 한 번 돌았고, 그 뒤 마이그레이션이 소유 역할로 새 표를 만든다. 같은 순서로 표·시퀀스를 하나 만든다.
+    ownerSql("CREATE TABLE later_migration_check (id BIGSERIAL PRIMARY KEY, v INT)");
+    try {
+      // has_*_privilege에 권한을 쉼표로 여러 개 주면 '하나라도'가 참이라, 권한마다 따로 본다.
+      var tables =
+          jdbc.sql(
+                  """
+                  SELECT c.relname,
+                    has_table_privilege(:app, c.oid, 'SELECT') AND has_table_privilege(:app, c.oid, 'INSERT')
+                      AND has_table_privilege(:app, c.oid, 'UPDATE') AND has_table_privilege(:app, c.oid, 'DELETE') AS ok
+                  FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+                  WHERE n.nspname = 'public' AND c.relkind IN ('r', 'p') AND c.relname <> 'flyway_schema_history'
+                  """)
+              .param("app", APP)
+              .query((row, index) -> Map.entry(row.getString(1), row.getBoolean(2)))
+              .list();
+      assertThat(tables).hasSizeGreaterThan(10);
+      assertThat(tables).extracting(Map.Entry::getKey).contains("later_migration_check");
+      assertThat(tables)
+          .filteredOn(entry -> !entry.getValue())
+          .extracting(Map.Entry::getKey)
+          .as("실행 역할의 읽기·쓰기 권한이 없는 표")
+          .isEmpty();
+      var sequences =
+          jdbc.sql(
+                  """
+                  SELECT c.relname
+                  FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+                  WHERE n.nspname = 'public' AND c.relkind = 'S'
+                    AND NOT (has_sequence_privilege(:app, c.oid, 'USAGE')
+                      AND has_sequence_privilege(:app, c.oid, 'SELECT'))
+                  """)
+              .param("app", APP)
+              .query(String.class)
+              .list();
+      assertThat(sequences).as("실행 역할의 사용 권한이 없는 시퀀스").isEmpty();
+      // 새 표에 실제로 쓸 수 있다(시퀀스 포함). 마이그레이션 기록은 그대로 막혀 있다.
+      assertThat(jdbc.sql("INSERT INTO later_migration_check (v) VALUES (1)").update())
+          .isEqualTo(1);
+      assertThat(
+              jdbc.sql("SELECT has_table_privilege(:app, 'flyway_schema_history', 'SELECT')")
+                  .param("app", APP)
+                  .query(Boolean.class)
+                  .single())
+          .isFalse();
+    } finally {
+      ownerSql("DROP TABLE IF EXISTS later_migration_check");
+    }
+  }
+
+  /** 소유 역할로 SQL 한 줄(마이그레이션과 같은 역할). 실패하면 예외. */
+  private static void ownerSql(String sql) throws Exception {
+    var result =
+        POSTGRES.execInContainer(
+            "psql", "-X", "-q", "-v", "ON_ERROR_STOP=1", "-U", OWNER, "-d", DATABASE, "-c", sql);
+    if (result.getExitCode() != 0)
+      throw new IllegalStateException("소유 역할 SQL 실패: exit " + result.getExitCode());
+  }
 }

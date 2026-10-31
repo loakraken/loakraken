@@ -70,7 +70,7 @@ class SpecUpIntegrationTest {
     var keys = redis.keys("character:v*스펙*");
     if (keys != null && !keys.isEmpty()) redis.delete(keys);
     redis.delete("market:v1:refining-materials");
-    var goals = redis.keys("spec-up:v1:goal:*");
+    var goals = redis.keys("spec-up:v2:goal:*");
     if (goals != null && !goals.isEmpty()) redis.delete(goals);
   }
 
@@ -852,6 +852,60 @@ class SpecUpIntegrationTest {
     assertThat(far.path("reached").asBoolean()).isFalse();
     assertThat(far.path("steps").size()).isEqualTo(3);
     assertThat(far.path("stopReason").asText()).isEqualTo("더 올릴 수 있는 항목이 없어 여기서 멈췄어요.");
+  }
+
+  @Test
+  void 추천_순서는_시세가_있는_보석_단계만_잇고_품질은_unpriced로_따로_준다() throws Exception {
+    when(auctions.cachedGems()).thenReturn(gemCells(true));
+    search("스펙순서");
+    var response = get("/api/v1/characters/spec-up/path?characterName=" + encode("스펙순서"));
+    assertThat(response.statusCode()).as(response.body()).isEqualTo(200);
+    ApiContractFixture.write("character-spec-up-path.json", response.body());
+    SiteNames.assertAbsent(response.body());
+    var data = mapper.readTree(response.body()).path("data");
+    assertThat(data.path("ruleVersion").asText()).isEqualTo("spec-up-path-v1");
+    assertThat(data.path("sort").asText()).isEqualTo("EFFICIENCY");
+    assertThat(data.path("limit").asInt()).isEqualTo(30);
+    var steps = data.path("steps");
+    assertThat(steps.size()).isEqualTo(2);
+    assertThat(steps.get(0).path("candidateId").asText()).isEqualTo("GEM_LEVEL:0:9");
+    assertThat(steps.get(1).path("candidateId").asText()).isEqualTo("GEM_LEVEL:0:10");
+    assertThat(steps.get(1).path("cumulativeCost").asLong()).isEqualTo(2_600_000);
+    // 줄 비용(누적)과 달리 extraCost는 더 드는 비용: 600,000 + 2,000,000 = cumulativeCost.
+    assertThat(steps.get(0).path("extraCost").asLong()).isEqualTo(600_000);
+    assertThat(steps.get(1).path("extraCost").asLong()).isEqualTo(2_000_000);
+    assertThat(data.path("totalCost").asLong()).isEqualTo(2_600_000);
+    assertThat(data.path("finalCombatPower").decimalValue()).isEqualByComparingTo("3048.07");
+    assertThat(data.path("stopReasonCode").asText()).isEqualTo("NO_CANDIDATE");
+    var unpriced = data.path("unpriced");
+    var ids = new java.util.ArrayList<String>();
+    for (var excluded : unpriced) ids.add(excluded.path("candidateId").asText());
+    assertThat(ids).contains("EQUIPMENT_QUALITY:0:100");
+    for (var excluded : unpriced) {
+      assertThat(excluded.at("/cost/amount").isNull()).isTrue();
+      assertThat(excluded.path("deltaCombatPower").decimalValue()).isPositive();
+    }
+
+    var one =
+        mapper
+            .readTree(
+                get("/api/v1/characters/spec-up/path?sort=DELTA&limit=1&characterName="
+                        + encode("스펙순서"))
+                    .body())
+            .path("data");
+    assertThat(one.path("sort").asText()).isEqualTo("DELTA");
+    assertThat(one.path("steps").size()).isEqualTo(1);
+    assertThat(one.path("stopReasonCode").asText()).isEqualTo("STEP_LIMIT");
+
+    for (var query : List.of("sort=GOLD", "limit=0", "limit=31", "limit=abc"))
+      assertThat(
+              get("/api/v1/characters/spec-up/path?" + query + "&characterName=" + encode("스펙순서"))
+                  .statusCode())
+          .as(query)
+          .isEqualTo(400);
+    var missing = get("/api/v1/characters/spec-up/path?characterName=" + encode("스펙없음"));
+    assertThat(missing.statusCode()).isEqualTo(404);
+    assertThat(missing.body()).contains("CHARACTER_NOT_CACHED");
   }
 
   @Test

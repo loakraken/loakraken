@@ -134,6 +134,28 @@ class SpecUpGoalGemCostTest {
     assertThat(SpecUpGoalService.preferred(bigger, true, free, true)).isTrue();
   }
 
+  /** 소수 둘째 자리에서 같아지는 효율(0.6476 · 0.6517 → 둘 다 0.65)도 반올림 전 값으로 가른다. Δ가 같아도 id 순으로 가지 않는다. */
+  @Test
+  void 효율은_반올림_전_값으로_고르고_화면_값만_둘째_자리다() {
+    var delta = new java.math.BigDecimal("38.45");
+    var low = SpecUpGoalService.rank(delta, 593_698L);
+    var high = SpecUpGoalService.rank(delta, 590_003L);
+    assertThat(SpecUpCost.efficiency(delta, 593_698L))
+        .isEqualByComparingTo(SpecUpCost.efficiency(delta, 590_003L));
+    assertThat(high).isGreaterThan(low);
+    var a =
+        option("GEM_LEVEL:10", SpecUpCost.gem(593_698, 0L, false))
+            .scored(delta, java.math.BigDecimal.valueOf(3000), low);
+    var b =
+        option("GEM_LEVEL:5", SpecUpCost.gem(590_003, 0L, false))
+            .scored(delta, java.math.BigDecimal.valueOf(3000), high);
+    // id만 보면 "GEM_LEVEL:10:10" < "GEM_LEVEL:5:10"이지만 반올림 전 효율이 큰 b가 앞선다.
+    assertThat(SpecUpGoalService.ORDER.compare(b, a)).isNegative();
+    assertThat(SpecUpGoalService.preferred(b, false, a, false)).isTrue();
+    assertThat(SpecUpGoalService.rank(delta, 0L)).isNull();
+    assertThat(SpecUpGoalService.rank(delta, null)).isNull();
+  }
+
   private static SpecUpGoalService.Option scored(
       SpecUpGoalService.Option option, String delta, String efficiency) {
     return option.scored(

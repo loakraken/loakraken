@@ -393,7 +393,13 @@ public record CharacterLoadoutResponse(
               description =
                   "보석 반영 쿨타임(공식 재사용 대기시간과 장착 보석의 재사용 대기시간 감소만 반영). 제목 줄에 재사용 대기시간이 없으면(갱신 전 캐시 등) null")
           @NullableResponse
-          SkillCooldownResponse cooldown) {
+          SkillCooldownResponse cooldown,
+      @Schema(
+              description =
+                  "공식 SkillType 코드 그대로(정수). 지금까지 본 값: 0 일반 스킬, 1 각성기, 100·101 초각성 두 종류. 다른 값이 와도 그대로 주므로 모르는 값은 일반 스킬처럼 다룹니다. 갱신 전 캐시(최대 5분)면 null",
+              example = "1")
+          @NullableResponse
+          Integer skillType) {
     static SkillResponse from(CharacterLoadout.Skill value) {
       return new SkillResponse(
           value.name(),
@@ -423,7 +429,8 @@ public record CharacterLoadoutResponse(
               .map(effect -> new SkillGemEffectResponse(effect.text(), effect.kind()))
               .toList(),
           value.attackType() == null ? null : value.attackType().name(),
-          SkillCooldownResponse.from(SkillCooldown.of(value)));
+          SkillCooldownResponse.from(SkillCooldown.of(value)),
+          value.skillType());
     }
   }
 

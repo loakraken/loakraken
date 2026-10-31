@@ -76,10 +76,12 @@ public record CharacterLoadout(
       String category,
       List<String> titleLines,
       List<String> infoLines,
-      List<TripodOption> tripodOptions) {
+      List<TripodOption> tripodOptions,
+      Integer skillType) {
     /**
      * titleLines: 공식 Tooltip 제목 줄(스킬 종류·재사용 대기시간·분류, #299). infoLines: 현재 레벨 정보 줄(PvE·스킬 레벨·마나·부위
-     * 파괴·무력화·공격 타입·슈퍼아머 등 원문 순서). 이전 캐시면 빈 목록.
+     * 파괴·무력화·공격 타입·슈퍼아머 등 원문 순서). 이전 캐시면 빈 목록. skillType: 공식 SkillType 코드 그대로(관측: 0 일반, 1 각성기,
+     * 100·101 초각성 두 종류). 모르는 값도 그대로 두고, 이전 캐시면 null.
      */
     public Skill {
       tripods = tripods == null ? List.of() : List.copyOf(tripods);
@@ -87,6 +89,39 @@ public record CharacterLoadout(
       titleLines = titleLines == null ? List.of() : List.copyOf(titleLines);
       infoLines = infoLines == null ? List.of() : List.copyOf(infoLines);
       tripodOptions = tripodOptions == null ? List.of() : List.copyOf(tripodOptions);
+    }
+
+    public Skill(
+        String name,
+        String icon,
+        Integer level,
+        String type,
+        Integer partBreakLevel,
+        Boolean counter,
+        List<Tripod> tripods,
+        Rune rune,
+        List<SkillGemEffect> gemEffects,
+        AttackType attackType,
+        String category,
+        List<String> titleLines,
+        List<String> infoLines,
+        List<TripodOption> tripodOptions) {
+      this(
+          name,
+          icon,
+          level,
+          type,
+          partBreakLevel,
+          counter,
+          tripods,
+          rune,
+          gemEffects,
+          attackType,
+          category,
+          titleLines,
+          infoLines,
+          tripodOptions,
+          null);
     }
 
     public Skill(

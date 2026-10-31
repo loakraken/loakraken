@@ -172,6 +172,8 @@ services:
       STATS_SEED_NAMES: ${STATS_SEED_NAMES:-}
       # 시드 파일(#271): 한 줄에 한 이름, # 주석. 스택 디렉터리 seed/에 두면 /seed로 읽기 전용 마운트된다(예: /seed/names.txt). 기동 때 한 번 읽는다.
       STATS_SEED_FILE: ${STATS_SEED_FILE:-}
+      # 전체 인구 주간 스냅샷(통계 B5). 웹 전체 인구 탭과 함께 켠다. 켜면 다음 날 05:10(KST)에 첫 스냅샷.
+      STATS_POPULATION_SNAPSHOT_ENABLED: ${STATS_POPULATION_SNAPSHOT_ENABLED:-false}
       MARKET_WARMUP_ENABLED: ${MARKET_WARMUP_ENABLED:-false}
       # 기능 플래그(#214): 비우면 꺼짐. 스테이징은 치명 계산을 켜고(web 치적 도구가 보임), 영수증·젬 가공은 검증 때만 켠다.
       CRIT_SPEED_ENABLED: ${CRIT_SPEED_ENABLED:-false}

@@ -148,6 +148,10 @@ stats:
     enabled: ${STATS_SEED_ENABLED:false}
     names: ${STATS_SEED_NAMES:}
     file: ${STATS_SEED_FILE:}
+  # 전체 인구 주간 스냅샷(통계 묶음 B5): 매일 cron에 보고 7일 지났으면 새로 만든다(공식 호출 없음). 웹 전체 인구 탭과 함께 켠다.
+  population-snapshot:
+    enabled: ${STATS_POPULATION_SNAPSHOT_ENABLED:false}
+    cron: ${STATS_POPULATION_SNAPSHOT_CRON:0 10 5 * * *}
 
 # 수집품(내실) 랭킹(#295): 웹 화면이 준비될 때까지 기본 꺼짐
 ranking:

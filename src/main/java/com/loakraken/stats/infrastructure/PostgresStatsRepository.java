@@ -33,7 +33,8 @@ import tools.jackson.databind.json.JsonMapper;
 @Transactional(readOnly = true, timeout = 5)
 class PostgresStatsRepository implements StatsPort {
   /** characters c가 처리정지 목록에 없다(B5). 모집단·커버리지·서버별 캐릭터 수에 같이 쓴다. */
-  private static final String NOT_EXCLUDED =
+  /** 처리정지 목록(public_exclusion)에 없는 캐릭터(별칭 c). 전체 인구 스냅샷도 같은 조건을 쓴다. */
+  static final String NOT_EXCLUDED =
       "NOT EXISTS (SELECT 1 FROM public_exclusion e WHERE e.character_name = c.character_name"
           + " AND (e.server_name IS NULL OR e.server_name = c.server_name))";
 

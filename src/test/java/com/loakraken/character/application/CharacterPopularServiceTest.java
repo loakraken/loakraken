@@ -55,6 +55,47 @@ class CharacterPopularServiceTest {
         .isInstanceOf(IllegalArgumentException.class);
   }
 
+  @Test
+  void 인기_길드_캐시_키에는_처리정지_목록_내용_값이_들어가_목록이_바뀌면_새로_센다() {
+    var popular = mock(CharacterPopularPort.class);
+    var summaries = mock(CharacterPublicSummaryPort.class);
+    var guilds = guildService(popular, summaries);
+    org.mockito.Mockito.when(summaries.exclusionRevision()).thenReturn("aaa", "bbb");
+    guilds.popularGuilds(CharacterPopularService.Period.LAST_24_HOURS, null, 10);
+    guilds.popularGuilds(CharacterPopularService.Period.LAST_24_HOURS, null, 10);
+    org.mockito.Mockito.verify(popular).findCachedGuilds("24h:-:10:xaaa");
+    org.mockito.Mockito.verify(popular).findCachedGuilds("24h:-:10:xbbb");
+  }
+
+  @Test
+  void 인기_길드는_처리정지_목록을_확인하지_못하면_내지_않는다() {
+    var summaries = mock(CharacterPublicSummaryPort.class);
+    org.mockito.Mockito.when(summaries.exclusionRevision())
+        .thenThrow(new org.springframework.dao.DataAccessResourceFailureException("down"));
+    assertThatThrownBy(
+            () ->
+                guildService(mock(CharacterPopularPort.class), summaries)
+                    .popularGuilds(CharacterPopularService.Period.LAST_24_HOURS, null, 10))
+        .isInstanceOf(CharacterException.class)
+        .extracting("errorCode")
+        .isEqualTo(CharacterErrorCode.CHARACTER_POPULAR_UNAVAILABLE);
+  }
+
+  private static CharacterPopularService guildService(
+      CharacterPopularPort popular, CharacterPublicSummaryPort summaries) {
+    return new CharacterPopularService(
+        popular,
+        new CharacterPopularPolicy(
+            true,
+            new CharacterPopularPolicy.MinUniqueViews(5, 15),
+            30,
+            Duration.ofMinutes(10),
+            Duration.ofDays(8)),
+        new CharacterMetrics(new SimpleMeterRegistry()),
+        Clock.systemUTC(),
+        new CharacterStopList(summaries));
+  }
+
   /** 처리정지 목록이 비어 있음(#351). */
   static CharacterStopList openStopList() {
     return new CharacterStopList(org.mockito.Mockito.mock(CharacterPublicSummaryPort.class));

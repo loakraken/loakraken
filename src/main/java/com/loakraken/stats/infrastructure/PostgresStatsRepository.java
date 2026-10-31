@@ -1176,6 +1176,11 @@ class PostgresStatsRepository implements StatsPort {
   }
 
   @Override
+  public String exclusionRevision() {
+    return jdbc.sql(StopListRevisionSql.REVISION).query(String.class).single();
+  }
+
+  @Override
   public java.util.Set<Named> stopListed(java.util.Collection<Named> characters) {
     var names =
         characters.stream()
@@ -1259,6 +1264,7 @@ class PostgresStatsRepository implements StatsPort {
     }
     if (c.representativeOnly())
       // 같은 원정대(같은 서버·같은 roster_key)에서 아이템 레벨이 가장 높은 캐릭터. 동률이면 이름순 첫 캐릭터.
+      // 처리정지 목록 캐릭터는 대표 후보에서도 빠진다(목록 캐릭터가 대표면 그 원정대는 다음 캐릭터가 대표).
       // 텍스트 블록은 앞 공백을 지우므로 구분 공백을 따로 붙인다.
       where
           .append(' ')
@@ -1268,7 +1274,9 @@ class PostgresStatsRepository implements StatsPort {
              SELECT 1 FROM characters o
              WHERE o.roster_key = c.roster_key AND o.server_name = c.server_name
                AND (o.item_level > c.item_level
-                    OR (o.item_level = c.item_level AND o.character_name < c.character_name))))""");
+                    OR (o.item_level = c.item_level AND o.character_name < c.character_name))
+               AND NOT EXISTS (SELECT 1 FROM public_exclusion oe WHERE oe.character_name = o.character_name
+                    AND (oe.server_name IS NULL OR oe.server_name = o.server_name))))""");
     if (classEngraving != null) {
       where.append(
           " AND REGEXP_REPLACE((SELECT e.ark_passive_title FROM character_equipment_summary e"

@@ -93,6 +93,9 @@ public interface StatsPort {
   /** characters 중 처리정지 목록에 있는 것(서버를 비운 항목은 모든 서버). 한 번의 조회다. */
   java.util.Set<Named> stopListed(java.util.Collection<Named> characters);
 
+  /** 처리정지 목록의 지금 내용을 나타내는 짧은 값. 목록이 바뀌면 달라진다(집계 캐시 키에 넣는다). 한 번의 조회다. */
+  String exclusionRevision();
+
   /** 캐릭터 이름과 서버. */
   record Named(String characterName, String serverName) {}
 

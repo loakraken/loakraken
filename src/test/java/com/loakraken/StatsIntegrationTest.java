@@ -360,6 +360,36 @@ class StatsIntegrationTest {
   }
 
   @Test
+  void 처리정지_목록이_바뀌면_집계_캐시를_비우지_않아도_바로_새로_세고_대표가_목록에_들면_다음_캐릭터가_대표다() throws Exception {
+    표본();
+    var all = "/api/v1/stats/summary?server=" + encode(SERVER);
+    var representative = "/api/v1/stats/summary?representativeOnly=true&server=" + encode(SERVER);
+    assertThat(data(all).at("/meta/population").asLong()).isEqualTo(40);
+    // 원정대(1700·1701·1790) 대표는 1790(전투력 없어 모집단 밖)이라 1700·1701이 둘 다 빠진다.
+    assertThat(data(representative).at("/meta/population").asLong()).isEqualTo(38);
+    try {
+      // 캐시는 그대로 두고 목록만 바꾼다.
+      jdbc.sql(
+              "INSERT INTO public_exclusion (character_name, server_name, reason_code) VALUES ('통계캐5', :s, 'PRIVACY_STOP')")
+          .param("s", SERVER)
+          .update();
+      assertThat(data(all).at("/meta/population").asLong()).isEqualTo(39);
+
+      // 원정대 대표(1790)가 목록에 들면 다음으로 높은 1701이 대표가 된다: 1700과 목록의 통계캐5만 빠져 40 − 2 = 38
+      // (고치기 전이면 1701도 빠져 37).
+      jdbc.sql(
+              "INSERT INTO public_exclusion (character_name, server_name, reason_code) VALUES ('통계발견만', :s, 'PRIVACY_STOP')")
+          .param("s", SERVER)
+          .update();
+      assertThat(data(representative).at("/meta/population").asLong()).isEqualTo(38);
+    } finally {
+      jdbc.sql("DELETE FROM public_exclusion WHERE server_name = :s").param("s", SERVER).update();
+    }
+    // 목록에서 빠지면 다시 처음 값(캐시 키가 다시 바뀜).
+    assertThat(data(all).at("/meta/population").asLong()).isEqualTo(40);
+  }
+
+  @Test
   void 랭킹과_캐릭터_순위는_동률을_같은_순위로_주고_상위_퍼센트로_티어를_정한다() throws Exception {
     표본();
     var ranking = data("/api/v1/rankings?metric=COMBAT_POWER&size=3&server=" + encode(SERVER));

@@ -82,4 +82,14 @@ class PostgresCharacterPublicSummaryRepository implements CharacterPublicSummary
             .query(String.class)
             .list());
   }
+
+  /** 이름·서버를 정렬해 이은 문자열의 md5 앞 12자리. 목록이 비면 "0". */
+  @Override
+  public String exclusionRevision() {
+    return jdbc.sql(
+            "SELECT COALESCE(LEFT(md5(string_agg(character_name || '|' || COALESCE(server_name, ''), ','"
+                + " ORDER BY character_name, server_name)), 12), '0') FROM public_exclusion")
+        .query(String.class)
+        .single();
+  }
 }

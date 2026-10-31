@@ -164,6 +164,31 @@ public class MaterialUnitPriceService {
     return result;
   }
 
+  /**
+   * 캐시만 읽는 재료 시세(재련 계획 합계 #764): 재료 시세 API와 같은 값(같은 기준·매물·소수 여섯째 자리)이지만 예열 캐시에 없는 이름은 검색하지 않고
+   * PRICE_UNAVAILABLE이다(공식 호출 없음, 버킷 매김 없음).
+   */
+  public List<UnitPrice> cachedPrices(MaterialPriceBasis basis, List<String> names) {
+    var scans = scans();
+    var result = new ArrayList<UnitPrice>();
+    for (var name : new LinkedHashSet<>(names)) {
+      var known = known(basis, name, scans);
+      result.add(
+          known != null
+              ? known
+              : new UnitPrice(
+                  name,
+                  UnitPrice.Status.PRICE_UNAVAILABLE,
+                  null,
+                  null,
+                  null,
+                  null,
+                  null,
+                  clock.instant()));
+    }
+    return result;
+  }
+
   /** 검색 없이 답할 수 있으면 그 값: 거래 불가 → 예열 스캔 → 음성 캐시. 없으면 null(검색 필요). */
   private UnitPrice known(MaterialPriceBasis basis, String name, Scans scans) {
     if (UNTRADEABLE.contains(name))

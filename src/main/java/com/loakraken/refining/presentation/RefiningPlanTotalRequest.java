@@ -21,6 +21,11 @@ import java.util.List;
 public record RefiningPlanTotalRequest(
     @Schema(description = "숨결 사용 방식(/plans의 breath와 같음). 생략하면 NONE", example = "OPTIMAL")
         RefiningPlanRequest.Breath breath,
+    @Schema(
+            description =
+                "재료 값 기준(재료 시세 API의 priceBasis와 같음). 생략하면 CURRENT_MIN_PRICE. OPTIMAL 계획 풀이는 이 값과 상관없이 즉시 구매 최저가로 한다(/plans와 같음)",
+            example = "CURRENT_MIN_PRICE")
+        com.loakraken.market.domain.MaterialPriceBasis priceBasis,
     @Schema(description = "/plans의 useBook과 같음. 생략하면 true", defaultValue = "true") Boolean useBook,
     @Schema(description = "/plans의 growthSupport와 같음. 생략하면 true", defaultValue = "true")
         Boolean growthSupport,
@@ -61,6 +66,13 @@ public record RefiningPlanTotalRequest(
       @NotBlank @Size(max = 40) @Schema(example = "운명의 수호석") String name,
       @NotNull @Min(0) @Max(1_000_000_000L) @Schema(description = "가진 수량", example = "12000")
           Long amount) {}
+
+  @JsonIgnore
+  com.loakraken.market.domain.MaterialPriceBasis effectivePriceBasis() {
+    return priceBasis == null
+        ? com.loakraken.market.domain.MaterialPriceBasis.CURRENT_MIN_PRICE
+        : priceBasis;
+  }
 
   @JsonIgnore
   RefiningPlanRequest.Breath effectiveBreath() {

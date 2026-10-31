@@ -2,8 +2,8 @@ package com.loakraken.refining.presentation;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.loakraken.market.application.RefiningMaterialPriceService.Listing;
-import com.loakraken.market.application.RefiningMaterialPriceService.Listings;
+import com.loakraken.market.application.MaterialUnitPriceService.UnitPrice;
+import com.loakraken.market.domain.MaterialPriceBasis;
 import com.loakraken.refining.domain.RefiningPlan;
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -26,13 +26,12 @@ class RefiningPlanTotalTest {
             stage("12.30", q("운명의 수호석", "0.40"), q("운명의 파편", "1500.50")),
             stage("10.25", q("운명의 수호석", "0.35"), q("빙하의 숨결", "3.20")));
     var b = solved(stage("7.10", q("운명의 수호석", "0.30"), q("재봉술 : 업화 [11-14]", "0.60")));
-    var listings =
-        new Listings(
-            AT,
-            Map.of(
-                "운명의 수호석", new Listing("운명의 수호석", 100, 1, new BigDecimal("32")),
-                "운명의 파편", new Listing("운명의 파편", 1, 1000, new BigDecimal("92")),
-                "빙하의 숨결", new Listing("빙하의 숨결", 1, 1, new BigDecimal("430"))));
+    // 재료 시세 API(캐시만)와 같은 값: 1개 값은 소수 여섯째 자리, 책은 캐시에 없어 PRICE_UNAVAILABLE.
+    var prices =
+        Map.of(
+            "운명의 수호석", priced("운명의 수호석", "0.320000", 100, "32", null, AT),
+            "운명의 파편", priced("운명의 파편", "0.092000", 1, "92", 1000, AT.minusSeconds(60)),
+            "빙하의 숨결", priced("빙하의 숨결", "430.000000", 1, "430", null, AT));
     var owned =
         List.of(
             new RefiningPlanTotalRequest.Owned("운명의 파편", 600L),
@@ -41,7 +40,11 @@ class RefiningPlanTotalTest {
 
     var total =
         RefiningPlanTotalResponse.of(
-            RefiningPlanRequest.Breath.MAX, List.of(a, b), owned, listings);
+            RefiningPlanRequest.Breath.MAX,
+            MaterialPriceBasis.CURRENT_MIN_PRICE,
+            List.of(a, b),
+            owned,
+            names -> pricer(names, prices));
 
     var lines = total.materials();
     assertThat(lines)
@@ -78,7 +81,9 @@ class RefiningPlanTotalTest {
     // 1544(책은 시세 없음)
     assertThat(total.marketValueGold()).isEqualTo(1544);
     assertThat(total.expectedCostGold()).isNull();
-    assertThat(total.pricesObservedAt()).isEqualTo(AT);
+    // 쓴 값 가운데 가장 오래된 관측 시각
+    assertThat(total.pricesObservedAt()).isEqualTo(AT.minusSeconds(60));
+    assertThat(total.priceBasis()).isEqualTo("CURRENT_MIN_PRICE");
     assertThat(total.parts()).hasSize(2);
     assertThat(total.assumptions()).contains("보유 재료는 계획을 바꾸지 않고 구매량에서만 뺍니다.");
   }
@@ -89,9 +94,10 @@ class RefiningPlanTotalTest {
     var total =
         RefiningPlanTotalResponse.of(
             RefiningPlanRequest.Breath.NONE,
+            MaterialPriceBasis.RECENT_PRICE,
             List.of(a),
             List.of(new RefiningPlanTotalRequest.Owned("운명의 수호석", 5L)),
-            null);
+            names -> pricer(names, Map.of()));
     var stone = total.materials().getFirst();
     assertThat(stone.amount()).isEqualTo(1);
     assertThat(stone.used()).isEqualTo(1);
@@ -110,7 +116,12 @@ class RefiningPlanTotalTest {
     var a = optimal(solved(stage("1", q("운명의 수호석", "0.40"))), 100.2, 200.2);
     var b = optimal(solved(stage("1", q("운명의 수호석", "0.40"))), 300.2);
     var total =
-        RefiningPlanTotalResponse.of(RefiningPlanRequest.Breath.OPTIMAL, List.of(a, b), null, null);
+        RefiningPlanTotalResponse.of(
+            RefiningPlanRequest.Breath.OPTIMAL,
+            MaterialPriceBasis.CURRENT_MIN_PRICE,
+            List.of(a, b),
+            null,
+            null);
     // ⌈600.6⌉ = 601(부위마다 올리면 ⌈300.4⌉ + ⌈300.2⌉ = 602)
     assertThat(total.expectedCostGold()).isEqualTo(601);
   }
@@ -120,6 +131,38 @@ class RefiningPlanTotalTest {
     assertThat(RefiningPlanTotalResponse.ceil(new BigDecimal("3.00"))).isEqualTo(3);
     assertThat(RefiningPlanTotalResponse.ceil(new BigDecimal("3.01"))).isEqualTo(4);
     assertThat(RefiningPlanTotalResponse.ceil(BigDecimal.ZERO)).isZero();
+  }
+
+  private static UnitPrice priced(
+      String name, String unit, int bundle, String bundlePrice, Integer contents, Instant at) {
+    return new UnitPrice(
+        name,
+        UnitPrice.Status.PRICED,
+        new BigDecimal(unit),
+        name,
+        bundle,
+        new BigDecimal(bundlePrice),
+        contents,
+        at);
+  }
+
+  /** 재료 시세 API(캐시만)처럼 이름마다 하나: 없는 이름은 PRICE_UNAVAILABLE. */
+  private static List<UnitPrice> pricer(List<String> names, Map<String, UnitPrice> prices) {
+    return names.stream()
+        .map(
+            name ->
+                prices.getOrDefault(
+                    name,
+                    new UnitPrice(
+                        name,
+                        UnitPrice.Status.PRICE_UNAVAILABLE,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        AT)))
+        .toList();
   }
 
   private static RefiningPlan.Quantity q(String name, String amount) {

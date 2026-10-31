@@ -329,6 +329,7 @@ class RefiningPlanIntegrationTest {
     ApiContractFixture.write("refining-plan-total.json", response.body());
     var data = mapper.readTree(response.body()).path("data");
     assertThat(data.path("totalRuleVersion").asText()).isEqualTo("refining-plan-total-v1");
+    assertThat(data.path("priceBasis").asText()).isEqualTo("CURRENT_MIN_PRICE");
     assertThat(data.path("parts").size()).isEqualTo(2);
     // 재련 골드 = 모든 부위·단계 expectedGold 합을 한 번 올림
     var stageGold = java.math.BigDecimal.ZERO;

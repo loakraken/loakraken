@@ -13,6 +13,8 @@ import com.loakraken.common.lostark.LostArkConfiguration;
 import com.loakraken.common.lostark.LostArkMetrics;
 import com.loakraken.common.lostark.LostArkProperties;
 import com.loakraken.common.lostark.LostArkRequestGate;
+import com.loakraken.common.lostark.UserKeyGate;
+import com.loakraken.common.lostark.UserKeyTestSupport;
 import com.sun.net.httpserver.HttpServer;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.net.InetSocketAddress;
@@ -481,7 +483,39 @@ class LostArkCharacterClientTest {
     assertThat(client.fetch("모험가").details().profile().characterName()).isEqualTo("모험가");
   }
 
+  @Test
+  void 사용자_키가_있으면_그_키로_부르고_서버_예산을_쓰지_않는다() {
+    var gate = UserKeyTestSupport.gate(metrics);
+    var client = client("server-token", Duration.ofSeconds(2), gate);
+    UserKeyTestSupport.withKey("user.key.marker", () -> client.fetch("모험가"));
+    assertThat(authorization).isEqualTo("Bearer user.key.marker");
+    assertThat(registry.get("loakraken.lostark.calls").tag("origin", "user_key").counter().count())
+        .isEqualTo(2);
+    assertThat(registry.find("loakraken.lostark.calls").tag("origin", "user").counter()).isNull();
+    // 키 문맥 밖은 지금처럼 서버 키다.
+    client.fetch("모험가");
+    assertThat(authorization).isEqualTo("Bearer server-token");
+  }
+
+  @ParameterizedTest
+  @CsvSource({"401,USER_KEY_INVALID", "403,USER_KEY_INVALID", "429,USER_KEY_RATE_LIMITED"})
+  void 사용자_키가_거절되면_서버_키로_다시_부르지_않는다(int official, String code) {
+    var client = client("server-token", Duration.ofSeconds(2), UserKeyTestSupport.gate(metrics));
+    status = official;
+    assertThatThrownBy(
+            () -> UserKeyTestSupport.withKey("user.key.marker", () -> client.fetch("모험가")))
+        .isInstanceOfSatisfying(
+            com.loakraken.common.api.BusinessException.class,
+            exception -> assertThat(exception.errorCode().code()).isEqualTo(code));
+    assertThat(requests.get()).isOne();
+    assertThat(authorization).isEqualTo("Bearer user.key.marker");
+  }
+
   private LostArkCharacterClient client(String key, Duration timeout) {
+    return client(key, timeout, null);
+  }
+
+  private LostArkCharacterClient client(String key, Duration timeout, UserKeyGate userKeys) {
     var properties =
         new LostArkProperties(
             URI.create("http://127.0.0.1:" + server.getAddress().getPort()),
@@ -497,7 +531,11 @@ class LostArkCharacterClientTest {
         new LostArkRequestGate(Clock.systemUTC(), properties, metrics),
         new JsonMapper(),
         metrics,
-        new StaticListableBeanFactory().getBeanProvider(ArmoryRawDump.class));
+        new StaticListableBeanFactory().getBeanProvider(ArmoryRawDump.class),
+        (userKeys == null
+                ? new StaticListableBeanFactory()
+                : new StaticListableBeanFactory(java.util.Map.of("userKeyGate", userKeys)))
+            .getBeanProvider(UserKeyGate.class));
   }
 
   private void assertError(LostArkCharacterClient client, CharacterErrorCode code) {

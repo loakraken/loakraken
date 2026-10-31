@@ -100,6 +100,8 @@ services:
       TITLE_STATS: "${TITLE_STATS:-}"
       # 통계 전체 인구 탭(통계 B5). api STATS_POPULATION_SNAPSHOT_ENABLED와 함께 켠다(api 먼저 — 기동 2분 뒤 첫 스냅샷).
       POPULATION_STATS: "${POPULATION_STATS:-}"
+      # 스펙업 추천 순서 화면(web #1216). api는 스펙업 가이드 스위치(SPEC_UP_ENABLED)를 그대로 쓴다.
+      SPEC_UP_PATH: "${SPEC_UP_PATH:-}"
       # 이 둘은 비우면 어디서나 꺼짐(on일 때만 켜짐): 검색엔진 색인, 시세 알림 화면.
       CHARACTER_INDEXING: "${CHARACTER_INDEXING:-}"
       PRICE_ALERTS: "${PRICE_ALERTS:-}"

@@ -16,6 +16,7 @@ import tools.jackson.databind.json.JsonMapper;
 @Component
 class ValkeySpecUpGoalStore implements SpecUpGoalStorePort {
   static final String PREFIX = "spec-up:v1:goal:";
+  static final String PATH_PREFIX = "spec-up:v1:path:";
   private static final Logger log = LoggerFactory.getLogger(ValkeySpecUpGoalStore.class);
   private final StringRedisTemplate redis;
   private final JsonMapper mapper;
@@ -43,6 +44,27 @@ class ValkeySpecUpGoalStore implements SpecUpGoalStorePort {
       redis.opsForValue().set(PREFIX + key, mapper.writeValueAsString(goal), ttl);
     } catch (DataAccessException | JacksonException exception) {
       log.warn("스펙업 목표 경로 캐시를 쓰지 못했습니다. 예외 유형={}", exception.getClass().getSimpleName());
+    }
+  }
+
+  @Override
+  public Optional<SpecUpGoalService.Path> findPath(String key) {
+    try {
+      var json = redis.opsForValue().get(PATH_PREFIX + key);
+      return json == null
+          ? Optional.empty()
+          : Optional.ofNullable(mapper.readValue(json, SpecUpGoalService.Path.class));
+    } catch (DataAccessException | JacksonException | IllegalArgumentException exception) {
+      return Optional.empty();
+    }
+  }
+
+  @Override
+  public void savePath(String key, SpecUpGoalService.Path path, Duration ttl) {
+    try {
+      redis.opsForValue().set(PATH_PREFIX + key, mapper.writeValueAsString(path), ttl);
+    } catch (DataAccessException | JacksonException exception) {
+      log.warn("스펙업 추천 순서 캐시를 쓰지 못했습니다. 예외 유형={}", exception.getClass().getSimpleName());
     }
   }
 }

@@ -49,7 +49,12 @@ class ReceiptIntegrationTest {
   @MockitoBean CharacterDetailsPort detailsPort;
   @MockitoBean MaterialUnitPriceService materials;
   @MockitoBean MarketAuctionService auctions;
+  @Autowired io.micrometer.core.instrument.MeterRegistry registry;
   private final JsonMapper mapper = new JsonMapper();
+
+  private double skipped(String reason) {
+    return registry.counter("loakraken.receipt.fetch.skipped", "reason", reason).count();
+  }
   private final List<String> names = new ArrayList<>();
 
   @BeforeEach
@@ -104,6 +109,7 @@ class ReceiptIntegrationTest {
 
   @Test
   void 한_요청에_8명까지_받고_나머지는_PENDING이며_다시_요청하면_이어서_채운다() throws Exception {
+    double capSkipped = skipped("cap");
     var first = get("/api/v1/characters/receipt?characterName=" + encode(MAIN));
     assertThat(first.statusCode()).as(first.body()).isEqualTo(200);
     var data = mapper.readTree(first.body()).path("data");
@@ -140,6 +146,8 @@ class ReceiptIntegrationTest {
     assertThat(data.path("notIncluded").toString()).contains("ARK_GRID_GEM", "VERIFYING");
     assertThat(data.path("assumptions").size()).isGreaterThan(0);
     verify(detailsPort, times(8)).fetchArmory(anyString());
+    // 상한으로 넘긴 2명은 이유 cap으로 센다(칸 부족·멈춤이 아님).
+    assertThat(skipped("cap") - capSkipped).isEqualTo(2);
     ApiContractFixture.write("character-receipt.json", first.body());
     // 다른 사이트 이름·간접 표현 금지(#261).
     SiteNames.assertAbsent(first.body());
@@ -151,6 +159,7 @@ class ReceiptIntegrationTest {
     assertThat(again.at("/total/status").asText()).isEqualTo("COMPLETE");
     // 앞의 8명은 캐시를 쓰고 남은 2명만 새로 받는다.
     verify(detailsPort, times(10)).fetchArmory(anyString());
+    assertThat(skipped("cap") - capSkipped).isEqualTo(2);
 
     // 기본은 책 포함(#279, PM 총괄 10-11 결정), false를 명시하면 책 제외.
     assertThat(data.at("/assumptions/0").asText()).contains("책 효과는 항상 적용된다고 가정합니다");

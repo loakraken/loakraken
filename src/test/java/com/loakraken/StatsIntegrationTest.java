@@ -187,6 +187,57 @@ class StatsIntegrationTest {
     assertThat(supportsOnly.path("combatPowerP90").isNull()).isTrue();
   }
 
+  /**
+   * 구성 블록(B4): 겸용 직업(바드)은 판정한 역할대로, 아닌 직업(버서커)은 역할을 몰라도 딜러로 센다. 네 값의 합은 표본이고, 겸용 직업 행의 딜러·서포터·미확인과
+   * 같다.
+   */
+  @Test
+  void 구성_블록은_겸용_직업을_역할로_나누고_합이_표본이다() throws Exception {
+    var at = now.minus(1, ChronoUnit.DAYS);
+    String[] bard = {"SUPPORT", "SUPPORT", "SUPPORT", "DEALER", "DEALER", null};
+    for (int i = 0; i < bard.length; i++)
+      insert(
+          "구성바드" + i,
+          "바드",
+          new BigDecimal("1700"),
+          new BigDecimal("3000"),
+          bard[i],
+          null,
+          null,
+          at);
+    String[] berserker = {"DEALER", "DEALER", "DEALER", "DEALER", null};
+    for (int i = 0; i < berserker.length; i++)
+      insert(
+          "구성버서커" + i,
+          "버서커",
+          new BigDecimal("1700"),
+          new BigDecimal("3000"),
+          berserker[i],
+          null,
+          null,
+          at);
+    var classes = data("/api/v1/stats/classes?server=" + encode(SERVER));
+    var composition = classes.path("composition");
+    assertThat(composition.path("dealer").asLong()).isEqualTo(5);
+    assertThat(composition.path("supportClassDealer").asLong()).isEqualTo(2);
+    assertThat(composition.path("support").asLong()).isEqualTo(3);
+    assertThat(composition.path("unknownRole").asLong()).isEqualTo(1);
+    long sum = 0;
+    for (var field : java.util.List.of("dealer", "supportClassDealer", "support", "unknownRole"))
+      sum += composition.path(field).asLong();
+    assertThat(sum).isEqualTo(classes.at("/meta/population").asLong()).isEqualTo(11);
+    // 겸용 직업 행의 역할 수와 같다(서포터 직업의 딜러·서포터 선택).
+    for (var row : classes.path("rows"))
+      if (row.path("className").asText().equals("바드")) {
+        assertThat(row.path("dealers").asLong()).isEqualTo(2);
+        assertThat(row.path("supports").asLong()).isEqualTo(3);
+        assertThat(row.path("unknownRole").asLong()).isEqualTo(1);
+      }
+    ApiContractFixture.write(
+        "stats-classes-composition.json",
+        get("/api/v1/stats/classes?server=" + encode(SERVER)).body());
+  }
+
   @Test
   void 분포의_상위_N퍼센트_기준값은_내_위치와_맞고_서버_행은_직업_행과_같은_값을_준다() throws Exception {
     표본();

@@ -81,6 +81,7 @@ public class CharacterCardService {
     // 해석은 이미 한 도메인에서 뽑으므로 요청 스레드에서 해도 가볍다. 쓰기만 작업자에 넘긴다.
     var summary = EquipmentSummary.from(details.profile(), details.loadout());
     var collectibles = details.loadout().collectibles();
+    var polishLines = polishLines(details.loadout());
     try {
       writer.execute(
           () -> {
@@ -90,6 +91,7 @@ public class CharacterCardService {
             write(observation);
             writeSummary(observation, summary);
             writeCollectibles(observation, collectibles);
+            if (polishLines != null) writePolishLines(observation, polishLines);
           });
     } catch (RejectedExecutionException exception) {
       metrics.cards(false);
@@ -206,6 +208,58 @@ public class CharacterCardService {
     } catch (DataAccessException | TransactionException exception) {
       metrics.cards(false);
       log.warn("카드 기록 저장에 실패했습니다. 예외 유형={}", exception.getClass().getSimpleName());
+    }
+  }
+
+  private static final List<String> ACCESSORY_SLOTS = List.of("목걸이", "귀걸이", "반지");
+
+  private static final java.util.regex.Pattern TRADE_ITEM_LEVEL =
+      java.util.regex.Pattern.compile("거래 제한 아이템 레벨\\s*([0-9][0-9,]{0,5})");
+
+  /**
+   * 장신구(목걸이·귀걸이·반지)의 연마 효과 줄. 장비를 관측하지 않았으면 null(저장된 줄을 바꾸지 않음). 공식 장신구 툴팁에는 '아이템 레벨 N' 줄이 없어 아이템
+   * 레벨은 거래 가능한 장신구의 '거래 제한 아이템 레벨 N' 줄에서 읽는다. 그 줄이 없는 장신구(거래 불가)는 null.
+   */
+  public static List<CharacterCardPort.PolishLine> polishLines(CharacterLoadout loadout) {
+    if (loadout.equipment().isEmpty()) return null;
+    var lines = new java.util.ArrayList<CharacterCardPort.PolishLine>();
+    for (var item : loadout.equipment()) {
+      if (item == null || !ACCESSORY_SLOTS.contains(item.type()) || item.detail() == null) continue;
+      var detail = item.detail();
+      if (detail.polishEffects() == null) continue;
+      var itemLevel = detail.itemLevel() != null ? detail.itemLevel() : tradeItemLevel(detail);
+      for (var effect : detail.polishEffects()) {
+        if (effect == null || effect.name() == null || effect.value() == null) continue;
+        lines.add(
+            new CharacterCardPort.PolishLine(
+                item.type(),
+                itemLevel,
+                item.grade(),
+                effect.name().strip(),
+                effect.value().strip(),
+                effect.grade() == null ? null : effect.grade().name()));
+      }
+    }
+    return List.copyOf(lines);
+  }
+
+  private static Integer tradeItemLevel(CharacterLoadout.EquipmentDetail detail) {
+    if (detail.tradeLines() == null) return null;
+    for (var line : detail.tradeLines()) {
+      if (line == null) continue;
+      var matcher = TRADE_ITEM_LEVEL.matcher(line);
+      if (matcher.find()) return Integer.valueOf(matcher.group(1).replace(",", ""));
+    }
+    return null;
+  }
+
+  private void writePolishLines(
+      CharacterCardPort.Observation observation, List<CharacterCardPort.PolishLine> lines) {
+    try {
+      cards.recordPolishLines(
+          observation.serverName(), observation.characterName(), lines, observation.observedAt());
+    } catch (DataAccessException | TransactionException exception) {
+      log.warn("event=polish_lines_save_failed type={}", exception.getClass().getSimpleName());
     }
   }
 

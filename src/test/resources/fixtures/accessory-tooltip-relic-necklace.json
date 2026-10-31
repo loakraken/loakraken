@@ -1,0 +1,76 @@
+{
+      "Element_000": {
+        "type": "NameTagBox",
+        "value": "<P ALIGN='CENTER'><FONT COLOR='#FA5D00'>엄숙한 결의의 목걸이</FONT></P>"
+      },
+      "Element_001": {
+        "type": "ItemTitle",
+        "value": {
+          "bEquip": 0,
+          "itemIrochiCount": 0,
+          "leftStr0": "<FONT SIZE='12'><FONT COLOR='#FA5D00'>유물 목걸이</FONT></FONT>",
+          "leftStr1": "<FONT SIZE='14'>품질</FONT>",
+          "leftStr2": "<FONT SIZE='14'>아이템 티어 4</FONT>",
+          "qualityValue": 81,
+          "rightStr0": "<FONT SIZE='12'><FONT COLOR='#FFD200'>장착중</FONT></FONT>",
+          "slotData": {
+            "advBookIcon": 0,
+            "battleItemTypeIcon": 0,
+            "blackListIcon": 0,
+            "cardIcon": false,
+            "friendship": 0,
+            "iconGrade": 5,
+            "iconPath": "https://cdn-lostark.game.onstove.com/efui_iconatlas/acc/acc_217.png",
+            "imagePath": "",
+            "islandIcon": 0,
+            "petBorder": 0,
+            "rtString": "",
+            "temporary": 0,
+            "town": 0,
+            "trash": 0
+          }
+        }
+      },
+      "Element_002": {
+        "type": "SingleTextBox",
+        "value": "<FONT SIZE='12'><FONT COLOR='#C24B46'>거래 제한 아이템 레벨</FONT> 1640<BR>캐릭터 귀속됨<BR>거래 <FONT COLOR='#FFD200'>2</FONT>회 가능</FONT>"
+      },
+      "Element_003": {
+        "type": "MultiTextBox",
+        "value": "|거래가능"
+      },
+      "Element_004": {
+        "type": "ItemPartBox",
+        "value": {
+          "Element_000": "<FONT COLOR='#A9D0F5'>기본 효과</FONT>",
+          "Element_001": "<FONT COLOR='#686660'>힘 +15366</FONT><BR><FONT COLOR='#686660'>민첩 +15366</FONT><BR>지능 +15366<BR>체력 +4030"
+        }
+      },
+      "Element_005": null,
+      "Element_006": {
+        "type": "ItemPartBox",
+        "value": {
+          "Element_000": "<FONT COLOR='#A9D0F5'>연마 효과</FONT>",
+          "Element_001": "<img src='emoticon_sign_greenDot' width='0' height='0' vspace='-3'></img>추가 피해 <FONT COLOR='FE9600'>+2.60%</FONT><br><img src='emoticon_sign_greenDot' width='0' height='0' vspace='-3'></img>적에게 주는 피해 <FONT color='CE43FC'>+1.20%</FONT><br><img src='emoticon_sign_greenDot' width='0' height='0' vspace='-3'></img>낙인력 <FONT COLOR='CE43FC'>+4.80%</FONT>"
+        }
+      },
+      "Element_007": {
+        "type": "ItemPartBox",
+        "value": {
+          "Element_000": "<FONT COLOR='#A9D0F5'>아크 패시브 포인트 효과</FONT>",
+          "Element_001": "깨달음 +10"
+        }
+      },
+      "Element_008": {
+        "type": "Progress",
+        "value": null
+      },
+      "Element_009": {
+        "type": "Progress",
+        "value": null
+      },
+      "Element_010": {
+        "type": "SingleTextBox",
+        "value": "<Font color='#5FD3F1'>[에픽 레이드] 폭풍의 지휘관, 베히모스</font><BR><Font color='#5FD3F1'>[카제로스 레이드] 서막 : 붉어진 백야의 나선</font><BR><Font color='#5FD3F1'>[카제로스 레이드] 1막 : 대지를 부수는 업화의 궤적 - 노말</font><BR><Font color='#5FD3F1'>그 외에 획득처가 더 존재합니다.</FONT>"
+      }
+    }

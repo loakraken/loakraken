@@ -51,7 +51,8 @@ public final class KrakenScoreInputMapper {
       Pattern.compile("\\[레벨 보너스\\] 기본 공격력 \\+(\\d+(?:\\.\\d+)?)%");
   private static final Pattern STONE_ENGRAVING =
       Pattern.compile("^\\s*\\[([^\\]]+)\\]\\s*Lv\\.(\\d+)");
-  private static final Pattern ORB = Pattern.compile("달성 최대 낙원력 : (\\d+)");
+  // 저장된 실제 응답은 쉼표 없이 오지만, 쉼표가 붙어도 첫 묶음만 읽지 않게 쉼표까지 받아 뺀다(장비 요약 낙원력과 같은 규칙).
+  private static final Pattern ORB = Pattern.compile("달성 최대 낙원력\\s*:\\s*(\\d[\\d,]*)");
   private static final Pattern BRACELET_ICON =
       Pattern.compile(
           "<img[^>]*emoticon_tooltip_bracelet[^>]*>(?:\\s*</img>)?", Pattern.CASE_INSENSITIVE);
@@ -317,7 +318,9 @@ public final class KrakenScoreInputMapper {
         var m = ORB.matcher(strip(write(tooltip)));
         var orb = out.putObject("orb");
         orb.set("name", copy(item.path("Name")));
-        orb.set("trinity", m.find() ? number(Long.parseLong(m.group(1))) : F.nullNode());
+        orb.set(
+            "trinity",
+            m.find() ? number(Long.parseLong(m.group(1).replace(",", ""))) : F.nullNode());
       }
     }
     return out;

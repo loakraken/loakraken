@@ -187,6 +187,26 @@ class KrakenScoreInputMapperTest {
   }
 
   @Test
+  void 보주_낙원력에_쉼표가_붙어도_같은_값과_점수를_만든다() throws IOException {
+    // 합성: l01 보주 원문의 낙원력 숫자에 천 단위 쉼표를 넣는다. 첫 묶음만 읽으면 낙원력이 35가 되어 점수가 바뀐다.
+    var doc = read("l01");
+    var raw = doc.path("raw").deepCopy();
+    int replaced = 0;
+    for (var item : raw.path("ArmoryEquipment")) {
+      if (!"보주".equals(item.path("Type").asString(""))) continue;
+      var tooltip = item.path("Tooltip").asString("");
+      var changed = tooltip.replace("최대 낙원력 : 35647915", "최대 낙원력 : 35,647,915");
+      if (!changed.equals(tooltip)) replaced++;
+      ((tools.jackson.databind.node.ObjectNode) item).put("Tooltip", changed);
+    }
+    assertThat(replaced).isOne();
+    var input = KrakenScoreInputMapper.from(raw);
+    assertThat(input.path("armory").path("orb").path("trinity").asLong()).isEqualTo(35647915L);
+    assertThat(KrakenScoreEngine.dealerScore(input, TABLES))
+        .isEqualTo(doc.path("expectedScore").asDouble());
+  }
+
+  @Test
   void 응답_때_점수_계산은_한_번에_수_밀리초_안이다() throws IOException {
     // 연결 PR 조건: 응답 p95 증가 ≤ 5ms. 응답 때 하는 일은 캐시에 든 입력으로 점수 한 번 계산뿐이다(변환은 공식 조회 때 한 번).
     var inputs = new ArrayList<JsonNode>();

@@ -360,7 +360,8 @@ record LostArkArmoryResponse(
       @JsonProperty("Type") String type,
       @JsonProperty("Tripods") List<Tripod> tripods,
       @JsonProperty("Rune") Rune rune,
-      @JsonProperty("Tooltip") String tooltip) {
+      @JsonProperty("Tooltip") String tooltip,
+      @JsonProperty("SkillType") Integer skillType) {
     CharacterLoadout.Skill toDomain() {
       var parsed = LostArkSkillTooltip.parse(tooltip);
       return new CharacterLoadout.Skill(
@@ -395,7 +396,8 @@ record LostArkArmoryResponse(
                               LostArkText.plain(tripod.name()),
                               tripod.icon(),
                               Boolean.TRUE.equals(tripod.selected())))
-                  .toList());
+                  .toList(),
+          skillType);
     }
   }
 

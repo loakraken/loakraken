@@ -86,6 +86,52 @@ public class RelicBookPriceService {
     }
   }
 
+  /** 공식 이미지 서버 주소만 내보낸다. */
+  static final String OFFICIAL_CDN = "https://cdn-lostark.game.onstove.com/";
+
+  /**
+   * 각인 그림 목록: 공백을 뺀 각인 이름 → 유물 각인서 공식 아이콘 주소(이름순). 마지막으로 본 아이콘(만료 없음)에 지금 시세 스캔을 덮어 쓴다. 공식 이미지 서버
+   * 주소만 담는다. 캐시를 읽지 못하면 읽은 만큼만(공식 호출 없음).
+   */
+  public java.util.SortedMap<String, String> icons() {
+    var byItem = new java.util.HashMap<String, String>();
+    try {
+      byItem.putAll(cache.findRelicBookIcons());
+    } catch (RuntimeException exception) {
+      // 마지막으로 본 아이콘을 읽지 못하면 시세 스캔만 쓴다.
+    }
+    try {
+      cache
+          .findRelicBooks()
+          .ifPresent(
+              scan -> {
+                for (var item : scan.items())
+                  if ((item.grade() == null || GRADE.equals(item.grade()))
+                      && item.icon() != null
+                      && !item.icon().isBlank()) byItem.put(compact(item.name()), item.icon());
+              });
+    } catch (RuntimeException exception) {
+      // 시세 스캔을 읽지 못하면 마지막으로 본 아이콘만 쓴다.
+    }
+    var result = new java.util.TreeMap<String, String>();
+    for (var entry : byItem.entrySet()) {
+      var engraving = engraving(entry.getKey());
+      if (engraving != null && entry.getValue().startsWith(OFFICIAL_CDN))
+        result.put(engraving, entry.getValue());
+    }
+    return result;
+  }
+
+  /** 공백을 뺀 품목 이름 "유물{각인}각인서" → "{각인}". 모양이 다르면 null. */
+  private static String engraving(String compactItemName) {
+    var prefix = compact(GRADE);
+    var suffix = "각인서";
+    if (!compactItemName.startsWith(prefix) || !compactItemName.endsWith(suffix)) return null;
+    var name =
+        compactItemName.substring(prefix.length(), compactItemName.length() - suffix.length());
+    return name.isEmpty() ? null : name;
+  }
+
   /** 캐시된 유물 각인서 시세의 관측 시각. 캐시가 없거나 읽지 못하면 빈 값(공식 호출 없음). 결과 캐시 키에 넣어 시세가 바뀌면 다시 계산하게 한다. */
   public Optional<Instant> observedAt() {
     try {

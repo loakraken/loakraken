@@ -191,11 +191,28 @@ public final class StatsResponses {
     }
   }
 
-  public record StatsClassesResponse(StatsMetaResponse meta, List<StatsClassRowResponse> rows) {
+  /** 구성 블록(B4). 직업군 비율은 직업 행의 인원을 화면의 직업군 표로 묶는다. */
+  public record StatsCompositionResponse(
+      @Schema(description = "딜러: 서포터 겸용 직업(바드·홀리나이트·도화가·발키리)이 아닌 직업의 모든 캐릭터(직업만으로 딜러)") long dealer,
+      @Schema(description = "서포터 직업 딜러: 겸용 직업 중 딜러로 판정한 캐릭터") long supportClassDealer,
+      @Schema(description = "서포터: 겸용 직업 중 서포터로 판정한 캐릭터") long support,
+      @Schema(description = "역할 미확인: 겸용 직업 중 역할을 아직 판정하지 못한 캐릭터") long unknownRole) {}
+
+  public record StatsClassesResponse(
+      StatsMetaResponse meta,
+      List<StatsClassRowResponse> rows,
+      @Schema(description = "구성 블록: 표본을 역할로 나눈 수(네 값의 합 = 표본)")
+          StatsCompositionResponse composition) {
     static StatsClassesResponse from(StatsQueryService.ClassesResult result) {
+      var composition = result.composition();
       return new StatsClassesResponse(
           StatsMetaResponse.from(result.meta()),
-          result.rows().stream().map(StatsClassesResponse::row).toList());
+          result.rows().stream().map(StatsClassesResponse::row).toList(),
+          new StatsCompositionResponse(
+              composition.dealer(),
+              composition.supportClassDealer(),
+              composition.support(),
+              composition.unknownRole()));
     }
 
     static StatsClassRowResponse row(StatsQueryService.ClassStat row) {

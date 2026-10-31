@@ -391,8 +391,9 @@ public class StatsQueryService {
   }
 
   public ClassesResult classes(StatsConditions conditions) {
+    // v2: 구성(composition)을 더했다(캐시에 남은 이전 모양을 읽지 않게).
     return cached(
-        "classes:" + key(conditions),
+        "classes:v2:" + key(conditions),
         ClassesResult.class,
         () -> {
           var now = clock.instant();
@@ -400,8 +401,29 @@ public class StatsQueryService {
           long population = rows.stream().mapToLong(StatsPort.ClassRow::count).sum();
           var result = new ArrayList<ClassStat>();
           for (var row : rows) result.add(classStat(row, population));
-          return new ClassesResult(meta(conditions, population, now), result);
+          return new ClassesResult(meta(conditions, population, now), result, composition(rows));
         });
+  }
+
+  /**
+   * 구성 블록(B4): 직업 행을 역할로 나눈다. 서포터 겸용 직업(StatsRules.SUPPORT_CLASSES)이 아닌 직업은 직업만으로 딜러라 모두 dealer, 겸용
+   * 직업은 판정한 역할대로 supportClassDealer·support, 역할을 모르면 unknownRole. 네 값의 합은 표본(모집단)과 같다.
+   */
+  static Composition composition(List<StatsPort.ClassRow> rows) {
+    long dealer = 0;
+    long supportClassDealer = 0;
+    long support = 0;
+    long unknownRole = 0;
+    for (var row : rows) {
+      if (!StatsRules.SUPPORT_CLASSES.contains(row.className())) {
+        dealer += row.count();
+        continue;
+      }
+      supportClassDealer += row.dealers();
+      support += row.supports();
+      unknownRole += row.count() - row.dealers() - row.supports();
+    }
+    return new Composition(dealer, supportClassDealer, support, unknownRole);
   }
 
   /**
@@ -1321,7 +1343,10 @@ public class StatsQueryService {
       Percentiles combatPower,
       SampleStatus sampleStatus) {}
 
-  public record ClassesResult(Meta meta, List<ClassStat> rows) {}
+  public record ClassesResult(Meta meta, List<ClassStat> rows, Composition composition) {}
+
+  /** 구성 블록(B4). dealer + supportClassDealer + support + unknownRole = 표본. */
+  public record Composition(long dealer, long supportClassDealer, long support, long unknownRole) {}
 
   /** 직업 각인 한 행: 직업 각인(공식 칭호 원문)과 직업별 통계와 같은 값. */
   public record ClassEngravingStat(String classEngraving, ClassStat stats) {}

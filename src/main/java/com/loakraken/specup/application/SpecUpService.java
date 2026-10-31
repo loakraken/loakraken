@@ -132,8 +132,8 @@ public class SpecUpService {
       BigDecimal krakenScorePer100kGold,
       String gemType,
       /**
-       * KRAKEN 정렬 키: 반올림 전 10만 골드당(raw ÷ 비용 × 10만). 비교 기준 B 원본도 반올림 전 값으로 정렬하고 표시만 둘째 자리다(계산 검증 11-01). 응답에는
-       * 내지 않는다(화면 값은 krakenScorePer100kGold).
+       * KRAKEN 정렬 키: 반올림 전 10만 골드당(raw ÷ 비용 × 10만). 비교 기준 B 원본도 반올림 전 값으로 정렬하고 표시만 둘째 자리다(계산 검증
+       * 11-01). 응답에는 내지 않는다(화면 값은 krakenScorePer100kGold).
        */
       Double krakenRank) {
     /**

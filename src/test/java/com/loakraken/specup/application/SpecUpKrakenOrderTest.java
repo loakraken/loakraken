@@ -67,7 +67,9 @@ class SpecUpKrakenOrderTest {
     assertThat(low.krakenScorePer100kGold()).isEqualByComparingTo(high.krakenScorePer100kGold());
     var candidates = new ArrayList<>(List.of(low, high));
     candidates.sort(SpecUpService.order(SpecUpService.Sort.KRAKEN));
-    assertThat(candidates).extracting(SpecUpService.Candidate::id).containsExactly("b-high", "a-low");
+    assertThat(candidates)
+        .extracting(SpecUpService.Candidate::id)
+        .containsExactly("b-high", "a-low");
   }
 
   /**

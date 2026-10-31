@@ -81,21 +81,78 @@ class RefiningController {
         content = @Content(schema = @Schema(ref = "#/components/schemas/ErrorResponse")))
   })
   public ApiResponse<RefiningPlanResponse> plan(@Valid @RequestBody RefiningPlanRequest request) {
+    var prices =
+        request.effectiveBreath() == RefiningPlanRequest.Breath.OPTIMAL
+            ? requirePrices().prices()
+            : null;
+    return ApiResponse.of(
+        RefiningSuccessCode.REFINING_PLAN_SUCCESS, solve(request, prices).response());
+  }
+
+  @PostMapping(value = "/plans/total", consumes = MediaType.APPLICATION_JSON_VALUE)
+  @Operation(
+      summary = "티어 4 재련 여러 부위 합계(가진 재료 빼기)",
+      description =
+          "부위(1~6개)마다 /plans와 같은 계획을 만들고 화면 합계 한 줄을 준다. 재료마다 모든 부위·단계 기대 수량을 더해 한 번 올린 뒤 가진 수량을 빼고, 남은 수량은 1개 값이 가장 싼 매물을 통째로 산다고 보고 골드로 바꾼다. "
+              + "재련 골드는 모든 단계 골드를 더해 한 번 올린다. 가진 재료는 계획(숨결·책 선택)을 바꾸지 않는다. "
+              + "시세는 서버 캐시만 읽는다(공식 호출 없음). NONE·MAX는 시세가 없어도 200(골드 칸 null), OPTIMAL은 /plans와 같이 409·429·400.")
+  @ApiResponses({
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(
+        responseCode = "200",
+        description = "REFINING_PLAN_TOTAL_SUCCESS"),
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(
+        responseCode = "400",
+        description =
+            "INVALID_REQUEST: 부위 0개·7개 이상, 단계 범위, 가진 수량 형식, OPTIMAL 스위치가 꺼져 있는데 breath=OPTIMAL",
+        content = @Content(schema = @Schema(ref = "#/components/schemas/ErrorResponse"))),
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(
+        responseCode = "409",
+        description = "REFINING_PRICE_PENDING: breath=OPTIMAL인데 재료 시세가 아직 없음(Retry-After 초)",
+        content = @Content(schema = @Schema(ref = "#/components/schemas/ErrorResponse"))),
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(
+        responseCode = "429",
+        description =
+            "REFINING_SOLVE_BUSY: breath=OPTIMAL인데 최적 풀이 자리가 모두 차 있음(기다리지 않음, Retry-After 초 뒤 다시)",
+        content = @Content(schema = @Schema(ref = "#/components/schemas/ErrorResponse")))
+  })
+  public ApiResponse<RefiningPlanTotalResponse> total(
+      @Valid @RequestBody RefiningPlanTotalRequest request) {
+    var optimal = request.effectiveBreath() == RefiningPlanRequest.Breath.OPTIMAL;
+    // 1개 값(OPTIMAL 풀이)과 매물(사야 할 골드)은 같은 스캔에서 만든다.
+    var snapshot = optimal ? requirePrices() : materials.cachedSnapshot().orElse(null);
+    var parts = new java.util.ArrayList<RefiningPlanTotalResponse.Solved>();
+    for (var part : request.parts())
+      parts.add(solve(request.toPlanRequest(part), snapshot == null ? null : snapshot.prices()));
+    return ApiResponse.of(
+        RefiningSuccessCode.REFINING_PLAN_TOTAL_SUCCESS,
+        RefiningPlanTotalResponse.of(
+            request.effectiveBreath(),
+            parts,
+            request.owned(),
+            snapshot == null ? null : snapshot.listings()));
+  }
+
+  /** OPTIMAL에 쓸 시세. 스위치가 꺼져 있으면 400, 시세가 없으면 409(다른 방식으로 바꿔 계산하지 않는다). */
+  private com.loakraken.market.application.RefiningMaterialPriceService.Snapshot requirePrices() {
+    if (!optimalEnabled())
+      // 400 INVALID_REQUEST(새 오류 코드 없음, 다른 400과 같은 처리)
+      throw new org.springframework.web.server.ResponseStatusException(
+          org.springframework.http.HttpStatus.BAD_REQUEST);
+    // 시세 캐시만 읽는다(공식 호출 없음). 시세가 없으면 숨결 없음·최대로 바꿔 계산하지 않는다.
+    return materials
+        .cachedSnapshot()
+        .orElseThrow(
+            () ->
+                new com.loakraken.common.api.BusinessException(
+                    com.loakraken.refining.application.RefiningErrorCode.REFINING_PRICE_PENDING,
+                    RETRY_AFTER));
+  }
+
+  /** 한 부위 계획. OPTIMAL이면 prices로 풀고(값이 모자라면 409), 아니면 시세 없이 계산한다. */
+  private RefiningPlanTotalResponse.Solved solve(
+      RefiningPlanRequest request,
+      com.loakraken.market.application.RefiningMaterialPriceService.Prices prices) {
     if (request.effectiveBreath() == RefiningPlanRequest.Breath.OPTIMAL) {
-      if (!optimalEnabled())
-        // 400 INVALID_REQUEST(새 오류 코드 없음, 다른 400과 같은 처리)
-        throw new org.springframework.web.server.ResponseStatusException(
-            org.springframework.http.HttpStatus.BAD_REQUEST);
-      // 시세 캐시만 읽는다(공식 호출 없음). 시세가 없으면 숨결 없음·최대로 바꿔 계산하지 않는다.
-      var prices =
-          materials
-              .cached()
-              .orElseThrow(
-                  () ->
-                      new com.loakraken.common.api.BusinessException(
-                          com.loakraken.refining.application.RefiningErrorCode
-                              .REFINING_PRICE_PENDING,
-                          RETRY_AFTER));
       var optimal =
           service.optimal(
               request.grade(), request.equipmentType(), request.toOptions(), prices.unitPrices());
@@ -103,8 +160,7 @@ class RefiningController {
         throw new com.loakraken.common.api.BusinessException(
             com.loakraken.refining.application.RefiningErrorCode.REFINING_PRICE_PENDING,
             RETRY_AFTER);
-      return ApiResponse.of(
-          RefiningSuccessCode.REFINING_PLAN_SUCCESS,
+      return new RefiningPlanTotalResponse.Solved(
           RefiningPlanResponse.from(
               service.rules(),
               service.growthCosts(),
@@ -113,17 +169,20 @@ class RefiningController {
               request,
               optimal.plan(),
               optimal.stages(),
-              prices.observedAt()));
+              prices.observedAt()),
+          optimal.plan(),
+          optimal.stages());
     }
     var plan = service.plan(request.grade(), request.equipmentType(), request.toOptions());
-    return ApiResponse.of(
-        RefiningSuccessCode.REFINING_PLAN_SUCCESS,
+    return new RefiningPlanTotalResponse.Solved(
         RefiningPlanResponse.from(
             service.rules(),
             service.growthCosts(),
             request.grade(),
             request.equipmentType(),
             request,
-            plan));
+            plan),
+        plan,
+        null);
   }
 }

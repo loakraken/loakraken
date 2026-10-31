@@ -1,6 +1,7 @@
 package com.loakraken.stats.infrastructure;
 
 import com.loakraken.stats.application.PopulationSnapshotPort;
+import com.loakraken.stats.application.StatsPopulationService;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 import java.time.Clock;
@@ -24,9 +25,9 @@ import org.springframework.stereotype.Component;
 class PopulationSnapshotJob {
   private static final Logger log = LoggerFactory.getLogger(PopulationSnapshotJob.class);
   static final String LEASE = "stats:lease:population-snapshot";
-  static final ZoneId KST = ZoneId.of("Asia/Seoul");
+  static final ZoneId KST = StatsPopulationService.KST;
   static final int INTERVAL_DAYS = 7;
-  static final int KEEP_WEEKS = 12;
+  static final int KEEP_WEEKS = StatsPopulationService.KEEP_WEEKS;
   private final String holder = java.util.UUID.randomUUID().toString();
   private final PopulationSnapshotPort snapshots;
   private final StringRedisTemplate redis;
@@ -73,7 +74,7 @@ class PopulationSnapshotJob {
   /** 만들었으면 true. */
   boolean run() {
     var today = LocalDate.now(clock.withZone(KST));
-    var latest = snapshots.latest().orElse(null);
+    var latest = snapshots.latest().map(PopulationSnapshotPort.Latest::date).orElse(null);
     if (latest != null && latest.isAfter(today.minusDays(INTERVAL_DAYS))) return false;
     if (!hold(Duration.ofMinutes(10))) return false;
     long started = System.nanoTime();

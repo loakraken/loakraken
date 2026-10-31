@@ -27,21 +27,62 @@ class PostgresPopulationSnapshotRepository implements PopulationSnapshotPort {
     this.jdbc = jdbc;
   }
 
+  /** 스냅샷 만들기를 인스턴스 사이에 한 번에 하나로(트랜잭션 잠금). 값은 이 작업 전용 임의 상수. */
+  static final long BUILD_LOCK = 0x6c6b5f706f70L;
+
   @Override
   @Transactional(readOnly = true, timeout = 5)
-  public Optional<LocalDate> latest() {
-    return jdbc.sql("SELECT MAX(snapshot_date) FROM stats_population_snapshot")
-        .query(LocalDate.class)
+  public Optional<Latest> latest() {
+    return jdbc.sql(
+            "SELECT snapshot_date, exclusion_revision FROM stats_population_snapshot_meta"
+                + " ORDER BY snapshot_date DESC LIMIT 1")
+        .query(
+            (row, index) ->
+                new Latest(
+                    row.getObject("snapshot_date", LocalDate.class),
+                    row.getString("exclusion_revision")))
         .optional();
+  }
+
+  @Override
+  @Transactional(readOnly = true, timeout = 5)
+  public String exclusionRevision() {
+    return jdbc.sql(StopListRevisionSql.REVISION).query(String.class).single();
   }
 
   @Override
   @Transactional(timeout = 120)
   public void build(LocalDate date, LocalDate keepFrom) {
+    jdbc.sql("SELECT 1 FROM (SELECT pg_advisory_xact_lock(:key)) l")
+        .param("key", BUILD_LOCK)
+        .query(Integer.class)
+        .single();
+    String revision = jdbc.sql(StopListRevisionSql.REVISION).query(String.class).single();
+    // 다른 인스턴스가 방금 같은 날짜를 지금 목록으로 만들었으면 다시 하지 않는다.
+    boolean done =
+        jdbc.sql(
+                "SELECT EXISTS (SELECT 1 FROM stats_population_snapshot_meta"
+                    + " WHERE snapshot_date = :date AND exclusion_revision = :revision)")
+            .param("date", date)
+            .param("revision", revision)
+            .query(Boolean.class)
+            .single();
+    if (done) return;
     jdbc.sql(
             "DELETE FROM stats_population_snapshot WHERE snapshot_date = :date OR snapshot_date < :keepFrom")
         .param("date", date)
         .param("keepFrom", keepFrom)
+        .update();
+    jdbc.sql(
+            "DELETE FROM stats_population_snapshot_meta WHERE snapshot_date = :date OR snapshot_date < :keepFrom")
+        .param("date", date)
+        .param("keepFrom", keepFrom)
+        .update();
+    jdbc.sql(
+            "INSERT INTO stats_population_snapshot_meta (snapshot_date, exclusion_revision, built_at)"
+                + " VALUES (:date, :revision, now())")
+        .param("date", date)
+        .param("revision", revision)
         .update();
     jdbc.sql(
             BASE

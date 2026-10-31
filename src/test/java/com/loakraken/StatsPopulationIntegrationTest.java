@@ -45,6 +45,7 @@ class StatsPopulationIntegrationTest {
   @AfterEach
   void 정리() {
     jdbc.sql("DELETE FROM stats_population_snapshot").update();
+    jdbc.sql("DELETE FROM stats_population_snapshot_meta").update();
     jdbc.sql("DELETE FROM public_exclusion WHERE server_name IN (:a, :b)")
         .param("a", A)
         .param("b", B)
@@ -77,7 +78,8 @@ class StatsPopulationIntegrationTest {
     // 오래된 스냅샷은 새로 만들 때 지운다.
     snapshots.build(LocalDate.of(2026, 7, 1), LocalDate.of(2026, 1, 1));
     snapshots.build(LocalDate.of(2026, 10, 31), LocalDate.of(2026, 8, 8));
-    assertThat(snapshots.latest()).contains(LocalDate.of(2026, 10, 31));
+    assertThat(snapshots.latest().map(PopulationSnapshotPort.Latest::date))
+        .contains(LocalDate.of(2026, 10, 31));
     assertThat(
             jdbc.sql(
                     "SELECT COUNT(*) FROM stats_population_snapshot WHERE snapshot_date < '2026-08-08'")
@@ -114,6 +116,34 @@ class StatsPopulationIntegrationTest {
         "stats-population.json",
         get("/api/v1/stats/population?server=" + URLEncoder.encode(A, StandardCharsets.UTF_8))
             .body());
+  }
+
+  /**
+   * 처리정지는 주간 스냅샷을 기다리지 않는다(코드 리뷰 10-31, #774와 같은 원칙): 스냅샷 뒤에 목록에 넣으면 다음 요청이 지금 목록으로 오늘(KST) 날짜에 다시
+   * 만들어 그 캐릭터를 바로 뺀다. 목록이 그대로면 다시 만들지 않는다.
+   */
+  @Test
+  void 스냅샷_뒤에_처리정지에_넣으면_다음_요청부터_바로_빠진다() throws Exception {
+    insert(A, "인구즉시1", "버서커", "1700", 3000L);
+    insert(A, "인구즉시2", "버서커", "1701", 3000L);
+    snapshots.build(LocalDate.of(2026, 10, 1), LocalDate.of(2026, 8, 1));
+    var path = "/api/v1/stats/population?server=" + URLEncoder.encode(A, StandardCharsets.UTF_8);
+    var before = data(path);
+    assertThat(before.path("total").asLong()).isEqualTo(2);
+    assertThat(before.path("snapshotDate").asText()).isEqualTo("2026-10-01");
+    // 목록이 그대로면 같은 스냅샷(다시 만들지 않음)
+    assertThat(data(path).path("snapshotDate").asText()).isEqualTo("2026-10-01");
+
+    jdbc.sql(
+            "INSERT INTO public_exclusion (character_name, server_name, reason_code)"
+                + " VALUES ('인구즉시2', :s, 'PRIVACY_STOP')")
+        .param("s", A)
+        .update();
+    var after = data(path);
+    assertThat(after.path("total").asLong()).isEqualTo(1);
+    assertThat(count(after.path("classes"), "버서커")).isEqualTo(1);
+    assertThat(after.path("snapshotDate").asText())
+        .isEqualTo(LocalDate.now(java.time.ZoneId.of("Asia/Seoul")).toString());
   }
 
   private static long count(JsonNode list, String name) {

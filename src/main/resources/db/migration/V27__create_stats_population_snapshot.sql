@@ -8,3 +8,10 @@ CREATE TABLE stats_population_snapshot (
   character_count BIGINT NOT NULL,
   PRIMARY KEY (snapshot_date, server_name, dimension, bucket)
 );
+
+-- 스냅샷마다 만들 때의 처리정지 목록 값(StopListRevisionSql). 지금 목록 값과 다르면 읽을 때 지금 목록으로 다시 만든다(처리정지는 바로 반영, #774와 같은 원칙).
+CREATE TABLE stats_population_snapshot_meta (
+  snapshot_date DATE PRIMARY KEY,
+  exclusion_revision TEXT NOT NULL,
+  built_at TIMESTAMPTZ NOT NULL
+);

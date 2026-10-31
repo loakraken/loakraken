@@ -48,17 +48,22 @@ class PopulationSnapshotJobTest {
     when(port.latest()).thenReturn(Optional.empty());
     job().afterStartup();
     verify(port).build(LocalDate.of(2026, 11, 1), LocalDate.of(2026, 8, 9));
-    when(port.latest()).thenReturn(Optional.of(LocalDate.of(2026, 11, 1)));
+    when(port.latest())
+        .thenReturn(Optional.of(new PopulationSnapshotPort.Latest(LocalDate.of(2026, 11, 1), "0")));
     job().afterStartup();
     verify(port).build(any(), any());
   }
 
   @Test
   void 가장_최근이_7일_지났으면_만들고_그_안이면_만들지_않는다() {
-    when(port.latest()).thenReturn(Optional.of(LocalDate.of(2026, 10, 26)));
+    when(port.latest())
+        .thenReturn(
+            Optional.of(new PopulationSnapshotPort.Latest(LocalDate.of(2026, 10, 26), "0")));
     assertThat(job().run()).isFalse();
     verify(port, never()).build(any(), any());
-    when(port.latest()).thenReturn(Optional.of(LocalDate.of(2026, 10, 25)));
+    when(port.latest())
+        .thenReturn(
+            Optional.of(new PopulationSnapshotPort.Latest(LocalDate.of(2026, 10, 25), "0")));
     assertThat(job().run()).isTrue();
     verify(port).build(LocalDate.of(2026, 11, 1), LocalDate.of(2026, 8, 9));
   }

@@ -16,8 +16,8 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 /**
- * 전체 인구 주간 스냅샷(통계 묶음 B5). 매일 한 번 보고, 스냅샷이 없거나 가장 최근 것이 7일 이상 지났으면 오늘(KST) 날짜로 새로 만든다(배포 직후 첫 스냅샷, 그
- * 뒤 주마다). 12주보다 오래된 스냅샷은 지운다. 여러 인스턴스 중 임대를 잡은 하나만 한다. 공식 API를 부르지 않는다.
+ * 전체 인구 주간 스냅샷(통계 묶음 B5). 기동 2분 뒤 한 번과 매일 한 번 보고, 스냅샷이 없거나 가장 최근 것이 7일 이상 지났으면 오늘(KST) 날짜로 새로 만든다(켠
+ * 직후 첫 스냅샷, 그 뒤 주마다). 12주보다 오래된 스냅샷은 지운다. 여러 인스턴스 중 임대를 잡은 하나만 한다. 공식 API를 부르지 않는다.
  */
 @Component
 @ConditionalOnProperty(prefix = "stats.population-snapshot", name = "enabled", havingValue = "true")
@@ -56,6 +56,17 @@ class PopulationSnapshotJob {
 
   @Scheduled(cron = "${stats.population-snapshot.cron:0 10 5 * * *}", zone = "Asia/Seoul")
   void tick() {
+    run();
+  }
+
+  /**
+   * 기동 뒤 한 번(배포·운영 10-31): 저녁에 켜도 다음 날 05:10까지 탭이 비지 않게. 7일 규칙이 그대로라 최근 스냅샷이 있으면 아무것도 하지 않고, 임대로 한
+   * 인스턴스만 만든다. 기동을 막지 않게 스케줄러 스레드에서 돈다.
+   */
+  @Scheduled(
+      initialDelayString = "${stats.population-snapshot.startup-delay:2m}",
+      fixedDelay = Long.MAX_VALUE)
+  void afterStartup() {
     run();
   }
 

@@ -42,6 +42,17 @@ class PopulationSnapshotJobTest {
     verify(port).build(LocalDate.of(2026, 11, 1), LocalDate.of(2026, 8, 9));
   }
 
+  /** 기동 뒤 한 번도 같은 규칙: 없으면 만들고, 최근 것이 있으면 하지 않는다(배포·운영 10-31). */
+  @Test
+  void 기동_뒤_한_번도_같은_7일_규칙이다() {
+    when(port.latest()).thenReturn(Optional.empty());
+    job().afterStartup();
+    verify(port).build(LocalDate.of(2026, 11, 1), LocalDate.of(2026, 8, 9));
+    when(port.latest()).thenReturn(Optional.of(LocalDate.of(2026, 11, 1)));
+    job().afterStartup();
+    verify(port).build(any(), any());
+  }
+
   @Test
   void 가장_최근이_7일_지났으면_만들고_그_안이면_만들지_않는다() {
     when(port.latest()).thenReturn(Optional.of(LocalDate.of(2026, 10, 26)));

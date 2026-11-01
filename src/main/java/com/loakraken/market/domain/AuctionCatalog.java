@@ -186,8 +186,8 @@ public final class AuctionCatalog {
   }
 
   /**
-   * 표의 조합 순서. 옵션 2개면 상상·상중·중상·중중·상하·하상(중하·하중·하하 제외 — 칸마다 공식 검색 1번이라 찾는 사람이 적은 조합은 표에 두지 않는다),
-   * 1개면 상·중·하. 표에 없는 조합도 매물 목록(levels)으로는 검색할 수 있다.
+   * 표의 조합 순서. 옵션 2개면 상상·상중·중상·중중·상하·하상(중하·하중·하하 제외 — 칸마다 공식 검색 1번이라 찾는 사람이 적은 조합은 표에 두지 않는다), 1개면
+   * 상·중·하. 표에 없는 조합도 매물 목록(levels)으로는 검색할 수 있다.
    */
   public static List<List<Level>> combinations(int optionCount) {
     if (optionCount == 1)
@@ -196,12 +196,7 @@ public final class AuctionCatalog {
     var m = Level.MID;
     var l = Level.LOW;
     return List.of(
-        List.of(h, h),
-        List.of(h, m),
-        List.of(m, h),
-        List.of(m, m),
-        List.of(h, l),
-        List.of(l, h));
+        List.of(h, h), List.of(h, m), List.of(m, h), List.of(m, m), List.of(h, l), List.of(l, h));
   }
 
   public static String gemName(String kind, int level) {

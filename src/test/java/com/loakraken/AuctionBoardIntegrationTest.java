@@ -156,7 +156,8 @@ class AuctionBoardIntegrationTest {
     assertThat(necklace.path("slot").asText()).isEqualTo("NECKLACE");
     assertThat(necklace.at("/options/0/shortName").asText()).isEqualTo("적주피");
     assertThat(necklace.at("/options/0/values/2").decimalValue()).isEqualByComparingTo("2.00");
-    assertThat(necklace.path("cells").size()).isEqualTo(8);
+    assertThat(necklace.path("cells").size()).isEqualTo(6);
+    assertThat(necklace.at("/cells/5/label").asText()).isEqualTo("하상");
     assertThat(necklace.at("/cells/1/label").asText()).isEqualTo("상중");
     assertThat(necklace.at("/cells/1/levels/1").asText()).isEqualTo("MID");
     ApiContractFixture.write(
@@ -176,6 +177,12 @@ class AuctionBoardIntegrationTest {
     ApiContractFixture.write(
         "auction-accessory-listings.json",
         get("/api/v1/markets/auctions/accessories/listings?slot=NECKLACE&levels=HIGH,HIGH").body());
+    // 표에서 뺀 중하 조합도 매물 목록으로는 그대로 검색한다(예전 링크가 400이 되지 않게).
+    var midLow =
+        get("/api/v1/markets/auctions/accessories/listings?slot=NECKLACE&levels=MID,LOW");
+    assertThat(midLow.statusCode()).isEqualTo(200);
+    assertThat(mapper.readTree(midLow.body()).at("/data/items/0/options/1/level").asText())
+        .isEqualTo("LOW");
   }
 
   @Test

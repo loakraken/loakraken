@@ -109,6 +109,51 @@ class CombatPowerBraceletModelTest {
         .isEqualByComparingTo("-15360");
   }
 
+  /** 공식 툴팁 문구(실제 원문)는 표와 띄어쓰기가 다를 수 있다: '매 초마다'(표 '매 초 마다'), '증가한다. (최대'(표 '증가한다.(최대'). */
+  static final String STACK_LINE =
+      "공격 적중 시 매 초마다 10초 동안 무기 공격력이 1320, 공격 및 이동 속도가 1% 증가한다. (최대 6중첩)";
+
+  @Test
+  void 띄어쓰기가_표와_달라도_공식_문구를_그_계열_등급으로_읽는다() {
+    // 전에는 계열 식이 맞지 않아 0 키워드('공격 및 이동 속도')로 떨어져 0으로 읽었다(계산 검증 11-01 P0).
+    var line = CombatPowerBraceletModel.parse(coefficients, STACK_LINE);
+    assertThat(line.kind()).isEqualTo(CombatPowerBraceletModel.Kind.SPECIAL);
+    assertThat(line.pct()).isEqualByComparingTo("2.14");
+    // 'X.0%'와 'X%'도 같은 값으로 본다.
+    assertThat(CombatPowerBraceletModel.parse(coefficients, "적에게 주는 피해가 3.0% 증가한다.").kind())
+        .isEqualTo(CombatPowerBraceletModel.parse(coefficients, "적에게 주는 피해가 3% 증가한다.").kind());
+    assertThat(CombatPowerBraceletModel.compact("증가한다. (최대 6중첩) 3.0%")).isEqualTo("증가한다.(최대6중첩)3%");
+  }
+
+  @Test
+  void 무기_공격력_중첩_줄을_바꾸면_그_줄_값으로_나눈다() {
+    var model =
+        model(
+            2469,
+            70,
+            List.of(
+                "치명 +106",
+                "특화 +116",
+                STACK_LINE,
+                "치명타 적중률이 3.4% 증가한다.\n공격이 치명타로 적중 시 적에게 주는 피해가 1.5% 증가한다.",
+                "스킬의 재사용 대기 시간이 2% 증가하지만, 적에게 주는 피해가 4.5% 증가한다."));
+    // 치명타 적중률 + 치명타 시 피해 LOW(3.5%)로 바꾸면 1.035 ÷ 1.0214 = 1.0133(두 비교 기준 같은 값). 전에는 지금 줄을 0으로 읽어
+    // 1.035.
+    var replaced =
+        model.factor(
+            Map.of(2, CombatPowerBraceletModel.option(coefficients, "치명타 적중률 + 치명타 시 피해", "LOW")));
+    assertThat(replaced.ratio())
+        .isCloseTo(
+            new BigDecimal("1.0133"),
+            org.assertj.core.data.Offset.offset(new BigDecimal("0.0001")));
+    // 재사용 대기 시간 줄도 계열로 읽는다(빠지거나 0이 아님).
+    assertThat(
+            CombatPowerBraceletModel.parse(
+                    coefficients, "스킬의 재사용 대기 시간이 2% 증가하지만, 적에게 주는 피해가 4.5% 증가한다.")
+                .kind())
+        .isEqualTo(CombatPowerBraceletModel.Kind.SPECIAL);
+  }
+
   private static BigDecimal contribution(CombatPowerBraceletModel.Model model) {
     var without = model.without();
     return BigDecimal.ONE

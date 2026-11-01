@@ -41,7 +41,8 @@ class JeonyulBookTest {
     // t4-refining-v4(계산 검증 2026-10-26): 게임 재련 화면(무기 17→18·18→19: 숨결 최대 25개, 개당 0.120%, 최대 +3.000%)과
     // 비교 기준 규칙 데이터(방어구·무기 17~19) 일치. v3의 20개 × 0.15%는 틀림(최대 3%는 같고 개수·한 개 증가량이 다름).
     var rules = rules();
-    for (var type : RefiningRules.EquipmentType.values()) {
+    for (var type :
+        java.util.List.of(RefiningRules.EquipmentType.WEAPON, RefiningRules.EquipmentType.ARMOR)) {
       var track = rules.track(RefiningRules.Grade.JEONYUL, type);
       for (int stage = 17; stage <= 19; stage++) {
         assertThat(track.stage(stage).breath().maxCount()).as(type + " " + stage).isEqualTo(25);
@@ -60,7 +61,8 @@ class JeonyulBookTest {
   @Test
   void 전율_17_19단계_숨결_최대는_시도마다_25개이고_첫_시도_6퍼센트다() throws IOException {
     var rules = rules();
-    for (var type : RefiningRules.EquipmentType.values()) {
+    for (var type :
+        java.util.List.of(RefiningRules.EquipmentType.WEAPON, RefiningRules.EquipmentType.ARMOR)) {
       var track = rules.track(RefiningRules.Grade.JEONYUL, type);
       var breathName = track.stage(17).breath().name();
       for (int target = 17; target <= 19; target++) {

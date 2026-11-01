@@ -23,9 +23,11 @@ public record RefiningRules(String ruleVersion, Source source, List<Track> track
     JEONYUL
   }
 
+  /** ARM_GUARD는 팔 보호구(완갑): 등급별 트랙이 없고 {@link VambraceRules} 한 표로 계산한다(재련 계획만, 이 규칙의 트랙에는 없음). */
   public enum EquipmentType {
     WEAPON,
-    ARMOR
+    ARMOR,
+    ARM_GUARD
   }
 
   public record Source(

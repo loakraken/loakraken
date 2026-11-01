@@ -161,6 +161,15 @@ public final class RefiningOptimal {
    * 않는다(IllegalArgumentException).
    */
   public static Result calculate(VambraceRules.Stage rule, Map<String, ? extends Number> prices) {
+    return calculate(rule, prices, 0, 0);
+  }
+
+  /** 시작 상태(실패 횟수, 장인의 기운 {@link #FULL_ENERGY} 단위)에서 푸는 팔 보호구 한 단계(재련 계획 첫 단계). */
+  public static Result calculate(
+      VambraceRules.Stage rule,
+      Map<String, ? extends Number> prices,
+      int startFailures,
+      int startEnergy) {
     double base = rule.gold();
     for (var material : rule.materials()) {
       var price = prices.get(material.name());
@@ -202,7 +211,7 @@ public final class RefiningOptimal {
           new Choice(
               breaths, false, breaths == 0 ? 0 : priced.get(0).rateBp() * breaths, extra, second));
     }
-    return solve(rule.baseRateBp(), base, choices, 0, 0);
+    return solve(rule.baseRateBp(), base, choices, startFailures, startEnergy);
   }
 
   /** 선택지 목록으로 회차별 최적을 푼다. 선택지는 127개까지(선택표가 byte). */

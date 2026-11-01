@@ -14,11 +14,24 @@ import jakarta.validation.constraints.NotNull;
 import java.math.BigDecimal;
 
 public record RefiningPlanRequest(
-    @NotNull @Schema(description = "UPHWA: 운명의 업화, JEONYUL: 운명의 전율", example = "UPHWA")
+    @Schema(
+            description =
+                "UPHWA: 운명의 업화, JEONYUL: 운명의 전율. WEAPON·ARMOR는 필수, ARM_GUARD(완갑)는 단계표가 하나라 보지 않는다(생략 가능)",
+            example = "UPHWA")
         RefiningRules.Grade grade,
-    @NotNull @Schema(example = "ARMOR") RefiningRules.EquipmentType equipmentType,
-    @NotNull @Min(10) @Max(24) @Schema(description = "현재 재련 단계", example = "18") Integer fromStage,
-    @NotNull @Min(11) @Max(25) @Schema(description = "목표 재련 단계", example = "20") Integer toStage,
+    @NotNull
+        @Schema(description = "WEAPON: 무기, ARMOR: 방어구, ARM_GUARD: 팔 보호구(완갑)", example = "ARMOR")
+        RefiningRules.EquipmentType equipmentType,
+    @NotNull
+        @Min(0)
+        @Max(24)
+        @Schema(description = "현재 재련 단계. WEAPON·ARMOR 10~24, ARM_GUARD 0~24", example = "18")
+        Integer fromStage,
+    @NotNull
+        @Min(1)
+        @Max(25)
+        @Schema(description = "목표 재련 단계. WEAPON·ARMOR 11~25, ARM_GUARD 1~25", example = "20")
+        Integer toStage,
     @Schema(
             description = "매 시도 숨결을 최대 개수로 사용. breath를 보내면 breath가 정한다(서로 어긋나면 400)",
             defaultValue = "false")
@@ -83,16 +96,36 @@ public record RefiningPlanRequest(
     return fromStage == null || toStage == null || toStage > fromStage;
   }
 
+  @AssertTrue(message = "무기·방어구는 grade(UPHWA·JEONYUL)가 필요합니다.")
+  @JsonIgnore
+  @Schema(hidden = true)
+  public boolean isGradeGiven() {
+    return equipmentType == null
+        || equipmentType == RefiningRules.EquipmentType.ARM_GUARD
+        || grade != null;
+  }
+
+  @AssertTrue(message = "무기·방어구는 현재 10~24단계, 목표 11~25단계입니다.")
+  @JsonIgnore
+  @Schema(hidden = true)
+  public boolean isStageRangeForType() {
+    if (equipmentType == null || equipmentType == RefiningRules.EquipmentType.ARM_GUARD)
+      return true;
+    return (fromStage == null || fromStage >= 10) && (toStage == null || toStage >= 11);
+  }
+
+  /** 팔 보호구면 책·성장 지원·장비 성장 비용·영지 연구가 없어 모두 끈다(응답에도 false로 나간다). */
   RefiningPlan.Options toOptions() {
+    boolean armGuard = equipmentType == RefiningRules.EquipmentType.ARM_GUARD;
     return new RefiningPlan.Options(
         fromStage,
         toStage,
         effectiveBreath() == Breath.MAX,
-        !Boolean.FALSE.equals(useBook),
-        growthSupport == null || growthSupport,
+        !armGuard && !Boolean.FALSE.equals(useBook),
+        !armGuard && (growthSupport == null || growthSupport),
         currentArtisanEnergy == null ? 0 : currentArtisanEnergy.movePointRight(2).intValueExact(),
         currentFailedAttempts == null ? 0 : currentFailedAttempts,
-        Boolean.TRUE.equals(growthCost),
-        expResearch == null || expResearch);
+        !armGuard && Boolean.TRUE.equals(growthCost),
+        !armGuard && (expResearch == null || expResearch));
   }
 }

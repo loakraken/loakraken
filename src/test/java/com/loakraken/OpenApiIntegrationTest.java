@@ -141,7 +141,8 @@ class OpenApiIntegrationTest {
     assertThat(document.at("/components/schemas/AvatarResponse/required").toString())
         .contains("effects")
         .doesNotContain("tendencies");
-    assertThat(document.at("/components/schemas/AvatarResponse/properties/tendencies/type").asText())
+    assertThat(
+            document.at("/components/schemas/AvatarResponse/properties/tendencies/type").asText())
         .isEqualTo("array");
     assertThat(document.at("/components/schemas/AvatarTendencyResponse/required").toString())
         .contains("type", "point");

@@ -287,8 +287,8 @@ public final class CombatPowerRefineModel {
 
   /**
    * 부위 수치. 전율은 단계표(상급 0만). 업화는 floor(T(5·일반 + 상급) × (1 + 30단계 2% + 40단계 3%))이고 T는 부위마다 공식 아이템 사전 표
-   * (upgradeOfficialT, 2026-11-02). 표에 없는 칸(지금 140~165)은 계산하지 않는다(null). 반올림이 아니라 버림이다(공식 표 198칸
-   * 대조, 반올림은 102칸만 같음).
+   * (upgradeOfficialT, 2026-11-02, 지수 55~165). 표에 없는 칸은 계산하지 않는다(null). 반올림이 아니라 버림이다(공식 표 상급
+   * 30·40단계 칸 모두 버림과 같음).
    */
   public static BigDecimal stat(
       Coefficients c, String type, Family family, int level, int advanced) {

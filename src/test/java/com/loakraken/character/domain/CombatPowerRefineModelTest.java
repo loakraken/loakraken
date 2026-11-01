@@ -244,9 +244,11 @@ class CombatPowerRefineModelTest {
         .isEqualByComparingTo("69959");
     assertThat(stat("무기", CombatPowerRefineModel.Family.UPGRADE, 11, 32))
         .isEqualByComparingTo("122483");
-    // 지수 140~165(상급 +23~+25 등)는 아직 공식 표를 확인하는 중이라 계산하지 않는다.
-    assertThat(stat("투구", CombatPowerRefineModel.Family.UPGRADE, 22, 32)).isNull();
-    assertThat(stat("투구", CombatPowerRefineModel.Family.UPGRADE, 24, 38)).isNull();
+    // 지수 140 이상도 공식 표에 있다: #333 표본 투구 +22·상급 32 = 95,094(반올림이면 95,095), +24·상급 38 = 104,110.
+    assertThat(stat("투구", CombatPowerRefineModel.Family.UPGRADE, 22, 32))
+        .isEqualByComparingTo("95094");
+    assertThat(stat("투구", CombatPowerRefineModel.Family.UPGRADE, 24, 38))
+        .isEqualByComparingTo("104110");
     // 전율은 상급 재련 수치가 없다.
     assertThat(stat("투구", CombatPowerRefineModel.Family.JEONYUL, 19, 1)).isNull();
   }
@@ -294,8 +296,8 @@ class CombatPowerRefineModelTest {
         CombatPowerRefineModel.of(coefficients, upgraded, stats("188163"), new BigDecimal("7.45"));
     assertThat(model.cannotSetAdvanced(1, 34)).isNull();
     assertThat(model.cannotSet(1, 20)).isNull();
-    // 지수 140 이상(+21·상급 35 = 140)은 공식 표를 확인하는 중이라 계산하지 않는다.
-    assertThat(model.cannotSetAdvanced(1, 35)).isNotNull();
+    // 상급 40을 넘는 칸은 없다.
+    assertThat(model.cannotSetAdvanced(1, 41)).isNotNull();
     var up =
         model.ratioTargets(
             Map.of(1, new CombatPowerRefineModel.Target(21, 34)), BigDecimal.ZERO, BigDecimal.ZERO);
@@ -579,6 +581,34 @@ class CombatPowerRefineModelTest {
         false,
         inner,
         List.of("민첩 +" + pct.setScale(2, RoundingMode.HALF_UP).toPlainString() + "%"));
+  }
+
+  /**
+   * 공식 아이템 사전 업화 표 모든 칸(재련 0~25, 상급 0~40 at +11·+15·+19·+22, 상급 26~40 at +25)과 같다(상급 보너스 칸은 버림).
+   */
+  @Test
+  void 업화_재련_상급_재련_수치는_공식_아이템_사전_모든_칸과_같다() throws IOException {
+    var sample =
+        new JsonMapper()
+            .readTree(
+                new ClassPathResource(
+                        "verification/combat-power/official-upgrade-refine-2026-11-02.json")
+                    .getInputStream())
+            .path("cells");
+    int cells = 0;
+    int bonus = 0;
+    for (var cell : sample) {
+      var part = cell.path("part").asText();
+      int refine = cell.path("refine").asInt();
+      int advanced = cell.path("advanced").asInt();
+      assertThat(stat(part, CombatPowerRefineModel.Family.UPGRADE, refine, advanced))
+          .as(part + " +" + refine + " 상급 " + advanced)
+          .isEqualByComparingTo(cell.path("value").decimalValue());
+      cells++;
+      if (advanced >= 30) bonus++;
+    }
+    assertThat(cells).isEqualTo(1206);
+    assertThat(bonus).isEqualTo(330);
   }
 
   @Test

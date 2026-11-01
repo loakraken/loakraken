@@ -130,10 +130,111 @@ class RefiningPlanIntegrationTest {
         "{\"grade\":\"UPHWA\",\"equipmentType\":\"ARMOR\",\"fromStage\":20,\"toStage\":21,\"currentArtisanEnergy\":10.123}",
         "{\"grade\":\"UPHWA\",\"equipmentType\":\"ARMOR\",\"fromStage\":20,\"toStage\":21,\"currentFailedAttempts\":11}",
         "{\"grade\":\"MYTHIC\",\"equipmentType\":\"ARMOR\",\"fromStage\":20,\"toStage\":21}",
-        "{\"equipmentType\":\"ARMOR\",\"fromStage\":20,\"toStage\":21}"
+        "{\"equipmentType\":\"ARMOR\",\"fromStage\":20,\"toStage\":21}",
+        "{\"grade\":\"UPHWA\",\"equipmentType\":\"WEAPON\",\"fromStage\":0,\"toStage\":11}",
+        "{\"equipmentType\":\"ARM_GUARD\",\"fromStage\":5,\"toStage\":5}",
+        "{\"equipmentType\":\"ARM_GUARD\",\"fromStage\":24,\"toStage\":26}",
+        "{\"equipmentType\":\"ARM_GUARD\",\"fromStage\":-1,\"toStage\":3}"
       })
   void 잘못된_입력은_400이다(String body) throws Exception {
     assertThat(request(body).statusCode()).isEqualTo(400);
+  }
+
+  @Test
+  void 팔_보호구는_단계표_하나로_0단계부터_계산하고_책_성장_지원은_없다() throws Exception {
+    var response =
+        request(
+            """
+            {"grade":"UPHWA","equipmentType":"ARM_GUARD","fromStage":14,"toStage":16,
+             "breath":"MAX","growthSupport":true,"useBook":true,"growthCost":true}
+            """);
+    assertThat(response.statusCode()).as(response.body()).isEqualTo(200);
+    ApiContractFixture.write("refining-plan-arm-guard.json", response.body());
+    SiteNames.assertAbsent(response.body());
+    var data = mapper.readTree(response.body()).path("data");
+    assertThat(data.path("equipmentType").asText()).isEqualTo("ARM_GUARD");
+    // 등급은 보내도 보지 않는다(단계표 하나). 책·성장 지원·성장 비용은 없어 false.
+    assertThat(data.path("grade").isNull()).isTrue();
+    assertThat(data.path("ruleVersion").asText()).isEqualTo("t4-vambrace-v1");
+    assertThat(data.path("useBook").asBoolean()).isFalse();
+    assertThat(data.path("growthSupport").asBoolean()).isFalse();
+    assertThat(data.path("growthCost").asBoolean()).isFalse();
+    assertThat(data.path("expResearch").asBoolean()).isFalse();
+    var first = data.at("/stages/0");
+    assertThat(first.path("targetStage").asInt()).isEqualTo(15);
+    assertThat(first.path("firstAttemptSuccessRateBp").asInt()).isEqualTo(1000);
+    assertThat(first.path("expectedAttempts").decimalValue()).isEqualByComparingTo("7.52");
+    assertThat(first.path("maxAttempts").asInt()).isEqualTo(18);
+    assertThat(first.path("growth").isNull()).isTrue();
+    assertThat(data.at("/stages/1/firstAttemptSuccessRateBp").asInt()).isEqualTo(600);
+    assertThat(data.path("expectedGold").decimalValue()).isEqualByComparingTo("174700.94");
+    assertThat(data.path("expectedMaterials").toString())
+        .contains("운명의 파괴석 결정", "운명의 수호석 결정", "용암의 숨결", "빙하의 숨결")
+        .doesNotContain("재봉술");
+    assertThat(data.path("assumptions").toString()).contains("팔 보호구");
+    // grade 없이도 되고, 0단계에서 시작할 수 있다.
+    var fromZero = request("{\"equipmentType\":\"ARM_GUARD\",\"fromStage\":0,\"toStage\":1}");
+    assertThat(fromZero.statusCode()).as(fromZero.body()).isEqualTo(200);
+    assertThat(
+            mapper.readTree(fromZero.body()).at("/data/stages/0/firstAttemptSuccessRateBp").asInt())
+        .isEqualTo(1500);
+    // 여러 부위 합계에도 같은 계획이 들어간다(완갑 + 방어구).
+    var sum =
+        total(
+            """
+            {"breath":"MAX","parts":[
+              {"equipmentType":"ARM_GUARD","fromStage":14,"toStage":16},
+              {"grade":"UPHWA","equipmentType":"ARMOR","fromStage":18,"toStage":19}]}
+            """);
+    assertThat(sum.statusCode()).as(sum.body()).isEqualTo(200);
+    var parts = mapper.readTree(sum.body()).at("/data/parts");
+    assertThat(parts.get(0).path("equipmentType").asText()).isEqualTo("ARM_GUARD");
+    assertThat(parts.get(0).path("grade").isNull()).isTrue();
+    assertThat(parts.get(0).path("expectedGold").decimalValue()).isEqualByComparingTo("174700.94");
+    assertThat(
+            total("{\"parts\":[{\"equipmentType\":\"ARMOR\",\"fromStage\":18,\"toStage\":19}]}")
+                .statusCode())
+        .isEqualTo(400);
+  }
+
+  @Test
+  void 팔_보호구_OPTIMAL은_숨결_두_가지_시세로_풀고_시세가_없으면_409다() throws Exception {
+    var body =
+        "{\"equipmentType\":\"ARM_GUARD\",\"fromStage\":16,\"toStage\":17,\"breath\":\"OPTIMAL\"}";
+    assertThat(request(body).statusCode()).isEqualTo(409);
+    marketCache.saveRefiningMaterials(
+        new com.loakraken.market.application.RefiningMaterialScan(
+            java.time.Instant.parse("2026-10-24T23:39:31Z"),
+            java.util.List.of(
+                material(11, "운명의 파괴석 결정", 1, "8.92"),
+                material(12, "운명의 수호석 결정", 1, "1.77"),
+                material(13, "위대한 운명의 돌파석", 1, "18"),
+                material(14, "상급 아비도스 융화 재료", 1, "268"),
+                material(15, "운명의 파편 주머니(소)", 1, "91"),
+                material(16, "빙하의 숨결", 1, "414"))),
+        java.time.Duration.ofMinutes(5));
+    // 용암의 숨결 값이 없으면 한 가지로 바꿔 풀지 않는다.
+    assertThat(request(body).statusCode()).isEqualTo(409);
+    marketCache.saveRefiningMaterials(
+        new com.loakraken.market.application.RefiningMaterialScan(
+            java.time.Instant.parse("2026-10-24T23:39:31Z"),
+            java.util.List.of(
+                material(11, "운명의 파괴석 결정", 1, "8.92"),
+                material(12, "운명의 수호석 결정", 1, "1.77"),
+                material(13, "위대한 운명의 돌파석", 1, "18"),
+                material(14, "상급 아비도스 융화 재료", 1, "268"),
+                material(15, "운명의 파편 주머니(소)", 1, "91"),
+                material(16, "빙하의 숨결", 1, "414"),
+                material(17, "용암의 숨결", 1, "476"))),
+        java.time.Duration.ofMinutes(5));
+    var response = request(body);
+    assertThat(response.statusCode()).as(response.body()).isEqualTo(200);
+    ApiContractFixture.write("refining-plan-arm-guard-optimal.json", response.body());
+    var data = mapper.readTree(response.body()).path("data");
+    assertThat(data.path("breath").asText()).isEqualTo("OPTIMAL");
+    assertThat(data.at("/stages/0/breathPath").size()).isPositive();
+    // 17단계 회차별 최적 기대 비용 677,293.26(스펙업 완갑 비용과 같은 풀이, 파편 1개 0.091).
+    assertThat(data.path("expectedCostGold").asLong()).isEqualTo(677_294L);
   }
 
   @org.springframework.beans.factory.annotation.Autowired

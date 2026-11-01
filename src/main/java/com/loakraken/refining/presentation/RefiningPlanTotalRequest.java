@@ -43,10 +43,19 @@ public record RefiningPlanTotalRequest(
         List<@Valid @NotNull Owned> owned) {
 
   public record Part(
-      @NotNull @Schema(example = "JEONYUL") RefiningRules.Grade grade,
+      @Schema(description = "/plans의 grade와 같음(ARM_GUARD는 생략 가능)", example = "JEONYUL")
+          RefiningRules.Grade grade,
       @NotNull @Schema(example = "ARMOR") RefiningRules.EquipmentType equipmentType,
-      @NotNull @Min(10) @Max(24) @Schema(example = "19") Integer fromStage,
-      @NotNull @Min(11) @Max(25) @Schema(example = "21") Integer toStage,
+      @NotNull
+          @Min(0)
+          @Max(24)
+          @Schema(description = "WEAPON·ARMOR 10~24, ARM_GUARD 0~24", example = "19")
+          Integer fromStage,
+      @NotNull
+          @Min(1)
+          @Max(25)
+          @Schema(description = "WEAPON·ARMOR 11~25, ARM_GUARD 1~25", example = "21")
+          Integer toStage,
       @DecimalMin("0")
           @DecimalMax("100")
           @Digits(integer = 3, fraction = 2)
@@ -59,6 +68,24 @@ public record RefiningPlanTotalRequest(
     @Schema(hidden = true)
     public boolean isValidRange() {
       return fromStage == null || toStage == null || toStage > fromStage;
+    }
+
+    @AssertTrue(message = "무기·방어구는 grade(UPHWA·JEONYUL)가 필요합니다.")
+    @JsonIgnore
+    @Schema(hidden = true)
+    public boolean isGradeGiven() {
+      return equipmentType == null
+          || equipmentType == RefiningRules.EquipmentType.ARM_GUARD
+          || grade != null;
+    }
+
+    @AssertTrue(message = "무기·방어구는 현재 10~24단계, 목표 11~25단계입니다.")
+    @JsonIgnore
+    @Schema(hidden = true)
+    public boolean isStageRangeForType() {
+      if (equipmentType == null || equipmentType == RefiningRules.EquipmentType.ARM_GUARD)
+        return true;
+      return (fromStage == null || fromStage >= 10) && (toStage == null || toStage >= 11);
     }
   }
 

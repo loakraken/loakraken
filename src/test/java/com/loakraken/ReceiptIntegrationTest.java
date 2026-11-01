@@ -173,6 +173,25 @@ class ReceiptIntegrationTest {
   }
 
   @Test
+  void 받다가_공식_한도로_멈추면_그_캐릭터와_뒤_캐릭터를_모두_stopped로_센다() throws Exception {
+    double stoppedBefore = skipped("stopped");
+    double capBefore = skipped("cap");
+    // 본캐·부캐1·부캐2는 받고, 부캐3에서 공식 한도. 부캐3과 뒤 6명(부캐4~9)이 PENDING이다.
+    when(detailsPort.fetchArmory("영수증부캐3"))
+        .thenThrow(
+            new com.loakraken.common.api.BusinessException(
+                com.loakraken.common.lostark.LostArkErrorCode.LOST_ARK_RATE_LIMITED));
+    var response = get("/api/v1/characters/receipt?characterName=" + encode(MAIN));
+    assertThat(response.statusCode()).as(response.body()).isEqualTo(200);
+    var data = mapper.readTree(response.body()).path("data");
+    assertThat(data.at("/coverage/ready").asInt()).isEqualTo(3);
+    assertThat(data.at("/coverage/pending").asInt()).isEqualTo(7);
+    verify(detailsPort, times(4)).fetchArmory(anyString());
+    assertThat(skipped("stopped") - stoppedBefore).isEqualTo(7);
+    assertThat(skipped("cap") - capBefore).isZero();
+  }
+
+  @Test
   void 시세를_하나도_찾지_못하면_합계_0이_아니라_UNAVAILABLE이다() throws Exception {
     when(materials.prices(any(), anyList()))
         .thenAnswer(

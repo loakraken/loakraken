@@ -9,6 +9,7 @@ import com.loakraken.character.application.CharacterResult;
 import com.loakraken.character.application.CharacterViewService;
 import com.loakraken.character.application.CombatPowerSimulationService;
 import com.loakraken.common.api.ApiResponse;
+import com.loakraken.common.lostark.UserKeyContext;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -39,6 +40,10 @@ public class CharacterController {
   private final com.loakraken.character.application.BraceletRealService braceletReals;
   private static final org.slf4j.Logger log =
       org.slf4j.LoggerFactory.getLogger(CharacterController.class);
+
+  /** 사용자 키(BYOK) 안내. 기능은 기본 꺼짐이고, 켜져도 web이 보낸 헤더만 받는다. */
+  static final String USER_KEY_NOTE =
+      "사용자 공식 API 키 기능이 켜져 있고 web이 키를 함께 보내면, 이 조회의 공식 호출은 그 키로 하고(서버 예산을 쓰지 않음) 받은 응답은 공용 캐시·기록에 남기지 않습니다. 그 키가 거절되거나 한도에 걸려도 서버 키로 다시 부르지 않습니다.";
 
   public CharacterController(
       CharacterQueryService queryService,
@@ -110,14 +115,19 @@ public class CharacterController {
   @Operation(
       summary = "캐릭터 검색",
       description =
-          "프로필, 장비·보석·각인·카드·아크패시브·아크그리드와 원정대를 제공합니다. 기본 캐시는 5분이며 fetchedAt은 실제 외부 수집 완료 시각입니다. null 섹션은 공식 API에서 데이터가 제공되지 않은 경우입니다.")
+          "프로필, 장비·보석·각인·카드·아크패시브·아크그리드와 원정대를 제공합니다. 기본 캐시는 5분이며 fetchedAt은 실제 외부 수집 완료 시각입니다. null 섹션은 공식 API에서 데이터가 제공되지 않은 경우입니다. "
+              + USER_KEY_NOTE)
   @ApiResponses({
     @io.swagger.v3.oas.annotations.responses.ApiResponse(
         responseCode = "200",
         description = "캐릭터 조회 성공"),
     @io.swagger.v3.oas.annotations.responses.ApiResponse(
         responseCode = "400",
-        description = "캐릭터명 누락 또는 형식 오류",
+        description = "캐릭터명 누락 또는 형식 오류, USER_KEY_MALFORMED(사용자 키 형식 오류)",
+        content = @Content(schema = @Schema(ref = "#/components/schemas/ErrorResponse"))),
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(
+        responseCode = "401",
+        description = "USER_KEY_INVALID: 공식 API가 사용자 키를 받지 않음",
         content = @Content(schema = @Schema(ref = "#/components/schemas/ErrorResponse"))),
     @io.swagger.v3.oas.annotations.responses.ApiResponse(
         responseCode = "404",
@@ -129,7 +139,7 @@ public class CharacterController {
         content = @Content(schema = @Schema(ref = "#/components/schemas/ErrorResponse"))),
     @io.swagger.v3.oas.annotations.responses.ApiResponse(
         responseCode = "429",
-        description = "LOST_ARK_RATE_LIMITED",
+        description = "LOST_ARK_RATE_LIMITED 또는 USER_KEY_RATE_LIMITED(사용자 키 한도, Retry-After)",
         content = @Content(schema = @Schema(ref = "#/components/schemas/ErrorResponse"))),
     @io.swagger.v3.oas.annotations.responses.ApiResponse(
         responseCode = "500",
@@ -152,12 +162,16 @@ public class CharacterController {
   public ApiResponse<CharacterResponse> search(
       @Valid @ModelAttribute @ParameterObject CharacterSearchRequest request,
       HttpServletRequest http) {
-    var result = queryService.search(request.toCommand());
+    // 사용자 공식 API 키(BYOK)가 있으면 이 조회의 공식 호출에만 쓴다(응답은 공용 캐시·DB에 남기지 않음). 기능이 꺼져 있으면 키가 없다.
+    var result = UserKeyContext.apply(() -> queryService.search(request.toCommand()));
     var profile = result.details().profile();
-    // 조회수는 검색 화면 응답이 성공했을 때만 센다(F-8). 기록 실패는 응답을 막지 않는다.
-    views.record(profile.characterName(), profile.serverName());
-    // 인기 검색(F-10)은 조회수와 따로 하루 1회 중복을 제거해 센다. 원격 주소는 신뢰 프록시를 거친 값이다.
-    popular.record(profile.characterName(), profile.serverName(), http.getRemoteAddr());
+    // 사용자 키를 가져온 요청은 조회 기록(조회수·인기 검색)도 남기지 않는다(그 요청의 응답만, 보안 R6).
+    if (!UserKeyContext.present()) {
+      // 조회수는 검색 화면 응답이 성공했을 때만 센다(F-8). 기록 실패는 응답을 막지 않는다.
+      views.record(profile.characterName(), profile.serverName());
+      // 인기 검색(F-10)은 조회수와 따로 하루 1회 중복을 제거해 센다. 원격 주소는 신뢰 프록시를 거친 값이다.
+      popular.record(profile.characterName(), profile.serverName(), http.getRemoteAddr());
+    }
     return ApiResponse.of(
         CharacterSuccessCode.CHARACTER_SEARCH_SUCCESS,
         CharacterResponse.from(
@@ -227,14 +241,19 @@ public class CharacterController {
   @Operation(
       summary = "원정대 캐릭터 조회",
       description =
-          "공식 원정대 목록만 조회합니다. 캐릭터 검색과 별도로 캐시(기본 5분)하며 같은 이름의 동시 요청을 합칩니다. 공식 API가 빈 목록을 반환하면 존재하지 않는 캐릭터로 처리합니다.")
+          "공식 원정대 목록만 조회합니다. 캐릭터 검색과 별도로 캐시(기본 5분)하며 같은 이름의 동시 요청을 합칩니다. 공식 API가 빈 목록을 반환하면 존재하지 않는 캐릭터로 처리합니다. "
+              + USER_KEY_NOTE)
   @ApiResponses({
     @io.swagger.v3.oas.annotations.responses.ApiResponse(
         responseCode = "200",
         description = "원정대 조회 성공"),
     @io.swagger.v3.oas.annotations.responses.ApiResponse(
         responseCode = "400",
-        description = "캐릭터명 누락 또는 형식 오류",
+        description = "캐릭터명 누락 또는 형식 오류, USER_KEY_MALFORMED(사용자 키 형식 오류)",
+        content = @Content(schema = @Schema(ref = "#/components/schemas/ErrorResponse"))),
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(
+        responseCode = "401",
+        description = "USER_KEY_INVALID: 공식 API가 사용자 키를 받지 않음",
         content = @Content(schema = @Schema(ref = "#/components/schemas/ErrorResponse"))),
     @io.swagger.v3.oas.annotations.responses.ApiResponse(
         responseCode = "404",
@@ -246,7 +265,7 @@ public class CharacterController {
         content = @Content(schema = @Schema(ref = "#/components/schemas/ErrorResponse"))),
     @io.swagger.v3.oas.annotations.responses.ApiResponse(
         responseCode = "429",
-        description = "LOST_ARK_RATE_LIMITED",
+        description = "LOST_ARK_RATE_LIMITED 또는 USER_KEY_RATE_LIMITED(사용자 키 한도, Retry-After)",
         content = @Content(schema = @Schema(ref = "#/components/schemas/ErrorResponse"))),
     @io.swagger.v3.oas.annotations.responses.ApiResponse(
         responseCode = "500",
@@ -269,7 +288,8 @@ public class CharacterController {
       @Valid @ModelAttribute @ParameterObject CharacterSiblingsRequest request) {
     return ApiResponse.of(
         CharacterSuccessCode.CHARACTER_SIBLINGS_SUCCESS,
-        CharacterSiblingsResponse.from(queryService.siblings(request.toCommand())));
+        CharacterSiblingsResponse.from(
+            UserKeyContext.apply(() -> queryService.siblings(request.toCommand()))));
   }
 
   @GetMapping("/card-collection")

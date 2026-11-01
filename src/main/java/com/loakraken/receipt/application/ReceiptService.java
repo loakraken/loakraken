@@ -240,7 +240,11 @@ public class ReceiptService {
         // 없는 캐릭터는 받을 수 없음으로 두고(대기 수에서 뺌), 한도·장애면 나머지를 다음 요청으로 넘긴다.
         if (exception.errorCode() == CharacterErrorCode.CHARACTER_NOT_FOUND)
           unavailableNames.add(name);
-        else stopped = true;
+        else {
+          // 받다가 멈춘 이 캐릭터도 PENDING으로 넘어가므로 뒤 캐릭터들과 같이 stopped로 센다.
+          stopped = true;
+          skipped("stopped");
+        }
       }
     }
     // 이 요청이 받는 동안 처리정지 목록에 든 캐릭터는 보관하지 않고 영수증에서도 뺀다. 확인하지 못하면 503(보관도 하지 않음).

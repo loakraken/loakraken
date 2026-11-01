@@ -299,6 +299,98 @@ class RefiningPlanIntegrationTest {
     assertThat(request(optimal).statusCode()).isEqualTo(200);
   }
 
+  /**
+   * 여러 부위 합계(#764): 부위마다 /plans와 같은 계획, 재료는 부위를 더해 한 번 올리고 가진 수량을 뺀 나머지를 통째 매물로 산다. OPTIMAL 계획 기대
+   * 비용은 모든 부위 단계 값을 더해 한 번 올린다(부위 값의 합보다 크지 않다).
+   */
+  @Test
+  void 여러_부위_합계는_부위_계획을_모아_재료를_한_번_올리고_가진_수량을_뺀다() throws Exception {
+    marketCache.saveRefiningMaterials(
+        new com.loakraken.market.application.RefiningMaterialScan(
+            java.time.Instant.parse("2026-11-01T02:00:00Z"),
+            java.util.List.of(
+                material(1, "운명의 수호석", 100, "32"),
+                material(2, "운명의 돌파석", 1, "5"),
+                material(3, "아비도스 융화 재료", 1, "197"),
+                material(4, "운명의 파편 주머니(소)", 1, "92"),
+                material(7, "운명의 파편 주머니(대)", 1, "270"),
+                material(5, "빙하의 숨결", 1, "430"),
+                material(6, "재봉술 : 업화 [11-14]", 1, "2000"))),
+        java.time.Duration.ofMinutes(5));
+    var part = "{\"grade\":\"UPHWA\",\"equipmentType\":\"ARMOR\",\"fromStage\":10,\"toStage\":12}";
+    var body =
+        "{\"breath\":\"OPTIMAL\",\"parts\":["
+            + part
+            + ","
+            + part
+            + "],\"owned\":[{\"name\":\"운명의 수호석\",\"amount\":100},{\"name\":\"없는 재료\",\"amount\":5}]}";
+    var response = total(body);
+    assertThat(response.statusCode()).as(response.body()).isEqualTo(200);
+    ApiContractFixture.write("refining-plan-total.json", response.body());
+    var data = mapper.readTree(response.body()).path("data");
+    assertThat(data.path("totalRuleVersion").asText()).isEqualTo("refining-plan-total-v1");
+    assertThat(data.path("priceBasis").asText()).isEqualTo("CURRENT_MIN_PRICE");
+    assertThat(data.path("parts").size()).isEqualTo(2);
+    // 재련 골드 = 모든 부위·단계 expectedGold 합을 한 번 올림
+    var stageGold = java.math.BigDecimal.ZERO;
+    long partCost = 0;
+    for (var p : data.path("parts")) {
+      partCost += p.path("expectedCostGold").asLong();
+      for (var stage : p.path("stages"))
+        stageGold = stageGold.add(stage.path("expectedGold").decimalValue());
+    }
+    assertThat(data.path("refineGold").asLong())
+        .isEqualTo(stageGold.setScale(0, java.math.RoundingMode.CEILING).longValueExact());
+    assertThat(data.path("expectedCostGold").asLong()).isLessThanOrEqualTo(partCost);
+    long purchase = 0;
+    for (var line : data.path("materials")) {
+      long amount = line.path("amount").asLong();
+      assertThat(
+              line.path("expected")
+                  .decimalValue()
+                  .setScale(0, java.math.RoundingMode.CEILING)
+                  .longValueExact())
+          .isEqualTo(amount);
+      assertThat(line.path("missing").asLong())
+          .isEqualTo(Math.max(0, amount - line.path("owned").asLong()));
+      if (line.path("listing").isNull()) continue;
+      long perUnit =
+          line.at("/listing/bundleCount").asLong() * line.at("/listing/contentsPerItem").asLong();
+      assertThat(line.path("listings").asLong())
+          .isEqualTo((line.path("missing").asLong() + perUnit - 1) / perUnit);
+      purchase += line.path("purchaseGold").asLong();
+      if ("운명의 수호석".equals(line.path("name").asText()))
+        assertThat(line.path("owned").asLong()).isEqualTo(100);
+      if ("운명의 파편".equals(line.path("name").asText()))
+        // 1개 값이 더 싼 주머니(대) 270 ÷ 3,000 < (소) 92 ÷ 1,000
+        assertThat(line.at("/listing/contentsPerItem").asInt()).isEqualTo(3000);
+    }
+    assertThat(data.path("purchaseGold").asLong()).isEqualTo(purchase);
+    assertThat(data.path("totalGold").asLong())
+        .isEqualTo(data.path("refineGold").asLong() + purchase);
+    assertThat(data.path("pricesObservedAt").asText()).isEqualTo("2026-11-01T02:00:00Z");
+
+    for (var bad :
+        java.util.List.of(
+            "{\"parts\":[]}",
+            "{\"parts\":[" + String.join(",", java.util.Collections.nCopies(7, part)) + "]}",
+            "{\"parts\":[" + part + "],\"owned\":[{\"name\":\"운명의 수호석\",\"amount\":-1}]}",
+            "{\"parts\":[{\"grade\":\"UPHWA\",\"equipmentType\":\"ARMOR\",\"fromStage\":12,\"toStage\":12}]}"))
+      assertThat(total(bad).statusCode()).as(bad).isEqualTo(400);
+  }
+
+  private HttpResponse<String> total(String body) throws Exception {
+    return HttpClient.newHttpClient()
+        .send(
+            HttpRequest.newBuilder(
+                    URI.create("http://localhost:" + port + "/api/v1/refining/plans/total"))
+                .header("Content-Type", "application/json")
+                .header("Accept", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(body))
+                .build(),
+            HttpResponse.BodyHandlers.ofString());
+  }
+
   /** 설정을 주지 않으면 OPTIMAL 스위치는 꺼짐이다(운영 기본값). */
   @Test
   void OPTIMAL_스위치_기본값은_꺼짐이다() throws Exception {

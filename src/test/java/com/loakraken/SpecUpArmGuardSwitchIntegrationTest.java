@@ -112,6 +112,47 @@ class SpecUpArmGuardSwitchIntegrationTest {
     assertThat(rows(guide())).isEqualTo(on);
   }
 
+  /**
+   * 추천 순서도 완갑 재련 단계를 다음 단계 후보로 둔다(실제 시뮬레이터). 기본 공격력 툴팁이 있어 완갑 전투력이 계산되는 프로필에서, 목록 완갑 줄(+15)이 OK면 추천
+   * 순서에도 같은 id·같은 Δ로 나온다(재료 시세가 없어 비용을 몰라 unpriced). 스위치를 끄면 어디에도 없다.
+   */
+  @Test
+  void 추천_순서는_완갑_단계를_목록_완갑_줄과_같은_전투력으로_후보에_둔다() throws Exception {
+    when(auctions.cachedGems()).thenReturn(List.of());
+    search(
+        List.of(
+            new CharacterProfile.Stat(
+                "공격력", "0", List.of("힘, 민첩, 지능과 무기 공격력을 기반으로 증가한 기본 공격력은 267396 입니다."))));
+    var row = rows(guide()).get(ARM_GUARD_ROW);
+    assertThat(row).isNotNull();
+    assertThat(row.path("status").asText()).as(row.toString()).isEqualTo("OK");
+    var on = path();
+    assertThat(on.path("ruleVersion").asText()).isEqualTo("spec-up-path-v3");
+    JsonNode item = null;
+    for (var excluded : on.path("unpriced"))
+      if (ARM_GUARD_ROW.equals(excluded.path("candidateId").asText())) item = excluded;
+    assertThat(item).as(on.toString()).isNotNull();
+    assertThat(item.path("kind").asText()).isEqualTo("ARM_GUARD");
+    assertThat(item.path("deltaCombatPower").decimalValue())
+        .isEqualByComparingTo(row.path("deltaCombatPower").decimalValue());
+
+    environment
+        .getPropertySources()
+        .addFirst(
+            new MapPropertySource("arm-guard-off", Map.of("spec-up.arm-guard.enabled", "false")));
+    var off = path();
+    for (var excluded : off.path("unpriced"))
+      assertThat(excluded.path("candidateId").asText()).doesNotStartWith("EQUIPMENT_REFINE:16:");
+    for (var step : off.path("steps"))
+      assertThat(step.path("candidateId").asText()).doesNotStartWith("EQUIPMENT_REFINE:16:");
+  }
+
+  private JsonNode path() throws Exception {
+    var response = get("/api/v1/characters/spec-up/path?limit=1&characterName=" + encode(NAME));
+    assertThat(response.statusCode()).as(response.body()).isEqualTo(200);
+    return mapper.readTree(response.body()).path("data");
+  }
+
   private JsonNode guide() throws Exception {
     var response =
         get("/api/v1/characters/spec-up?characterName=" + encode(NAME) + "&sort=DELTA&limit=200");
@@ -148,6 +189,11 @@ class SpecUpArmGuardSwitchIntegrationTest {
   }
 
   private void search() throws Exception {
+    search(List.of());
+  }
+
+  /** stats: 프로필 능력치(재련 전투력 계산에 기본 공격력 툴팁이 필요하다). 기본은 비어 있어 재련·완갑 전투력은 계산하지 않는다. */
+  private void search(List<CharacterProfile.Stat> stats) throws Exception {
     var raw =
         mapper
             .readTree(
@@ -166,7 +212,7 @@ class SpecUpArmGuardSwitchIntegrationTest {
             null,
             null,
             null,
-            List.of());
+            stats);
     var details = CharacterTestFixture.details(profile, ArmoryRawFixtures.loadout(raw), List.of());
     when(detailsPort.fetch(anyString()))
         .thenReturn(new FetchedCharacter(details, "{}", "[]", KrakenScoreInputMapper.from(raw)));

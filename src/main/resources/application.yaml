@@ -49,6 +49,10 @@ lostark:
     # 비우면 API 키 SHA-256 앞 12자. 운영·스테이징은 명시합니다.
     key-id: ${LOSTARK_GATE_KEY_ID:}
     command-timeout: ${LOSTARK_GATE_COMMAND_TIMEOUT:100ms}
+  # 사용자 공식 API 키(BYOK). 기본 꺼짐. 켜도 web(X-Forwarded-For를 믿는 프록시와 같은 주소)이 보낸 헤더만 받습니다.
+  byok:
+    enabled: ${BYOK_ENABLED:false}
+    trusted-peer: ${BYOK_TRUSTED_PEER:${server.tomcat.remoteip.internal-proxies:}}
   # 클라이언트별 분당 한도(#108). official은 요청이 실제로 일으킨 공식 호출 수입니다.
   client-limit:
     enabled: ${CLIENT_LIMIT_ENABLED:true}

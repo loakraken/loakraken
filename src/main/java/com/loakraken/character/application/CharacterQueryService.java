@@ -1,5 +1,6 @@
 package com.loakraken.character.application;
 
+import com.loakraken.common.lostark.UserKeyContext;
 import java.time.Clock;
 import java.time.Instant;
 import org.springframework.dao.DataAccessException;
@@ -117,7 +118,7 @@ public class CharacterQueryService {
     if (cached.isPresent()) return cached.get();
     rejectMissing(name);
     return siblingQueries.run(
-        name,
+        flight(name),
         () ->
             cache
                 .findSiblings(name)
@@ -127,7 +128,7 @@ public class CharacterQueryService {
                       var now = Instant.now(clock);
                       var result =
                           new CharacterSiblingsResult(name, siblings, now, now.plus(cache.ttl()));
-                      cache.saveSiblings(name, result);
+                      if (shared()) cache.saveSiblings(name, result);
                       return result;
                     }));
   }
@@ -137,7 +138,7 @@ public class CharacterQueryService {
     if (cached.isPresent()) return cached.get();
     rejectMissing(name);
     return searches.run(
-        "summary:" + name,
+        flight("summary:" + name),
         () ->
             cache
                 .find(name)
@@ -146,15 +147,17 @@ public class CharacterQueryService {
                       var fetched = remembering(name, () -> detailsPort.fetch(name));
                       var fetchedAt = Instant.now(clock);
                       var profile = fetched.details().profile();
-                      // 처리정지 목록의 캐릭터는 응답만 주고 기록하지 않는다(#351).
-                      boolean recordable;
-                      try {
-                        recordable =
-                            !stopList.contains(profile.characterName(), profile.serverName());
-                        if (recordable) snapshots.save(fetched, fetchedAt);
-                      } catch (DataAccessException | TransactionException exception) {
-                        throw new CharacterException(
-                            CharacterErrorCode.CHARACTER_STORAGE_UNAVAILABLE);
+                      // 처리정지 목록의 캐릭터는 응답만 주고 기록하지 않는다(#351). 사용자 키로 받은 응답도 기록하지 않는다.
+                      boolean recordable = false;
+                      if (shared()) {
+                        try {
+                          recordable =
+                              !stopList.contains(profile.characterName(), profile.serverName());
+                          if (recordable) snapshots.save(fetched, fetchedAt);
+                        } catch (DataAccessException | TransactionException exception) {
+                          throw new CharacterException(
+                              CharacterErrorCode.CHARACTER_STORAGE_UNAVAILABLE);
+                        }
                       }
                       var result =
                           new CharacterResult(
@@ -163,7 +166,7 @@ public class CharacterQueryService {
                               Instant.now(clock).plus(cache.ttl()),
                               fetched.krakenScoreInput(),
                               arkGridReal(fetched));
-                      cache.save(name, result);
+                      if (shared()) cache.save(name, result);
                       if (recordable) {
                         history.record(profile, fetchedAt);
                         cards.record(fetched.details(), fetched.krakenScoreInput(), fetchedAt);
@@ -177,7 +180,7 @@ public class CharacterQueryService {
     if (cached.isPresent()) return cached.get();
     rejectMissing(name);
     return searches.run(
-        "armory:" + name,
+        flight("armory:" + name),
         () ->
             cache
                 .findArmory(name)
@@ -192,6 +195,7 @@ public class CharacterQueryService {
                               now.plus(cache.ttl()),
                               fetched.krakenScoreInput(),
                               arkGridReal(fetched));
+                      if (!shared()) return result;
                       cache.saveArmory(name, result);
                       var profile = fetched.details().profile();
                       if (stopList.recordable(profile.characterName(), profile.serverName())) {
@@ -222,8 +226,23 @@ public class CharacterQueryService {
     try {
       return fetch.get();
     } catch (CharacterException exception) {
-      if (exception.errorCode() == CharacterErrorCode.CHARACTER_NOT_FOUND) cache.markMissing(name);
+      if (exception.errorCode() == CharacterErrorCode.CHARACTER_NOT_FOUND && shared())
+        cache.markMissing(name);
       throw exception;
     }
+  }
+
+  /**
+   * 사용자 공식 API 키(BYOK)로 받는 중이 아니면 true. 사용자 키로 받은 응답은 공용 캐시·없는 캐릭터 기억·DB(스냅샷·관측 이력·카드)에 남기지 않는다(그
+   * 사용자의 요청에만 쓴다).
+   */
+  private static boolean shared() {
+    return !UserKeyContext.applied();
+  }
+
+  /** 같은 이름의 동시 요청 묶기 키. 사용자 키 요청은 같은 키끼리만 묶는다(한 사람의 키로 다른 사람 요청을 채우지 않게). */
+  private static String flight(String key) {
+    var id = UserKeyContext.id();
+    return id == null ? key : "byok:" + id + ":" + key;
   }
 }

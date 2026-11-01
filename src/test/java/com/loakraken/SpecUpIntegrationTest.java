@@ -70,7 +70,7 @@ class SpecUpIntegrationTest {
     var keys = redis.keys("character:v*스펙*");
     if (keys != null && !keys.isEmpty()) redis.delete(keys);
     redis.delete("market:v1:refining-materials");
-    var goals = redis.keys("spec-up:v2:goal:*");
+    var goals = redis.keys("spec-up:v3:goal:*");
     if (goals != null && !goals.isEmpty()) redis.delete(goals);
   }
 
@@ -863,7 +863,7 @@ class SpecUpIntegrationTest {
     ApiContractFixture.write("character-spec-up-path.json", response.body());
     SiteNames.assertAbsent(response.body());
     var data = mapper.readTree(response.body()).path("data");
-    assertThat(data.path("ruleVersion").asText()).isEqualTo("spec-up-path-v1");
+    assertThat(data.path("ruleVersion").asText()).isEqualTo("spec-up-path-v3");
     assertThat(data.path("sort").asText()).isEqualTo("EFFICIENCY");
     assertThat(data.path("limit").asInt()).isEqualTo(30);
     var steps = data.path("steps");

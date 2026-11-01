@@ -236,6 +236,54 @@ class CollectibleOwnershipIntegrationTest {
   }
 
   @Test
+  void 아는_항목을_다시_기록해도_item_id_시퀀스를_쓰지_않는다() {
+    roster("보유시퀀스", null);
+    var first = Instant.now().minus(Duration.ofDays(2));
+    cards.recordCollectibles(SERVER, "보유시퀀스", List.of(items(SEED, 1, 5, 0, 3)), first);
+    long before = sequence();
+    // 날이 바뀌면 메모리 캐시를 지나 DB에 간다(재부팅도 같다).
+    cards.recordCollectibles(
+        SERVER, "보유시퀀스", List.of(items(SEED, 2, 5, 0, 3)), first.plus(Duration.ofDays(1)));
+    cards.recordCollectibles(
+        SERVER, "보유시퀀스", List.of(items(SEED, 3, 5, 0, 3)), first.plus(Duration.ofDays(2)));
+    assertThat(sequence()).isEqualTo(before);
+    assertThat(heldPoints("보유시퀀스")).isEqualTo("{3}");
+  }
+
+  @Test
+  void 시퀀스가_끝까지_닿아도_아는_항목_기록은_된다() {
+    roster("보유끝", null);
+    var first = Instant.now().minus(Duration.ofDays(2));
+    cards.recordCollectibles(SERVER, "보유끝", List.of(items(HEART, 1, 1, 0, 1)), first);
+    var name = "pg_get_serial_sequence('collectible_item', 'item_id')";
+    try {
+      jdbc.sql("SELECT setval(" + name + ", 32767, true)").query(Long.class).single();
+      cards.recordCollectibles(
+          SERVER, "보유끝", List.of(items(HEART, 1, 1, 1, 1)), first.plus(Duration.ofDays(1)));
+      assertThat(heldPoints("보유끝")).isEqualTo("{1,1}");
+    } finally {
+      jdbc.sql(
+              "SELECT setval(" + name + ", (SELECT MAX(item_id) FROM collectible_item) + 1, false)")
+          .query(Long.class)
+          .single();
+    }
+  }
+
+  private long sequence() {
+    return jdbc.sql("SELECT last_value FROM collectible_item_item_id_seq")
+        .query(Long.class)
+        .single();
+  }
+
+  private String heldPoints(String name) {
+    return jdbc.sql(
+            "SELECT r.points::text FROM roster_collectible_item r JOIN characters c ON c.roster_key = r.roster_key WHERE c.character_name = :n")
+        .param("n", name)
+        .query(String.class)
+        .single();
+  }
+
+  @Test
   void 종류_값이_틀리면_400이다() throws Exception {
     assertThat(get("/api/v1/collectibles/ownership?type=" + encode("<script>")).statusCode())
         .isEqualTo(400);

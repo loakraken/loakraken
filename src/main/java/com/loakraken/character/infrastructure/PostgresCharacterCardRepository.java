@@ -391,7 +391,7 @@ class PostgresCharacterCardRepository implements CharacterCardPort {
       List<com.loakraken.character.domain.CharacterLoadout.Collectible> collectibles,
       OffsetDateTime at) {
     // 같은 종류 안에 같은 이름이 두 번 와도 원정대를 두 번 세지 않게 (type, name) 하나로 합친다(큰 point).
-    var held = new java.util.LinkedHashMap<Short, Integer>();
+    var held = new java.util.LinkedHashMap<Integer, Integer>();
     boolean any = false;
     int typeOrder = 0;
     for (var collectible : collectibles) {
@@ -407,7 +407,7 @@ class PostgresCharacterCardRepository implements CharacterCardPort {
         String name = item.name().strip();
         if (type.length() > 32 || name.length() > 64) continue;
         any = true;
-        short id = itemId(type, name, typeOrder, order, item.maxPoint(), at);
+        int id = itemId(type, name, typeOrder, order, item.maxPoint(), at);
         int point = item.point() == null ? 0 : item.point();
         if (point > 0) held.merge(id, Math.min(point, Short.MAX_VALUE), Math::max);
       }
@@ -427,7 +427,7 @@ class PostgresCharacterCardRepository implements CharacterCardPort {
     jdbc.sql(
             """
         INSERT INTO roster_collectible_item (roster_key, item_ids, points, observed_at)
-        VALUES (:roster, CAST(:ids AS SMALLINT[]), CAST(:points AS SMALLINT[]), :at)
+        VALUES (:roster, CAST(:ids AS INTEGER[]), CAST(:points AS SMALLINT[]), :at)
         ON CONFLICT (roster_key) DO UPDATE SET item_ids = EXCLUDED.item_ids, points = EXCLUDED.points,
           observed_at = EXCLUDED.observed_at
         WHERE roster_collectible_item.observed_at <= EXCLUDED.observed_at
@@ -439,7 +439,7 @@ class PostgresCharacterCardRepository implements CharacterCardPort {
         .update();
   }
 
-  private short itemId(
+  private int itemId(
       String type, String name, int typeOrder, int order, int maxPoint, OffsetDateTime at) {
     String key = type + '\u0000' + name;
     var cached = items.get(key);
@@ -449,27 +449,53 @@ class PostgresCharacterCardRepository implements CharacterCardPort {
         && cached[1] == order
         && cached[2] == maxPoint
         && cached[3] == typeOrder
-        && cached[4] == day) return (short) cached[0];
-    short id =
-        jdbc.sql(
-                """
-            INSERT INTO collectible_item (type, name, type_order, sort_order, max_point, last_seen_at)
-            VALUES (:type, :name, :typeOrder, :order, :max, :at)
-            ON CONFLICT (type, name) DO UPDATE SET type_order = EXCLUDED.type_order,
-              sort_order = EXCLUDED.sort_order, max_point = EXCLUDED.max_point,
-              last_seen_at = GREATEST(collectible_item.last_seen_at, EXCLUDED.last_seen_at)
-            RETURNING item_id
-            """)
-            .param("type", type)
-            .param("name", name)
-            .param("typeOrder", typeOrder)
-            .param("order", order)
-            .param("max", Math.min(maxPoint, Short.MAX_VALUE))
-            .param("at", at)
-            .query(Short.class)
-            .single();
+        && cached[4] == day) return cached[0];
+    int max = Math.min(maxPoint, Short.MAX_VALUE);
+    // 아는 항목은 UPDATE만 한다. INSERT ... ON CONFLICT는 충돌해도 item_id 시퀀스(SMALLINT, 32767까지)를 쓰므로
+    // 부팅·날마다 항목 수만큼 닳아 끝나면 모든 수집품 기록이 실패했다. 시퀀스는 처음 보는 이름에만 쓴다.
+    var id = updateItem(type, name, typeOrder, order, max, at);
+    if (id.isEmpty())
+      id =
+          jdbc.sql(
+                  """
+              INSERT INTO collectible_item (type, name, type_order, sort_order, max_point, last_seen_at)
+              VALUES (:type, :name, :typeOrder, :order, :max, :at)
+              ON CONFLICT (type, name) DO NOTHING
+              RETURNING item_id
+              """)
+              .param("type", type)
+              .param("name", name)
+              .param("typeOrder", typeOrder)
+              .param("order", order)
+              .param("max", max)
+              .param("at", at)
+              .query(Integer.class)
+              .optional();
+    // 다른 프로세스(수집기)가 같은 이름을 먼저 넣었으면 그 행을 갱신한다.
+    if (id.isEmpty()) id = updateItem(type, name, typeOrder, order, max, at);
+    // 사전 행은 지우지 않으므로 여기까지 없을 일은 없다. 그래도 기록 작업자가 잡는 저장 예외로 끝낸다.
+    int value = id.orElseThrow(() -> new org.springframework.dao.EmptyResultDataAccessException(1));
     if (items.size() > KNOWN_LIMIT) items.clear();
-    items.put(key, new int[] {id, order, maxPoint, typeOrder, day});
-    return id;
+    items.put(key, new int[] {value, order, maxPoint, typeOrder, day});
+    return value;
+  }
+
+  private java.util.Optional<Integer> updateItem(
+      String type, String name, int typeOrder, int order, int max, OffsetDateTime at) {
+    return jdbc.sql(
+            """
+        UPDATE collectible_item SET type_order = :typeOrder, sort_order = :order, max_point = :max,
+          last_seen_at = GREATEST(last_seen_at, :at)
+        WHERE type = :type AND name = :name
+        RETURNING item_id
+        """)
+        .param("type", type)
+        .param("name", name)
+        .param("typeOrder", typeOrder)
+        .param("order", order)
+        .param("max", max)
+        .param("at", at)
+        .query(Integer.class)
+        .optional();
   }
 }

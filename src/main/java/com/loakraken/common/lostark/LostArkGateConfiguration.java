@@ -21,7 +21,11 @@ import org.springframework.data.redis.core.StringRedisTemplate;
  * 하나 더 만들면 Boot 자동 구성이 꺼지므로, 연결은 빈이 아닌 {@link GateRedis} 안에서 만든다.
  */
 @Configuration(proxyBeanMethods = false)
-@EnableConfigurationProperties({LostArkGateProperties.class, ClientLimitProperties.class})
+@EnableConfigurationProperties({
+  LostArkGateProperties.class,
+  ClientLimitProperties.class,
+  ByokProperties.class
+})
 class LostArkGateConfiguration {
   @Bean
   GateRedis lostArkGateRedis(
@@ -104,6 +108,33 @@ class LostArkGateConfiguration {
             new ClientLimitFilter(limiter));
     registration.addUrlPatterns("/api/v1/*");
     registration.setOrder(org.springframework.core.Ordered.HIGHEST_PRECEDENCE + 10);
+    return registration;
+  }
+
+  /** 사용자 키(BYOK) 게이트. 키별 카운터는 클라이언트 한도와 같은 저장소(Valkey, 없으면 메모리)에 HMAC id로만 둔다. */
+  @Bean
+  UserKeyGate userKeyGate(
+      GateRedis redis,
+      ByokProperties byok,
+      ClientLimiter limiter,
+      LostArkMetrics metrics,
+      Clock clock) {
+    ClientLimitStore store =
+        redis.template() == null
+            ? new ClientLimitStore.Memory()
+            : new ClientLimitStore.Valkey(redis.template());
+    return new UserKeyGate(byok, limiter, store, metrics, clock);
+  }
+
+  /** 클라이언트 한도 필터 바로 뒤(형식 오류도 그 한도에 먼저 세어지게). */
+  @Bean
+  org.springframework.boot.web.servlet.FilterRegistrationBean<UserKeyFilter> userKeyFilter(
+      ByokProperties byok, ClientLimiter limiter) {
+    var registration =
+        new org.springframework.boot.web.servlet.FilterRegistrationBean<>(
+            new UserKeyFilter(byok, limiter));
+    registration.addUrlPatterns("/api/v1/*");
+    registration.setOrder(org.springframework.core.Ordered.HIGHEST_PRECEDENCE + 11);
     return registration;
   }
 

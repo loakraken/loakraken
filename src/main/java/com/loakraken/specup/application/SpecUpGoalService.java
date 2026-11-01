@@ -119,8 +119,8 @@ public class SpecUpGoalService {
     meters.counter("loakraken.spec_up.path", "outcome", outcome).increment();
   }
 
-  // v2: 완갑(팔 보호구) 재련 단계를 고른다.
-  public static final String PATH_RULE_VERSION = "spec-up-path-v2";
+  // v2: 완갑(팔 보호구) 재련 단계를 고른다. v3: 어빌리티 스톤 목표 조합(각인 둘을 한 단계에), 단계 changes.
+  public static final String PATH_RULE_VERSION = "spec-up-path-v3";
   static final int PATH_MAX_STEPS = 30;
   static final int PATH_MAX_CONCURRENT = 2;
   static final Duration PATH_RETRY_AFTER = Duration.ofSeconds(2);
@@ -301,16 +301,17 @@ public class SpecUpGoalService {
     var pricesAt = new Instant[1];
     var result = new ArrayList<Excluded>();
     for (var option :
-        options(State.of(snapshot.details().loadout(), armGuard), gems, refinePrices, pricesAt)) {
+        options(
+            State.of(snapshot.details().loadout(), armGuard, true), gems, refinePrices, pricesAt)) {
       if (option.cost() != null && option.cost().amount() != null) continue;
-      var simulated = simulator.simulate(snapshot, List.of(option.change()));
+      var simulated = simulator.simulate(snapshot, option.changes());
       if (simulated.unsupportedCount() > 0 || simulated.after() == null) continue;
       var delta = simulated.after().subtract(before);
       if (delta.signum() <= 0) continue;
       result.add(
           new Excluded(
               option.id(),
-              option.change().kind().name(),
+              option.kind(),
               option.target(),
               option.from(),
               option.to(),
@@ -343,7 +344,8 @@ public class SpecUpGoalService {
       SpecUpCost cost,
       Long cumulativeCost,
       BigDecimal combatPowerPer10kGold,
-      Long extraCost) {}
+      Long extraCost,
+      List<Change> changes) {}
 
   public record Goal(
       String characterName,
@@ -470,8 +472,10 @@ public class SpecUpGoalService {
       Optional<RefiningMaterialPriceService.Prices> refinePrices) {
     var pricesAt = new Instant[1];
     var steps = new ArrayList<Step>();
-    var state = State.of(snapshot.details().loadout(), armGuard);
-    var applied = new LinkedHashMap<String, Change>();
+    // 추천 순서(armGuard 인자를 받는 쪽)는 어빌리티 스톤도 고른다. 목표 경로는 그대로.
+    var state = State.of(snapshot.details().loadout(), armGuard, pricedOnly);
+    // 칸마다 그 칸의 마지막 단계 변경(스톤은 각인 둘이라 여러 개).
+    var applied = new LinkedHashMap<String, List<Change>>();
     var current = before;
     Long cumulative = 0L;
     int unpriced = 0;
@@ -502,8 +506,8 @@ public class SpecUpGoalService {
         var marginal = marginal(option, gemTotals);
         if (pricedOnly && marginal == null) continue;
         var trial = new LinkedHashMap<>(applied);
-        trial.put(option.slot(), option.change());
-        var simulated = simulator.simulate(snapshot, List.copyOf(trial.values()));
+        trial.put(option.slot(), option.changes());
+        var simulated = simulator.simulate(snapshot, flatten(trial));
         // 지금까지 적용한 단계는 모두 계산된 것이므로, 계산하지 못한 변경이 있으면 이 후보다.
         if (simulated.unsupportedCount() > 0 || simulated.after() == null) continue;
         var delta = simulated.after().subtract(current);
@@ -524,7 +528,7 @@ public class SpecUpGoalService {
         stop = NO_CANDIDATE;
         break;
       }
-      applied.put(best.slot(), best.change());
+      applied.put(best.slot(), best.changes());
       state = state.after(best);
       current = best.after();
       var amount = best.cost() == null ? null : best.cost().amount();
@@ -537,7 +541,7 @@ public class SpecUpGoalService {
           new Step(
               steps.size() + 1,
               best.id(),
-              best.change().kind().name(),
+              best.kind(),
               best.target(),
               best.from(),
               best.to(),
@@ -550,9 +554,16 @@ public class SpecUpGoalService {
               best.cost(),
               cumulative,
               SpecUpCost.efficiency(best.delta(), bestMarginal),
-              bestMarginal));
+              bestMarginal,
+              best.changes()));
     }
     return new Chain(List.copyOf(steps), stop, cumulative, unpriced, current, pricesAt[0]);
+  }
+
+  private static List<Change> flatten(Map<String, List<Change>> applied) {
+    var changes = new ArrayList<Change>();
+    for (var list : applied.values()) changes.addAll(list);
+    return List.copyOf(changes);
   }
 
   /** DELTA 고르기: 전투력 증가 큰 순 → 효율 높은 순(없으면 뒤) → id. */
@@ -852,7 +863,82 @@ public class SpecUpGoalService {
               null,
               null));
     }
+    if (state.stone() != null) result.addAll(stoneOptions(state.stone()));
     return result;
+  }
+
+  /**
+   * 어빌리티 스톤 목표 조합(목록 스톤 줄과 같은 목표·id·비용): 조합마다 두 배치(어느 각인에 높은 레벨). 한 단계에 각인 둘(STONE_ENGRAVING 둘)을
+   * 바꾼다. 비용은 새 스톤 기대 비용 전부(스톤은 이어 올리지 않고 새로 깎는다). 지금과 같은 레벨 조합은 뺀다.
+   */
+  static List<Option> stoneOptions(Stone stone) {
+    var names = List.copyOf(stone.levels().keySet());
+    var result = new ArrayList<Option>();
+    // 스톤 레벨 계수를 확인하지 못한 각인이 있으면 스톤 단계를 내지 않는다(계산 검증 11-01: 예리한 둔기 3→4 표본에 맞는 식 없음).
+    if (names.stream().anyMatch(STONE_UNCONFIRMED::contains)) return result;
+    var seen = new java.util.HashSet<String>();
+    for (var target : SpecUpScoreCandidates.STONE_TARGETS) {
+      var label = target[0] + "" + target[1] + "돌";
+      var gold = com.loakraken.specup.domain.SpecUpCostRules.stoneGold(label);
+      var cost = gold == null ? SpecUpCost.STONE_COST_UNCONFIRMED : SpecUpCost.stone(gold);
+      for (var order :
+          List.of(new int[] {target[2], target[3]}, new int[] {target[3], target[2]})) {
+        var levels = new LinkedHashMap<String, Integer>();
+        levels.put(names.get(0), order[0]);
+        levels.put(names.get(1), order[1]);
+        if (levels.equals(stone.levels())) continue;
+        var id = "ABILITY_STONE:" + order[0] + ":" + order[1];
+        if (!seen.add(id)) continue;
+        result.add(
+            new Option(
+                "ABILITY_STONE",
+                id,
+                stone.item().name(),
+                stoneText(stone.levels()),
+                label + " " + stoneText(levels),
+                stone.item().icon(),
+                stone.item().grade(),
+                null,
+                stoneChange(names.get(0), order[0]),
+                cost,
+                null,
+                null,
+                null,
+                List.of(stoneChange(names.get(1), order[1]))));
+      }
+    }
+    return result;
+  }
+
+  /** 어빌리티 스톤의 감소 줄 이름(각인이 아니라 스톤 단계에서 바꾸지 않는다). */
+  static final java.util.Set<String> STONE_PENALTIES =
+      java.util.Set.of("공격력 감소", "방어력 감소", "공격속도 감소", "이동속도 감소");
+
+  /** 스톤 레벨 전투력 계수를 아직 확인하지 못한 각인(추천 순서 스톤 단계에서 뺀다). */
+  static final java.util.Set<String> STONE_UNCONFIRMED = java.util.Set.of("예리한 둔기");
+
+  private static Change stoneChange(String name, int level) {
+    return new Change(
+        Kind.STONE_ENGRAVING,
+        null,
+        null,
+        null,
+        level,
+        null,
+        null,
+        null,
+        null,
+        name,
+        null,
+        null,
+        null,
+        null);
+  }
+
+  private static String stoneText(Map<String, Integer> levels) {
+    var parts = new ArrayList<String>();
+    levels.forEach((name, level) -> parts.add(name + " Lv." + level));
+    return String.join(" · ", parts);
   }
 
   /**
@@ -927,7 +1013,40 @@ public class SpecUpGoalService {
       SpecUpCost cost,
       BigDecimal delta,
       BigDecimal after,
-      BigDecimal efficiency) {
+      BigDecimal efficiency,
+      List<Change> more) {
+    /** 변경이 하나인 단계. */
+    Option(
+        String slot,
+        String id,
+        String target,
+        String from,
+        String to,
+        String icon,
+        String grade,
+        String skillName,
+        Change change,
+        SpecUpCost cost,
+        BigDecimal delta,
+        BigDecimal after,
+        BigDecimal efficiency) {
+      this(
+          slot,
+          id,
+          target,
+          from,
+          to,
+          icon,
+          grade,
+          skillName,
+          change,
+          cost,
+          delta,
+          after,
+          efficiency,
+          List.of());
+    }
+
     Option scored(BigDecimal delta, BigDecimal after, BigDecimal efficiency) {
       return new Option(
           slot,
@@ -942,9 +1061,29 @@ public class SpecUpGoalService {
           cost,
           delta,
           after,
-          efficiency);
+          efficiency,
+          more);
+    }
+
+    /** 이 단계의 시뮬레이터 변경 전부(change가 먼저). */
+    List<Change> changes() {
+      if (more == null || more.isEmpty()) return List.of(change);
+      var all = new ArrayList<Change>();
+      all.add(change);
+      all.addAll(more);
+      return List.copyOf(all);
+    }
+
+    /** 단계 종류: 변경이 하나면 그 kind, 여럿이면(어빌리티 스톤) 후보 id의 종류(목록과 같음). */
+    String kind() {
+      if (more == null || more.isEmpty()) return change.kind().name();
+      int colon = id.indexOf(':');
+      return colon < 0 ? id : id.substring(0, colon);
     }
   }
+
+  /** 어빌리티 스톤: 각인 이름 → 레벨(스톤 줄 순서), 표시용 장비. */
+  record Stone(CharacterLoadout.Equipment item, Map<String, Integer> levels) {}
 
   record GemSlot(
       int slot,
@@ -969,14 +1108,18 @@ public class SpecUpGoalService {
       Map<Integer, Item> advanced,
       Item quality,
       Map<String, Engraving> engravings,
-      Item armGuard) {
-    /** 완갑(팔 보호구)은 넣지 않는 상태(스위치가 꺼졌을 때). */
+      Item armGuard,
+      Stone stone) {
+    /** 완갑(팔 보호구)·어빌리티 스톤은 넣지 않는 상태(목표 경로). */
     static State of(CharacterLoadout loadout) {
-      return of(loadout, false);
+      return of(loadout, false, false);
     }
 
-    /** armGuard면 완갑 재련 단계도 다음 단계 후보로 둔다(+0~24, 목록 완갑 줄과 같은 대상). */
-    static State of(CharacterLoadout loadout, boolean armGuard) {
+    /**
+     * armGuard면 완갑 재련 단계도 다음 단계 후보로 둔다(+0~24, 목록 완갑 줄과 같은 대상). stone이면 어빌리티 스톤 목표 조합도 둔다(각인 줄이 둘인
+     * 스톤만).
+     */
+    static State of(CharacterLoadout loadout, boolean armGuard, boolean stone) {
       var gems = new LinkedHashMap<Integer, GemSlot>();
       if (loadout.gems() != null) {
         var skills = new HashMap<Integer, String>();
@@ -1046,7 +1189,31 @@ public class SpecUpGoalService {
             guard = new Item(loadout.equipment().indexOf(item), item, refine);
         }
       }
-      return new State(gems, refines, advanced, quality, engravings, guard);
+      Stone stoneState = null;
+      if (stone) {
+        var item =
+            loadout.equipment().stream()
+                .filter(
+                    equipment ->
+                        equipment != null
+                            && "어빌리티 스톤".equals(equipment.type())
+                            && equipment.detail() != null)
+                .findFirst()
+                .orElse(null);
+        if (item != null) {
+          var levels = new LinkedHashMap<String, Integer>();
+          // 실제 스톤에는 감소 줄(예: 방어력 감소 Lv.0)이 셋째로 붙는다. 각인 줄만 센다(계산 검증 11-01 P1: 감소 줄 때문에 스톤 단계가 하나도 나오지
+          // 않음).
+          for (var line : item.detail().stoneEngravings())
+            if (line != null
+                && line.name() != null
+                && line.level() != null
+                && !STONE_PENALTIES.contains(line.name()))
+              levels.putIfAbsent(line.name(), line.level());
+          if (levels.size() == 2) stoneState = new Stone(item, levels);
+        }
+      }
+      return new State(gems, refines, advanced, quality, engravings, guard, stoneState);
     }
 
     /** option 단계를 적용한 다음 상태. 끝 단계에 닿은 칸은 뺀다. */
@@ -1057,6 +1224,7 @@ public class SpecUpGoalService {
       var quality = this.quality;
       var engravings = new LinkedHashMap<>(this.engravings);
       var armGuard = this.armGuard;
+      var stone = this.stone;
       var change = option.change();
       switch (change.kind()) {
         case GEM_LEVEL -> {
@@ -1106,9 +1274,14 @@ public class SpecUpGoalService {
                 change.level() >= 25
                     ? null
                     : new Item(armGuard.index(), armGuard.equipment(), change.level());
+        case STONE_ENGRAVING -> {
+          var levels = new LinkedHashMap<>(stone.levels());
+          for (var each : option.changes()) levels.put(each.name(), each.level());
+          stone = new Stone(stone.item(), levels);
+        }
         default -> {}
       }
-      return new State(gems, refines, advanced, quality, engravings, armGuard);
+      return new State(gems, refines, advanced, quality, engravings, armGuard, stone);
     }
   }
 }

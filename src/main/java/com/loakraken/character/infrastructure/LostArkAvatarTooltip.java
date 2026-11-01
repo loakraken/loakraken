@@ -9,9 +9,10 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * 아바타 툴팁의 성향 줄. 공식 툴팁은 type이 SymbolString이고 titleStr이 "성향"인 요소에 `&tdc_smart 지성 : 5<BR>&tdc_courage 담력 :
- * 10<BR>`처럼 담는다. 요소 번호(Element_004~007)는 아바타마다 달라 제목으로 찾는다. 이동 효과·변신 스킨에는 없다(저장된 실제 raw 26명 259벌 중
- * 238벌에 있음, 2026-11-02 확인).
+ * 아바타 툴팁의 성향 줄. 공식 툴팁은 type이 SymbolString이고 titleStr이 "성향"인 요소에 `&tdc_smart 지성 : 5<br>
+ * &tdc_courage 담력 : 10<br>
+ * `처럼 담는다. 요소 번호(Element_004~007)는 아바타마다 달라 제목으로 찾는다. 이동 효과·변신 스킨에는 없다(저장된 실제 raw 26명 259벌 중 238벌에
+ * 있음, 2026-11-02 확인).
  */
 final class LostArkAvatarTooltip {
   private static final JsonMapper MAPPER = JsonMapper.builder().build();

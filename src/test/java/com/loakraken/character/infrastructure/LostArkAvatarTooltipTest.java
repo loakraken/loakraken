@@ -67,7 +67,8 @@ class LostArkAvatarTooltipTest {
     try (InputStream input =
         LostArkAvatarTooltipTest.class.getResourceAsStream("/fixtures/avatar-tooltips-real.json")) {
       var tooltips = new ArrayList<String>();
-      for (var avatar : MAPPER.readTree(input).values()) tooltips.add(avatar.path("tooltip").stringValue());
+      for (var avatar : MAPPER.readTree(input).values())
+        tooltips.add(avatar.path("tooltip").stringValue());
       return tooltips;
     }
   }

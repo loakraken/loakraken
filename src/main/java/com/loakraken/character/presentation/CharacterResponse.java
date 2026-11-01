@@ -286,7 +286,9 @@ public record CharacterResponse(
       @NullableResponse Boolean isSet,
       @NullableResponse Boolean isInner,
       @Schema(description = "아바타 기본 효과 줄(예: 민첩 +2.00%)") List<String> effects,
-      @Schema(description = "이 아바타가 주는 성향 점수(공식 툴팁 순서). 성향 줄이 없는 아바타(이동 효과 등)는 빈 목록. 캐릭터 성향 합계는 tendencies")
+      @Schema(
+              description =
+                  "이 아바타가 주는 성향 점수(공식 툴팁 순서). 성향 줄이 없는 아바타(이동 효과 등)는 빈 목록. 캐릭터 성향 합계는 tendencies")
           List<AvatarTendencyResponse> tendencies) {}
 
   public record AvatarTendencyResponse(

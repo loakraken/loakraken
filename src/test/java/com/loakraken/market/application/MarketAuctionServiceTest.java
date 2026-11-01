@@ -117,16 +117,51 @@ class MarketAuctionServiceTest {
         .containsExactly("상상", "상중", "중상", "중중", "상하", "하상");
     assertThat(slots.get(0).cells().get(5).optionLabels()).containsExactly("적주피 하", "추피 상");
     assertThat(port.searches).isEqualTo(5);
-    // 딜러 표 18칸은 4번째 요청에서 다 차고(5 × 3 + 3), 그 뒤 요청은 공식 호출이 없다.
-    for (int visit = 2; visit <= 5; visit++) service.accessories(Grade.ANCIENT, Role.DEALER, 70);
-    assertThat(port.searches).isEqualTo(18);
-    // 서포터는 귀걸이가 무공% 단일 3칸이라 15칸이다(요청마다 5칸).
+    // 보이는 18칸을 먼저 채운다: 4번째 요청(20회)에서 표가 다 찬다.
+    List<MarketAuctionService.AccessorySlot> board = slots;
+    for (int visit = 2; visit <= 4; visit++)
+      board = service.accessories(Grade.ANCIENT, Role.DEALER, 70);
+    assertThat(port.searches).isEqualTo(20);
+    assertThat(board)
+        .flatExtracting(MarketAuctionService.AccessorySlot::cells)
+        .hasSize(18)
+        .allMatch(cell -> cell.status() == MarketAuctionService.Status.READY);
+    // 표에서 뺀 중하·하중 6칸도 채운다(스펙업 연마 비용이 읽는다): 딜러 24칸은 5번째 요청에서 다 찬다(5 × 4 + 4).
+    service.accessories(Grade.ANCIENT, Role.DEALER, 70);
+    assertThat(port.searches).isEqualTo(24);
+    // 서포터는 귀걸이가 무공% 단일 3칸이라 19칸이다(요청마다 5칸).
     var support = service.accessories(Grade.ANCIENT, Role.SUPPORT, 70);
     assertThat(support.get(1).cells())
         .extracting(MarketAuctionService.AccessoryCell::label)
         .containsExactly("상", "중", "하");
     assertThat(support.get(0).cells()).hasSize(6);
-    assertThat(port.searches).isEqualTo(18 + 5);
+    assertThat(port.searches).isEqualTo(24 + 5);
+  }
+
+  /**
+   * 회귀 방지(PM 총괄 11-02): 표에서 뺀 중하 조합도 표 채우기가 칸을 데워, 중하 귀걸이를 낀 캐릭터의 스펙업 연마 비용이 채우기 플래그 없이(fill 꺼짐)
+   * 값을 받는다.
+   */
+  @Test
+  void 표에서_뺀_중하_칸도_데워_스펙업_연마_비용이_값을_받는다() {
+    // 스펙업 연마 비용은 품질 조건 없는 칸을 읽는다: 품질 0 표를 다 채운다(24칸, 요청마다 5칸).
+    List<MarketAuctionService.AccessorySlot> board = List.of();
+    for (int visit = 1; visit <= 5; visit++)
+      board = service.accessories(Grade.ANCIENT, Role.DEALER, 0);
+    assertThat(port.searches).isEqualTo(24);
+    assertThat(board.get(1).cells())
+        .extracting(MarketAuctionService.AccessoryCell::label)
+        .doesNotContain("중하", "하중");
+    // 귀걸이 무공% 중(+1.80%)·공% 하(+0.40%) = 중하 칸.
+    var midLow =
+        List.of(
+            new MarketAuctionService.PolishLine("공격력", true, "+0.40%"),
+            new MarketAuctionService.PolishLine("무기 공격력", true, "+1.80%"));
+    var price =
+        service.polishPrice("귀걸이", midLow, new MarketAuctionService.PolishFill(false));
+    assertThat(price.status()).isEqualTo(MarketAuctionService.PolishStatus.OK);
+    assertThat(price.minBuyPrice()).isEqualTo(2_500_000L);
+    assertThat(port.searches).isEqualTo(24);
   }
 
   @Test

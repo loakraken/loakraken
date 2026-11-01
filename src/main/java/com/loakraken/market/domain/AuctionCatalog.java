@@ -186,8 +186,8 @@ public final class AuctionCatalog {
   }
 
   /**
-   * 표의 조합 순서. 옵션 2개면 상상·상중·중상·중중·상하·하상(중하·하중·하하 제외 — 칸마다 공식 검색 1번이라 찾는 사람이 적은 조합은 표에 두지 않는다), 1개면
-   * 상·중·하. 표에 없는 조합도 매물 목록(levels)으로는 검색할 수 있다.
+   * 시세 칸을 채우는 조합 순서. 옵션 2개면 상상·상중·중상·중중·상하·하상·중하·하중(하하 제외), 1개면 상·중·하. 표에 보이지 않는 중하·하중도 채운다: 스펙업
+   * 연마 비용이 같은 칸을 읽는다(PM 총괄 11-02, 회귀 방지).
    */
   public static List<List<Level>> combinations(int optionCount) {
     if (optionCount == 1)
@@ -196,7 +196,23 @@ public final class AuctionCatalog {
     var m = Level.MID;
     var l = Level.LOW;
     return List.of(
-        List.of(h, h), List.of(h, m), List.of(m, h), List.of(m, m), List.of(h, l), List.of(l, h));
+        List.of(h, h),
+        List.of(h, m),
+        List.of(m, h),
+        List.of(m, m),
+        List.of(h, l),
+        List.of(l, h),
+        List.of(m, l),
+        List.of(l, m));
+  }
+
+  /**
+   * 시세 표에 보이는 조합인가. 옵션 2개면 중하·하중은 표에서 뺀다(사용자 피드백 11-02). 표에 없는 조합도 매물 목록(levels)으로는 검색할 수 있다.
+   */
+  public static boolean shown(List<Level> levels) {
+    return !(levels.size() == 2
+        && levels.contains(Level.MID)
+        && levels.contains(Level.LOW));
   }
 
   public static String gemName(String kind, int level) {

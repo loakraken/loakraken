@@ -434,8 +434,8 @@ class AuctionBoardIntegrationTest {
                 gate.release();
               }
             });
-    // 요청마다 최대 5칸: 품질 70 표 18칸을 4번의 요청이 채우고(18회), 품질 90 표 요청이 2칸을 더 채운 뒤(20회, 클라이언트 한도 20)
-    // 세 번째 호출이 한도에 걸린다.
+    // 요청마다 최대 5칸: 품질 70 표(보이는 18칸 먼저, 표에서 뺀 중하·하중 6칸은 그 뒤)를 4번의 요청이 20회 채워 클라이언트 한도 20에 닿고,
+    // 품질 90 표 요청의 첫 호출이 한도에 걸린다.
     HttpResponse<String> response = null;
     for (int visit = 1; visit <= 4; visit++) {
       response =
@@ -450,8 +450,7 @@ class AuctionBoardIntegrationTest {
     assertThat(response.statusCode()).isEqualTo(200);
     var statuses = statuses(response);
     assertThat(statuses).hasSize(18);
-    assertThat(statuses.stream().filter("READY"::equals)).hasSize(2);
-    assertThat(statuses.stream().filter("PENDING"::equals)).hasSize(16);
+    assertThat(statuses).containsOnly("PENDING");
     verify(search, times(21)).search(any());
   }
 

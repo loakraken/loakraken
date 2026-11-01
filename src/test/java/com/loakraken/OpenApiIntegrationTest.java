@@ -137,9 +137,12 @@ class OpenApiIntegrationTest {
         .contains("skills", "avatars", "collectibles");
     assertThat(document.at("/components/schemas/CharacterResponse/required").toString())
         .contains("tendencies", "decorations", "honorPoint", "townName", "avatars", "collectibles");
-    // 아바타별 성향(다음 릴리스): 목록이라 null이 아니고, 성향 줄이 없으면 빈 목록이다.
+    // 아바타별 성향(다음 릴리스): 응답은 늘 보내지만(없으면 빈 목록) api 배포 전까지 계약에서는 선택 필드다(배포 순서 규칙).
     assertThat(document.at("/components/schemas/AvatarResponse/required").toString())
-        .contains("effects", "tendencies");
+        .contains("effects")
+        .doesNotContain("tendencies");
+    assertThat(document.at("/components/schemas/AvatarResponse/properties/tendencies/type").asText())
+        .isEqualTo("array");
     assertThat(document.at("/components/schemas/AvatarTendencyResponse/required").toString())
         .contains("type", "point");
     // 자동완성(#372): 필수 필드와 nullable 초상(프론트 10-12 05:32 계약 검증).

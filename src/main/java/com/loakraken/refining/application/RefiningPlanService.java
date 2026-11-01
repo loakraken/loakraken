@@ -122,19 +122,34 @@ public class RefiningPlanService {
 
   /**
    * 첫 단계(targetStage)의 현재 성공 확률(숨결·책 전, 만분율)에서 이미 실패한 횟수. 그 단계 기본 확률 × (1 + 0.1k)와 같은 k가 없으면 400
-   * REFINING_SUCCESS_RATE_MISMATCH.
+   * REFINING_SUCCESS_RATE_MISMATCH. 장인의 기운(0.01%p)이 그 횟수만큼 실패해 쌓일 수 있는 범위({@link
+   * RefiningPlan#energyRange}, 숨결·책을 쓴 이력은 모르니 매 시도 없음 ~ 매 시도 최대) 밖이면 400
+   * REFINING_ARTISAN_ENERGY_MISMATCH.
    */
   public int failuresFromSuccessRate(
       RefiningRules.Grade grade,
       RefiningRules.EquipmentType equipmentType,
       int targetStage,
-      int rateBp) {
-    double base =
-        equipmentType == RefiningRules.EquipmentType.ARM_GUARD
-            ? vambrace.stage(targetStage).baseRateBp()
-            : rules.track(grade, equipmentType).stage(targetStage).baseRateBp();
+      int rateBp,
+      int energyBp) {
+    double base;
+    double auxMax = 0;
+    if (equipmentType == RefiningRules.EquipmentType.ARM_GUARD) {
+      var stage = vambrace.stage(targetStage);
+      base = stage.baseRateBp();
+      for (var breath : stage.breaths()) auxMax += breath.rateBp() * breath.maxCount();
+    } else {
+      var stage = rules.track(grade, equipmentType).stage(targetStage);
+      base = stage.baseRateBp();
+      if (stage.breath() != null)
+        auxMax += (double) stage.breath().rateBp() * stage.breath().maxCount();
+      if (stage.book() != null) auxMax += stage.book().rateBp();
+    }
     int failures = RefiningPlan.failuresFromRate(base, rateBp);
     if (failures < 0) throw new BusinessException(RefiningErrorCode.REFINING_SUCCESS_RATE_MISMATCH);
+    var range = RefiningPlan.energyRange(base, auxMax, failures);
+    if (energyBp < range[0] || energyBp > range[1])
+      throw new BusinessException(RefiningErrorCode.REFINING_ARTISAN_ENERGY_MISMATCH);
     return failures;
   }
 

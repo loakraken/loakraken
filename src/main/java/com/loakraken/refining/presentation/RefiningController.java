@@ -58,7 +58,7 @@ class RefiningController {
     @io.swagger.v3.oas.annotations.responses.ApiResponse(
         responseCode = "400",
         description =
-            "INVALID_REQUEST: 단계 범위·장인의 기운·실패 횟수 오류, useBreath와 breath가 어긋남, OPTIMAL 스위치가 꺼져 있는데 breath=OPTIMAL. REFINING_SUCCESS_RATE_MISMATCH: currentSuccessRate가 첫 단계 기본 확률 × (1 + 0.1 × 실패 0~10) 어느 값과도 같지 않음(숨결·책을 더한 값 등)",
+            "INVALID_REQUEST: 단계 범위·장인의 기운·실패 횟수 오류, useBreath와 breath가 어긋남, OPTIMAL 스위치가 꺼져 있는데 breath=OPTIMAL. REFINING_SUCCESS_RATE_MISMATCH: currentSuccessRate가 첫 단계 기본 확률 × (1 + 0.1 × 실패 0~10) 어느 값과도 같지 않음(숨결·책을 더한 값 등). REFINING_ARTISAN_ENERGY_MISMATCH: 성공 확률로 정한 실패 횟수와 currentArtisanEnergy가 맞지 않음(그 횟수만큼 실패해 쌓일 수 있는 기운 밖)",
         content = @Content(schema = @Schema(ref = "#/components/schemas/ErrorResponse"))),
     @io.swagger.v3.oas.annotations.responses.ApiResponse(
         responseCode = "409",
@@ -104,7 +104,7 @@ class RefiningController {
     @io.swagger.v3.oas.annotations.responses.ApiResponse(
         responseCode = "400",
         description =
-            "INVALID_REQUEST: 부위 0개·7개 이상, 단계 범위, 가진 수량 형식, OPTIMAL 스위치가 꺼져 있는데 breath=OPTIMAL. REFINING_SUCCESS_RATE_MISMATCH: 부위 currentSuccessRate가 그 부위 첫 단계 값과 맞지 않음",
+            "INVALID_REQUEST: 부위 0개·7개 이상, 단계 범위, 가진 수량 형식, OPTIMAL 스위치가 꺼져 있는데 breath=OPTIMAL. REFINING_SUCCESS_RATE_MISMATCH: 부위 currentSuccessRate가 그 부위 첫 단계 값과 맞지 않음. REFINING_ARTISAN_ENERGY_MISMATCH: 부위 성공 확률과 장인의 기운이 맞지 않음",
         content = @Content(schema = @Schema(ref = "#/components/schemas/ErrorResponse"))),
     @io.swagger.v3.oas.annotations.responses.ApiResponse(
         responseCode = "409",
@@ -160,7 +160,10 @@ class RefiningController {
             request.grade(),
             request.equipmentType(),
             request.fromStage() + 1,
-            request.currentSuccessRate().movePointRight(2).intValueExact()),
+            request.currentSuccessRate().movePointRight(2).intValueExact(),
+            request.currentArtisanEnergy() == null
+                ? 0
+                : request.currentArtisanEnergy().movePointRight(2).intValueExact()),
         "SUCCESS_RATE");
   }
 

@@ -72,7 +72,7 @@ public record RefiningPlanRequest(
         @Digits(integer = 3, fraction = 2)
         @Schema(
             description =
-                "첫 단계의 현재 성공 확률(%, 게임 재련 화면 값을 숨결·책을 올리기 전에 읽은 것). currentFailedAttempts가 없을 때 이 값으로 실패 횟수를 정한다(기본 확률 × (1 + 0.1 × 실패 0~10)과 같아야 함, 아니면 400 REFINING_SUCCESS_RATE_MISMATCH). 둘 다 없으면 실패 0",
+                "첫 단계의 현재 성공 확률(%, 게임 재련 화면 값을 숨결·책을 올리기 전에 읽은 것). currentFailedAttempts가 없을 때 이 값으로 실패 횟수를 정한다(기본 확률 × (1 + 0.1 × 실패 0~10)과 같아야 함, 아니면 400 REFINING_SUCCESS_RATE_MISMATCH). 장인의 기운은 그 실패 횟수로 쌓일 수 있는 값이어야 함(아니면 400 REFINING_ARTISAN_ENERGY_MISMATCH). 둘 다 없으면 실패 0",
             example = "3.30")
         BigDecimal currentSuccessRate) {
   public enum Breath {

@@ -15,7 +15,14 @@ public enum RefiningErrorCode implements ErrorCode {
    * 받아야 실패 횟수가 정해진다.
    */
   REFINING_SUCCESS_RATE_MISMATCH(
-      HttpStatus.BAD_REQUEST, "현재 성공 확률이 이 단계의 값과 맞지 않습니다. 숨결·책을 올리기 전 성공 확률을 넣어 주세요.");
+      HttpStatus.BAD_REQUEST, "현재 성공 확률이 이 단계의 값과 맞지 않습니다. 숨결·책을 올리기 전 성공 확률을 넣어 주세요."),
+  /**
+   * 현재 성공 확률로 정한 실패 횟수와 장인의 기운이 맞지 않는다: 그 횟수만큼 실패했을 때 쌓일 수 있는 기운(매 시도 숨결·책 없이 ~ 매 시도 최대) 밖이다(다른 단계
+   * 화면 값이거나 잘못 읽은 값).
+   */
+  REFINING_ARTISAN_ENERGY_MISMATCH(
+      HttpStatus.BAD_REQUEST,
+      "현재 성공 확률과 장인의 기운이 맞지 않습니다. 같은 단계 재련 화면에서 숨결·책을 올리기 전 두 값을 다시 확인해 주세요.");
 
   private final HttpStatus httpStatus;
   private final String message;

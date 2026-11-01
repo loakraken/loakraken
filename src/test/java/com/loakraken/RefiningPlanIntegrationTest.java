@@ -247,12 +247,33 @@ class RefiningPlanIntegrationTest {
     ApiContractFixture.write("refining-plan-success-rate-mismatch.json", mismatch.body());
     assertThat(mapper.readTree(mismatch.body()).path("code").asText())
         .isEqualTo("REFINING_SUCCESS_RATE_MISMATCH");
-    // 완갑 →1 기본 15%: 16.50% = 실패 1회. 여러 부위 합계도 부위마다 정한다.
+    // 성공 확률 3.30%(실패 1회)인데 장인의 기운 0%: 한 번 실패하면 1.39~4.18%가 쌓여 있어야 한다(코덱스 #830 P1).
+    for (var energy : new String[] {"0", "1.38", "4.19"}) {
+      var energyMismatch =
+          request(
+              "{\"grade\":\"UPHWA\",\"equipmentType\":\"ARMOR\",\"fromStage\":16,\"toStage\":17,\"currentSuccessRate\":3.30,\"currentArtisanEnergy\":"
+                  + energy
+                  + "}");
+      assertThat(energyMismatch.statusCode()).as(energy).isEqualTo(400);
+      assertThat(mapper.readTree(energyMismatch.body()).path("code").asText())
+          .as(energy)
+          .isEqualTo("REFINING_ARTISAN_ENERGY_MISMATCH");
+      if (energy.equals("0"))
+        ApiContractFixture.write(
+            "refining-plan-artisan-energy-mismatch.json", energyMismatch.body());
+    }
+    // 실패 횟수를 직접 보내면 지금처럼 확인하지 않는다.
+    assertThat(
+            request(
+                    "{\"grade\":\"UPHWA\",\"equipmentType\":\"ARMOR\",\"fromStage\":16,\"toStage\":17,\"currentFailedAttempts\":1}")
+                .statusCode())
+        .isEqualTo(200);
+    // 완갑 →1 기본 15%: 16.50% = 실패 1회(기운 6.97~13.95%). 여러 부위 합계도 부위마다 정한다.
     var armGuard =
         total(
             """
-            {"parts":[{"equipmentType":"ARM_GUARD","fromStage":0,"toStage":1,"currentSuccessRate":16.50},
-                      {"grade":"UPHWA","equipmentType":"ARMOR","fromStage":16,"toStage":17,"currentSuccessRate":3.90}]}
+            {"parts":[{"equipmentType":"ARM_GUARD","fromStage":0,"toStage":1,"currentSuccessRate":16.50,"currentArtisanEnergy":6.97},
+                      {"grade":"UPHWA","equipmentType":"ARMOR","fromStage":16,"toStage":17,"currentSuccessRate":3.90,"currentArtisanEnergy":12.96}]}
             """);
     assertThat(armGuard.statusCode()).as(armGuard.body()).isEqualTo(200);
     var parts = mapper.readTree(armGuard.body()).at("/data/parts");
@@ -264,6 +285,12 @@ class RefiningPlanIntegrationTest {
                     "{\"parts\":[{\"equipmentType\":\"ARM_GUARD\",\"fromStage\":0,\"toStage\":1,\"currentSuccessRate\":16.4}]}")
                 .statusCode())
         .isEqualTo(400);
+    var totalEnergyMismatch =
+        total(
+            "{\"parts\":[{\"equipmentType\":\"ARM_GUARD\",\"fromStage\":0,\"toStage\":1,\"currentSuccessRate\":16.50,\"currentArtisanEnergy\":13.96}]}");
+    assertThat(totalEnergyMismatch.statusCode()).isEqualTo(400);
+    assertThat(mapper.readTree(totalEnergyMismatch.body()).path("code").asText())
+        .isEqualTo("REFINING_ARTISAN_ENERGY_MISMATCH");
   }
 
   @Test

@@ -198,6 +198,141 @@ class RefiningPlanIntegrationTest {
   }
 
   @Test
+  void 현재_성공_확률로_첫_단계_실패_횟수를_정하고_맞지_않으면_REFINING_SUCCESS_RATE_MISMATCH다() throws Exception {
+    // 업화 방어구 →17 기본 3%: 3.30% = 실패 1회.
+    var response =
+        request(
+            """
+            {"grade":"UPHWA","equipmentType":"ARMOR","fromStage":16,"toStage":18,
+             "currentArtisanEnergy":1.39,"currentSuccessRate":3.30}
+            """);
+    assertThat(response.statusCode()).as(response.body()).isEqualTo(200);
+    ApiContractFixture.write("refining-plan-success-rate.json", response.body());
+    var data = mapper.readTree(response.body()).path("data");
+    assertThat(data.path("failedAttemptsFrom").asText()).isEqualTo("SUCCESS_RATE");
+    assertThat(data.at("/stages/0/startFailedAttempts").asInt()).isEqualTo(1);
+    // 첫 시도 = 3.30%(실패 1회) + 책 3%(useBook 생략 = 켬). 성공 확률 입력은 책을 더하기 전 값이다.
+    assertThat(data.at("/stages/0/firstAttemptSuccessRateBp").asInt()).isEqualTo(630);
+    assertThat(data.at("/stages/1/startFailedAttempts").asInt()).isZero();
+    // 같은 실패 횟수를 직접 보낸 계획과 같다.
+    var explicit =
+        mapper.readTree(
+            request(
+                    """
+                    {"grade":"UPHWA","equipmentType":"ARMOR","fromStage":16,"toStage":18,
+                     "currentArtisanEnergy":1.39,"currentFailedAttempts":1}
+                    """)
+                .body());
+    assertThat(explicit.at("/data/failedAttemptsFrom").asText()).isEqualTo("REQUEST");
+    assertThat(explicit.at("/data/stages")).isEqualTo(data.path("stages"));
+    // 실패 횟수를 같이 보내면 그 값을 쓴다(지금 웹과 같음).
+    var both =
+        mapper.readTree(
+            request(
+                    """
+                    {"grade":"UPHWA","equipmentType":"ARMOR","fromStage":16,"toStage":17,
+                     "currentFailedAttempts":0,"currentSuccessRate":3.30}
+                    """)
+                .body());
+    assertThat(both.at("/data/failedAttemptsFrom").asText()).isEqualTo("REQUEST");
+    assertThat(both.at("/data/stages/0/startFailedAttempts").asInt()).isZero();
+    // 숨결을 올린 화면 값(3.72%)은 이 단계 값이 아니다.
+    var mismatch =
+        request(
+            """
+            {"grade":"UPHWA","equipmentType":"ARMOR","fromStage":16,"toStage":17,
+             "currentSuccessRate":3.72}
+            """);
+    assertThat(mismatch.statusCode()).isEqualTo(400);
+    ApiContractFixture.write("refining-plan-success-rate-mismatch.json", mismatch.body());
+    assertThat(mapper.readTree(mismatch.body()).path("code").asText())
+        .isEqualTo("REFINING_SUCCESS_RATE_MISMATCH");
+    // 성공 확률 3.30%(실패 1회)인데 장인의 기운 0%: 한 번 실패하면 1.39~4.18%가 쌓여 있어야 한다(코덱스 #830 P1).
+    for (var energy : new String[] {"0", "1.38", "4.19"}) {
+      var energyMismatch =
+          request(
+              "{\"grade\":\"UPHWA\",\"equipmentType\":\"ARMOR\",\"fromStage\":16,\"toStage\":17,\"currentSuccessRate\":3.30,\"currentArtisanEnergy\":"
+                  + energy
+                  + "}");
+      assertThat(energyMismatch.statusCode()).as(energy).isEqualTo(400);
+      assertThat(mapper.readTree(energyMismatch.body()).path("code").asText())
+          .as(energy)
+          .isEqualTo("REFINING_ARTISAN_ENERGY_MISMATCH");
+      if (energy.equals("0"))
+        ApiContractFixture.write(
+            "refining-plan-artisan-energy-mismatch.json", energyMismatch.body());
+    }
+    // 실패 횟수를 직접 보내면 지금처럼 확인하지 않는다.
+    assertThat(
+            request(
+                    "{\"grade\":\"UPHWA\",\"equipmentType\":\"ARMOR\",\"fromStage\":16,\"toStage\":17,\"currentFailedAttempts\":1}")
+                .statusCode())
+        .isEqualTo(200);
+    // 완갑 →1 기본 15%: 16.50% = 실패 1회(기운 6.97~13.95%). 여러 부위 합계도 부위마다 정한다.
+    var armGuard =
+        total(
+            """
+            {"parts":[{"equipmentType":"ARM_GUARD","fromStage":0,"toStage":1,"currentSuccessRate":16.50,"currentArtisanEnergy":6.97},
+                      {"grade":"UPHWA","equipmentType":"ARMOR","fromStage":16,"toStage":17,"currentSuccessRate":3.90,"currentArtisanEnergy":12.96}]}
+            """);
+    assertThat(armGuard.statusCode()).as(armGuard.body()).isEqualTo(200);
+    var parts = mapper.readTree(armGuard.body()).at("/data/parts");
+    assertThat(parts.at("/0/stages/0/startFailedAttempts").asInt()).isEqualTo(1);
+    assertThat(parts.at("/0/stages/0/firstAttemptSuccessRateBp").asInt()).isEqualTo(1650);
+    assertThat(parts.at("/1/stages/0/startFailedAttempts").asInt()).isEqualTo(3);
+    assertThat(
+            total(
+                    "{\"parts\":[{\"equipmentType\":\"ARM_GUARD\",\"fromStage\":0,\"toStage\":1,\"currentSuccessRate\":16.4}]}")
+                .statusCode())
+        .isEqualTo(400);
+    var totalEnergyMismatch =
+        total(
+            "{\"parts\":[{\"equipmentType\":\"ARM_GUARD\",\"fromStage\":0,\"toStage\":1,\"currentSuccessRate\":16.50,\"currentArtisanEnergy\":13.96}]}");
+    assertThat(totalEnergyMismatch.statusCode()).isEqualTo(400);
+    assertThat(mapper.readTree(totalEnergyMismatch.body()).path("code").asText())
+        .isEqualTo("REFINING_ARTISAN_ENERGY_MISMATCH");
+    // 완갑 1~5단계 30.00%(실패 10회): 숨결 없이 9회 87.86%, 10회째에 100%에서 멈춘다 → 기운 100%만 맞다(계산 검증 #830 P1).
+    for (var from : new int[] {0, 4}) {
+      var capped =
+          request(
+              "{\"equipmentType\":\"ARM_GUARD\",\"fromStage\":"
+                  + from
+                  + ",\"toStage\":"
+                  + (from + 1)
+                  + ",\"currentSuccessRate\":30.00,\"currentArtisanEnergy\":100}");
+      assertThat(capped.statusCode()).as(capped.body()).isEqualTo(200);
+      assertThat(mapper.readTree(capped.body()).at("/data/stages/0/startFailedAttempts").asInt())
+          .isEqualTo(10);
+    }
+    // 게임 화면은 소수 셋째 자리(3.300%)로 보인다: 받아서 같은 값으로 계산하고, 0.01 단위가 아닌 성공 확률은 성공 확률 불일치다(계산 검증 #830 P2).
+    var threeDecimals =
+        request(
+            """
+            {"grade":"UPHWA","equipmentType":"ARMOR","fromStage":16,"toStage":17,
+             "currentSuccessRate":3.300,"currentArtisanEnergy":1.390}
+            """);
+    assertThat(threeDecimals.statusCode()).as(threeDecimals.body()).isEqualTo(200);
+    assertThat(
+            mapper.readTree(threeDecimals.body()).at("/data/stages/0/startFailedAttempts").asInt())
+        .isEqualTo(1);
+    var offGrid =
+        request(
+            """
+            {"grade":"UPHWA","equipmentType":"ARMOR","fromStage":16,"toStage":17,
+             "currentSuccessRate":3.305,"currentArtisanEnergy":1.39}
+            """);
+    assertThat(offGrid.statusCode()).isEqualTo(400);
+    assertThat(mapper.readTree(offGrid.body()).path("code").asText())
+        .isEqualTo("REFINING_SUCCESS_RATE_MISMATCH");
+    // 장인의 기운은 0.01 단위만(1.395는 형식 오류).
+    assertThat(
+            request(
+                    "{\"grade\":\"UPHWA\",\"equipmentType\":\"ARMOR\",\"fromStage\":16,\"toStage\":17,\"currentArtisanEnergy\":1.395}")
+                .statusCode())
+        .isEqualTo(400);
+  }
+
+  @Test
   void 팔_보호구_OPTIMAL은_숨결_두_가지_시세로_풀고_시세가_없으면_409다() throws Exception {
     var body =
         "{\"equipmentType\":\"ARM_GUARD\",\"fromStage\":16,\"toStage\":17,\"breath\":\"OPTIMAL\"}";

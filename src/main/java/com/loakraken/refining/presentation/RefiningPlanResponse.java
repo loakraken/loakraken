@@ -44,7 +44,18 @@ public record RefiningPlanResponse(
             description =
                 "OPTIMAL: 계획 전체 기대 비용(골드) = 단계 기대 비용을 올리기 전 값으로 더한 뒤 한 번 올림(스펙업 여러 단계 재련 비용과 같은 방식). 화면 합계는 이 값을 쓰고 단계 expectedCostGold를 더하지 않는다(단계마다 올리면 단계 수 − 1골드까지 커진다). 다른 방식이면 null")
         @com.loakraken.common.api.NullableResponse
-        Long expectedCostGold) {
+        Long expectedCostGold,
+    @Schema(
+            description =
+                "첫 단계 실패 횟수를 정한 방법. REQUEST: 요청 currentFailedAttempts(없으면 0), SUCCESS_RATE: 요청 currentSuccessRate에서 정함. 모르는 값은 REQUEST처럼 다룬다",
+            example = "SUCCESS_RATE")
+        @com.loakraken.common.api.NullableResponse
+        String failedAttemptsFrom) {
+  /** 첫 단계 실패 횟수와 정한 방법(REQUEST·SUCCESS_RATE). */
+  record StartFailures(int count, String from) {
+    static final StartFailures NONE = new StartFailures(0, "REQUEST");
+  }
+
   static RefiningPlanResponse from(
       RefiningRules rules,
       GrowthCosts growthCosts,
@@ -52,8 +63,10 @@ public record RefiningPlanResponse(
       RefiningRules.Grade grade,
       RefiningRules.EquipmentType equipmentType,
       RefiningPlanRequest request,
-      RefiningPlan plan) {
-    return from(rules, growthCosts, vambrace, grade, equipmentType, request, plan, null, null);
+      RefiningPlan plan,
+      StartFailures start) {
+    return from(
+        rules, growthCosts, vambrace, grade, equipmentType, request, plan, null, null, start);
   }
 
   /**
@@ -69,12 +82,17 @@ public record RefiningPlanResponse(
       RefiningPlanRequest request,
       RefiningPlan plan,
       List<RefiningPlan.OptimalStage> optimal,
-      java.time.Instant pricesObservedAt) {
-    var options = request.toOptions();
+      java.time.Instant pricesObservedAt,
+      StartFailures start) {
+    var options = request.toOptions(start.count());
     var breath = request.effectiveBreath();
     var stages = new java.util.ArrayList<StageResponse>();
     for (int i = 0; i < plan.stages().size(); i++)
-      stages.add(StageResponse.from(plan.stages().get(i), optimal == null ? null : optimal.get(i)));
+      stages.add(
+          StageResponse.from(
+              plan.stages().get(i),
+              optimal == null ? null : optimal.get(i),
+              i == 0 ? start.count() : 0));
     boolean armGuard = equipmentType == RefiningRules.EquipmentType.ARM_GUARD;
     return new RefiningPlanResponse(
         armGuard ? vambrace.ruleVersion() : rules.ruleVersion(),
@@ -134,7 +152,8 @@ public record RefiningPlanResponse(
                     : "OPTIMAL은 지금 재료 1개 즉시 구매 최저가로 시도마다 숨결(과 책) 사용을 골라 기대 비용이 가장 작은 방법입니다. 단계 expectedCostGold에 시세 환산 기대 비용이 있고, 시도 수·수량은 그 방법 기준입니다."),
         breath.name(),
         pricesObservedAt,
-        optimal == null ? null : totalCostGold(optimal));
+        optimal == null ? null : totalCostGold(optimal),
+        start.from());
   }
 
   /** 팔 보호구(완갑) 계획의 계산 가정. */
@@ -216,8 +235,12 @@ public record RefiningPlanResponse(
               description =
                   "OPTIMAL: 그 방법의 기대 비용(골드, 올림) = 재련 골드(업화 18단계까지 성장 지원 20% 적용) + 재료·파편 × 1개 즉시 구매 최저가 + 숨결·책 × 1개 값. 운명의 파편 1개 값은 거래소 파편 주머니(소 1000·중 2000·대 3000개) 가운데 1개당 가장 싼 값. 장비 성장(경험치) 비용·실링은 넣지 않는다. 다른 방식이면 null")
           @com.loakraken.common.api.NullableResponse
-          Long expectedCostGold) {
-    static StageResponse from(RefiningPlan.StagePlan stage, RefiningPlan.OptimalStage optimal) {
+          Long expectedCostGold,
+      @Schema(description = "이 단계를 시작할 때 이미 실패한 횟수(첫 단계 = 요청 값이나 성공 확률로 정한 값, 다음 단계는 0)")
+          @com.loakraken.common.api.NullableResponse
+          Integer startFailedAttempts) {
+    static StageResponse from(
+        RefiningPlan.StagePlan stage, RefiningPlan.OptimalStage optimal, int startFailedAttempts) {
       return new StageResponse(
           stage.targetStage(),
           stage.firstAttemptSuccessRateBp(),
@@ -249,7 +272,8 @@ public record RefiningPlanResponse(
           optimal == null ? null : scale2(optimal.expectedBooks()),
           // 표시 기대 비용은 올림: 비교 기준 B의 스펙업 재련 비용이 기대값을 올린 값과 12줄 모두 같았다(계산 검증 10-25).
           // 스펙업 재련 비용(SpecUpCost.refineExpected)도 같은 올림이라 두 화면 금액이 같다.
-          optimal == null ? null : (long) Math.ceil(optimal.expectedCostGold()));
+          optimal == null ? null : (long) Math.ceil(optimal.expectedCostGold()),
+          startFailedAttempts);
     }
   }
 

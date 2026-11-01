@@ -37,6 +37,34 @@ public record RefiningPlan(
   }
 
   static final int MAX_BONUS_FAILURES = 10;
+
+  /**
+   * 현재 성공 확률(숨결·책 전, 만분율)에서 실패 횟수. 실패마다 기본 확률의 10%가 붙으므로(10회까지) 기본 × (1 + 0.1k)와 같은 k(0~10)다. 10회를
+   * 넘게 실패해도 확률은 10회와 같아 10으로 본다. 어느 k와도 같지 않으면 -1(숨결·책을 더한 값이거나 다른 단계 값).
+   */
+  public static int failuresFromRate(double baseRateBp, int rateBp) {
+    for (int k = 0; k <= MAX_BONUS_FAILURES; k++)
+      if (Math.abs(Math.min(10_000, baseRateBp * (1 + 0.1 * k)) - rateBp) < 1e-6) return k;
+    return -1;
+  }
+
+  /**
+   * 실패 failures회 뒤 쌓일 수 있는 장인의 기운 범위(0.01%p, [아래, 위]). 아래 = 매 시도 숨결·책 없이, 위 = 매 시도 auxMaxBp(최대 숨결 +
+   * 있으면 책)를 더한 경우이고, 한 시도 쌓임은 {@link #artisanGainHundredths}다. 실패 보너스는 10회에서 멈추니 10회면 그보다 더 실패했을 수
+   * 있어 위를 100%로 둔다. 아래·위 모두 100%를 넘지 않는다(기운은 100%에서 멈춘다: 완갑 1~5단계는 숨결 없이 9회 실패 87.86%에서 10회째에 100%가
+   * 된다, 계산 검증 11-02).
+   */
+  public static int[] energyRange(double baseRateBp, double auxMaxBp, int failures) {
+    int low = 0, high = 0;
+    for (int k = 0; k < failures; k++) {
+      double rate = baseRateBp * (1 + 0.1 * Math.min(k, MAX_BONUS_FAILURES));
+      low += artisanGainHundredths(Math.min(10_000, rate));
+      high += artisanGainHundredths(Math.min(10_000, rate + auxMaxBp));
+    }
+    if (failures >= MAX_BONUS_FAILURES) high = 10_000;
+    return new int[] {Math.min(10_000, low), Math.min(10_000, high)};
+  }
+
   private static final int MAX_ATTEMPTS = 10_000;
   private static final int GROWTH_SUPPORT_MAX_STAGE = 18;
 

@@ -49,6 +49,17 @@ public class RefiningPlanService {
 
   private final Timer solveTime;
 
+  /**
+   * 현재 성공 확률로 첫 단계 실패 횟수를 정한 결과 수 {@code
+   * loakraken.refining.start_failures{result=matched|rate_mismatch|energy_mismatch}}. 운영에서 물을 것: 화면
+   * 성공 확률·장인의 기운이 우리 규칙(기본 × (1 + 0.1k), ÷ 2.15)과 맞지 않아 거절되는 요청이 늘었나(게임 규칙이 바뀌었거나 화면 값을 다르게 읽는 경우).
+   * 라벨은 세 값뿐이다.
+   */
+  private final Counter startMatched;
+
+  private final Counter startRateMismatch;
+  private final Counter startEnergyMismatch;
+
   public RefiningPlanService(
       RefiningRules rules,
       GrowthCosts growthCosts,
@@ -76,6 +87,9 @@ public class RefiningPlanService {
         Counter.builder("loakraken.refining.optimal.rejected")
             .description("OPTIMAL 단계 풀이 자리가 없어 429 REFINING_SOLVE_BUSY로 돌려준 수")
             .register(registry);
+    this.startMatched = startFailures(registry, "matched");
+    this.startRateMismatch = startFailures(registry, "rate_mismatch");
+    this.startEnergyMismatch = startFailures(registry, "energy_mismatch");
     this.solveTime =
         Timer.builder("loakraken.refining.optimal.solve")
             .description("캐시에 없는 OPTIMAL 단계 풀이 하나에 걸린 시간")
@@ -86,6 +100,13 @@ public class RefiningPlanService {
         .register(registry);
     Gauge.builder("loakraken.refining.optimal.solving.max", this, service -> service.maxSolves)
         .description("동시에 할 수 있는 OPTIMAL 단계 풀이 수(refining.optimal.max-concurrent-solves)")
+        .register(registry);
+  }
+
+  private static Counter startFailures(MeterRegistry registry, String result) {
+    return Counter.builder("loakraken.refining.start_failures")
+        .description("현재 성공 확률로 첫 단계 실패 횟수를 정한 결과(matched·rate_mismatch·energy_mismatch)")
+        .tag("result", result)
         .register(registry);
   }
 
@@ -118,6 +139,45 @@ public class RefiningPlanService {
 
   public RefiningRules rules() {
     return rules;
+  }
+
+  /**
+   * 첫 단계(targetStage)의 현재 성공 확률(숨결·책 전, 만분율)에서 이미 실패한 횟수. 그 단계 기본 확률 × (1 + 0.1k)와 같은 k가 없으면 400
+   * REFINING_SUCCESS_RATE_MISMATCH. 장인의 기운(0.01%p)이 그 횟수만큼 실패해 쌓일 수 있는 범위({@link
+   * RefiningPlan#energyRange}, 숨결·책을 쓴 이력은 모르니 매 시도 없음 ~ 매 시도 최대) 밖이면 400
+   * REFINING_ARTISAN_ENERGY_MISMATCH.
+   */
+  public int failuresFromSuccessRate(
+      RefiningRules.Grade grade,
+      RefiningRules.EquipmentType equipmentType,
+      int targetStage,
+      int rateBp,
+      int energyBp) {
+    double base;
+    double auxMax = 0;
+    if (equipmentType == RefiningRules.EquipmentType.ARM_GUARD) {
+      var stage = vambrace.stage(targetStage);
+      base = stage.baseRateBp();
+      for (var breath : stage.breaths()) auxMax += breath.rateBp() * breath.maxCount();
+    } else {
+      var stage = rules.track(grade, equipmentType).stage(targetStage);
+      base = stage.baseRateBp();
+      if (stage.breath() != null)
+        auxMax += (double) stage.breath().rateBp() * stage.breath().maxCount();
+      if (stage.book() != null) auxMax += stage.book().rateBp();
+    }
+    int failures = RefiningPlan.failuresFromRate(base, rateBp);
+    if (failures < 0) {
+      startRateMismatch.increment();
+      throw new BusinessException(RefiningErrorCode.REFINING_SUCCESS_RATE_MISMATCH);
+    }
+    var range = RefiningPlan.energyRange(base, auxMax, failures);
+    if (energyBp < range[0] || energyBp > range[1]) {
+      startEnergyMismatch.increment();
+      throw new BusinessException(RefiningErrorCode.REFINING_ARTISAN_ENERGY_MISMATCH);
+    }
+    startMatched.increment();
+    return failures;
   }
 
   /** 회차별 최적 계획. 필요한 시세가 하나라도 없으면 null. */

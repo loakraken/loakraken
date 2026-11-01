@@ -119,7 +119,8 @@ public class SpecUpGoalService {
     meters.counter("loakraken.spec_up.path", "outcome", outcome).increment();
   }
 
-  public static final String PATH_RULE_VERSION = "spec-up-path-v1";
+  // v2: 완갑(팔 보호구) 재련 단계를 고른다.
+  public static final String PATH_RULE_VERSION = "spec-up-path-v2";
   static final int PATH_MAX_STEPS = 30;
   static final int PATH_MAX_CONCURRENT = 2;
   static final Duration PATH_RETRY_AFTER = Duration.ofSeconds(2);
@@ -190,7 +191,8 @@ public class SpecUpGoalService {
             String.valueOf(books.observedAt().map(Instant::toEpochMilli).orElse(0L)),
             PATH_RULE_VERSION,
             CombatPowerSimulationService.RULE_VERSION,
-            String.valueOf(specUp.costRuleVersions()));
+            String.valueOf(specUp.costRuleVersions()),
+            specUp.armGuardEnabled() ? "ag" : "-");
     var cached = store.findPath(key);
     if (cached.isPresent()) {
       pathOutcome("cache_hit");
@@ -266,8 +268,10 @@ public class SpecUpGoalService {
           List.of(),
           List.of());
     }
-    var chain = chain(snapshot, before, null, pick, true, limit, gems, refinePrices);
-    var unpriced = unpricedAtStart(snapshot, before, gems, refinePrices);
+    // 추천 순서는 완갑(팔 보호구) 재련도 고른다(목록 완갑 스위치를 따름). 목표 경로는 그대로(완갑 없음).
+    boolean armGuard = specUp.armGuardEnabled();
+    var chain = chain(snapshot, before, null, pick, true, limit, armGuard, gems, refinePrices);
+    var unpriced = unpricedAtStart(snapshot, before, armGuard, gems, refinePrices);
     return new Path(
         profile.characterName(),
         profile.serverName(),
@@ -291,12 +295,13 @@ public class SpecUpGoalService {
   private List<Excluded> unpricedAtStart(
       CharacterResult snapshot,
       BigDecimal before,
+      boolean armGuard,
       Map<String, MarketAuctionService.GemCell> gems,
       Optional<RefiningMaterialPriceService.Prices> refinePrices) {
     var pricesAt = new Instant[1];
     var result = new ArrayList<Excluded>();
     for (var option :
-        options(State.of(snapshot.details().loadout()), gems, refinePrices, pricesAt)) {
+        options(State.of(snapshot.details().loadout(), armGuard), gems, refinePrices, pricesAt)) {
       if (option.cost() != null && option.cost().amount() != null) continue;
       var simulated = simulator.simulate(snapshot, List.of(option.change()));
       if (simulated.unsupportedCount() > 0 || simulated.after() == null) continue;
@@ -419,7 +424,8 @@ public class SpecUpGoalService {
       return result(
           snapshot, before, target, before, ALREADY_REACHED, null, 0L, 0, null, List.of());
     var chain =
-        chain(snapshot, before, target, Pick.EFFICIENCY, false, MAX_STEPS, gems, refinePrices);
+        chain(
+            snapshot, before, target, Pick.EFFICIENCY, false, MAX_STEPS, false, gems, refinePrices);
     return result(
         snapshot,
         before,
@@ -459,11 +465,12 @@ public class SpecUpGoalService {
       Pick pick,
       boolean pricedOnly,
       int maxSteps,
+      boolean armGuard,
       Map<String, MarketAuctionService.GemCell> gems,
       Optional<RefiningMaterialPriceService.Prices> refinePrices) {
     var pricesAt = new Instant[1];
     var steps = new ArrayList<Step>();
-    var state = State.of(snapshot.details().loadout());
+    var state = State.of(snapshot.details().loadout(), armGuard);
     var applied = new LinkedHashMap<String, Change>();
     var current = before;
     Long cumulative = 0L;
@@ -712,6 +719,42 @@ public class SpecUpGoalService {
               null,
               null));
     }
+    if (state.armGuard() != null) {
+      var item = state.armGuard();
+      int next = item.refine() + 1;
+      // 등급은 목록 완갑 줄과 같이 처음 등급에서 목표 단계로 정한다(시뮬레이터 ARM_GUARD는 목표 단계·등급을 그대로 받는다).
+      var grade = specUp.armGuardGrade(item.equipment().grade(), next);
+      if (grade != null)
+        result.add(
+            new Option(
+                "EQUIPMENT_REFINE:" + item.index(),
+                "EQUIPMENT_REFINE:" + item.index() + ":" + next,
+                item.equipment().name(),
+                "+" + item.refine(),
+                "+" + next + (grade.equals(item.equipment().grade()) ? "" : " " + grade),
+                item.equipment().icon(),
+                item.equipment().grade(),
+                null,
+                new Change(
+                    Kind.ARM_GUARD,
+                    null,
+                    null,
+                    null,
+                    next,
+                    null,
+                    null,
+                    null,
+                    grade,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null),
+                specUp.armGuardStepCost(item.refine(), refinePrices, pricesAt),
+                null,
+                null,
+                null));
+    }
     for (var item : state.advanced().values()) {
       int next = item.refine() + 1;
       result.add(
@@ -925,8 +968,15 @@ public class SpecUpGoalService {
       Map<Integer, Item> refines,
       Map<Integer, Item> advanced,
       Item quality,
-      Map<String, Engraving> engravings) {
+      Map<String, Engraving> engravings,
+      Item armGuard) {
+    /** 완갑(팔 보호구)은 넣지 않는 상태(스위치가 꺼졌을 때). */
     static State of(CharacterLoadout loadout) {
+      return of(loadout, false);
+    }
+
+    /** armGuard면 완갑 재련 단계도 다음 단계 후보로 둔다(+0~24, 목록 완갑 줄과 같은 대상). */
+    static State of(CharacterLoadout loadout, boolean armGuard) {
       var gems = new LinkedHashMap<Integer, GemSlot>();
       if (loadout.gems() != null) {
         var skills = new HashMap<Integer, String>();
@@ -987,7 +1037,16 @@ public class SpecUpGoalService {
             engravings.put(
                 engraving.name(),
                 new Engraving(engraving.name(), engraving.grade(), engraving.level()));
-      return new State(gems, refines, advanced, quality, engravings);
+      Item guard = null;
+      if (armGuard) {
+        var item = SpecUpKrakenScore.armGuardItem(loadout);
+        if (item != null && item.detail() != null && item.detail().refineLevel() != null) {
+          int refine = item.detail().refineLevel();
+          if (refine >= 0 && refine < 25)
+            guard = new Item(loadout.equipment().indexOf(item), item, refine);
+        }
+      }
+      return new State(gems, refines, advanced, quality, engravings, guard);
     }
 
     /** option 단계를 적용한 다음 상태. 끝 단계에 닿은 칸은 뺀다. */
@@ -997,6 +1056,7 @@ public class SpecUpGoalService {
       var advanced = new LinkedHashMap<>(this.advanced);
       var quality = this.quality;
       var engravings = new LinkedHashMap<>(this.engravings);
+      var armGuard = this.armGuard;
       var change = option.change();
       switch (change.kind()) {
         case GEM_LEVEL -> {
@@ -1041,9 +1101,14 @@ public class SpecUpGoalService {
             engravings.put(
                 change.name(), new Engraving(engraving.name(), engraving.grade(), change.level()));
         }
+        case ARM_GUARD ->
+            armGuard =
+                change.level() >= 25
+                    ? null
+                    : new Item(armGuard.index(), armGuard.equipment(), change.level());
         default -> {}
       }
-      return new State(gems, refines, advanced, quality, engravings);
+      return new State(gems, refines, advanced, quality, engravings, armGuard);
     }
   }
 }

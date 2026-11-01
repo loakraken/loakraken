@@ -32,6 +32,10 @@ class SpecUpGoalServiceTest {
   private final RefiningMaterialPriceService materials = mock(RefiningMaterialPriceService.class);
   private final SpecUpService specUp = mock(SpecUpService.class);
   private final MemoryStore store = new MemoryStore();
+
+  /** 테스트 캐릭터 장비(기본 없음). service() 전에 바꾼다. */
+  private List<CharacterLoadout.Equipment> equipment = List.of();
+
   private final io.micrometer.core.instrument.simple.SimpleMeterRegistry meters =
       new io.micrometer.core.instrument.simple.SimpleMeterRegistry();
 
@@ -188,6 +192,54 @@ class SpecUpGoalServiceTest {
     assertThat(store.saved).hasSize(goals + 1);
   }
 
+  /**
+   * 추천 순서는 완갑(팔 보호구) 재련도 다음 단계 후보로 둔다(스위치가 켜져 있을 때): 한 단계 = 다음 단계, id·등급·한 단계 비용은 목록 완갑 줄과 같은 규칙,
+   * 시뮬레이터에는 ARM_GUARD(목표 단계·등급). 같은 칸이라 다음 단계로 이어 올린다. 스위치를 끄면 완갑은 순서에도 unpriced에도 없다.
+   */
+  @Test
+  void 추천_순서는_완갑_재련을_한_단계씩_이어_고르고_스위치를_끄면_뺀다() {
+    equipment =
+        List.of(
+            new CharacterLoadout.Equipment(
+                "완갑",
+                "테스트 완갑",
+                null,
+                "고대",
+                new CharacterLoadout.EquipmentDetail(
+                    14, null, null, null, null, List.of(), List.of(), List.of(), List.of(), null,
+                    List.of(), null, List.of(), null, List.of())));
+    var service = service(System::nanoTime);
+    when(specUp.armGuardEnabled()).thenReturn(true);
+    when(specUp.armGuardGrade(
+            org.mockito.ArgumentMatchers.eq("고대"), org.mockito.ArgumentMatchers.anyInt()))
+        .thenReturn("고대");
+    // 한 단계 비용: refine → refine + 1 = (refine + 1) × 10,000골드
+    when(specUp.armGuardStepCost(org.mockito.ArgumentMatchers.anyInt(), any(), any()))
+        .thenAnswer(
+            invocation ->
+                com.loakraken.specup.domain.SpecUpCost.refineExpected(
+                    ((int) invocation.getArgument(0) + 1) * 10_000L));
+    var path = service.path("목표테스트", SpecUpGoalService.Pick.EFFICIENCY, 3);
+    // 보석은 시세가 없어(cachedGems 비어 있음) 순서에서 빠지고, 완갑만 14 → 15 → 16 → 17로 이어 고른다.
+    assertThat(path.steps())
+        .extracting(SpecUpGoalService.Step::candidateId)
+        .containsExactly("EQUIPMENT_REFINE:0:15", "EQUIPMENT_REFINE:0:16", "EQUIPMENT_REFINE:0:17");
+    assertThat(path.steps()).allMatch(step -> step.kind().equals("ARM_GUARD"));
+    assertThat(path.steps().get(2).change().level()).isEqualTo(17);
+    assertThat(path.steps().get(2).change().grade()).isEqualTo("고대");
+    assertThat(path.steps())
+        .extracting(SpecUpGoalService.Step::extraCost)
+        .containsExactly(150_000L, 160_000L, 170_000L);
+    assertThat(path.totalCost()).isEqualTo(480_000L);
+    assertThat(path.ruleVersion()).isEqualTo("spec-up-path-v2");
+
+    when(specUp.armGuardEnabled()).thenReturn(false);
+    var off = service.path("목표테스트", SpecUpGoalService.Pick.EFFICIENCY, 3);
+    assertThat(off.steps()).isEmpty();
+    assertThat(off.unpriced())
+        .noneMatch(item -> item.candidateId().startsWith("EQUIPMENT_REFINE:0:"));
+  }
+
   /** 계산 자리가 모두 차 있으면 기다리지 않고 429 SPEC_UP_BUSY(캐시에 없는 계산만 자리를 씀). */
   @Test
   void 추천_순서_계산_자리가_차_있으면_바로_SPEC_UP_BUSY다() throws Exception {
@@ -233,7 +285,7 @@ class SpecUpGoalServiceTest {
       gems.add(new CharacterLoadout.Gem(slot, "1레벨 겁화의 보석", null, 1, "고대"));
     var loadout =
         new CharacterLoadout(
-            List.of(),
+            equipment,
             null,
             new CharacterLoadout.Gems(gems, null),
             null,

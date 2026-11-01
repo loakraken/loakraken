@@ -111,19 +111,22 @@ class MarketAuctionServiceTest {
   void 장신구_표는_한_요청에_최대_5칸만_채운다() {
     var slots = service.accessories(Grade.ANCIENT, Role.DEALER, 70);
     assertThat(slots).hasSize(3);
-    assertThat(slots.get(0).cells()).hasSize(8);
-    assertThat(slots.get(0).cells().get(0).label()).isEqualTo("상상");
+    // 옵션 2개 부위는 6칸이다(중하·하중은 표에 없다).
+    assertThat(slots.get(0).cells())
+        .extracting(MarketAuctionService.AccessoryCell::label)
+        .containsExactly("상상", "상중", "중상", "중중", "상하", "하상");
     assertThat(slots.get(0).cells().get(5).optionLabels()).containsExactly("적주피 하", "추피 상");
     assertThat(port.searches).isEqualTo(5);
-    // 딜러 표 24칸은 5번째 요청에서 다 찬다(5 × 4 + 4).
+    // 딜러 표 18칸은 4번째 요청에서 다 차고(5 × 3 + 3), 그 뒤 요청은 공식 호출이 없다.
     for (int visit = 2; visit <= 5; visit++) service.accessories(Grade.ANCIENT, Role.DEALER, 70);
-    assertThat(port.searches).isEqualTo(24);
-    // 서포터는 귀걸이가 무공% 단일 3칸이라 19칸이다(요청마다 5칸).
+    assertThat(port.searches).isEqualTo(18);
+    // 서포터는 귀걸이가 무공% 단일 3칸이라 15칸이다(요청마다 5칸).
     var support = service.accessories(Grade.ANCIENT, Role.SUPPORT, 70);
     assertThat(support.get(1).cells())
         .extracting(MarketAuctionService.AccessoryCell::label)
         .containsExactly("상", "중", "하");
-    assertThat(port.searches).isEqualTo(24 + 5);
+    assertThat(support.get(0).cells()).hasSize(6);
+    assertThat(port.searches).isEqualTo(18 + 5);
   }
 
   @Test

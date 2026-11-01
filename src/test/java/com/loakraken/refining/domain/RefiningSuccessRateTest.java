@@ -71,6 +71,8 @@ class RefiningSuccessRateTest {
     assertThat(RefiningPlan.energyRange(1500, 1500, 8)).containsExactly(7_531, 10_000);
     assertThat(RefiningPlan.energyRange(1500, 1500, 7)[0]).isEqualTo(6_345);
     assertThat(RefiningPlan.energyRange(1500, 1500, 1)).containsExactly(697, 1_395);
+    // 완갑 1~5단계 10회: 숨결 없이도 10회째에 100%를 넘어 100%에서 멈춘다 → 아래도 100%(계산 검증 #830 P1, 101.81%가 아님).
+    assertThat(RefiningPlan.energyRange(1500, 1500, 10)).containsExactly(10_000, 10_000);
     // 0.5% →25(숨결 최대 + 책 = +1%): 1회 0.23 ~ 0.69.
     assertThat(RefiningPlan.energyRange(50, 100, 1)).containsExactly(23, 69);
   }

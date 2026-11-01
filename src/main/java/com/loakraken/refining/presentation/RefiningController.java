@@ -160,7 +160,10 @@ class RefiningController {
             request.grade(),
             request.equipmentType(),
             request.fromStage() + 1,
-            request.currentSuccessRate().movePointRight(2).intValueExact(),
+            RefiningPlanRequest.onHundredths(request.currentSuccessRate())
+                ? request.currentSuccessRate().movePointRight(2).intValueExact()
+                // 0.01% 단위가 아닌 값(3.305)은 어느 단계 값과도 같지 않다(성공 확률 불일치).
+                : -1,
             request.currentArtisanEnergy() == null
                 ? 0
                 : request.currentArtisanEnergy().movePointRight(2).intValueExact()),

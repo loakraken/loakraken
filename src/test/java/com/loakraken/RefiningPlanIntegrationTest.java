@@ -291,6 +291,45 @@ class RefiningPlanIntegrationTest {
     assertThat(totalEnergyMismatch.statusCode()).isEqualTo(400);
     assertThat(mapper.readTree(totalEnergyMismatch.body()).path("code").asText())
         .isEqualTo("REFINING_ARTISAN_ENERGY_MISMATCH");
+    // 완갑 1~5단계 30.00%(실패 10회): 숨결 없이 9회 87.86%, 10회째에 100%에서 멈춘다 → 기운 100%만 맞다(계산 검증 #830 P1).
+    for (var from : new int[] {0, 4}) {
+      var capped =
+          request(
+              "{\"equipmentType\":\"ARM_GUARD\",\"fromStage\":"
+                  + from
+                  + ",\"toStage\":"
+                  + (from + 1)
+                  + ",\"currentSuccessRate\":30.00,\"currentArtisanEnergy\":100}");
+      assertThat(capped.statusCode()).as(capped.body()).isEqualTo(200);
+      assertThat(mapper.readTree(capped.body()).at("/data/stages/0/startFailedAttempts").asInt())
+          .isEqualTo(10);
+    }
+    // 게임 화면은 소수 셋째 자리(3.300%)로 보인다: 받아서 같은 값으로 계산하고, 0.01 단위가 아닌 성공 확률은 성공 확률 불일치다(계산 검증 #830 P2).
+    var threeDecimals =
+        request(
+            """
+            {"grade":"UPHWA","equipmentType":"ARMOR","fromStage":16,"toStage":17,
+             "currentSuccessRate":3.300,"currentArtisanEnergy":1.390}
+            """);
+    assertThat(threeDecimals.statusCode()).as(threeDecimals.body()).isEqualTo(200);
+    assertThat(
+            mapper.readTree(threeDecimals.body()).at("/data/stages/0/startFailedAttempts").asInt())
+        .isEqualTo(1);
+    var offGrid =
+        request(
+            """
+            {"grade":"UPHWA","equipmentType":"ARMOR","fromStage":16,"toStage":17,
+             "currentSuccessRate":3.305,"currentArtisanEnergy":1.39}
+            """);
+    assertThat(offGrid.statusCode()).isEqualTo(400);
+    assertThat(mapper.readTree(offGrid.body()).path("code").asText())
+        .isEqualTo("REFINING_SUCCESS_RATE_MISMATCH");
+    // 장인의 기운은 0.01 단위만(1.395는 형식 오류).
+    assertThat(
+            request(
+                    "{\"grade\":\"UPHWA\",\"equipmentType\":\"ARMOR\",\"fromStage\":16,\"toStage\":17,\"currentArtisanEnergy\":1.395}")
+                .statusCode())
+        .isEqualTo(400);
   }
 
   @Test

@@ -47,8 +47,11 @@ public record RefiningPlanRequest(
         Boolean growthSupport,
     @DecimalMin("0")
         @DecimalMax("100")
-        @Digits(integer = 3, fraction = 2)
-        @Schema(description = "첫 단계의 현재 장인의 기운(%)", defaultValue = "0", example = "46.50")
+        @Digits(integer = 3, fraction = 3)
+        @Schema(
+            description = "첫 단계의 현재 장인의 기운(%). 게임 화면처럼 소수 셋째 자리까지 받되 0.01%p 단위여야 함(46.500 = 46.50)",
+            defaultValue = "0",
+            example = "46.50")
         BigDecimal currentArtisanEnergy,
     @Min(0) @Max(10) @Schema(description = "첫 단계에서 이미 실패한 횟수", defaultValue = "0")
         Integer currentFailedAttempts,
@@ -69,10 +72,10 @@ public record RefiningPlanRequest(
         Breath breath,
     @DecimalMin("0")
         @DecimalMax("100")
-        @Digits(integer = 3, fraction = 2)
+        @Digits(integer = 3, fraction = 3)
         @Schema(
             description =
-                "첫 단계의 현재 성공 확률(%, 게임 재련 화면 값을 숨결·책을 올리기 전에 읽은 것). currentFailedAttempts가 없을 때 이 값으로 실패 횟수를 정한다(기본 확률 × (1 + 0.1 × 실패 0~10)과 같아야 함, 아니면 400 REFINING_SUCCESS_RATE_MISMATCH). 장인의 기운은 그 실패 횟수로 쌓일 수 있는 값이어야 함(아니면 400 REFINING_ARTISAN_ENERGY_MISMATCH). 둘 다 없으면 실패 0",
+                "첫 단계의 현재 성공 확률(%, 게임 재련 화면 값을 숨결·책을 올리기 전에 읽은 것, 화면처럼 소수 셋째 자리까지 받음: 3.300 = 3.30). currentFailedAttempts가 없을 때 이 값으로 실패 횟수를 정한다(기본 확률 × (1 + 0.1 × 실패 0~10)과 같아야 함, 아니면 400 REFINING_SUCCESS_RATE_MISMATCH). 장인의 기운은 그 실패 횟수로 쌓일 수 있는 값이어야 함(아니면 400 REFINING_ARTISAN_ENERGY_MISMATCH). 둘 다 없으면 실패 0",
             example = "3.30")
         BigDecimal currentSuccessRate) {
   public enum Breath {
@@ -120,6 +123,18 @@ public record RefiningPlanRequest(
     if (equipmentType == null || equipmentType == RefiningRules.EquipmentType.ARM_GUARD)
       return true;
     return (fromStage == null || fromStage >= 10) && (toStage == null || toStage >= 11);
+  }
+
+  @AssertTrue(message = "장인의 기운은 0.01% 단위입니다(예: 46.50, 46.500).")
+  @JsonIgnore
+  @Schema(hidden = true)
+  public boolean isArtisanEnergyOnGrid() {
+    return onHundredths(currentArtisanEnergy);
+  }
+
+  /** null이거나 0.01 단위(소수 셋째 자리가 0)인지. */
+  static boolean onHundredths(BigDecimal percent) {
+    return percent == null || percent.stripTrailingZeros().scale() <= 2;
   }
 
   /** 실패 횟수를 현재 성공 확률로 정하는지(실패 횟수는 없고 성공 확률이 있음). */

@@ -62,7 +62,12 @@ public record RefiningPlanTotalRequest(
           @Schema(description = "첫 단계의 현재 장인의 기운(%)", defaultValue = "0")
           BigDecimal currentArtisanEnergy,
       @Min(0) @Max(10) @Schema(description = "첫 단계에서 이미 실패한 횟수", defaultValue = "0")
-          Integer currentFailedAttempts) {
+          Integer currentFailedAttempts,
+      @DecimalMin("0")
+          @DecimalMax("100")
+          @Digits(integer = 3, fraction = 2)
+          @Schema(description = "/plans의 currentSuccessRate와 같음(숨결·책 전 현재 성공 확률 %)")
+          BigDecimal currentSuccessRate) {
     @AssertTrue(message = "목표 단계는 현재 단계보다 커야 합니다.")
     @JsonIgnore
     @Schema(hidden = true)
@@ -120,6 +125,7 @@ public record RefiningPlanTotalRequest(
         part.currentFailedAttempts(),
         growthCost,
         expResearch,
-        effectiveBreath());
+        effectiveBreath(),
+        part.currentSuccessRate());
   }
 }

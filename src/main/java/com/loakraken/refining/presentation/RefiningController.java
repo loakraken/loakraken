@@ -58,7 +58,7 @@ class RefiningController {
     @io.swagger.v3.oas.annotations.responses.ApiResponse(
         responseCode = "400",
         description =
-            "INVALID_REQUEST: 단계 범위·장인의 기운·실패 횟수 오류, useBreath와 breath가 어긋남, OPTIMAL 스위치가 꺼져 있는데 breath=OPTIMAL",
+            "INVALID_REQUEST: 단계 범위·장인의 기운·실패 횟수 오류, useBreath와 breath가 어긋남, OPTIMAL 스위치가 꺼져 있는데 breath=OPTIMAL. REFINING_SUCCESS_RATE_MISMATCH: currentSuccessRate가 첫 단계 기본 확률 × (1 + 0.1 × 실패 0~10) 어느 값과도 같지 않음(숨결·책을 더한 값 등)",
         content = @Content(schema = @Schema(ref = "#/components/schemas/ErrorResponse"))),
     @io.swagger.v3.oas.annotations.responses.ApiResponse(
         responseCode = "409",
@@ -104,7 +104,7 @@ class RefiningController {
     @io.swagger.v3.oas.annotations.responses.ApiResponse(
         responseCode = "400",
         description =
-            "INVALID_REQUEST: 부위 0개·7개 이상, 단계 범위, 가진 수량 형식, OPTIMAL 스위치가 꺼져 있는데 breath=OPTIMAL",
+            "INVALID_REQUEST: 부위 0개·7개 이상, 단계 범위, 가진 수량 형식, OPTIMAL 스위치가 꺼져 있는데 breath=OPTIMAL. REFINING_SUCCESS_RATE_MISMATCH: 부위 currentSuccessRate가 그 부위 첫 단계 값과 맞지 않음",
         content = @Content(schema = @Schema(ref = "#/components/schemas/ErrorResponse"))),
     @io.swagger.v3.oas.annotations.responses.ApiResponse(
         responseCode = "409",
@@ -150,14 +150,29 @@ class RefiningController {
                     RETRY_AFTER));
   }
 
+  /** 첫 단계 실패 횟수: 요청 값, 없으면 현재 성공 확률로 정한 값(맞는 값이 없으면 400), 둘 다 없으면 0. */
+  private RefiningPlanResponse.StartFailures startFailures(RefiningPlanRequest request) {
+    if (!request.failuresFromSuccessRate())
+      return new RefiningPlanResponse.StartFailures(
+          request.currentFailedAttempts() == null ? 0 : request.currentFailedAttempts(), "REQUEST");
+    return new RefiningPlanResponse.StartFailures(
+        service.failuresFromSuccessRate(
+            request.grade(),
+            request.equipmentType(),
+            request.fromStage() + 1,
+            request.currentSuccessRate().movePointRight(2).intValueExact()),
+        "SUCCESS_RATE");
+  }
+
   /** 한 부위 계획. OPTIMAL이면 prices로 풀고(값이 모자라면 409), 아니면 시세 없이 계산한다. */
   private RefiningPlanTotalResponse.Solved solve(
       RefiningPlanRequest request,
       com.loakraken.market.application.RefiningMaterialPriceService.Prices prices) {
+    var start = startFailures(request);
+    var options = request.toOptions(start.count());
     if (request.effectiveBreath() == RefiningPlanRequest.Breath.OPTIMAL) {
       var optimal =
-          service.optimal(
-              request.grade(), request.equipmentType(), request.toOptions(), prices.unitPrices());
+          service.optimal(request.grade(), request.equipmentType(), options, prices.unitPrices());
       if (optimal == null)
         throw new com.loakraken.common.api.BusinessException(
             com.loakraken.refining.application.RefiningErrorCode.REFINING_PRICE_PENDING,
@@ -172,11 +187,12 @@ class RefiningController {
               request,
               optimal.plan(),
               optimal.stages(),
-              prices.observedAt()),
+              prices.observedAt(),
+              start),
           optimal.plan(),
           optimal.stages());
     }
-    var plan = service.plan(request.grade(), request.equipmentType(), request.toOptions());
+    var plan = service.plan(request.grade(), request.equipmentType(), options);
     return new RefiningPlanTotalResponse.Solved(
         RefiningPlanResponse.from(
             service.rules(),
@@ -185,7 +201,8 @@ class RefiningController {
             request.grade(),
             request.equipmentType(),
             request,
-            plan),
+            plan,
+            start),
         plan,
         null);
   }

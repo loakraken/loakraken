@@ -120,6 +120,24 @@ public class RefiningPlanService {
     return rules;
   }
 
+  /**
+   * 첫 단계(targetStage)의 현재 성공 확률(숨결·책 전, 만분율)에서 이미 실패한 횟수. 그 단계 기본 확률 × (1 + 0.1k)와 같은 k가 없으면 400
+   * REFINING_SUCCESS_RATE_MISMATCH.
+   */
+  public int failuresFromSuccessRate(
+      RefiningRules.Grade grade,
+      RefiningRules.EquipmentType equipmentType,
+      int targetStage,
+      int rateBp) {
+    double base =
+        equipmentType == RefiningRules.EquipmentType.ARM_GUARD
+            ? vambrace.stage(targetStage).baseRateBp()
+            : rules.track(grade, equipmentType).stage(targetStage).baseRateBp();
+    int failures = RefiningPlan.failuresFromRate(base, rateBp);
+    if (failures < 0) throw new BusinessException(RefiningErrorCode.REFINING_SUCCESS_RATE_MISMATCH);
+    return failures;
+  }
+
   /** 회차별 최적 계획. 필요한 시세가 하나라도 없으면 null. */
   public RefiningPlan.Optimal optimal(
       RefiningRules.Grade grade,

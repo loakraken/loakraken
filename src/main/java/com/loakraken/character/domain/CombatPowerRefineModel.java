@@ -47,10 +47,8 @@ public final class CombatPowerRefineModel {
       BigDecimal karmaWeaponPctPerLevel,
       Map<String, Map<Integer, Long>> jeonyulStatTable,
       String upgradeSource,
-      Map<Integer, BigDecimal> upgradeHelmetT,
-      List<BigDecimal> upgradeBetween,
-      Map<String, BigDecimal> upgradePartMultiplier,
-      Map<Integer, BigDecimal> upgradeWeaponExactT,
+      String upgradeOfficialTSource,
+      Map<String, Map<Integer, Long>> upgradeOfficialT,
       Map<Integer, BigDecimal> advancedBonus,
       String armGuardSource,
       Map<Integer, ArmGuardLevel> armGuardTable,
@@ -65,12 +63,10 @@ public final class CombatPowerRefineModel {
       var table = new HashMap<String, Map<Integer, Long>>();
       jeonyulStatTable.forEach((part, levels) -> table.put(part, Map.copyOf(levels)));
       jeonyulStatTable = Map.copyOf(table);
-      upgradeHelmetT = upgradeHelmetT == null ? Map.of() : Map.copyOf(upgradeHelmetT);
-      upgradeBetween = upgradeBetween == null ? List.of() : List.copyOf(upgradeBetween);
-      upgradePartMultiplier =
-          upgradePartMultiplier == null ? Map.of() : Map.copyOf(upgradePartMultiplier);
-      upgradeWeaponExactT =
-          upgradeWeaponExactT == null ? Map.of() : Map.copyOf(upgradeWeaponExactT);
+      var official = new HashMap<String, Map<Integer, Long>>();
+      if (upgradeOfficialT != null)
+        upgradeOfficialT.forEach((part, cells) -> official.put(part, Map.copyOf(cells)));
+      upgradeOfficialT = Map.copyOf(official);
       advancedBonus = advancedBonus == null ? Map.of() : Map.copyOf(advancedBonus);
     }
   }
@@ -290,8 +286,9 @@ public final class CombatPowerRefineModel {
   }
 
   /**
-   * 부위 수치. 전율은 단계표(상급 0만). 업화는 round(T(5·일반 + 상급) × (1 + 30단계 2% + 40단계 3%))이고, 방어구 T = round(투구 T
-   * × 부위 배수), 5의 배수 사이 칸은 ⌈T(a) + (T(a + 5) − T(a)) × f(j)⌉, 무기는 확인된 칸만(#333, 상급 재련 표본 2026-10-11).
+   * 부위 수치. 전율은 단계표(상급 0만). 업화는 floor(T(5·일반 + 상급) × (1 + 30단계 2% + 40단계 3%))이고 T는 부위마다 공식 아이템 사전 표
+   * (upgradeOfficialT, 2026-11-02, 지수 55~165). 표에 없는 칸은 계산하지 않는다(null). 반올림이 아니라 버림이다(공식 표 상급
+   * 30·40단계 칸 모두 버림과 같음).
    */
   public static BigDecimal stat(
       Coefficients c, String type, Family family, int level, int advanced) {
@@ -303,31 +300,13 @@ public final class CombatPowerRefineModel {
     }
     if (level < 0 || advanced < 0 || advanced > 40) return null;
     int index = 5 * level + advanced;
-    BigDecimal base;
-    if ("무기".equals(type)) base = c.upgradeWeaponExactT().get(index);
-    else {
-      var multiplier = c.upgradePartMultiplier().get(type);
-      var helmet = helmetT(c, index);
-      if (multiplier == null || helmet == null) return null;
-      base = helmet.multiply(multiplier, MATH).setScale(0, RoundingMode.HALF_UP);
-    }
-    if (base == null) return null;
+    var table = c.upgradeOfficialT().get(type);
+    var cell = table == null ? null : table.get(index);
+    if (cell == null) return null;
     var bonus = BigDecimal.ONE;
     for (var entry : c.advancedBonus().entrySet())
       if (advanced >= entry.getKey()) bonus = bonus.add(entry.getValue());
-    return base.multiply(bonus, MATH).setScale(0, RoundingMode.HALF_UP);
-  }
-
-  private static BigDecimal helmetT(Coefficients c, int index) {
-    var exact = c.upgradeHelmetT().get(index);
-    if (exact != null) return exact;
-    int base = index - index % 5;
-    int j = index % 5;
-    var low = c.upgradeHelmetT().get(base);
-    var high = c.upgradeHelmetT().get(base + 5);
-    if (low == null || high == null || j == 0 || c.upgradeBetween().size() < 4) return null;
-    return low.add(high.subtract(low).multiply(c.upgradeBetween().get(j - 1), MATH), MATH)
-        .setScale(0, RoundingMode.CEILING);
+    return BigDecimal.valueOf(cell).multiply(bonus, MATH).setScale(0, RoundingMode.FLOOR);
   }
 
   static final String WEAPON_CORE = "혼돈의 별 코어 : 무기";

@@ -215,34 +215,40 @@ class CombatPowerRefineModelTest {
   }
 
   @Test
-  void 업화_투구_단계표는_표본_칸과_맞고_무기는_확인된_칸만_있다() {
-    // #333 표본(ref-a-advanced-refine-2026-10-11.json) 투구 8칸: 7칸 정확, 1칸 ±1 스탯(사이 칸 보간).
+  void 업화_수치는_공식_표_T에_상급_보너스를_곱해_버린다() {
+    // 공식 아이템 사전 T(5 × 일반 + 상급) × (1 + 30단계 2% + 40단계 3%)를 버림. #333 표본 투구 칸은 모두 정확히 같다(전에는 보간으로 ±1).
     var helmet =
         Map.of(
             "11/2", 59632, "12/3", 61379, "15/3", 66175, "17/4", 70020, "20/1", 74560, "21/2",
-            76974, "22/32", 95094, "24/38", 104110);
-    int exact = 0;
+            76974);
     for (var entry : helmet.entrySet()) {
       var cell = entry.getKey().split("/");
-      var value =
-          CombatPowerRefineModel.stat(
-              coefficients,
-              "투구",
-              CombatPowerRefineModel.Family.UPGRADE,
-              Integer.parseInt(cell[0]),
-              Integer.parseInt(cell[1]));
-      var diff = value.subtract(BigDecimal.valueOf(entry.getValue())).abs();
-      assertThat(diff).as(entry.getKey()).isLessThanOrEqualTo(BigDecimal.ONE);
-      if (diff.signum() == 0) exact++;
+      assertThat(
+              stat(
+                  "투구",
+                  CombatPowerRefineModel.Family.UPGRADE,
+                  Integer.parseInt(cell[0]),
+                  Integer.parseInt(cell[1])))
+          .as(entry.getKey())
+          .isEqualByComparingTo(String.valueOf(entry.getValue()));
     }
-    assertThat(exact).isGreaterThanOrEqualTo(7);
-    // 무기 +17·상급 40 = T(125) 147,000 × 1.05 = 154,350, +11·상급 0 = 102,384(공식 관측).
+    // 무기 +17·상급 40 = T(125) × 1.05, +11·상급 0 = 102,384(공식 관측). 전에는 확인하지 않았던 +11·상급 1도 공식 표에 있다.
     assertThat(stat("무기", CombatPowerRefineModel.Family.UPGRADE, 17, 40))
         .isEqualByComparingTo("154350");
     assertThat(stat("무기", CombatPowerRefineModel.Family.UPGRADE, 11, 0))
         .isEqualByComparingTo("102384");
-    // 확인하지 않은 무기 칸(+11·상급 1)은 계산하지 않는다(PM 총괄 판정 (b)).
-    assertThat(stat("무기", CombatPowerRefineModel.Family.UPGRADE, 11, 1)).isNull();
+    assertThat(stat("무기", CombatPowerRefineModel.Family.UPGRADE, 11, 1))
+        .isEqualByComparingTo("102863");
+    // 버림(반올림이면 69,960·122,484): 투구 +11·상급 30, 무기 +11·상급 32.
+    assertThat(stat("투구", CombatPowerRefineModel.Family.UPGRADE, 11, 30))
+        .isEqualByComparingTo("69959");
+    assertThat(stat("무기", CombatPowerRefineModel.Family.UPGRADE, 11, 32))
+        .isEqualByComparingTo("122483");
+    // 지수 140 이상도 공식 표에 있다: #333 표본 투구 +22·상급 32 = 95,094(반올림이면 95,095), +24·상급 38 = 104,110.
+    assertThat(stat("투구", CombatPowerRefineModel.Family.UPGRADE, 22, 32))
+        .isEqualByComparingTo("95094");
+    assertThat(stat("투구", CombatPowerRefineModel.Family.UPGRADE, 24, 38))
+        .isEqualByComparingTo("104110");
     // 전율은 상급 재련 수치가 없다.
     assertThat(stat("투구", CombatPowerRefineModel.Family.JEONYUL, 19, 1)).isNull();
   }
@@ -252,16 +258,16 @@ class CombatPowerRefineModelTest {
     var loadout =
         loadout(19, 19, "운명의 전율 검", "208130", "2030", "14817", List.of("+1.80%", "+0.80%"), 29);
     var equipment = new ArrayList<>(loadout.equipment());
-    // 투구를 업화 +22·상급 32로 바꾼다.
+    // 투구를 업화 +21·상급 30(지수 135, 공식 표 안)으로 바꾼다.
     equipment.set(
         1,
         new CharacterLoadout.Equipment(
             "투구",
-            "+22 운명의 업화 모자",
+            "+21 운명의 업화 모자",
             null,
             "고대",
             new CharacterLoadout.EquipmentDetail(
-                22,
+                21,
                 null,
                 null,
                 4,
@@ -274,7 +280,7 @@ class CombatPowerRefineModelTest {
                 List.of(),
                 null,
                 List.of(),
-                32)));
+                30)));
     var upgraded =
         new CharacterLoadout(
             equipment,
@@ -288,16 +294,18 @@ class CombatPowerRefineModelTest {
             List.of());
     var model =
         CombatPowerRefineModel.of(coefficients, upgraded, stats("188163"), new BigDecimal("7.45"));
-    assertThat(model.cannotSetAdvanced(1, 38)).isNull();
-    assertThat(model.cannotSet(1, 24)).isNull();
+    assertThat(model.cannotSetAdvanced(1, 34)).isNull();
+    assertThat(model.cannotSet(1, 20)).isNull();
+    // 상급 40을 넘는 칸은 없다.
+    assertThat(model.cannotSetAdvanced(1, 41)).isNotNull();
     var up =
         model.ratioTargets(
-            Map.of(1, new CombatPowerRefineModel.Target(22, 38)), BigDecimal.ZERO, BigDecimal.ZERO);
+            Map.of(1, new CombatPowerRefineModel.Target(21, 34)), BigDecimal.ZERO, BigDecimal.ZERO);
     assertThat(up).isGreaterThan(BigDecimal.ONE);
-    // 상급 32 → 38 수치 차이(95,094 → 상급 38)를 S 항에 그대로 쓴다.
+    // 상급 30 → 34 수치 차이를 S 항에 그대로 쓴다. 지금과 같은 칸이면 비율 1.
     var same =
         model.ratioTargets(
-            Map.of(1, new CombatPowerRefineModel.Target(22, 32)), BigDecimal.ZERO, BigDecimal.ZERO);
+            Map.of(1, new CombatPowerRefineModel.Target(21, 30)), BigDecimal.ZERO, BigDecimal.ZERO);
     assertThat(same).isEqualByComparingTo("1");
     // 전율 상의(순번 2)의 상급 재련은 계산하지 않는다.
     // E21: 전율 장비에는 상급 재련이 없다(공식 가이드·툴팁, 검증 표본 official-jeonyul-refine-stats).
@@ -573,6 +581,34 @@ class CombatPowerRefineModelTest {
         false,
         inner,
         List.of("민첩 +" + pct.setScale(2, RoundingMode.HALF_UP).toPlainString() + "%"));
+  }
+
+  /**
+   * 공식 아이템 사전 업화 표 모든 칸(재련 0~25, 상급 0~40 at +11·+15·+19·+22, 상급 26~40 at +25)과 같다(상급 보너스 칸은 버림).
+   */
+  @Test
+  void 업화_재련_상급_재련_수치는_공식_아이템_사전_모든_칸과_같다() throws IOException {
+    var sample =
+        new JsonMapper()
+            .readTree(
+                new ClassPathResource(
+                        "verification/combat-power/official-upgrade-refine-2026-11-02.json")
+                    .getInputStream())
+            .path("cells");
+    int cells = 0;
+    int bonus = 0;
+    for (var cell : sample) {
+      var part = cell.path("part").asText();
+      int refine = cell.path("refine").asInt();
+      int advanced = cell.path("advanced").asInt();
+      assertThat(stat(part, CombatPowerRefineModel.Family.UPGRADE, refine, advanced))
+          .as(part + " +" + refine + " 상급 " + advanced)
+          .isEqualByComparingTo(cell.path("value").decimalValue());
+      cells++;
+      if (advanced >= 30) bonus++;
+    }
+    assertThat(cells).isEqualTo(1206);
+    assertThat(bonus).isEqualTo(330);
   }
 
   @Test

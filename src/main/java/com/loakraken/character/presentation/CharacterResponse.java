@@ -130,7 +130,10 @@ public record CharacterResponse(
                         a.grade(),
                         a.isSet(),
                         a.isInner(),
-                        a.effects()))
+                        a.effects(),
+                        a.tendencies().stream()
+                            .map(t -> new AvatarTendencyResponse(t.type(), t.point()))
+                            .toList()))
             .toList(),
         result.details().loadout().collectibles().stream()
             .map(
@@ -282,7 +285,12 @@ public record CharacterResponse(
       @NullableResponse String grade,
       @NullableResponse Boolean isSet,
       @NullableResponse Boolean isInner,
-      @Schema(description = "아바타 기본 효과 줄(예: 민첩 +2.00%)") List<String> effects) {}
+      @Schema(description = "아바타 기본 효과 줄(예: 민첩 +2.00%)") List<String> effects,
+      @Schema(description = "이 아바타가 주는 성향 점수(공식 툴팁 순서). 성향 줄이 없는 아바타(이동 효과 등)는 빈 목록. 캐릭터 성향 합계는 tendencies")
+          List<AvatarTendencyResponse> tendencies) {}
+
+  public record AvatarTendencyResponse(
+      @Schema(example = "지성") String type, @Schema(example = "5") Integer point) {}
 
   public record CollectibleResponse(
       @NullableResponse String type,

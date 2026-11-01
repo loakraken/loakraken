@@ -874,8 +874,6 @@ public class SpecUpGoalService {
   static List<Option> stoneOptions(Stone stone) {
     var names = List.copyOf(stone.levels().keySet());
     var result = new ArrayList<Option>();
-    // 스톤 레벨 계수를 확인하지 못한 각인이 있으면 스톤 단계를 내지 않는다(계산 검증 11-01: 예리한 둔기 3→4 표본에 맞는 식 없음).
-    if (names.stream().anyMatch(STONE_UNCONFIRMED::contains)) return result;
     var seen = new java.util.HashSet<String>();
     for (var target : SpecUpScoreCandidates.STONE_TARGETS) {
       var label = target[0] + "" + target[1] + "돌";
@@ -913,9 +911,6 @@ public class SpecUpGoalService {
   /** 어빌리티 스톤의 감소 줄 이름(각인이 아니라 스톤 단계에서 바꾸지 않는다). */
   static final java.util.Set<String> STONE_PENALTIES =
       java.util.Set.of("공격력 감소", "방어력 감소", "공격속도 감소", "이동속도 감소");
-
-  /** 스톤 레벨 전투력 계수를 아직 확인하지 못한 각인(추천 순서 스톤 단계에서 뺀다). */
-  static final java.util.Set<String> STONE_UNCONFIRMED = java.util.Set.of("예리한 둔기");
 
   private static Change stoneChange(String name, int level) {
     return new Change(

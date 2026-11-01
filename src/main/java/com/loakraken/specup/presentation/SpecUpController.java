@@ -313,7 +313,11 @@ public class SpecUpController {
               description =
                   "이 단계에 더 드는 비용(골드) = 이 단계를 넣어 늘어난 경로 합계. 보석은 같은 칸에서 이미 낸 누적을 뺀 값(거꾸로 시세면 0 이하일 수 있음), 그 밖은 cost.amount와 같음. 1만 골드당 전투력의 분모이고, 단계마다 더하면 cumulativeCost와 같다. 모르면 null")
           @NullableResponse
-          Long extraCost) {
+          Long extraCost,
+      @Schema(
+              description =
+                  "이 단계의 시뮬레이터 변경 전부(전투력 시뮬레이터 요청의 changes[]와 같은 모양). 대부분 하나(= change)이고, 어빌리티 스톤은 각인 둘. 다시 잴 때는 단계마다 이 목록을 넣고 같은 칸(candidateId의 마지막 ':' 앞)은 마지막 단계의 목록만 남긴다")
+          List<ChangeResponse> changes) {
     static SpecUpGoalStepResponse from(SpecUpGoalService.Step step) {
       return new SpecUpGoalStepResponse(
           step.order(),
@@ -331,7 +335,9 @@ public class SpecUpController {
           CostResponse.from(step.cost()),
           step.cumulativeCost(),
           step.combatPowerPer10kGold(),
-          step.extraCost());
+          step.extraCost(),
+          (step.changes() == null ? List.of(step.change()) : step.changes())
+              .stream().map(ChangeResponse::from).toList());
     }
   }
 
@@ -353,7 +359,7 @@ public class SpecUpController {
       @Schema(description = "멈춘 이유(화면 문구)") @NullableResponse String stopReason,
       @Schema(description = "전체 합계(골드) = 마지막 단계의 cumulativeCost. 모르면 null") @NullableResponse
           Long totalCost,
-      @Schema(example = "spec-up-path-v2") String ruleVersion,
+      @Schema(example = "spec-up-path-v3") String ruleVersion,
       @Schema(description = "전투력을 낸 시뮬레이터 규칙") String simulatorRuleVersion,
       @Schema(description = "캐릭터 캐시 수집 시각") @NullableResponse Instant fetchedAt,
       @Schema(description = "비용에 쓴 시세 칸 가운데 가장 오래된 관측 시각") @NullableResponse Instant pricesAt,

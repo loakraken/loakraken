@@ -231,13 +231,117 @@ class SpecUpGoalServiceTest {
         .extracting(SpecUpGoalService.Step::extraCost)
         .containsExactly(150_000L, 160_000L, 170_000L);
     assertThat(path.totalCost()).isEqualTo(480_000L);
-    assertThat(path.ruleVersion()).isEqualTo("spec-up-path-v2");
+    assertThat(path.ruleVersion()).isEqualTo("spec-up-path-v3");
 
     when(specUp.armGuardEnabled()).thenReturn(false);
     var off = service.path("목표테스트", SpecUpGoalService.Pick.EFFICIENCY, 3);
     assertThat(off.steps()).isEmpty();
     assertThat(off.unpriced())
         .noneMatch(item -> item.candidateId().startsWith("EQUIPMENT_REFINE:0:"));
+  }
+
+  /**
+   * 어빌리티 스톤 목표 조합(목록 스톤 줄과 같은 목표·id·비용): 조합마다 두 배치, 한 단계에 각인 둘(STONE_ENGRAVING 둘)을 바꾼다. 두 레벨이 같은
+   * 99돌(3·3)·1010돌(4·4)은 하나, 지금과 같은 레벨 조합은 뺀다.
+   */
+  @Test
+  void 스톤_목표_조합은_각인_둘을_한_단계로_바꾸고_목록과_같은_id와_비용이다() {
+    var levels = new java.util.LinkedHashMap<String, Integer>();
+    levels.put("원한", 1);
+    levels.put("아드레날린", 1);
+    var options =
+        SpecUpGoalService.stoneOptions(new SpecUpGoalService.Stone(stoneItem(1, 1), levels));
+    // 97·106·107·109 두 배치씩 + 99(3·3)·1010(4·4) 하나씩 = 10
+    assertThat(options).hasSize(10);
+    assertThat(options)
+        .extracting(SpecUpGoalService.Option::id)
+        .contains(
+            "ABILITY_STONE:3:2", "ABILITY_STONE:2:3", "ABILITY_STONE:3:3", "ABILITY_STONE:4:4");
+    for (var option : options) {
+      assertThat(option.kind()).isEqualTo("ABILITY_STONE");
+      assertThat(option.slot()).isEqualTo("ABILITY_STONE");
+      assertThat(option.changes()).hasSize(2);
+      assertThat(option.changes())
+          .allMatch(change -> change.kind() == CombatPowerSimulationService.Kind.STONE_ENGRAVING);
+      assertThat(option.changes())
+          .extracting(CombatPowerSimulationService.Change::name)
+          .containsExactly("원한", "아드레날린");
+    }
+    var nineSeven =
+        options.stream()
+            .filter(option -> option.id().equals("ABILITY_STONE:3:2"))
+            .findFirst()
+            .get();
+    var gold = com.loakraken.specup.domain.SpecUpCostRules.stoneGold("97돌");
+    assertThat(nineSeven.cost())
+        .isEqualTo(
+            gold == null
+                ? com.loakraken.specup.domain.SpecUpCost.STONE_COST_UNCONFIRMED
+                : com.loakraken.specup.domain.SpecUpCost.stone(gold));
+    assertThat(nineSeven.to()).startsWith("97돌 ");
+    // 스톤 계수를 확인하지 못한 각인(예리한 둔기)이 있으면 스톤 단계가 없다.
+    var unconfirmed = new java.util.LinkedHashMap<String, Integer>();
+    unconfirmed.put("원한", 1);
+    unconfirmed.put("예리한 둔기", 1);
+    assertThat(
+            SpecUpGoalService.stoneOptions(
+                new SpecUpGoalService.Stone(stoneItem(1, 1), unconfirmed)))
+        .isEmpty();
+    // 지금이 이미 3·2면 그 배치는 빠진다.
+    levels.put("원한", 3);
+    levels.put("아드레날린", 2);
+    assertThat(SpecUpGoalService.stoneOptions(new SpecUpGoalService.Stone(stoneItem(3, 2), levels)))
+        .extracting(SpecUpGoalService.Option::id)
+        .doesNotContain("ABILITY_STONE:3:2")
+        .contains("ABILITY_STONE:2:3");
+  }
+
+  /** 추천 순서는 스톤 단계도 고르고, 단계 changes(각인 둘)를 같은 칸은 마지막만 남겨 다시 넣으면 그 단계 전투력과 같다. */
+  @Test
+  void 추천_순서는_스톤_단계를_고르고_단계_changes로_다시_재면_같다() {
+    equipment = List.of(stoneItem(1, 1));
+    var service = service(System::nanoTime);
+    var path = service.path("목표테스트", SpecUpGoalService.Pick.DELTA, 2);
+    assertThat(path.steps()).isNotEmpty();
+    var first = path.steps().getFirst();
+    assertThat(first.kind()).isEqualTo("ABILITY_STONE");
+    assertThat(first.changes()).hasSize(2);
+    assertThat(first.change()).isEqualTo(first.changes().getFirst());
+    var bySlot = new java.util.LinkedHashMap<String, List<CombatPowerSimulationService.Change>>();
+    for (var step : path.steps()) {
+      bySlot.put(
+          step.candidateId().substring(0, step.candidateId().lastIndexOf(':')), step.changes());
+      var all = new java.util.ArrayList<CombatPowerSimulationService.Change>();
+      bySlot.values().forEach(all::addAll);
+      var fresh = simulator.simulate(simulator.snapshot("목표테스트"), all).after();
+      assertThat(step.combatPowerAfter()).isEqualByComparingTo(fresh);
+    }
+  }
+
+  private static CharacterLoadout.Equipment stoneItem(int first, int second) {
+    return new CharacterLoadout.Equipment(
+        "어빌리티 스톤",
+        "테스트 스톤",
+        null,
+        "고대",
+        new CharacterLoadout.EquipmentDetail(
+            null,
+            null,
+            null,
+            null,
+            null,
+            List.of(),
+            List.of(
+                new CharacterLoadout.StoneEngraving("원한", first),
+                new CharacterLoadout.StoneEngraving("아드레날린", second)),
+            List.of(),
+            List.of(),
+            null,
+            List.of(),
+            null,
+            List.of(),
+            null,
+            List.of()));
   }
 
   /** 계산 자리가 모두 차 있으면 기다리지 않고 429 SPEC_UP_BUSY(캐시에 없는 계산만 자리를 씀). */

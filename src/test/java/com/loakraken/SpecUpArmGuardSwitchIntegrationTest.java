@@ -127,7 +127,7 @@ class SpecUpArmGuardSwitchIntegrationTest {
     assertThat(row).isNotNull();
     assertThat(row.path("status").asText()).as(row.toString()).isEqualTo("OK");
     var on = path();
-    assertThat(on.path("ruleVersion").asText()).isEqualTo("spec-up-path-v2");
+    assertThat(on.path("ruleVersion").asText()).isEqualTo("spec-up-path-v3");
     JsonNode item = null;
     for (var excluded : on.path("unpriced"))
       if (ARM_GUARD_ROW.equals(excluded.path("candidateId").asText())) item = excluded;

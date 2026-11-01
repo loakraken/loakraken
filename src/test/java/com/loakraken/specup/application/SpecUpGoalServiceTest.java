@@ -279,14 +279,13 @@ class SpecUpGoalServiceTest {
                 ? com.loakraken.specup.domain.SpecUpCost.STONE_COST_UNCONFIRMED
                 : com.loakraken.specup.domain.SpecUpCost.stone(gold));
     assertThat(nineSeven.to()).startsWith("97돌 ");
-    // 스톤 계수를 확인하지 못한 각인(예리한 둔기)이 있으면 스톤 단계가 없다.
-    var unconfirmed = new java.util.LinkedHashMap<String, Integer>();
-    unconfirmed.put("원한", 1);
-    unconfirmed.put("예리한 둔기", 1);
-    assertThat(
-            SpecUpGoalService.stoneOptions(
-                new SpecUpGoalService.Stone(stoneItem(1, 1), unconfirmed)))
-        .isEmpty();
+    // 예리한 둔기 스톤도 스톤 단계를 낸다(각인 둘 함께 바꾸기가 독립 계산과 같음, #813).
+    var sharp = new java.util.LinkedHashMap<String, Integer>();
+    sharp.put("원한", 1);
+    sharp.put("예리한 둔기", 1);
+    assertThat(SpecUpGoalService.stoneOptions(new SpecUpGoalService.Stone(stoneItem(1, 1), sharp)))
+        .hasSize(10)
+        .allMatch(option -> option.changes().get(1).name().equals("예리한 둔기"));
     // 지금이 이미 3·2면 그 배치는 빠진다.
     levels.put("원한", 3);
     levels.put("아드레날린", 2);

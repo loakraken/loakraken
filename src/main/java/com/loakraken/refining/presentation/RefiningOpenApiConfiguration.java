@@ -9,7 +9,12 @@ import org.springframework.context.annotation.Configuration;
 class RefiningOpenApiConfiguration {
   @Bean
   OpenApiCustomizer refiningResponseContract() {
-    return document ->
-        ResponseContracts.apply(RefiningPlanResponse.class, document.getComponents().getSchemas());
+    return document -> {
+      var schemas = document.getComponents().getSchemas();
+      ResponseContracts.apply(RefiningPlanResponse.class, schemas);
+      ResponseContracts.apply(RefiningPlanTotalResponse.class, schemas);
+      ResponseContracts.apply(RefiningPlanTotalResponse.MaterialLine.class, schemas);
+      ResponseContracts.apply(RefiningPlanTotalResponse.ListingResponse.class, schemas);
+    };
   }
 }

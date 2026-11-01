@@ -318,6 +318,39 @@ class SpecUpGoalServiceTest {
     }
   }
 
+  /**
+   * 실제 원문 스톤(감소 줄이 셋째로 붙음)에서도 스톤 상태를 만든다. 감소 줄을 각인으로 세면 줄이 셋이라 스톤 단계가 하나도 나오지 않았다(계산 검증 11-01 P1).
+   */
+  @Test
+  void 실제_원문_스톤은_감소_줄을_빼고_각인_둘로_스톤_단계를_낸다() throws Exception {
+    var raw =
+        new tools.jackson.databind.json.JsonMapper()
+            .readTree(
+                new org.springframework.core.io.ClassPathResource("kraken-score/l01.json")
+                    .getContentAsString(java.nio.charset.StandardCharsets.UTF_8))
+            .path("raw");
+    var loadout = com.loakraken.character.infrastructure.ArmoryRawFixtures.loadout(raw);
+    var lines =
+        loadout.equipment().stream()
+            .filter(item -> item != null && "어빌리티 스톤".equals(item.type()))
+            .findFirst()
+            .orElseThrow()
+            .detail()
+            .stoneEngravings();
+    // 이 원문은 감소 줄이 있어야 이 테스트가 의미가 있다.
+    assertThat(lines)
+        .extracting(CharacterLoadout.StoneEngraving::name)
+        .anyMatch(SpecUpGoalService.STONE_PENALTIES::contains);
+    var state = SpecUpGoalService.State.of(loadout, false, true);
+    assertThat(state.stone()).isNotNull();
+    assertThat(state.stone().levels()).hasSize(2);
+    assertThat(state.stone().levels().keySet())
+        .noneMatch(SpecUpGoalService.STONE_PENALTIES::contains);
+    assertThat(SpecUpGoalService.stoneOptions(state.stone())).isNotEmpty();
+    // 목표 경로 상태(stone=false)에는 스톤이 없다.
+    assertThat(SpecUpGoalService.State.of(loadout, false, false).stone()).isNull();
+  }
+
   private static CharacterLoadout.Equipment stoneItem(int first, int second) {
     return new CharacterLoadout.Equipment(
         "어빌리티 스톤",

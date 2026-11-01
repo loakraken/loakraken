@@ -910,6 +910,10 @@ public class SpecUpGoalService {
     return result;
   }
 
+  /** 어빌리티 스톤의 감소 줄 이름(각인이 아니라 스톤 단계에서 바꾸지 않는다). */
+  static final java.util.Set<String> STONE_PENALTIES =
+      java.util.Set.of("공격력 감소", "방어력 감소", "공격속도 감소", "이동속도 감소");
+
   /** 스톤 레벨 전투력 계수를 아직 확인하지 못한 각인(추천 순서 스톤 단계에서 뺀다). */
   static final java.util.Set<String> STONE_UNCONFIRMED = java.util.Set.of("예리한 둔기");
 
@@ -1198,8 +1202,13 @@ public class SpecUpGoalService {
                 .orElse(null);
         if (item != null) {
           var levels = new LinkedHashMap<String, Integer>();
+          // 실제 스톤에는 감소 줄(예: 방어력 감소 Lv.0)이 셋째로 붙는다. 각인 줄만 센다(계산 검증 11-01 P1: 감소 줄 때문에 스톤 단계가 하나도 나오지
+          // 않음).
           for (var line : item.detail().stoneEngravings())
-            if (line != null && line.name() != null && line.level() != null)
+            if (line != null
+                && line.name() != null
+                && line.level() != null
+                && !STONE_PENALTIES.contains(line.name()))
               levels.putIfAbsent(line.name(), line.level());
           if (levels.size() == 2) stoneState = new Stone(item, levels);
         }

@@ -271,7 +271,7 @@ public final class CombatPowerBraceletModel {
           0,
           fixedWeapon(text),
           "이 팔찌 옵션의 버프 부분 계수를 아직 확인하지 않아 계산하지 않았습니다.");
-    // 계열·0 키워드는 띄어쓰기를 빼고 맞춘다: 공식 툴팁은 '매 초마다'·'증가한다. (최대'처럼 표와 띄어쓰기가 다를 수 있다(계산 검증 11-01 P0).
+    // 계열·0 키워드는 띄어쓰기를 빼고 맞춘다: 공식 툴팁의 띄어쓰기는 표와 다르다(예: 툴팁 '매 초마다'·'증가한다. (최대', 표 '매 초 마다'·'증가한다.(최대', 계산 검증 11-01 P0).
     var key = compact(text);
     for (var family : c.families()) {
       var matcher = family.regex().matcher(key);

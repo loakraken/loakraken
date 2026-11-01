@@ -106,6 +106,59 @@ class RelicBookPriceServiceTest {
   }
 
   @Test
+  void 각인_그림_목록은_공백_뺀_각인_이름으로_공식_이미지_서버_주소만_주고_스캔이_마지막_아이콘을_덮는다() {
+    var cdn = RelicBookPriceService.OFFICIAL_CDN;
+    when(cache.findRelicBookIcons())
+        .thenReturn(
+            java.util.Map.of(
+                "유물원한각인서", cdn + "old.png",
+                "유물아드레날린각인서", cdn + "adr.png",
+                "유물예리한둔기각인서", "https://elsewhere.example/x.png",
+                "이상한품목", cdn + "y.png"));
+    when(cache.findRelicBooks())
+        .thenReturn(
+            Optional.of(
+                new RelicBookScan(
+                    at,
+                    2,
+                    List.of(
+                        new MarketPrice(
+                            1, "유물 원한 각인서", "유물", cdn + "new.png", 1, null, null, null, null),
+                        new MarketPrice(
+                            2,
+                            "전설 저주받은 인형 각인서",
+                            "전설",
+                            cdn + "z.png",
+                            1,
+                            null,
+                            null,
+                            null,
+                            null)))));
+    assertThat(service.icons())
+        .containsExactly(
+            java.util.Map.entry("아드레날린", cdn + "adr.png"),
+            java.util.Map.entry("원한", cdn + "new.png"));
+  }
+
+  @Test
+  void 각인_그림_목록은_캐시를_읽지_못하면_읽은_만큼만이고_공식_호출이_없다() {
+    var cdn = RelicBookPriceService.OFFICIAL_CDN;
+    when(cache.findRelicBookIcons()).thenThrow(new IllegalStateException("down"));
+    when(cache.findRelicBooks())
+        .thenReturn(
+            Optional.of(
+                new RelicBookScan(
+                    at,
+                    1,
+                    List.of(
+                        new MarketPrice(
+                            1, "유물 실드관통 각인서", "유물", cdn + "s.png", 1, null, null, null, null)))));
+    assertThat(service.icons()).containsExactly(java.util.Map.entry("실드관통", cdn + "s.png"));
+    when(cache.findRelicBooks()).thenThrow(new IllegalStateException("down"));
+    assertThat(service.icons()).isEmpty();
+  }
+
+  @Test
   void 관측_시각은_캐시된_스캔_시각이고_캐시가_없거나_장애면_빈_값이다() {
     when(cache.findRelicBooks()).thenReturn(Optional.of(new RelicBookScan(at, 0, List.of())));
     assertThat(service.observedAt()).contains(at);

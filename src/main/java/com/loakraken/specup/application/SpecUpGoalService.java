@@ -12,6 +12,8 @@ import com.loakraken.market.application.RefiningMaterialPriceService;
 import com.loakraken.market.application.RelicBookPriceService;
 import com.loakraken.refining.domain.RefiningRules;
 import com.loakraken.specup.domain.SpecUpCost;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Duration;
@@ -27,6 +29,8 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.LongSupplier;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -63,7 +67,11 @@ public class SpecUpGoalService {
   private final RefiningMaterialPriceService materials;
   private final SpecUpGoalStorePort store;
   private final LongSupplier nanoTime;
-  private final ConcurrentHashMap<String, CompletableFuture<Goal>> flights =
+
+  /** 추천 순서 계산(캐시에 없을 때) 동시 수. 넘으면 기다리지 않고 429 SPEC_UP_BUSY(요청 스레드를 붙잡지 않게). */
+  private final java.util.concurrent.Semaphore pathSolves;
+
+  private final ConcurrentHashMap<String, CompletableFuture<Object>> flights =
       new ConcurrentHashMap<>();
 
   @Autowired
@@ -73,8 +81,9 @@ public class SpecUpGoalService {
       MarketAuctionService auctions,
       RelicBookPriceService books,
       RefiningMaterialPriceService materials,
-      SpecUpGoalStorePort store) {
-    this(specUp, simulator, auctions, books, materials, store, System::nanoTime);
+      SpecUpGoalStorePort store,
+      MeterRegistry meters) {
+    this(specUp, simulator, auctions, books, materials, store, meters, System::nanoTime);
   }
 
   SpecUpGoalService(
@@ -84,6 +93,7 @@ public class SpecUpGoalService {
       RelicBookPriceService books,
       RefiningMaterialPriceService materials,
       SpecUpGoalStorePort store,
+      MeterRegistry meters,
       LongSupplier nanoTime) {
     this.specUp = specUp;
     this.simulator = simulator;
@@ -92,6 +102,223 @@ public class SpecUpGoalService {
     this.materials = materials;
     this.store = store;
     this.nanoTime = nanoTime;
+    this.meters = meters;
+    this.pathSolves = new java.util.concurrent.Semaphore(PATH_MAX_CONCURRENT);
+  }
+
+  private static final Logger log = LoggerFactory.getLogger(SpecUpGoalService.class);
+
+  /**
+   * 추천 순서 운영 지표. loakraken.spec_up.path{outcome=cache_hit|computed|busy}: 캐시 적중·계산·자리 부족(429) 비율.
+   * loakraken.spec_up.path_compute{pick, stop}: 캐시에 없을 때 계산 시간(p95·p99), stop은 멈춘 이유 코드(작은 고정 집합).
+   * 캐릭터 이름은 태그·로그에 넣지 않는다.
+   */
+  private final MeterRegistry meters;
+
+  private void pathOutcome(String outcome) {
+    meters.counter("loakraken.spec_up.path", "outcome", outcome).increment();
+  }
+
+  public static final String PATH_RULE_VERSION = "spec-up-path-v1";
+  static final int PATH_MAX_STEPS = 30;
+  static final int PATH_MAX_CONCURRENT = 2;
+  static final Duration PATH_RETRY_AFTER = Duration.ofSeconds(2);
+  private static final Map<String, String> PATH_STOP_TEXT =
+      Map.of(
+          NO_CANDIDATE, "시세가 있는 항목 가운데 전투력이 오르는 것을 모두 골랐어요.",
+          STEP_LIMIT, "정한 단계 수까지 보여 드려요.",
+          TIME_LIMITED, "계산 시간이 길어 여기까지 고른 단계만 보여 드려요.");
+
+  /** 순서에서 뺀 항목(지금 상태에서 시세를 몰라 고를 수 없는 다음 단계 중 전투력이 오르는 것). 추측 비용을 넣지 않는다. */
+  public record Excluded(
+      String candidateId,
+      String kind,
+      String target,
+      String from,
+      String to,
+      String icon,
+      String grade,
+      String skillName,
+      BigDecimal deltaCombatPower,
+      SpecUpCost cost) {}
+
+  /** 추천 순서(이어 고르기): 목표 없이 limit 단계까지. steps는 시세가 있는 단계만, unpriced는 지금 상태 기준 뺀 항목. */
+  public record Path(
+      String characterName,
+      String serverName,
+      String className,
+      BigDecimal combatPower,
+      BigDecimal finalCombatPower,
+      String pick,
+      int limit,
+      String stopReasonCode,
+      String stopReason,
+      Long totalCost,
+      String ruleVersion,
+      String simulatorRuleVersion,
+      Instant fetchedAt,
+      Instant pricesAt,
+      List<Step> steps,
+      List<Excluded> unpriced) {}
+
+  /**
+   * 추천 순서(스펙업 순서 시안 '나'): 지금 상태에서 pick 기준으로 가장 앞의 다음 한 단계를 적용하고 다시 재기를 limit 단계까지(목표 없음). 시세(더 드는
+   * 비용)를 모르는 단계는 고르지 않고 unpriced로 따로 준다. 목표 경로와 같은 단계·비용·시뮬레이터를 쓴다. 같은 캐릭터 수집 시각·시세·기준·단계 수는 10분
+   * 캐시, 같은 키는 한 번만 계산, 캐시에 없는 계산은 동시에 PATH_MAX_CONCURRENT개까지(넘으면 바로 429).
+   */
+  public Path path(String characterName, Pick pick, int limit) {
+    if (!specUp.enabled()) throw new BusinessException(SpecUpErrorCode.SPEC_UP_DISABLED);
+    var snapshot = simulator.snapshot(characterName);
+    var profile = snapshot.details().profile();
+    var before =
+        profile.combatPower() == null
+            ? null
+            : profile.combatPower().setScale(2, RoundingMode.HALF_UP);
+    var gems = gemPrices();
+    var refinePrices = materials.cached();
+    var key =
+        String.join(
+            ":",
+            profile.serverName(),
+            profile.characterName(),
+            pick.name(),
+            String.valueOf(limit),
+            String.valueOf(snapshot.fetchedAt() == null ? 0 : snapshot.fetchedAt().toEpochMilli()),
+            String.valueOf(latest(gems)),
+            staleSignature(gems),
+            String.valueOf(refinePrices.map(p -> p.observedAt().toEpochMilli()).orElse(0L)),
+            String.valueOf(books.observedAt().map(Instant::toEpochMilli).orElse(0L)),
+            PATH_RULE_VERSION,
+            CombatPowerSimulationService.RULE_VERSION,
+            String.valueOf(specUp.costRuleVersions()));
+    var cached = store.findPath(key);
+    if (cached.isPresent()) {
+      pathOutcome("cache_hit");
+      return cached.get();
+    }
+    return single(
+        "path:" + key,
+        () -> {
+          if (!pathSolves.tryAcquire()) {
+            pathOutcome("busy");
+            log.warn(
+                "event=spec_up_path_busy pick={} limit={} slots={}",
+                pick,
+                limit,
+                PATH_MAX_CONCURRENT);
+            throw new BusinessException(SpecUpErrorCode.SPEC_UP_BUSY, PATH_RETRY_AFTER);
+          }
+          try {
+            long started = nanoTime.getAsLong();
+            var result = computePath(snapshot, before, pick, limit, gems, refinePrices);
+            long elapsed = nanoTime.getAsLong() - started;
+            pathOutcome("computed");
+            Timer.builder("loakraken.spec_up.path_compute")
+                .tag("pick", pick.name())
+                .tag("stop", result.stopReasonCode())
+                .publishPercentiles(0.5, 0.95, 0.99)
+                .register(meters)
+                .record(Duration.ofNanos(elapsed));
+            if (TIME_LIMITED.equals(result.stopReasonCode()))
+              log.warn(
+                  "event=spec_up_path_time_limit pick={} limit={} steps={} elapsedMs={}",
+                  pick,
+                  limit,
+                  result.steps().size(),
+                  elapsed / 1_000_000);
+            else store.savePath(key, result, CACHE_TTL);
+            return result;
+          } finally {
+            pathSolves.release();
+          }
+        });
+  }
+
+  private Path computePath(
+      CharacterResult snapshot,
+      BigDecimal before,
+      Pick pick,
+      int limit,
+      Map<String, MarketAuctionService.GemCell> gems,
+      Optional<RefiningMaterialPriceService.Prices> refinePrices) {
+    var profile = snapshot.details().profile();
+    var roleReason = CombatPowerSimulationService.roleReason(snapshot);
+    if (roleReason != null || before == null) {
+      var reason =
+          roleReason != null
+              ? CombatPowerReasons.classify(roleReason)
+              : CombatPowerReasons.NO_OFFICIAL_COMBAT_POWER;
+      return new Path(
+          profile.characterName(),
+          profile.serverName(),
+          profile.className(),
+          before,
+          before,
+          pick.name(),
+          limit,
+          reason.code(),
+          reason.text(),
+          null,
+          PATH_RULE_VERSION,
+          CombatPowerSimulationService.RULE_VERSION,
+          snapshot.fetchedAt(),
+          null,
+          List.of(),
+          List.of());
+    }
+    var chain = chain(snapshot, before, null, pick, true, limit, gems, refinePrices);
+    var unpriced = unpricedAtStart(snapshot, before, gems, refinePrices);
+    return new Path(
+        profile.characterName(),
+        profile.serverName(),
+        profile.className(),
+        before,
+        chain.last(),
+        pick.name(),
+        limit,
+        chain.stop(),
+        PATH_STOP_TEXT.get(chain.stop()),
+        chain.cumulative(),
+        PATH_RULE_VERSION,
+        CombatPowerSimulationService.RULE_VERSION,
+        snapshot.fetchedAt(),
+        chain.pricesAt(),
+        chain.steps(),
+        unpriced);
+  }
+
+  /** 지금 상태에서 비용을 몰라 순서에서 뺀 다음 단계 중 전투력이 오르는 것. Δ 큰 순, 같으면 id. */
+  private List<Excluded> unpricedAtStart(
+      CharacterResult snapshot,
+      BigDecimal before,
+      Map<String, MarketAuctionService.GemCell> gems,
+      Optional<RefiningMaterialPriceService.Prices> refinePrices) {
+    var pricesAt = new Instant[1];
+    var result = new ArrayList<Excluded>();
+    for (var option :
+        options(State.of(snapshot.details().loadout()), gems, refinePrices, pricesAt)) {
+      if (option.cost() != null && option.cost().amount() != null) continue;
+      var simulated = simulator.simulate(snapshot, List.of(option.change()));
+      if (simulated.unsupportedCount() > 0 || simulated.after() == null) continue;
+      var delta = simulated.after().subtract(before);
+      if (delta.signum() <= 0) continue;
+      result.add(
+          new Excluded(
+              option.id(),
+              option.change().kind().name(),
+              option.target(),
+              option.from(),
+              option.to(),
+              option.icon(),
+              option.grade(),
+              option.skillName(),
+              delta,
+              option.cost()));
+    }
+    result.sort(
+        Comparator.comparing(Excluded::deltaCombatPower, Comparator.reverseOrder())
+            .thenComparing(Excluded::candidateId));
+    return List.copyOf(result);
   }
 
   /** 경로의 한 단계. 표시 필드는 스펙업 후보와 같은 뜻이고 change는 시뮬레이터 요청 changes[] 하나와 같다. */
@@ -110,7 +337,8 @@ public class SpecUpGoalService {
       BigDecimal combatPowerAfter,
       SpecUpCost cost,
       Long cumulativeCost,
-      BigDecimal combatPowerPer10kGold) {}
+      BigDecimal combatPowerPer10kGold,
+      Long extraCost) {}
 
   public record Goal(
       String characterName,
@@ -158,7 +386,8 @@ public class SpecUpGoalService {
             // 각인서 시세가 바뀌면 각인 비용이 달라지므로 다시 계산한다(시세가 그대로면 캐시 그대로).
             String.valueOf(books.observedAt().map(Instant::toEpochMilli).orElse(0L)),
             RULE_VERSION,
-            CombatPowerSimulationService.RULE_VERSION);
+            CombatPowerSimulationService.RULE_VERSION,
+            String.valueOf(specUp.costRuleVersions()));
     var cached = store.find(key);
     if (cached.isPresent()) return cached.get();
     return single(
@@ -177,8 +406,6 @@ public class SpecUpGoalService {
       BigDecimal target,
       Map<String, MarketAuctionService.GemCell> gems,
       Optional<RefiningMaterialPriceService.Prices> refinePrices) {
-    var pricesAt = new Instant[1];
-    var steps = new ArrayList<Step>();
     var roleReason = CombatPowerSimulationService.roleReason(snapshot);
     if (roleReason != null || before == null) {
       var reason =
@@ -186,11 +413,56 @@ public class SpecUpGoalService {
               ? CombatPowerReasons.classify(roleReason)
               : CombatPowerReasons.NO_OFFICIAL_COMBAT_POWER;
       return result(
-          snapshot, before, target, before, reason.code(), reason.text(), null, 0, null, steps);
+          snapshot, before, target, before, reason.code(), reason.text(), null, 0, null, List.of());
     }
     if (before.compareTo(target) >= 0)
-      return result(snapshot, before, target, before, ALREADY_REACHED, null, 0L, 0, null, steps);
+      return result(
+          snapshot, before, target, before, ALREADY_REACHED, null, 0L, 0, null, List.of());
+    var chain =
+        chain(snapshot, before, target, Pick.EFFICIENCY, false, MAX_STEPS, gems, refinePrices);
+    return result(
+        snapshot,
+        before,
+        target,
+        chain.last(),
+        chain.stop(),
+        null,
+        chain.cumulative(),
+        chain.unpriced(),
+        chain.pricesAt(),
+        chain.steps());
+  }
 
+  /** 다음 단계를 고르는 기준. EFFICIENCY: 더 드는 비용 1만 골드당 전투력(목표 경로와 같음). DELTA: 전투력 증가가 큰 순(같으면 효율·id). */
+  public enum Pick {
+    EFFICIENCY,
+    DELTA
+  }
+
+  /** 한 번 이어 고른 결과. last = 마지막 단계 뒤 전투력(단계가 없으면 처음 전투력). */
+  record Chain(
+      List<Step> steps,
+      String stop,
+      Long cumulative,
+      int unpriced,
+      BigDecimal last,
+      Instant pricesAt) {}
+
+  /**
+   * 지금 상태에서 다음 한 단계를 고르고 적용한 뒤 다시 모든 칸의 다음 단계를 시뮬레이터로 재기를 되풀이한다(사슬). target이 있으면 닿을 때 멈추고,
+   * pricedOnly면 비용(더 드는 비용)을 모르는 단계는 고르지 않는다. 같은 입력이면 같은 사슬이다(같으면 id 순).
+   */
+  private Chain chain(
+      CharacterResult snapshot,
+      BigDecimal before,
+      BigDecimal target,
+      Pick pick,
+      boolean pricedOnly,
+      int maxSteps,
+      Map<String, MarketAuctionService.GemCell> gems,
+      Optional<RefiningMaterialPriceService.Prices> refinePrices) {
+    var pricesAt = new Instant[1];
+    var steps = new ArrayList<Step>();
     var state = State.of(snapshot.details().loadout());
     var applied = new LinkedHashMap<String, Change>();
     var current = before;
@@ -203,11 +475,11 @@ public class SpecUpGoalService {
     long started = nanoTime.getAsLong();
     String stop;
     while (true) {
-      if (current.compareTo(target) >= 0) {
+      if (target != null && current.compareTo(target) >= 0) {
         stop = REACHED;
         break;
       }
-      if (steps.size() >= MAX_STEPS) {
+      if (steps.size() >= maxSteps) {
         stop = STEP_LIMIT;
         break;
       }
@@ -217,7 +489,11 @@ public class SpecUpGoalService {
       }
       Option best = null;
       boolean bestFree = false;
+      Long bestMarginal = null;
       for (var option : options(state, gems, refinePrices, pricesAt)) {
+        // 고르는 효율은 이 단계에 더 드는 비용(보석은 누적 차이)으로: 같은 칸을 이어서 올릴 때 이미 낸 비용을 다시 세지 않는다.
+        var marginal = marginal(option, gemTotals);
+        if (pricedOnly && marginal == null) continue;
         var trial = new LinkedHashMap<>(applied);
         trial.put(option.slot(), option.change());
         var simulated = simulator.simulate(snapshot, List.copyOf(trial.values()));
@@ -225,14 +501,16 @@ public class SpecUpGoalService {
         if (simulated.unsupportedCount() > 0 || simulated.after() == null) continue;
         var delta = simulated.after().subtract(current);
         if (delta.signum() <= 0) continue;
-        // 고르는 효율은 이 단계에 더 드는 비용(보석은 누적 차이)으로: 같은 칸을 이어서 올릴 때 이미 낸 비용을 다시 세지 않는다.
-        var marginal = marginal(option, gemTotals);
-        var scored =
-            option.scored(delta, simulated.after(), SpecUpCost.efficiency(delta, marginal));
+        // 고르기는 반올림하지 않은 비율로(소수 둘째 자리에서 같아져 id 순으로 갈리지 않게, 계산 검증 11-01). 화면 값은 단계를 만들 때 따로 반올림한다.
+        var scored = option.scored(delta, simulated.after(), rank(delta, marginal));
         boolean free = free(marginal);
-        if (best == null || preferred(scored, free, best, bestFree)) {
+        if (best == null
+            || (pick == Pick.DELTA
+                ? BY_DELTA.compare(scored, best) < 0
+                : preferred(scored, free, best, bestFree))) {
           best = scored;
           bestFree = free;
+          bestMarginal = marginal;
         }
       }
       if (best == null) {
@@ -264,11 +542,17 @@ public class SpecUpGoalService {
               best.after(),
               best.cost(),
               cumulative,
-              best.efficiency()));
+              SpecUpCost.efficiency(best.delta(), bestMarginal),
+              bestMarginal));
     }
-    return result(
-        snapshot, before, target, current, stop, null, cumulative, unpriced, pricesAt[0], steps);
+    return new Chain(List.copyOf(steps), stop, cumulative, unpriced, current, pricesAt[0]);
   }
+
+  /** DELTA 고르기: 전투력 증가 큰 순 → 효율 높은 순(없으면 뒤) → id. */
+  static final Comparator<Option> BY_DELTA =
+      Comparator.comparing(Option::delta, Comparator.nullsLast(Comparator.reverseOrder()))
+          .thenComparing(Option::efficiency, Comparator.nullsLast(Comparator.reverseOrder()))
+          .thenComparing(Option::id);
 
   private static Goal result(
       CharacterResult snapshot,
@@ -335,6 +619,14 @@ public class SpecUpGoalService {
     long sum = others;
     for (var value : gemTotals.values()) sum += value;
     return sum;
+  }
+
+  /**
+   * 고르는 효율: Δ × 10,000 ÷ 더 드는 비용(반올림 없음, 소수 12자리). 더 드는 비용이 0 이하이거나 모르면 null. 화면 값은
+   * SpecUpCost.efficiency.
+   */
+  static BigDecimal rank(BigDecimal delta, Long marginal) {
+    return SpecUpCost.rankEfficiency(delta, marginal);
   }
 
   static final Comparator<Option> ORDER =
@@ -554,12 +846,13 @@ public class SpecUpGoalService {
         : stale.size() + "-" + Integer.toHexString(String.join(",", stale).hashCode());
   }
 
-  private Goal single(String key, java.util.function.Supplier<Goal> loader) {
-    var future = new CompletableFuture<Goal>();
+  @SuppressWarnings("unchecked")
+  private <T> T single(String key, java.util.function.Supplier<T> loader) {
+    var future = new CompletableFuture<Object>();
     var existing = flights.putIfAbsent(key, future);
     if (existing != null) {
       try {
-        return existing.join();
+        return (T) existing.join();
       } catch (CompletionException exception) {
         if (exception.getCause() instanceof RuntimeException cause) throw cause;
         throw exception;

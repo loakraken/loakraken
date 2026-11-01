@@ -127,7 +127,8 @@ class SpecUpDetailMismatchTest {
             new BigDecimal("1.20"),
             null,
             null,
-            "DAMAGE");
+            "DAMAGE",
+            null);
     return new SpecUpService.Guide(
         "캐릭터",
         "서버",

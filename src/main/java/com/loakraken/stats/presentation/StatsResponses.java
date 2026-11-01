@@ -191,11 +191,28 @@ public final class StatsResponses {
     }
   }
 
-  public record StatsClassesResponse(StatsMetaResponse meta, List<StatsClassRowResponse> rows) {
+  /** 구성 블록(B4). 직업군 비율은 직업 행의 인원을 화면의 직업군 표로 묶는다. */
+  public record StatsCompositionResponse(
+      @Schema(description = "딜러: 서포터 겸용 직업(바드·홀리나이트·도화가·발키리)이 아닌 직업의 모든 캐릭터(직업만으로 딜러)") long dealer,
+      @Schema(description = "서포터 직업 딜러: 겸용 직업 중 딜러로 판정한 캐릭터") long supportClassDealer,
+      @Schema(description = "서포터: 겸용 직업 중 서포터로 판정한 캐릭터") long support,
+      @Schema(description = "역할 미확인: 겸용 직업 중 역할을 아직 판정하지 못한 캐릭터") long unknownRole) {}
+
+  public record StatsClassesResponse(
+      StatsMetaResponse meta,
+      List<StatsClassRowResponse> rows,
+      @Schema(description = "구성 블록: 표본을 역할로 나눈 수(네 값의 합 = 표본)")
+          StatsCompositionResponse composition) {
     static StatsClassesResponse from(StatsQueryService.ClassesResult result) {
+      var composition = result.composition();
       return new StatsClassesResponse(
           StatsMetaResponse.from(result.meta()),
-          result.rows().stream().map(StatsClassesResponse::row).toList());
+          result.rows().stream().map(StatsClassesResponse::row).toList(),
+          new StatsCompositionResponse(
+              composition.dealer(),
+              composition.supportClassDealer(),
+              composition.support(),
+              composition.unknownRole()));
     }
 
     static StatsClassRowResponse row(StatsQueryService.ClassStat row) {
@@ -299,6 +316,53 @@ public final class StatsResponses {
 
   @Schema(description = "구간 [from, to)")
   public record StatsBinResponse(BigDecimal from, BigDecimal to, long count) {}
+
+  public record StatsGemLevelsResponse(
+      StatsMetaResponse meta,
+      @Schema(description = "보석을 관측한 표본 = 구간 수의 합(모집단 meta.population보다 작을 수 있음)") long gemSample,
+      @Schema(
+              description =
+                  "'5 미만'(from null, to 5.0), 5.0~9.5(0.5 단위, to 미포함), 10.0(to null) 순. 빈 구간은 0")
+          List<StatsGemLevelBinResponse> bins) {
+    static StatsGemLevelsResponse from(StatsQueryService.GemLevelsResult result) {
+      return new StatsGemLevelsResponse(
+          StatsMetaResponse.from(result.meta()),
+          result.gemSample(),
+          result.bins().stream()
+              .map(bin -> new StatsGemLevelBinResponse(bin.from(), bin.to(), bin.count()))
+              .toList());
+    }
+  }
+
+  public record StatsLevelCombatPowerResponse(
+      @Schema(description = "meta.population = 전투력이 있는 캐릭터 수(구간 count의 합)") StatsMetaResponse meta,
+      @Schema(
+              description =
+                  "아이템 레벨 5 단위 구간(오름차순, 사람이 있는 구간만). median은 count가 meta.minSample(30) 이상일 때만")
+          List<StatsLevelCombatPowerBucketResponse> buckets) {
+    static StatsLevelCombatPowerResponse from(StatsQueryService.LevelCombatPowerResult result) {
+      return new StatsLevelCombatPowerResponse(
+          StatsMetaResponse.from(result.meta()),
+          result.buckets().stream()
+              .map(
+                  bucket ->
+                      new StatsLevelCombatPowerBucketResponse(
+                          bucket.from(), bucket.to(), bucket.count(), bucket.median()))
+              .toList());
+    }
+  }
+
+  public record StatsLevelCombatPowerBucketResponse(
+      @Schema(description = "아이템 레벨 하한(포함)") BigDecimal from,
+      @Schema(description = "아이템 레벨 상한(미포함, 하한 + 5)") BigDecimal to,
+      @Schema(description = "전투력이 있는 캐릭터 수") long count,
+      @Schema(description = "전투력 중앙값(요약 중앙값과 같은 계산). count가 30 미만이면 null") @NullableResponse
+          BigDecimal median) {}
+
+  public record StatsGemLevelBinResponse(
+      @Schema(description = "구간 하한(포함). '5 미만' 구간은 null") @NullableResponse BigDecimal from,
+      @Schema(description = "구간 상한(미포함). 10.0 구간은 null") @NullableResponse BigDecimal to,
+      long count) {}
 
   public record StatsPercentileOfResponse(
       BigDecimal value,

@@ -391,8 +391,9 @@ public class StatsQueryService {
   }
 
   public ClassesResult classes(StatsConditions conditions) {
+    // v2: 구성(composition)을 더했다(캐시에 남은 이전 모양을 읽지 않게).
     return cached(
-        "classes:" + key(conditions),
+        "classes:v2:" + key(conditions),
         ClassesResult.class,
         () -> {
           var now = clock.instant();
@@ -400,8 +401,29 @@ public class StatsQueryService {
           long population = rows.stream().mapToLong(StatsPort.ClassRow::count).sum();
           var result = new ArrayList<ClassStat>();
           for (var row : rows) result.add(classStat(row, population));
-          return new ClassesResult(meta(conditions, population, now), result);
+          return new ClassesResult(meta(conditions, population, now), result, composition(rows));
         });
+  }
+
+  /**
+   * 구성 블록(B4): 직업 행을 역할로 나눈다. 서포터 겸용 직업(StatsRules.SUPPORT_CLASSES)이 아닌 직업은 직업만으로 딜러라 모두 dealer, 겸용
+   * 직업은 판정한 역할대로 supportClassDealer·support, 역할을 모르면 unknownRole. 네 값의 합은 표본(모집단)과 같다.
+   */
+  static Composition composition(List<StatsPort.ClassRow> rows) {
+    long dealer = 0;
+    long supportClassDealer = 0;
+    long support = 0;
+    long unknownRole = 0;
+    for (var row : rows) {
+      if (!StatsRules.SUPPORT_CLASSES.contains(row.className())) {
+        dealer += row.count();
+        continue;
+      }
+      supportClassDealer += row.dealers();
+      support += row.supports();
+      unknownRole += row.count() - row.dealers() - row.supports();
+    }
+    return new Composition(dealer, supportClassDealer, support, unknownRole);
   }
 
   /**
@@ -455,6 +477,68 @@ public class StatsQueryService {
             : null,
         status);
   }
+
+  /**
+   * 보석 레벨 분포(B2): 4티어 보석 평균 레벨을 '5 미만', 5.0~9.5(0.5 단위), 10.0 구간으로 센다. 구간 수의 합은 보석을 관측한
+   * 표본(gemSample)이고 모집단 전체가 아니다(보석을 못 본 캐릭터는 빠짐). 빈 구간도 0으로 준다.
+   */
+  public GemLevelsResult gemLevels(StatsConditions conditions) {
+    return cached(
+        "gem-levels:v1:" + key(conditions),
+        GemLevelsResult.class,
+        () -> {
+          var now = clock.instant();
+          var counts = new java.util.HashMap<Integer, Long>();
+          long population = 0;
+          for (var row : stats.gemLevels(conditions, conditions.since(now))) {
+            population += row.count();
+            counts.merge(row.bucket(), row.count(), Long::sum);
+          }
+          var bins = new ArrayList<GemLevelBin>();
+          long gemSample = 0;
+          bins.add(new GemLevelBin(null, GEM_LEVEL_FLOOR, counts.getOrDefault(0, 0L)));
+          for (int bucket = 10; bucket <= 20; bucket++) {
+            // bucket = 하한 × 2 → 하한 = bucket × 0.5(소수 한 자리).
+            var from = BigDecimal.valueOf(bucket * 5L, 1);
+            var to = bucket == 20 ? null : from.add(GEM_LEVEL_STEP);
+            bins.add(new GemLevelBin(from, to, counts.getOrDefault(bucket, 0L)));
+          }
+          for (var bin : bins) gemSample += bin.count();
+          return new GemLevelsResult(meta(conditions, population, now), gemSample, bins);
+        });
+  }
+
+  /**
+   * 레벨별 전투력(B3): 아이템 레벨 5 단위 구간마다 전투력이 있는 캐릭터 수와 중앙값. 중앙값은 그 구간이 30명 이상일 때만(아니면 null, 화면은 그리지 않음).
+   * 같은 표본이면 요약의 전투력 중앙값과 같은 값이다.
+   */
+  public LevelCombatPowerResult levelCombatPower(StatsConditions conditions) {
+    return cached(
+        "level-combat-power:v1:" + key(conditions),
+        LevelCombatPowerResult.class,
+        () -> {
+          var now = clock.instant();
+          var rows = stats.levelCombatPower(conditions, conditions.since(now));
+          long population = 0;
+          var buckets = new ArrayList<LevelCombatPowerBucket>();
+          for (var row : rows) {
+            population += row.count();
+            if (row.count() == 0) continue;
+            buckets.add(
+                new LevelCombatPowerBucket(
+                    row.from(),
+                    row.from().add(LEVEL_BUCKET),
+                    row.count(),
+                    row.count() >= StatsRules.MIN_SAMPLE ? row.median() : null));
+          }
+          return new LevelCombatPowerResult(meta(conditions, population, now), buckets);
+        });
+  }
+
+  static final BigDecimal LEVEL_BUCKET = BigDecimal.valueOf(5);
+
+  static final BigDecimal GEM_LEVEL_FLOOR = new BigDecimal("5.0");
+  static final BigDecimal GEM_LEVEL_STEP = new BigDecimal("0.5");
 
   public ServersResult servers(StatsConditions conditions) {
     return cached(
@@ -860,11 +944,17 @@ public class StatsQueryService {
   public TitleEquipResult titleEquip(StatsConditions conditions, String title) {
     var full =
         cached(
-            "titles:" + key(conditions),
+            // v2: 관측(기간 무관)·최근 30일 첫 기록 수가 들어간 결과. 옛 결과를 읽지 않게 키를 바꾼다.
+            "titles:v2:" + key(conditions),
             TitleEquipResult.class,
             () -> {
               var now = clock.instant();
-              var result = stats.titleEquip(conditions.server(), conditions.since(now), null);
+              var result =
+                  stats.titleEquip(
+                      conditions.server(),
+                      conditions.since(now),
+                      now.minus(java.time.Duration.ofDays(TITLE_RECENT_DAYS)),
+                      null);
               long population = result.population();
               return new TitleEquipResult(
                   meta(conditions, population, now),
@@ -873,7 +963,13 @@ public class StatsQueryService {
                       .map(
                           row ->
                               new EquippedTitle(
-                                  row.title(), row.rosters(), percent(row.rosters(), population)))
+                                  row.title(),
+                                  row.rosters(),
+                                  percent(row.rosters(), population),
+                                  row.observedRosters(),
+                                  percent(row.observedRosters(), population),
+                                  row.newRosters(),
+                                  row.observedCharacters()))
                       .toList());
             });
     if (title == null) return full;
@@ -882,6 +978,39 @@ public class StatsQueryService {
         title,
         full.titles().stream().filter(row -> title.equals(row.title())).toList());
   }
+
+  /** '최근 많이 기록된 칭호'의 기간(일). activeDays와 무관하다. */
+  static final int TITLE_RECENT_DAYS = 30;
+
+  /**
+   * 휘장 장착 분포. 조건 중 server·activeDays만 쓴다. 캐릭터 단위이고 휘장 정보를 관측한 캐릭터만 모집단이다. 공식 프로필에는 휘장 이름이 없어 아이콘
+   * 주소가 묶음 기준이다. 30 미만이면 COLLECTING이지만 비율은 그대로(참고값).
+   */
+  public EmblemEquipResult emblemEquip(StatsConditions conditions) {
+    return cached(
+        "emblems:" + key(conditions),
+        EmblemEquipResult.class,
+        () -> {
+          var now = clock.instant();
+          var result = stats.emblemEquip(conditions.server(), conditions.since(now));
+          long population = result.population();
+          return new EmblemEquipResult(
+              meta(conditions, population, now),
+              result.withoutEmblem(),
+              result.emblems().stream()
+                  .map(
+                      row ->
+                          new EquippedEmblem(
+                              row.iconUrl(),
+                              row.characters(),
+                              percent(row.characters(), population)))
+                  .toList());
+        });
+  }
+
+  public record EmblemEquipResult(Meta meta, long withoutEmblem, List<EquippedEmblem> emblems) {}
+
+  public record EquippedEmblem(String iconUrl, long characters, BigDecimal percent) {}
 
   /**
    * classEngraving은 직업 각인 목록의 표기(컨트롤러가 검증)다. 주면 마지막 장비 요약의 직업 각인이 그 값인 캐릭터만 순위·모집단에 넣고(#618), 같은
@@ -1217,7 +1346,9 @@ public class StatsQueryService {
         cached("coverage", StatsPort.Coverage.class, stats::coverage));
   }
 
-  private <T> T cached(String key, Class<T> type, Supplier<T> loader) {
+  private <T> T cached(String baseKey, Class<T> type, Supplier<T> loader) {
+    // 처리정지 목록이 바뀌면 집계(수·순서)도 바로 새로 센다: 목록 내용 값을 키에 넣는다(#757).
+    var key = baseKey + ":x" + guard(stats::exclusionRevision);
     var hit = cache.find(key, type);
     // 캐릭터를 나열하는 결과는 캐시 뒤 처리정지 목록에 든 캐릭터가 있으면 다시 센다(집계 SQL이 목록을 뺀다). 목록 추가는 운영자가 DB에 직접
     // 하므로 지울 시점을 알 수 없어, 캐시를 쓸 때마다 한 번 확인한다.
@@ -1319,7 +1450,23 @@ public class StatsQueryService {
       Percentiles combatPower,
       SampleStatus sampleStatus) {}
 
-  public record ClassesResult(Meta meta, List<ClassStat> rows) {}
+  public record ClassesResult(Meta meta, List<ClassStat> rows, Composition composition) {}
+
+  /** from이 null이면 '5 미만', to가 null이면 10.0(마지막). to는 그 값을 넣지 않는다. */
+  public record GemLevelBin(BigDecimal from, BigDecimal to, long count) {}
+
+  /** gemSample = 구간 수의 합(보석을 관측한 캐릭터). meta.population은 모집단 전체. */
+  public record GemLevelsResult(Meta meta, long gemSample, List<GemLevelBin> bins) {}
+
+  /** to는 넣지 않는다. median은 count가 30 이상일 때만. */
+  public record LevelCombatPowerBucket(
+      BigDecimal from, BigDecimal to, long count, BigDecimal median) {}
+
+  /** meta.population은 전투력이 있는 캐릭터 수(구간 수의 합). */
+  public record LevelCombatPowerResult(Meta meta, List<LevelCombatPowerBucket> buckets) {}
+
+  /** 구성 블록(B4). dealer + supportClassDealer + support + unknownRole = 표본. */
+  public record Composition(long dealer, long supportClassDealer, long support, long unknownRole) {}
 
   /** 직업 각인 한 행: 직업 각인(공식 칭호 원문)과 직업별 통계와 같은 값. */
   public record ClassEngravingStat(String classEngraving, ClassStat stats) {}
@@ -1564,7 +1711,14 @@ public class StatsQueryService {
   /** 칭호 장착 확인 비율 결과(#311). title이 null이면 전체 칭호. */
   public record TitleEquipResult(Meta meta, String title, List<EquippedTitle> titles) {}
 
-  public record EquippedTitle(String title, long equippedRosters, BigDecimal equippedPercent) {}
+  public record EquippedTitle(
+      String title,
+      long equippedRosters,
+      BigDecimal equippedPercent,
+      long observedRosters,
+      BigDecimal observedPercent,
+      long newRosters30d,
+      long observedCharacters) {}
 
   /**
    * classEngraving은 요청한 직업 각인(없으면 null), classEngravingUnknown은 필터를 켰을 때 같은 조건에서 직업 각인을 모르는(마지막 장비

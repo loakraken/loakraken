@@ -187,6 +187,147 @@ class StatsIntegrationTest {
     assertThat(supportsOnly.path("combatPowerP90").isNull()).isTrue();
   }
 
+  /**
+   * 구성 블록(B4): 겸용 직업(바드)은 판정한 역할대로, 아닌 직업(버서커)은 역할을 몰라도 딜러로 센다. 네 값의 합은 표본이고, 겸용 직업 행의 딜러·서포터·미확인과
+   * 같다.
+   */
+  @Test
+  void 구성_블록은_겸용_직업을_역할로_나누고_합이_표본이다() throws Exception {
+    var at = now.minus(1, ChronoUnit.DAYS);
+    String[] bard = {"SUPPORT", "SUPPORT", "SUPPORT", "DEALER", "DEALER", null};
+    for (int i = 0; i < bard.length; i++)
+      insert(
+          "구성바드" + i,
+          "바드",
+          new BigDecimal("1700"),
+          new BigDecimal("3000"),
+          bard[i],
+          null,
+          null,
+          at);
+    String[] berserker = {"DEALER", "DEALER", "DEALER", "DEALER", null};
+    for (int i = 0; i < berserker.length; i++)
+      insert(
+          "구성버서커" + i,
+          "버서커",
+          new BigDecimal("1700"),
+          new BigDecimal("3000"),
+          berserker[i],
+          null,
+          null,
+          at);
+    var classes = data("/api/v1/stats/classes?server=" + encode(SERVER));
+    var composition = classes.path("composition");
+    assertThat(composition.path("dealer").asLong()).isEqualTo(5);
+    assertThat(composition.path("supportClassDealer").asLong()).isEqualTo(2);
+    assertThat(composition.path("support").asLong()).isEqualTo(3);
+    assertThat(composition.path("unknownRole").asLong()).isEqualTo(1);
+    long sum = 0;
+    for (var field : java.util.List.of("dealer", "supportClassDealer", "support", "unknownRole"))
+      sum += composition.path(field).asLong();
+    assertThat(sum).isEqualTo(classes.at("/meta/population").asLong()).isEqualTo(11);
+    // 겸용 직업 행의 역할 수와 같다(서포터 직업의 딜러·서포터 선택).
+    for (var row : classes.path("rows"))
+      if (row.path("className").asText().equals("바드")) {
+        assertThat(row.path("dealers").asLong()).isEqualTo(2);
+        assertThat(row.path("supports").asLong()).isEqualTo(3);
+        assertThat(row.path("unknownRole").asLong()).isEqualTo(1);
+      }
+    ApiContractFixture.write(
+        "stats-classes-composition.json",
+        get("/api/v1/stats/classes?server=" + encode(SERVER)).body());
+  }
+
+  /** 보석 레벨 분포(B2): 5 미만·0.5 단위·10.0 구간, 빈 구간은 0, 합은 보석을 관측한 표본(모집단보다 작음). */
+  @Test
+  void 보석_레벨_분포는_구간_합이_보석_표본이고_빈_구간도_준다() throws Exception {
+    var at = now.minus(1, ChronoUnit.DAYS);
+    String[] gems = {null, "4.50", "5.00", "5.25", "7.50", "9.99", "10.00"};
+    for (int i = 0; i < gems.length; i++)
+      insert(
+          "보석분포" + i,
+          "버서커",
+          new BigDecimal("1700"),
+          new BigDecimal("3000"),
+          "DEALER",
+          gems[i] == null ? null : new BigDecimal(gems[i]),
+          null,
+          at);
+    var data = data("/api/v1/stats/gem-levels?server=" + encode(SERVER));
+    assertThat(data.at("/meta/population").asLong()).isEqualTo(7);
+    assertThat(data.path("gemSample").asLong()).isEqualTo(6);
+    var bins = data.path("bins");
+    assertThat(bins.size()).isEqualTo(12); // 5 미만 + 5.0~9.5(10개) + 10.0
+    assertThat(bins.get(0).path("from").isNull()).isTrue();
+    assertThat(bins.get(0).path("to").decimalValue()).isEqualByComparingTo("5.0");
+    assertThat(bins.get(0).path("count").asLong()).isEqualTo(1); // 4.50
+    assertThat(bins.get(1).path("from").decimalValue()).isEqualByComparingTo("5.0");
+    assertThat(bins.get(1).path("to").decimalValue()).isEqualByComparingTo("5.5");
+    assertThat(bins.get(1).path("count").asLong()).isEqualTo(2); // 5.00, 5.25
+    assertThat(bins.get(6).path("from").decimalValue()).isEqualByComparingTo("7.5");
+    assertThat(bins.get(6).path("count").asLong()).isEqualTo(1);
+    assertThat(bins.get(10).path("from").decimalValue()).isEqualByComparingTo("9.5");
+    assertThat(bins.get(10).path("count").asLong()).isEqualTo(1); // 9.99
+    assertThat(bins.get(11).path("from").decimalValue()).isEqualByComparingTo("10.0");
+    assertThat(bins.get(11).path("to").isNull()).isTrue();
+    assertThat(bins.get(11).path("count").asLong()).isEqualTo(1);
+    long sum = 0;
+    for (var bin : bins) sum += bin.path("count").asLong();
+    assertThat(sum).isEqualTo(data.path("gemSample").asLong());
+    assertThat(bins.get(3).path("count").asLong()).isZero(); // 6.0 빈 구간
+    ApiContractFixture.write(
+        "stats-gem-levels.json", get("/api/v1/stats/gem-levels?server=" + encode(SERVER)).body());
+  }
+
+  /** 레벨별 전투력(B3): 아이템 레벨 5 단위 구간, 30명 이상 구간만 중앙값. 같은 표본(그 구간만 거른 요약)의 전투력 중앙값과 같다. */
+  @Test
+  void 레벨별_전투력은_5레벨_구간마다_30명_이상만_중앙값이고_요약_중앙값과_같다() throws Exception {
+    var at = now.minus(1, ChronoUnit.DAYS);
+    for (int i = 0; i < 31; i++)
+      insert(
+          "레벨전투" + i,
+          "버서커",
+          new BigDecimal("1721.5"),
+          new BigDecimal(3000 + 10 * i),
+          "DEALER",
+          null,
+          null,
+          at);
+    for (int i = 0; i < 2; i++)
+      insert(
+          "레벨전투작은" + i,
+          "버서커",
+          new BigDecimal("1652"),
+          new BigDecimal("2000"),
+          "DEALER",
+          null,
+          null,
+          at);
+    var data = data("/api/v1/stats/level-combat-power?server=" + encode(SERVER));
+    var buckets = data.path("buckets");
+    assertThat(buckets.size()).isEqualTo(2);
+    assertThat(buckets.get(0).path("from").decimalValue()).isEqualByComparingTo("1650");
+    assertThat(buckets.get(0).path("to").decimalValue()).isEqualByComparingTo("1655");
+    assertThat(buckets.get(0).path("count").asLong()).isEqualTo(2);
+    assertThat(buckets.get(0).path("median").isNull()).isTrue(); // 30명 미만
+    assertThat(buckets.get(1).path("from").decimalValue()).isEqualByComparingTo("1720");
+    assertThat(buckets.get(1).path("count").asLong()).isEqualTo(31);
+    // 3000..3300(10씩) 31개의 16번째 = 3150
+    assertThat(buckets.get(1).path("median").decimalValue()).isEqualByComparingTo("3150");
+    assertThat(data.at("/meta/population").asLong()).isEqualTo(33);
+    // 같은 표본(1720~1724.99)의 요약 중앙값과 같다.
+    var summary =
+        data(
+            "/api/v1/stats/summary?server="
+                + encode(SERVER)
+                + "&itemLevelMin=1720&itemLevelMax=1724.99");
+    assertThat(buckets.get(1).path("median").decimalValue())
+        .isEqualByComparingTo(summary.path("combatPowerMedian").decimalValue());
+    ApiContractFixture.write(
+        "stats-level-combat-power.json",
+        get("/api/v1/stats/level-combat-power?server=" + encode(SERVER)).body());
+  }
+
   @Test
   void 분포의_상위_N퍼센트_기준값은_내_위치와_맞고_서버_행은_직업_행과_같은_값을_준다() throws Exception {
     표본();
@@ -357,6 +498,36 @@ class StatsIntegrationTest {
             + encode(SERVER))
         .at("/percentileOf/topPercent")
         .decimalValue();
+  }
+
+  @Test
+  void 처리정지_목록이_바뀌면_집계_캐시를_비우지_않아도_바로_새로_세고_대표가_목록에_들면_다음_캐릭터가_대표다() throws Exception {
+    표본();
+    var all = "/api/v1/stats/summary?server=" + encode(SERVER);
+    var representative = "/api/v1/stats/summary?representativeOnly=true&server=" + encode(SERVER);
+    assertThat(data(all).at("/meta/population").asLong()).isEqualTo(40);
+    // 원정대(1700·1701·1790) 대표는 1790(전투력 없어 모집단 밖)이라 1700·1701이 둘 다 빠진다.
+    assertThat(data(representative).at("/meta/population").asLong()).isEqualTo(38);
+    try {
+      // 캐시는 그대로 두고 목록만 바꾼다.
+      jdbc.sql(
+              "INSERT INTO public_exclusion (character_name, server_name, reason_code) VALUES ('통계캐5', :s, 'PRIVACY_STOP')")
+          .param("s", SERVER)
+          .update();
+      assertThat(data(all).at("/meta/population").asLong()).isEqualTo(39);
+
+      // 원정대 대표(1790)가 목록에 들면 다음으로 높은 1701이 대표가 된다: 1700과 목록의 통계캐5만 빠져 40 − 2 = 38
+      // (고치기 전이면 1701도 빠져 37).
+      jdbc.sql(
+              "INSERT INTO public_exclusion (character_name, server_name, reason_code) VALUES ('통계발견만', :s, 'PRIVACY_STOP')")
+          .param("s", SERVER)
+          .update();
+      assertThat(data(representative).at("/meta/population").asLong()).isEqualTo(38);
+    } finally {
+      jdbc.sql("DELETE FROM public_exclusion WHERE server_name = :s").param("s", SERVER).update();
+    }
+    // 목록에서 빠지면 다시 처음 값(캐시 키가 다시 바뀜).
+    assertThat(data(all).at("/meta/population").asLong()).isEqualTo(40);
   }
 
   @Test

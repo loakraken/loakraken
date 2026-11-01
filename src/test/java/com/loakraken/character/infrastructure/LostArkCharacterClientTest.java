@@ -177,6 +177,9 @@ class LostArkCharacterClientTest {
         .isEqualTo(com.loakraken.character.domain.CharacterLoadout.GemEffectKind.DAMAGE);
     assertThat(loadout.skills().get(1).counter()).isNull();
     assertThat(loadout.skills().get(1).rune()).isNull();
+    // 공식 SkillType 코드는 그대로 둔다(0 일반, 1 각성기).
+    assertThat(skill.skillType()).isEqualTo(0);
+    assertThat(loadout.skills().get(1).skillType()).isEqualTo(1);
     var helmet = loadout.equipment().get(1).detail();
     assertThat(helmet.refineLevel()).isEqualTo(19);
     assertThat(helmet.quality()).isEqualTo(95);
@@ -199,6 +202,11 @@ class LostArkCharacterClientTest {
     assertThat(mapper.readValue(cacheJson, CharacterResult.class)).isEqualTo(result);
     var response = mapper.writeValueAsString(CharacterResponse.from(result));
     ApiContractFixture.write("character-full.json", response);
+    assertThat(response).contains("\"skillType\":0").contains("\"skillType\":1");
+    // 필드가 생기기 전 캐시(최대 5분)는 skillType 없이 읽혀 null이다.
+    var oldCache =
+        mapper.readValue(cacheJson.replaceAll(",\"skillType\":\\d+", ""), CharacterResult.class);
+    assertThat(oldCache.details().loadout().skills()).allMatch(s -> s.skillType() == null);
     assertThat(response)
         .contains(
             "테스트 무기",

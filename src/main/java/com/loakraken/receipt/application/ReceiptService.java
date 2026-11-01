@@ -18,6 +18,7 @@ import com.loakraken.receipt.domain.EquipmentReceipt;
 import com.loakraken.receipt.domain.GemReceipt;
 import com.loakraken.refining.application.RefiningPlanService;
 import com.loakraken.refining.domain.OptimalStageCache;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
@@ -52,6 +53,7 @@ public class ReceiptService {
   private final CharacterStopList stopList;
   private final LostArkRequestGate gate;
   private final Clock clock;
+  private final MeterRegistry registry;
 
   public ReceiptService(
       CharacterQueryService characters,
@@ -64,6 +66,7 @@ public class ReceiptService {
       LostArkRequestGate gate,
       Clock clock,
       ReceiptInputStore inputs,
+      MeterRegistry registry,
       @org.springframework.beans.factory.annotation.Value("${receipt.max-fetch:2}") int maxFetch) {
     if (maxFetch < 1) throw new IllegalArgumentException("receipt.max-fetch는 1 이상이어야 합니다.");
     this.inputs = inputs;
@@ -77,6 +80,18 @@ public class ReceiptService {
     this.stopList = stopList;
     this.gate = gate;
     this.clock = clock;
+    this.registry = registry;
+    // 세 계열을 미리 만들어 아직 한 번도 없던 이유도 0으로 보이게 한다(계열이 없으면 대시보드가 '값 없음'으로 보임).
+    for (var reason : List.of("cap", "budget", "stopped"))
+      registry.counter("loakraken.receipt.fetch.skipped", "reason", reason);
+  }
+
+  /**
+   * 이번 요청에서 받지 않고 PENDING으로 넘긴 캐릭터 한 명. reason: cap(요청당 상한), budget(방문자 칸 부족), stopped(공식 한도·장애로
+   * 멈춤). 라벨은 이 세 값뿐이다(캐릭터 이름 없음).
+   */
+  private void skipped(String reason) {
+    registry.counter("loakraken.receipt.fetch.skipped", "reason", reason).increment();
   }
 
   /** READY: 계산함. PENDING: 아직 받지 못함(다시 요청하면 채움). UNAVAILABLE: 캐릭터를 찾지 못해 받을 수 없음(대기 수에 넣지 않음). */
@@ -206,10 +221,14 @@ public class ReceiptService {
         unavailableNames.add(name);
         continue;
       }
-      if (stopped || budgetLow || fetched == maxFetch) continue;
+      if (stopped || budgetLow || fetched == maxFetch) {
+        skipped(stopped ? "stopped" : budgetLow ? "budget" : "cap");
+        continue;
+      }
       // 방문자 칸에 다른 조회 몫을 남긴다. 모자라면 이번에는 부르지 않는다(한도 거절로 다른 조회가 막히지 않게).
       if (!gate.bulkMayContinue()) {
         budgetLow = true;
+        skipped("budget");
         continue;
       }
       fetched++;

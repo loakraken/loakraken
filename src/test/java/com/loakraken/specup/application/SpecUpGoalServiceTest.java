@@ -32,6 +32,8 @@ class SpecUpGoalServiceTest {
   private final RefiningMaterialPriceService materials = mock(RefiningMaterialPriceService.class);
   private final SpecUpService specUp = mock(SpecUpService.class);
   private final MemoryStore store = new MemoryStore();
+  private final io.micrometer.core.instrument.simple.SimpleMeterRegistry meters =
+      new io.micrometer.core.instrument.simple.SimpleMeterRegistry();
 
   @Test
   void 단계가_30개를_넘으면_STEP_LIMIT으로_멈추고_시세가_없으면_누적_비용은_null이다() {
@@ -96,6 +98,112 @@ class SpecUpGoalServiceTest {
     when(auctions.cachedGems()).thenReturn(gemCells(at, false));
     assertThat(service.goal("목표테스트", new BigDecimal("3002"))).isEqualTo(fresh);
     assertThat(store.saved).hasSize(2);
+  }
+
+  /**
+   * 추천 순서(목표 없음): 시세가 있는 단계만 limit까지 이어 고르고, 각 단계 전투력은 그때까지 고른 change 전체를 시뮬레이터에 넣은 값이다(이어 잰 Δ의 합 =
+   * 처음부터 다시 잰 값). 같은 입력이면 같은 순서다.
+   */
+  @Test
+  void 추천_순서는_시세가_있는_단계만_limit까지_이어_고르고_다시_재도_같다() {
+    var service = service(System::nanoTime);
+    when(auctions.cachedGems()).thenReturn(gemCells(Instant.parse("2026-10-31T12:00:00Z"), false));
+    var path = service.path("목표테스트", SpecUpGoalService.Pick.EFFICIENCY, 5);
+    assertThat(path.steps()).hasSize(5);
+    assertThat(path.stopReasonCode()).isEqualTo("STEP_LIMIT");
+    assertThat(path.unpriced()).isEmpty();
+    // 같은 칸(candidateId에서 마지막 ':목표' 앞)은 마지막 단계의 change만 남긴다(서비스가 그 칸을 바꿔 끼우는 것과 같음).
+    var changes = new java.util.LinkedHashMap<String, CombatPowerSimulationService.Change>();
+    BigDecimal deltas = BigDecimal.ZERO;
+    Long previous = 0L;
+    for (var step : path.steps()) {
+      changes.put(
+          step.candidateId().substring(0, step.candidateId().lastIndexOf(':')), step.change());
+      deltas = deltas.add(step.deltaCombatPower());
+      assertThat(step.cost().amount()).isNotNull();
+      assertThat(step.cumulativeCost()).isGreaterThanOrEqualTo(previous);
+      // 이 단계에 더 드는 비용 = 경로 합계가 늘어난 만큼(보석은 같은 칸 누적 차이)
+      assertThat(step.extraCost()).isEqualTo(step.cumulativeCost() - previous);
+      previous = step.cumulativeCost();
+      // 그 단계까지의 change를 처음부터 시뮬레이터에 넣은 값 = 그 단계 전투력
+      var fresh =
+          simulator.simulate(simulator.snapshot("목표테스트"), List.copyOf(changes.values())).after();
+      assertThat(step.combatPowerAfter()).isEqualByComparingTo(fresh);
+    }
+    assertThat(path.finalCombatPower().subtract(path.combatPower())).isEqualByComparingTo(deltas);
+    assertThat(path.totalCost()).isEqualTo(previous);
+    // 같은 입력이면 같은 순서(캐시를 비워도)
+    store.saved.clear();
+    store.paths.clear();
+    var again = service.path("목표테스트", SpecUpGoalService.Pick.EFFICIENCY, 5);
+    assertThat(again.steps().stream().map(SpecUpGoalService.Step::candidateId).toList())
+        .isEqualTo(path.steps().stream().map(SpecUpGoalService.Step::candidateId).toList());
+    assertThat(meters.counter("loakraken.spec_up.path", "outcome", "computed").count())
+        .isEqualTo(2);
+    assertThat(
+            meters
+                .get("loakraken.spec_up.path_compute")
+                .tags("pick", "EFFICIENCY", "stop", "STEP_LIMIT")
+                .timer()
+                .count())
+        .isEqualTo(2);
+  }
+
+  /** 시세가 없는 단계는 고르지 않고 unpriced에 따로(지금 상태 기준, 전투력이 오르는 것만). 비용을 추측하지 않는다. */
+  @Test
+  void 시세가_없으면_순서는_비고_뺀_항목으로_준다() {
+    var service = service(System::nanoTime);
+    var path = service.path("목표테스트", SpecUpGoalService.Pick.DELTA, 30);
+    assertThat(path.steps()).isEmpty();
+    assertThat(path.stopReasonCode()).isEqualTo("NO_CANDIDATE");
+    assertThat(path.finalCombatPower()).isEqualByComparingTo(path.combatPower());
+    assertThat(path.unpriced()).hasSize(4); // 보석 칸 4개(1 → 2레벨)
+    assertThat(path.unpriced())
+        .allMatch(item -> item.cost() == null || item.cost().amount() == null)
+        .allMatch(item -> item.deltaCombatPower().signum() > 0);
+    assertThat(path.totalCost()).isEqualTo(0L);
+  }
+
+  /** 비용 규칙 버전(재련·성장 비용 등)이 바뀌면 같은 캐릭터·시세라도 캐시를 쓰지 않고 다시 계산한다(코드 리뷰 11-01 P3). */
+  @Test
+  void 비용_규칙_버전이_바뀌면_추천_순서_캐시를_다시_쓰지_않는다() {
+    var service = service(System::nanoTime);
+    when(auctions.cachedGems()).thenReturn(gemCells(Instant.parse("2026-10-31T12:00:00Z"), false));
+    when(specUp.costRuleVersions()).thenReturn("spec-up-v1+t4-refining-v4");
+    service.path("목표테스트", SpecUpGoalService.Pick.EFFICIENCY, 3);
+    service.path("목표테스트", SpecUpGoalService.Pick.EFFICIENCY, 3);
+    assertThat(meters.counter("loakraken.spec_up.path", "outcome", "computed").count())
+        .isEqualTo(1);
+    assertThat(meters.counter("loakraken.spec_up.path", "outcome", "cache_hit").count())
+        .isEqualTo(1);
+    when(specUp.costRuleVersions()).thenReturn("spec-up-v1+t4-refining-v5");
+    service.path("목표테스트", SpecUpGoalService.Pick.EFFICIENCY, 3);
+    assertThat(meters.counter("loakraken.spec_up.path", "outcome", "computed").count())
+        .isEqualTo(2);
+    // 목표 경로도 같은 키 규칙
+    service.goal("목표테스트", new BigDecimal("3010"));
+    var goals = store.saved.size();
+    when(specUp.costRuleVersions()).thenReturn("spec-up-v1+t4-refining-v6");
+    service.goal("목표테스트", new BigDecimal("3010"));
+    assertThat(store.saved).hasSize(goals + 1);
+  }
+
+  /** 계산 자리가 모두 차 있으면 기다리지 않고 429 SPEC_UP_BUSY(캐시에 없는 계산만 자리를 씀). */
+  @Test
+  void 추천_순서_계산_자리가_차_있으면_바로_SPEC_UP_BUSY다() throws Exception {
+    var service = service(System::nanoTime);
+    var field = SpecUpGoalService.class.getDeclaredField("pathSolves");
+    field.setAccessible(true);
+    var slots = (java.util.concurrent.Semaphore) field.get(service);
+    slots.acquire(slots.availablePermits());
+    org.assertj.core.api.Assertions.assertThatThrownBy(
+            () -> service.path("목표테스트", SpecUpGoalService.Pick.EFFICIENCY, 3))
+        .isInstanceOf(com.loakraken.common.api.BusinessException.class)
+        .satisfies(
+            e ->
+                assertThat(((com.loakraken.common.api.BusinessException) e).errorCode())
+                    .isEqualTo(SpecUpErrorCode.SPEC_UP_BUSY));
+    assertThat(meters.counter("loakraken.spec_up.path", "outcome", "busy").count()).isEqualTo(1);
   }
 
   /** 겁화 1~10레벨 칸(값은 레벨 × 1,000골드), 같은 관측 시각. */
@@ -172,7 +280,8 @@ class SpecUpGoalServiceTest {
                   0,
                   List.of());
             });
-    return new SpecUpGoalService(specUp, simulator, auctions, books, materials, store, nanoTime);
+    return new SpecUpGoalService(
+        specUp, simulator, auctions, books, materials, store, meters, nanoTime);
   }
 
   private static final class MemoryStore implements SpecUpGoalStorePort {
@@ -186,6 +295,18 @@ class SpecUpGoalServiceTest {
     @Override
     public void save(String key, SpecUpGoalService.Goal goal, Duration ttl) {
       saved.put(key, goal);
+    }
+
+    final Map<String, SpecUpGoalService.Path> paths = new HashMap<>();
+
+    @Override
+    public Optional<SpecUpGoalService.Path> findPath(String key) {
+      return Optional.ofNullable(paths.get(key));
+    }
+
+    @Override
+    public void savePath(String key, SpecUpGoalService.Path path, Duration ttl) {
+      paths.put(key, path);
     }
   }
 }

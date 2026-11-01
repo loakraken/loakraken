@@ -193,7 +193,21 @@ public class CharacterPopularService {
   public PopularGuildResult popularGuilds(Period period, String serverName, int limit) {
     if (!policy.enabled())
       throw new CharacterException(CharacterErrorCode.CHARACTER_POPULAR_DISABLED);
-    String cacheKey = period.key() + ":" + (serverName == null ? "-" : serverName) + ":" + limit;
+    // 처리정지 목록이 바뀌면 길드 순서도 바로 새로 센다: 목록 내용 값을 키에 넣는다(#757). 확인하지 못하면 집계도 못 하므로 503.
+    String revision;
+    try {
+      revision = stopList.revision();
+    } catch (DataAccessException | TransactionException exception) {
+      throw new CharacterException(CharacterErrorCode.CHARACTER_POPULAR_UNAVAILABLE);
+    }
+    String cacheKey =
+        period.key()
+            + ":"
+            + (serverName == null ? "-" : serverName)
+            + ":"
+            + limit
+            + ":x"
+            + revision;
     try {
       var cached = popular.findCachedGuilds(cacheKey);
       if (cached.isPresent()) return cached.get();

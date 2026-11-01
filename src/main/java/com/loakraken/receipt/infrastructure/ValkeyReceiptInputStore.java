@@ -84,7 +84,7 @@ class ValkeyReceiptInputStore implements ReceiptInputStore {
     try {
       redis.opsForValue().set(PREFIX + characterName, mapper.writeValueAsString(input), remaining);
     } catch (DataAccessException | JacksonException exception) {
-      log.warn("영수증 입력을 쓰지 못했습니다. 예외 유형={}", exception.getClass().getSimpleName());
+      log.warn("event=receipt_input_save_failed type={}", exception.getClass().getSimpleName());
     }
   }
 }

@@ -54,6 +54,72 @@ class SpecUpKrakenOrderTest {
     assertThat(tie.krakenScorePer100kGold()).isEqualByComparingTo("1.01");
   }
 
+  /** KRAKEN: 10만 골드당 화면 값이 둘째 자리에서 같아도 반올림 전 값이 큰 줄이 먼저다(비교 기준 B 원본 정렬과 같음, 계산 검증 11-01). */
+  @Test
+  void KRAKEN_정렬은_반올림_전_10만_골드당으로_가른다() {
+    // raw 1.2 ÷ 185,301 × 10만 = 0.6476 · raw 1.2 ÷ 184,141 × 10만 = 0.6517 → 화면은 둘 다 0.65
+    var low =
+        candidate("a-low", "1.20", SpecUpCost.refineExpected(185_301))
+            .withKraken(new BigDecimal("1.20"), 1.2, SpecUpCost.refineExpected(185_301));
+    var high =
+        candidate("b-high", "1.20", SpecUpCost.refineExpected(184_141))
+            .withKraken(new BigDecimal("1.20"), 1.2, SpecUpCost.refineExpected(184_141));
+    assertThat(low.krakenScorePer100kGold()).isEqualByComparingTo(high.krakenScorePer100kGold());
+    var candidates = new ArrayList<>(List.of(low, high));
+    candidates.sort(SpecUpService.order(SpecUpService.Sort.KRAKEN));
+    assertThat(candidates)
+        .extracting(SpecUpService.Candidate::id)
+        .containsExactly("b-high", "a-low");
+  }
+
+  /**
+   * 효율 순: 화면 값이 둘째 자리에서 같아도(0.6476 · 0.6517 → 0.65) 반올림 전 비율이 큰 줄이 먼저다(Δ·id로 가지 않음, 계산 검증 11-01).
+   */
+  @Test
+  void 효율_순은_반올림_전_비율로_가른다() {
+    var delta = new BigDecimal("38.45");
+    var candidates =
+        new ArrayList<>(
+            List.of(
+                efficient("a-pricier", delta, 593_698L), efficient("b-cheaper", delta, 590_003L)));
+    assertThat(candidates.get(0).combatPowerPer10kGold())
+        .isEqualByComparingTo(candidates.get(1).combatPowerPer10kGold());
+    candidates.sort(SpecUpService.order(SpecUpService.Sort.EFFICIENCY));
+    assertThat(candidates)
+        .extracting(SpecUpService.Candidate::id)
+        .containsExactly("b-cheaper", "a-pricier");
+  }
+
+  private static SpecUpService.Candidate efficient(String id, BigDecimal delta, long amount) {
+    var cost = SpecUpCost.refineExpected(amount);
+    return new SpecUpService.Candidate(
+        id,
+        "EQUIPMENT_REFINE",
+        id,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        "OK",
+        delta,
+        null,
+        cost,
+        SpecUpCost.efficiency(delta, cost.amount()),
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null);
+  }
+
   private static SpecUpService.Candidate candidate(String id, String delta, SpecUpCost cost) {
     return new SpecUpService.Candidate(
             id,
@@ -67,6 +133,7 @@ class SpecUpKrakenOrderTest {
             null,
             null,
             "UNSUPPORTED",
+            null,
             null,
             null,
             null,

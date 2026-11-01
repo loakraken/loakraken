@@ -98,6 +98,10 @@ services:
       GUILD_TAB: "${GUILD_TAB:-}"
       SPEC_UP_GUIDE: "${SPEC_UP_GUIDE:-}"
       TITLE_STATS: "${TITLE_STATS:-}"
+      # 통계 전체 인구 탭(통계 B5). api STATS_POPULATION_SNAPSHOT_ENABLED와 함께 켠다(api 먼저 — 기동 2분 뒤 첫 스냅샷).
+      POPULATION_STATS: "${POPULATION_STATS:-}"
+      # 스펙업 추천 순서 화면(web #1216). api는 스펙업 가이드 스위치(SPEC_UP_ENABLED)를 그대로 쓴다.
+      SPEC_UP_PATH: "${SPEC_UP_PATH:-}"
       # 이 둘은 비우면 어디서나 꺼짐(on일 때만 켜짐): 검색엔진 색인, 시세 알림 화면.
       CHARACTER_INDEXING: "${CHARACTER_INDEXING:-}"
       PRICE_ALERTS: "${PRICE_ALERTS:-}"
@@ -170,6 +174,8 @@ services:
       STATS_SEED_NAMES: ${STATS_SEED_NAMES:-}
       # 시드 파일(#271): 한 줄에 한 이름, # 주석. 스택 디렉터리 seed/에 두면 /seed로 읽기 전용 마운트된다(예: /seed/names.txt). 기동 때 한 번 읽는다.
       STATS_SEED_FILE: ${STATS_SEED_FILE:-}
+      # 전체 인구 주간 스냅샷(통계 B5). 웹 전체 인구 탭과 함께 켠다. 켜면 기동 2분 뒤 첫 스냅샷, 그 뒤 매일 05:10(KST)에 보고 7일마다.
+      STATS_POPULATION_SNAPSHOT_ENABLED: ${STATS_POPULATION_SNAPSHOT_ENABLED:-false}
       MARKET_WARMUP_ENABLED: ${MARKET_WARMUP_ENABLED:-false}
       # 기능 플래그(#214): 비우면 꺼짐. 스테이징은 치명 계산을 켜고(web 치적 도구가 보임), 영수증·젬 가공은 검증 때만 켠다.
       CRIT_SPEED_ENABLED: ${CRIT_SPEED_ENABLED:-false}

@@ -14,6 +14,8 @@ import com.loakraken.common.lostark.LostArkMetrics.ApiOutcome;
 import com.loakraken.common.lostark.LostArkMetrics.Endpoint;
 import com.loakraken.common.lostark.LostArkProperties;
 import com.loakraken.common.lostark.LostArkRequestGate;
+import com.loakraken.common.lostark.UserKeyContext;
+import com.loakraken.common.lostark.UserKeyGate;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -38,6 +40,7 @@ class LostArkCharacterClient implements CharacterDetailsPort {
   private final JsonMapper mapper;
   private final LostArkMetrics metrics;
   private final org.springframework.beans.factory.ObjectProvider<ArmoryRawDump> rawDump;
+  private final org.springframework.beans.factory.ObjectProvider<UserKeyGate> userKeys;
 
   LostArkCharacterClient(
       RestClient lostArkRestClient,
@@ -45,13 +48,15 @@ class LostArkCharacterClient implements CharacterDetailsPort {
       LostArkRequestGate gate,
       JsonMapper mapper,
       LostArkMetrics metrics,
-      org.springframework.beans.factory.ObjectProvider<ArmoryRawDump> rawDump) {
+      org.springframework.beans.factory.ObjectProvider<ArmoryRawDump> rawDump,
+      org.springframework.beans.factory.ObjectProvider<UserKeyGate> userKeys) {
     this.client = lostArkRestClient;
     this.properties = properties;
     this.gate = gate;
     this.mapper = mapper;
     this.metrics = metrics;
     this.rawDump = rawDump;
+    this.userKeys = userKeys;
   }
 
   @Override
@@ -60,7 +65,9 @@ class LostArkCharacterClient implements CharacterDetailsPort {
     var armory = armoryPayload.value();
     var profile = LostArkProfileMapper.from(armory.profile());
     // 로컬 대조 전용(#540): local 프로필 + ARMORY_RAW_DUMP_DIR일 때만, 처리정지 목록 밖 캐릭터의 본문을 파일로 남긴다.
-    rawDump.ifAvailable(dump -> dump.write(profile, armoryPayload.json()));
+    // 사용자 키로 받은 본문은 파일로도 남기지 않는다.
+    if (!UserKeyContext.applied())
+      rawDump.ifAvailable(dump -> dump.write(profile, armoryPayload.json()));
     var siblingsPayload = siblings(characterName, CharacterErrorCode.LOST_ARK_API_ERROR);
     var siblings = siblingsPayload.value();
     var details =
@@ -81,7 +88,9 @@ class LostArkCharacterClient implements CharacterDetailsPort {
     var armoryPayload = armory(characterName);
     var armory = armoryPayload.value();
     var profile = LostArkProfileMapper.from(armory.profile());
-    rawDump.ifAvailable(dump -> dump.write(profile, armoryPayload.json()));
+    // 사용자 키로 받은 본문은 파일로도 남기지 않는다.
+    if (!UserKeyContext.applied())
+      rawDump.ifAvailable(dump -> dump.write(profile, armoryPayload.json()));
     var details = new CharacterDetails(profile, armory.toLoadout(), null, armory.coverage(null));
     return new FetchedCharacter(
         details, armoryPayload.json(), null, krakenScoreInput(armoryPayload.json()));
@@ -174,16 +183,26 @@ class LostArkCharacterClient implements CharacterDetailsPort {
       String characterName,
       Class<T> responseType,
       CharacterErrorCode notFoundCode) {
-    if (properties.apiKey().isBlank())
-      throw new CharacterException(CharacterErrorCode.LOST_ARK_NOT_CONFIGURED);
-    try {
-      gate.acquire(endpoint);
-    } catch (BusinessException exception) {
-      // 게이트 저장소 장애는 호출 한도가 아니라 503이다(#107).
-      // 클라이언트 한도(#108)도 공유 한도와 구분해 그대로 돌려준다.
-      if (exception.errorCode() == LostArkErrorCode.LOST_ARK_GATE_UNAVAILABLE
-          || exception.errorCode() == LostArkErrorCode.CLIENT_RATE_LIMITED) throw exception;
-      throw new CharacterException(CharacterErrorCode.LOST_ARK_RATE_LIMITED);
+    // 사용자 키(BYOK)면 그 키의 게이트만 쓰고 서버 예산·공식 한도 대기에는 닿지 않는다. 어떤 실패에도 서버 키로 다시 부르지 않는다.
+    var userKey = UserKeyContext.bearer();
+    var userGate = userKey == null ? null : userKeys.getIfAvailable();
+    if (userKey != null) {
+      // 사용자 키 게이트의 거절(키 한도·방문자 한도·저장소 장애)은 그대로 돌려준다.
+      if (userGate == null)
+        throw new CharacterException(CharacterErrorCode.LOST_ARK_NOT_CONFIGURED);
+      userGate.acquire();
+    } else {
+      if (properties.apiKey().isBlank())
+        throw new CharacterException(CharacterErrorCode.LOST_ARK_NOT_CONFIGURED);
+      try {
+        gate.acquire(endpoint);
+      } catch (BusinessException exception) {
+        // 게이트 저장소 장애는 호출 한도가 아니라 503이다(#107).
+        // 클라이언트 한도(#108)도 공유 한도와 구분해 그대로 돌려준다.
+        if (exception.errorCode() == LostArkErrorCode.LOST_ARK_GATE_UNAVAILABLE
+            || exception.errorCode() == LostArkErrorCode.CLIENT_RATE_LIMITED) throw exception;
+        throw new CharacterException(CharacterErrorCode.LOST_ARK_RATE_LIMITED);
+      }
     }
     var sample = metrics.startApi();
     var outcome = new AtomicReference<>(ApiOutcome.ERROR);
@@ -191,10 +210,21 @@ class LostArkCharacterClient implements CharacterDetailsPort {
       return client
           .get()
           .uri(path, Map.of("name", characterName, "filters", FILTERS))
+          .headers(
+              headers -> {
+                if (userKey != null) headers.setBearerAuth(userKey);
+              })
           .exchange(
               (request, response) -> {
                 int status = response.getStatusCode().value();
-                gate.observe(response.getHeaders(), status == 429);
+                if (userGate != null) {
+                  // 공식이 사용자 키를 받지 않거나(401·403) 그 키의 한도(429)면 우리 오류로 바꾸고 다시 부르지 않는다.
+                  var rejected = userGate.upstream(status, response.getHeaders());
+                  if (rejected != null) {
+                    if (status == 429) outcome.set(ApiOutcome.RATE_LIMITED);
+                    throw rejected;
+                  }
+                } else gate.observe(response.getHeaders(), status == 429);
                 if (status == 404) {
                   outcome.set(ApiOutcome.NOT_FOUND);
                   throw new CharacterException(notFoundCode);
@@ -226,7 +256,8 @@ class LostArkCharacterClient implements CharacterDetailsPort {
     } catch (RestClientException | JacksonException exception) {
       throw new CharacterException(CharacterErrorCode.LOST_ARK_API_ERROR);
     } finally {
-      gate.release();
+      if (userGate != null) userGate.release();
+      else gate.release();
       metrics.finishApi(sample, endpoint, outcome.get());
     }
   }

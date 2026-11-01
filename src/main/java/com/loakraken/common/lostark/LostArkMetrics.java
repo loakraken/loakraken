@@ -65,7 +65,9 @@ public class LostArkMetrics {
   public enum CallOrigin {
     USER,
     USER_RESERVE,
-    BACKGROUND
+    BACKGROUND,
+    /** 사용자 공식 API 키(BYOK)로 부른 호출. 서버 예산을 쓰지 않는다. */
+    USER_KEY
   }
 
   public enum GateEvent {
@@ -73,6 +75,8 @@ public class LostArkMetrics {
     CONCURRENCY_REJECT,
     UPSTREAM_429,
     UPSTREAM_BACKOFF_REJECT,
-    GATE_UNAVAILABLE
+    GATE_UNAVAILABLE,
+    /** 사용자 키(BYOK)의 분당·동시 상한 또는 공식 429로 거절. 키별 라벨은 없다. */
+    USER_KEY_REJECT
   }
 }

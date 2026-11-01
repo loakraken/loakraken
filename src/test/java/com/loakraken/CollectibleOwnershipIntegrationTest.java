@@ -263,9 +263,7 @@ class CollectibleOwnershipIntegrationTest {
       assertThat(heldPoints("보유끝")).isEqualTo("{1,1}");
     } finally {
       jdbc.sql(
-              "SELECT setval("
-                  + name
-                  + ", (SELECT MAX(item_id) FROM collectible_item) + 1, false)")
+              "SELECT setval(" + name + ", (SELECT MAX(item_id) FROM collectible_item) + 1, false)")
           .query(Long.class)
           .single();
     }
@@ -288,8 +286,7 @@ class CollectibleOwnershipIntegrationTest {
           SERVER,
           "보유넓힘",
           List.of(
-              new Collectible(
-                  "보유 넓힘", null, 1, 1, List.of(new CollectibleItem("넓힌 항목", 1, 1)))),
+              new Collectible("보유 넓힘", null, 1, 1, List.of(new CollectibleItem("넓힌 항목", 1, 1)))),
           Instant.now());
       assertThat(
               jdbc.sql(
@@ -300,9 +297,7 @@ class CollectibleOwnershipIntegrationTest {
     } finally {
       jdbc.sql("DELETE FROM collectible_item WHERE type = '보유 넓힘'").update();
       jdbc.sql(
-              "SELECT setval("
-                  + name
-                  + ", (SELECT MAX(item_id) FROM collectible_item) + 1, false)")
+              "SELECT setval(" + name + ", (SELECT MAX(item_id) FROM collectible_item) + 1, false)")
           .query(Long.class)
           .single();
     }

@@ -4,8 +4,9 @@
 #   docker compose -f compose.prod.yaml --env-file stack.env up -d --wait
 #
 # 공개 포트는 edge(80/443)뿐이다. web·api·postgres·valkey는 호스트에 포트를 열지 않는다(모니터링 grafana만 호스트 127.0.0.1).
-# 망: public(edge↔web), internal(web↔api, 공식 API 호출을 위한 외부 통신 허용), data(api↔postgres·valkey, 외부 통신 차단),
-#     monitor(프로필 monitor: prometheus·node-exporter·grafana).
+# 망: ingress(edge만, 공개 포트), edge_web(edge↔web, 외부 통신 차단), app(web↔api, 외부 통신 차단), egress(api만, 공식 API 호출),
+#     data(api↔postgres·valkey, 외부 통신 차단), metrics(api↔prometheus, 외부 통신 차단), monitor(프로필 monitor).
+#     web은 바깥 통신이 되는 망에 붙지 않는다.
 # 비밀값은 compose secrets로 파일 마운트(/run/secrets/...)하며 환경변수·이미지·저장소에 두지 않는다.
 
 name: ${STACK_NAME:-loakraken}
@@ -47,7 +48,8 @@ services:
       start_period: 10s
       retries: 3
     networks:
-      - public
+      - ingress
+      - edge_web
     security_opt:
       - no-new-privileges:true
     cap_drop:
@@ -126,11 +128,12 @@ services:
     mem_limit: ${WEB_MEM_LIMIT:-384m}
     # 프로세스 수 상한(포크 폭주가 서버 전체로 번지지 않게). Node 한 프로세스(스레드 10여 개).
     pids_limit: 256
+    # web은 edge에게서 요청을 받고 api만 부른다. 두 망 모두 바깥 통신이 없어 web은 인터넷에 나가지 못한다.
     networks:
-      public:
-      internal:
+      edge_web: {}
+      app:
         # 백엔드는 이 주소에서 온 X-Forwarded-For만 믿는다(api의 SERVER_TOMCAT_REMOTEIP_INTERNALPROXIES).
-        ipv4_address: ${WEB_INTERNAL_IP:-172.31.250.10}
+        ipv4_address: ${WEB_APP_IP:?WEB_APP_IP가 필요합니다(env 예시 참고)}
     security_opt:
       - no-new-privileges:true
     cap_drop:
@@ -233,7 +236,8 @@ services:
       # JVM 힙 = 컨테이너 한도의 65%(768m이면 약 500MB). 나머지는 메타스페이스·스레드·코드 캐시 몫(2GB 서버 기준).
       JAVA_TOOL_OPTIONS: "${API_JAVA_OPTS:--XX:MaxRAMPercentage=65 -XX:+ExitOnOutOfMemoryError}"
       # 클라이언트 IP 헤더를 믿는 프록시를 web 한 곳으로 한정한다(Tomcat RemoteIpValve 정규식). 사설 대역 전체를 믿지 않는다.
-      SERVER_TOMCAT_REMOTEIP_INTERNALPROXIES: ${TRUSTED_PROXY_REGEX:-172\.31\.250\.10}
+      # web 주소(WEB_APP_IP)와 맞아야 한다. 맞지 않으면 모든 접속이 web 주소 하나로 보여 사용자별 한도가 섞이므로 기본값 없이 필수로 둔다.
+      SERVER_TOMCAT_REMOTEIP_INTERNALPROXIES: ${TRUSTED_PROXY_REGEX:?TRUSTED_PROXY_REGEX가 필요합니다(WEB_APP_IP와 같은 주소, env 예시 참고)}
     secrets:
       - source: db_app_password
         target: DB_PASSWORD
@@ -273,8 +277,10 @@ services:
     # 프로세스 수 상한(포크 폭주가 서버 전체로 번지지 않게). JVM 스레드도 pid로 센다(Tomcat 최대 200 + 풀·GC·배경 작업).
     pids_limit: 1024
     networks:
-      internal: {}
+      app: {}
       data: {}
+      # 바깥 통신은 api만(공식 API·브라우저 푸시).
+      egress: {}
       # 모니터링 수집용(prometheus만 함께 있는 망). 프로필을 끈 서버에서도 망만 있고 다른 컨테이너는 없다. 주소를 고정해 관리 포트를 여기에만 묶는다.
       metrics:
         ipv4_address: ${API_METRICS_IP:?API_METRICS_IP가 필요합니다(env 예시 참고)}
@@ -584,13 +590,20 @@ secrets:
     file: ${SECRETS_DIR:?SECRETS_DIR가 필요합니다}/cloudflared_token
 
 networks:
-  # edge ↔ web만 연결한다.
-  public:
-  # web↔api. api가 공식 API를 불러야 해서 외부 통신을 막지 않는다. 서브넷을 고정해 web 주소를 신뢰 프록시로 쓴다.
-  internal:
+  # edge만(80·443 공개). 공개 포트를 내려면 바깥 통신이 되는 망이어야 한다.
+  ingress:
+  # edge ↔ web. 외부 통신 없음.
+  edge_web:
+    internal: true
+  # web ↔ api. 외부 통신 없음. 서브넷을 고정해 web 주소(WEB_APP_IP)를 api가 믿는 프록시로 쓴다.
+  # 옛 internal 망과 이름·서브넷이 달라, 배포 때 옛 망 설정을 바꾸지 않는다(옛 망은 되돌리기를 위해 서버에 남겨 두었다가 따로 지운다).
+  app:
+    internal: true
     ipam:
       config:
-        - subnet: ${INTERNAL_SUBNET:-172.31.250.0/24}
+        - subnet: ${APP_SUBNET:?APP_SUBNET이 필요합니다(env 예시 참고)}
+  # api만. 공식 API·브라우저 푸시로 나가는 망.
+  egress:
   # api↔postgres·valkey. 외부 통신이 없는 망(DB·캐시는 인터넷에 나가지 않는다).
   data:
     internal: true

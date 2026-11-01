@@ -23,6 +23,29 @@ class LostArkEquipmentTooltipTest {
        "Element_008":{"type":"FutureElement","value":{"unknown":true}}}
       """;
 
+  /** 실제 팔찌 원문(잠긴 줄 둘 + 바꿀 수 있는 줄 셋, 한 효과가 두 문장)에서 효과 다섯을 모두 읽는다(줄이 빠지지 않음). */
+  @Test
+  void 실제_팔찌_효과_다섯을_모두_읽는다() {
+    var html =
+        "<img src='emoticon_tooltip_bracelet_locked' vspace='-5'></img> 치명 <FONT COLOR='#CE43FC'>+106</FONT><BR>"
+            + "<img src='emoticon_tooltip_bracelet_locked' vspace='-5'></img> 특화 <FONT COLOR='#CE43FC'>+116</FONT><BR>"
+            + "<img src='emoticon_tooltip_bracelet_changeable' width='20' height='20' vspace='-6'></img>공격 적중 시 매 초마다 10초 동안 무기 공격력이 <FONT COLOR='#CE43FC'>1320</FONT>, 공격 및 이동 속도가 <FONT COLOR='#99ff99'>1%</FONT> 증가한다. (최대 6중첩)<BR>"
+            + "<img src='emoticon_tooltip_bracelet_changeable' width='20' height='20' vspace='-6'></img>치명타 적중률이 <FONT COLOR='#00B5FF'>3.4%</FONT> 증가한다.<BR>공격이 치명타로 적중 시 적에게 주는 피해가 <FONT COLOR='#99ff99'>1.5%</FONT> 증가한다.<BR>"
+            + "<img src='emoticon_tooltip_bracelet_changeable' width='20' height='20' vspace='-6'></img>스킬의 재사용 대기 시간이 <FONT COLOR='#ff9999'>2%</FONT> 증가하지만, 적에게 주는 피해가 <FONT COLOR='#00B5FF'>4.5%</FONT> 증가한다.";
+    var node = new tools.jackson.databind.json.JsonMapper().createObjectNode();
+    var part = node.putObject("Element_005");
+    part.put("type", "ItemPartBox");
+    var value = part.putObject("value");
+    value.put("Element_000", "<FONT COLOR='#A9D0F5'>팔찌 효과</FONT>");
+    value.put("Element_001", html);
+    var detail = LostArkEquipmentTooltip.parse("테스트 팔찌", node.toString());
+    var texts =
+        detail.braceletEffects().stream().map(CharacterLoadout.BraceletEffect::text).toList();
+    assertThat(texts).hasSize(5);
+    assertThat(texts.get(2)).contains("매 초마다").contains("1320");
+    assertThat(texts.get(4)).contains("재사용 대기 시간이 2% 증가하지만").contains("4.5%");
+  }
+
   @Test
   void 방어구의_재련_품질_레벨_티어_포인트와_효과를_해석한다() {
     var detail = LostArkEquipmentTooltip.parse("+19 테스트 머리장식", ARMOR);

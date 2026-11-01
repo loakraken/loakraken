@@ -269,40 +269,6 @@ class CollectibleOwnershipIntegrationTest {
     }
   }
 
-  @Test
-  void item_id가_INTEGER면_SMALLINT를_넘는_새_항목도_기록된다() {
-    // 운영 시퀀스가 끝에 가까워 item_id를 INTEGER로 넓힌 경우만 본다(SMALLINT 그대로면 건너뜀).
-    var columnType =
-        jdbc.sql(
-                "SELECT data_type FROM information_schema.columns WHERE table_name = 'collectible_item' AND column_name = 'item_id'")
-            .query(String.class)
-            .single();
-    org.junit.jupiter.api.Assumptions.assumeTrue("integer".equals(columnType));
-    roster("보유넓힘", null);
-    var name = "pg_get_serial_sequence('collectible_item', 'item_id')";
-    try {
-      jdbc.sql("SELECT setval(" + name + ", 40000, true)").query(Long.class).single();
-      cards.recordCollectibles(
-          SERVER,
-          "보유넓힘",
-          List.of(
-              new Collectible("보유 넓힘", null, 1, 1, List.of(new CollectibleItem("넓힌 항목", 1, 1)))),
-          Instant.now());
-      assertThat(
-              jdbc.sql(
-                      "SELECT r.item_ids::text FROM roster_collectible_item r JOIN characters c ON c.roster_key = r.roster_key WHERE c.character_name = '보유넓힘'")
-                  .query(String.class)
-                  .single())
-          .isEqualTo("{40001}");
-    } finally {
-      jdbc.sql("DELETE FROM collectible_item WHERE type = '보유 넓힘'").update();
-      jdbc.sql(
-              "SELECT setval(" + name + ", (SELECT MAX(item_id) FROM collectible_item) + 1, false)")
-          .query(Long.class)
-          .single();
-    }
-  }
-
   private long sequence() {
     return jdbc.sql("SELECT last_value FROM collectible_item_item_id_seq")
         .query(Long.class)

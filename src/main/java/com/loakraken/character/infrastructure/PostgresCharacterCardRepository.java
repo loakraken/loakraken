@@ -473,7 +473,8 @@ class PostgresCharacterCardRepository implements CharacterCardPort {
               .optional();
     // 다른 프로세스(수집기)가 같은 이름을 먼저 넣었으면 그 행을 갱신한다.
     if (id.isEmpty()) id = updateItem(type, name, typeOrder, order, max, at);
-    int value = id.orElseThrow();
+    // 사전 행은 지우지 않으므로 여기까지 없을 일은 없다. 그래도 기록 작업자가 잡는 저장 예외로 끝낸다.
+    int value = id.orElseThrow(() -> new org.springframework.dao.EmptyResultDataAccessException(1));
     if (items.size() > KNOWN_LIMIT) items.clear();
     items.put(key, new int[] {value, order, maxPoint, typeOrder, day});
     return value;

@@ -178,11 +178,9 @@ class AuctionBoardIntegrationTest {
         "auction-accessory-listings.json",
         get("/api/v1/markets/auctions/accessories/listings?slot=NECKLACE&levels=HIGH,HIGH").body());
     // 표에서 뺀 중하 조합도 매물 목록으로는 그대로 검색한다(예전 링크가 400이 되지 않게).
-    var midLow =
-        get("/api/v1/markets/auctions/accessories/listings?slot=NECKLACE&levels=MID,LOW");
-    assertThat(midLow.statusCode()).isEqualTo(200);
-    assertThat(mapper.readTree(midLow.body()).at("/data/items/0/options/1/level").asText())
-        .isEqualTo("LOW");
+    var midLow = get("/api/v1/markets/auctions/accessories/listings?slot=NECKLACE&levels=MID,LOW");
+    assertThat(midLow.statusCode()).as(midLow.body()).isEqualTo(200);
+    assertThat(mapper.readTree(midLow.body()).at("/data/totalCount").asLong()).isEqualTo(25);
   }
 
   @Test

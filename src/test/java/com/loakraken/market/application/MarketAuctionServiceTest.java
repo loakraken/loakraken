@@ -139,8 +139,8 @@ class MarketAuctionServiceTest {
   }
 
   /**
-   * 회귀 방지(PM 총괄 11-02): 표에서 뺀 중하 조합도 표 채우기가 칸을 데워, 중하 귀걸이를 낀 캐릭터의 스펙업 연마 비용이 채우기 플래그 없이(fill 꺼짐)
-   * 값을 받는다.
+   * 회귀 방지(PM 총괄 11-02): 표에서 뺀 중하 조합도 표 채우기가 칸을 데워, 중하 귀걸이를 낀 캐릭터의 스펙업 연마 비용이 채우기 플래그 없이(fill 꺼짐) 값을
+   * 받는다.
    */
   @Test
   void 표에서_뺀_중하_칸도_데워_스펙업_연마_비용이_값을_받는다() {
@@ -157,8 +157,7 @@ class MarketAuctionServiceTest {
         List.of(
             new MarketAuctionService.PolishLine("공격력", true, "+0.40%"),
             new MarketAuctionService.PolishLine("무기 공격력", true, "+1.80%"));
-    var price =
-        service.polishPrice("귀걸이", midLow, new MarketAuctionService.PolishFill(false));
+    var price = service.polishPrice("귀걸이", midLow, new MarketAuctionService.PolishFill(false));
     assertThat(price.status()).isEqualTo(MarketAuctionService.PolishStatus.OK);
     assertThat(price.minBuyPrice()).isEqualTo(2_500_000L);
     assertThat(port.searches).isEqualTo(24);

@@ -63,8 +63,9 @@ public final class CombatPowerBraceletModel {
       return value.y() == null ? text : text.replace("{y}", plain(value.y()));
     }
 
+    /** 공식 문구와 같은지 볼 때 쓰는 식. 띄어쓰기·'X.0%'를 무시한다(compact). */
     private Pattern regex() {
-      var normalized = normalize(pattern);
+      var normalized = compact(pattern);
       var builder = new StringBuilder("^");
       int at = 0;
       var holes = Pattern.compile("\\{[xy]\\}").matcher(normalized);
@@ -270,8 +271,11 @@ public final class CombatPowerBraceletModel {
           0,
           fixedWeapon(text),
           "이 팔찌 옵션의 버프 부분 계수를 아직 확인하지 않아 계산하지 않았습니다.");
+    // 계열·0 키워드는 띄어쓰기를 빼고 맞춘다: 공식 툴팁의 띄어쓰기는 표와 다르다(예: 툴팁 '매 초마다'·'증가한다. (최대', 표 '매 초 마다'·'증가한다.(최대',
+    // 계산 검증 11-01 P0).
+    var key = compact(text);
     for (var family : c.families()) {
-      var matcher = family.regex().matcher(text);
+      var matcher = family.regex().matcher(key);
       if (!matcher.matches()) continue;
       for (var grade : family.grades().values())
         if (same(matcher, 1, grade.x()) && (grade.y() == null || same(matcher, 2, grade.y())))
@@ -279,7 +283,7 @@ public final class CombatPowerBraceletModel {
       return unknown(text, "이 팔찌 옵션의 등급 수치를 아직 확인하지 않아 계산하지 않았습니다.");
     }
     for (var keyword : c.zeroKeywords())
-      if (text.contains(keyword))
+      if (key.contains(compact(keyword)))
         return new Line(text, Kind.ZERO, null, null, 0, BigDecimal.ZERO, null);
     return unknown(text, "이 팔찌 옵션의 전투력 계수를 아직 확인하지 않아 계산하지 않았습니다.");
   }
@@ -333,6 +337,11 @@ public final class CombatPowerBraceletModel {
 
   static String normalize(String text) {
     return text.replaceAll("\\s+", " ").strip();
+  }
+
+  /** 맞춤용: 공백을 모두 빼고 'X.0%'를 'X%'로(공식 툴팁·표 표기 차이). 화면 문구는 normalize 값을 그대로 쓴다. */
+  static String compact(String text) {
+    return text.replaceAll("\\s+", "").replaceAll("(\\d+)\\.0%", "$1%");
   }
 
   private static String plain(BigDecimal value) {

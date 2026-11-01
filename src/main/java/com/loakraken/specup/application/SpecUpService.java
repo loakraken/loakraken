@@ -98,6 +98,26 @@ public class SpecUpService {
     return environment.getProperty("spec-up.arm-guard.enabled", Boolean.class, true);
   }
 
+  /** 완갑 target 단계의 등급(목록 줄과 같은 규칙). 정할 수 없으면 null. */
+  String armGuardGrade(String current, int target) {
+    return kraken.armGuardGrade(current, target);
+  }
+
+  /**
+   * 완갑 refine → refine + 1 한 단계 비용(추천 순서·목표 경로). 목록 줄과 같은 풀이(회차별 최적 숨결)이고, 단계마다 장인의 기운이 0에서 시작하므로
+   * 단계 비용을 더하면 목록의 누적 풀이와 같은 계획이다. 시세를 쓰면 pricesAt을 가장 오래된 관측 시각으로 맞춘다.
+   */
+  SpecUpCost armGuardStepCost(
+      int refine,
+      java.util.Optional<RefiningMaterialPriceService.Prices> prices,
+      Instant[] pricesAt) {
+    var breakdown = armGuardBreakdown(refine, refine + 1, prices);
+    if ("OK".equals(breakdown.cost().status())
+        && (pricesAt[0] == null || breakdown.prices().observedAt().isBefore(pricesAt[0])))
+      pricesAt[0] = breakdown.prices().observedAt();
+    return breakdown.cost();
+  }
+
   /** KRAKEN: Δ크라켄 점수 ÷ 비용(비교 기준 B 스펙업 추천과 같은 순서). 점수를 낼 수 없으면 EFFICIENCY로 되돌린다. */
   public enum Sort {
     EFFICIENCY,

@@ -353,7 +353,7 @@ public class SpecUpController {
       @Schema(description = "멈춘 이유(화면 문구)") @NullableResponse String stopReason,
       @Schema(description = "전체 합계(골드) = 마지막 단계의 cumulativeCost. 모르면 null") @NullableResponse
           Long totalCost,
-      @Schema(example = "spec-up-path-v1") String ruleVersion,
+      @Schema(example = "spec-up-path-v2") String ruleVersion,
       @Schema(description = "전투력을 낸 시뮬레이터 규칙") String simulatorRuleVersion,
       @Schema(description = "캐릭터 캐시 수집 시각") @NullableResponse Instant fetchedAt,
       @Schema(description = "비용에 쓴 시세 칸 가운데 가장 오래된 관측 시각") @NullableResponse Instant pricesAt,

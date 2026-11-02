@@ -341,6 +341,10 @@ public class CombatPowerSimulationService {
   }
 
   private static final String LEAP_UNREAD = "도약 포인트 합을 읽지 못해 계산하지 않았습니다.";
+  private static final String LEAP = "도약";
+  private static final String LEAP_BASIS = "도약 포인트 합의 전투력 배수(1 + 0.002 × 포인트)를 바꾼 비율을 공식 전투력에 곱했습니다.";
+  private static final String EVOLUTION_ENLIGHTENMENT_REASON =
+      "진화·깨달음 포인트의 전투력 계산식을 아직 확인하고 있어 계산하지 않았습니다.";
 
   /** 팔찌 변화의 전투력 비(W·S 항은 재련 모델로). 계산할 수 없으면 null. */
   private static BigDecimal removalRatio(
@@ -396,7 +400,7 @@ public class CombatPowerSimulationService {
     var before = official == null ? null : official.setScale(2, RoundingMode.HALF_UP);
     var engravings = currentEngravings(loadout);
     var weaponAddDamage = CombatPowerEquipmentModel.currentWeaponAddDamage(weaponDetail(loadout));
-    var state = new State(Map.of(), null, Map.of(), Map.of(), Map.of(), null, Map.of());
+    var state = new State(Map.of(), null, Map.of(), Map.of(), Map.of(), null, Map.of(), null);
     var running = before;
     var contributions = new ArrayList<Contribution>();
     int unsupported = 0;
@@ -472,10 +476,13 @@ public class CombatPowerSimulationService {
   /** 팔찌 효과 줄(#327): 줄 번호 → 새 줄(빼기 포함). */
   private record BraceletEffect(int line, CombatPowerBraceletModel.Line next) implements Effect {}
 
+  /** 아크 패시브 도약 포인트 합: 지금 → 새 합. */
+  private record LeapEffect(int current, int next) implements Effect {}
+
   /** 각인 하나의 각인서·스톤 레벨. */
   private record EngravingLevels(int book, int stone) {}
 
-  /** 지금까지 적용한 변경. 보석 칸 레벨, 무기 추가 피해 %(null이면 그대로), 각인별 레벨. */
+  /** 지금까지 적용한 변경. 보석 칸 레벨, 무기 추가 피해 %(null이면 그대로), 각인별 레벨, 도약 포인트 합(null이면 그대로). */
   private record State(
       Map<Integer, Integer> gems,
       BigDecimal weaponAddDamage,
@@ -483,17 +490,26 @@ public class CombatPowerSimulationService {
       Map<Integer, CombatPowerRefineModel.Target> refines,
       Map<Integer, CombatPowerBraceletModel.Line> bracelet,
       CombatPowerRefineModel.ArmGuard armGuard,
-      Map<String, PolishEffect> polish) {
+      Map<String, PolishEffect> polish,
+      LeapEffect leap) {
     State apply(Effect effect, Map<String, CharacterLoadout.PassiveEngraving> currents) {
       return switch (effect) {
         case GemEffect gem -> {
           var next = new HashMap<>(gems);
           next.putAll(gem.levels());
           yield new State(
-              Map.copyOf(next), weaponAddDamage, engravings, refines, bracelet, armGuard, polish);
+              Map.copyOf(next),
+              weaponAddDamage,
+              engravings,
+              refines,
+              bracelet,
+              armGuard,
+              polish,
+              leap);
         }
         case WeaponQualityEffect quality ->
-            new State(gems, quality.addDamage(), engravings, refines, bracelet, armGuard, polish);
+            new State(
+                gems, quality.addDamage(), engravings, refines, bracelet, armGuard, polish, leap);
         case RefineEffect refine -> {
           var next = new HashMap<>(refines);
           var base = refines.getOrDefault(refine.index(), refine.current());
@@ -503,23 +519,55 @@ public class CombatPowerSimulationService {
                   refine.level() != null ? refine.level() : base.level(),
                   refine.advanced() != null ? refine.advanced() : base.advanced()));
           yield new State(
-              gems, weaponAddDamage, engravings, Map.copyOf(next), bracelet, armGuard, polish);
+              gems,
+              weaponAddDamage,
+              engravings,
+              Map.copyOf(next),
+              bracelet,
+              armGuard,
+              polish,
+              leap);
         }
         case BraceletEffect line -> {
           var next = new HashMap<>(bracelet);
           next.put(line.line(), line.next());
           yield new State(
-              gems, weaponAddDamage, engravings, refines, Map.copyOf(next), armGuard, polish);
+              gems,
+              weaponAddDamage,
+              engravings,
+              refines,
+              Map.copyOf(next),
+              armGuard,
+              polish,
+              leap);
         }
         case ArmGuardEffect guard ->
-            new State(gems, weaponAddDamage, engravings, refines, bracelet, guard.target(), polish);
+            new State(
+                gems,
+                weaponAddDamage,
+                engravings,
+                refines,
+                bracelet,
+                guard.target(),
+                polish,
+                leap);
         case NeutralEffect neutral -> this;
         case PolishEffect line -> {
           var next = new HashMap<>(polish);
           next.put(line.key(), line);
           yield new State(
-              gems, weaponAddDamage, engravings, refines, bracelet, armGuard, Map.copyOf(next));
+              gems,
+              weaponAddDamage,
+              engravings,
+              refines,
+              bracelet,
+              armGuard,
+              Map.copyOf(next),
+              leap);
         }
+        case LeapEffect next ->
+            new State(
+                gems, weaponAddDamage, engravings, refines, bracelet, armGuard, polish, next);
         case EngravingEffect engraving -> {
           var next = new HashMap<>(engravings);
           var base = engravings.get(engraving.name());
@@ -536,7 +584,14 @@ public class CombatPowerSimulationService {
                   engraving.book() != null ? engraving.book() : base.book(),
                   engraving.stone() != null ? engraving.stone() : base.stone()));
           yield new State(
-              gems, weaponAddDamage, Map.copyOf(next), refines, bracelet, armGuard, polish);
+              gems,
+              weaponAddDamage,
+              Map.copyOf(next),
+              refines,
+              bracelet,
+              armGuard,
+              polish,
+              leap);
         }
       };
     }
@@ -633,6 +688,16 @@ public class CombatPowerSimulationService {
           ratio.multiply(
               CombatPowerEquipmentModel.weaponQualityRatio(weaponCurrent, state.weaponAddDamage()),
               MATH);
+    }
+    // 도약 포인트 합 P: (1 + c·P) 독립 배수(c = 팔찌 도약과 같은 계수, 0.002/점).
+    if (state.leap() != null) {
+      var perPoint = braceletCoefficients.leapPerPoint();
+      var now =
+          BigDecimal.ONE.add(
+              perPoint.multiply(BigDecimal.valueOf(state.leap().current()), MATH), MATH);
+      var next =
+          BigDecimal.ONE.add(perPoint.multiply(BigDecimal.valueOf(state.leap().next()), MATH), MATH);
+      ratio = ratio.multiply(next.divide(now, MATH), MATH);
     }
     for (var entry : state.engravings().entrySet()) {
       var current = currents.get(entry.getKey());
@@ -959,8 +1024,22 @@ public class CombatPowerSimulationService {
                     .findFirst()
                     .orElse(null);
         if (point == null) throw notFound("아크 패시브 " + change.tree());
-        yield unsupported(
-            change, "아크 패시브 " + point.name(), str(point.value()), str(change.points()));
+        var target = "아크 패시브 " + point.name();
+        var from = str(point.value());
+        var to = str(change.points());
+        // 진화·깨달음은 비교 기준 둘의 식이 달라 확인 전까지 계산하지 않는다(PM 총괄 11-02). 도약은 둘이 같다.
+        if (!LEAP.equals(point.name()))
+          yield new Planned(change, target, from, to, null, null, EVOLUTION_ENLIGHTENMENT_REASON);
+        if (point.value() == null)
+          yield new Planned(change, target, from, to, null, null, LEAP_UNREAD);
+        yield new Planned(
+            change,
+            target,
+            from,
+            to,
+            new LeapEffect(point.value(), change.points()),
+            LEAP_BASIS,
+            null);
       }
       case ARM_GUARD -> armGuard(loadout, refineModel, change);
       case ARK_GRID_CORE -> {

@@ -2,6 +2,7 @@ package com.loakraken.character.application;
 
 import com.loakraken.character.domain.CharacterLoadout;
 import com.loakraken.character.domain.CharacterPosition;
+import com.loakraken.character.domain.CombatPowerArkGridModel;
 import com.loakraken.character.domain.CombatPowerBraceletModel;
 import com.loakraken.character.domain.CombatPowerEquipmentModel;
 import com.loakraken.character.domain.CombatPowerGemModel;
@@ -66,6 +67,8 @@ public class CombatPowerSimulationService {
 
   public static final String ROLE_UNKNOWN_BASIS = CombatPowerReasons.ROLE_UNKNOWN.text();
   private static final String UNSUPPORTED_BASIS = "이 항목의 전투력 계산식을 아직 확인하고 있어 계산하지 않았습니다.";
+  private static final String ARK_GRID_BASIS =
+      "아크 그리드 코어 배수(1 + 코어 계수/100, 코어 계열·포인트 구간·등급 상한, 고대 17P 이상 +1.0%p)의 비율을 공식 전투력에 곱했습니다.";
 
   private final CharacterCache cache;
   private final CharacterPublicSummaryPort stored;
@@ -74,6 +77,7 @@ public class CombatPowerSimulationService {
   private final CombatPowerPolishValues polishValues;
   private final CombatPowerRefineModel.Coefficients refineCoefficients;
   private final CombatPowerBraceletModel.Coefficients braceletCoefficients;
+  private final CombatPowerArkGridModel.Coefficients arkGridCoefficients;
 
   public CombatPowerSimulationService(
       CharacterCache cache,
@@ -82,7 +86,8 @@ public class CombatPowerSimulationService {
       CombatPowerEquipmentModel.Coefficients equipmentCoefficients,
       CombatPowerPolishValues polishValues,
       CombatPowerRefineModel.Coefficients refineCoefficients,
-      CombatPowerBraceletModel.Coefficients braceletCoefficients) {
+      CombatPowerBraceletModel.Coefficients braceletCoefficients,
+      CombatPowerArkGridModel.Coefficients arkGridCoefficients) {
     this.cache = cache;
     this.stored = stored;
     this.gemCoefficients = gemCoefficients;
@@ -90,6 +95,7 @@ public class CombatPowerSimulationService {
     this.polishValues = polishValues;
     this.refineCoefficients = refineCoefficients;
     this.braceletCoefficients = braceletCoefficients;
+    this.arkGridCoefficients = arkGridCoefficients;
   }
 
   public enum Kind {
@@ -396,7 +402,7 @@ public class CombatPowerSimulationService {
     var before = official == null ? null : official.setScale(2, RoundingMode.HALF_UP);
     var engravings = currentEngravings(loadout);
     var weaponAddDamage = CombatPowerEquipmentModel.currentWeaponAddDamage(weaponDetail(loadout));
-    var state = new State(Map.of(), null, Map.of(), Map.of(), Map.of(), null, Map.of());
+    var state = new State(Map.of(), null, Map.of(), Map.of(), Map.of(), null, Map.of(), Map.of());
     var running = before;
     var contributions = new ArrayList<Contribution>();
     int unsupported = 0;
@@ -472,6 +478,10 @@ public class CombatPowerSimulationService {
   /** 팔찌 효과 줄(#327): 줄 번호 → 새 줄(빼기 포함). */
   private record BraceletEffect(int line, CombatPowerBraceletModel.Line next) implements Effect {}
 
+  /** 아크 그리드 코어(slotIndex) 등급·포인트: 지금·바꾼 뒤 코어 계수 C(%). */
+  private record ArkGridCoreEffect(int slot, BigDecimal nowPct, BigDecimal nextPct)
+      implements Effect {}
+
   /** 각인 하나의 각인서·스톤 레벨. */
   private record EngravingLevels(int book, int stone) {}
 
@@ -483,17 +493,26 @@ public class CombatPowerSimulationService {
       Map<Integer, CombatPowerRefineModel.Target> refines,
       Map<Integer, CombatPowerBraceletModel.Line> bracelet,
       CombatPowerRefineModel.ArmGuard armGuard,
-      Map<String, PolishEffect> polish) {
+      Map<String, PolishEffect> polish,
+      Map<Integer, ArkGridCoreEffect> cores) {
     State apply(Effect effect, Map<String, CharacterLoadout.PassiveEngraving> currents) {
       return switch (effect) {
         case GemEffect gem -> {
           var next = new HashMap<>(gems);
           next.putAll(gem.levels());
           yield new State(
-              Map.copyOf(next), weaponAddDamage, engravings, refines, bracelet, armGuard, polish);
+              Map.copyOf(next),
+              weaponAddDamage,
+              engravings,
+              refines,
+              bracelet,
+              armGuard,
+              polish,
+              cores);
         }
         case WeaponQualityEffect quality ->
-            new State(gems, quality.addDamage(), engravings, refines, bracelet, armGuard, polish);
+            new State(
+                gems, quality.addDamage(), engravings, refines, bracelet, armGuard, polish, cores);
         case RefineEffect refine -> {
           var next = new HashMap<>(refines);
           var base = refines.getOrDefault(refine.index(), refine.current());
@@ -503,22 +522,64 @@ public class CombatPowerSimulationService {
                   refine.level() != null ? refine.level() : base.level(),
                   refine.advanced() != null ? refine.advanced() : base.advanced()));
           yield new State(
-              gems, weaponAddDamage, engravings, Map.copyOf(next), bracelet, armGuard, polish);
+              gems,
+              weaponAddDamage,
+              engravings,
+              Map.copyOf(next),
+              bracelet,
+              armGuard,
+              polish,
+              cores);
         }
         case BraceletEffect line -> {
           var next = new HashMap<>(bracelet);
           next.put(line.line(), line.next());
           yield new State(
-              gems, weaponAddDamage, engravings, refines, Map.copyOf(next), armGuard, polish);
+              gems,
+              weaponAddDamage,
+              engravings,
+              refines,
+              Map.copyOf(next),
+              armGuard,
+              polish,
+              cores);
         }
         case ArmGuardEffect guard ->
-            new State(gems, weaponAddDamage, engravings, refines, bracelet, guard.target(), polish);
+            new State(
+                gems,
+                weaponAddDamage,
+                engravings,
+                refines,
+                bracelet,
+                guard.target(),
+                polish,
+                cores);
         case NeutralEffect neutral -> this;
+        case ArkGridCoreEffect core -> {
+          var next = new HashMap<>(cores);
+          next.put(core.slot(), core);
+          yield new State(
+              gems,
+              weaponAddDamage,
+              engravings,
+              refines,
+              bracelet,
+              armGuard,
+              polish,
+              Map.copyOf(next));
+        }
         case PolishEffect line -> {
           var next = new HashMap<>(polish);
           next.put(line.key(), line);
           yield new State(
-              gems, weaponAddDamage, engravings, refines, bracelet, armGuard, Map.copyOf(next));
+              gems,
+              weaponAddDamage,
+              engravings,
+              refines,
+              bracelet,
+              armGuard,
+              Map.copyOf(next),
+              cores);
         }
         case EngravingEffect engraving -> {
           var next = new HashMap<>(engravings);
@@ -536,7 +597,7 @@ public class CombatPowerSimulationService {
                   engraving.book() != null ? engraving.book() : base.book(),
                   engraving.stone() != null ? engraving.stone() : base.stone()));
           yield new State(
-              gems, weaponAddDamage, Map.copyOf(next), refines, bracelet, armGuard, polish);
+              gems, weaponAddDamage, Map.copyOf(next), refines, bracelet, armGuard, polish, cores);
         }
       };
     }
@@ -634,6 +695,13 @@ public class CombatPowerSimulationService {
               CombatPowerEquipmentModel.weaponQualityRatio(weaponCurrent, state.weaponAddDamage()),
               MATH);
     }
+    // 아크 그리드 코어(계산 검증 11-02): 코어 배수는 다른 항목과 독립이라 (1 + C(new)/100) / (1 + C(now)/100)를 곱한다.
+    for (var core : state.cores().values())
+      ratio =
+          ratio.multiply(
+              CombatPowerArkGridModel.factor(core.nextPct())
+                  .divide(CombatPowerArkGridModel.factor(core.nowPct()), MATH),
+              MATH);
     for (var entry : state.engravings().entrySet()) {
       var current = currents.get(entry.getKey());
       int book = current.level();
@@ -979,11 +1047,28 @@ public class CombatPowerSimulationService {
                     .findFirst()
                     .orElse(null);
         if (slot == null) throw notFound("아크 그리드 slotIndex " + change.slotIndex());
-        yield unsupported(
+        var target =
+            new CharacterLoadout.GridSlot(
+                slot.index(),
+                slot.icon(),
+                slot.name(),
+                change.point(),
+                change.grade(),
+                slot.gems(),
+                slot.core(),
+                slot.lines());
+        // 같은 코어 표(아크 그리드 실 효율 #368)로 지금·바꾼 뒤 C를 구한다. 혼돈의 별 : 무기·확인하지 않은 코어는 그 이유로 계산하지 않는다.
+        var now = CombatPowerArkGridModel.core(arkGridCoefficients, slot);
+        var next = CombatPowerArkGridModel.core(arkGridCoefficients, target);
+        var reason = now.reason() != null ? now.reason() : next.reason();
+        yield new Planned(
             change,
             slot.name(),
             slot.grade() + " " + slot.point() + "P",
-            change.grade() + " " + change.point() + "P");
+            change.grade() + " " + change.point() + "P",
+            reason == null ? new ArkGridCoreEffect(slot.index(), now.pct(), next.pct()) : null,
+            ARK_GRID_BASIS,
+            reason);
       }
     };
   }

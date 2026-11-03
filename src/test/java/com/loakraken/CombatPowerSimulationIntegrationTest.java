@@ -96,18 +96,19 @@ class CombatPowerSimulationIntegrationTest {
     // 이어서 무기 품질 90 → 100(추가 피해 10 + 20 × (q/100)²): × 1.30/1.262 = 3139.85.
     // 기본 공격력 % = 보석 0.80 → 1.20 + 스톤 레벨 보너스 1.50 + 완갑 추가 효과 1.00.
     // 이어서 목걸이 연마 추가 피해 +1.60% → +2.60%(#325, c = x/1.3): × 1.02/(1 + 0.016/1.3) = 3163.70.
+    // 이어서 아크 그리드 질서의 해 유물 17P(7.5%) → 고대 20P(8 + 1.0 = 9%): × 1.09/1.075 = 3207.85.
     assertThat(response.body())
         .contains(
             "\"before\":3000.00",
-            "\"after\":3163.70",
-            "\"delta\":163.70",
-            "\"deltaPercent\":5.457");
+            "\"after\":3207.85",
+            "\"delta\":207.85",
+            "\"deltaPercent\":6.928");
     assertThat(data.path("modelBefore").isNull()).isTrue();
     assertThat(data.path("partial").asBoolean()).isTrue();
     // 같은 보석 slot은 뒤의 변경(10)이 이기고 자리는 처음 나온 곳을 지킨다.
     var contributions = data.path("contributions");
     assertThat(contributions.size()).isEqualTo(9);
-    assertThat(data.path("unsupportedCount").asInt()).isEqualTo(6);
+    assertThat(data.path("unsupportedCount").asInt()).isEqualTo(5);
     assertThat(contributions.at("/0/kind").asText()).isEqualTo("GEM_LEVEL");
     assertThat(contributions.at("/0/from").asText()).isEqualTo("8");
     assertThat(contributions.at("/0/to").asText()).isEqualTo("10");
@@ -126,8 +127,11 @@ class CombatPowerSimulationIntegrationTest {
     assertThat(contributions.at("/7/kind").asText()).isEqualTo("ARK_PASSIVE_POINT");
     assertThat(contributions.at("/7/basis").asText()).contains("진화·깨달음");
     assertThat(contributions.at("/7/reasonCode").asText()).isEqualTo("MODEL_UNCONFIRMED");
+    assertThat(contributions.at("/8/kind").asText()).isEqualTo("ARK_GRID_CORE");
+    assertThat(contributions.at("/8/status").asText()).isEqualTo("OK");
+    assertThat(contributions.at("/8/delta").decimalValue()).isEqualByComparingTo("44.15");
     for (int i = 1; i < contributions.size(); i++) {
-      if (i == 2 || i == 3) continue;
+      if (i == 2 || i == 3 || i == 8) continue;
       assertThat(contributions.get(i).path("status").asText()).isEqualTo("UNSUPPORTED");
       assertThat(contributions.get(i).path("delta").isNull()).isTrue();
     }
@@ -749,6 +753,74 @@ class CombatPowerSimulationIntegrationTest {
     assertThat((BigDecimal) row.get("ark_grid_gem_pct")).isEqualByComparingTo("4.27");
     assertThat(row.get("ark_grid_rule_version")).isEqualTo("ark-grid-efficiency-v1");
     assertThat(row.get("efficiency_observed_at")).isNotNull();
+  }
+
+  @Test
+  void 아크_그리드_코어는_코어_배수_비율로_계산하고_무기_코어는_계산하지_않는다() throws Exception {
+    // 계산 검증 11-02(비교 기준 둘 일치): 바꾼 뒤 = 공식 × (1 + C(new)/100) / (1 + C(now)/100), 코어마다 독립 배수.
+    when(detailsPort.fetch(anyString()))
+        .thenAnswer(
+            invocation -> {
+              var base = fetchedBracelet(invocation.getArgument(0));
+              var details = base.details();
+              var old = details.loadout();
+              var grid =
+                  new CharacterLoadout.ArkGrid(
+                      List.of(
+                          gridSlot(0, "질서의 해 코어 : 직업 스킬", 18, "유물"),
+                          gridSlot(2, "질서의 달 코어 : 직업 스킬", 18, "유물"),
+                          gridSlot(4, "혼돈의 해 코어 : 현란한 공격", 17, "유물"),
+                          gridSlot(6, "혼돈의 별 코어 : 무기", 17, "유물")),
+                      List.of());
+              var loadout =
+                  new CharacterLoadout(
+                      old.equipment(),
+                      old.engravings(),
+                      old.gems(),
+                      old.cards(),
+                      old.arkPassive(),
+                      grid,
+                      old.skills());
+              return new FetchedCharacter(
+                  CharacterTestFixture.details(details.profile(), loadout, List.of()), "{}", "[]");
+            });
+    assertThat(get("/api/v1/characters/search?characterName=" + encode("시뮬코어")).statusCode())
+        .isEqualTo(200);
+    var response =
+        simulate(
+            "시뮬코어",
+            """
+            [
+              {"kind": "ARK_GRID_CORE", "slotIndex": 0, "grade": "고대", "point": 18},
+              {"kind": "ARK_GRID_CORE", "slotIndex": 4, "grade": "유물", "point": 16},
+              {"kind": "ARK_GRID_CORE", "slotIndex": 2, "grade": "전설", "point": 20},
+              {"kind": "ARK_GRID_CORE", "slotIndex": 6, "grade": "고대", "point": 20}
+            ]
+            """);
+    assertThat(response.statusCode()).as(response.body()).isEqualTo(200);
+    ApiContractFixture.write("character-combat-power-simulate-ark-grid.json", response.body());
+    SiteNames.assertAbsent(response.body());
+    var data = mapper.readTree(response.body()).path("data");
+    var contributions = data.path("contributions");
+    // 질서의 해 유물 18P(7.67%) → 고대 18P(8.67%, 17P 이상 +1.0%p): × 1.0867/1.0767 = 1.009288(비교 기준 둘과 같음).
+    // 코어 합에 더하는 식이면 × 1.007521이라 이 값으로 갈린다.
+    assertThat(contributions.at("/0/status").asText()).isEqualTo("OK");
+    assertThat(contributions.at("/0/from").asText()).isEqualTo("유물 18P");
+    assertThat(contributions.at("/0/to").asText()).isEqualTo("고대 18P");
+    assertThat(contributions.at("/0/delta").decimalValue()).isEqualByComparingTo("31.07");
+    // 혼돈 1단 17P(2.5%) → 16P: 14~16은 같은 구간(1%)이라 × 1.01/1.025(보간이 아님).
+    assertThat(contributions.at("/1/delta").decimalValue()).isEqualByComparingTo("-49.41");
+    // 전설은 14P가 상한이라 20P를 골라도 14P 값(4%): × 1.04/1.0767.
+    assertThat(contributions.at("/2/delta").decimalValue()).isEqualByComparingTo("-113.40");
+    // 혼돈의 별 : 무기는 무기 공격력 항이라 코어 표에 없다.
+    assertThat(contributions.at("/3/status").asText()).isEqualTo("UNSUPPORTED");
+    assertThat(contributions.at("/3/delta").isNull()).isTrue();
+    assertThat(contributions.at("/3/basis").asText()).contains("혼돈의 별 : 무기");
+    assertThat(data.path("after").decimalValue()).isEqualByComparingTo("3213.50");
+    assertThat(data.path("delta").decimalValue()).isEqualByComparingTo("-131.74");
+    assertThat(data.path("deltaPercent").decimalValue()).isEqualByComparingTo("-3.938");
+    assertThat(data.path("unsupportedCount").asInt()).isEqualTo(1);
+    verify(detailsPort, times(1)).fetch(anyString());
   }
 
   private static CharacterLoadout.GridSlot gridSlot(

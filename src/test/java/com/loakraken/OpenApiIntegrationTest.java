@@ -201,6 +201,9 @@ class OpenApiIntegrationTest {
                   .asText())
           .as(field)
           .isEqualTo("null");
+    // 쓰지 않던 각인 그림 목록은 없앴다(#836).
+    assertThat(document.at("/paths/~1api~1v1~1markets~1engraving-icons").isMissingNode()).isTrue();
+    assertThat(document.at("/components/schemas/EngravingIconsResponse").isMissingNode()).isTrue();
     // 인기 길드(M21): 새 경로, 숫자 없이 순위·서버·길드 이름만(모두 필수).
     assertThat(document.at("/paths/~1api~1v1~1guilds~1popular/get").isMissingNode()).isFalse();
     assertThat(document.at("/components/schemas/GuildPopularResponse/required").toString())

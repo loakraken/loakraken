@@ -495,7 +495,9 @@ class CombatPowerSimulationIntegrationTest {
     var down =
         mapper
             .readTree(
-                simulate("시뮬도약", "[{\"kind\": \"ARK_PASSIVE_POINT\", \"tree\": \"도약\", \"points\": 50}]")
+                simulate(
+                        "시뮬도약",
+                        "[{\"kind\": \"ARK_PASSIVE_POINT\", \"tree\": \"도약\", \"points\": 50}]")
                     .body())
             .path("data");
     assertThat(down.at("/contributions/0/status").asText()).isEqualTo("OK");
@@ -523,7 +525,9 @@ class CombatPowerSimulationIntegrationTest {
     var same =
         mapper
             .readTree(
-                simulate("시뮬도약", "[{\"kind\": \"ARK_PASSIVE_POINT\", \"tree\": \"도약\", \"points\": 70}]")
+                simulate(
+                        "시뮬도약",
+                        "[{\"kind\": \"ARK_PASSIVE_POINT\", \"tree\": \"도약\", \"points\": 70}]")
                     .body())
             .path("data");
     assertThat(same.path("after").decimalValue()).isEqualByComparingTo("3345.24");

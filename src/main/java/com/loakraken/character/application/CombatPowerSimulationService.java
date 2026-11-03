@@ -342,7 +342,8 @@ public class CombatPowerSimulationService {
 
   private static final String LEAP_UNREAD = "도약 포인트 합을 읽지 못해 계산하지 않았습니다.";
   private static final String LEAP = "도약";
-  private static final String LEAP_BASIS = "도약 포인트 합의 전투력 배수(1 + 0.002 × 포인트)를 바꾼 비율을 공식 전투력에 곱했습니다.";
+  private static final String LEAP_BASIS =
+      "도약 포인트 합의 전투력 배수(1 + 0.002 × 포인트)를 바꾼 비율을 공식 전투력에 곱했습니다.";
   private static final String EVOLUTION_ENLIGHTENMENT_REASON =
       "진화·깨달음 포인트의 전투력 계산식을 아직 확인하고 있어 계산하지 않았습니다.";
 
@@ -532,25 +533,11 @@ public class CombatPowerSimulationService {
           var next = new HashMap<>(bracelet);
           next.put(line.line(), line.next());
           yield new State(
-              gems,
-              weaponAddDamage,
-              engravings,
-              refines,
-              Map.copyOf(next),
-              armGuard,
-              polish,
-              leap);
+              gems, weaponAddDamage, engravings, refines, Map.copyOf(next), armGuard, polish, leap);
         }
         case ArmGuardEffect guard ->
             new State(
-                gems,
-                weaponAddDamage,
-                engravings,
-                refines,
-                bracelet,
-                guard.target(),
-                polish,
-                leap);
+                gems, weaponAddDamage, engravings, refines, bracelet, guard.target(), polish, leap);
         case NeutralEffect neutral -> this;
         case PolishEffect line -> {
           var next = new HashMap<>(polish);
@@ -566,8 +553,7 @@ public class CombatPowerSimulationService {
               leap);
         }
         case LeapEffect next ->
-            new State(
-                gems, weaponAddDamage, engravings, refines, bracelet, armGuard, polish, next);
+            new State(gems, weaponAddDamage, engravings, refines, bracelet, armGuard, polish, next);
         case EngravingEffect engraving -> {
           var next = new HashMap<>(engravings);
           var base = engravings.get(engraving.name());
@@ -584,14 +570,7 @@ public class CombatPowerSimulationService {
                   engraving.book() != null ? engraving.book() : base.book(),
                   engraving.stone() != null ? engraving.stone() : base.stone()));
           yield new State(
-              gems,
-              weaponAddDamage,
-              Map.copyOf(next),
-              refines,
-              bracelet,
-              armGuard,
-              polish,
-              leap);
+              gems, weaponAddDamage, Map.copyOf(next), refines, bracelet, armGuard, polish, leap);
         }
       };
     }
@@ -696,7 +675,8 @@ public class CombatPowerSimulationService {
           BigDecimal.ONE.add(
               perPoint.multiply(BigDecimal.valueOf(state.leap().current()), MATH), MATH);
       var next =
-          BigDecimal.ONE.add(perPoint.multiply(BigDecimal.valueOf(state.leap().next()), MATH), MATH);
+          BigDecimal.ONE.add(
+              perPoint.multiply(BigDecimal.valueOf(state.leap().next()), MATH), MATH);
       ratio = ratio.multiply(next.divide(now, MATH), MATH);
     }
     for (var entry : state.engravings().entrySet()) {

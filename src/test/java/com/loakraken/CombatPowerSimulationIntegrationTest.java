@@ -123,6 +123,10 @@ class CombatPowerSimulationIntegrationTest {
     assertThat(contributions.at("/3/from").asText()).isEqualTo("추가 피해 +1.60%");
     assertThat(contributions.at("/3/to").asText()).isEqualTo("추가 피해 +2.60%");
     assertThat(contributions.at("/3/delta").decimalValue()).isEqualByComparingTo("23.85");
+    // 진화·깨달음은 비교 기준 둘의 식이 달라 확인 전까지 계산하지 않는다(도약만 계산).
+    assertThat(contributions.at("/7/kind").asText()).isEqualTo("ARK_PASSIVE_POINT");
+    assertThat(contributions.at("/7/basis").asText()).contains("진화·깨달음");
+    assertThat(contributions.at("/7/reasonCode").asText()).isEqualTo("MODEL_UNCONFIRMED");
     assertThat(contributions.at("/8/kind").asText()).isEqualTo("ARK_GRID_CORE");
     assertThat(contributions.at("/8/status").asText()).isEqualTo("OK");
     assertThat(contributions.at("/8/delta").decimalValue()).isEqualByComparingTo("44.15");
@@ -482,6 +486,75 @@ class CombatPowerSimulationIntegrationTest {
         mapper.readTree(get("/api/v1/characters/combat-power/options").body()).path("data");
     assertThat(options.at("/braceletOptions").size()).isEqualTo(13);
     assertThat(options.toString()).contains("추가 피해 +3.50%");
+  }
+
+  @Test
+  void 도약_포인트는_독립_배수로_계산한다() throws Exception {
+    // 도약 합 P의 배수 (1 + 0.002·P)(팔찌 도약과 같은 계수). 비교 기준 A·B가 같은 식이다.
+    when(detailsPort.fetch(anyString()))
+        .thenAnswer(invocation -> fetchedBracelet(invocation.getArgument(0)));
+    assertThat(get("/api/v1/characters/search?characterName=" + encode("시뮬도약")).statusCode())
+        .isEqualTo(200);
+    // 70 → 50: 3,345.24 × 1.10 / 1.14 = 3,227.86.
+    var down =
+        mapper
+            .readTree(
+                simulate(
+                        "시뮬도약",
+                        "[{\"kind\": \"ARK_PASSIVE_POINT\", \"tree\": \"도약\", \"points\": 50}]")
+                    .body())
+            .path("data");
+    assertThat(down.at("/contributions/0/status").asText()).isEqualTo("OK");
+    assertThat(down.at("/contributions/0/target").asText()).isEqualTo("아크 패시브 도약");
+    assertThat(down.at("/contributions/0/from").asText()).isEqualTo("70");
+    assertThat(down.at("/contributions/0/to").asText()).isEqualTo("50");
+    assertThat(down.path("after").decimalValue()).isEqualByComparingTo("3227.86");
+    assertThat(down.at("/contributions/0/delta").decimalValue()).isEqualByComparingTo("-117.38");
+    assertThat(down.path("partial").asBoolean()).isFalse();
+    // 70 → 80: 3,345.24 × 1.16 / 1.14 = 3,403.93. 같은 대상은 뒤의 변경이 이긴다.
+    var up =
+        mapper
+            .readTree(
+                simulate(
+                        "시뮬도약",
+                        """
+                        [{"kind": "ARK_PASSIVE_POINT", "tree": "도약", "points": 10},
+                         {"kind": "ARK_PASSIVE_POINT", "tree": "도약", "points": 80}]
+                        """)
+                    .body())
+            .path("data");
+    assertThat(up.path("contributions").size()).isEqualTo(1);
+    assertThat(up.path("after").decimalValue()).isEqualByComparingTo("3403.93");
+    // 같은 값이면 배수 1.
+    var same =
+        mapper
+            .readTree(
+                simulate(
+                        "시뮬도약",
+                        "[{\"kind\": \"ARK_PASSIVE_POINT\", \"tree\": \"도약\", \"points\": 70}]")
+                    .body())
+            .path("data");
+    assertThat(same.path("after").decimalValue()).isEqualByComparingTo("3345.24");
+    // 팔찌 줄 교체와 도약을 한 번에(계산 검증 11-03 판정): 팔찌 줄은 도약을 움직이지 않고, 입력한 도약(팔찌 +18 포함한 최종 합)만 한 번 곱한다.
+    // 3,345.24 ÷ (1 + 2.6923%)(추가 피해 +3.50% 빼기) × 1.104/1.14 = 3,154.67(끝에서 한 번 반올림).
+    // 가르는 값: 팔찌 도약 18까지 또 빼면(이중 계산, × 0.93783934) 3,055.05, 입력 도약을 팔찌 빼기에 묻으면(× 1) 3,257.54.
+    for (var body :
+        List.of(
+            """
+            [{"kind": "BRACELET_EFFECT", "line": 3, "name": "없음"},
+             {"kind": "ARK_PASSIVE_POINT", "tree": "도약", "points": 52}]
+            """,
+            """
+            [{"kind": "ARK_PASSIVE_POINT", "tree": "도약", "points": 52},
+             {"kind": "BRACELET_EFFECT", "line": 3, "name": "없음"}]
+            """)) {
+      var both = mapper.readTree(simulate("시뮬도약", body).body()).path("data");
+      assertThat(both.path("partial").asBoolean()).isFalse();
+      assertThat(both.path("after").decimalValue())
+          .isEqualByComparingTo("3154.67")
+          .isNotEqualByComparingTo("3055.05")
+          .isNotEqualByComparingTo("3257.54");
+    }
   }
 
   @Test

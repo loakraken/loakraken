@@ -407,7 +407,8 @@ public class CombatPowerSimulationService {
     var before = official == null ? null : official.setScale(2, RoundingMode.HALF_UP);
     var engravings = currentEngravings(loadout);
     var weaponAddDamage = CombatPowerEquipmentModel.currentWeaponAddDamage(weaponDetail(loadout));
-    var state = new State(Map.of(), null, Map.of(), Map.of(), Map.of(), null, Map.of(), Map.of(), null);
+    var state =
+        new State(Map.of(), null, Map.of(), Map.of(), Map.of(), null, Map.of(), Map.of(), null);
     var running = before;
     var contributions = new ArrayList<Contribution>();
     int unsupported = 0;
@@ -517,11 +518,20 @@ public class CombatPowerSimulationService {
               bracelet,
               armGuard,
               polish,
-              cores, leap);
+              cores,
+              leap);
         }
         case WeaponQualityEffect quality ->
             new State(
-                gems, quality.addDamage(), engravings, refines, bracelet, armGuard, polish, cores, leap);
+                gems,
+                quality.addDamage(),
+                engravings,
+                refines,
+                bracelet,
+                armGuard,
+                polish,
+                cores,
+                leap);
         case RefineEffect refine -> {
           var next = new HashMap<>(refines);
           var base = refines.getOrDefault(refine.index(), refine.current());
@@ -538,7 +548,8 @@ public class CombatPowerSimulationService {
               bracelet,
               armGuard,
               polish,
-              cores, leap);
+              cores,
+              leap);
         }
         case BraceletEffect line -> {
           var next = new HashMap<>(bracelet);
@@ -551,7 +562,8 @@ public class CombatPowerSimulationService {
               Map.copyOf(next),
               armGuard,
               polish,
-              cores, leap);
+              cores,
+              leap);
         }
         case ArmGuardEffect guard ->
             new State(
@@ -562,7 +574,8 @@ public class CombatPowerSimulationService {
                 bracelet,
                 guard.target(),
                 polish,
-                cores, leap);
+                cores,
+                leap);
         case NeutralEffect neutral -> this;
         case ArkGridCoreEffect core -> {
           var next = new HashMap<>(cores);
@@ -589,11 +602,20 @@ public class CombatPowerSimulationService {
               bracelet,
               armGuard,
               Map.copyOf(next),
-              cores, leap);
+              cores,
+              leap);
         }
         case LeapEffect next ->
             new State(
-                gems, weaponAddDamage, engravings, refines, bracelet, armGuard, polish, cores, next);
+                gems,
+                weaponAddDamage,
+                engravings,
+                refines,
+                bracelet,
+                armGuard,
+                polish,
+                cores,
+                next);
         case EngravingEffect engraving -> {
           var next = new HashMap<>(engravings);
           var base = engravings.get(engraving.name());
@@ -610,7 +632,15 @@ public class CombatPowerSimulationService {
                   engraving.book() != null ? engraving.book() : base.book(),
                   engraving.stone() != null ? engraving.stone() : base.stone()));
           yield new State(
-              gems, weaponAddDamage, Map.copyOf(next), refines, bracelet, armGuard, polish, cores, leap);
+              gems,
+              weaponAddDamage,
+              Map.copyOf(next),
+              refines,
+              bracelet,
+              armGuard,
+              polish,
+              cores,
+              leap);
         }
       };
     }
@@ -722,7 +752,8 @@ public class CombatPowerSimulationService {
           BigDecimal.ONE.add(
               perPoint.multiply(BigDecimal.valueOf(state.leap().current()), MATH), MATH);
       var next =
-          BigDecimal.ONE.add(perPoint.multiply(BigDecimal.valueOf(state.leap().next()), MATH), MATH);
+          BigDecimal.ONE.add(
+              perPoint.multiply(BigDecimal.valueOf(state.leap().next()), MATH), MATH);
       ratio = ratio.multiply(next.divide(now, MATH), MATH);
     }
     for (var entry : state.engravings().entrySet()) {

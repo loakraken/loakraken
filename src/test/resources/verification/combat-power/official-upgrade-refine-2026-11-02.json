@@ -1,0 +1,7241 @@
+{
+ "source": "공식 아이템 사전(https://lostark.game.onstove.com/ItemDictionary) 운명의 업화(고대, 티어 4) 무기·방어구 5부위 기본 효과, 2026-11-02 확인. 재련 0~25(상급 0), 상급 0~40(재련 +11·+15·+19·+22), 상급 26~40(재련 +25). 무기 = 무기 공격력, 방어구 = 힘",
+ "cells": [
+  {
+   "part": "무기",
+   "refine": 0,
+   "advanced": 0,
+   "value": 60362
+  },
+  {
+   "part": "무기",
+   "refine": 1,
+   "advanced": 0,
+   "value": 67051
+  },
+  {
+   "part": "무기",
+   "refine": 2,
+   "advanced": 0,
+   "value": 73796
+  },
+  {
+   "part": "무기",
+   "refine": 3,
+   "advanced": 0,
+   "value": 80599
+  },
+  {
+   "part": "무기",
+   "refine": 4,
+   "advanced": 0,
+   "value": 87463
+  },
+  {
+   "part": "무기",
+   "refine": 5,
+   "advanced": 0,
+   "value": 89390
+  },
+  {
+   "part": "무기",
+   "refine": 6,
+   "advanced": 0,
+   "value": 91381
+  },
+  {
+   "part": "무기",
+   "refine": 7,
+   "advanced": 0,
+   "value": 93439
+  },
+  {
+   "part": "무기",
+   "refine": 8,
+   "advanced": 0,
+   "value": 95566
+  },
+  {
+   "part": "무기",
+   "refine": 9,
+   "advanced": 0,
+   "value": 97764
+  },
+  {
+   "part": "무기",
+   "refine": 10,
+   "advanced": 0,
+   "value": 100036
+  },
+  {
+   "part": "무기",
+   "refine": 11,
+   "advanced": 0,
+   "value": 102384
+  },
+  {
+   "part": "무기",
+   "refine": 11,
+   "advanced": 1,
+   "value": 102863
+  },
+  {
+   "part": "무기",
+   "refine": 11,
+   "advanced": 2,
+   "value": 103345
+  },
+  {
+   "part": "무기",
+   "refine": 11,
+   "advanced": 3,
+   "value": 103830
+  },
+  {
+   "part": "무기",
+   "refine": 11,
+   "advanced": 4,
+   "value": 104319
+  },
+  {
+   "part": "무기",
+   "refine": 11,
+   "advanced": 5,
+   "value": 104811
+  },
+  {
+   "part": "무기",
+   "refine": 11,
+   "advanced": 6,
+   "value": 105327
+  },
+  {
+   "part": "무기",
+   "refine": 11,
+   "advanced": 7,
+   "value": 105847
+  },
+  {
+   "part": "무기",
+   "refine": 11,
+   "advanced": 8,
+   "value": 106371
+  },
+  {
+   "part": "무기",
+   "refine": 11,
+   "advanced": 9,
+   "value": 106898
+  },
+  {
+   "part": "무기",
+   "refine": 11,
+   "advanced": 10,
+   "value": 107429
+  },
+  {
+   "part": "무기",
+   "refine": 11,
+   "advanced": 11,
+   "value": 107963
+  },
+  {
+   "part": "무기",
+   "refine": 11,
+   "advanced": 12,
+   "value": 108502
+  },
+  {
+   "part": "무기",
+   "refine": 11,
+   "advanced": 13,
+   "value": 109044
+  },
+  {
+   "part": "무기",
+   "refine": 11,
+   "advanced": 14,
+   "value": 109589
+  },
+  {
+   "part": "무기",
+   "refine": 11,
+   "advanced": 15,
+   "value": 110139
+  },
+  {
+   "part": "무기",
+   "refine": 11,
+   "advanced": 16,
+   "value": 110692
+  },
+  {
+   "part": "무기",
+   "refine": 11,
+   "advanced": 17,
+   "value": 111249
+  },
+  {
+   "part": "무기",
+   "refine": 11,
+   "advanced": 18,
+   "value": 111810
+  },
+  {
+   "part": "무기",
+   "refine": 11,
+   "advanced": 19,
+   "value": 112375
+  },
+  {
+   "part": "무기",
+   "refine": 11,
+   "advanced": 20,
+   "value": 112944
+  },
+  {
+   "part": "무기",
+   "refine": 11,
+   "advanced": 21,
+   "value": 113516
+  },
+  {
+   "part": "무기",
+   "refine": 11,
+   "advanced": 22,
+   "value": 114093
+  },
+  {
+   "part": "무기",
+   "refine": 11,
+   "advanced": 23,
+   "value": 114674
+  },
+  {
+   "part": "무기",
+   "refine": 11,
+   "advanced": 24,
+   "value": 115258
+  },
+  {
+   "part": "무기",
+   "refine": 11,
+   "advanced": 25,
+   "value": 115847
+  },
+  {
+   "part": "무기",
+   "refine": 11,
+   "advanced": 26,
+   "value": 116439
+  },
+  {
+   "part": "무기",
+   "refine": 11,
+   "advanced": 27,
+   "value": 117036
+  },
+  {
+   "part": "무기",
+   "refine": 11,
+   "advanced": 28,
+   "value": 117637
+  },
+  {
+   "part": "무기",
+   "refine": 11,
+   "advanced": 29,
+   "value": 118242
+  },
+  {
+   "part": "무기",
+   "refine": 11,
+   "advanced": 30,
+   "value": 121228
+  },
+  {
+   "part": "무기",
+   "refine": 11,
+   "advanced": 31,
+   "value": 121854
+  },
+  {
+   "part": "무기",
+   "refine": 11,
+   "advanced": 32,
+   "value": 122483
+  },
+  {
+   "part": "무기",
+   "refine": 11,
+   "advanced": 33,
+   "value": 123118
+  },
+  {
+   "part": "무기",
+   "refine": 11,
+   "advanced": 34,
+   "value": 123757
+  },
+  {
+   "part": "무기",
+   "refine": 11,
+   "advanced": 35,
+   "value": 124400
+  },
+  {
+   "part": "무기",
+   "refine": 11,
+   "advanced": 36,
+   "value": 125047
+  },
+  {
+   "part": "무기",
+   "refine": 11,
+   "advanced": 37,
+   "value": 125699
+  },
+  {
+   "part": "무기",
+   "refine": 11,
+   "advanced": 38,
+   "value": 126356
+  },
+  {
+   "part": "무기",
+   "refine": 11,
+   "advanced": 39,
+   "value": 127017
+  },
+  {
+   "part": "무기",
+   "refine": 11,
+   "advanced": 40,
+   "value": 131439
+  },
+  {
+   "part": "무기",
+   "refine": 12,
+   "advanced": 0,
+   "value": 104811
+  },
+  {
+   "part": "무기",
+   "refine": 13,
+   "advanced": 0,
+   "value": 107429
+  },
+  {
+   "part": "무기",
+   "refine": 14,
+   "advanced": 0,
+   "value": 110139
+  },
+  {
+   "part": "무기",
+   "refine": 15,
+   "advanced": 0,
+   "value": 112944
+  },
+  {
+   "part": "무기",
+   "refine": 15,
+   "advanced": 1,
+   "value": 113516
+  },
+  {
+   "part": "무기",
+   "refine": 15,
+   "advanced": 2,
+   "value": 114093
+  },
+  {
+   "part": "무기",
+   "refine": 15,
+   "advanced": 3,
+   "value": 114674
+  },
+  {
+   "part": "무기",
+   "refine": 15,
+   "advanced": 4,
+   "value": 115258
+  },
+  {
+   "part": "무기",
+   "refine": 15,
+   "advanced": 5,
+   "value": 115847
+  },
+  {
+   "part": "무기",
+   "refine": 15,
+   "advanced": 6,
+   "value": 116439
+  },
+  {
+   "part": "무기",
+   "refine": 15,
+   "advanced": 7,
+   "value": 117036
+  },
+  {
+   "part": "무기",
+   "refine": 15,
+   "advanced": 8,
+   "value": 117637
+  },
+  {
+   "part": "무기",
+   "refine": 15,
+   "advanced": 9,
+   "value": 118242
+  },
+  {
+   "part": "무기",
+   "refine": 15,
+   "advanced": 10,
+   "value": 118851
+  },
+  {
+   "part": "무기",
+   "refine": 15,
+   "advanced": 11,
+   "value": 119465
+  },
+  {
+   "part": "무기",
+   "refine": 15,
+   "advanced": 12,
+   "value": 120082
+  },
+  {
+   "part": "무기",
+   "refine": 15,
+   "advanced": 13,
+   "value": 120704
+  },
+  {
+   "part": "무기",
+   "refine": 15,
+   "advanced": 14,
+   "value": 121331
+  },
+  {
+   "part": "무기",
+   "refine": 15,
+   "advanced": 15,
+   "value": 121961
+  },
+  {
+   "part": "무기",
+   "refine": 15,
+   "advanced": 16,
+   "value": 122596
+  },
+  {
+   "part": "무기",
+   "refine": 15,
+   "advanced": 17,
+   "value": 123235
+  },
+  {
+   "part": "무기",
+   "refine": 15,
+   "advanced": 18,
+   "value": 123879
+  },
+  {
+   "part": "무기",
+   "refine": 15,
+   "advanced": 19,
+   "value": 124527
+  },
+  {
+   "part": "무기",
+   "refine": 15,
+   "advanced": 20,
+   "value": 125180
+  },
+  {
+   "part": "무기",
+   "refine": 15,
+   "advanced": 21,
+   "value": 125837
+  },
+  {
+   "part": "무기",
+   "refine": 15,
+   "advanced": 22,
+   "value": 126499
+  },
+  {
+   "part": "무기",
+   "refine": 15,
+   "advanced": 23,
+   "value": 127165
+  },
+  {
+   "part": "무기",
+   "refine": 15,
+   "advanced": 24,
+   "value": 127836
+  },
+  {
+   "part": "무기",
+   "refine": 15,
+   "advanced": 25,
+   "value": 128511
+  },
+  {
+   "part": "무기",
+   "refine": 15,
+   "advanced": 26,
+   "value": 129191
+  },
+  {
+   "part": "무기",
+   "refine": 15,
+   "advanced": 27,
+   "value": 129876
+  },
+  {
+   "part": "무기",
+   "refine": 15,
+   "advanced": 28,
+   "value": 130566
+  },
+  {
+   "part": "무기",
+   "refine": 15,
+   "advanced": 29,
+   "value": 131260
+  },
+  {
+   "part": "무기",
+   "refine": 15,
+   "advanced": 30,
+   "value": 134598
+  },
+  {
+   "part": "무기",
+   "refine": 15,
+   "advanced": 31,
+   "value": 135316
+  },
+  {
+   "part": "무기",
+   "refine": 15,
+   "advanced": 32,
+   "value": 136039
+  },
+  {
+   "part": "무기",
+   "refine": 15,
+   "advanced": 33,
+   "value": 136766
+  },
+  {
+   "part": "무기",
+   "refine": 15,
+   "advanced": 34,
+   "value": 137500
+  },
+  {
+   "part": "무기",
+   "refine": 15,
+   "advanced": 35,
+   "value": 138237
+  },
+  {
+   "part": "무기",
+   "refine": 15,
+   "advanced": 36,
+   "value": 138981
+  },
+  {
+   "part": "무기",
+   "refine": 15,
+   "advanced": 37,
+   "value": 139729
+  },
+  {
+   "part": "무기",
+   "refine": 15,
+   "advanced": 38,
+   "value": 140482
+  },
+  {
+   "part": "무기",
+   "refine": 15,
+   "advanced": 39,
+   "value": 141241
+  },
+  {
+   "part": "무기",
+   "refine": 15,
+   "advanced": 40,
+   "value": 146182
+  },
+  {
+   "part": "무기",
+   "refine": 16,
+   "advanced": 0,
+   "value": 115847
+  },
+  {
+   "part": "무기",
+   "refine": 17,
+   "advanced": 0,
+   "value": 118851
+  },
+  {
+   "part": "무기",
+   "refine": 18,
+   "advanced": 0,
+   "value": 121961
+  },
+  {
+   "part": "무기",
+   "refine": 19,
+   "advanced": 0,
+   "value": 125180
+  },
+  {
+   "part": "무기",
+   "refine": 19,
+   "advanced": 1,
+   "value": 125837
+  },
+  {
+   "part": "무기",
+   "refine": 19,
+   "advanced": 2,
+   "value": 126499
+  },
+  {
+   "part": "무기",
+   "refine": 19,
+   "advanced": 3,
+   "value": 127165
+  },
+  {
+   "part": "무기",
+   "refine": 19,
+   "advanced": 4,
+   "value": 127836
+  },
+  {
+   "part": "무기",
+   "refine": 19,
+   "advanced": 5,
+   "value": 128511
+  },
+  {
+   "part": "무기",
+   "refine": 19,
+   "advanced": 6,
+   "value": 129191
+  },
+  {
+   "part": "무기",
+   "refine": 19,
+   "advanced": 7,
+   "value": 129876
+  },
+  {
+   "part": "무기",
+   "refine": 19,
+   "advanced": 8,
+   "value": 130566
+  },
+  {
+   "part": "무기",
+   "refine": 19,
+   "advanced": 9,
+   "value": 131260
+  },
+  {
+   "part": "무기",
+   "refine": 19,
+   "advanced": 10,
+   "value": 131959
+  },
+  {
+   "part": "무기",
+   "refine": 19,
+   "advanced": 11,
+   "value": 132663
+  },
+  {
+   "part": "무기",
+   "refine": 19,
+   "advanced": 12,
+   "value": 133372
+  },
+  {
+   "part": "무기",
+   "refine": 19,
+   "advanced": 13,
+   "value": 134085
+  },
+  {
+   "part": "무기",
+   "refine": 19,
+   "advanced": 14,
+   "value": 134804
+  },
+  {
+   "part": "무기",
+   "refine": 19,
+   "advanced": 15,
+   "value": 135527
+  },
+  {
+   "part": "무기",
+   "refine": 19,
+   "advanced": 16,
+   "value": 136256
+  },
+  {
+   "part": "무기",
+   "refine": 19,
+   "advanced": 17,
+   "value": 136990
+  },
+  {
+   "part": "무기",
+   "refine": 19,
+   "advanced": 18,
+   "value": 137728
+  },
+  {
+   "part": "무기",
+   "refine": 19,
+   "advanced": 19,
+   "value": 138472
+  },
+  {
+   "part": "무기",
+   "refine": 19,
+   "advanced": 20,
+   "value": 139221
+  },
+  {
+   "part": "무기",
+   "refine": 19,
+   "advanced": 21,
+   "value": 139975
+  },
+  {
+   "part": "무기",
+   "refine": 19,
+   "advanced": 22,
+   "value": 140734
+  },
+  {
+   "part": "무기",
+   "refine": 19,
+   "advanced": 23,
+   "value": 141499
+  },
+  {
+   "part": "무기",
+   "refine": 19,
+   "advanced": 24,
+   "value": 142269
+  },
+  {
+   "part": "무기",
+   "refine": 19,
+   "advanced": 25,
+   "value": 143044
+  },
+  {
+   "part": "무기",
+   "refine": 19,
+   "advanced": 26,
+   "value": 143824
+  },
+  {
+   "part": "무기",
+   "refine": 19,
+   "advanced": 27,
+   "value": 144610
+  },
+  {
+   "part": "무기",
+   "refine": 19,
+   "advanced": 28,
+   "value": 145401
+  },
+  {
+   "part": "무기",
+   "refine": 19,
+   "advanced": 29,
+   "value": 146198
+  },
+  {
+   "part": "무기",
+   "refine": 19,
+   "advanced": 30,
+   "value": 149940
+  },
+  {
+   "part": "무기",
+   "refine": 19,
+   "advanced": 31,
+   "value": 150764
+  },
+  {
+   "part": "무기",
+   "refine": 19,
+   "advanced": 32,
+   "value": 151593
+  },
+  {
+   "part": "무기",
+   "refine": 19,
+   "advanced": 33,
+   "value": 152428
+  },
+  {
+   "part": "무기",
+   "refine": 19,
+   "advanced": 34,
+   "value": 153270
+  },
+  {
+   "part": "무기",
+   "refine": 19,
+   "advanced": 35,
+   "value": 154116
+  },
+  {
+   "part": "무기",
+   "refine": 19,
+   "advanced": 36,
+   "value": 154969
+  },
+  {
+   "part": "무기",
+   "refine": 19,
+   "advanced": 37,
+   "value": 155828
+  },
+  {
+   "part": "무기",
+   "refine": 19,
+   "advanced": 38,
+   "value": 156693
+  },
+  {
+   "part": "무기",
+   "refine": 19,
+   "advanced": 39,
+   "value": 157563
+  },
+  {
+   "part": "무기",
+   "refine": 19,
+   "advanced": 40,
+   "value": 163099
+  },
+  {
+   "part": "무기",
+   "refine": 20,
+   "advanced": 0,
+   "value": 128511
+  },
+  {
+   "part": "무기",
+   "refine": 21,
+   "advanced": 0,
+   "value": 131959
+  },
+  {
+   "part": "무기",
+   "refine": 22,
+   "advanced": 0,
+   "value": 135527
+  },
+  {
+   "part": "무기",
+   "refine": 22,
+   "advanced": 1,
+   "value": 136256
+  },
+  {
+   "part": "무기",
+   "refine": 22,
+   "advanced": 2,
+   "value": 136990
+  },
+  {
+   "part": "무기",
+   "refine": 22,
+   "advanced": 3,
+   "value": 137728
+  },
+  {
+   "part": "무기",
+   "refine": 22,
+   "advanced": 4,
+   "value": 138472
+  },
+  {
+   "part": "무기",
+   "refine": 22,
+   "advanced": 5,
+   "value": 139221
+  },
+  {
+   "part": "무기",
+   "refine": 22,
+   "advanced": 6,
+   "value": 139975
+  },
+  {
+   "part": "무기",
+   "refine": 22,
+   "advanced": 7,
+   "value": 140734
+  },
+  {
+   "part": "무기",
+   "refine": 22,
+   "advanced": 8,
+   "value": 141499
+  },
+  {
+   "part": "무기",
+   "refine": 22,
+   "advanced": 9,
+   "value": 142269
+  },
+  {
+   "part": "무기",
+   "refine": 22,
+   "advanced": 10,
+   "value": 143044
+  },
+  {
+   "part": "무기",
+   "refine": 22,
+   "advanced": 11,
+   "value": 143824
+  },
+  {
+   "part": "무기",
+   "refine": 22,
+   "advanced": 12,
+   "value": 144610
+  },
+  {
+   "part": "무기",
+   "refine": 22,
+   "advanced": 13,
+   "value": 145401
+  },
+  {
+   "part": "무기",
+   "refine": 22,
+   "advanced": 14,
+   "value": 146198
+  },
+  {
+   "part": "무기",
+   "refine": 22,
+   "advanced": 15,
+   "value": 147000
+  },
+  {
+   "part": "무기",
+   "refine": 22,
+   "advanced": 16,
+   "value": 147808
+  },
+  {
+   "part": "무기",
+   "refine": 22,
+   "advanced": 17,
+   "value": 148621
+  },
+  {
+   "part": "무기",
+   "refine": 22,
+   "advanced": 18,
+   "value": 149440
+  },
+  {
+   "part": "무기",
+   "refine": 22,
+   "advanced": 19,
+   "value": 150265
+  },
+  {
+   "part": "무기",
+   "refine": 22,
+   "advanced": 20,
+   "value": 151095
+  },
+  {
+   "part": "무기",
+   "refine": 22,
+   "advanced": 21,
+   "value": 151931
+  },
+  {
+   "part": "무기",
+   "refine": 22,
+   "advanced": 22,
+   "value": 152773
+  },
+  {
+   "part": "무기",
+   "refine": 22,
+   "advanced": 23,
+   "value": 153621
+  },
+  {
+   "part": "무기",
+   "refine": 22,
+   "advanced": 24,
+   "value": 154474
+  },
+  {
+   "part": "무기",
+   "refine": 22,
+   "advanced": 25,
+   "value": 155333
+  },
+  {
+   "part": "무기",
+   "refine": 22,
+   "advanced": 26,
+   "value": 156199
+  },
+  {
+   "part": "무기",
+   "refine": 22,
+   "advanced": 27,
+   "value": 157070
+  },
+  {
+   "part": "무기",
+   "refine": 22,
+   "advanced": 28,
+   "value": 157947
+  },
+  {
+   "part": "무기",
+   "refine": 22,
+   "advanced": 29,
+   "value": 158831
+  },
+  {
+   "part": "무기",
+   "refine": 22,
+   "advanced": 30,
+   "value": 162914
+  },
+  {
+   "part": "무기",
+   "refine": 22,
+   "advanced": 31,
+   "value": 163828
+  },
+  {
+   "part": "무기",
+   "refine": 22,
+   "advanced": 32,
+   "value": 164747
+  },
+  {
+   "part": "무기",
+   "refine": 22,
+   "advanced": 33,
+   "value": 165673
+  },
+  {
+   "part": "무기",
+   "refine": 22,
+   "advanced": 34,
+   "value": 166606
+  },
+  {
+   "part": "무기",
+   "refine": 22,
+   "advanced": 35,
+   "value": 167545
+  },
+  {
+   "part": "무기",
+   "refine": 22,
+   "advanced": 36,
+   "value": 168490
+  },
+  {
+   "part": "무기",
+   "refine": 22,
+   "advanced": 37,
+   "value": 169443
+  },
+  {
+   "part": "무기",
+   "refine": 22,
+   "advanced": 38,
+   "value": 170401
+  },
+  {
+   "part": "무기",
+   "refine": 22,
+   "advanced": 39,
+   "value": 171367
+  },
+  {
+   "part": "무기",
+   "refine": 22,
+   "advanced": 40,
+   "value": 177406
+  },
+  {
+   "part": "무기",
+   "refine": 23,
+   "advanced": 0,
+   "value": 139221
+  },
+  {
+   "part": "무기",
+   "refine": 24,
+   "advanced": 0,
+   "value": 143044
+  },
+  {
+   "part": "무기",
+   "refine": 25,
+   "advanced": 0,
+   "value": 147000
+  },
+  {
+   "part": "무기",
+   "refine": 25,
+   "advanced": 26,
+   "value": 169919
+  },
+  {
+   "part": "무기",
+   "refine": 25,
+   "advanced": 27,
+   "value": 170885
+  },
+  {
+   "part": "무기",
+   "refine": 25,
+   "advanced": 28,
+   "value": 171857
+  },
+  {
+   "part": "무기",
+   "refine": 25,
+   "advanced": 29,
+   "value": 172837
+  },
+  {
+   "part": "무기",
+   "refine": 25,
+   "advanced": 30,
+   "value": 177299
+  },
+  {
+   "part": "무기",
+   "refine": 25,
+   "advanced": 31,
+   "value": 178312
+  },
+  {
+   "part": "무기",
+   "refine": 25,
+   "advanced": 32,
+   "value": 179332
+  },
+  {
+   "part": "무기",
+   "refine": 25,
+   "advanced": 33,
+   "value": 180358
+  },
+  {
+   "part": "무기",
+   "refine": 25,
+   "advanced": 34,
+   "value": 181392
+  },
+  {
+   "part": "무기",
+   "refine": 25,
+   "advanced": 35,
+   "value": 182434
+  },
+  {
+   "part": "무기",
+   "refine": 25,
+   "advanced": 36,
+   "value": 183481
+  },
+  {
+   "part": "무기",
+   "refine": 25,
+   "advanced": 37,
+   "value": 184537
+  },
+  {
+   "part": "무기",
+   "refine": 25,
+   "advanced": 38,
+   "value": 185600
+  },
+  {
+   "part": "무기",
+   "refine": 25,
+   "advanced": 39,
+   "value": 186670
+  },
+  {
+   "part": "무기",
+   "refine": 25,
+   "advanced": 40,
+   "value": 193270
+  },
+  {
+   "part": "상의",
+   "refine": 0,
+   "advanced": 0,
+   "value": 27845
+  },
+  {
+   "part": "상의",
+   "refine": 1,
+   "advanced": 0,
+   "value": 30936
+  },
+  {
+   "part": "상의",
+   "refine": 2,
+   "advanced": 0,
+   "value": 34053
+  },
+  {
+   "part": "상의",
+   "refine": 3,
+   "advanced": 0,
+   "value": 37197
+  },
+  {
+   "part": "상의",
+   "refine": 4,
+   "advanced": 0,
+   "value": 40368
+  },
+  {
+   "part": "상의",
+   "refine": 5,
+   "advanced": 0,
+   "value": 41258
+  },
+  {
+   "part": "상의",
+   "refine": 6,
+   "advanced": 0,
+   "value": 42178
+  },
+  {
+   "part": "상의",
+   "refine": 7,
+   "advanced": 0,
+   "value": 43129
+  },
+  {
+   "part": "상의",
+   "refine": 8,
+   "advanced": 0,
+   "value": 44112
+  },
+  {
+   "part": "상의",
+   "refine": 9,
+   "advanced": 0,
+   "value": 45128
+  },
+  {
+   "part": "상의",
+   "refine": 10,
+   "advanced": 0,
+   "value": 46177
+  },
+  {
+   "part": "상의",
+   "refine": 11,
+   "advanced": 0,
+   "value": 47262
+  },
+  {
+   "part": "상의",
+   "refine": 11,
+   "advanced": 1,
+   "value": 47483
+  },
+  {
+   "part": "상의",
+   "refine": 11,
+   "advanced": 2,
+   "value": 47706
+  },
+  {
+   "part": "상의",
+   "refine": 11,
+   "advanced": 3,
+   "value": 47930
+  },
+  {
+   "part": "상의",
+   "refine": 11,
+   "advanced": 4,
+   "value": 48156
+  },
+  {
+   "part": "상의",
+   "refine": 11,
+   "advanced": 5,
+   "value": 48383
+  },
+  {
+   "part": "상의",
+   "refine": 11,
+   "advanced": 6,
+   "value": 48622
+  },
+  {
+   "part": "상의",
+   "refine": 11,
+   "advanced": 7,
+   "value": 48862
+  },
+  {
+   "part": "상의",
+   "refine": 11,
+   "advanced": 8,
+   "value": 49104
+  },
+  {
+   "part": "상의",
+   "refine": 11,
+   "advanced": 9,
+   "value": 49348
+  },
+  {
+   "part": "상의",
+   "refine": 11,
+   "advanced": 10,
+   "value": 49593
+  },
+  {
+   "part": "상의",
+   "refine": 11,
+   "advanced": 11,
+   "value": 49840
+  },
+  {
+   "part": "상의",
+   "refine": 11,
+   "advanced": 12,
+   "value": 50089
+  },
+  {
+   "part": "상의",
+   "refine": 11,
+   "advanced": 13,
+   "value": 50339
+  },
+  {
+   "part": "상의",
+   "refine": 11,
+   "advanced": 14,
+   "value": 50591
+  },
+  {
+   "part": "상의",
+   "refine": 11,
+   "advanced": 15,
+   "value": 50845
+  },
+  {
+   "part": "상의",
+   "refine": 11,
+   "advanced": 16,
+   "value": 51101
+  },
+  {
+   "part": "상의",
+   "refine": 11,
+   "advanced": 17,
+   "value": 51358
+  },
+  {
+   "part": "상의",
+   "refine": 11,
+   "advanced": 18,
+   "value": 51618
+  },
+  {
+   "part": "상의",
+   "refine": 11,
+   "advanced": 19,
+   "value": 51879
+  },
+  {
+   "part": "상의",
+   "refine": 11,
+   "advanced": 20,
+   "value": 52141
+  },
+  {
+   "part": "상의",
+   "refine": 11,
+   "advanced": 21,
+   "value": 52406
+  },
+  {
+   "part": "상의",
+   "refine": 11,
+   "advanced": 22,
+   "value": 52672
+  },
+  {
+   "part": "상의",
+   "refine": 11,
+   "advanced": 23,
+   "value": 52941
+  },
+  {
+   "part": "상의",
+   "refine": 11,
+   "advanced": 24,
+   "value": 53211
+  },
+  {
+   "part": "상의",
+   "refine": 11,
+   "advanced": 25,
+   "value": 53483
+  },
+  {
+   "part": "상의",
+   "refine": 11,
+   "advanced": 26,
+   "value": 53756
+  },
+  {
+   "part": "상의",
+   "refine": 11,
+   "advanced": 27,
+   "value": 54032
+  },
+  {
+   "part": "상의",
+   "refine": 11,
+   "advanced": 28,
+   "value": 54310
+  },
+  {
+   "part": "상의",
+   "refine": 11,
+   "advanced": 29,
+   "value": 54589
+  },
+  {
+   "part": "상의",
+   "refine": 11,
+   "advanced": 30,
+   "value": 55968
+  },
+  {
+   "part": "상의",
+   "refine": 11,
+   "advanced": 31,
+   "value": 56257
+  },
+  {
+   "part": "상의",
+   "refine": 11,
+   "advanced": 32,
+   "value": 56548
+  },
+  {
+   "part": "상의",
+   "refine": 11,
+   "advanced": 33,
+   "value": 56841
+  },
+  {
+   "part": "상의",
+   "refine": 11,
+   "advanced": 34,
+   "value": 57136
+  },
+  {
+   "part": "상의",
+   "refine": 11,
+   "advanced": 35,
+   "value": 57434
+  },
+  {
+   "part": "상의",
+   "refine": 11,
+   "advanced": 36,
+   "value": 57733
+  },
+  {
+   "part": "상의",
+   "refine": 11,
+   "advanced": 37,
+   "value": 58033
+  },
+  {
+   "part": "상의",
+   "refine": 11,
+   "advanced": 38,
+   "value": 58337
+  },
+  {
+   "part": "상의",
+   "refine": 11,
+   "advanced": 39,
+   "value": 58642
+  },
+  {
+   "part": "상의",
+   "refine": 11,
+   "advanced": 40,
+   "value": 60684
+  },
+  {
+   "part": "상의",
+   "refine": 12,
+   "advanced": 0,
+   "value": 48383
+  },
+  {
+   "part": "상의",
+   "refine": 13,
+   "advanced": 0,
+   "value": 49593
+  },
+  {
+   "part": "상의",
+   "refine": 14,
+   "advanced": 0,
+   "value": 50845
+  },
+  {
+   "part": "상의",
+   "refine": 15,
+   "advanced": 0,
+   "value": 52141
+  },
+  {
+   "part": "상의",
+   "refine": 15,
+   "advanced": 1,
+   "value": 52406
+  },
+  {
+   "part": "상의",
+   "refine": 15,
+   "advanced": 2,
+   "value": 52672
+  },
+  {
+   "part": "상의",
+   "refine": 15,
+   "advanced": 3,
+   "value": 52941
+  },
+  {
+   "part": "상의",
+   "refine": 15,
+   "advanced": 4,
+   "value": 53211
+  },
+  {
+   "part": "상의",
+   "refine": 15,
+   "advanced": 5,
+   "value": 53483
+  },
+  {
+   "part": "상의",
+   "refine": 15,
+   "advanced": 6,
+   "value": 53756
+  },
+  {
+   "part": "상의",
+   "refine": 15,
+   "advanced": 7,
+   "value": 54032
+  },
+  {
+   "part": "상의",
+   "refine": 15,
+   "advanced": 8,
+   "value": 54310
+  },
+  {
+   "part": "상의",
+   "refine": 15,
+   "advanced": 9,
+   "value": 54589
+  },
+  {
+   "part": "상의",
+   "refine": 15,
+   "advanced": 10,
+   "value": 54871
+  },
+  {
+   "part": "상의",
+   "refine": 15,
+   "advanced": 11,
+   "value": 55154
+  },
+  {
+   "part": "상의",
+   "refine": 15,
+   "advanced": 12,
+   "value": 55440
+  },
+  {
+   "part": "상의",
+   "refine": 15,
+   "advanced": 13,
+   "value": 55727
+  },
+  {
+   "part": "상의",
+   "refine": 15,
+   "advanced": 14,
+   "value": 56016
+  },
+  {
+   "part": "상의",
+   "refine": 15,
+   "advanced": 15,
+   "value": 56308
+  },
+  {
+   "part": "상의",
+   "refine": 15,
+   "advanced": 16,
+   "value": 56601
+  },
+  {
+   "part": "상의",
+   "refine": 15,
+   "advanced": 17,
+   "value": 56896
+  },
+  {
+   "part": "상의",
+   "refine": 15,
+   "advanced": 18,
+   "value": 57194
+  },
+  {
+   "part": "상의",
+   "refine": 15,
+   "advanced": 19,
+   "value": 57493
+  },
+  {
+   "part": "상의",
+   "refine": 15,
+   "advanced": 20,
+   "value": 57795
+  },
+  {
+   "part": "상의",
+   "refine": 15,
+   "advanced": 21,
+   "value": 58099
+  },
+  {
+   "part": "상의",
+   "refine": 15,
+   "advanced": 22,
+   "value": 58404
+  },
+  {
+   "part": "상의",
+   "refine": 15,
+   "advanced": 23,
+   "value": 58712
+  },
+  {
+   "part": "상의",
+   "refine": 15,
+   "advanced": 24,
+   "value": 59022
+  },
+  {
+   "part": "상의",
+   "refine": 15,
+   "advanced": 25,
+   "value": 59334
+  },
+  {
+   "part": "상의",
+   "refine": 15,
+   "advanced": 26,
+   "value": 59648
+  },
+  {
+   "part": "상의",
+   "refine": 15,
+   "advanced": 27,
+   "value": 59965
+  },
+  {
+   "part": "상의",
+   "refine": 15,
+   "advanced": 28,
+   "value": 60283
+  },
+  {
+   "part": "상의",
+   "refine": 15,
+   "advanced": 29,
+   "value": 60604
+  },
+  {
+   "part": "상의",
+   "refine": 15,
+   "advanced": 30,
+   "value": 62145
+  },
+  {
+   "part": "상의",
+   "refine": 15,
+   "advanced": 31,
+   "value": 62477
+  },
+  {
+   "part": "상의",
+   "refine": 15,
+   "advanced": 32,
+   "value": 62811
+  },
+  {
+   "part": "상의",
+   "refine": 15,
+   "advanced": 33,
+   "value": 63148
+  },
+  {
+   "part": "상의",
+   "refine": 15,
+   "advanced": 34,
+   "value": 63486
+  },
+  {
+   "part": "상의",
+   "refine": 15,
+   "advanced": 35,
+   "value": 63827
+  },
+  {
+   "part": "상의",
+   "refine": 15,
+   "advanced": 36,
+   "value": 64171
+  },
+  {
+   "part": "상의",
+   "refine": 15,
+   "advanced": 37,
+   "value": 64517
+  },
+  {
+   "part": "상의",
+   "refine": 15,
+   "advanced": 38,
+   "value": 64864
+  },
+  {
+   "part": "상의",
+   "refine": 15,
+   "advanced": 39,
+   "value": 65215
+  },
+  {
+   "part": "상의",
+   "refine": 15,
+   "advanced": 40,
+   "value": 67497
+  },
+  {
+   "part": "상의",
+   "refine": 16,
+   "advanced": 0,
+   "value": 53483
+  },
+  {
+   "part": "상의",
+   "refine": 17,
+   "advanced": 0,
+   "value": 54871
+  },
+  {
+   "part": "상의",
+   "refine": 18,
+   "advanced": 0,
+   "value": 56308
+  },
+  {
+   "part": "상의",
+   "refine": 19,
+   "advanced": 0,
+   "value": 57795
+  },
+  {
+   "part": "상의",
+   "refine": 19,
+   "advanced": 1,
+   "value": 58099
+  },
+  {
+   "part": "상의",
+   "refine": 19,
+   "advanced": 2,
+   "value": 58404
+  },
+  {
+   "part": "상의",
+   "refine": 19,
+   "advanced": 3,
+   "value": 58712
+  },
+  {
+   "part": "상의",
+   "refine": 19,
+   "advanced": 4,
+   "value": 59022
+  },
+  {
+   "part": "상의",
+   "refine": 19,
+   "advanced": 5,
+   "value": 59334
+  },
+  {
+   "part": "상의",
+   "refine": 19,
+   "advanced": 6,
+   "value": 59648
+  },
+  {
+   "part": "상의",
+   "refine": 19,
+   "advanced": 7,
+   "value": 59965
+  },
+  {
+   "part": "상의",
+   "refine": 19,
+   "advanced": 8,
+   "value": 60283
+  },
+  {
+   "part": "상의",
+   "refine": 19,
+   "advanced": 9,
+   "value": 60604
+  },
+  {
+   "part": "상의",
+   "refine": 19,
+   "advanced": 10,
+   "value": 60927
+  },
+  {
+   "part": "상의",
+   "refine": 19,
+   "advanced": 11,
+   "value": 61252
+  },
+  {
+   "part": "상의",
+   "refine": 19,
+   "advanced": 12,
+   "value": 61580
+  },
+  {
+   "part": "상의",
+   "refine": 19,
+   "advanced": 13,
+   "value": 61910
+  },
+  {
+   "part": "상의",
+   "refine": 19,
+   "advanced": 14,
+   "value": 62242
+  },
+  {
+   "part": "상의",
+   "refine": 19,
+   "advanced": 15,
+   "value": 62576
+  },
+  {
+   "part": "상의",
+   "refine": 19,
+   "advanced": 16,
+   "value": 62913
+  },
+  {
+   "part": "상의",
+   "refine": 19,
+   "advanced": 17,
+   "value": 63252
+  },
+  {
+   "part": "상의",
+   "refine": 19,
+   "advanced": 18,
+   "value": 63593
+  },
+  {
+   "part": "상의",
+   "refine": 19,
+   "advanced": 19,
+   "value": 63937
+  },
+  {
+   "part": "상의",
+   "refine": 19,
+   "advanced": 20,
+   "value": 64283
+  },
+  {
+   "part": "상의",
+   "refine": 19,
+   "advanced": 21,
+   "value": 64631
+  },
+  {
+   "part": "상의",
+   "refine": 19,
+   "advanced": 22,
+   "value": 64982
+  },
+  {
+   "part": "상의",
+   "refine": 19,
+   "advanced": 23,
+   "value": 65335
+  },
+  {
+   "part": "상의",
+   "refine": 19,
+   "advanced": 24,
+   "value": 65691
+  },
+  {
+   "part": "상의",
+   "refine": 19,
+   "advanced": 25,
+   "value": 66049
+  },
+  {
+   "part": "상의",
+   "refine": 19,
+   "advanced": 26,
+   "value": 66409
+  },
+  {
+   "part": "상의",
+   "refine": 19,
+   "advanced": 27,
+   "value": 66773
+  },
+  {
+   "part": "상의",
+   "refine": 19,
+   "advanced": 28,
+   "value": 67138
+  },
+  {
+   "part": "상의",
+   "refine": 19,
+   "advanced": 29,
+   "value": 67506
+  },
+  {
+   "part": "상의",
+   "refine": 19,
+   "advanced": 30,
+   "value": 69234
+  },
+  {
+   "part": "상의",
+   "refine": 19,
+   "advanced": 31,
+   "value": 69615
+  },
+  {
+   "part": "상의",
+   "refine": 19,
+   "advanced": 32,
+   "value": 69998
+  },
+  {
+   "part": "상의",
+   "refine": 19,
+   "advanced": 33,
+   "value": 70384
+  },
+  {
+   "part": "상의",
+   "refine": 19,
+   "advanced": 34,
+   "value": 70772
+  },
+  {
+   "part": "상의",
+   "refine": 19,
+   "advanced": 35,
+   "value": 71164
+  },
+  {
+   "part": "상의",
+   "refine": 19,
+   "advanced": 36,
+   "value": 71558
+  },
+  {
+   "part": "상의",
+   "refine": 19,
+   "advanced": 37,
+   "value": 71954
+  },
+  {
+   "part": "상의",
+   "refine": 19,
+   "advanced": 38,
+   "value": 72354
+  },
+  {
+   "part": "상의",
+   "refine": 19,
+   "advanced": 39,
+   "value": 72756
+  },
+  {
+   "part": "상의",
+   "refine": 19,
+   "advanced": 40,
+   "value": 75313
+  },
+  {
+   "part": "상의",
+   "refine": 20,
+   "advanced": 0,
+   "value": 59334
+  },
+  {
+   "part": "상의",
+   "refine": 21,
+   "advanced": 0,
+   "value": 60927
+  },
+  {
+   "part": "상의",
+   "refine": 22,
+   "advanced": 0,
+   "value": 62576
+  },
+  {
+   "part": "상의",
+   "refine": 22,
+   "advanced": 1,
+   "value": 62913
+  },
+  {
+   "part": "상의",
+   "refine": 22,
+   "advanced": 2,
+   "value": 63252
+  },
+  {
+   "part": "상의",
+   "refine": 22,
+   "advanced": 3,
+   "value": 63593
+  },
+  {
+   "part": "상의",
+   "refine": 22,
+   "advanced": 4,
+   "value": 63937
+  },
+  {
+   "part": "상의",
+   "refine": 22,
+   "advanced": 5,
+   "value": 64283
+  },
+  {
+   "part": "상의",
+   "refine": 22,
+   "advanced": 6,
+   "value": 64631
+  },
+  {
+   "part": "상의",
+   "refine": 22,
+   "advanced": 7,
+   "value": 64982
+  },
+  {
+   "part": "상의",
+   "refine": 22,
+   "advanced": 8,
+   "value": 65335
+  },
+  {
+   "part": "상의",
+   "refine": 22,
+   "advanced": 9,
+   "value": 65691
+  },
+  {
+   "part": "상의",
+   "refine": 22,
+   "advanced": 10,
+   "value": 66049
+  },
+  {
+   "part": "상의",
+   "refine": 22,
+   "advanced": 11,
+   "value": 66409
+  },
+  {
+   "part": "상의",
+   "refine": 22,
+   "advanced": 12,
+   "value": 66773
+  },
+  {
+   "part": "상의",
+   "refine": 22,
+   "advanced": 13,
+   "value": 67138
+  },
+  {
+   "part": "상의",
+   "refine": 22,
+   "advanced": 14,
+   "value": 67506
+  },
+  {
+   "part": "상의",
+   "refine": 22,
+   "advanced": 15,
+   "value": 67877
+  },
+  {
+   "part": "상의",
+   "refine": 22,
+   "advanced": 16,
+   "value": 68250
+  },
+  {
+   "part": "상의",
+   "refine": 22,
+   "advanced": 17,
+   "value": 68626
+  },
+  {
+   "part": "상의",
+   "refine": 22,
+   "advanced": 18,
+   "value": 69004
+  },
+  {
+   "part": "상의",
+   "refine": 22,
+   "advanced": 19,
+   "value": 69385
+  },
+  {
+   "part": "상의",
+   "refine": 22,
+   "advanced": 20,
+   "value": 69769
+  },
+  {
+   "part": "상의",
+   "refine": 22,
+   "advanced": 21,
+   "value": 70155
+  },
+  {
+   "part": "상의",
+   "refine": 22,
+   "advanced": 22,
+   "value": 70544
+  },
+  {
+   "part": "상의",
+   "refine": 22,
+   "advanced": 23,
+   "value": 70936
+  },
+  {
+   "part": "상의",
+   "refine": 22,
+   "advanced": 24,
+   "value": 71330
+  },
+  {
+   "part": "상의",
+   "refine": 22,
+   "advanced": 25,
+   "value": 71727
+  },
+  {
+   "part": "상의",
+   "refine": 22,
+   "advanced": 26,
+   "value": 72127
+  },
+  {
+   "part": "상의",
+   "refine": 22,
+   "advanced": 27,
+   "value": 72530
+  },
+  {
+   "part": "상의",
+   "refine": 22,
+   "advanced": 28,
+   "value": 72935
+  },
+  {
+   "part": "상의",
+   "refine": 22,
+   "advanced": 29,
+   "value": 73343
+  },
+  {
+   "part": "상의",
+   "refine": 22,
+   "advanced": 30,
+   "value": 75229
+  },
+  {
+   "part": "상의",
+   "refine": 22,
+   "advanced": 31,
+   "value": 75651
+  },
+  {
+   "part": "상의",
+   "refine": 22,
+   "advanced": 32,
+   "value": 76076
+  },
+  {
+   "part": "상의",
+   "refine": 22,
+   "advanced": 33,
+   "value": 76504
+  },
+  {
+   "part": "상의",
+   "refine": 22,
+   "advanced": 34,
+   "value": 76935
+  },
+  {
+   "part": "상의",
+   "refine": 22,
+   "advanced": 35,
+   "value": 77369
+  },
+  {
+   "part": "상의",
+   "refine": 22,
+   "advanced": 36,
+   "value": 77805
+  },
+  {
+   "part": "상의",
+   "refine": 22,
+   "advanced": 37,
+   "value": 78245
+  },
+  {
+   "part": "상의",
+   "refine": 22,
+   "advanced": 38,
+   "value": 78688
+  },
+  {
+   "part": "상의",
+   "refine": 22,
+   "advanced": 39,
+   "value": 79134
+  },
+  {
+   "part": "상의",
+   "refine": 22,
+   "advanced": 40,
+   "value": 81924
+  },
+  {
+   "part": "상의",
+   "refine": 23,
+   "advanced": 0,
+   "value": 64283
+  },
+  {
+   "part": "상의",
+   "refine": 24,
+   "advanced": 0,
+   "value": 66049
+  },
+  {
+   "part": "상의",
+   "refine": 25,
+   "advanced": 0,
+   "value": 67877
+  },
+  {
+   "part": "상의",
+   "refine": 25,
+   "advanced": 26,
+   "value": 78466
+  },
+  {
+   "part": "상의",
+   "refine": 25,
+   "advanced": 27,
+   "value": 78913
+  },
+  {
+   "part": "상의",
+   "refine": 25,
+   "advanced": 28,
+   "value": 79362
+  },
+  {
+   "part": "상의",
+   "refine": 25,
+   "advanced": 29,
+   "value": 79815
+  },
+  {
+   "part": "상의",
+   "refine": 25,
+   "advanced": 30,
+   "value": 81875
+  },
+  {
+   "part": "상의",
+   "refine": 25,
+   "advanced": 31,
+   "value": 82343
+  },
+  {
+   "part": "상의",
+   "refine": 25,
+   "advanced": 32,
+   "value": 82814
+  },
+  {
+   "part": "상의",
+   "refine": 25,
+   "advanced": 33,
+   "value": 83289
+  },
+  {
+   "part": "상의",
+   "refine": 25,
+   "advanced": 34,
+   "value": 83767
+  },
+  {
+   "part": "상의",
+   "refine": 25,
+   "advanced": 35,
+   "value": 84247
+  },
+  {
+   "part": "상의",
+   "refine": 25,
+   "advanced": 36,
+   "value": 84732
+  },
+  {
+   "part": "상의",
+   "refine": 25,
+   "advanced": 37,
+   "value": 85219
+  },
+  {
+   "part": "상의",
+   "refine": 25,
+   "advanced": 38,
+   "value": 85711
+  },
+  {
+   "part": "상의",
+   "refine": 25,
+   "advanced": 39,
+   "value": 86205
+  },
+  {
+   "part": "상의",
+   "refine": 25,
+   "advanced": 40,
+   "value": 89253
+  },
+  {
+   "part": "어깨",
+   "refine": 0,
+   "advanced": 0,
+   "value": 37043
+  },
+  {
+   "part": "어깨",
+   "refine": 1,
+   "advanced": 0,
+   "value": 41155
+  },
+  {
+   "part": "어깨",
+   "refine": 2,
+   "advanced": 0,
+   "value": 45302
+  },
+  {
+   "part": "어깨",
+   "refine": 3,
+   "advanced": 0,
+   "value": 49483
+  },
+  {
+   "part": "어깨",
+   "refine": 4,
+   "advanced": 0,
+   "value": 53703
+  },
+  {
+   "part": "어깨",
+   "refine": 5,
+   "advanced": 0,
+   "value": 54887
+  },
+  {
+   "part": "어깨",
+   "refine": 6,
+   "advanced": 0,
+   "value": 56111
+  },
+  {
+   "part": "어깨",
+   "refine": 7,
+   "advanced": 0,
+   "value": 57376
+  },
+  {
+   "part": "어깨",
+   "refine": 8,
+   "advanced": 0,
+   "value": 58684
+  },
+  {
+   "part": "어깨",
+   "refine": 9,
+   "advanced": 0,
+   "value": 60035
+  },
+  {
+   "part": "어깨",
+   "refine": 10,
+   "advanced": 0,
+   "value": 61431
+  },
+  {
+   "part": "어깨",
+   "refine": 11,
+   "advanced": 0,
+   "value": 62875
+  },
+  {
+   "part": "어깨",
+   "refine": 11,
+   "advanced": 1,
+   "value": 63169
+  },
+  {
+   "part": "어깨",
+   "refine": 11,
+   "advanced": 2,
+   "value": 63465
+  },
+  {
+   "part": "어깨",
+   "refine": 11,
+   "advanced": 3,
+   "value": 63764
+  },
+  {
+   "part": "어깨",
+   "refine": 11,
+   "advanced": 4,
+   "value": 64064
+  },
+  {
+   "part": "어깨",
+   "refine": 11,
+   "advanced": 5,
+   "value": 64366
+  },
+  {
+   "part": "어깨",
+   "refine": 11,
+   "advanced": 6,
+   "value": 64684
+  },
+  {
+   "part": "어깨",
+   "refine": 11,
+   "advanced": 7,
+   "value": 65003
+  },
+  {
+   "part": "어깨",
+   "refine": 11,
+   "advanced": 8,
+   "value": 65325
+  },
+  {
+   "part": "어깨",
+   "refine": 11,
+   "advanced": 9,
+   "value": 65649
+  },
+  {
+   "part": "어깨",
+   "refine": 11,
+   "advanced": 10,
+   "value": 65976
+  },
+  {
+   "part": "어깨",
+   "refine": 11,
+   "advanced": 11,
+   "value": 66304
+  },
+  {
+   "part": "어깨",
+   "refine": 11,
+   "advanced": 12,
+   "value": 66635
+  },
+  {
+   "part": "어깨",
+   "refine": 11,
+   "advanced": 13,
+   "value": 66968
+  },
+  {
+   "part": "어깨",
+   "refine": 11,
+   "advanced": 14,
+   "value": 67304
+  },
+  {
+   "part": "어깨",
+   "refine": 11,
+   "advanced": 15,
+   "value": 67642
+  },
+  {
+   "part": "어깨",
+   "refine": 11,
+   "advanced": 16,
+   "value": 67982
+  },
+  {
+   "part": "어깨",
+   "refine": 11,
+   "advanced": 17,
+   "value": 68324
+  },
+  {
+   "part": "어깨",
+   "refine": 11,
+   "advanced": 18,
+   "value": 68669
+  },
+  {
+   "part": "어깨",
+   "refine": 11,
+   "advanced": 19,
+   "value": 69016
+  },
+  {
+   "part": "어깨",
+   "refine": 11,
+   "advanced": 20,
+   "value": 69366
+  },
+  {
+   "part": "어깨",
+   "refine": 11,
+   "advanced": 21,
+   "value": 69718
+  },
+  {
+   "part": "어깨",
+   "refine": 11,
+   "advanced": 22,
+   "value": 70072
+  },
+  {
+   "part": "어깨",
+   "refine": 11,
+   "advanced": 23,
+   "value": 70429
+  },
+  {
+   "part": "어깨",
+   "refine": 11,
+   "advanced": 24,
+   "value": 70788
+  },
+  {
+   "part": "어깨",
+   "refine": 11,
+   "advanced": 25,
+   "value": 71150
+  },
+  {
+   "part": "어깨",
+   "refine": 11,
+   "advanced": 26,
+   "value": 71514
+  },
+  {
+   "part": "어깨",
+   "refine": 11,
+   "advanced": 27,
+   "value": 71881
+  },
+  {
+   "part": "어깨",
+   "refine": 11,
+   "advanced": 28,
+   "value": 72251
+  },
+  {
+   "part": "어깨",
+   "refine": 11,
+   "advanced": 29,
+   "value": 72622
+  },
+  {
+   "part": "어깨",
+   "refine": 11,
+   "advanced": 30,
+   "value": 74456
+  },
+  {
+   "part": "어깨",
+   "refine": 11,
+   "advanced": 31,
+   "value": 74841
+  },
+  {
+   "part": "어깨",
+   "refine": 11,
+   "advanced": 32,
+   "value": 75229
+  },
+  {
+   "part": "어깨",
+   "refine": 11,
+   "advanced": 33,
+   "value": 75618
+  },
+  {
+   "part": "어깨",
+   "refine": 11,
+   "advanced": 34,
+   "value": 76011
+  },
+  {
+   "part": "어깨",
+   "refine": 11,
+   "advanced": 35,
+   "value": 76407
+  },
+  {
+   "part": "어깨",
+   "refine": 11,
+   "advanced": 36,
+   "value": 76804
+  },
+  {
+   "part": "어깨",
+   "refine": 11,
+   "advanced": 37,
+   "value": 77205
+  },
+  {
+   "part": "어깨",
+   "refine": 11,
+   "advanced": 38,
+   "value": 77608
+  },
+  {
+   "part": "어깨",
+   "refine": 11,
+   "advanced": 39,
+   "value": 78015
+  },
+  {
+   "part": "어깨",
+   "refine": 11,
+   "advanced": 40,
+   "value": 80731
+  },
+  {
+   "part": "어깨",
+   "refine": 12,
+   "advanced": 0,
+   "value": 64366
+  },
+  {
+   "part": "어깨",
+   "refine": 13,
+   "advanced": 0,
+   "value": 65976
+  },
+  {
+   "part": "어깨",
+   "refine": 14,
+   "advanced": 0,
+   "value": 67642
+  },
+  {
+   "part": "어깨",
+   "refine": 15,
+   "advanced": 0,
+   "value": 69366
+  },
+  {
+   "part": "어깨",
+   "refine": 15,
+   "advanced": 1,
+   "value": 69718
+  },
+  {
+   "part": "어깨",
+   "refine": 15,
+   "advanced": 2,
+   "value": 70072
+  },
+  {
+   "part": "어깨",
+   "refine": 15,
+   "advanced": 3,
+   "value": 70429
+  },
+  {
+   "part": "어깨",
+   "refine": 15,
+   "advanced": 4,
+   "value": 70788
+  },
+  {
+   "part": "어깨",
+   "refine": 15,
+   "advanced": 5,
+   "value": 71150
+  },
+  {
+   "part": "어깨",
+   "refine": 15,
+   "advanced": 6,
+   "value": 71514
+  },
+  {
+   "part": "어깨",
+   "refine": 15,
+   "advanced": 7,
+   "value": 71881
+  },
+  {
+   "part": "어깨",
+   "refine": 15,
+   "advanced": 8,
+   "value": 72251
+  },
+  {
+   "part": "어깨",
+   "refine": 15,
+   "advanced": 9,
+   "value": 72622
+  },
+  {
+   "part": "어깨",
+   "refine": 15,
+   "advanced": 10,
+   "value": 72997
+  },
+  {
+   "part": "어깨",
+   "refine": 15,
+   "advanced": 11,
+   "value": 73374
+  },
+  {
+   "part": "어깨",
+   "refine": 15,
+   "advanced": 12,
+   "value": 73754
+  },
+  {
+   "part": "어깨",
+   "refine": 15,
+   "advanced": 13,
+   "value": 74136
+  },
+  {
+   "part": "어깨",
+   "refine": 15,
+   "advanced": 14,
+   "value": 74521
+  },
+  {
+   "part": "어깨",
+   "refine": 15,
+   "advanced": 15,
+   "value": 74909
+  },
+  {
+   "part": "어깨",
+   "refine": 15,
+   "advanced": 16,
+   "value": 75299
+  },
+  {
+   "part": "어깨",
+   "refine": 15,
+   "advanced": 17,
+   "value": 75692
+  },
+  {
+   "part": "어깨",
+   "refine": 15,
+   "advanced": 18,
+   "value": 76087
+  },
+  {
+   "part": "어깨",
+   "refine": 15,
+   "advanced": 19,
+   "value": 76486
+  },
+  {
+   "part": "어깨",
+   "refine": 15,
+   "advanced": 20,
+   "value": 76887
+  },
+  {
+   "part": "어깨",
+   "refine": 15,
+   "advanced": 21,
+   "value": 77291
+  },
+  {
+   "part": "어깨",
+   "refine": 15,
+   "advanced": 22,
+   "value": 77698
+  },
+  {
+   "part": "어깨",
+   "refine": 15,
+   "advanced": 23,
+   "value": 78107
+  },
+  {
+   "part": "어깨",
+   "refine": 15,
+   "advanced": 24,
+   "value": 78519
+  },
+  {
+   "part": "어깨",
+   "refine": 15,
+   "advanced": 25,
+   "value": 78935
+  },
+  {
+   "part": "어깨",
+   "refine": 15,
+   "advanced": 26,
+   "value": 79353
+  },
+  {
+   "part": "어깨",
+   "refine": 15,
+   "advanced": 27,
+   "value": 79774
+  },
+  {
+   "part": "어깨",
+   "refine": 15,
+   "advanced": 28,
+   "value": 80198
+  },
+  {
+   "part": "어깨",
+   "refine": 15,
+   "advanced": 29,
+   "value": 80624
+  },
+  {
+   "part": "어깨",
+   "refine": 15,
+   "advanced": 30,
+   "value": 82675
+  },
+  {
+   "part": "어깨",
+   "refine": 15,
+   "advanced": 31,
+   "value": 83116
+  },
+  {
+   "part": "어깨",
+   "refine": 15,
+   "advanced": 32,
+   "value": 83560
+  },
+  {
+   "part": "어깨",
+   "refine": 15,
+   "advanced": 33,
+   "value": 84008
+  },
+  {
+   "part": "어깨",
+   "refine": 15,
+   "advanced": 34,
+   "value": 84459
+  },
+  {
+   "part": "어깨",
+   "refine": 15,
+   "advanced": 35,
+   "value": 84912
+  },
+  {
+   "part": "어깨",
+   "refine": 15,
+   "advanced": 36,
+   "value": 85368
+  },
+  {
+   "part": "어깨",
+   "refine": 15,
+   "advanced": 37,
+   "value": 85828
+  },
+  {
+   "part": "어깨",
+   "refine": 15,
+   "advanced": 38,
+   "value": 86292
+  },
+  {
+   "part": "어깨",
+   "refine": 15,
+   "advanced": 39,
+   "value": 86759
+  },
+  {
+   "part": "어깨",
+   "refine": 15,
+   "advanced": 40,
+   "value": 89793
+  },
+  {
+   "part": "어깨",
+   "refine": 16,
+   "advanced": 0,
+   "value": 71150
+  },
+  {
+   "part": "어깨",
+   "refine": 17,
+   "advanced": 0,
+   "value": 72997
+  },
+  {
+   "part": "어깨",
+   "refine": 18,
+   "advanced": 0,
+   "value": 74909
+  },
+  {
+   "part": "어깨",
+   "refine": 19,
+   "advanced": 0,
+   "value": 76887
+  },
+  {
+   "part": "어깨",
+   "refine": 19,
+   "advanced": 1,
+   "value": 77291
+  },
+  {
+   "part": "어깨",
+   "refine": 19,
+   "advanced": 2,
+   "value": 77698
+  },
+  {
+   "part": "어깨",
+   "refine": 19,
+   "advanced": 3,
+   "value": 78107
+  },
+  {
+   "part": "어깨",
+   "refine": 19,
+   "advanced": 4,
+   "value": 78519
+  },
+  {
+   "part": "어깨",
+   "refine": 19,
+   "advanced": 5,
+   "value": 78935
+  },
+  {
+   "part": "어깨",
+   "refine": 19,
+   "advanced": 6,
+   "value": 79353
+  },
+  {
+   "part": "어깨",
+   "refine": 19,
+   "advanced": 7,
+   "value": 79774
+  },
+  {
+   "part": "어깨",
+   "refine": 19,
+   "advanced": 8,
+   "value": 80198
+  },
+  {
+   "part": "어깨",
+   "refine": 19,
+   "advanced": 9,
+   "value": 80624
+  },
+  {
+   "part": "어깨",
+   "refine": 19,
+   "advanced": 10,
+   "value": 81054
+  },
+  {
+   "part": "어깨",
+   "refine": 19,
+   "advanced": 11,
+   "value": 81487
+  },
+  {
+   "part": "어깨",
+   "refine": 19,
+   "advanced": 12,
+   "value": 81922
+  },
+  {
+   "part": "어깨",
+   "refine": 19,
+   "advanced": 13,
+   "value": 82361
+  },
+  {
+   "part": "어깨",
+   "refine": 19,
+   "advanced": 14,
+   "value": 82803
+  },
+  {
+   "part": "어깨",
+   "refine": 19,
+   "advanced": 15,
+   "value": 83248
+  },
+  {
+   "part": "어깨",
+   "refine": 19,
+   "advanced": 16,
+   "value": 83695
+  },
+  {
+   "part": "어깨",
+   "refine": 19,
+   "advanced": 17,
+   "value": 84146
+  },
+  {
+   "part": "어깨",
+   "refine": 19,
+   "advanced": 18,
+   "value": 84600
+  },
+  {
+   "part": "어깨",
+   "refine": 19,
+   "advanced": 19,
+   "value": 85058
+  },
+  {
+   "part": "어깨",
+   "refine": 19,
+   "advanced": 20,
+   "value": 85518
+  },
+  {
+   "part": "어깨",
+   "refine": 19,
+   "advanced": 21,
+   "value": 85981
+  },
+  {
+   "part": "어깨",
+   "refine": 19,
+   "advanced": 22,
+   "value": 86448
+  },
+  {
+   "part": "어깨",
+   "refine": 19,
+   "advanced": 23,
+   "value": 86918
+  },
+  {
+   "part": "어깨",
+   "refine": 19,
+   "advanced": 24,
+   "value": 87391
+  },
+  {
+   "part": "어깨",
+   "refine": 19,
+   "advanced": 25,
+   "value": 87868
+  },
+  {
+   "part": "어깨",
+   "refine": 19,
+   "advanced": 26,
+   "value": 88347
+  },
+  {
+   "part": "어깨",
+   "refine": 19,
+   "advanced": 27,
+   "value": 88830
+  },
+  {
+   "part": "어깨",
+   "refine": 19,
+   "advanced": 28,
+   "value": 89317
+  },
+  {
+   "part": "어깨",
+   "refine": 19,
+   "advanced": 29,
+   "value": 89807
+  },
+  {
+   "part": "어깨",
+   "refine": 19,
+   "advanced": 30,
+   "value": 92106
+  },
+  {
+   "part": "어깨",
+   "refine": 19,
+   "advanced": 31,
+   "value": 92611
+  },
+  {
+   "part": "어깨",
+   "refine": 19,
+   "advanced": 32,
+   "value": 93121
+  },
+  {
+   "part": "어깨",
+   "refine": 19,
+   "advanced": 33,
+   "value": 93636
+  },
+  {
+   "part": "어깨",
+   "refine": 19,
+   "advanced": 34,
+   "value": 94152
+  },
+  {
+   "part": "어깨",
+   "refine": 19,
+   "advanced": 35,
+   "value": 94673
+  },
+  {
+   "part": "어깨",
+   "refine": 19,
+   "advanced": 36,
+   "value": 95197
+  },
+  {
+   "part": "어깨",
+   "refine": 19,
+   "advanced": 37,
+   "value": 95724
+  },
+  {
+   "part": "어깨",
+   "refine": 19,
+   "advanced": 38,
+   "value": 96256
+  },
+  {
+   "part": "어깨",
+   "refine": 19,
+   "advanced": 39,
+   "value": 96791
+  },
+  {
+   "part": "어깨",
+   "refine": 19,
+   "advanced": 40,
+   "value": 100193
+  },
+  {
+   "part": "어깨",
+   "refine": 20,
+   "advanced": 0,
+   "value": 78935
+  },
+  {
+   "part": "어깨",
+   "refine": 21,
+   "advanced": 0,
+   "value": 81054
+  },
+  {
+   "part": "어깨",
+   "refine": 22,
+   "advanced": 0,
+   "value": 83248
+  },
+  {
+   "part": "어깨",
+   "refine": 22,
+   "advanced": 1,
+   "value": 83695
+  },
+  {
+   "part": "어깨",
+   "refine": 22,
+   "advanced": 2,
+   "value": 84146
+  },
+  {
+   "part": "어깨",
+   "refine": 22,
+   "advanced": 3,
+   "value": 84600
+  },
+  {
+   "part": "어깨",
+   "refine": 22,
+   "advanced": 4,
+   "value": 85058
+  },
+  {
+   "part": "어깨",
+   "refine": 22,
+   "advanced": 5,
+   "value": 85518
+  },
+  {
+   "part": "어깨",
+   "refine": 22,
+   "advanced": 6,
+   "value": 85981
+  },
+  {
+   "part": "어깨",
+   "refine": 22,
+   "advanced": 7,
+   "value": 86448
+  },
+  {
+   "part": "어깨",
+   "refine": 22,
+   "advanced": 8,
+   "value": 86918
+  },
+  {
+   "part": "어깨",
+   "refine": 22,
+   "advanced": 9,
+   "value": 87391
+  },
+  {
+   "part": "어깨",
+   "refine": 22,
+   "advanced": 10,
+   "value": 87868
+  },
+  {
+   "part": "어깨",
+   "refine": 22,
+   "advanced": 11,
+   "value": 88347
+  },
+  {
+   "part": "어깨",
+   "refine": 22,
+   "advanced": 12,
+   "value": 88830
+  },
+  {
+   "part": "어깨",
+   "refine": 22,
+   "advanced": 13,
+   "value": 89317
+  },
+  {
+   "part": "어깨",
+   "refine": 22,
+   "advanced": 14,
+   "value": 89807
+  },
+  {
+   "part": "어깨",
+   "refine": 22,
+   "advanced": 15,
+   "value": 90300
+  },
+  {
+   "part": "어깨",
+   "refine": 22,
+   "advanced": 16,
+   "value": 90796
+  },
+  {
+   "part": "어깨",
+   "refine": 22,
+   "advanced": 17,
+   "value": 91296
+  },
+  {
+   "part": "어깨",
+   "refine": 22,
+   "advanced": 18,
+   "value": 91800
+  },
+  {
+   "part": "어깨",
+   "refine": 22,
+   "advanced": 19,
+   "value": 92306
+  },
+  {
+   "part": "어깨",
+   "refine": 22,
+   "advanced": 20,
+   "value": 92817
+  },
+  {
+   "part": "어깨",
+   "refine": 22,
+   "advanced": 21,
+   "value": 93331
+  },
+  {
+   "part": "어깨",
+   "refine": 22,
+   "advanced": 22,
+   "value": 93848
+  },
+  {
+   "part": "어깨",
+   "refine": 22,
+   "advanced": 23,
+   "value": 94369
+  },
+  {
+   "part": "어깨",
+   "refine": 22,
+   "advanced": 24,
+   "value": 94894
+  },
+  {
+   "part": "어깨",
+   "refine": 22,
+   "advanced": 25,
+   "value": 95422
+  },
+  {
+   "part": "어깨",
+   "refine": 22,
+   "advanced": 26,
+   "value": 95954
+  },
+  {
+   "part": "어깨",
+   "refine": 22,
+   "advanced": 27,
+   "value": 96489
+  },
+  {
+   "part": "어깨",
+   "refine": 22,
+   "advanced": 28,
+   "value": 97029
+  },
+  {
+   "part": "어깨",
+   "refine": 22,
+   "advanced": 29,
+   "value": 97572
+  },
+  {
+   "part": "어깨",
+   "refine": 22,
+   "advanced": 30,
+   "value": 100080
+  },
+  {
+   "part": "어깨",
+   "refine": 22,
+   "advanced": 31,
+   "value": 100642
+  },
+  {
+   "part": "어깨",
+   "refine": 22,
+   "advanced": 32,
+   "value": 101207
+  },
+  {
+   "part": "어깨",
+   "refine": 22,
+   "advanced": 33,
+   "value": 101776
+  },
+  {
+   "part": "어깨",
+   "refine": 22,
+   "advanced": 34,
+   "value": 102349
+  },
+  {
+   "part": "어깨",
+   "refine": 22,
+   "advanced": 35,
+   "value": 102927
+  },
+  {
+   "part": "어깨",
+   "refine": 22,
+   "advanced": 36,
+   "value": 103508
+  },
+  {
+   "part": "어깨",
+   "refine": 22,
+   "advanced": 37,
+   "value": 104094
+  },
+  {
+   "part": "어깨",
+   "refine": 22,
+   "advanced": 38,
+   "value": 104682
+  },
+  {
+   "part": "어깨",
+   "refine": 22,
+   "advanced": 39,
+   "value": 105276
+  },
+  {
+   "part": "어깨",
+   "refine": 22,
+   "advanced": 40,
+   "value": 108987
+  },
+  {
+   "part": "어깨",
+   "refine": 23,
+   "advanced": 0,
+   "value": 85518
+  },
+  {
+   "part": "어깨",
+   "refine": 24,
+   "advanced": 0,
+   "value": 87868
+  },
+  {
+   "part": "어깨",
+   "refine": 25,
+   "advanced": 0,
+   "value": 90300
+  },
+  {
+   "part": "어깨",
+   "refine": 25,
+   "advanced": 26,
+   "value": 104387
+  },
+  {
+   "part": "어깨",
+   "refine": 25,
+   "advanced": 27,
+   "value": 104981
+  },
+  {
+   "part": "어깨",
+   "refine": 25,
+   "advanced": 28,
+   "value": 105579
+  },
+  {
+   "part": "어깨",
+   "refine": 25,
+   "advanced": 29,
+   "value": 106181
+  },
+  {
+   "part": "어깨",
+   "refine": 25,
+   "advanced": 30,
+   "value": 108922
+  },
+  {
+   "part": "어깨",
+   "refine": 25,
+   "advanced": 31,
+   "value": 109545
+  },
+  {
+   "part": "어깨",
+   "refine": 25,
+   "advanced": 32,
+   "value": 110172
+  },
+  {
+   "part": "어깨",
+   "refine": 25,
+   "advanced": 33,
+   "value": 110803
+  },
+  {
+   "part": "어깨",
+   "refine": 25,
+   "advanced": 34,
+   "value": 111439
+  },
+  {
+   "part": "어깨",
+   "refine": 25,
+   "advanced": 35,
+   "value": 112078
+  },
+  {
+   "part": "어깨",
+   "refine": 25,
+   "advanced": 36,
+   "value": 112723
+  },
+  {
+   "part": "어깨",
+   "refine": 25,
+   "advanced": 37,
+   "value": 113371
+  },
+  {
+   "part": "어깨",
+   "refine": 25,
+   "advanced": 38,
+   "value": 114025
+  },
+  {
+   "part": "어깨",
+   "refine": 25,
+   "advanced": 39,
+   "value": 114683
+  },
+  {
+   "part": "어깨",
+   "refine": 25,
+   "advanced": 40,
+   "value": 118738
+  },
+  {
+   "part": "장갑",
+   "refine": 0,
+   "advanced": 0,
+   "value": 41767
+  },
+  {
+   "part": "장갑",
+   "refine": 1,
+   "advanced": 0,
+   "value": 46403
+  },
+  {
+   "part": "장갑",
+   "refine": 2,
+   "advanced": 0,
+   "value": 51079
+  },
+  {
+   "part": "장갑",
+   "refine": 3,
+   "advanced": 0,
+   "value": 55794
+  },
+  {
+   "part": "장갑",
+   "refine": 4,
+   "advanced": 0,
+   "value": 60552
+  },
+  {
+   "part": "장갑",
+   "refine": 5,
+   "advanced": 0,
+   "value": 61887
+  },
+  {
+   "part": "장갑",
+   "refine": 6,
+   "advanced": 0,
+   "value": 63267
+  },
+  {
+   "part": "장갑",
+   "refine": 7,
+   "advanced": 0,
+   "value": 64693
+  },
+  {
+   "part": "장갑",
+   "refine": 8,
+   "advanced": 0,
+   "value": 66167
+  },
+  {
+   "part": "장갑",
+   "refine": 9,
+   "advanced": 0,
+   "value": 67691
+  },
+  {
+   "part": "장갑",
+   "refine": 10,
+   "advanced": 0,
+   "value": 69265
+  },
+  {
+   "part": "장갑",
+   "refine": 11,
+   "advanced": 0,
+   "value": 70892
+  },
+  {
+   "part": "장갑",
+   "refine": 11,
+   "advanced": 1,
+   "value": 71224
+  },
+  {
+   "part": "장갑",
+   "refine": 11,
+   "advanced": 2,
+   "value": 71559
+  },
+  {
+   "part": "장갑",
+   "refine": 11,
+   "advanced": 3,
+   "value": 71895
+  },
+  {
+   "part": "장갑",
+   "refine": 11,
+   "advanced": 4,
+   "value": 72233
+  },
+  {
+   "part": "장갑",
+   "refine": 11,
+   "advanced": 5,
+   "value": 72574
+  },
+  {
+   "part": "장갑",
+   "refine": 11,
+   "advanced": 6,
+   "value": 72932
+  },
+  {
+   "part": "장갑",
+   "refine": 11,
+   "advanced": 7,
+   "value": 73293
+  },
+  {
+   "part": "장갑",
+   "refine": 11,
+   "advanced": 8,
+   "value": 73656
+  },
+  {
+   "part": "장갑",
+   "refine": 11,
+   "advanced": 9,
+   "value": 74021
+  },
+  {
+   "part": "장갑",
+   "refine": 11,
+   "advanced": 10,
+   "value": 74389
+  },
+  {
+   "part": "장갑",
+   "refine": 11,
+   "advanced": 11,
+   "value": 74760
+  },
+  {
+   "part": "장갑",
+   "refine": 11,
+   "advanced": 12,
+   "value": 75133
+  },
+  {
+   "part": "장갑",
+   "refine": 11,
+   "advanced": 13,
+   "value": 75508
+  },
+  {
+   "part": "장갑",
+   "refine": 11,
+   "advanced": 14,
+   "value": 75886
+  },
+  {
+   "part": "장갑",
+   "refine": 11,
+   "advanced": 15,
+   "value": 76267
+  },
+  {
+   "part": "장갑",
+   "refine": 11,
+   "advanced": 16,
+   "value": 76651
+  },
+  {
+   "part": "장갑",
+   "refine": 11,
+   "advanced": 17,
+   "value": 77037
+  },
+  {
+   "part": "장갑",
+   "refine": 11,
+   "advanced": 18,
+   "value": 77426
+  },
+  {
+   "part": "장갑",
+   "refine": 11,
+   "advanced": 19,
+   "value": 77817
+  },
+  {
+   "part": "장갑",
+   "refine": 11,
+   "advanced": 20,
+   "value": 78211
+  },
+  {
+   "part": "장갑",
+   "refine": 11,
+   "advanced": 21,
+   "value": 78608
+  },
+  {
+   "part": "장갑",
+   "refine": 11,
+   "advanced": 22,
+   "value": 79008
+  },
+  {
+   "part": "장갑",
+   "refine": 11,
+   "advanced": 23,
+   "value": 79410
+  },
+  {
+   "part": "장갑",
+   "refine": 11,
+   "advanced": 24,
+   "value": 79815
+  },
+  {
+   "part": "장갑",
+   "refine": 11,
+   "advanced": 25,
+   "value": 80223
+  },
+  {
+   "part": "장갑",
+   "refine": 11,
+   "advanced": 26,
+   "value": 80634
+  },
+  {
+   "part": "장갑",
+   "refine": 11,
+   "advanced": 27,
+   "value": 81048
+  },
+  {
+   "part": "장갑",
+   "refine": 11,
+   "advanced": 28,
+   "value": 81464
+  },
+  {
+   "part": "장갑",
+   "refine": 11,
+   "advanced": 29,
+   "value": 81883
+  },
+  {
+   "part": "장갑",
+   "refine": 11,
+   "advanced": 30,
+   "value": 83952
+  },
+  {
+   "part": "장갑",
+   "refine": 11,
+   "advanced": 31,
+   "value": 84385
+  },
+  {
+   "part": "장갑",
+   "refine": 11,
+   "advanced": 32,
+   "value": 84822
+  },
+  {
+   "part": "장갑",
+   "refine": 11,
+   "advanced": 33,
+   "value": 85261
+  },
+  {
+   "part": "장갑",
+   "refine": 11,
+   "advanced": 34,
+   "value": 85704
+  },
+  {
+   "part": "장갑",
+   "refine": 11,
+   "advanced": 35,
+   "value": 86150
+  },
+  {
+   "part": "장갑",
+   "refine": 11,
+   "advanced": 36,
+   "value": 86599
+  },
+  {
+   "part": "장갑",
+   "refine": 11,
+   "advanced": 37,
+   "value": 87050
+  },
+  {
+   "part": "장갑",
+   "refine": 11,
+   "advanced": 38,
+   "value": 87505
+  },
+  {
+   "part": "장갑",
+   "refine": 11,
+   "advanced": 39,
+   "value": 87963
+  },
+  {
+   "part": "장갑",
+   "refine": 11,
+   "advanced": 40,
+   "value": 91026
+  },
+  {
+   "part": "장갑",
+   "refine": 12,
+   "advanced": 0,
+   "value": 72574
+  },
+  {
+   "part": "장갑",
+   "refine": 13,
+   "advanced": 0,
+   "value": 74389
+  },
+  {
+   "part": "장갑",
+   "refine": 14,
+   "advanced": 0,
+   "value": 76267
+  },
+  {
+   "part": "장갑",
+   "refine": 15,
+   "advanced": 0,
+   "value": 78211
+  },
+  {
+   "part": "장갑",
+   "refine": 15,
+   "advanced": 1,
+   "value": 78608
+  },
+  {
+   "part": "장갑",
+   "refine": 15,
+   "advanced": 2,
+   "value": 79008
+  },
+  {
+   "part": "장갑",
+   "refine": 15,
+   "advanced": 3,
+   "value": 79410
+  },
+  {
+   "part": "장갑",
+   "refine": 15,
+   "advanced": 4,
+   "value": 79815
+  },
+  {
+   "part": "장갑",
+   "refine": 15,
+   "advanced": 5,
+   "value": 80223
+  },
+  {
+   "part": "장갑",
+   "refine": 15,
+   "advanced": 6,
+   "value": 80634
+  },
+  {
+   "part": "장갑",
+   "refine": 15,
+   "advanced": 7,
+   "value": 81048
+  },
+  {
+   "part": "장갑",
+   "refine": 15,
+   "advanced": 8,
+   "value": 81464
+  },
+  {
+   "part": "장갑",
+   "refine": 15,
+   "advanced": 9,
+   "value": 81883
+  },
+  {
+   "part": "장갑",
+   "refine": 15,
+   "advanced": 10,
+   "value": 82306
+  },
+  {
+   "part": "장갑",
+   "refine": 15,
+   "advanced": 11,
+   "value": 82731
+  },
+  {
+   "part": "장갑",
+   "refine": 15,
+   "advanced": 12,
+   "value": 83159
+  },
+  {
+   "part": "장갑",
+   "refine": 15,
+   "advanced": 13,
+   "value": 83590
+  },
+  {
+   "part": "장갑",
+   "refine": 15,
+   "advanced": 14,
+   "value": 84024
+  },
+  {
+   "part": "장갑",
+   "refine": 15,
+   "advanced": 15,
+   "value": 84461
+  },
+  {
+   "part": "장갑",
+   "refine": 15,
+   "advanced": 16,
+   "value": 84901
+  },
+  {
+   "part": "장갑",
+   "refine": 15,
+   "advanced": 17,
+   "value": 85344
+  },
+  {
+   "part": "장갑",
+   "refine": 15,
+   "advanced": 18,
+   "value": 85790
+  },
+  {
+   "part": "장갑",
+   "refine": 15,
+   "advanced": 19,
+   "value": 86239
+  },
+  {
+   "part": "장갑",
+   "refine": 15,
+   "advanced": 20,
+   "value": 86692
+  },
+  {
+   "part": "장갑",
+   "refine": 15,
+   "advanced": 21,
+   "value": 87147
+  },
+  {
+   "part": "장갑",
+   "refine": 15,
+   "advanced": 22,
+   "value": 87606
+  },
+  {
+   "part": "장갑",
+   "refine": 15,
+   "advanced": 23,
+   "value": 88067
+  },
+  {
+   "part": "장갑",
+   "refine": 15,
+   "advanced": 24,
+   "value": 88532
+  },
+  {
+   "part": "장갑",
+   "refine": 15,
+   "advanced": 25,
+   "value": 89000
+  },
+  {
+   "part": "장갑",
+   "refine": 15,
+   "advanced": 26,
+   "value": 89472
+  },
+  {
+   "part": "장갑",
+   "refine": 15,
+   "advanced": 27,
+   "value": 89946
+  },
+  {
+   "part": "장갑",
+   "refine": 15,
+   "advanced": 28,
+   "value": 90424
+  },
+  {
+   "part": "장갑",
+   "refine": 15,
+   "advanced": 29,
+   "value": 90906
+  },
+  {
+   "part": "장갑",
+   "refine": 15,
+   "advanced": 30,
+   "value": 93217
+  },
+  {
+   "part": "장갑",
+   "refine": 15,
+   "advanced": 31,
+   "value": 93715
+  },
+  {
+   "part": "장갑",
+   "refine": 15,
+   "advanced": 32,
+   "value": 94216
+  },
+  {
+   "part": "장갑",
+   "refine": 15,
+   "advanced": 33,
+   "value": 94721
+  },
+  {
+   "part": "장갑",
+   "refine": 15,
+   "advanced": 34,
+   "value": 95229
+  },
+  {
+   "part": "장갑",
+   "refine": 15,
+   "advanced": 35,
+   "value": 95740
+  },
+  {
+   "part": "장갑",
+   "refine": 15,
+   "advanced": 36,
+   "value": 96255
+  },
+  {
+   "part": "장갑",
+   "refine": 15,
+   "advanced": 37,
+   "value": 96774
+  },
+  {
+   "part": "장갑",
+   "refine": 15,
+   "advanced": 38,
+   "value": 97296
+  },
+  {
+   "part": "장갑",
+   "refine": 15,
+   "advanced": 39,
+   "value": 97822
+  },
+  {
+   "part": "장갑",
+   "refine": 15,
+   "advanced": 40,
+   "value": 101244
+  },
+  {
+   "part": "장갑",
+   "refine": 16,
+   "advanced": 0,
+   "value": 80223
+  },
+  {
+   "part": "장갑",
+   "refine": 17,
+   "advanced": 0,
+   "value": 82306
+  },
+  {
+   "part": "장갑",
+   "refine": 18,
+   "advanced": 0,
+   "value": 84461
+  },
+  {
+   "part": "장갑",
+   "refine": 19,
+   "advanced": 0,
+   "value": 86692
+  },
+  {
+   "part": "장갑",
+   "refine": 19,
+   "advanced": 1,
+   "value": 87147
+  },
+  {
+   "part": "장갑",
+   "refine": 19,
+   "advanced": 2,
+   "value": 87606
+  },
+  {
+   "part": "장갑",
+   "refine": 19,
+   "advanced": 3,
+   "value": 88067
+  },
+  {
+   "part": "장갑",
+   "refine": 19,
+   "advanced": 4,
+   "value": 88532
+  },
+  {
+   "part": "장갑",
+   "refine": 19,
+   "advanced": 5,
+   "value": 89000
+  },
+  {
+   "part": "장갑",
+   "refine": 19,
+   "advanced": 6,
+   "value": 89472
+  },
+  {
+   "part": "장갑",
+   "refine": 19,
+   "advanced": 7,
+   "value": 89946
+  },
+  {
+   "part": "장갑",
+   "refine": 19,
+   "advanced": 8,
+   "value": 90424
+  },
+  {
+   "part": "장갑",
+   "refine": 19,
+   "advanced": 9,
+   "value": 90906
+  },
+  {
+   "part": "장갑",
+   "refine": 19,
+   "advanced": 10,
+   "value": 91390
+  },
+  {
+   "part": "장갑",
+   "refine": 19,
+   "advanced": 11,
+   "value": 91878
+  },
+  {
+   "part": "장갑",
+   "refine": 19,
+   "advanced": 12,
+   "value": 92369
+  },
+  {
+   "part": "장갑",
+   "refine": 19,
+   "advanced": 13,
+   "value": 92864
+  },
+  {
+   "part": "장갑",
+   "refine": 19,
+   "advanced": 14,
+   "value": 93362
+  },
+  {
+   "part": "장갑",
+   "refine": 19,
+   "advanced": 15,
+   "value": 93863
+  },
+  {
+   "part": "장갑",
+   "refine": 19,
+   "advanced": 16,
+   "value": 94368
+  },
+  {
+   "part": "장갑",
+   "refine": 19,
+   "advanced": 17,
+   "value": 94877
+  },
+  {
+   "part": "장갑",
+   "refine": 19,
+   "advanced": 18,
+   "value": 95389
+  },
+  {
+   "part": "장갑",
+   "refine": 19,
+   "advanced": 19,
+   "value": 95904
+  },
+  {
+   "part": "장갑",
+   "refine": 19,
+   "advanced": 20,
+   "value": 96423
+  },
+  {
+   "part": "장갑",
+   "refine": 19,
+   "advanced": 21,
+   "value": 96946
+  },
+  {
+   "part": "장갑",
+   "refine": 19,
+   "advanced": 22,
+   "value": 97472
+  },
+  {
+   "part": "장갑",
+   "refine": 19,
+   "advanced": 23,
+   "value": 98002
+  },
+  {
+   "part": "장갑",
+   "refine": 19,
+   "advanced": 24,
+   "value": 98535
+  },
+  {
+   "part": "장갑",
+   "refine": 19,
+   "advanced": 25,
+   "value": 99072
+  },
+  {
+   "part": "장갑",
+   "refine": 19,
+   "advanced": 26,
+   "value": 99613
+  },
+  {
+   "part": "장갑",
+   "refine": 19,
+   "advanced": 27,
+   "value": 100158
+  },
+  {
+   "part": "장갑",
+   "refine": 19,
+   "advanced": 28,
+   "value": 100706
+  },
+  {
+   "part": "장갑",
+   "refine": 19,
+   "advanced": 29,
+   "value": 101259
+  },
+  {
+   "part": "장갑",
+   "refine": 19,
+   "advanced": 30,
+   "value": 103851
+  },
+  {
+   "part": "장갑",
+   "refine": 19,
+   "advanced": 31,
+   "value": 104421
+  },
+  {
+   "part": "장갑",
+   "refine": 19,
+   "advanced": 32,
+   "value": 104996
+  },
+  {
+   "part": "장갑",
+   "refine": 19,
+   "advanced": 33,
+   "value": 105576
+  },
+  {
+   "part": "장갑",
+   "refine": 19,
+   "advanced": 34,
+   "value": 106158
+  },
+  {
+   "part": "장갑",
+   "refine": 19,
+   "advanced": 35,
+   "value": 106746
+  },
+  {
+   "part": "장갑",
+   "refine": 19,
+   "advanced": 36,
+   "value": 107336
+  },
+  {
+   "part": "장갑",
+   "refine": 19,
+   "advanced": 37,
+   "value": 107932
+  },
+  {
+   "part": "장갑",
+   "refine": 19,
+   "advanced": 38,
+   "value": 108531
+  },
+  {
+   "part": "장갑",
+   "refine": 19,
+   "advanced": 39,
+   "value": 109134
+  },
+  {
+   "part": "장갑",
+   "refine": 19,
+   "advanced": 40,
+   "value": 112969
+  },
+  {
+   "part": "장갑",
+   "refine": 20,
+   "advanced": 0,
+   "value": 89000
+  },
+  {
+   "part": "장갑",
+   "refine": 21,
+   "advanced": 0,
+   "value": 91390
+  },
+  {
+   "part": "장갑",
+   "refine": 22,
+   "advanced": 0,
+   "value": 93863
+  },
+  {
+   "part": "장갑",
+   "refine": 22,
+   "advanced": 1,
+   "value": 94368
+  },
+  {
+   "part": "장갑",
+   "refine": 22,
+   "advanced": 2,
+   "value": 94877
+  },
+  {
+   "part": "장갑",
+   "refine": 22,
+   "advanced": 3,
+   "value": 95389
+  },
+  {
+   "part": "장갑",
+   "refine": 22,
+   "advanced": 4,
+   "value": 95904
+  },
+  {
+   "part": "장갑",
+   "refine": 22,
+   "advanced": 5,
+   "value": 96423
+  },
+  {
+   "part": "장갑",
+   "refine": 22,
+   "advanced": 6,
+   "value": 96946
+  },
+  {
+   "part": "장갑",
+   "refine": 22,
+   "advanced": 7,
+   "value": 97472
+  },
+  {
+   "part": "장갑",
+   "refine": 22,
+   "advanced": 8,
+   "value": 98002
+  },
+  {
+   "part": "장갑",
+   "refine": 22,
+   "advanced": 9,
+   "value": 98535
+  },
+  {
+   "part": "장갑",
+   "refine": 22,
+   "advanced": 10,
+   "value": 99072
+  },
+  {
+   "part": "장갑",
+   "refine": 22,
+   "advanced": 11,
+   "value": 99613
+  },
+  {
+   "part": "장갑",
+   "refine": 22,
+   "advanced": 12,
+   "value": 100158
+  },
+  {
+   "part": "장갑",
+   "refine": 22,
+   "advanced": 13,
+   "value": 100706
+  },
+  {
+   "part": "장갑",
+   "refine": 22,
+   "advanced": 14,
+   "value": 101259
+  },
+  {
+   "part": "장갑",
+   "refine": 22,
+   "advanced": 15,
+   "value": 101815
+  },
+  {
+   "part": "장갑",
+   "refine": 22,
+   "advanced": 16,
+   "value": 102374
+  },
+  {
+   "part": "장갑",
+   "refine": 22,
+   "advanced": 17,
+   "value": 102938
+  },
+  {
+   "part": "장갑",
+   "refine": 22,
+   "advanced": 18,
+   "value": 103506
+  },
+  {
+   "part": "장갑",
+   "refine": 22,
+   "advanced": 19,
+   "value": 104077
+  },
+  {
+   "part": "장갑",
+   "refine": 22,
+   "advanced": 20,
+   "value": 104653
+  },
+  {
+   "part": "장갑",
+   "refine": 22,
+   "advanced": 21,
+   "value": 105232
+  },
+  {
+   "part": "장갑",
+   "refine": 22,
+   "advanced": 22,
+   "value": 105816
+  },
+  {
+   "part": "장갑",
+   "refine": 22,
+   "advanced": 23,
+   "value": 106403
+  },
+  {
+   "part": "장갑",
+   "refine": 22,
+   "advanced": 24,
+   "value": 106995
+  },
+  {
+   "part": "장갑",
+   "refine": 22,
+   "advanced": 25,
+   "value": 107590
+  },
+  {
+   "part": "장갑",
+   "refine": 22,
+   "advanced": 26,
+   "value": 108190
+  },
+  {
+   "part": "장갑",
+   "refine": 22,
+   "advanced": 27,
+   "value": 108794
+  },
+  {
+   "part": "장갑",
+   "refine": 22,
+   "advanced": 28,
+   "value": 109402
+  },
+  {
+   "part": "장갑",
+   "refine": 22,
+   "advanced": 29,
+   "value": 110014
+  },
+  {
+   "part": "장갑",
+   "refine": 22,
+   "advanced": 30,
+   "value": 112842
+  },
+  {
+   "part": "장갑",
+   "refine": 22,
+   "advanced": 31,
+   "value": 113476
+  },
+  {
+   "part": "장갑",
+   "refine": 22,
+   "advanced": 32,
+   "value": 114113
+  },
+  {
+   "part": "장갑",
+   "refine": 22,
+   "advanced": 33,
+   "value": 114755
+  },
+  {
+   "part": "장갑",
+   "refine": 22,
+   "advanced": 34,
+   "value": 115401
+  },
+  {
+   "part": "장갑",
+   "refine": 22,
+   "advanced": 35,
+   "value": 116052
+  },
+  {
+   "part": "장갑",
+   "refine": 22,
+   "advanced": 36,
+   "value": 116708
+  },
+  {
+   "part": "장갑",
+   "refine": 22,
+   "advanced": 37,
+   "value": 117367
+  },
+  {
+   "part": "장갑",
+   "refine": 22,
+   "advanced": 38,
+   "value": 118032
+  },
+  {
+   "part": "장갑",
+   "refine": 22,
+   "advanced": 39,
+   "value": 118701
+  },
+  {
+   "part": "장갑",
+   "refine": 22,
+   "advanced": 40,
+   "value": 122885
+  },
+  {
+   "part": "장갑",
+   "refine": 23,
+   "advanced": 0,
+   "value": 96423
+  },
+  {
+   "part": "장갑",
+   "refine": 24,
+   "advanced": 0,
+   "value": 99072
+  },
+  {
+   "part": "장갑",
+   "refine": 25,
+   "advanced": 0,
+   "value": 101815
+  },
+  {
+   "part": "장갑",
+   "refine": 25,
+   "advanced": 26,
+   "value": 117699
+  },
+  {
+   "part": "장갑",
+   "refine": 25,
+   "advanced": 27,
+   "value": 118368
+  },
+  {
+   "part": "장갑",
+   "refine": 25,
+   "advanced": 28,
+   "value": 119042
+  },
+  {
+   "part": "장갑",
+   "refine": 25,
+   "advanced": 29,
+   "value": 119721
+  },
+  {
+   "part": "장갑",
+   "refine": 25,
+   "advanced": 30,
+   "value": 122813
+  },
+  {
+   "part": "장갑",
+   "refine": 25,
+   "advanced": 31,
+   "value": 123514
+  },
+  {
+   "part": "장갑",
+   "refine": 25,
+   "advanced": 32,
+   "value": 124221
+  },
+  {
+   "part": "장갑",
+   "refine": 25,
+   "advanced": 33,
+   "value": 124933
+  },
+  {
+   "part": "장갑",
+   "refine": 25,
+   "advanced": 34,
+   "value": 125649
+  },
+  {
+   "part": "장갑",
+   "refine": 25,
+   "advanced": 35,
+   "value": 126370
+  },
+  {
+   "part": "장갑",
+   "refine": 25,
+   "advanced": 36,
+   "value": 127098
+  },
+  {
+   "part": "장갑",
+   "refine": 25,
+   "advanced": 37,
+   "value": 127829
+  },
+  {
+   "part": "장갑",
+   "refine": 25,
+   "advanced": 38,
+   "value": 128565
+  },
+  {
+   "part": "장갑",
+   "refine": 25,
+   "advanced": 39,
+   "value": 129307
+  },
+  {
+   "part": "장갑",
+   "refine": 25,
+   "advanced": 40,
+   "value": 133879
+  },
+  {
+   "part": "투구",
+   "refine": 0,
+   "advanced": 0,
+   "value": 34806
+  },
+  {
+   "part": "투구",
+   "refine": 1,
+   "advanced": 0,
+   "value": 38669
+  },
+  {
+   "part": "투구",
+   "refine": 2,
+   "advanced": 0,
+   "value": 42565
+  },
+  {
+   "part": "투구",
+   "refine": 3,
+   "advanced": 0,
+   "value": 46495
+  },
+  {
+   "part": "투구",
+   "refine": 4,
+   "advanced": 0,
+   "value": 50459
+  },
+  {
+   "part": "투구",
+   "refine": 5,
+   "advanced": 0,
+   "value": 51572
+  },
+  {
+   "part": "투구",
+   "refine": 6,
+   "advanced": 0,
+   "value": 52722
+  },
+  {
+   "part": "투구",
+   "refine": 7,
+   "advanced": 0,
+   "value": 53911
+  },
+  {
+   "part": "투구",
+   "refine": 8,
+   "advanced": 0,
+   "value": 55139
+  },
+  {
+   "part": "투구",
+   "refine": 9,
+   "advanced": 0,
+   "value": 56409
+  },
+  {
+   "part": "투구",
+   "refine": 10,
+   "advanced": 0,
+   "value": 57721
+  },
+  {
+   "part": "투구",
+   "refine": 11,
+   "advanced": 0,
+   "value": 59077
+  },
+  {
+   "part": "투구",
+   "refine": 11,
+   "advanced": 1,
+   "value": 59353
+  },
+  {
+   "part": "투구",
+   "refine": 11,
+   "advanced": 2,
+   "value": 59632
+  },
+  {
+   "part": "투구",
+   "refine": 11,
+   "advanced": 3,
+   "value": 59912
+  },
+  {
+   "part": "투구",
+   "refine": 11,
+   "advanced": 4,
+   "value": 60194
+  },
+  {
+   "part": "투구",
+   "refine": 11,
+   "advanced": 5,
+   "value": 60478
+  },
+  {
+   "part": "투구",
+   "refine": 11,
+   "advanced": 6,
+   "value": 60777
+  },
+  {
+   "part": "투구",
+   "refine": 11,
+   "advanced": 7,
+   "value": 61077
+  },
+  {
+   "part": "투구",
+   "refine": 11,
+   "advanced": 8,
+   "value": 61379
+  },
+  {
+   "part": "투구",
+   "refine": 11,
+   "advanced": 9,
+   "value": 61684
+  },
+  {
+   "part": "투구",
+   "refine": 11,
+   "advanced": 10,
+   "value": 61991
+  },
+  {
+   "part": "투구",
+   "refine": 11,
+   "advanced": 11,
+   "value": 62299
+  },
+  {
+   "part": "투구",
+   "refine": 11,
+   "advanced": 12,
+   "value": 62610
+  },
+  {
+   "part": "투구",
+   "refine": 11,
+   "advanced": 13,
+   "value": 62923
+  },
+  {
+   "part": "투구",
+   "refine": 11,
+   "advanced": 14,
+   "value": 63238
+  },
+  {
+   "part": "투구",
+   "refine": 11,
+   "advanced": 15,
+   "value": 63556
+  },
+  {
+   "part": "투구",
+   "refine": 11,
+   "advanced": 16,
+   "value": 63875
+  },
+  {
+   "part": "투구",
+   "refine": 11,
+   "advanced": 17,
+   "value": 64197
+  },
+  {
+   "part": "투구",
+   "refine": 11,
+   "advanced": 18,
+   "value": 64521
+  },
+  {
+   "part": "투구",
+   "refine": 11,
+   "advanced": 19,
+   "value": 64847
+  },
+  {
+   "part": "투구",
+   "refine": 11,
+   "advanced": 20,
+   "value": 65176
+  },
+  {
+   "part": "투구",
+   "refine": 11,
+   "advanced": 21,
+   "value": 65506
+  },
+  {
+   "part": "투구",
+   "refine": 11,
+   "advanced": 22,
+   "value": 65839
+  },
+  {
+   "part": "투구",
+   "refine": 11,
+   "advanced": 23,
+   "value": 66175
+  },
+  {
+   "part": "투구",
+   "refine": 11,
+   "advanced": 24,
+   "value": 66512
+  },
+  {
+   "part": "투구",
+   "refine": 11,
+   "advanced": 25,
+   "value": 66852
+  },
+  {
+   "part": "투구",
+   "refine": 11,
+   "advanced": 26,
+   "value": 67195
+  },
+  {
+   "part": "투구",
+   "refine": 11,
+   "advanced": 27,
+   "value": 67539
+  },
+  {
+   "part": "투구",
+   "refine": 11,
+   "advanced": 28,
+   "value": 67886
+  },
+  {
+   "part": "투구",
+   "refine": 11,
+   "advanced": 29,
+   "value": 68236
+  },
+  {
+   "part": "투구",
+   "refine": 11,
+   "advanced": 30,
+   "value": 69959
+  },
+  {
+   "part": "투구",
+   "refine": 11,
+   "advanced": 31,
+   "value": 70320
+  },
+  {
+   "part": "투구",
+   "refine": 11,
+   "advanced": 32,
+   "value": 70684
+  },
+  {
+   "part": "투구",
+   "refine": 11,
+   "advanced": 33,
+   "value": 71051
+  },
+  {
+   "part": "투구",
+   "refine": 11,
+   "advanced": 34,
+   "value": 71420
+  },
+  {
+   "part": "투구",
+   "refine": 11,
+   "advanced": 35,
+   "value": 71791
+  },
+  {
+   "part": "투구",
+   "refine": 11,
+   "advanced": 36,
+   "value": 72166
+  },
+  {
+   "part": "투구",
+   "refine": 11,
+   "advanced": 37,
+   "value": 72542
+  },
+  {
+   "part": "투구",
+   "refine": 11,
+   "advanced": 38,
+   "value": 72920
+  },
+  {
+   "part": "투구",
+   "refine": 11,
+   "advanced": 39,
+   "value": 73303
+  },
+  {
+   "part": "투구",
+   "refine": 11,
+   "advanced": 40,
+   "value": 75855
+  },
+  {
+   "part": "투구",
+   "refine": 12,
+   "advanced": 0,
+   "value": 60478
+  },
+  {
+   "part": "투구",
+   "refine": 13,
+   "advanced": 0,
+   "value": 61991
+  },
+  {
+   "part": "투구",
+   "refine": 14,
+   "advanced": 0,
+   "value": 63556
+  },
+  {
+   "part": "투구",
+   "refine": 15,
+   "advanced": 0,
+   "value": 65176
+  },
+  {
+   "part": "투구",
+   "refine": 15,
+   "advanced": 1,
+   "value": 65506
+  },
+  {
+   "part": "투구",
+   "refine": 15,
+   "advanced": 2,
+   "value": 65839
+  },
+  {
+   "part": "투구",
+   "refine": 15,
+   "advanced": 3,
+   "value": 66175
+  },
+  {
+   "part": "투구",
+   "refine": 15,
+   "advanced": 4,
+   "value": 66512
+  },
+  {
+   "part": "투구",
+   "refine": 15,
+   "advanced": 5,
+   "value": 66852
+  },
+  {
+   "part": "투구",
+   "refine": 15,
+   "advanced": 6,
+   "value": 67195
+  },
+  {
+   "part": "투구",
+   "refine": 15,
+   "advanced": 7,
+   "value": 67539
+  },
+  {
+   "part": "투구",
+   "refine": 15,
+   "advanced": 8,
+   "value": 67886
+  },
+  {
+   "part": "투구",
+   "refine": 15,
+   "advanced": 9,
+   "value": 68236
+  },
+  {
+   "part": "투구",
+   "refine": 15,
+   "advanced": 10,
+   "value": 68588
+  },
+  {
+   "part": "투구",
+   "refine": 15,
+   "advanced": 11,
+   "value": 68942
+  },
+  {
+   "part": "투구",
+   "refine": 15,
+   "advanced": 12,
+   "value": 69299
+  },
+  {
+   "part": "투구",
+   "refine": 15,
+   "advanced": 13,
+   "value": 69658
+  },
+  {
+   "part": "투구",
+   "refine": 15,
+   "advanced": 14,
+   "value": 70020
+  },
+  {
+   "part": "투구",
+   "refine": 15,
+   "advanced": 15,
+   "value": 70384
+  },
+  {
+   "part": "투구",
+   "refine": 15,
+   "advanced": 16,
+   "value": 70751
+  },
+  {
+   "part": "투구",
+   "refine": 15,
+   "advanced": 17,
+   "value": 71120
+  },
+  {
+   "part": "투구",
+   "refine": 15,
+   "advanced": 18,
+   "value": 71491
+  },
+  {
+   "part": "투구",
+   "refine": 15,
+   "advanced": 19,
+   "value": 71866
+  },
+  {
+   "part": "투구",
+   "refine": 15,
+   "advanced": 20,
+   "value": 72243
+  },
+  {
+   "part": "투구",
+   "refine": 15,
+   "advanced": 21,
+   "value": 72622
+  },
+  {
+   "part": "투구",
+   "refine": 15,
+   "advanced": 22,
+   "value": 73004
+  },
+  {
+   "part": "투구",
+   "refine": 15,
+   "advanced": 23,
+   "value": 73389
+  },
+  {
+   "part": "투구",
+   "refine": 15,
+   "advanced": 24,
+   "value": 73777
+  },
+  {
+   "part": "투구",
+   "refine": 15,
+   "advanced": 25,
+   "value": 74167
+  },
+  {
+   "part": "투구",
+   "refine": 15,
+   "advanced": 26,
+   "value": 74560
+  },
+  {
+   "part": "투구",
+   "refine": 15,
+   "advanced": 27,
+   "value": 74955
+  },
+  {
+   "part": "투구",
+   "refine": 15,
+   "advanced": 28,
+   "value": 75353
+  },
+  {
+   "part": "투구",
+   "refine": 15,
+   "advanced": 29,
+   "value": 75754
+  },
+  {
+   "part": "투구",
+   "refine": 15,
+   "advanced": 30,
+   "value": 77681
+  },
+  {
+   "part": "투구",
+   "refine": 15,
+   "advanced": 31,
+   "value": 78096
+  },
+  {
+   "part": "투구",
+   "refine": 15,
+   "advanced": 32,
+   "value": 78513
+  },
+  {
+   "part": "투구",
+   "refine": 15,
+   "advanced": 33,
+   "value": 78933
+  },
+  {
+   "part": "투구",
+   "refine": 15,
+   "advanced": 34,
+   "value": 79357
+  },
+  {
+   "part": "투구",
+   "refine": 15,
+   "advanced": 35,
+   "value": 79783
+  },
+  {
+   "part": "투구",
+   "refine": 15,
+   "advanced": 36,
+   "value": 80212
+  },
+  {
+   "part": "투구",
+   "refine": 15,
+   "advanced": 37,
+   "value": 80645
+  },
+  {
+   "part": "투구",
+   "refine": 15,
+   "advanced": 38,
+   "value": 81079
+  },
+  {
+   "part": "투구",
+   "refine": 15,
+   "advanced": 39,
+   "value": 81518
+  },
+  {
+   "part": "투구",
+   "refine": 15,
+   "advanced": 40,
+   "value": 84369
+  },
+  {
+   "part": "투구",
+   "refine": 16,
+   "advanced": 0,
+   "value": 66852
+  },
+  {
+   "part": "투구",
+   "refine": 17,
+   "advanced": 0,
+   "value": 68588
+  },
+  {
+   "part": "투구",
+   "refine": 18,
+   "advanced": 0,
+   "value": 70384
+  },
+  {
+   "part": "투구",
+   "refine": 19,
+   "advanced": 0,
+   "value": 72243
+  },
+  {
+   "part": "투구",
+   "refine": 19,
+   "advanced": 1,
+   "value": 72622
+  },
+  {
+   "part": "투구",
+   "refine": 19,
+   "advanced": 2,
+   "value": 73004
+  },
+  {
+   "part": "투구",
+   "refine": 19,
+   "advanced": 3,
+   "value": 73389
+  },
+  {
+   "part": "투구",
+   "refine": 19,
+   "advanced": 4,
+   "value": 73777
+  },
+  {
+   "part": "투구",
+   "refine": 19,
+   "advanced": 5,
+   "value": 74167
+  },
+  {
+   "part": "투구",
+   "refine": 19,
+   "advanced": 6,
+   "value": 74560
+  },
+  {
+   "part": "투구",
+   "refine": 19,
+   "advanced": 7,
+   "value": 74955
+  },
+  {
+   "part": "투구",
+   "refine": 19,
+   "advanced": 8,
+   "value": 75353
+  },
+  {
+   "part": "투구",
+   "refine": 19,
+   "advanced": 9,
+   "value": 75754
+  },
+  {
+   "part": "투구",
+   "refine": 19,
+   "advanced": 10,
+   "value": 76158
+  },
+  {
+   "part": "투구",
+   "refine": 19,
+   "advanced": 11,
+   "value": 76565
+  },
+  {
+   "part": "투구",
+   "refine": 19,
+   "advanced": 12,
+   "value": 76974
+  },
+  {
+   "part": "투구",
+   "refine": 19,
+   "advanced": 13,
+   "value": 77386
+  },
+  {
+   "part": "투구",
+   "refine": 19,
+   "advanced": 14,
+   "value": 77801
+  },
+  {
+   "part": "투구",
+   "refine": 19,
+   "advanced": 15,
+   "value": 78219
+  },
+  {
+   "part": "투구",
+   "refine": 19,
+   "advanced": 16,
+   "value": 78640
+  },
+  {
+   "part": "투구",
+   "refine": 19,
+   "advanced": 17,
+   "value": 79064
+  },
+  {
+   "part": "투구",
+   "refine": 19,
+   "advanced": 18,
+   "value": 79490
+  },
+  {
+   "part": "투구",
+   "refine": 19,
+   "advanced": 19,
+   "value": 79920
+  },
+  {
+   "part": "투구",
+   "refine": 19,
+   "advanced": 20,
+   "value": 80352
+  },
+  {
+   "part": "투구",
+   "refine": 19,
+   "advanced": 21,
+   "value": 80788
+  },
+  {
+   "part": "투구",
+   "refine": 19,
+   "advanced": 22,
+   "value": 81226
+  },
+  {
+   "part": "투구",
+   "refine": 19,
+   "advanced": 23,
+   "value": 81668
+  },
+  {
+   "part": "투구",
+   "refine": 19,
+   "advanced": 24,
+   "value": 82112
+  },
+  {
+   "part": "투구",
+   "refine": 19,
+   "advanced": 25,
+   "value": 82560
+  },
+  {
+   "part": "투구",
+   "refine": 19,
+   "advanced": 26,
+   "value": 83011
+  },
+  {
+   "part": "투구",
+   "refine": 19,
+   "advanced": 27,
+   "value": 83465
+  },
+  {
+   "part": "투구",
+   "refine": 19,
+   "advanced": 28,
+   "value": 83922
+  },
+  {
+   "part": "투구",
+   "refine": 19,
+   "advanced": 29,
+   "value": 84382
+  },
+  {
+   "part": "투구",
+   "refine": 19,
+   "advanced": 30,
+   "value": 86541
+  },
+  {
+   "part": "투구",
+   "refine": 19,
+   "advanced": 31,
+   "value": 87018
+  },
+  {
+   "part": "투구",
+   "refine": 19,
+   "advanced": 32,
+   "value": 87497
+  },
+  {
+   "part": "투구",
+   "refine": 19,
+   "advanced": 33,
+   "value": 87980
+  },
+  {
+   "part": "투구",
+   "refine": 19,
+   "advanced": 34,
+   "value": 88465
+  },
+  {
+   "part": "투구",
+   "refine": 19,
+   "advanced": 35,
+   "value": 88954
+  },
+  {
+   "part": "투구",
+   "refine": 19,
+   "advanced": 36,
+   "value": 89446
+  },
+  {
+   "part": "투구",
+   "refine": 19,
+   "advanced": 37,
+   "value": 89942
+  },
+  {
+   "part": "투구",
+   "refine": 19,
+   "advanced": 38,
+   "value": 90442
+  },
+  {
+   "part": "투구",
+   "refine": 19,
+   "advanced": 39,
+   "value": 90945
+  },
+  {
+   "part": "투구",
+   "refine": 19,
+   "advanced": 40,
+   "value": 94140
+  },
+  {
+   "part": "투구",
+   "refine": 20,
+   "advanced": 0,
+   "value": 74167
+  },
+  {
+   "part": "투구",
+   "refine": 21,
+   "advanced": 0,
+   "value": 76158
+  },
+  {
+   "part": "투구",
+   "refine": 22,
+   "advanced": 0,
+   "value": 78219
+  },
+  {
+   "part": "투구",
+   "refine": 22,
+   "advanced": 1,
+   "value": 78640
+  },
+  {
+   "part": "투구",
+   "refine": 22,
+   "advanced": 2,
+   "value": 79064
+  },
+  {
+   "part": "투구",
+   "refine": 22,
+   "advanced": 3,
+   "value": 79490
+  },
+  {
+   "part": "투구",
+   "refine": 22,
+   "advanced": 4,
+   "value": 79920
+  },
+  {
+   "part": "투구",
+   "refine": 22,
+   "advanced": 5,
+   "value": 80352
+  },
+  {
+   "part": "투구",
+   "refine": 22,
+   "advanced": 6,
+   "value": 80788
+  },
+  {
+   "part": "투구",
+   "refine": 22,
+   "advanced": 7,
+   "value": 81226
+  },
+  {
+   "part": "투구",
+   "refine": 22,
+   "advanced": 8,
+   "value": 81668
+  },
+  {
+   "part": "투구",
+   "refine": 22,
+   "advanced": 9,
+   "value": 82112
+  },
+  {
+   "part": "투구",
+   "refine": 22,
+   "advanced": 10,
+   "value": 82560
+  },
+  {
+   "part": "투구",
+   "refine": 22,
+   "advanced": 11,
+   "value": 83011
+  },
+  {
+   "part": "투구",
+   "refine": 22,
+   "advanced": 12,
+   "value": 83465
+  },
+  {
+   "part": "투구",
+   "refine": 22,
+   "advanced": 13,
+   "value": 83922
+  },
+  {
+   "part": "투구",
+   "refine": 22,
+   "advanced": 14,
+   "value": 84382
+  },
+  {
+   "part": "투구",
+   "refine": 22,
+   "advanced": 15,
+   "value": 84845
+  },
+  {
+   "part": "투구",
+   "refine": 22,
+   "advanced": 16,
+   "value": 85312
+  },
+  {
+   "part": "투구",
+   "refine": 22,
+   "advanced": 17,
+   "value": 85782
+  },
+  {
+   "part": "투구",
+   "refine": 22,
+   "advanced": 18,
+   "value": 86255
+  },
+  {
+   "part": "투구",
+   "refine": 22,
+   "advanced": 19,
+   "value": 86731
+  },
+  {
+   "part": "투구",
+   "refine": 22,
+   "advanced": 20,
+   "value": 87210
+  },
+  {
+   "part": "투구",
+   "refine": 22,
+   "advanced": 21,
+   "value": 87693
+  },
+  {
+   "part": "투구",
+   "refine": 22,
+   "advanced": 22,
+   "value": 88179
+  },
+  {
+   "part": "투구",
+   "refine": 22,
+   "advanced": 23,
+   "value": 88669
+  },
+  {
+   "part": "투구",
+   "refine": 22,
+   "advanced": 24,
+   "value": 89162
+  },
+  {
+   "part": "투구",
+   "refine": 22,
+   "advanced": 25,
+   "value": 89658
+  },
+  {
+   "part": "투구",
+   "refine": 22,
+   "advanced": 26,
+   "value": 90158
+  },
+  {
+   "part": "투구",
+   "refine": 22,
+   "advanced": 27,
+   "value": 90661
+  },
+  {
+   "part": "투구",
+   "refine": 22,
+   "advanced": 28,
+   "value": 91168
+  },
+  {
+   "part": "투구",
+   "refine": 22,
+   "advanced": 29,
+   "value": 91678
+  },
+  {
+   "part": "투구",
+   "refine": 22,
+   "advanced": 30,
+   "value": 94035
+  },
+  {
+   "part": "투구",
+   "refine": 22,
+   "advanced": 31,
+   "value": 94563
+  },
+  {
+   "part": "투구",
+   "refine": 22,
+   "advanced": 32,
+   "value": 95094
+  },
+  {
+   "part": "투구",
+   "refine": 22,
+   "advanced": 33,
+   "value": 95629
+  },
+  {
+   "part": "투구",
+   "refine": 22,
+   "advanced": 34,
+   "value": 96167
+  },
+  {
+   "part": "투구",
+   "refine": 22,
+   "advanced": 35,
+   "value": 96710
+  },
+  {
+   "part": "투구",
+   "refine": 22,
+   "advanced": 36,
+   "value": 97255
+  },
+  {
+   "part": "투구",
+   "refine": 22,
+   "advanced": 37,
+   "value": 97805
+  },
+  {
+   "part": "투구",
+   "refine": 22,
+   "advanced": 38,
+   "value": 98359
+  },
+  {
+   "part": "투구",
+   "refine": 22,
+   "advanced": 39,
+   "value": 98917
+  },
+  {
+   "part": "투구",
+   "refine": 22,
+   "advanced": 40,
+   "value": 102404
+  },
+  {
+   "part": "투구",
+   "refine": 23,
+   "advanced": 0,
+   "value": 80352
+  },
+  {
+   "part": "투구",
+   "refine": 24,
+   "advanced": 0,
+   "value": 82560
+  },
+  {
+   "part": "투구",
+   "refine": 25,
+   "advanced": 0,
+   "value": 84845
+  },
+  {
+   "part": "투구",
+   "refine": 25,
+   "advanced": 26,
+   "value": 98082
+  },
+  {
+   "part": "투구",
+   "refine": 25,
+   "advanced": 27,
+   "value": 98640
+  },
+  {
+   "part": "투구",
+   "refine": 25,
+   "advanced": 28,
+   "value": 99202
+  },
+  {
+   "part": "투구",
+   "refine": 25,
+   "advanced": 29,
+   "value": 99767
+  },
+  {
+   "part": "투구",
+   "refine": 25,
+   "advanced": 30,
+   "value": 102343
+  },
+  {
+   "part": "투구",
+   "refine": 25,
+   "advanced": 31,
+   "value": 102928
+  },
+  {
+   "part": "투구",
+   "refine": 25,
+   "advanced": 32,
+   "value": 103517
+  },
+  {
+   "part": "투구",
+   "refine": 25,
+   "advanced": 33,
+   "value": 104110
+  },
+  {
+   "part": "투구",
+   "refine": 25,
+   "advanced": 34,
+   "value": 104708
+  },
+  {
+   "part": "투구",
+   "refine": 25,
+   "advanced": 35,
+   "value": 105308
+  },
+  {
+   "part": "투구",
+   "refine": 25,
+   "advanced": 36,
+   "value": 105914
+  },
+  {
+   "part": "투구",
+   "refine": 25,
+   "advanced": 37,
+   "value": 106523
+  },
+  {
+   "part": "투구",
+   "refine": 25,
+   "advanced": 38,
+   "value": 107137
+  },
+  {
+   "part": "투구",
+   "refine": 25,
+   "advanced": 39,
+   "value": 107755
+  },
+  {
+   "part": "투구",
+   "refine": 25,
+   "advanced": 40,
+   "value": 111565
+  },
+  {
+   "part": "하의",
+   "refine": 0,
+   "advanced": 0,
+   "value": 30082
+  },
+  {
+   "part": "하의",
+   "refine": 1,
+   "advanced": 0,
+   "value": 33421
+  },
+  {
+   "part": "하의",
+   "refine": 2,
+   "advanced": 0,
+   "value": 36788
+  },
+  {
+   "part": "하의",
+   "refine": 3,
+   "advanced": 0,
+   "value": 40185
+  },
+  {
+   "part": "하의",
+   "refine": 4,
+   "advanced": 0,
+   "value": 43611
+  },
+  {
+   "part": "하의",
+   "refine": 5,
+   "advanced": 0,
+   "value": 44573
+  },
+  {
+   "part": "하의",
+   "refine": 6,
+   "advanced": 0,
+   "value": 45567
+  },
+  {
+   "part": "하의",
+   "refine": 7,
+   "advanced": 0,
+   "value": 46594
+  },
+  {
+   "part": "하의",
+   "refine": 8,
+   "advanced": 0,
+   "value": 47656
+  },
+  {
+   "part": "하의",
+   "refine": 9,
+   "advanced": 0,
+   "value": 48753
+  },
+  {
+   "part": "하의",
+   "refine": 10,
+   "advanced": 0,
+   "value": 49887
+  },
+  {
+   "part": "하의",
+   "refine": 11,
+   "advanced": 0,
+   "value": 51059
+  },
+  {
+   "part": "하의",
+   "refine": 11,
+   "advanced": 1,
+   "value": 51298
+  },
+  {
+   "part": "하의",
+   "refine": 11,
+   "advanced": 2,
+   "value": 51539
+  },
+  {
+   "part": "하의",
+   "refine": 11,
+   "advanced": 3,
+   "value": 51781
+  },
+  {
+   "part": "하의",
+   "refine": 11,
+   "advanced": 4,
+   "value": 52025
+  },
+  {
+   "part": "하의",
+   "refine": 11,
+   "advanced": 5,
+   "value": 52270
+  },
+  {
+   "part": "하의",
+   "refine": 11,
+   "advanced": 6,
+   "value": 52528
+  },
+  {
+   "part": "하의",
+   "refine": 11,
+   "advanced": 7,
+   "value": 52788
+  },
+  {
+   "part": "하의",
+   "refine": 11,
+   "advanced": 8,
+   "value": 53049
+  },
+  {
+   "part": "하의",
+   "refine": 11,
+   "advanced": 9,
+   "value": 53312
+  },
+  {
+   "part": "하의",
+   "refine": 11,
+   "advanced": 10,
+   "value": 53577
+  },
+  {
+   "part": "하의",
+   "refine": 11,
+   "advanced": 11,
+   "value": 53844
+  },
+  {
+   "part": "하의",
+   "refine": 11,
+   "advanced": 12,
+   "value": 54113
+  },
+  {
+   "part": "하의",
+   "refine": 11,
+   "advanced": 13,
+   "value": 54383
+  },
+  {
+   "part": "하의",
+   "refine": 11,
+   "advanced": 14,
+   "value": 54656
+  },
+  {
+   "part": "하의",
+   "refine": 11,
+   "advanced": 15,
+   "value": 54930
+  },
+  {
+   "part": "하의",
+   "refine": 11,
+   "advanced": 16,
+   "value": 55206
+  },
+  {
+   "part": "하의",
+   "refine": 11,
+   "advanced": 17,
+   "value": 55484
+  },
+  {
+   "part": "하의",
+   "refine": 11,
+   "advanced": 18,
+   "value": 55764
+  },
+  {
+   "part": "하의",
+   "refine": 11,
+   "advanced": 19,
+   "value": 56046
+  },
+  {
+   "part": "하의",
+   "refine": 11,
+   "advanced": 20,
+   "value": 56330
+  },
+  {
+   "part": "하의",
+   "refine": 11,
+   "advanced": 21,
+   "value": 56616
+  },
+  {
+   "part": "하의",
+   "refine": 11,
+   "advanced": 22,
+   "value": 56904
+  },
+  {
+   "part": "하의",
+   "refine": 11,
+   "advanced": 23,
+   "value": 57194
+  },
+  {
+   "part": "하의",
+   "refine": 11,
+   "advanced": 24,
+   "value": 57485
+  },
+  {
+   "part": "하의",
+   "refine": 11,
+   "advanced": 25,
+   "value": 57779
+  },
+  {
+   "part": "하의",
+   "refine": 11,
+   "advanced": 26,
+   "value": 58075
+  },
+  {
+   "part": "하의",
+   "refine": 11,
+   "advanced": 27,
+   "value": 58373
+  },
+  {
+   "part": "하의",
+   "refine": 11,
+   "advanced": 28,
+   "value": 58673
+  },
+  {
+   "part": "하의",
+   "refine": 11,
+   "advanced": 29,
+   "value": 58975
+  },
+  {
+   "part": "하의",
+   "refine": 11,
+   "advanced": 30,
+   "value": 60464
+  },
+  {
+   "part": "하의",
+   "refine": 11,
+   "advanced": 31,
+   "value": 60776
+  },
+  {
+   "part": "하의",
+   "refine": 11,
+   "advanced": 32,
+   "value": 61091
+  },
+  {
+   "part": "하의",
+   "refine": 11,
+   "advanced": 33,
+   "value": 61408
+  },
+  {
+   "part": "하의",
+   "refine": 11,
+   "advanced": 34,
+   "value": 61727
+  },
+  {
+   "part": "하의",
+   "refine": 11,
+   "advanced": 35,
+   "value": 62047
+  },
+  {
+   "part": "하의",
+   "refine": 11,
+   "advanced": 36,
+   "value": 62370
+  },
+  {
+   "part": "하의",
+   "refine": 11,
+   "advanced": 37,
+   "value": 62696
+  },
+  {
+   "part": "하의",
+   "refine": 11,
+   "advanced": 38,
+   "value": 63024
+  },
+  {
+   "part": "하의",
+   "refine": 11,
+   "advanced": 39,
+   "value": 63354
+  },
+  {
+   "part": "하의",
+   "refine": 11,
+   "advanced": 40,
+   "value": 65559
+  },
+  {
+   "part": "하의",
+   "refine": 12,
+   "advanced": 0,
+   "value": 52270
+  },
+  {
+   "part": "하의",
+   "refine": 13,
+   "advanced": 0,
+   "value": 53577
+  },
+  {
+   "part": "하의",
+   "refine": 14,
+   "advanced": 0,
+   "value": 54930
+  },
+  {
+   "part": "하의",
+   "refine": 15,
+   "advanced": 0,
+   "value": 56330
+  },
+  {
+   "part": "하의",
+   "refine": 15,
+   "advanced": 1,
+   "value": 56616
+  },
+  {
+   "part": "하의",
+   "refine": 15,
+   "advanced": 2,
+   "value": 56904
+  },
+  {
+   "part": "하의",
+   "refine": 15,
+   "advanced": 3,
+   "value": 57194
+  },
+  {
+   "part": "하의",
+   "refine": 15,
+   "advanced": 4,
+   "value": 57485
+  },
+  {
+   "part": "하의",
+   "refine": 15,
+   "advanced": 5,
+   "value": 57779
+  },
+  {
+   "part": "하의",
+   "refine": 15,
+   "advanced": 6,
+   "value": 58075
+  },
+  {
+   "part": "하의",
+   "refine": 15,
+   "advanced": 7,
+   "value": 58373
+  },
+  {
+   "part": "하의",
+   "refine": 15,
+   "advanced": 8,
+   "value": 58673
+  },
+  {
+   "part": "하의",
+   "refine": 15,
+   "advanced": 9,
+   "value": 58975
+  },
+  {
+   "part": "하의",
+   "refine": 15,
+   "advanced": 10,
+   "value": 59279
+  },
+  {
+   "part": "하의",
+   "refine": 15,
+   "advanced": 11,
+   "value": 59585
+  },
+  {
+   "part": "하의",
+   "refine": 15,
+   "advanced": 12,
+   "value": 59894
+  },
+  {
+   "part": "하의",
+   "refine": 15,
+   "advanced": 13,
+   "value": 60204
+  },
+  {
+   "part": "하의",
+   "refine": 15,
+   "advanced": 14,
+   "value": 60517
+  },
+  {
+   "part": "하의",
+   "refine": 15,
+   "advanced": 15,
+   "value": 60831
+  },
+  {
+   "part": "하의",
+   "refine": 15,
+   "advanced": 16,
+   "value": 61148
+  },
+  {
+   "part": "하의",
+   "refine": 15,
+   "advanced": 17,
+   "value": 61467
+  },
+  {
+   "part": "하의",
+   "refine": 15,
+   "advanced": 18,
+   "value": 61789
+  },
+  {
+   "part": "하의",
+   "refine": 15,
+   "advanced": 19,
+   "value": 62112
+  },
+  {
+   "part": "하의",
+   "refine": 15,
+   "advanced": 20,
+   "value": 62438
+  },
+  {
+   "part": "하의",
+   "refine": 15,
+   "advanced": 21,
+   "value": 62766
+  },
+  {
+   "part": "하의",
+   "refine": 15,
+   "advanced": 22,
+   "value": 63096
+  },
+  {
+   "part": "하의",
+   "refine": 15,
+   "advanced": 23,
+   "value": 63429
+  },
+  {
+   "part": "하의",
+   "refine": 15,
+   "advanced": 24,
+   "value": 63764
+  },
+  {
+   "part": "하의",
+   "refine": 15,
+   "advanced": 25,
+   "value": 64101
+  },
+  {
+   "part": "하의",
+   "refine": 15,
+   "advanced": 26,
+   "value": 64440
+  },
+  {
+   "part": "하의",
+   "refine": 15,
+   "advanced": 27,
+   "value": 64782
+  },
+  {
+   "part": "하의",
+   "refine": 15,
+   "advanced": 28,
+   "value": 65127
+  },
+  {
+   "part": "하의",
+   "refine": 15,
+   "advanced": 29,
+   "value": 65473
+  },
+  {
+   "part": "하의",
+   "refine": 15,
+   "advanced": 30,
+   "value": 67138
+  },
+  {
+   "part": "하의",
+   "refine": 15,
+   "advanced": 31,
+   "value": 67496
+  },
+  {
+   "part": "하의",
+   "refine": 15,
+   "advanced": 32,
+   "value": 67857
+  },
+  {
+   "part": "하의",
+   "refine": 15,
+   "advanced": 33,
+   "value": 68221
+  },
+  {
+   "part": "하의",
+   "refine": 15,
+   "advanced": 34,
+   "value": 68586
+  },
+  {
+   "part": "하의",
+   "refine": 15,
+   "advanced": 35,
+   "value": 68955
+  },
+  {
+   "part": "하의",
+   "refine": 15,
+   "advanced": 36,
+   "value": 69326
+  },
+  {
+   "part": "하의",
+   "refine": 15,
+   "advanced": 37,
+   "value": 69699
+  },
+  {
+   "part": "하의",
+   "refine": 15,
+   "advanced": 38,
+   "value": 70076
+  },
+  {
+   "part": "하의",
+   "refine": 15,
+   "advanced": 39,
+   "value": 70454
+  },
+  {
+   "part": "하의",
+   "refine": 15,
+   "advanced": 40,
+   "value": 72919
+  },
+  {
+   "part": "하의",
+   "refine": 16,
+   "advanced": 0,
+   "value": 57779
+  },
+  {
+   "part": "하의",
+   "refine": 17,
+   "advanced": 0,
+   "value": 59279
+  },
+  {
+   "part": "하의",
+   "refine": 18,
+   "advanced": 0,
+   "value": 60831
+  },
+  {
+   "part": "하의",
+   "refine": 19,
+   "advanced": 0,
+   "value": 62438
+  },
+  {
+   "part": "하의",
+   "refine": 19,
+   "advanced": 1,
+   "value": 62766
+  },
+  {
+   "part": "하의",
+   "refine": 19,
+   "advanced": 2,
+   "value": 63096
+  },
+  {
+   "part": "하의",
+   "refine": 19,
+   "advanced": 3,
+   "value": 63429
+  },
+  {
+   "part": "하의",
+   "refine": 19,
+   "advanced": 4,
+   "value": 63764
+  },
+  {
+   "part": "하의",
+   "refine": 19,
+   "advanced": 5,
+   "value": 64101
+  },
+  {
+   "part": "하의",
+   "refine": 19,
+   "advanced": 6,
+   "value": 64440
+  },
+  {
+   "part": "하의",
+   "refine": 19,
+   "advanced": 7,
+   "value": 64782
+  },
+  {
+   "part": "하의",
+   "refine": 19,
+   "advanced": 8,
+   "value": 65127
+  },
+  {
+   "part": "하의",
+   "refine": 19,
+   "advanced": 9,
+   "value": 65473
+  },
+  {
+   "part": "하의",
+   "refine": 19,
+   "advanced": 10,
+   "value": 65822
+  },
+  {
+   "part": "하의",
+   "refine": 19,
+   "advanced": 11,
+   "value": 66173
+  },
+  {
+   "part": "하의",
+   "refine": 19,
+   "advanced": 12,
+   "value": 66527
+  },
+  {
+   "part": "하의",
+   "refine": 19,
+   "advanced": 13,
+   "value": 66884
+  },
+  {
+   "part": "하의",
+   "refine": 19,
+   "advanced": 14,
+   "value": 67242
+  },
+  {
+   "part": "하의",
+   "refine": 19,
+   "advanced": 15,
+   "value": 67603
+  },
+  {
+   "part": "하의",
+   "refine": 19,
+   "advanced": 16,
+   "value": 67967
+  },
+  {
+   "part": "하의",
+   "refine": 19,
+   "advanced": 17,
+   "value": 68333
+  },
+  {
+   "part": "하의",
+   "refine": 19,
+   "advanced": 18,
+   "value": 68702
+  },
+  {
+   "part": "하의",
+   "refine": 19,
+   "advanced": 19,
+   "value": 69073
+  },
+  {
+   "part": "하의",
+   "refine": 19,
+   "advanced": 20,
+   "value": 69447
+  },
+  {
+   "part": "하의",
+   "refine": 19,
+   "advanced": 21,
+   "value": 69823
+  },
+  {
+   "part": "하의",
+   "refine": 19,
+   "advanced": 22,
+   "value": 70203
+  },
+  {
+   "part": "하의",
+   "refine": 19,
+   "advanced": 23,
+   "value": 70584
+  },
+  {
+   "part": "하의",
+   "refine": 19,
+   "advanced": 24,
+   "value": 70968
+  },
+  {
+   "part": "하의",
+   "refine": 19,
+   "advanced": 25,
+   "value": 71355
+  },
+  {
+   "part": "하의",
+   "refine": 19,
+   "advanced": 26,
+   "value": 71745
+  },
+  {
+   "part": "하의",
+   "refine": 19,
+   "advanced": 27,
+   "value": 72137
+  },
+  {
+   "part": "하의",
+   "refine": 19,
+   "advanced": 28,
+   "value": 72532
+  },
+  {
+   "part": "하의",
+   "refine": 19,
+   "advanced": 29,
+   "value": 72930
+  },
+  {
+   "part": "하의",
+   "refine": 19,
+   "advanced": 30,
+   "value": 74796
+  },
+  {
+   "part": "하의",
+   "refine": 19,
+   "advanced": 31,
+   "value": 75207
+  },
+  {
+   "part": "하의",
+   "refine": 19,
+   "advanced": 32,
+   "value": 75621
+  },
+  {
+   "part": "하의",
+   "refine": 19,
+   "advanced": 33,
+   "value": 76038
+  },
+  {
+   "part": "하의",
+   "refine": 19,
+   "advanced": 34,
+   "value": 76459
+  },
+  {
+   "part": "하의",
+   "refine": 19,
+   "advanced": 35,
+   "value": 76881
+  },
+  {
+   "part": "하의",
+   "refine": 19,
+   "advanced": 36,
+   "value": 77307
+  },
+  {
+   "part": "하의",
+   "refine": 19,
+   "advanced": 37,
+   "value": 77736
+  },
+  {
+   "part": "하의",
+   "refine": 19,
+   "advanced": 38,
+   "value": 78167
+  },
+  {
+   "part": "하의",
+   "refine": 19,
+   "advanced": 39,
+   "value": 78602
+  },
+  {
+   "part": "하의",
+   "refine": 19,
+   "advanced": 40,
+   "value": 81364
+  },
+  {
+   "part": "하의",
+   "refine": 20,
+   "advanced": 0,
+   "value": 64101
+  },
+  {
+   "part": "하의",
+   "refine": 21,
+   "advanced": 0,
+   "value": 65822
+  },
+  {
+   "part": "하의",
+   "refine": 22,
+   "advanced": 0,
+   "value": 67603
+  },
+  {
+   "part": "하의",
+   "refine": 22,
+   "advanced": 1,
+   "value": 67967
+  },
+  {
+   "part": "하의",
+   "refine": 22,
+   "advanced": 2,
+   "value": 68333
+  },
+  {
+   "part": "하의",
+   "refine": 22,
+   "advanced": 3,
+   "value": 68702
+  },
+  {
+   "part": "하의",
+   "refine": 22,
+   "advanced": 4,
+   "value": 69073
+  },
+  {
+   "part": "하의",
+   "refine": 22,
+   "advanced": 5,
+   "value": 69447
+  },
+  {
+   "part": "하의",
+   "refine": 22,
+   "advanced": 6,
+   "value": 69823
+  },
+  {
+   "part": "하의",
+   "refine": 22,
+   "advanced": 7,
+   "value": 70203
+  },
+  {
+   "part": "하의",
+   "refine": 22,
+   "advanced": 8,
+   "value": 70584
+  },
+  {
+   "part": "하의",
+   "refine": 22,
+   "advanced": 9,
+   "value": 70968
+  },
+  {
+   "part": "하의",
+   "refine": 22,
+   "advanced": 10,
+   "value": 71355
+  },
+  {
+   "part": "하의",
+   "refine": 22,
+   "advanced": 11,
+   "value": 71745
+  },
+  {
+   "part": "하의",
+   "refine": 22,
+   "advanced": 12,
+   "value": 72137
+  },
+  {
+   "part": "하의",
+   "refine": 22,
+   "advanced": 13,
+   "value": 72532
+  },
+  {
+   "part": "하의",
+   "refine": 22,
+   "advanced": 14,
+   "value": 72930
+  },
+  {
+   "part": "하의",
+   "refine": 22,
+   "advanced": 15,
+   "value": 73330
+  },
+  {
+   "part": "하의",
+   "refine": 22,
+   "advanced": 16,
+   "value": 73733
+  },
+  {
+   "part": "하의",
+   "refine": 22,
+   "advanced": 17,
+   "value": 74139
+  },
+  {
+   "part": "하의",
+   "refine": 22,
+   "advanced": 18,
+   "value": 74548
+  },
+  {
+   "part": "하의",
+   "refine": 22,
+   "advanced": 19,
+   "value": 74960
+  },
+  {
+   "part": "하의",
+   "refine": 22,
+   "advanced": 20,
+   "value": 75374
+  },
+  {
+   "part": "하의",
+   "refine": 22,
+   "advanced": 21,
+   "value": 75792
+  },
+  {
+   "part": "하의",
+   "refine": 22,
+   "advanced": 22,
+   "value": 76212
+  },
+  {
+   "part": "하의",
+   "refine": 22,
+   "advanced": 23,
+   "value": 76635
+  },
+  {
+   "part": "하의",
+   "refine": 22,
+   "advanced": 24,
+   "value": 77061
+  },
+  {
+   "part": "하의",
+   "refine": 22,
+   "advanced": 25,
+   "value": 77490
+  },
+  {
+   "part": "하의",
+   "refine": 22,
+   "advanced": 26,
+   "value": 77922
+  },
+  {
+   "part": "하의",
+   "refine": 22,
+   "advanced": 27,
+   "value": 78357
+  },
+  {
+   "part": "하의",
+   "refine": 22,
+   "advanced": 28,
+   "value": 78795
+  },
+  {
+   "part": "하의",
+   "refine": 22,
+   "advanced": 29,
+   "value": 79236
+  },
+  {
+   "part": "하의",
+   "refine": 22,
+   "advanced": 30,
+   "value": 81273
+  },
+  {
+   "part": "하의",
+   "refine": 22,
+   "advanced": 31,
+   "value": 81729
+  },
+  {
+   "part": "하의",
+   "refine": 22,
+   "advanced": 32,
+   "value": 82188
+  },
+  {
+   "part": "하의",
+   "refine": 22,
+   "advanced": 33,
+   "value": 82650
+  },
+  {
+   "part": "하의",
+   "refine": 22,
+   "advanced": 34,
+   "value": 83116
+  },
+  {
+   "part": "하의",
+   "refine": 22,
+   "advanced": 35,
+   "value": 83584
+  },
+  {
+   "part": "하의",
+   "refine": 22,
+   "advanced": 36,
+   "value": 84057
+  },
+  {
+   "part": "하의",
+   "refine": 22,
+   "advanced": 37,
+   "value": 84532
+  },
+  {
+   "part": "하의",
+   "refine": 22,
+   "advanced": 38,
+   "value": 85010
+  },
+  {
+   "part": "하의",
+   "refine": 22,
+   "advanced": 39,
+   "value": 85492
+  },
+  {
+   "part": "하의",
+   "refine": 22,
+   "advanced": 40,
+   "value": 88506
+  },
+  {
+   "part": "하의",
+   "refine": 23,
+   "advanced": 0,
+   "value": 69447
+  },
+  {
+   "part": "하의",
+   "refine": 24,
+   "advanced": 0,
+   "value": 71355
+  },
+  {
+   "part": "하의",
+   "refine": 25,
+   "advanced": 0,
+   "value": 73330
+  },
+  {
+   "part": "하의",
+   "refine": 25,
+   "advanced": 26,
+   "value": 84771
+  },
+  {
+   "part": "하의",
+   "refine": 25,
+   "advanced": 27,
+   "value": 85253
+  },
+  {
+   "part": "하의",
+   "refine": 25,
+   "advanced": 28,
+   "value": 85738
+  },
+  {
+   "part": "하의",
+   "refine": 25,
+   "advanced": 29,
+   "value": 86227
+  },
+  {
+   "part": "하의",
+   "refine": 25,
+   "advanced": 30,
+   "value": 88454
+  },
+  {
+   "part": "하의",
+   "refine": 25,
+   "advanced": 31,
+   "value": 88959
+  },
+  {
+   "part": "하의",
+   "refine": 25,
+   "advanced": 32,
+   "value": 89468
+  },
+  {
+   "part": "하의",
+   "refine": 25,
+   "advanced": 33,
+   "value": 89981
+  },
+  {
+   "part": "하의",
+   "refine": 25,
+   "advanced": 34,
+   "value": 90497
+  },
+  {
+   "part": "하의",
+   "refine": 25,
+   "advanced": 35,
+   "value": 91016
+  },
+  {
+   "part": "하의",
+   "refine": 25,
+   "advanced": 36,
+   "value": 91539
+  },
+  {
+   "part": "하의",
+   "refine": 25,
+   "advanced": 37,
+   "value": 92067
+  },
+  {
+   "part": "하의",
+   "refine": 25,
+   "advanced": 38,
+   "value": 92597
+  },
+  {
+   "part": "하의",
+   "refine": 25,
+   "advanced": 39,
+   "value": 93132
+  },
+  {
+   "part": "하의",
+   "refine": 25,
+   "advanced": 40,
+   "value": 96424
+  }
+ ]
+}

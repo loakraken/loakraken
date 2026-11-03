@@ -37,11 +37,27 @@ public record CharacterLoadout(
       String grade,
       Boolean isSet,
       Boolean isInner,
-      List<String> effects) {
+      List<String> effects,
+      List<AvatarTendency> tendencies) {
     public Avatar {
       effects = effects == null ? List.of() : List.copyOf(effects);
+      tendencies = tendencies == null ? List.of() : List.copyOf(tendencies);
+    }
+
+    public Avatar(
+        String type,
+        String name,
+        String icon,
+        String grade,
+        Boolean isSet,
+        Boolean isInner,
+        List<String> effects) {
+      this(type, name, icon, grade, isSet, isInner, effects, List.of());
     }
   }
+
+  /** 아바타 한 벌이 주는 성향 점수(지성·담력·매력·친절). 캐릭터 성향 합계의 일부다. */
+  public record AvatarTendency(String type, Integer point) {}
 
   public record Collectible(
       String type, String icon, Integer point, Integer maxPoint, List<CollectibleItem> items) {

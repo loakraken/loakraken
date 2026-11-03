@@ -166,6 +166,7 @@ class RefiningController {
           RefiningPlanResponse.from(
               service.rules(),
               service.growthCosts(),
+              service.vambrace(),
               request.grade(),
               request.equipmentType(),
               request,
@@ -180,6 +181,7 @@ class RefiningController {
         RefiningPlanResponse.from(
             service.rules(),
             service.growthCosts(),
+            service.vambrace(),
             request.grade(),
             request.equipmentType(),
             request,

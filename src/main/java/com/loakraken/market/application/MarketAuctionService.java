@@ -178,13 +178,16 @@ public class MarketAuctionService {
                 levels,
                 accessoryQuery(grade, slot, options, levels, minQuality, 1)));
     }
-    var filled =
-        fill(specs.stream().map(AccessorySpec::query).toList(), LocalDate.now(clock.withZone(KST)));
+    // 표에 보이는 칸을 먼저 채우고, 표에서 뺀 중하·하중은 그 뒤에 채운다(스펙업 연마 비용이 같은 칸을 읽는다).
+    var queries = new ArrayList<AuctionQuery>();
+    for (var spec : specs) if (AuctionCatalog.shown(spec.levels())) queries.add(spec.query());
+    for (var spec : specs) if (!AuctionCatalog.shown(spec.levels())) queries.add(spec.query());
+    var filled = fill(queries, LocalDate.now(clock.withZone(KST)));
     var slots = new ArrayList<AccessorySlot>();
     for (var slot : Slot.values()) {
       var cells = new ArrayList<AccessoryCell>();
       for (var spec : specs) {
-        if (spec.slot() != slot) continue;
+        if (spec.slot() != slot || !AuctionCatalog.shown(spec.levels())) continue;
         var value = filled.get(spec.query().key());
         cells.add(
             new AccessoryCell(

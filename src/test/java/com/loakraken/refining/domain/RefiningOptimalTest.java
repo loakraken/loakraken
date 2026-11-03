@@ -64,7 +64,9 @@ class RefiningOptimalTest {
   void 기대_수량으로_다시_더한_골드는_기대_골드와_같다() {
     // 스펙업 줄 상세(#585): 내역 합 = 목록 비용이 되려면 최적 정책의 기대 시도·숨결·책 수가 기대 골드와 맞아야 한다.
     for (var grade : RefiningRules.Grade.values())
-      for (var type : RefiningRules.EquipmentType.values()) {
+      for (var type :
+          java.util.List.of(
+              RefiningRules.EquipmentType.WEAPON, RefiningRules.EquipmentType.ARMOR)) {
         var track = RULES.track(grade, type);
         for (int stage : new int[] {12, 15, 19, 24}) {
           if (stage < track.minTargetStage() || stage > track.maxTargetStage()) continue;
@@ -95,7 +97,9 @@ class RefiningOptimalTest {
   @Test
   void 어떤_고정_전략보다_같거나_싸다() {
     for (var grade : RefiningRules.Grade.values())
-      for (var type : RefiningRules.EquipmentType.values()) {
+      for (var type :
+          java.util.List.of(
+              RefiningRules.EquipmentType.WEAPON, RefiningRules.EquipmentType.ARMOR)) {
         var track = RULES.track(grade, type);
         for (int stage : new int[] {12, 15, 18, 19, 21, 24}) {
           if (stage < track.minTargetStage() || stage > track.maxTargetStage()) continue;

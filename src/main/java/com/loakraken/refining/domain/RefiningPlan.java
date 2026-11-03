@@ -171,40 +171,18 @@ public record RefiningPlan(
       Growth growth) {
     var breath = options.useBreath() ? rule.breath() : null;
     var book = options.useBook() ? rule.book() : null;
-    double artisan = startArtisan;
-    int failures = startFailures;
-    double reach = 1;
-    double expected = 0;
-    double expectedAuxiliary = 0;
-    double cumulative = 0;
-    int median = 0, p90 = 0, attempts = 0, worstAuxiliary = 0, firstRateBp = 0;
-    while (attempts < MAX_ATTEMPTS) {
-      boolean guaranteed = artisan >= 1 - 1e-9;
-      double rateBp =
-          guaranteed
-              ? 10_000
-              : Math.min(
-                  10_000,
-                  rule.baseRateBp() * (1 + 0.1 * Math.min(failures, MAX_BONUS_FAILURES))
-                      + (breath == null ? 0 : (double) breath.rateBp() * breath.maxCount())
-                      + (book == null ? 0 : book.rateBp()));
-      double probability = rateBp / 10_000;
-      boolean auxiliary = !guaranteed && (breath != null || book != null);
-      attempts++;
-      if (attempts == 1) firstRateBp = (int) Math.round(rateBp);
-      expected += reach;
-      if (auxiliary) {
-        expectedAuxiliary += reach;
-        worstAuxiliary++;
-      }
-      cumulative += reach * probability;
-      if (median == 0 && cumulative >= 0.5 - 1e-12) median = attempts;
-      if (p90 == 0 && cumulative >= 0.9 - 1e-12) p90 = attempts;
-      reach *= 1 - probability;
-      if (probability >= 1) break;
-      artisan += artisanGainHundredths(rateBp) / 10_000.0;
-      failures++;
-    }
+    var run =
+        attempts(
+            rule.baseRateBp(),
+            breath == null ? 0 : (double) breath.rateBp() * breath.maxCount(),
+            book == null ? 0 : book.rateBp(),
+            breath != null || book != null,
+            startArtisan,
+            startFailures);
+    double expected = run.expected();
+    double expectedAuxiliary = run.expectedAuxiliary();
+    int median = run.median(), p90 = run.p90(), attempts = run.attempts();
+    int worstAuxiliary = run.worstAuxiliary(), firstRateBp = run.firstRateBp();
     double goldRate =
         options.growthSupport()
                 && grade == RefiningRules.Grade.UPHWA
@@ -242,6 +220,259 @@ public record RefiningPlan(
         scale(rule.gold() * goldRate * expected),
         Math.round(rule.gold() * goldRate * attempts),
         growth);
+  }
+
+  /** 매 시도 같은 숨결·책을 쓸 때의 시도 수 분포. expectedAuxiliary·worstAuxiliary는 숨결·책을 쓰는(확정이 아닌) 회차 수다. */
+  private record Attempts(
+      double expected,
+      double expectedAuxiliary,
+      int median,
+      int p90,
+      int attempts,
+      int worstAuxiliary,
+      int firstRateBp) {}
+
+  /**
+   * 시도 성공률 = 기본 × (1 + 0.1 × 실패(10회까지)) + breathBp + bookBp(100% 상한). 장인의 기운 100%면 숨결·책 없이 확정 성공.
+   * auxiliary는 숨결이나 책을 쓰는지(확정 회차 말고는 매 회차 쓴다).
+   */
+  private static Attempts attempts(
+      double baseRateBp,
+      double breathBp,
+      double bookBp,
+      boolean auxiliary,
+      double startArtisan,
+      int startFailures) {
+    double artisan = startArtisan;
+    int failures = startFailures;
+    double reach = 1;
+    double expected = 0;
+    double expectedAuxiliary = 0;
+    double cumulative = 0;
+    int median = 0, p90 = 0, attempts = 0, worstAuxiliary = 0, firstRateBp = 0;
+    while (attempts < MAX_ATTEMPTS) {
+      boolean guaranteed = artisan >= 1 - 1e-9;
+      double rateBp =
+          guaranteed
+              ? 10_000
+              : Math.min(
+                  10_000,
+                  baseRateBp * (1 + 0.1 * Math.min(failures, MAX_BONUS_FAILURES))
+                      + breathBp
+                      + bookBp);
+      double probability = rateBp / 10_000;
+      attempts++;
+      if (attempts == 1) firstRateBp = (int) Math.round(rateBp);
+      expected += reach;
+      if (!guaranteed && auxiliary) {
+        expectedAuxiliary += reach;
+        worstAuxiliary++;
+      }
+      cumulative += reach * probability;
+      if (median == 0 && cumulative >= 0.5 - 1e-12) median = attempts;
+      if (p90 == 0 && cumulative >= 0.9 - 1e-12) p90 = attempts;
+      reach *= 1 - probability;
+      if (probability >= 1) break;
+      artisan += artisanGainHundredths(rateBp) / 10_000.0;
+      failures++;
+    }
+    return new Attempts(
+        expected, expectedAuxiliary, median, p90, attempts, worstAuxiliary, firstRateBp);
+  }
+
+  /**
+   * 팔 보호구(완갑) 계획(NONE·MAX). 단계표 하나({@link VambraceRules}), 목표 1~25단계. useBreath면 숨결 두 가지(용암·빙하)를 매
+   * 시도 최대 개수씩 쓴다. 책·성장 지원·장비 성장 비용은 없다(options의 그 값은 보지 않는다). 첫 단계만 지금 장인의 기운·실패 횟수에서 시작한다.
+   */
+  public static RefiningPlan calculate(VambraceRules rules, Options options) {
+    if (options.fromStage() < 0 || options.toStage() > 25)
+      throw new IllegalArgumentException("지원하지 않는 재련 단계 범위입니다.");
+    var stages = new ArrayList<StagePlan>();
+    for (int target = options.fromStage() + 1; target <= options.toStage(); target++) {
+      boolean first = target == options.fromStage() + 1;
+      var rule = rules.stage(target);
+      var breaths = options.useBreath() ? rule.breaths() : List.<VambraceRules.Breath>of();
+      double breathBp = 0;
+      for (var breath : breaths) breathBp += breath.rateBp() * breath.maxCount();
+      var run =
+          attempts(
+              rule.baseRateBp(),
+              breathBp,
+              0,
+              !breaths.isEmpty(),
+              first ? options.startArtisanEnergyBp() / 10_000.0 : 0,
+              first ? options.startFailedAttempts() : 0);
+      var expectedMaterials = new ArrayList<Quantity>();
+      var worstMaterials = new ArrayList<Quantity>();
+      for (var material : rule.materials()) {
+        expectedMaterials.add(quantity(material.name(), material.count() * run.expected()));
+        worstMaterials.add(quantity(material.name(), (double) material.count() * run.attempts()));
+      }
+      expectedMaterials.add(quantity(SHARD, rule.shard() * run.expected()));
+      worstMaterials.add(quantity(SHARD, (double) rule.shard() * run.attempts()));
+      for (var breath : breaths) {
+        expectedMaterials.add(quantity(breath.name(), breath.maxCount() * run.expectedAuxiliary()));
+        worstMaterials.add(
+            quantity(breath.name(), (double) breath.maxCount() * run.worstAuxiliary()));
+      }
+      stages.add(
+          new StagePlan(
+              target,
+              run.firstRateBp(),
+              scale(run.expected()),
+              run.median(),
+              run.p90(),
+              run.attempts(),
+              expectedMaterials,
+              worstMaterials,
+              scale(rule.gold() * run.expected()),
+              Math.round((double) rule.gold() * run.attempts()),
+              null));
+    }
+    return total(stages);
+  }
+
+  /**
+   * 팔 보호구 회차별 최적 계획({@link RefiningOptimal#calculate(VambraceRules.Stage, Map, int, int)}: 시도마다 숨결
+   * 수를 골라 기대 비용 최소, 같은 수면 싼 숨결부터). 재료·파편·숨결 두 가지 값이 하나라도 없으면 null. 숨결 수량은 이름별로 나눈다(싼 숨결 = 전체 − 비싼
+   * 숨결).
+   */
+  public static Optimal optimal(
+      VambraceRules rules,
+      Options options,
+      Map<String, ? extends Number> prices,
+      OptimalStageCache cache) {
+    if (options.fromStage() < 0 || options.toStage() > 25)
+      throw new IllegalArgumentException("지원하지 않는 재련 단계 범위입니다.");
+    var stages = new ArrayList<StagePlan>();
+    var extras = new ArrayList<OptimalStage>();
+    for (int target = options.fromStage() + 1; target <= options.toStage(); target++) {
+      boolean first = target == options.fromStage() + 1;
+      var rule = rules.stage(target);
+      for (var material : rule.materials())
+        if (material.count() > 0 && prices.get(material.name()) == null) return null;
+      if (rule.shard() > 0 && prices.get(SHARD) == null) return null;
+      for (var breath : rule.breaths()) if (prices.get(breath.name()) == null) return null;
+      int failures = first ? options.startFailedAttempts() : 0;
+      int energyBp = first ? options.startArtisanEnergyBp() : 0;
+      var result =
+          cache
+              .get(
+                  vambraceKey(rule, failures, energyBp, prices),
+                  () ->
+                      RefiningOptimal.calculate(
+                          rule,
+                          prices,
+                          failures,
+                          energyBp * (RefiningOptimal.FULL_ENERGY / 10_000)))
+              .orElse(null);
+      if (result == null) return null;
+      stages.add(vambraceOptimalStage(rule, result, prices));
+      extras.add(
+          new OptimalStage(
+              runs(result.steps()),
+              result.expectedBreaths(),
+              result.expectedBooks(),
+              result.expectedGold()));
+    }
+    return new Optimal(total(stages), extras);
+  }
+
+  /** 팔 보호구 단계 풀이 캐시 키: 단계·시작 상태와 그 단계에 쓰는 시세 값(단계표가 하나라 등급·골드 비율 없음). */
+  static String vambraceKey(
+      VambraceRules.Stage rule, int failures, int energyBp, Map<String, ? extends Number> prices) {
+    var key = new StringBuilder("plan:ARM_GUARD:").append(rule.targetStage());
+    key.append(':').append(failures).append(':').append(energyBp);
+    var names = new java.util.TreeSet<String>();
+    for (var material : rule.materials()) names.add(material.name());
+    names.add(SHARD);
+    for (var breath : rule.breaths()) names.add(breath.name());
+    for (var name : names) key.append('|').append(name).append('=').append(prices.get(name));
+    return key.toString();
+  }
+
+  /** 팔 보호구 정책의 실패 경로로 시도 분포·수량을 만든다. 회차마다 싼 숨결부터 최대 개수까지 채우고 나머지가 비싼 숨결이다(풀이와 같은 순서). */
+  private static StagePlan vambraceOptimalStage(
+      VambraceRules.Stage rule,
+      RefiningOptimal.Result result,
+      Map<String, ? extends Number> prices) {
+    var byPrice =
+        rule.breaths().stream()
+            .sorted(
+                java.util.Comparator.comparingDouble(
+                    (VambraceRules.Breath breath) -> prices.get(breath.name()).doubleValue()))
+            .toList();
+    double reach = 1;
+    double cumulative = 0;
+    int attempts = 0, median = 0, p90 = 0, worstCheap = 0, worstSecond = 0;
+    for (var step : result.steps()) {
+      attempts++;
+      double probability = step.rateBp() / 10_000.0;
+      cumulative += reach * probability;
+      if (median == 0 && cumulative >= 0.5 - 1e-12) median = attempts;
+      if (p90 == 0 && cumulative >= 0.9 - 1e-12) p90 = attempts;
+      int cheap = Math.min(step.breaths(), byPrice.get(0).maxCount());
+      worstCheap += cheap;
+      worstSecond += step.breaths() - cheap;
+      reach *= 1 - probability;
+    }
+    if (reach > 1e-12 || result.steps().isEmpty()) {
+      attempts++;
+      if (median == 0) median = attempts;
+      if (p90 == 0) p90 = attempts;
+    }
+    double expected = result.expectedAttempts();
+    var expectedMaterials = new ArrayList<Quantity>();
+    var worstMaterials = new ArrayList<Quantity>();
+    for (var material : rule.materials()) {
+      expectedMaterials.add(quantity(material.name(), material.count() * expected));
+      worstMaterials.add(quantity(material.name(), (double) material.count() * attempts));
+    }
+    expectedMaterials.add(quantity(SHARD, rule.shard() * expected));
+    worstMaterials.add(quantity(SHARD, (double) rule.shard() * attempts));
+    double second = result.expectedSecondBreaths();
+    double cheap = result.expectedBreaths() - second;
+    if (cheap > 0 || worstCheap > 0) {
+      expectedMaterials.add(quantity(byPrice.get(0).name(), cheap));
+      worstMaterials.add(quantity(byPrice.get(0).name(), worstCheap));
+    }
+    if (second > 0 || worstSecond > 0) {
+      expectedMaterials.add(quantity(byPrice.get(1).name(), second));
+      worstMaterials.add(quantity(byPrice.get(1).name(), worstSecond));
+    }
+    int firstRateBp = result.steps().isEmpty() ? 10_000 : result.steps().getFirst().rateBp();
+    return new StagePlan(
+        rule.targetStage(),
+        firstRateBp,
+        scale(expected),
+        median,
+        p90,
+        attempts,
+        expectedMaterials,
+        worstMaterials,
+        scale(rule.gold() * expected),
+        Math.round((double) rule.gold() * attempts),
+        null);
+  }
+
+  /** 단계 계획들을 더한 계획. */
+  private static RefiningPlan total(List<StagePlan> stages) {
+    var expectedTotal = new LinkedHashMap<String, BigDecimal>();
+    var worstTotal = new LinkedHashMap<String, BigDecimal>();
+    var expectedGold = BigDecimal.ZERO;
+    long worstGold = 0;
+    for (var plan : stages) {
+      plan.expectedMaterials()
+          .forEach(
+              quantity -> expectedTotal.merge(quantity.name(), quantity.amount(), BigDecimal::add));
+      plan.worstCaseMaterials()
+          .forEach(
+              quantity -> worstTotal.merge(quantity.name(), quantity.amount(), BigDecimal::add));
+      expectedGold = expectedGold.add(plan.expectedGold());
+      worstGold += plan.worstCaseGold();
+    }
+    return new RefiningPlan(
+        stages, quantities(expectedTotal), quantities(worstTotal), expectedGold, worstGold);
   }
 
   /** 같은 선택이 이어지는 회차 묶음(회차는 1부터, 양끝 포함). breaths 0이면 숨결 없음. */

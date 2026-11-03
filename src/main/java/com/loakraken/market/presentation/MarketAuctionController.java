@@ -109,7 +109,7 @@ public class MarketAuctionController {
   @Operation(
       summary = "T4 장신구 시세 표",
       description =
-          "목걸이·귀걸이·반지별 핵심 연마 효과 조합(상상~하중, 서포터 귀걸이는 무공% 상·중·하)의 즉시 구매 최저가와 매물 수, 전일 대비. "
+          "목걸이·귀걸이·반지별 핵심 연마 효과 조합(상상~하상, 서포터 귀걸이는 무공% 상·중·하)의 즉시 구매 최저가와 매물 수, 전일 대비. "
               + "딜러: 적주피·추피 / 무공%·공% / 치피·치적. 서포터: 낙인력·아덴 / 무공% / 아피강·아공강.")
   @StandardErrors
   public ApiResponse<AuctionResponses.AuctionAccessoryBoardResponse> accessories(

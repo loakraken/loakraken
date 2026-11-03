@@ -34,7 +34,7 @@ public final class ResponseContracts {
       throw new IllegalStateException("응답 스키마를 찾을 수 없습니다: " + recordType.getSimpleName());
     var required = new ArrayList<String>();
     for (var component : recordType.getRecordComponents()) {
-      required.add(component.getName());
+      if (!component.isAnnotationPresent(OptionalResponse.class)) required.add(component.getName());
       if (component.isAnnotationPresent(NullableResponse.class)) {
         Schema<?> property = (Schema<?>) schema.getProperties().get(component.getName());
         if (property == null)

@@ -6,6 +6,7 @@ import com.loakraken.refining.domain.OptimalStageCache;
 import com.loakraken.refining.domain.RefiningOptimal;
 import com.loakraken.refining.domain.RefiningPlan;
 import com.loakraken.refining.domain.RefiningRules;
+import com.loakraken.refining.domain.VambraceRules;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -26,6 +27,9 @@ public class RefiningPlanService {
   private final GrowthCosts growthCosts;
   private final OptimalStageCache cache;
 
+  /** 팔 보호구(완갑) 단계표. 없으면(일부 테스트) ARM_GUARD 계획은 만들 수 없다. */
+  private final VambraceRules vambrace;
+
   /**
    * OPTIMAL 단계 풀이(캐시에 없을 때만, 단계 하나 수~수십 ms)를 동시에 몇 개까지 할지. 웹이 털려 OPTIMAL을 마구 보내도 api CPU를 이 수만큼만
    * 쓴다(PM 총괄 10-25).
@@ -45,15 +49,26 @@ public class RefiningPlanService {
 
   private final Timer solveTime;
 
-  @Autowired
   public RefiningPlanService(
       RefiningRules rules,
       GrowthCosts growthCosts,
       OptimalStageCache cache,
       MeterRegistry registry,
+      int maxConcurrentSolves) {
+    this(rules, growthCosts, null, cache, registry, maxConcurrentSolves);
+  }
+
+  @Autowired
+  public RefiningPlanService(
+      RefiningRules rules,
+      GrowthCosts growthCosts,
+      VambraceRules vambrace,
+      OptimalStageCache cache,
+      MeterRegistry registry,
       @Value("${refining.optimal.max-concurrent-solves:2}") int maxConcurrentSolves) {
     this.rules = rules;
     this.growthCosts = growthCosts;
+    this.vambrace = vambrace;
     this.cache = cache;
     this.maxSolves = Math.max(1, maxConcurrentSolves);
     this.solves = new Semaphore(maxSolves);
@@ -80,12 +95,21 @@ public class RefiningPlanService {
   }
 
   public RefiningPlanService(RefiningRules rules, GrowthCosts growthCosts) {
+    this(rules, growthCosts, null);
+  }
+
+  public RefiningPlanService(RefiningRules rules, GrowthCosts growthCosts, VambraceRules vambrace) {
     this(
         rules,
         growthCosts,
+        vambrace,
         OptimalStageCache.NONE,
         new io.micrometer.core.instrument.simple.SimpleMeterRegistry(),
         2);
+  }
+
+  public VambraceRules vambrace() {
+    return vambrace;
   }
 
   public GrowthCosts growthCosts() {
@@ -102,6 +126,9 @@ public class RefiningPlanService {
       RefiningRules.EquipmentType equipmentType,
       RefiningPlan.Options options,
       java.util.Map<String, ? extends Number> prices) {
+    if (equipmentType == RefiningRules.EquipmentType.ARM_GUARD)
+      return RefiningPlan.optimal(
+          vambrace, options, prices, (key, compute) -> cache.get(key, () -> bounded(compute)));
     return RefiningPlan.optimal(
         rules.track(grade, equipmentType),
         grade,
@@ -130,6 +157,8 @@ public class RefiningPlanService {
       RefiningRules.Grade grade,
       RefiningRules.EquipmentType equipmentType,
       RefiningPlan.Options options) {
+    if (equipmentType == RefiningRules.EquipmentType.ARM_GUARD)
+      return RefiningPlan.calculate(vambrace, options);
     return RefiningPlan.calculate(rules.track(grade, equipmentType), grade, options, growthCosts);
   }
 }

@@ -421,7 +421,8 @@ record LostArkArmoryResponse(
           isInner,
           detail == null
               ? List.of()
-              : detail.effects().stream().flatMap(group -> group.lines().stream()).toList());
+              : detail.effects().stream().flatMap(group -> group.lines().stream()).toList(),
+          LostArkAvatarTooltip.tendencies(tooltip));
     }
   }
 

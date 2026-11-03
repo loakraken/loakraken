@@ -535,6 +535,26 @@ class CombatPowerSimulationIntegrationTest {
                     .body())
             .path("data");
     assertThat(same.path("after").decimalValue()).isEqualByComparingTo("3345.24");
+    // 팔찌 줄 교체와 도약을 한 번에(계산 검증 11-03 판정): 팔찌 줄은 도약을 움직이지 않고, 입력한 도약(팔찌 +18 포함한 최종 합)만 한 번 곱한다.
+    // 3,345.24 ÷ (1 + 2.6923%)(추가 피해 +3.50% 빼기) × 1.104/1.14 = 3,154.67(끝에서 한 번 반올림).
+    // 가르는 값: 팔찌 도약 18까지 또 빼면(이중 계산, × 0.93783934) 3,055.05, 입력 도약을 팔찌 빼기에 묻으면(× 1) 3,257.54.
+    for (var body :
+        List.of(
+            """
+            [{"kind": "BRACELET_EFFECT", "line": 3, "name": "없음"},
+             {"kind": "ARK_PASSIVE_POINT", "tree": "도약", "points": 52}]
+            """,
+            """
+            [{"kind": "ARK_PASSIVE_POINT", "tree": "도약", "points": 52},
+             {"kind": "BRACELET_EFFECT", "line": 3, "name": "없음"}]
+            """)) {
+      var both = mapper.readTree(simulate("시뮬도약", body).body()).path("data");
+      assertThat(both.path("partial").asBoolean()).isFalse();
+      assertThat(both.path("after").decimalValue())
+          .isEqualByComparingTo("3154.67")
+          .isNotEqualByComparingTo("3055.05")
+          .isNotEqualByComparingTo("3257.54");
+    }
   }
 
   @Test

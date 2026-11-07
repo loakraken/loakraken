@@ -191,8 +191,7 @@ class MaterialUnitPriceServiceTest {
         .thenThrow(
             new com.loakraken.common.api.BusinessException(
                 com.loakraken.common.lostark.LostArkErrorCode.CLIENT_RATE_LIMITED));
-    var result =
-        service.prices(MaterialPriceBasis.RECENT_PRICE, List.of("목재", "모르는 재료", "다른 재료"));
+    var result = service.prices(MaterialPriceBasis.RECENT_PRICE, List.of("목재", "모르는 재료", "다른 재료"));
     assertThat(result.get(0).status()).isEqualTo(MaterialUnitPriceService.UnitPrice.Status.PRICED);
     assertThat(result.subList(1, 3))
         .extracting(MaterialUnitPriceService.UnitPrice::status)

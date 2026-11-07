@@ -1,0 +1,743 @@
+{
+  "source": {
+    "titles": "칭호별 등급·획득 조건 = 레퍼런스 칭호 데이터 표(2026-11-08). 공식 공지가 있는 줄은 그 공지 주소, 나머지는 내부 기록. 조건이 서로 다르거나 추정인 줄은 condition null",
+    "notes": "칭호 문자열은 공식 프로필 Title 표기 그대로. 표에 없는 칭호는 grade·condition null(웹은 중립 색). 첫 주 하위 행은 공식 칭호가 아니라 싣지 않음"
+  },
+  "titles": [
+    {
+      "title": "별을 제패한 자",
+      "grade": "전설",
+      "parentTitle": null,
+      "condition": "카멘을 처치한다",
+      "source": "내부 기록"
+    },
+    {
+      "title": "죽음의 현신",
+      "grade": "전설",
+      "parentTitle": null,
+      "condition": "카제로스를 처치한다",
+      "source": "내부 기록"
+    },
+    {
+      "title": "빛을 꺼트리는 자",
+      "grade": "희귀",
+      "parentTitle": null,
+      "condition": "카멘을 처치한다",
+      "source": "내부 기록"
+    },
+    {
+      "title": "심연의 징벌자",
+      "grade": "희귀",
+      "parentTitle": null,
+      "condition": "모르둠을 처치한다",
+      "source": "내부 기록"
+    },
+    {
+      "title": "욕망의 주인",
+      "grade": "희귀",
+      "parentTitle": null,
+      "condition": "에키드나를 처치한다",
+      "source": "내부 기록"
+    },
+    {
+      "title": "폭풍의 눈",
+      "grade": "희귀",
+      "parentTitle": null,
+      "condition": "베히모스를 처치한다",
+      "source": "내부 기록"
+    },
+    {
+      "title": "몽환의 현시자",
+      "grade": "희귀",
+      "parentTitle": null,
+      "condition": "아브렐슈드와의 전투에서 이긴다",
+      "source": "내부 기록"
+    },
+    {
+      "title": "질병군단장",
+      "grade": "희귀",
+      "parentTitle": null,
+      "condition": "일리아칸을 처치한다",
+      "source": "내부 기록"
+    },
+    {
+      "title": "어둠군단장",
+      "grade": "희귀",
+      "parentTitle": null,
+      "condition": "카멘을 처치한다",
+      "source": "내부 기록"
+    },
+    {
+      "title": "몽환군단장",
+      "grade": "희귀",
+      "parentTitle": null,
+      "condition": "아브렐슈드를 처치한다",
+      "source": "내부 기록"
+    },
+    {
+      "title": "심연의 파수꾼",
+      "grade": "희귀",
+      "parentTitle": null,
+      "condition": "아르모체를 처치한다",
+      "source": "내부 기록"
+    },
+    {
+      "title": "광기군단장",
+      "grade": "희귀",
+      "parentTitle": null,
+      "condition": "쿠크세이튼을 처치한다",
+      "source": "내부 기록"
+    },
+    {
+      "title": "마수군단장",
+      "grade": "희귀",
+      "parentTitle": null,
+      "condition": "발탄을 처치한다",
+      "source": "내부 기록"
+    },
+    {
+      "title": "짓밟는 자",
+      "grade": "희귀",
+      "parentTitle": null,
+      "condition": "에기르를 처치한다",
+      "source": "내부 기록"
+    },
+    {
+      "title": "홍염의 군주",
+      "grade": "전설",
+      "parentTitle": null,
+      "condition": "카제로스 레이드 익스트림 1막을 나이트메어 난이도로 처음 클리어한다",
+      "source": "https://lostark.game.onstove.com/News/Notice/Views/13416"
+    },
+    {
+      "title": "혹한의 군주",
+      "grade": "전설",
+      "parentTitle": null,
+      "condition": "카제로스 레이드 익스트림 2막을 나이트메어 난이도로 처음 클리어한다",
+      "source": "https://lostark.game.onstove.com/News/Notice/Views/13442"
+    },
+    {
+      "title": "뇌전의 군주",
+      "grade": "전설",
+      "parentTitle": null,
+      "condition": "카제로스 레이드 익스트림 3막을 나이트메어 난이도로 처음 클리어한다",
+      "source": "https://lostark.game.onstove.com/News/Notice/Views/13551"
+    },
+    {
+      "title": "파멸의 군주",
+      "grade": "전설",
+      "parentTitle": null,
+      "condition": "카제로스 레이드 익스트림 종막을 나이트메어 난이도로 처음 클리어한다",
+      "source": "https://lostark.game.onstove.com/News/Notice/Views/13578"
+    },
+    {
+      "title": "심연의 끝을 마주한 자",
+      "grade": "유물",
+      "parentTitle": null,
+      "condition": "익스트림 3막과 종막을 나이트메어 난이도로 모두 클리어한다(업적 보상)",
+      "source": "https://lostark.game.onstove.com/News/Notice/Views/13578"
+    },
+    {
+      "title": "심연의 군주",
+      "grade": "전설",
+      "parentTitle": null,
+      "condition": "카제로스 The FIRST 난이도 클리어 보상",
+      "source": "내부 기록"
+    },
+    {
+      "title": "이클립스",
+      "grade": "전설",
+      "parentTitle": null,
+      "condition": "카멘 The FIRST 난이도 클리어 보상",
+      "source": "내부 기록"
+    },
+    {
+      "title": "카멘 The 1st",
+      "grade": "유물",
+      "parentTitle": null,
+      "condition": "카멘 The FIRST 이벤트 1위 공격대",
+      "source": "내부 기록"
+    },
+    {
+      "title": "카멘 The 2nd",
+      "grade": "유물",
+      "parentTitle": null,
+      "condition": "카멘 The FIRST 이벤트 2위 공격대",
+      "source": "내부 기록"
+    },
+    {
+      "title": "카멘 The 3rd",
+      "grade": "유물",
+      "parentTitle": null,
+      "condition": "카멘 The FIRST 이벤트 3위 공격대",
+      "source": "내부 기록"
+    },
+    {
+      "title": "카멘 The TOP10",
+      "grade": "유물",
+      "parentTitle": null,
+      "condition": "카멘 The FIRST 이벤트 4~10위 공격대",
+      "source": "내부 기록"
+    },
+    {
+      "title": "카제로스 The 1st",
+      "grade": "고대",
+      "parentTitle": null,
+      "condition": "카제로스 The FIRST 이벤트 1위 공격대",
+      "source": "내부 기록"
+    },
+    {
+      "title": "카제로스 The 2nd",
+      "grade": "고대",
+      "parentTitle": null,
+      "condition": "카제로스 The FIRST 이벤트 2위 공격대",
+      "source": "내부 기록"
+    },
+    {
+      "title": "카제로스 The 3rd",
+      "grade": "고대",
+      "parentTitle": null,
+      "condition": "카제로스 The FIRST 이벤트 3위 공격대",
+      "source": "내부 기록"
+    },
+    {
+      "title": "카제로스 The TOP10",
+      "grade": "고대",
+      "parentTitle": null,
+      "condition": "카제로스 The FIRST 이벤트 4~10위 공격대",
+      "source": "내부 기록"
+    },
+    {
+      "title": "죽음을 부르는 자",
+      "grade": "유물",
+      "parentTitle": null,
+      "condition": "벨가르딘 정복전의 나이트메어 미션 6개를 모두 달성한다",
+      "source": "https://lostark.game.onstove.com/Promotion/Mission/260805"
+    },
+    {
+      "title": "크로체",
+      "grade": "전설",
+      "parentTitle": null,
+      "condition": "벨가르딘 정복전의 나이트메어 미션 5개를 달성한다",
+      "source": "https://lostark.game.onstove.com/Promotion/Mission/260805"
+    },
+    {
+      "title": "돌로리스",
+      "grade": "전설",
+      "parentTitle": null,
+      "condition": "세르카 나이트메어 난이도가 열린 첫 주에 클리어한다",
+      "source": "내부 기록"
+    },
+    {
+      "title": "찬란하게 빛나는",
+      "grade": "전설",
+      "parentTitle": null,
+      "condition": "시련 가디언 아카테스 토벌에 성공한다",
+      "source": "내부 기록"
+    },
+    {
+      "title": "대지를 분쇄하는",
+      "grade": "전설",
+      "parentTitle": null,
+      "condition": "시련 가디언 하누마탄을 하드 난이도로 토벌한다",
+      "source": "내부 기록"
+    },
+    {
+      "title": "천둥을 내리꽂는",
+      "grade": "전설",
+      "parentTitle": null,
+      "condition": "시련 가디언 칼엘리고스 토벌에 성공한다",
+      "source": "내부 기록"
+    },
+    {
+      "title": "빛의 날개",
+      "grade": "전설",
+      "parentTitle": null,
+      "condition": "시즌 1 시련 가디언 아카테스 토벌에 성공한다",
+      "source": "내부 기록"
+    },
+    {
+      "title": "분노의 포식자",
+      "grade": "전설",
+      "parentTitle": null,
+      "condition": "시즌 1 시련 가디언 이그렉시온 토벌에 성공한다",
+      "source": "내부 기록"
+    },
+    {
+      "title": "광풍의 눈",
+      "grade": "전설",
+      "parentTitle": null,
+      "condition": "시즌 1 시련 가디언 고대의 칼벤투스 토벌에 성공한다",
+      "source": "내부 기록"
+    },
+    {
+      "title": "번뇌의 창",
+      "grade": "전설",
+      "parentTitle": null,
+      "condition": "시즌 1 시련 가디언 엘버하스틱 토벌에 성공한다",
+      "source": "내부 기록"
+    },
+    {
+      "title": "푸른 갈기",
+      "grade": "전설",
+      "parentTitle": null,
+      "condition": "시즌 1 시련 가디언 벨가누스 토벌에 성공한다",
+      "source": "내부 기록"
+    },
+    {
+      "title": "광풍의 슬레이어",
+      "grade": "전설",
+      "parentTitle": null,
+      "condition": "시즌 1에서 전 서버 최초로 고대의 칼벤투스를 토벌한다",
+      "source": "내부 기록"
+    },
+    {
+      "title": "뇌룡을 정복한 자",
+      "grade": "전설",
+      "parentTitle": null,
+      "condition": "전 서버 최초로 칼엘리고스를 토벌한다",
+      "source": "내부 기록"
+    },
+    {
+      "title": "날개를 꺾은 자",
+      "grade": "전설",
+      "parentTitle": null,
+      "condition": "전 서버 최초로 시련 아카테스를 토벌한다",
+      "source": "내부 기록"
+    },
+    {
+      "title": "벨가누스 슬레이어",
+      "grade": "전설",
+      "parentTitle": null,
+      "condition": "시즌 1에서 전 서버 최초로 벨가누스를 토벌한다",
+      "source": "내부 기록"
+    },
+    {
+      "title": "아카테스 슬레이어",
+      "grade": "전설",
+      "parentTitle": null,
+      "condition": "시즌 1에서 전 서버 최초로 아카테스를 토벌한다",
+      "source": "내부 기록"
+    },
+    {
+      "title": "엘버하스틱 슬레이어",
+      "grade": "전설",
+      "parentTitle": null,
+      "condition": "시즌 1에서 전 서버 최초로 엘버하스틱을 토벌한다",
+      "source": "내부 기록"
+    },
+    {
+      "title": "이그렉시온 슬레이어",
+      "grade": "전설",
+      "parentTitle": null,
+      "condition": "시즌 1에서 전 서버 최초로 이그렉시온을 토벌한다",
+      "source": "내부 기록"
+    },
+    {
+      "title": "악마 사냥꾼",
+      "grade": "전설",
+      "parentTitle": null,
+      "condition": "군단장 레이드 헬에서 군단장 3명을 토벌한다",
+      "source": "내부 기록"
+    },
+    {
+      "title": "마수군단장 슬레이어",
+      "grade": "전설",
+      "parentTitle": null,
+      "condition": "군단장 레이드 헬에서 발탄을 토벌한다",
+      "source": "내부 기록"
+    },
+    {
+      "title": "마수의 포효",
+      "grade": "전설",
+      "parentTitle": null,
+      "condition": "군단장 레이드 헬에서 한 명도 죽지 않고 발탄을 돌파한다",
+      "source": "내부 기록"
+    },
+    {
+      "title": "광기군단장 슬레이어",
+      "grade": "전설",
+      "parentTitle": null,
+      "condition": "군단장 레이드 헬에서 쿠크세이튼을 토벌한다",
+      "source": "내부 기록"
+    },
+    {
+      "title": "욕망군단장 슬레이어",
+      "grade": "전설",
+      "parentTitle": null,
+      "condition": "군단장 레이드 헬에서 비아키스를 토벌한다",
+      "source": "내부 기록"
+    },
+    {
+      "title": "쾌락의 탐닉자",
+      "grade": "전설",
+      "parentTitle": null,
+      "condition": "군단장 레이드 헬에서 한 명도 죽지 않고 비아키스를 돌파한다",
+      "source": "내부 기록"
+    },
+    {
+      "title": "광기의 그림자",
+      "grade": "전설",
+      "parentTitle": null,
+      "condition": "군단장 레이드 헬에서 한 명도 죽지 않고 쿠크세이튼 구간을 돌파한다",
+      "source": "내부 기록"
+    },
+    {
+      "title": "몽환의 지배자",
+      "grade": "전설",
+      "parentTitle": null,
+      "condition": "군단장 레이드 헬에서 한 명도 죽지 않고 아브렐슈드 구간을 돌파한다",
+      "source": "내부 기록"
+    },
+    {
+      "title": "몽환군단장 슬레이어",
+      "grade": "전설",
+      "parentTitle": null,
+      "condition": "군단장 레이드 헬에서 아브렐슈드를 토벌한다",
+      "source": "내부 기록"
+    },
+    {
+      "title": "S1 낙원의 주인",
+      "grade": "전설",
+      "parentTitle": null,
+      "condition": "낙원 랭킹 시즌 1에서 1위",
+      "source": "https://lostark.game.onstove.com/News/Notice/Views/13247"
+    },
+    {
+      "title": "S1 낙원의 정복자",
+      "grade": "전설",
+      "parentTitle": null,
+      "condition": "낙원 랭킹 시즌 1에서 2~10위",
+      "source": "https://lostark.game.onstove.com/News/Notice/Views/13247"
+    },
+    {
+      "title": "S1 낙원의 선봉대",
+      "grade": "전설",
+      "parentTitle": null,
+      "condition": "낙원 랭킹 시즌 1에서 11~30위",
+      "source": "https://lostark.game.onstove.com/News/Notice/Views/13247"
+    },
+    {
+      "title": "S2 낙원의 주인",
+      "grade": "전설",
+      "parentTitle": null,
+      "condition": "낙원 랭킹 시즌 2에서 1위",
+      "source": "내부 기록"
+    },
+    {
+      "title": "S2 낙원의 정복자",
+      "grade": "전설",
+      "parentTitle": null,
+      "condition": "낙원 랭킹 시즌 2에서 2~10위",
+      "source": "내부 기록"
+    },
+    {
+      "title": "S2 낙원의 선봉대",
+      "grade": "전설",
+      "parentTitle": null,
+      "condition": "낙원 랭킹 시즌 2에서 11~30위",
+      "source": "내부 기록"
+    },
+    {
+      "title": "S3 낙원의 주인",
+      "grade": "전설",
+      "parentTitle": null,
+      "condition": "낙원 랭킹 시즌 3에서 1위",
+      "source": "내부 기록"
+    },
+    {
+      "title": "S3 낙원의 정복자",
+      "grade": "전설",
+      "parentTitle": null,
+      "condition": "낙원 랭킹 시즌 3에서 2~10위",
+      "source": "내부 기록"
+    },
+    {
+      "title": "S3 낙원의 선봉대",
+      "grade": "전설",
+      "parentTitle": null,
+      "condition": "낙원 랭킹 시즌 3에서 11~30위",
+      "source": "내부 기록"
+    },
+    {
+      "title": "S4 낙원의 주인",
+      "grade": "전설",
+      "parentTitle": null,
+      "condition": null,
+      "source": "내부 기록"
+    },
+    {
+      "title": "S4 낙원의 정복자",
+      "grade": "전설",
+      "parentTitle": null,
+      "condition": null,
+      "source": "내부 기록"
+    },
+    {
+      "title": "S4 낙원의 선봉대",
+      "grade": "전설",
+      "parentTitle": null,
+      "condition": null,
+      "source": "내부 기록"
+    },
+    {
+      "title": "극에 달한 자",
+      "grade": "전설",
+      "parentTitle": null,
+      "condition": "증명의 전장 무극 계급에서 용기의 주화로 구매한다",
+      "source": "https://lostark.game.onstove.com/News/Notice/Views/802"
+    },
+    {
+      "title": "끝을 마주한 자",
+      "grade": "전설",
+      "parentTitle": null,
+      "condition": "증명의 전장 시즌 2 무극 계급에서 용기의 주화로 구매한다",
+      "source": "https://lostark.game.onstove.com/News/Notice/Views/802"
+    },
+    {
+      "title": "정상에 오른 자",
+      "grade": "전설",
+      "parentTitle": null,
+      "condition": "경쟁전에서 그랜드 마스터 등급을 달성한다",
+      "source": "내부 기록"
+    },
+    {
+      "title": "그랜드 마스터",
+      "grade": "전설",
+      "parentTitle": null,
+      "condition": "경쟁전 시즌 중 그랜드 마스터 등급에 오른다",
+      "source": "내부 기록"
+    },
+    {
+      "title": "일기당천",
+      "grade": "전설",
+      "parentTitle": null,
+      "condition": "경쟁전 시즌 2 마스터 등급 보상",
+      "source": "내부 기록"
+    },
+    {
+      "title": "만인지적",
+      "grade": "전설",
+      "parentTitle": null,
+      "condition": "경쟁전 시즌 2 그랜드마스터 등급 보상",
+      "source": "내부 기록"
+    },
+    {
+      "title": "만년지재",
+      "grade": "전설",
+      "parentTitle": null,
+      "condition": "경쟁전 시즌 3 마스터 등급 보상",
+      "source": "내부 기록"
+    },
+    {
+      "title": "유아독존",
+      "grade": "전설",
+      "parentTitle": null,
+      "condition": "경쟁전 시즌 3 그랜드마스터 등급 보상",
+      "source": "내부 기록"
+    },
+    {
+      "title": "불요불굴",
+      "grade": "전설",
+      "parentTitle": null,
+      "condition": "경쟁전 마스터 등급 보상",
+      "source": "내부 기록"
+    },
+    {
+      "title": "경천동지",
+      "grade": "전설",
+      "parentTitle": null,
+      "condition": "경쟁전 그랜드마스터 등급 보상",
+      "source": "내부 기록"
+    },
+    {
+      "title": "크리스마스의 기적",
+      "grade": "전설",
+      "parentTitle": null,
+      "condition": "'2021 크리스마스의 낭만이 함께하길' 업적 보상",
+      "source": "내부 기록"
+    },
+    {
+      "title": "빛나는 추억 속",
+      "grade": "전설",
+      "parentTitle": null,
+      "condition": "5주년 추억 앨범을 모두 퍼펙트 샷으로 완성한다",
+      "source": "내부 기록"
+    },
+    {
+      "title": "듀얼리스트",
+      "grade": "희귀",
+      "parentTitle": null,
+      "condition": "티카투카에서 연속으로 이긴다",
+      "source": "내부 기록"
+    },
+    {
+      "title": "마스터마인드",
+      "grade": "전설",
+      "parentTitle": null,
+      "condition": "티카투카 누적 포인트를 달성한다",
+      "source": "내부 기록"
+    },
+    {
+      "title": "준비된 자",
+      "grade": "희귀",
+      "parentTitle": null,
+      "condition": "OBT 사전 예약 보상",
+      "source": "내부 기록"
+    },
+    {
+      "title": "일 년을 함께한",
+      "grade": "희귀",
+      "parentTitle": null,
+      "condition": "1주년 기념 보상",
+      "source": "내부 기록"
+    },
+    {
+      "title": "2018 X-mas",
+      "grade": "희귀",
+      "parentTitle": null,
+      "condition": "2018년 크리스마스 패키지",
+      "source": "내부 기록"
+    },
+    {
+      "title": "혼자가 아닌",
+      "grade": "희귀",
+      "parentTitle": null,
+      "condition": "2020 겨울 한정 퀘스트 보상",
+      "source": "내부 기록"
+    },
+    {
+      "title": "스페셜리스트",
+      "grade": "전설",
+      "parentTitle": null,
+      "condition": "1주년 기념으로 특별 지급",
+      "source": "내부 기록"
+    },
+    {
+      "title": "갈망의 정복자",
+      "grade": "희귀",
+      "parentTitle": null,
+      "condition": "갈망의 섬에서 섬의 마음을 얻는다",
+      "source": "내부 기록"
+    },
+    {
+      "title": "세계수의 축복 받은 자",
+      "grade": "전설",
+      "parentTitle": null,
+      "condition": "세계수의 잎 포인트 120 보상",
+      "source": "내부 기록"
+    },
+    {
+      "title": "북부의 지배자",
+      "grade": "전설",
+      "parentTitle": null,
+      "condition": "로웬 세력 직위 15단계를 달성한다",
+      "source": "내부 기록"
+    },
+    {
+      "title": "삼라만상",
+      "grade": "전설",
+      "parentTitle": null,
+      "condition": "업적 등급 삼라만상을 달성한다",
+      "source": "내부 기록"
+    },
+    {
+      "title": "백일몽",
+      "grade": "전설",
+      "parentTitle": null,
+      "condition": "종언의 잔영 하드 도전 과제 보상",
+      "source": "내부 기록"
+    },
+    {
+      "title": "에스더의 결속자",
+      "grade": "유물",
+      "parentTitle": null,
+      "condition": "에스더 무기에 엘라를 부여한다",
+      "source": "내부 기록"
+    },
+    {
+      "title": "에스더의 후계자",
+      "grade": "유물",
+      "parentTitle": null,
+      "condition": "에스더 무기에 엘라를 부여한다",
+      "source": "내부 기록"
+    },
+    {
+      "title": "20년 최고의 금손",
+      "grade": "전설",
+      "parentTitle": null,
+      "condition": "2020 공모전 입상",
+      "source": "내부 기록"
+    },
+    {
+      "title": "21년 최고의 금손",
+      "grade": "전설",
+      "parentTitle": null,
+      "condition": "2021 공모전 입상",
+      "source": "내부 기록"
+    },
+    {
+      "title": "22년 최고의 금손",
+      "grade": "전설",
+      "parentTitle": null,
+      "condition": "2022 공모전 입상",
+      "source": "내부 기록"
+    },
+    {
+      "title": "23년 최고의 금손",
+      "grade": "전설",
+      "parentTitle": null,
+      "condition": "2023 공모전 입상",
+      "source": "내부 기록"
+    },
+    {
+      "title": "24년 최고의 금손",
+      "grade": "전설",
+      "parentTitle": null,
+      "condition": "2024 공모전 입상",
+      "source": "내부 기록"
+    },
+    {
+      "title": "25년 최고의 금손",
+      "grade": "전설",
+      "parentTitle": null,
+      "condition": "2025 아트 공모전 기념",
+      "source": "내부 기록"
+    },
+    {
+      "title": "동물 애호가",
+      "grade": "전설",
+      "parentTitle": null,
+      "condition": "셀피 콘테스트 동물 부문 입상",
+      "source": "내부 기록"
+    },
+    {
+      "title": "사계절을 함께한",
+      "grade": "전설",
+      "parentTitle": null,
+      "condition": "셀피 콘테스트 사계절 부문 입상",
+      "source": "내부 기록"
+    },
+    {
+      "title": "아크라시아 여행가",
+      "grade": "전설",
+      "parentTitle": null,
+      "condition": "셀피 콘테스트 여행 부문 입상",
+      "source": "내부 기록"
+    },
+    {
+      "title": "아크라시아 인싸",
+      "grade": "전설",
+      "parentTitle": null,
+      "condition": "셀피 콘테스트 친구들 부문 입상",
+      "source": "내부 기록"
+    },
+    {
+      "title": "타고난 이야기꾼",
+      "grade": "전설",
+      "parentTitle": null,
+      "condition": "셀피 콘테스트 로아 스토리툰 부문 입상",
+      "source": "내부 기록"
+    }
+  ]
+}

@@ -949,34 +949,45 @@ public class StatsQueryService {
             TitleEquipResult.class,
             () -> {
               var now = clock.instant();
-              var result =
-                  stats.titleEquip(
-                      conditions.server(),
-                      conditions.since(now),
-                      now.minus(java.time.Duration.ofDays(TITLE_RECENT_DAYS)),
-                      null);
-              long population = result.population();
-              return new TitleEquipResult(
-                  meta(conditions, population, now),
-                  null,
-                  result.titles().stream()
-                      .map(
-                          row ->
-                              new EquippedTitle(
-                                  row.title(),
-                                  row.rosters(),
-                                  percent(row.rosters(), population),
-                                  row.observedRosters(),
-                                  percent(row.observedRosters(), population),
-                                  row.newRosters(),
-                                  row.observedCharacters()))
-                      .toList());
+              return titleResult(
+                  conditions,
+                  now,
+                  titleEquipNow(conditions.server(), conditions.since(now), now),
+                  null);
             });
     if (title == null) return full;
     return new TitleEquipResult(
         full.meta(),
         title,
         full.titles().stream().filter(row -> title.equals(row.title())).toList());
+  }
+
+  /** 지금 server(null = 전체)의 칭호 장착 확인. since = 관측 기간 시작(일별 스냅숏은 30일 창). */
+  StatsPort.TitleEquip titleEquipNow(String server, Instant since, Instant now) {
+    return stats.titleEquip(
+        server, since, now.minus(java.time.Duration.ofDays(TITLE_RECENT_DAYS)), null);
+  }
+
+  /** 칭호 장착 확인 결과(지금이든 스냅숏이든 같은 모양). title이 있으면 그 칭호만. */
+  TitleEquipResult titleResult(
+      StatsConditions conditions, Instant aggregatedAt, StatsPort.TitleEquip result, String title) {
+    long population = result.population();
+    return new TitleEquipResult(
+        meta(conditions, population, aggregatedAt),
+        title,
+        result.titles().stream()
+            .filter(row -> title == null || title.equals(row.title()))
+            .map(
+                row ->
+                    new EquippedTitle(
+                        row.title(),
+                        row.rosters(),
+                        percent(row.rosters(), population),
+                        row.observedRosters(),
+                        percent(row.observedRosters(), population),
+                        row.newRosters(),
+                        row.observedCharacters()))
+            .toList());
   }
 
   /** '최근 많이 기록된 칭호'의 기간(일). activeDays와 무관하다. */

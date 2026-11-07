@@ -12,6 +12,7 @@ enum StatsSuccessCode implements SuccessCode {
   RANKING_SUCCESS,
   COLLECTIBLE_RANKING_SUCCESS,
   TITLE_EQUIP_SUCCESS,
+  TITLE_SNAPSHOT_DATES_SUCCESS,
   COLLECTIBLE_OWNERSHIP_SUCCESS,
   COLLECTIBLE_STANDING_SUCCESS,
   ROSTER_RANKING_SUCCESS,
@@ -37,6 +38,7 @@ enum StatsSuccessCode implements SuccessCode {
       case RANKING_SUCCESS -> "랭킹 조회에 성공했습니다.";
       case COLLECTIBLE_RANKING_SUCCESS -> "수집품 랭킹 조회에 성공했습니다.";
       case TITLE_EQUIP_SUCCESS -> "칭호 장착 확인 비율 조회에 성공했습니다.";
+      case TITLE_SNAPSHOT_DATES_SUCCESS -> "칭호 통계 스냅숏 날짜 조회에 성공했습니다.";
       case COLLECTIBLE_OWNERSHIP_SUCCESS -> "수집품 보유율 조회에 성공했습니다.";
       case COLLECTIBLE_STANDING_SUCCESS -> "수집품 순위 조회에 성공했습니다.";
       case ROSTER_RANKING_SUCCESS -> "원정대 랭킹 조회에 성공했습니다.";

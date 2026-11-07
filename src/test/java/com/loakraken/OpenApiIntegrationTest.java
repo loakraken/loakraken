@@ -491,6 +491,19 @@ class OpenApiIntegrationTest {
         .contains("observedAt", "lastConfirmedAt", "itemLevel", "combatPower");
     assertThat(document.at("/components/schemas/CharacterHistoryResponse/required").toString())
         .contains("points", "titles");
+    // 칭호 통계 날짜 비교: snapshotDate는 api 배포 전까지 선택 필드, 날짜 목록 경로와 date 쿼리가 있다.
+    assertThat(document.at("/components/schemas/TitleEquipResponse/required").toString())
+        .contains("titles")
+        .doesNotContain("snapshotDate");
+    assertThat(
+            document
+                .at("/components/schemas/TitleEquipResponse/properties/snapshotDate")
+                .isMissingNode())
+        .isFalse();
+    assertThat(document.at("/paths/~1api~1v1~1titles~1equipped~1dates/get").isMissingNode())
+        .isFalse();
+    assertThat(document.at("/paths/~1api~1v1~1titles~1equipped/get/parameters").toString())
+        .contains("\"date\"");
     var siblings = document.at("/paths/~1api~1v1~1characters~1siblings/get");
     assertThat(siblings.path("responses").has("404")).isTrue();
     assertThat(document.at("/components/schemas/CharacterSiblingsResponse/required").toString())

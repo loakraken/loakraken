@@ -246,7 +246,8 @@ class SpecUpIntegrationTest {
     var engravingSteps = new java.util.ArrayList<JsonNode>();
     for (var group : List.of(path.path("steps"), path.path("unpriced")))
       for (var step : group)
-        if (step.path("candidateId").asText().startsWith("ENGRAVING_LEVEL:")) engravingSteps.add(step);
+        if (step.path("candidateId").asText().startsWith("ENGRAVING_LEVEL:"))
+          engravingSteps.add(step);
     assertThat(engravingSteps).isNotEmpty();
     for (var step : engravingSteps)
       assertThat(step.path("icon").asText())

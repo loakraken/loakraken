@@ -26,6 +26,8 @@ import org.springframework.stereotype.Service;
  */
 @Service
 public class MarketBoardService {
+  private static final org.slf4j.Logger log =
+      org.slf4j.LoggerFactory.getLogger(MarketBoardService.class);
   public static final int PAGE_SIZE = 10;
   public static final int MAX_SCAN_PAGES = 10;
   static final ZoneId KST = ZoneId.of("Asia/Seoul");
@@ -123,8 +125,11 @@ public class MarketBoardService {
     };
   }
 
-  /** 한 요청에서 새로 스캔할 수 있는 (탭, 티어) 묶음 수. 묶음마다 공식 검색이 최대 10번이라 방문자 한도(분당 20)를 넘지 않게 한다. */
-  public static final int MAX_COLD_GROUPS = 3;
+  /**
+   * 한 요청에서 새로 스캔할 수 있는 (탭, 티어) 묶음 수. 묶음마다 공식 검색이 최대 MAX_SCAN_PAGES(10)번이라 2묶음 = 최대 20번으로 방문자 한도(분당
+   * 20) 안이다.
+   */
+  public static final int MAX_COLD_GROUPS = 2;
 
   public static final int MAX_PRICE_ITEMS = 50;
 
@@ -148,8 +153,8 @@ public class MarketBoardService {
 
   /**
    * 즐겨찾기 묶음 시세. (탭, 티어)마다 상승·하락 정렬과 같은 탭 전체 스캔(같은 캐시·합치기·한 번에 하나)에서 찾는다. 캐시에 없는 묶음은 요청당
-   * MAX_COLD_GROUPS개까지만 새로 스캔하고, 한도·공식 장애에 걸리면 그 묶음과 뒤의 새 묶음은 PENDING이다. 같은 itemId는 처음 것만, 요청 순서대로
-   * 준다.
+   * MAX_COLD_GROUPS개까지만 새로 스캔하고, 한도·공식 장애나 그 밖의 오류로 스캔하지 못하면 그 묶음과 뒤의 새 묶음은 PENDING이다(500 대신). 같은
+   * itemId는 처음 것만, 요청 순서대로 준다.
    */
   public List<ItemPrice> prices(List<PriceRequest> requests) {
     var scans = new java.util.HashMap<ScanKey, Optional<MarketBoardScan>>();
@@ -171,6 +176,15 @@ public class MarketBoardService {
       try {
         scans.put(key, Optional.of(scan(key.tab(), key.tier())));
       } catch (com.loakraken.common.api.BusinessException exception) {
+        stopped = true;
+        scans.put(key, Optional.empty());
+      } catch (RuntimeException exception) {
+        // 예상하지 못한 오류도 이 요청의 나머지 값(캐시 묶음)은 돌려주고 그 묶음만 PENDING으로 둔다. 원인은 로그로 남긴다.
+        log.warn(
+            "event=market_item_prices_scan_failed tab={} tier={} exceptionType={}",
+            key.tab(),
+            key.tier(),
+            exception.getClass().getName());
         stopped = true;
         scans.put(key, Optional.empty());
       }

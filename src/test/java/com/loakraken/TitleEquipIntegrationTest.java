@@ -180,8 +180,8 @@ class TitleEquipIntegrationTest {
   @Test
   @org.junit.jupiter.api.extension.ExtendWith(
       org.springframework.boot.test.system.OutputCaptureExtension.class)
-  void 칭호_표에_없는_칭호는_한_번만_로그로_남긴다(
-      org.springframework.boot.test.system.CapturedOutput output) throws Exception {
+  void 칭호_표에_없는_칭호는_한_번만_로그로_남긴다(org.springframework.boot.test.system.CapturedOutput output)
+      throws Exception {
     character(SERVER, "칭호표밖", UUID.randomUUID(), "표에 없는 시험 칭호", Instant.now());
     character(SERVER, "칭호표안", UUID.randomUUID(), "빛을 꺼트리는 자", Instant.now());
     data(get("/api/v1/titles/equipped?server=" + encode(SERVER)));

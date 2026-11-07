@@ -60,8 +60,8 @@ public class TitleEquipController {
   }
 
   /**
-   * 칭호 표의 줄. 표에 없으면 null이고, 처음 본 칭호면 한 번 남긴다(표 철자 차이를 찾게 — 표에 없으면 조용히 중립 색이 되므로). 인스턴스당 칭호마다 한
-   * 번, 최대 MAX_MISS_LOGGED개.
+   * 칭호 표의 줄. 표에 없으면 null이고, 처음 본 칭호면 한 번 남긴다(표 철자 차이를 찾게 — 표에 없으면 조용히 중립 색이 되므로). 인스턴스당 칭호마다 한 번,
+   * 최대 MAX_MISS_LOGGED개.
    */
   private TitleCatalog.Entry catalogEntry(String title) {
     var entry = catalog.get(title);

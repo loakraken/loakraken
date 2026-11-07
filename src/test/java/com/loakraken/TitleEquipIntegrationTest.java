@@ -193,7 +193,10 @@ class TitleEquipIntegrationTest {
                 + " VALUES (:d, '', 1, now())")
         .param("d", old)
         .update();
-    assertThat(snapshots.build()).isGreaterThanOrEqualTo(2);
+    var built = snapshots.build();
+    assertThat(built.keys()).isGreaterThanOrEqualTo(2);
+    // 전체·이 서버에 칭호 2줄씩은 있다.
+    assertThat(built.rows()).isGreaterThanOrEqualTo(4);
     assertThat(snapshots.builtToday()).isTrue();
     var today = LocalDate.now(TitleSnapshotService.KST);
 

@@ -68,9 +68,13 @@ class TitleSnapshotJob {
     if (!hold(Duration.ofMinutes(10))) return false;
     long started = System.nanoTime();
     try {
-      int keys = snapshots.build();
+      var built = snapshots.build();
       lastSuccess.set(clock.instant().getEpochSecond());
-      log.info("event=title_snapshot_built trigger={} keys={}", trigger, keys);
+      log.info(
+          "event=title_snapshot_built trigger={} keys={} rows={}",
+          trigger,
+          built.keys(),
+          built.rows());
       return true;
     } catch (org.springframework.dao.DataAccessException exception) {
       log.warn(

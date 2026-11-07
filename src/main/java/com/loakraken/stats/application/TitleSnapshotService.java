@@ -39,8 +39,8 @@ public class TitleSnapshotService {
     return snapshots.latest().filter(today::equals).isPresent();
   }
 
-  /** 오늘(KST) 스냅숏을 만든다(같은 날짜면 바꿔 씀). 만든 server key 수(전체 포함). */
-  public int build() {
+  /** 오늘(KST) 스냅숏을 만든다(같은 날짜면 바꿔 씀). keys = 만든 server key 수(전체 포함), rows = 넣은 칭호 줄 수. */
+  public Built build() {
     var now = clock.instant();
     var today = LocalDate.now(clock.withZone(KST));
     var conditions = StatsConditions.defaults();
@@ -51,7 +51,8 @@ public class TitleSnapshotService {
       if (server.serverName() != null && !server.serverName().isBlank())
         byServer.put(server.serverName(), query.titleEquipNow(server.serverName(), since, now));
     snapshots.replace(today, now, byServer, today.minusDays(KEEP_DAYS));
-    return byServer.size();
+    int rows = byServer.values().stream().mapToInt(value -> value.titles().size()).sum();
+    return new Built(byServer.size(), rows);
   }
 
   /** date·server(null = 전체) 스냅숏. 없으면 404 TITLE_SNAPSHOT_NOT_FOUND. */
@@ -63,6 +64,9 @@ public class TitleSnapshotService {
             .orElseThrow(() -> new BusinessException(StatsErrorCode.TITLE_SNAPSHOT_NOT_FOUND));
     return query.titleResult(conditions, snapshot.builtAt(), snapshot.data(), title);
   }
+
+  /** 한 번 만든 결과(로그·배포 확인용). */
+  public record Built(int keys, int rows) {}
 
   /** server(null = 전체) 스냅숏 날짜(최신순, 최대 90개). */
   public List<LocalDate> dates(String server) {

@@ -35,6 +35,31 @@ class MarketBoardRulesTest {
         .containsExactly(3L, 1L, 2L, 5L, 4L);
     assertThatThrownBy(() -> MarketBoardRules.sortByChange(items, MarketBoardRules.Sort.HIGH))
         .isInstanceOf(IllegalArgumentException.class);
+    assertThatThrownBy(() -> MarketBoardRules.sortByChange(items, MarketBoardRules.Sort.VOLUME))
+        .isInstanceOf(IllegalArgumentException.class);
+  }
+
+  @Test
+  void 거래량_정렬은_7일_합_내림차순_같으면_전일_내림차순_같으면_스캔_순서이고_거래량_없는_품목은_뒤에_스캔_순서다() {
+    var items =
+        List.of(
+            price(1, "가", "10", "10"),
+            price(2, "나", "10", "10"),
+            price(3, "다", "10", "10"),
+            price(4, "라", "10", "10"),
+            price(5, "마", "10", "10"),
+            price(6, "바", "10", "10"));
+    var day = java.time.LocalDate.of(2026, 11, 7);
+    var volumes =
+        java.util.Map.of(
+            2L, new MarketVolume(2, day, 5, 50),
+            4L, new MarketVolume(4, day, 1, 90),
+            5L, new MarketVolume(5, day, 9, 50),
+            6L, new MarketVolume(6, day, 5, 50));
+    assertThat(MarketBoardRules.sortByVolume(items, volumes))
+        .extracting(MarketPrice::id)
+        .containsExactly(4L, 5L, 2L, 6L, 1L, 3L);
+    assertThat(MarketBoardRules.Sort.VOLUME.scansWholeTab()).isTrue();
   }
 
   static MarketPrice price(long id, String name, String current, String yesterday) {

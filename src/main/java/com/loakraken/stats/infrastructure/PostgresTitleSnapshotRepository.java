@@ -5,9 +5,12 @@ import com.loakraken.stats.application.TitleSnapshotPort;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
+import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
@@ -19,9 +22,11 @@ class PostgresTitleSnapshotRepository implements TitleSnapshotPort {
   static final long BUILD_LOCK = 0x6c6b5f7469746cL;
 
   private final JdbcClient jdbc;
+  private final NamedParameterJdbcTemplate batch;
 
-  PostgresTitleSnapshotRepository(JdbcClient jdbc) {
+  PostgresTitleSnapshotRepository(JdbcClient jdbc, NamedParameterJdbcTemplate batch) {
     this.jdbc = jdbc;
+    this.batch = batch;
   }
 
   @Override
@@ -50,32 +55,40 @@ class PostgresTitleSnapshotRepository implements TitleSnapshotPort {
           .param("date", date)
           .param("keepFrom", keepFrom)
           .update();
+    // 메타·칭호 줄을 각각 한 번의 일괄 넣기로(하루 수백 줄, 왕복 수를 줄임).
+    var metas = new ArrayList<MapSqlParameterSource>();
+    var rows = new ArrayList<MapSqlParameterSource>();
     for (var entry : byServer.entrySet()) {
-      jdbc.sql(
-              "INSERT INTO title_equip_daily_meta (snapshot_date, server_key, population, built_at)"
-                  + " VALUES (:date, :key, :population, :builtAt)")
-          .param("date", date)
-          .param("key", entry.getKey())
-          .param("population", entry.getValue().population())
-          .param("builtAt", Timestamp.from(builtAt))
-          .update();
+      metas.add(
+          new MapSqlParameterSource()
+              .addValue("date", date)
+              .addValue("key", entry.getKey())
+              .addValue("population", entry.getValue().population())
+              .addValue("builtAt", Timestamp.from(builtAt)));
       for (var row : entry.getValue().titles())
-        jdbc.sql(
-                """
-                INSERT INTO title_equip_daily
-                  (snapshot_date, server_key, title, equipped_rosters, observed_rosters,
-                   new_rosters_30d, observed_characters)
-                VALUES (:date, :key, :title, :equipped, :observed, :newRosters, :characters)
-                """)
-            .param("date", date)
-            .param("key", entry.getKey())
-            .param("title", row.title())
-            .param("equipped", row.rosters())
-            .param("observed", row.observedRosters())
-            .param("newRosters", row.newRosters())
-            .param("characters", row.observedCharacters())
-            .update();
+        rows.add(
+            new MapSqlParameterSource()
+                .addValue("date", date)
+                .addValue("key", entry.getKey())
+                .addValue("title", row.title())
+                .addValue("equipped", row.rosters())
+                .addValue("observed", row.observedRosters())
+                .addValue("newRosters", row.newRosters())
+                .addValue("characters", row.observedCharacters()));
     }
+    batch.batchUpdate(
+        "INSERT INTO title_equip_daily_meta (snapshot_date, server_key, population, built_at)"
+            + " VALUES (:date, :key, :population, :builtAt)",
+        metas.toArray(MapSqlParameterSource[]::new));
+    if (!rows.isEmpty())
+      batch.batchUpdate(
+          """
+          INSERT INTO title_equip_daily
+            (snapshot_date, server_key, title, equipped_rosters, observed_rosters,
+             new_rosters_30d, observed_characters)
+          VALUES (:date, :key, :title, :equipped, :observed, :newRosters, :characters)
+          """,
+          rows.toArray(MapSqlParameterSource[]::new));
   }
 
   @Override

@@ -46,10 +46,7 @@ class PostgresTitleSnapshotRepository implements TitleSnapshotPort {
         .query(Integer.class)
         .single();
     for (var table : List.of("title_equip_daily", "title_equip_daily_meta"))
-      jdbc.sql(
-              "DELETE FROM "
-                  + table
-                  + " WHERE snapshot_date = :date OR snapshot_date < :keepFrom")
+      jdbc.sql("DELETE FROM " + table + " WHERE snapshot_date = :date OR snapshot_date < :keepFrom")
           .param("date", date)
           .param("keepFrom", keepFrom)
           .update();
@@ -114,7 +111,8 @@ class PostgresTitleSnapshotRepository implements TitleSnapshotPort {
                         row.getLong("observed_characters")))
             .list();
     return Optional.of(
-        new Snapshot(meta.get().builtAt(), new StatsPort.TitleEquip(meta.get().population(), rows)));
+        new Snapshot(
+            meta.get().builtAt(), new StatsPort.TitleEquip(meta.get().population(), rows)));
   }
 
   private record Meta(long population, Instant builtAt) {}

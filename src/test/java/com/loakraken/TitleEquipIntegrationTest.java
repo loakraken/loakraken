@@ -2,6 +2,7 @@ package com.loakraken;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.loakraken.stats.application.TitleSnapshotService;
 import java.math.BigDecimal;
 import java.net.URI;
 import java.net.URLEncoder;
@@ -15,7 +16,6 @@ import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.UUID;
-import com.loakraken.stats.application.TitleSnapshotService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -178,8 +178,8 @@ class TitleEquipIntegrationTest {
   }
 
   /**
-   * 일별 스냅숏(칭호 통계 날짜 비교, 계약 v1.2): 만든 날짜로 전체·서버별을 읽고 지금 값과 같은 모양이다. 없는 날짜는 404, date와 activeDays(30 밖)는
-   * 400, 365일보다 오래된 날짜는 만들 때 지운다.
+   * 일별 스냅숏(칭호 통계 날짜 비교, 계약 v1.2): 만든 날짜로 전체·서버별을 읽고 지금 값과 같은 모양이다. 없는 날짜는 404, date와 activeDays(30
+   * 밖)는 400, 365일보다 오래된 날짜는 만들 때 지운다.
    */
   @Test
   void 일별_스냅숏은_날짜와_서버로_읽고_없는_날짜는_404다() throws Exception {
@@ -199,8 +199,7 @@ class TitleEquipIntegrationTest {
 
     var live = data(get("/api/v1/titles/equipped?server=" + encode(SERVER)));
     assertThat(live.path("snapshotDate").isNull()).isTrue();
-    var day =
-        data(get("/api/v1/titles/equipped?server=" + encode(SERVER) + "&date=" + today));
+    var day = data(get("/api/v1/titles/equipped?server=" + encode(SERVER) + "&date=" + today));
     assertThat(day.path("snapshotDate").asText()).isEqualTo(today.toString());
     assertThat(day.at("/meta/population").asLong()).isEqualTo(3);
     assertThat(day.path("titles").size()).isEqualTo(2);
@@ -218,14 +217,17 @@ class TitleEquipIntegrationTest {
     assertThat(data(get("/api/v1/titles/equipped/dates")).path("dates").toString())
         .isEqualTo("[\"" + today + "\"]");
     assertThat(
-            data(get("/api/v1/titles/equipped/dates?server=" + encode(SERVER))).path("dates").toString())
+            data(get("/api/v1/titles/equipped/dates?server=" + encode(SERVER)))
+                .path("dates")
+                .toString())
         .isEqualTo("[\"" + today + "\"]");
     // 없는 날짜·없는 서버 = 404, date + activeDays(30 밖) = 400, 30은 된다.
     var missing = get("/api/v1/titles/equipped?date=" + today.minusDays(1));
     assertThat(missing.statusCode()).isEqualTo(404);
     assertThat(mapper.readTree(missing.body()).path("code").asText())
         .isEqualTo("TITLE_SNAPSHOT_NOT_FOUND");
-    assertThat(get("/api/v1/titles/equipped?server=" + encode("없는서버") + "&date=" + today).statusCode())
+    assertThat(
+            get("/api/v1/titles/equipped?server=" + encode("없는서버") + "&date=" + today).statusCode())
         .isEqualTo(404);
     assertThat(get("/api/v1/titles/equipped?activeDays=7&date=" + today).statusCode())
         .isEqualTo(400);

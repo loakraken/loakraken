@@ -14,8 +14,8 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 /**
- * 칭호 장착 확인 일별 스냅숏(칭호 통계 날짜 비교). 기동 2분 뒤 한 번과 매일 한 번, 오늘(KST) 스냅숏이 없으면 만든다. 여러 인스턴스 중 임대를 잡은 하나만
- * 한다. 공식 API를 부르지 않는다. 기본 꺼짐(stats.title-snapshot.enabled).
+ * 칭호 장착 확인 일별 스냅숏(칭호 통계 날짜 비교). 기동 2분 뒤 한 번과 매일 한 번, 오늘(KST) 스냅숏이 없으면 만든다. 여러 인스턴스 중 임대를 잡은 하나만 한다.
+ * 공식 API를 부르지 않는다. 기본 꺼짐(stats.title-snapshot.enabled).
  */
 @Component
 @ConditionalOnProperty(prefix = "stats.title-snapshot", name = "enabled", havingValue = "true")

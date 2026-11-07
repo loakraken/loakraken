@@ -101,9 +101,7 @@ public class TitleEquipController {
                 .toList()));
   }
 
-  @GetMapping(
-      value = "/api/v1/titles/equipped/dates",
-      produces = MediaType.APPLICATION_JSON_VALUE)
+  @GetMapping(value = "/api/v1/titles/equipped/dates", produces = MediaType.APPLICATION_JSON_VALUE)
   @Operation(
       summary = "칭호 통계 스냅숏 날짜",
       description =

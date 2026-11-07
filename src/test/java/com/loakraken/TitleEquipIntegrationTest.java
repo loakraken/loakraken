@@ -176,6 +176,24 @@ class TitleEquipIntegrationTest {
     assertThat(a1).isNotNull();
   }
 
+  /** 칭호 표에 없는 칭호는 인스턴스당 한 번 로그로 남는다(표 철자 차이를 찾게), 표에 있는 칭호는 남지 않는다. */
+  @Test
+  @org.junit.jupiter.api.extension.ExtendWith(
+      org.springframework.boot.test.system.OutputCaptureExtension.class)
+  void 칭호_표에_없는_칭호는_한_번만_로그로_남긴다(
+      org.springframework.boot.test.system.CapturedOutput output) throws Exception {
+    character(SERVER, "칭호표밖", UUID.randomUUID(), "표에 없는 시험 칭호", Instant.now());
+    character(SERVER, "칭호표안", UUID.randomUUID(), "빛을 꺼트리는 자", Instant.now());
+    data(get("/api/v1/titles/equipped?server=" + encode(SERVER)));
+    var keys = redis.keys("stats:v1:*");
+    if (keys != null && !keys.isEmpty()) redis.delete(keys);
+    data(get("/api/v1/titles/equipped?server=" + encode(SERVER)));
+    var miss = "event=title_catalog_miss title=표에 없는 시험 칭호";
+    assertThat(output.getOut().split(java.util.regex.Pattern.quote(miss), -1).length - 1)
+        .isEqualTo(1);
+    assertThat(output.getOut()).doesNotContain("event=title_catalog_miss title=빛을 꺼트리는 자");
+  }
+
   @Test
   void 관측_원정대가_없으면_빈_목록이다() throws Exception {
     var response = get("/api/v1/titles/equipped?server=" + encode("칭호없음서버"));

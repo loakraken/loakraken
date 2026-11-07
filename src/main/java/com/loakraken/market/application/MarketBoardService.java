@@ -140,11 +140,16 @@ public class MarketBoardService {
 
   /** price·changeDay는 READY일 때만 있다. observedAt은 그 탭 스캔 시각(READY·NOT_FOUND). */
   public record ItemPrice(
-      long itemId, PriceStatus status, MarketPrice price, BigDecimal changeDay, Instant observedAt) {}
+      long itemId,
+      PriceStatus status,
+      MarketPrice price,
+      BigDecimal changeDay,
+      Instant observedAt) {}
 
   /**
    * 즐겨찾기 묶음 시세. (탭, 티어)마다 상승·하락 정렬과 같은 탭 전체 스캔(같은 캐시·합치기·한 번에 하나)에서 찾는다. 캐시에 없는 묶음은 요청당
-   * MAX_COLD_GROUPS개까지만 새로 스캔하고, 한도·공식 장애에 걸리면 그 묶음과 뒤의 새 묶음은 PENDING이다. 같은 itemId는 처음 것만, 요청 순서대로 준다.
+   * MAX_COLD_GROUPS개까지만 새로 스캔하고, 한도·공식 장애에 걸리면 그 묶음과 뒤의 새 묶음은 PENDING이다. 같은 itemId는 처음 것만, 요청 순서대로
+   * 준다.
    */
   public List<ItemPrice> prices(List<PriceRequest> requests) {
     var scans = new java.util.HashMap<ScanKey, Optional<MarketBoardScan>>();

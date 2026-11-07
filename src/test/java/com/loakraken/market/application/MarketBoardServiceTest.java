@@ -64,11 +64,11 @@ class MarketBoardServiceTest {
   /** 즐겨찾기 묶음 시세: 캐시에 있는 묶음은 공식 호출 없이, 새 묶음은 요청당 3개까지만 스캔하고 나머지는 PENDING. */
   @Test
   void 묶음_시세는_새_탭_스캔을_요청당_3묶음까지만_하고_나머지는_PENDING이다() {
-    var cachedScan =
-        new MarketBoardScan(MarketTab.FOOD, null, OBSERVED, 1, List.of(item(7)));
+    var cachedScan = new MarketBoardScan(MarketTab.FOOD, null, OBSERVED, 1, List.of(item(7)));
     when(cache.findBoardScan(MarketTab.FOOD, null)).thenReturn(Optional.of(cachedScan));
     for (var tab :
-        List.of(MarketTab.LIFE, MarketTab.BATTLE_ITEM, MarketTab.ARK_GRID, MarketTab.ENGRAVING_BOOK))
+        List.of(
+            MarketTab.LIFE, MarketTab.BATTLE_ITEM, MarketTab.ARK_GRID, MarketTab.ENGRAVING_BOOK))
       stubPages(tab, null, 3);
     var result =
         service.prices(
@@ -95,13 +95,13 @@ class MarketBoardServiceTest {
 
   @Test
   void 묶음_시세의_새_스캔이_한도에_걸리면_그_묶음과_뒤_새_묶음은_PENDING이고_캐시_묶음은_그대로다() {
-    when(markets.search(any(), argThat(s -> s != null && s.categoryCode() == MarketTab.LIFE.categoryCode())))
+    when(markets.search(
+            any(), argThat(s -> s != null && s.categoryCode() == MarketTab.LIFE.categoryCode())))
         .thenThrow(
             new com.loakraken.common.api.BusinessException(
                 com.loakraken.common.lostark.LostArkErrorCode.CLIENT_RATE_LIMITED));
     stubPages(MarketTab.BATTLE_ITEM, null, 3);
-    var cachedScan =
-        new MarketBoardScan(MarketTab.FOOD, null, OBSERVED, 1, List.of(item(7)));
+    var cachedScan = new MarketBoardScan(MarketTab.FOOD, null, OBSERVED, 1, List.of(item(7)));
     when(cache.findBoardScan(MarketTab.FOOD, null)).thenReturn(Optional.of(cachedScan));
     var result =
         service.prices(

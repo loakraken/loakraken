@@ -185,7 +185,10 @@ class MarketBoardIntegrationTest {
     assertThat(post("/api/v1/markets/items/prices", body).statusCode()).isEqualTo(400);
     var many = new StringBuilder("{\"items\": [");
     for (int i = 1; i <= 51; i++)
-      many.append(i > 1 ? "," : "").append("{\"itemId\": ").append(i).append(", \"tab\": \"REFINING\"}");
+      many.append(i > 1 ? "," : "")
+          .append("{\"itemId\": ")
+          .append(i)
+          .append(", \"tab\": \"REFINING\"}");
     assertThat(post("/api/v1/markets/items/prices", many.append("]}").toString()).statusCode())
         .isEqualTo(400);
     verifyNoInteractions(prices);

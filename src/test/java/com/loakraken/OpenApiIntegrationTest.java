@@ -491,6 +491,14 @@ class OpenApiIntegrationTest {
         .contains("observedAt", "lastConfirmedAt", "itemLevel", "combatPower");
     assertThat(document.at("/components/schemas/CharacterHistoryResponse/required").toString())
         .contains("points", "titles");
+    // 칭호 등급·상위 칭호·획득 조건: api 배포 전까지 선택 필드, 등급은 닫힌 enum이 아닌 문자열(새 등급이 깨지는 변경이 되지 않게).
+    var equippedTitle = document.at("/components/schemas/EquippedTitleResponse");
+    assertThat(equippedTitle.path("required").toString())
+        .contains("sampleReady")
+        .doesNotContain("grade", "parentTitle", "condition");
+    for (var field : List.of("grade", "parentTitle", "condition"))
+      assertThat(equippedTitle.at("/properties/" + field).isMissingNode()).as(field).isFalse();
+    assertThat(equippedTitle.at("/properties/grade").toString()).doesNotContain("\"enum\"");
     var siblings = document.at("/paths/~1api~1v1~1characters~1siblings/get");
     assertThat(siblings.path("responses").has("404")).isTrue();
     assertThat(document.at("/components/schemas/CharacterSiblingsResponse/required").toString())

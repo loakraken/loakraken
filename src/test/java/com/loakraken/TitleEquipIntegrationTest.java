@@ -85,6 +85,15 @@ class TitleEquipIntegrationTest {
     assertThat(data.at("/titles/0/equippedRosters").asLong()).isEqualTo(1);
     assertThat(data.at("/titles/0/equippedPercent").decimalValue()).isEqualByComparingTo("33.33");
     assertThat(data.at("/titles/1/title").asText()).isEqualTo("혼돈의 지배자");
+    // 칭호 데이터 표의 등급·획득 조건(표에 있는 칭호), 표에 없는 칭호는 null. 변형이 아니면 parentTitle null.
+    assertThat(data.at("/titles/0/grade").asText()).isEqualTo("희귀");
+    assertThat(data.at("/titles/0/condition").asText()).isEqualTo("카멘을 처치한다");
+    assertThat(data.at("/titles/0/parentTitle").isNull()).isTrue();
+    assertThat(data.at("/titles/1/grade").isNull()).isTrue();
+    assertThat(data.at("/titles/1/condition").isNull()).isTrue();
+    assertThat(data.at("/titles/1/parentTitle").isNull()).isTrue();
+    // 표의 줄별 출처는 응답에 내지 않는다.
+    assertThat(response.body()).doesNotContain("내부 기록").doesNotContain("News/Notice");
     assertThat(response.body()).doesNotContain("칭호제외").doesNotContain("보유율");
     SiteNames.assertAbsent(response.body());
 

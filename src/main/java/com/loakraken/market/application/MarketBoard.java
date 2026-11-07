@@ -20,13 +20,17 @@ public record MarketBoard(
     boolean complete,
     List<Row> rows) {
 
-  /** changeWeek·spark7은 이력 캐시가 있을 때만 채운다. spark7은 오래된 날부터 최대 7개 완료일이다. */
+  /**
+   * changeWeek·spark7은 이력 캐시가 있을 때만 채운다. spark7은 오래된 날부터 최대 7개 완료일이다. volume은 완료일 거래량이고 거래량 지도나 이력
+   * 캐시가 없으면 null이다.
+   */
   public record Row(
       MarketPrice price,
       BigDecimal changeDay,
       BigDecimal changeWeek,
       List<SparkPoint> spark7,
-      boolean historyAvailable) {}
+      boolean historyAvailable,
+      com.loakraken.market.domain.MarketVolume volume) {}
 
   public record SparkPoint(LocalDate date, BigDecimal averagePrice) {}
 }

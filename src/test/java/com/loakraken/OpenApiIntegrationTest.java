@@ -785,7 +785,21 @@ class OpenApiIntegrationTest {
     var document = JsonMapper.builder().build().readTree(request("/v3/api-docs").body());
     var board = document.path("paths").path("/api/v1/markets/board").path("get");
     assertThat(board.path("parameters").toString())
-        .contains("tab", "sort", "default|high|low|rise|fall");
+        .contains("tab", "sort", "default|high|low|rise|fall|volume");
+    // 거래량 칸은 api가 먼저 배포되기 전까지 optional(required 아님)이고 null을 허용한다.
+    for (var field : List.of("tradesYesterday", "trades7d", "volumeDate")) {
+      assertThat(document.at("/components/schemas/MarketBoardItemResponse/required").toString())
+          .doesNotContain(field);
+      assertThat(
+              document
+                  .at(
+                      "/components/schemas/MarketBoardItemResponse/properties/"
+                          + field
+                          + "/anyOf/1/type")
+                  .asText())
+          .as(field)
+          .isEqualTo("null");
+    }
     assertThat(document.path("paths").path("/api/v1/markets/tabs").path("get").isMissingNode())
         .isFalse();
     assertThat(document.at("/components/schemas/MarketBoardResponse/required").toString())

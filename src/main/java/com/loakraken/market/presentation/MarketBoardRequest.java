@@ -16,9 +16,10 @@ public record MarketBoardRequest(
     @NotNull @Schema(description = "보드 탭(GET /api/v1/markets/tabs)", example = "REFINING")
         MarketTab tab,
     @Min(1) @Max(4) @Schema(description = "아이템 티어. 생략하면 탭 기본 티어") Integer tier,
-    @Pattern(regexp = "default|high|low|rise|fall")
+    @Pattern(regexp = "default|high|low|rise|fall|volume")
         @Schema(
-            description = "default(공식 등급순), high/low(현재 최저가), rise/fall(전일 대비 등락률, 탭 전체 스캔)",
+            description =
+                "default(공식 등급순), high/low(현재 최저가), rise/fall(전일 대비 등락률, 탭 전체 스캔), volume(최근 완료일 7일 거래량 많은 순, 같으면 전일 거래량, 탭 전체 스캔. 거래량을 아직 모으지 못한 품목은 뒤에 공식 등급순)",
             defaultValue = "default")
         String sort,
     @Min(1)

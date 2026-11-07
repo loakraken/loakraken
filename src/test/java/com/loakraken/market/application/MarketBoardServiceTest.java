@@ -227,6 +227,75 @@ class MarketBoardServiceTest {
   }
 
   @Test
+  void 거래량_정렬은_탭_전체_스캔을_거래량_지도로_정렬하고_오늘_없으면_어제_값을_날짜와_함께_쓴다() {
+    var clock = java.time.Clock.fixed(OBSERVED, java.time.ZoneOffset.UTC);
+    var withClock = new MarketBoardService(markets, cache, clock);
+    var today = LocalDate.ofInstant(OBSERVED, ZoneId.of("Asia/Seoul"));
+    var items = IntStream.rangeClosed(1, 5).mapToObj(MarketBoardServiceTest::item).toList();
+    when(cache.findBoardScan(MarketTab.FOOD, null))
+        .thenReturn(Optional.of(new MarketBoardScan(MarketTab.FOOD, null, OBSERVED, 5, items)));
+    when(cache.findVolumes(eq(today), any()))
+        .thenReturn(
+            Map.of(
+                2L, new com.loakraken.market.domain.MarketVolume(2, today.minusDays(1), 5, 50),
+                4L, new com.loakraken.market.domain.MarketVolume(4, today.minusDays(1), 1, 90)));
+    when(cache.findVolumes(eq(today.minusDays(1)), any()))
+        .thenReturn(
+            Map.of(5L, new com.loakraken.market.domain.MarketVolume(5, today.minusDays(2), 9, 50)));
+
+    var board = withClock.board(MarketTab.FOOD, null, MarketBoardRules.Sort.VOLUME, 1);
+
+    verifyNoInteractions(markets);
+    assertThat(board.sort()).isEqualTo(MarketBoardRules.Sort.VOLUME);
+    assertThat(board.scannedItems()).isEqualTo(5);
+    assertThat(board.rows())
+        .extracting(row -> row.price().id())
+        .containsExactly(4L, 5L, 2L, 1L, 3L);
+    assertThat(board.rows().getFirst().volume().sevenDay()).isEqualTo(90);
+    assertThat(board.rows().get(1).volume().volumeDate()).isEqualTo(today.minusDays(2));
+    assertThat(board.rows().get(3).volume()).isNull();
+    // 어제 지도는 오늘 지도에 없는 품목만 찾는다.
+    @SuppressWarnings("unchecked")
+    ArgumentCaptor<java.util.Collection<Long>> missing =
+        ArgumentCaptor.forClass(java.util.Collection.class);
+    verify(cache, atLeastOnce()).findVolumes(eq(today.minusDays(1)), missing.capture());
+    assertThat(missing.getAllValues().getFirst()).containsExactly(1L, 3L, 5L);
+
+    // 이름 검색도 같은 거래량 정렬을 쓴다.
+    var searched = withClock.board(MarketTab.FOOD, null, MarketBoardRules.Sort.VOLUME, 1, "품목");
+    assertThat(searched.rows())
+        .extracting(row -> row.price().id())
+        .containsExactly(4L, 5L, 2L, 1L, 3L);
+  }
+
+  @Test
+  void 거래량_지도가_없으면_행의_거래량은_이력_캐시의_완료일로_채우고_맞는_변형이_없으면_null이다() {
+    stubPages(MarketTab.REFINING, 4, 1);
+    var today = LocalDate.ofInstant(OBSERVED, ZoneId.of("Asia/Seoul"));
+    var days = new ArrayList<MarketItemHistory.DailyStat>();
+    days.add(new MarketItemHistory.DailyStat(today, new BigDecimal("999"), 4)); // 부분 집계
+    for (int i = 1; i <= 9; i++)
+      days.add(new MarketItemHistory.DailyStat(today.minusDays(i), BigDecimal.valueOf(100), i));
+    var history =
+        new MarketItemHistory(1L, List.of(new MarketItemHistory.Variant("품목1", null, 1, days)));
+    when(cache.findItemHistories(List.of(1L)))
+        .thenReturn(Map.of(1L, new MarketItemHistoryResult(OBSERVED, history)));
+
+    var row =
+        service.board(MarketTab.REFINING, null, MarketBoardRules.Sort.DEFAULT, 1).rows().getFirst();
+
+    // 완료일 최신순 1~7번째: 거래량 1+2+...+7 = 28, 전일 = 1
+    assertThat(row.volume().volumeDate()).isEqualTo(today.minusDays(1));
+    assertThat(row.volume().yesterday()).isEqualTo(1);
+    assertThat(row.volume().sevenDay()).isEqualTo(28);
+    var otherBundle =
+        new MarketPrice(1, "품목1", "일반", null, 10, null, BigDecimal.TEN, null, BigDecimal.TEN);
+    assertThat(MarketBoardService.volumeOf(history, otherBundle, today)).isNull();
+    assertThat(MarketBoardService.volumeOf(history, item(1), today.minusDays(9))).isNull();
+    assertThat(MarketBoardService.volumeOf(null, item(1), today)).isNull();
+  }
+
+  @Test
   void 이름_검색은_등락_정렬과_같은_스캔_캐시에서_이름_초성으로_거른_뒤_정렬_페이지를_적용한다() {
     var items =
         List.of(

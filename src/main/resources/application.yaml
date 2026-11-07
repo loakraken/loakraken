@@ -111,6 +111,14 @@ market:
     gems:
       enabled: ${MARKET_WARMUP_GEMS_ENABLED:false}
       interval: ${MARKET_WARMUP_GEMS_INTERVAL:10m}
+  # 거래량 정렬용 거래량 채우기. 하루(KST) 한 바퀴, 탭 기본 티어 스캔 품목의 상세 이력에서 완료일 거래량을 Valkey(TTL 36시간)에 둔다.
+  # 이 작업만의 상한: 분당 15·하루 800 공식 호출(사용자 몫 40을 남기는 관문 판정은 그대로). 리더 임대로 한 인스턴스만 돈다.
+  volume-warmup:
+    enabled: ${MARKET_VOLUME_WARMUP_ENABLED:false}
+    interval: ${MARKET_VOLUME_WARMUP_INTERVAL:60s}
+    initial-delay: ${MARKET_VOLUME_WARMUP_INITIAL_DELAY:2m}
+    max-calls-per-minute: ${MARKET_VOLUME_WARMUP_MAX_CALLS_PER_MINUTE:15}
+    max-calls-per-day: ${MARKET_VOLUME_WARMUP_MAX_CALLS_PER_DAY:800}
   # 악세 경매 검색기(N13). 기능 몫은 모든 사용자 합 분당 공식 호출 수, reserve는 사용자 경로 몫(docs/accessory-auction-search.md).
   auction-search:
     quota-per-minute: ${MARKET_AUCTION_SEARCH_QUOTA:20}

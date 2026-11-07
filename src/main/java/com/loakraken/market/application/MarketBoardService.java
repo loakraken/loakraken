@@ -4,11 +4,15 @@ import com.loakraken.market.domain.MarketBoardRules;
 import com.loakraken.market.domain.MarketItemHistory;
 import com.loakraken.market.domain.MarketPrice;
 import com.loakraken.market.domain.MarketTab;
+import com.loakraken.market.domain.MarketVolume;
 import java.math.BigDecimal;
+import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -17,6 +21,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.ReentrantLock;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 /**
@@ -34,14 +39,21 @@ public class MarketBoardService {
 
   private final MarketQueryService markets;
   private final MarketCache cache;
+  private final Clock clock;
   private final ConcurrentHashMap<ScanKey, CompletableFuture<MarketBoardScan>> scans =
       new ConcurrentHashMap<>();
   // 서로 다른 탭·티어 스캔이 겹쳐 공유 호출 예산을 몰아 쓰지 않도록 전체 스캔은 한 번에 하나만 실행한다.
   private final ReentrantLock scanLock = new ReentrantLock(true);
 
   public MarketBoardService(MarketQueryService markets, MarketCache cache) {
+    this(markets, cache, Clock.systemUTC());
+  }
+
+  @Autowired
+  public MarketBoardService(MarketQueryService markets, MarketCache cache, Clock clock) {
     this.markets = markets;
     this.cache = cache;
+    this.clock = clock;
   }
 
   public MarketBoard board(MarketTab tab, Integer tier, MarketBoardRules.Sort sort, int page) {
@@ -61,7 +73,11 @@ public class MarketBoardService {
           scan.items().stream()
               .filter(item -> MarketBoardRules.nameMatches(item.name(), query))
               .toList();
-      var sorted = sortScanned(matched, sort);
+      var volumes =
+          sort == MarketBoardRules.Sort.VOLUME
+              ? volumes(ids(matched))
+              : Map.<Long, MarketVolume>of();
+      var sorted = sortScanned(matched, sort, volumes);
       int from = Math.min(sorted.size(), (page - 1) * PAGE_SIZE);
       int to = Math.min(sorted.size(), from + PAGE_SIZE);
       return new MarketBoard(
@@ -73,7 +89,7 @@ public class MarketBoardService {
           sorted.size(),
           scan.items().size(),
           scan.complete(),
-          rows(sorted.subList(from, to)));
+          rows(sorted.subList(from, to), volumes));
     }
     if (!sort.scansWholeTab()) {
       var result =
@@ -88,10 +104,17 @@ public class MarketBoardService {
           result.page().totalCount(),
           items.size(),
           true,
-          rows(items));
+          rows(items, Map.of()));
     }
     var scan = scan(tab, effectiveTier);
-    var sorted = MarketBoardRules.sortByChange(scan.items(), sort);
+    var volumes =
+        sort == MarketBoardRules.Sort.VOLUME
+            ? volumes(ids(scan.items()))
+            : Map.<Long, MarketVolume>of();
+    var sorted =
+        sort == MarketBoardRules.Sort.VOLUME
+            ? MarketBoardRules.sortByVolume(scan.items(), volumes)
+            : MarketBoardRules.sortByChange(scan.items(), sort);
     int from = Math.min(sorted.size(), (page - 1) * PAGE_SIZE);
     int to = Math.min(sorted.size(), from + PAGE_SIZE);
     return new MarketBoard(
@@ -103,11 +126,15 @@ public class MarketBoardService {
         scan.totalItems(),
         scan.items().size(),
         scan.complete(),
-        rows(sorted.subList(from, to)));
+        rows(sorted.subList(from, to), volumes));
   }
 
-  /** 스캔한 품목의 정렬. 기본은 스캔 순서(공식 등급순 페이지 순서), 고가·저가는 현재 최저가(없으면 맨 뒤, 같으면 스캔 순서), 상승·하락은 등락률 정렬과 같다. */
-  static List<MarketPrice> sortScanned(List<MarketPrice> items, MarketBoardRules.Sort sort) {
+  /**
+   * 스캔한 품목의 정렬. 기본은 스캔 순서(공식 등급순 페이지 순서), 고가·저가는 현재 최저가(없으면 맨 뒤, 같으면 스캔 순서), 상승·하락은 등락률 정렬, 거래량은
+   * 거래량 정렬(volumes)과 같다.
+   */
+  static List<MarketPrice> sortScanned(
+      List<MarketPrice> items, MarketBoardRules.Sort sort, Map<Long, MarketVolume> volumes) {
     return switch (sort) {
       case DEFAULT -> items;
       case HIGH, LOW -> {
@@ -122,6 +149,7 @@ public class MarketBoardService {
             .toList();
       }
       case RISE, FALL -> MarketBoardRules.sortByChange(items, sort);
+      case VOLUME -> MarketBoardRules.sortByVolume(items, volumes);
     };
   }
 
@@ -227,6 +255,51 @@ public class MarketBoardService {
   }
 
   /**
+   * 거래량 채우기 작업 전용: 탭 기본 티어의 전체 스캔(보드 상승·하락·거래량 정렬과 같은 캐시·합치기·한 번에 하나). 캐시에 없으면 공식 검색을 최대
+   * MAX_SCAN_PAGES번 부른다.
+   */
+  public MarketBoardScan scanForVolume(MarketTab tab) {
+    return scan(tab, tab.defaultTier());
+  }
+
+  /**
+   * 품목들의 완료일 거래량. 오늘(KST) 거래량 지도에서 찾고, 없는 품목은 어제 지도에서 찾는다(자정 뒤 채우기 작업이 다시 채우기 전까지 어제 값을 그 날짜와 함께 보여
+   * 준다). 둘 다 없으면 빠진다.
+   */
+  public Map<Long, MarketVolume> volumes(Collection<Long> itemIds) {
+    if (itemIds.isEmpty()) return Map.of();
+    LocalDate today = LocalDate.now(clock.withZone(KST));
+    var result = new LinkedHashMap<Long, MarketVolume>(cache.findVolumes(today, itemIds));
+    var missing = itemIds.stream().filter(id -> !result.containsKey(id)).distinct().toList();
+    if (!missing.isEmpty())
+      cache.findVolumes(today.minusDays(1), missing).forEach(result::putIfAbsent);
+    return result;
+  }
+
+  /**
+   * 상세 이력에서 그 품목(묶음·거래 가능 횟수가 맞는 변형)의 완료일 거래량. volumeDate = 가장 최근 완료일, yesterday = 그날 거래량, sevenDay
+   * = 최근 완료일 최대 7일 합. 맞는 변형이나 완료일이 없으면 null.
+   */
+  public static MarketVolume volumeOf(
+      MarketItemHistory history, MarketPrice item, LocalDate today) {
+    if (history == null) return null;
+    var variant = variant(history, item);
+    if (variant == null) return null;
+    var complete = variant.completeDays(today);
+    if (complete.isEmpty()) return null;
+    var week = complete.subList(0, Math.min(MarketItemHistory.SEVEN_DAYS, complete.size()));
+    return new MarketVolume(
+        item.id(),
+        complete.getFirst().date(),
+        complete.getFirst().tradeCount(),
+        week.stream().mapToLong(MarketItemHistory.DailyStat::tradeCount).sum());
+  }
+
+  private static List<Long> ids(List<MarketPrice> items) {
+    return items.stream().map(MarketPrice::id).toList();
+  }
+
+  /**
    * 탭의 기본 보드(defaultTier, 기본 정렬, 1페이지)를 캐시를 건너뛰고 다시 받아 저장한다. 예열 전용이다. 홈 요약과 시세 기본 탭이 이 키를 같이 쓴다.
    */
   public MarketResult refreshDefaultPage(MarketTab tab) {
@@ -298,19 +371,27 @@ public class MarketBoardService {
     return List.copyOf(seen.values());
   }
 
-  private List<MarketBoard.Row> rows(List<MarketPrice> items) {
-    Map<Long, MarketItemHistoryResult> histories =
-        items.isEmpty()
-            ? Map.of()
-            : cache.findItemHistories(items.stream().map(MarketPrice::id).toList());
-    return items.stream().map(item -> row(item, histories.get(item.id()))).toList();
+  /** 페이지 행. 거래량은 거래량 정렬에 쓴 값(known)을 먼저 쓰고, 없으면 거래량 지도, 그래도 없으면 이력 캐시에서 계산한다(정렬 순서와 보이는 값이 같게). */
+  private List<MarketBoard.Row> rows(List<MarketPrice> items, Map<Long, MarketVolume> known) {
+    if (items.isEmpty()) return List.of();
+    var ids = ids(items);
+    Map<Long, MarketItemHistoryResult> histories = cache.findItemHistories(ids);
+    var volumes = new LinkedHashMap<Long, MarketVolume>(known);
+    var missing = ids.stream().filter(id -> !volumes.containsKey(id)).toList();
+    if (!missing.isEmpty()) volumes.putAll(volumes(missing));
+    return items.stream()
+        .map(item -> row(item, histories.get(item.id()), volumes.get(item.id())))
+        .toList();
   }
 
-  private static MarketBoard.Row row(MarketPrice item, MarketItemHistoryResult history) {
+  private static MarketBoard.Row row(
+      MarketPrice item, MarketItemHistoryResult history, MarketVolume volume) {
     var changeDay = MarketBoardRules.changeDay(item);
     var variant = history == null ? null : variant(history.history(), item);
-    if (variant == null) return new MarketBoard.Row(item, changeDay, null, List.of(), false);
+    if (variant == null)
+      return new MarketBoard.Row(item, changeDay, null, List.of(), false, volume);
     LocalDate today = LocalDate.ofInstant(history.observedAt(), KST);
+    if (volume == null) volume = volumeOf(history.history(), item, today);
     var summary = variant.summary(today);
     var complete = variant.completeDays(today);
     var week = complete.subList(0, Math.min(MarketItemHistory.SEVEN_DAYS, complete.size()));
@@ -322,7 +403,8 @@ public class MarketBoardService {
         changeDay,
         MarketBoardRules.change(item.currentMinPrice(), summary.sevenDayAveragePrice()),
         List.copyOf(spark),
-        true);
+        true,
+        volume);
   }
 
   /** 묶음 수와 거래 가능 횟수가 같은 변형을 우선하고, 없으면 묶음 수만 같은 변형을 쓴다. */

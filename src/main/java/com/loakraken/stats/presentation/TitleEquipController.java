@@ -40,15 +40,36 @@ import org.springframework.web.server.ResponseStatusException;
 @Validated
 @Tag(name = "통계·랭킹")
 public class TitleEquipController {
+  private static final org.slf4j.Logger log =
+      org.slf4j.LoggerFactory.getLogger(TitleEquipController.class);
+
+  /** 표에 없다고 남긴 칭호 수 상한(인스턴스당). 칭호 문자열은 공식 표기라 개인 정보가 아니다. */
+  static final int MAX_MISS_LOGGED = 1000;
+
   private final StatsQueryService stats;
   private final TitleSnapshotService snapshots;
   private final Map<String, TitleCatalog.Entry> catalog;
+  private final java.util.Set<String> missLogged =
+      java.util.concurrent.ConcurrentHashMap.newKeySet();
 
   public TitleEquipController(
       StatsQueryService stats, TitleSnapshotService snapshots, TitleCatalog catalog) {
     this.stats = stats;
     this.snapshots = snapshots;
     this.catalog = catalog.index();
+  }
+
+  /**
+   * 칭호 표의 줄. 표에 없으면 null이고, 처음 본 칭호면 한 번 남긴다(표 철자 차이를 찾게 — 표에 없으면 조용히 중립 색이 되므로). 인스턴스당 칭호마다 한
+   * 번, 최대 MAX_MISS_LOGGED개.
+   */
+  private TitleCatalog.Entry catalogEntry(String title) {
+    var entry = catalog.get(title);
+    if (entry == null
+        && title != null
+        && missLogged.size() < MAX_MISS_LOGGED
+        && missLogged.add(title)) log.info("event=title_catalog_miss title={}", title);
+    return entry;
   }
 
   @GetMapping(value = "/api/v1/titles/equipped", produces = MediaType.APPLICATION_JSON_VALUE)
@@ -94,7 +115,7 @@ public class TitleEquipController {
             result.titles().stream()
                 .map(
                     row -> {
-                      var entry = catalog.get(row.title());
+                      var entry = catalogEntry(row.title());
                       return new EquippedTitleResponse(
                           row.title(),
                           row.equippedRosters(),

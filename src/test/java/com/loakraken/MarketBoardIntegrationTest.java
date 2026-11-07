@@ -179,6 +179,9 @@ class MarketBoardIntegrationTest {
         "{\"items\": [{\"itemId\": 1}]}",
         "{\"items\": [{\"itemId\": 0, \"tab\": \"REFINING\"}]}",
         "{\"items\": [{\"itemId\": 1, \"tab\": \"REFINING\", \"tier\": 5}]}",
+        // 티어가 없는 탭에 티어를 붙이면 스캔 키만 늘어나므로 막는다(웹은 재련 두 탭에서만 티어를 보냄).
+        "{\"items\": [{\"itemId\": 1, \"tab\": \"FOOD\", \"tier\": 4}]}",
+        "{\"items\": [{\"itemId\": 1, \"tab\": \"ARK_GRID\", \"tier\": 1}]}",
         "{\"items\": [{\"itemId\": 1, \"tab\": \"없는탭\"}]}"
       })
   void 잘못된_즐겨찾기_요청은_조회_전에_400이다(String body) throws Exception {

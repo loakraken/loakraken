@@ -178,8 +178,8 @@ class MaterialUnitPriceServiceTest {
   }
 
   /**
-   * 장비 영수증 경로(prices): 요청 클라이언트의 공식 호출 한도에 걸려도 영수증 전체가 429가 되지 않고, 그 이름부터 나머지는 알 수 없음(캐시에서 답한
-   * 이름은 그대로)이다. 다시 부르지 않는다(QA 11-03 P3).
+   * 장비 영수증 경로(prices): 요청 클라이언트의 공식 호출 한도에 걸려도 영수증 전체가 429가 되지 않고, 그 이름부터 나머지는 알 수 없음(캐시에서 답한 이름은
+   * 그대로)이다. 다시 부르지 않는다(QA 11-03 P3).
    */
   @Test
   void 영수증_경로도_클라이언트_한도에_걸리면_예외_대신_그_뒤_이름은_알_수_없음이다() {
@@ -192,7 +192,7 @@ class MaterialUnitPriceServiceTest {
             new com.loakraken.common.api.BusinessException(
                 com.loakraken.common.lostark.LostArkErrorCode.CLIENT_RATE_LIMITED));
     var result =
-        service.prices(MaterialPriceBasis.CURRENT_MIN_PRICE, List.of("목재", "모르는 재료", "다른 재료"));
+        service.prices(MaterialPriceBasis.RECENT_PRICE, List.of("목재", "모르는 재료", "다른 재료"));
     assertThat(result.get(0).status()).isEqualTo(MaterialUnitPriceService.UnitPrice.Status.PRICED);
     assertThat(result.subList(1, 3))
         .extracting(MaterialUnitPriceService.UnitPrice::status)

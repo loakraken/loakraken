@@ -228,8 +228,7 @@ class MarketVolumeWarmupTest {
   }
 
   private double count(String event) {
-    var counter =
-        registry.find("loakraken.market.volume_warmup").tag("event", event).counter();
+    var counter = registry.find("loakraken.market.volume_warmup").tag("event", event).counter();
     return counter == null ? 0 : counter.count();
   }
 

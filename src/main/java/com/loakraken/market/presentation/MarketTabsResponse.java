@@ -15,7 +15,7 @@ public record MarketTabsResponse(List<MarketTabResponse> tabs, List<String> sort
                 tab ->
                     new MarketTabResponse(tab, tab.label(), tab.categoryCode(), tab.defaultTier()))
             .toList(),
-        List.of("default", "high", "low", "rise", "fall"));
+        List.of("default", "high", "low", "rise", "fall", "volume"));
   }
 
   public record MarketTabResponse(

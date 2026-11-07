@@ -153,13 +153,30 @@ public class MaterialUnitPriceService {
     }
   }
 
-  /** 서버 안 경로(장비 영수증 등). 예열 캐시에 없는 이름은 거래소를 검색하고, 그 공식 호출은 지금 요청 클라이언트의 공식 호출 한도에 하나씩 매긴다. */
+  /**
+   * 서버 안 경로(장비 영수증 등). 예열 캐시에 없는 이름은 거래소를 검색하고, 그 공식 호출은 지금 요청 클라이언트의 공식 호출 한도에 하나씩 매긴다. 한도·공유
+   * 예산·공식 장애에 걸리면 그 이름부터 나머지는 PRICE_UNAVAILABLE이다(요청 전체를 429로 끝내지 않음, 재료 시세 API와 같음).
+   */
   public List<UnitPrice> prices(MaterialPriceBasis basis, List<String> names) {
     var scans = scans();
     var result = new ArrayList<UnitPrice>();
+    String stopped = null;
     for (var name : new LinkedHashSet<>(names)) {
       var known = known(basis, name, scans);
-      result.add(known != null ? known : lookup(basis, name, new int[] {Integer.MAX_VALUE}, scans));
+      if (known != null) {
+        result.add(known);
+        continue;
+      }
+      if (stopped != null) {
+        result.add(unavailable(name, stopped));
+        continue;
+      }
+      try {
+        result.add(lookup(basis, name, new int[] {Integer.MAX_VALUE}, scans));
+      } catch (BusinessException exception) {
+        stopped = reason(exception);
+        result.add(unavailable(name, stopped));
+      }
     }
     return result;
   }

@@ -121,6 +121,82 @@ class MarketBoardIntegrationTest {
     ApiContractFixture.write("market-board.json", response.body());
   }
 
+  /** 즐겨찾기 묶음 시세: 보드와 같은 탭 스캔에서 찾고, 같은 스캔 캐시를 다시 쓴다(공식 추가 호출 없음). 요청 순서·중복 한 번·없는 품목 NOT_FOUND. */
+  @Test
+  void 즐겨찾기_묶음_시세는_보드_탭_스캔에서_찾고_스캔을_다시_쓴다() throws Exception {
+    when(prices.fetch(any(), any()))
+        .thenAnswer(
+            invocation -> {
+              MarketSearch search = invocation.getArgument(1);
+              int from = (search.pageNo() - 1) * 10 + 1;
+              int to = Math.min(13, from + 9);
+              return new MarketPage(
+                  search.pageNo(),
+                  10,
+                  13,
+                  IntStream.rangeClosed(from, to)
+                      .mapToObj(MarketBoardIntegrationTest::item)
+                      .toList());
+            });
+    var body =
+        """
+        {"items": [
+          {"itemId": 13, "tab": "ENGRAVING_BOOK"},
+          {"itemId": 999, "tab": "ENGRAVING_BOOK"},
+          {"itemId": 2, "tab": "ENGRAVING_BOOK"},
+          {"itemId": 13, "tab": "ENGRAVING_BOOK"}
+        ]}
+        """;
+    var response = post("/api/v1/markets/items/prices", body);
+    assertThat(response.statusCode()).as(response.body()).isEqualTo(200);
+    ApiContractFixture.write("market-item-prices.json", response.body());
+    var json = mapper.readTree(response.body());
+    assertThat(json.path("code").asText()).isEqualTo("MARKET_ITEM_PRICES_SUCCESS");
+    var items = json.at("/data/items");
+    assertThat(items.size()).isEqualTo(3);
+    assertThat(items.at("/0/itemId").asLong()).isEqualTo(13L);
+    assertThat(items.at("/0/status").asText()).isEqualTo("READY");
+    assertThat(items.at("/0/name").asText()).isEqualTo("품목13");
+    assertThat(items.at("/0/changeDay").decimalValue()).isEqualByComparingTo("13.0");
+    assertThat(items.at("/0/observedAt").isNull()).isFalse();
+    assertThat(items.at("/1/itemId").asLong()).isEqualTo(999L);
+    assertThat(items.at("/1/status").asText()).isEqualTo("NOT_FOUND");
+    assertThat(items.at("/1/currentMinPrice").isNull()).isTrue();
+    assertThat(items.at("/2/itemId").asLong()).isEqualTo(2L);
+    assertThat(items.at("/2/status").asText()).isEqualTo("READY");
+    // 13개 탭 = 2페이지. 두 번째 요청과 상승 보드는 같은 스캔 캐시를 쓴다.
+    verify(prices, times(2)).fetch(any(), any());
+    assertThat(post("/api/v1/markets/items/prices", body).statusCode()).isEqualTo(200);
+    assertThat(get("/api/v1/markets/board?tab=ENGRAVING_BOOK&sort=rise").statusCode())
+        .isEqualTo(200);
+    verify(prices, times(2)).fetch(any(), any());
+  }
+
+  @ParameterizedTest
+  @ValueSource(
+      strings = {
+        "{\"items\": []}",
+        "{\"items\": [{\"itemId\": 1}]}",
+        "{\"items\": [{\"itemId\": 0, \"tab\": \"REFINING\"}]}",
+        "{\"items\": [{\"itemId\": 1, \"tab\": \"REFINING\", \"tier\": 5}]}",
+        // 티어가 없는 탭에 티어를 붙이면 스캔 키만 늘어나므로 막는다(웹은 재련 두 탭에서만 티어를 보냄).
+        "{\"items\": [{\"itemId\": 1, \"tab\": \"FOOD\", \"tier\": 4}]}",
+        "{\"items\": [{\"itemId\": 1, \"tab\": \"ARK_GRID\", \"tier\": 1}]}",
+        "{\"items\": [{\"itemId\": 1, \"tab\": \"없는탭\"}]}"
+      })
+  void 잘못된_즐겨찾기_요청은_조회_전에_400이다(String body) throws Exception {
+    assertThat(post("/api/v1/markets/items/prices", body).statusCode()).isEqualTo(400);
+    var many = new StringBuilder("{\"items\": [");
+    for (int i = 1; i <= 51; i++)
+      many.append(i > 1 ? "," : "")
+          .append("{\"itemId\": ")
+          .append(i)
+          .append(", \"tab\": \"REFINING\"}");
+    assertThat(post("/api/v1/markets/items/prices", many.append("]}").toString()).statusCode())
+        .isEqualTo(400);
+    verifyNoInteractions(prices);
+  }
+
   @Autowired com.loakraken.market.application.MarketCache marketCache;
   @Autowired org.springframework.context.ApplicationContext context;
 
@@ -228,6 +304,17 @@ class MarketBoardIntegrationTest {
     try (var client = HttpClient.newHttpClient()) {
       return client.send(
           HttpRequest.newBuilder(URI.create("http://localhost:" + port + path)).GET().build(),
+          HttpResponse.BodyHandlers.ofString());
+    }
+  }
+
+  private HttpResponse<String> post(String path, String body) throws Exception {
+    try (var client = HttpClient.newHttpClient()) {
+      return client.send(
+          HttpRequest.newBuilder(URI.create("http://localhost:" + port + path))
+              .header("Content-Type", "application/json")
+              .POST(HttpRequest.BodyPublishers.ofString(body))
+              .build(),
           HttpResponse.BodyHandlers.ofString());
     }
   }

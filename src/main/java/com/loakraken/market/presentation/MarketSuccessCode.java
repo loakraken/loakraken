@@ -11,6 +11,7 @@ enum MarketSuccessCode implements SuccessCode {
   MARKET_ITEM_HISTORY_SUCCESS,
   MARKET_ITEM_MINUTES_SUCCESS,
   MARKET_BOARD_SUCCESS,
+  MARKET_ITEM_PRICES_SUCCESS,
   MARKET_TABS_SUCCESS,
   AUCTION_GEMS_SUCCESS,
   AUCTION_ACCESSORIES_SUCCESS,
@@ -35,6 +36,7 @@ enum MarketSuccessCode implements SuccessCode {
       case MARKET_ITEM_HISTORY_SUCCESS -> "상품 시세 이력 조회에 성공했습니다.";
       case MARKET_ITEM_MINUTES_SUCCESS -> "분 단위 시세 조회에 성공했습니다.";
       case MARKET_BOARD_SUCCESS -> "시세 보드 조회에 성공했습니다.";
+      case MARKET_ITEM_PRICES_SUCCESS -> "즐겨찾기 시세 조회에 성공했습니다.";
       case MARKET_TABS_SUCCESS -> "시세 보드 탭 조회에 성공했습니다.";
       case AUCTION_GEMS_SUCCESS -> "보석 시세 조회에 성공했습니다.";
       case AUCTION_ACCESSORIES_SUCCESS -> "장신구 시세 조회에 성공했습니다.";

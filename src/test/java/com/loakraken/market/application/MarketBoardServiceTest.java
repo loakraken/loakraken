@@ -61,6 +61,93 @@ class MarketBoardServiceTest {
     assertThat(all.getAllValues().get(2).itemTier()).isEqualTo(3);
   }
 
+  /** 즐겨찾기 묶음 시세: 캐시에 있는 묶음은 공식 호출 없이, 새 묶음은 요청당 2개까지만 스캔하고 나머지는 PENDING. */
+  @Test
+  void 묶음_시세는_새_탭_스캔을_요청당_2묶음까지만_하고_나머지는_PENDING이다() {
+    var cachedScan = new MarketBoardScan(MarketTab.FOOD, null, OBSERVED, 1, List.of(item(7)));
+    when(cache.findBoardScan(MarketTab.FOOD, null)).thenReturn(Optional.of(cachedScan));
+    for (var tab :
+        List.of(
+            MarketTab.LIFE, MarketTab.BATTLE_ITEM, MarketTab.ARK_GRID, MarketTab.ENGRAVING_BOOK))
+      stubPages(tab, null, 3);
+    var result =
+        service.prices(
+            List.of(
+                new MarketBoardService.PriceRequest(7, MarketTab.FOOD, null),
+                new MarketBoardService.PriceRequest(1, MarketTab.LIFE, null),
+                new MarketBoardService.PriceRequest(2, MarketTab.BATTLE_ITEM, null),
+                new MarketBoardService.PriceRequest(3, MarketTab.ARK_GRID, null),
+                new MarketBoardService.PriceRequest(5, MarketTab.ENGRAVING_BOOK, null),
+                new MarketBoardService.PriceRequest(1, MarketTab.WEAPON_EVOLUTION, null)));
+    assertThat(result)
+        .extracting(MarketBoardService.ItemPrice::status)
+        // 셋째·넷째 새 묶음(ARK_GRID·ENGRAVING_BOOK)은 스캔하지 않고 PENDING이다. 같은 itemId(마지막 1)는 처음 것만.
+        .containsExactly(
+            MarketBoardService.PriceStatus.READY,
+            MarketBoardService.PriceStatus.READY,
+            MarketBoardService.PriceStatus.READY,
+            MarketBoardService.PriceStatus.PENDING,
+            MarketBoardService.PriceStatus.PENDING);
+    // 새 묶음 2개 × 1페이지 = 공식 검색 2번(FOOD는 캐시). 묶음당 최대 10번이라 요청당 최대 20번 = 방문자 한도(분당 20).
+    verify(markets, times(2)).search(any(), any());
+    assertThat(MarketBoardService.MAX_COLD_GROUPS * MarketBoardService.MAX_SCAN_PAGES)
+        .isLessThanOrEqualTo(20);
+    assertThat(result.get(0).price().currentMinPrice()).isEqualByComparingTo("107");
+  }
+
+  @Test
+  void 묶음_시세의_새_스캔이_한도에_걸리면_그_묶음과_뒤_새_묶음은_PENDING이고_캐시_묶음은_그대로다() {
+    when(markets.search(
+            any(), argThat(s -> s != null && s.categoryCode() == MarketTab.LIFE.categoryCode())))
+        .thenThrow(
+            new com.loakraken.common.api.BusinessException(
+                com.loakraken.common.lostark.LostArkErrorCode.CLIENT_RATE_LIMITED));
+    stubPages(MarketTab.BATTLE_ITEM, null, 3);
+    var cachedScan = new MarketBoardScan(MarketTab.FOOD, null, OBSERVED, 1, List.of(item(7)));
+    when(cache.findBoardScan(MarketTab.FOOD, null)).thenReturn(Optional.of(cachedScan));
+    var result =
+        service.prices(
+            List.of(
+                new MarketBoardService.PriceRequest(1, MarketTab.LIFE, null),
+                new MarketBoardService.PriceRequest(2, MarketTab.BATTLE_ITEM, null),
+                new MarketBoardService.PriceRequest(7, MarketTab.FOOD, null),
+                new MarketBoardService.PriceRequest(9, MarketTab.FOOD, null)));
+    assertThat(result)
+        .extracting(MarketBoardService.ItemPrice::status)
+        .containsExactly(
+            MarketBoardService.PriceStatus.PENDING,
+            MarketBoardService.PriceStatus.PENDING,
+            MarketBoardService.PriceStatus.READY,
+            MarketBoardService.PriceStatus.NOT_FOUND);
+    assertThat(result.get(0).observedAt()).isNull();
+    assertThat(result.get(3).observedAt()).isEqualTo(OBSERVED);
+    // 한도에 걸린 뒤 BATTLE_ITEM은 부르지 않는다.
+    verify(markets, times(1)).search(any(), any());
+  }
+
+  @Test
+  void 묶음_시세의_새_스캔이_업무_예외가_아닌_오류로_실패해도_500_대신_그_묶음과_뒤_새_묶음은_PENDING이다() {
+    when(markets.search(
+            any(), argThat(s -> s != null && s.categoryCode() == MarketTab.LIFE.categoryCode())))
+        .thenThrow(new IllegalStateException("예상하지 못한 오류"));
+    stubPages(MarketTab.BATTLE_ITEM, null, 3);
+    var cachedScan = new MarketBoardScan(MarketTab.FOOD, null, OBSERVED, 1, List.of(item(7)));
+    when(cache.findBoardScan(MarketTab.FOOD, null)).thenReturn(Optional.of(cachedScan));
+    var result =
+        service.prices(
+            List.of(
+                new MarketBoardService.PriceRequest(1, MarketTab.LIFE, null),
+                new MarketBoardService.PriceRequest(2, MarketTab.BATTLE_ITEM, null),
+                new MarketBoardService.PriceRequest(7, MarketTab.FOOD, null)));
+    assertThat(result)
+        .extracting(MarketBoardService.ItemPrice::status)
+        .containsExactly(
+            MarketBoardService.PriceStatus.PENDING,
+            MarketBoardService.PriceStatus.PENDING,
+            MarketBoardService.PriceStatus.READY);
+    verify(markets, times(1)).search(any(), any());
+  }
+
   @Test
   void 기본_보드_예열은_사용자_기본_보드와_같은_검색_키를_강제_갱신한다() {
     stubPages(MarketTab.REFINING, 4, 11);

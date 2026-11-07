@@ -5,6 +5,7 @@ import com.loakraken.market.domain.MarketItemHistory;
 import com.loakraken.market.domain.MarketPrice;
 import com.loakraken.market.domain.MarketTab;
 import com.loakraken.market.domain.MarketVolume;
+import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -15,6 +16,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.ConcurrentHashMap;
@@ -29,6 +31,8 @@ import org.springframework.stereotype.Service;
  */
 @Service
 public class MarketBoardService {
+  private static final org.slf4j.Logger log =
+      org.slf4j.LoggerFactory.getLogger(MarketBoardService.class);
   public static final int PAGE_SIZE = 10;
   public static final int MAX_SCAN_PAGES = 10;
   static final ZoneId KST = ZoneId.of("Asia/Seoul");
@@ -147,6 +151,107 @@ public class MarketBoardService {
       case RISE, FALL -> MarketBoardRules.sortByChange(items, sort);
       case VOLUME -> MarketBoardRules.sortByVolume(items, volumes);
     };
+  }
+
+  /**
+   * 한 요청에서 새로 스캔할 수 있는 (탭, 티어) 묶음 수. 묶음마다 공식 검색이 최대 MAX_SCAN_PAGES(10)번이라 2묶음 = 최대 20번으로 방문자 한도(분당
+   * 20) 안이다.
+   */
+  public static final int MAX_COLD_GROUPS = 2;
+
+  public static final int MAX_PRICE_ITEMS = 50;
+
+  /** 묶음 시세 한 칸: 공식 상품 ID와 그 품목이 있는 탭·티어(null이면 탭 기본 티어). */
+  public record PriceRequest(long itemId, MarketTab tab, Integer tier) {}
+
+  /** READY = 값 있음, PENDING = 이번 요청에서 그 탭 스캔을 하지 못함(다음 갱신 때), NOT_FOUND = 그 탭 스캔에 없음. */
+  public enum PriceStatus {
+    READY,
+    PENDING,
+    NOT_FOUND
+  }
+
+  /** price·changeDay는 READY일 때만 있다. observedAt은 그 탭 스캔 시각(READY·NOT_FOUND). */
+  public record ItemPrice(
+      long itemId,
+      PriceStatus status,
+      MarketPrice price,
+      BigDecimal changeDay,
+      Instant observedAt) {}
+
+  /**
+   * 즐겨찾기 묶음 시세. (탭, 티어)마다 상승·하락 정렬과 같은 탭 전체 스캔(같은 캐시·합치기·한 번에 하나)에서 찾는다. 캐시에 없는 묶음은 요청당
+   * MAX_COLD_GROUPS개까지만 새로 스캔하고, 한도·공식 장애나 그 밖의 오류로 스캔하지 못하면 그 묶음과 뒤의 새 묶음은 PENDING이다(500 대신). 같은
+   * itemId는 처음 것만, 요청 순서대로 준다.
+   */
+  public List<ItemPrice> prices(List<PriceRequest> requests) {
+    var scans = new java.util.HashMap<ScanKey, Optional<MarketBoardScan>>();
+    int cold = 0;
+    boolean stopped = false;
+    for (var request : requests) {
+      var key = new ScanKey(request.tab(), effectiveTier(request.tab(), request.tier()));
+      if (scans.containsKey(key)) continue;
+      var cached = cache.findBoardScan(key.tab(), key.tier());
+      if (cached.isPresent()) {
+        scans.put(key, cached);
+        continue;
+      }
+      if (stopped || cold >= MAX_COLD_GROUPS) {
+        scans.put(key, Optional.empty());
+        continue;
+      }
+      cold++;
+      try {
+        scans.put(key, Optional.of(scan(key.tab(), key.tier())));
+      } catch (com.loakraken.common.api.BusinessException exception) {
+        stopped = true;
+        scans.put(key, Optional.empty());
+      } catch (RuntimeException exception) {
+        // 예상하지 못한 오류도 이 요청의 나머지 값(캐시 묶음)은 돌려주고 그 묶음만 PENDING으로 둔다. 원인은 로그로 남긴다.
+        log.warn(
+            "event=market_item_prices_scan_failed tab={} tier={} exceptionType={}",
+            key.tab(),
+            key.tier(),
+            exception.getClass().getName());
+        stopped = true;
+        scans.put(key, Optional.empty());
+      }
+    }
+    var result = new ArrayList<ItemPrice>();
+    var seen = new java.util.HashSet<Long>();
+    for (var request : requests) {
+      if (!seen.add(request.itemId())) continue;
+      var scan =
+          scans.get(new ScanKey(request.tab(), effectiveTier(request.tab(), request.tier())));
+      if (scan.isEmpty()) {
+        result.add(new ItemPrice(request.itemId(), PriceStatus.PENDING, null, null, null));
+        continue;
+      }
+      var item =
+          scan.get().items().stream().filter(price -> price.id() == request.itemId()).findFirst();
+      result.add(
+          item.map(
+                  price ->
+                      new ItemPrice(
+                          request.itemId(),
+                          PriceStatus.READY,
+                          price,
+                          MarketBoardRules.changeDay(price),
+                          scan.get().observedAt()))
+              .orElseGet(
+                  () ->
+                      new ItemPrice(
+                          request.itemId(),
+                          PriceStatus.NOT_FOUND,
+                          null,
+                          null,
+                          scan.get().observedAt())));
+    }
+    return List.copyOf(result);
+  }
+
+  private static Integer effectiveTier(MarketTab tab, Integer tier) {
+    return tier == null ? tab.defaultTier() : tier;
   }
 
   /**

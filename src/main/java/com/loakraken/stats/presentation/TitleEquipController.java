@@ -8,6 +8,7 @@ import com.loakraken.stats.application.StatsQueryService;
 import com.loakraken.stats.application.TitleSnapshotService;
 import com.loakraken.stats.domain.StatsConditions;
 import com.loakraken.stats.domain.StatsRules;
+import com.loakraken.stats.domain.TitleCatalog;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -16,6 +17,7 @@ import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 import org.springdoc.core.customizers.OpenApiCustomizer;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
@@ -40,10 +42,13 @@ import org.springframework.web.server.ResponseStatusException;
 public class TitleEquipController {
   private final StatsQueryService stats;
   private final TitleSnapshotService snapshots;
+  private final Map<String, TitleCatalog.Entry> catalog;
 
-  public TitleEquipController(StatsQueryService stats, TitleSnapshotService snapshots) {
+  public TitleEquipController(
+      StatsQueryService stats, TitleSnapshotService snapshots, TitleCatalog catalog) {
     this.stats = stats;
     this.snapshots = snapshots;
+    this.catalog = catalog.index();
   }
 
   @GetMapping(value = "/api/v1/titles/equipped", produces = MediaType.APPLICATION_JSON_VALUE)
@@ -88,16 +93,21 @@ public class TitleEquipController {
             date,
             result.titles().stream()
                 .map(
-                    row ->
-                        new EquippedTitleResponse(
-                            row.title(),
-                            row.equippedRosters(),
-                            row.equippedPercent(),
-                            row.observedRosters(),
-                            row.observedPercent(),
-                            row.newRosters30d(),
-                            row.observedCharacters(),
-                            row.observedCharacters() >= StatsRules.MIN_SAMPLE))
+                    row -> {
+                      var entry = catalog.get(row.title());
+                      return new EquippedTitleResponse(
+                          row.title(),
+                          row.equippedRosters(),
+                          row.equippedPercent(),
+                          row.observedRosters(),
+                          row.observedPercent(),
+                          row.newRosters30d(),
+                          row.observedCharacters(),
+                          row.observedCharacters() >= StatsRules.MIN_SAMPLE,
+                          entry == null ? null : entry.grade(),
+                          entry == null ? null : entry.parentTitle(),
+                          entry == null ? null : entry.condition());
+                    })
                 .toList()));
   }
 
@@ -201,7 +211,22 @@ public class TitleEquipController {
       @Schema(
               description =
                   "표본 기준을 넘었는지: observedCharacters가 30 이상이면 true. false면 보유율·희소도는 참고값(가장 드문 칭호 같은 순위에는 넣지 않음)")
-          boolean sampleReady) {}
+          boolean sampleReady,
+      @Schema(
+              description =
+                  "칭호 등급(칭호 데이터 표). 닫힌 목록이 아닌 문자열이다: 지금 쓰는 값은 일반·고급·희귀·영웅·전설·유물·고대·에스더이고, 모르는 값은 등급 없음처럼 다룬다. 표에 없는 칭호는 null",
+              example = "전설")
+          @NullableResponse
+          @OptionalResponse
+          String grade,
+      @Schema(description = "같은 칭호의 변형이면 상위 칭호 문자열(공식 표기 그대로), 아니면 null. 상위 칭호 줄이 목록에 없을 수도 있다")
+          @NullableResponse
+          @OptionalResponse
+          String parentTitle,
+      @Schema(description = "획득 조건 한 줄(칭호 데이터 표). 표에 없거나 조건이 확인되지 않은 칭호는 null")
+          @NullableResponse
+          @OptionalResponse
+          String condition) {}
 
   @Configuration(proxyBeanMethods = false)
   @ConditionalOnProperty(prefix = "ranking.titles", name = "enabled", havingValue = "true")

@@ -121,6 +121,62 @@ class MarketBoardIntegrationTest {
     ApiContractFixture.write("market-board.json", response.body());
   }
 
+  @Autowired com.loakraken.market.application.MarketCache marketCache;
+  @Autowired org.springframework.context.ApplicationContext context;
+
+  @Test
+  void 거래량_정렬은_거래량_지도로_탭_전체를_정렬하고_행에_거래량과_날짜를_싣는다() throws Exception {
+    when(prices.fetch(any(), any()))
+        .thenAnswer(
+            invocation -> {
+              MarketSearch search = invocation.getArgument(1);
+              return new MarketPage(
+                  1,
+                  10,
+                  4,
+                  IntStream.rangeClosed(1, 4).mapToObj(MarketBoardIntegrationTest::item).toList());
+            });
+    var today = LocalDate.now(ZoneId.of("Asia/Seoul"));
+    var volumeDate = today.minusDays(1);
+    marketCache.saveVolumes(
+        today,
+        List.of(
+            new com.loakraken.market.domain.MarketVolume(3, volumeDate, 12, 80),
+            new com.loakraken.market.domain.MarketVolume(1, volumeDate, 40, 80),
+            new com.loakraken.market.domain.MarketVolume(4, volumeDate, 0, 5)));
+    // 거래량 지도는 Valkey 해시 하나, TTL 36시간 이하(DB 저장 없음).
+    long ttl = redis.getExpire("market:v1:volume:" + today, java.util.concurrent.TimeUnit.SECONDS);
+    assertThat(ttl).isPositive().isLessThanOrEqualTo(36 * 3600);
+    assertThat(marketCache.addVolumeCalls(today, 3)).isEqualTo(3);
+    assertThat(marketCache.addVolumeCalls(today, 2)).isEqualTo(5);
+
+    var response = get("/api/v1/markets/board?tab=FOOD&sort=volume");
+    assertThat(response.statusCode()).isEqualTo(200);
+    var json = mapper.readTree(response.body());
+    assertThat(json.at("/data/sort").asText()).isEqualTo("volume");
+    assertThat(json.at("/data/scannedItems").asInt()).isEqualTo(4);
+    var order = new ArrayList<Long>();
+    for (var node : json.at("/data/items")) order.add(node.path("itemId").asLong());
+    assertThat(order).containsExactly(1L, 3L, 4L, 2L);
+    assertThat(json.at("/data/items/0/tradesYesterday").asLong()).isEqualTo(40);
+    assertThat(json.at("/data/items/0/trades7d").asLong()).isEqualTo(80);
+    assertThat(json.at("/data/items/0/volumeDate").asText()).isEqualTo(volumeDate.toString());
+    assertThat(json.at("/data/items/3/tradesYesterday").isNull()).isTrue();
+    assertThat(json.at("/data/items/3/trades7d").isNull()).isTrue();
+    assertThat(json.at("/data/items/3/volumeDate").isNull()).isTrue();
+
+    // 다른 정렬도 같은 거래량 칸을 싣는다(같은 스캔 재사용, 공식 추가 호출 없음).
+    var rise = mapper.readTree(get("/api/v1/markets/board?tab=FOOD&sort=rise").body());
+    assertThat(rise.at("/data/items/0/itemId").asLong()).isEqualTo(4L);
+    assertThat(rise.at("/data/items/0/trades7d").asLong()).isEqualTo(5);
+    verify(prices, times(1)).fetch(any(), any());
+
+    // 채우기 작업은 기본 꺼짐이라 빈이 없다.
+    assertThat(context.containsBean("marketVolumeWarmup")).isFalse();
+    assertThat(mapper.readTree(get("/api/v1/markets/tabs").body()).at("/data/sorts").toString())
+        .contains("volume");
+  }
+
   @Test
   void 탭_정의는_외부_호출_없이_돌려준다() throws Exception {
     var response = get("/api/v1/markets/tabs");

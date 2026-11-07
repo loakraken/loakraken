@@ -519,7 +519,7 @@
       "title": "만인지적",
       "grade": "전설",
       "parentTitle": null,
-      "condition": "경쟁전 시즌 2 그랜드마스터 등급 보상",
+      "condition": "경쟁전 시즌 2 그랜드 마스터 등급 보상",
       "source": "내부 기록"
     },
     {
@@ -533,7 +533,7 @@
       "title": "유아독존",
       "grade": "전설",
       "parentTitle": null,
-      "condition": "경쟁전 시즌 3 그랜드마스터 등급 보상",
+      "condition": "경쟁전 시즌 3 그랜드 마스터 등급 보상",
       "source": "내부 기록"
     },
     {
@@ -547,7 +547,7 @@
       "title": "경천동지",
       "grade": "전설",
       "parentTitle": null,
-      "condition": "경쟁전 그랜드마스터 등급 보상",
+      "condition": "경쟁전 그랜드 마스터 등급 보상",
       "source": "내부 기록"
     },
     {
@@ -737,6 +737,62 @@
       "grade": "전설",
       "parentTitle": null,
       "condition": "셀피 콘테스트 로아 스토리툰 부문 입상",
+      "source": "내부 기록"
+    },
+    {
+      "title": "기분 좋은 향기",
+      "grade": "전설",
+      "parentTitle": null,
+      "condition": "모코코 씨앗 수집 포인트 보상을 받는다",
+      "source": "내부 기록"
+    },
+    {
+      "title": "모코코 사냥꾼",
+      "grade": "전설",
+      "parentTitle": null,
+      "condition": "모코코 씨앗 수집 포인트 보상을 받는다",
+      "source": "내부 기록"
+    },
+    {
+      "title": "미술품 애호가",
+      "grade": "전설",
+      "parentTitle": null,
+      "condition": "위대한 미술품 수집 포인트 보상을 받는다",
+      "source": "내부 기록"
+    },
+    {
+      "title": "생활의 달인",
+      "grade": "전설",
+      "parentTitle": null,
+      "condition": "세계수의 잎 수집 포인트 보상을 받는다",
+      "source": "내부 기록"
+    },
+    {
+      "title": "서풍의 지휘자",
+      "grade": "전설",
+      "parentTitle": null,
+      "condition": "항해 모험물 수집 포인트 보상을 받는다",
+      "source": "내부 기록"
+    },
+    {
+      "title": "일등 항해사",
+      "grade": "전설",
+      "parentTitle": null,
+      "condition": "항해 모험물 수집 포인트 보상을 받는다",
+      "source": "내부 기록"
+    },
+    {
+      "title": "아크라시아의 순례자",
+      "grade": "전설",
+      "parentTitle": null,
+      "condition": "이그네아의 징표 수집 포인트 보상을 받는다",
+      "source": "내부 기록"
+    },
+    {
+      "title": "영혼의 공명",
+      "grade": "전설",
+      "parentTitle": null,
+      "condition": "거인의 심장 수집 포인트 보상을 받는다",
       "source": "내부 기록"
     }
   ]

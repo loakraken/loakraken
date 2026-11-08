@@ -68,10 +68,13 @@ public class CombatPowerSimulationService {
   public static final String ROLE_UNKNOWN_BASIS = CombatPowerReasons.ROLE_UNKNOWN.text();
 
   /**
-   * 시뮬레이터 화면(엔드포인트)에서 방어구 재련·상급 재련은 계산하지 않는다(사용자 결정 11-08, 옵션 B): 계산 검증에서 비교 기준 둘의 주 스탯 배수가 달라 아직
-   * 기준이 하나뿐이다. 스펙업 목록·추천 순서는 지금 값을 그대로 쓴다(PM 총괄 11-08). 이유 코드는 기존 MODEL_UNCONFIRMED.
+   * 방어구 재련·상급 재련의 전투력 Δ는 계산하지 않는다(P0 핫픽스 11-09): 같은 시점 공식 전투력과 비교한 실측에서 우리 값이 실제의 약 0.66배였다(주 스탯 배수
+   * 경로). 스펙업 목록·추천 순서·시뮬레이터 모두 이 이유로 UNSUPPORTED(기존 코드 MODEL_UNCONFIRMED). 무기 재련·상급 재련은 그대로.
    */
   static final String ARMOR_REFINE_UNCONFIRMED = "방어구 재련·상급 재련의 전투력 계산식을 아직 확인하고 있어 계산하지 않았습니다.";
+
+  /** 팔 보호구(완갑)도 같은 주 스탯 경로라 확인 전까지 계산하지 않는다(P0 핫픽스 11-09). */
+  static final String ARM_GUARD_UNCONFIRMED = "팔 보호구 재련의 전투력 계산식을 아직 확인하고 있어 계산하지 않았습니다.";
 
   private static final String UNSUPPORTED_BASIS = "이 항목의 전투력 계산식을 아직 확인하고 있어 계산하지 않았습니다.";
   private static final String ARK_GRID_BASIS =
@@ -165,9 +168,8 @@ public class CombatPowerSimulationService {
       int unsupportedCount,
       List<String> assumptions) {}
 
-  /** 시뮬레이터 엔드포인트. 방어구 재련·상급 재련은 계산하지 않는다({@link #ARMOR_REFINE_UNCONFIRMED}). */
   public Result simulate(String characterName, List<Change> changes) {
-    return simulate(snapshot(characterName), changes, true);
+    return simulate(snapshot(characterName), changes);
   }
 
   /**
@@ -394,12 +396,7 @@ public class CombatPowerSimulationService {
   }
 
   /** 이미 읽은 캐릭터로 시뮬레이션한다(공식 호출 없음). */
-  /** 스펙업 목록·추천 순서가 후보마다 부른다. 방어구 재련·상급 재련도 계산한다(옵션 B는 시뮬레이터 화면만). */
   public Result simulate(CharacterResult result, List<Change> changes) {
-    return simulate(result, changes, false);
-  }
-
-  private Result simulate(CharacterResult result, List<Change> changes, boolean simulatorTab) {
     var loadout = result.details().loadout();
     var gemModel = CombatPowerGemModel.of(gemCoefficients, loadout);
     var refineModel =
@@ -428,8 +425,10 @@ public class CombatPowerSimulationService {
     var roleReason = roleReason(result);
     for (var planned : merged.values()) {
       String reason = roleReason != null ? roleReason : planned.reason();
-      if (roleReason == null && simulatorTab && armorRefine(loadout, planned.change()))
-        reason = ARMOR_REFINE_UNCONFIRMED;
+      if (roleReason == null) {
+        var hold = heldReason(loadout, planned.change());
+        if (hold != null) reason = hold;
+      }
       if (planned.effect() != null && reason == null) {
         if (before == null) reason = NO_OFFICIAL_BASIS;
         else {
@@ -1156,12 +1155,12 @@ public class CombatPowerSimulationService {
     };
   }
 
-  /** 무기가 아닌 장비(방어구)의 재련·상급 재련 변경인지. */
-  private static boolean armorRefine(CharacterLoadout loadout, Change change) {
+  /** 확인 전이라 계산하지 않는 변경의 이유(방어구 재련·상급 재련, 팔 보호구). 그 밖이면 null. */
+  private static String heldReason(CharacterLoadout loadout, Change change) {
+    if (change.kind() == Kind.ARM_GUARD) return ARM_GUARD_UNCONFIRMED;
     if (change.kind() != Kind.EQUIPMENT_REFINE && change.kind() != Kind.EQUIPMENT_ADVANCED_REFINE)
-      return false;
-    var item = equipment(loadout, change.index());
-    return !"무기".equals(item.type());
+      return null;
+    return "무기".equals(equipment(loadout, change.index()).type()) ? null : ARMOR_REFINE_UNCONFIRMED;
   }
 
   /** 재련 모델이 아는 부위의 지금 단계. 모르는 부위면 (0, 0)(그 변경은 cannotSet 이유로 계산하지 않는다). */

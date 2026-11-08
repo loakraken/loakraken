@@ -262,6 +262,15 @@ class MarketBoardIntegrationTest {
     assertThat(json.at("/data/tabs/0/categoryCode").asInt()).isEqualTo(50010);
     assertThat(json.at("/data/tabs/0/defaultTier").asInt()).isEqualTo(4);
     assertThat(json.at("/data/sorts").toString()).contains("rise", "fall");
+    // #11: 아바타·장비 상자(목표 사이트 실관찰, 공식 분류 코드). 티어 조건 없음.
+    var added = new java.util.HashMap<String, tools.jackson.databind.JsonNode>();
+    json.at("/data/tabs").forEach(tab -> added.put(tab.path("tab").asText(), tab));
+    assertThat(added.get("AVATAR").path("label").asText()).isEqualTo("아바타");
+    assertThat(added.get("AVATAR").path("categoryCode").asInt()).isEqualTo(20000);
+    assertThat(added.get("AVATAR").path("defaultTier").isNull()).isTrue();
+    assertThat(added.get("EQUIPMENT_BOX").path("label").asText()).isEqualTo("장비 상자");
+    assertThat(added.get("EQUIPMENT_BOX").path("categoryCode").asInt()).isEqualTo(10100);
+    assertThat(added.get("EQUIPMENT_BOX").path("defaultTier").isNull()).isTrue();
     verifyNoInteractions(prices, options, history);
     ApiContractFixture.write("market-tabs.json", response.body());
   }

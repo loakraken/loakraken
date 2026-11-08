@@ -89,14 +89,18 @@ class AccessoryBaseStatTest {
   }
 
   @Test
-  void 범위_밖_힘민지도_백분율을_그대로_내고_최댓값_위만_표시한다() {
+  void 범위_밖_힘민지도_백분율을_그대로_내고_범위표_점검_대상을_표시한다() {
     var high = AccessoryBaseStat.of("목걸이", "고대", detail(4, 3, "힘 +18000"));
     assertThat(high).isEqualTo(new AccessoryBaseStat(3, 18000, 15178, 17857, pct("105.34")));
-    assertThat(high.aboveMax()).isTrue();
+    assertThat(high.rangeSuspect()).isTrue();
     var low = AccessoryBaseStat.of("목걸이", "고대", detail(4, 3, "힘 +15177"));
     assertThat(low.mainStatRangePct()).isEqualByComparingTo("-0.04");
-    assertThat(low.aboveMax()).isFalse();
-    assertThat(AccessoryBaseStat.of("목걸이", "고대", detail(4, 3, "힘 +16000")).aboveMax()).isFalse();
+    // 연마 3단계인데 최솟값 아래면 범위표 점검 대상
+    assertThat(low.rangeSuspect()).isTrue();
+    assertThat(AccessoryBaseStat.of("목걸이", "고대", detail(4, 2, "힘 +15177")).rangeSuspect())
+        .isFalse();
+    assertThat(AccessoryBaseStat.of("목걸이", "고대", detail(4, 3, "힘 +16000")).rangeSuspect())
+        .isFalse();
   }
 
   @Test

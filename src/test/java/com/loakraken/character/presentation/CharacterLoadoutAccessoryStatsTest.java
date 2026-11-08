@@ -62,7 +62,7 @@ class CharacterLoadoutAccessoryStatsTest {
       assertThat(stats.mainStatRangePct()).isEqualByComparingTo("179.96");
       assertThat(stats.mainStat()).isEqualTo(19999);
     }
-    var line = "event=accessory_stat_above_max slot=목걸이 stage=0 mainStat=19999";
+    var line = "event=accessory_stat_range_suspect slot=목걸이 stage=0 mainStat=19999";
     assertThat(output.getOut().split(java.util.regex.Pattern.quote(line), -1).length - 1)
         .isEqualTo(1);
   }

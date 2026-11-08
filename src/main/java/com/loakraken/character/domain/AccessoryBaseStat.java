@@ -34,9 +34,14 @@ public record AccessoryBaseStat(
         stage, value, min, max, AccessoryMainStatRange.rangePct(slot, line, value));
   }
 
-  /** 힘민지가 3단계 최댓값보다 큰가(% 100 초과). 범위표에 없는 값이라 표 점검 대상. 최솟값 아래는 연마가 덜 된 장신구·3티어에서 흔한 값이라 해당 없음. */
-  public boolean aboveMax() {
-    return mainStatRangePct != null && mainStatRangePct.compareTo(HUNDRED) > 0;
+  /**
+   * 범위표가 틀렸다는 신호인가: 3단계 최댓값 위(% 100 초과)이거나, 연마 3단계(연마 효과 3줄)인데 3단계 최솟값 아래(% 0 미만). 연마가 덜 된 장신구·3티어의
+   * 최솟값 아래는 흔한 값이라 해당 없음.
+   */
+  public boolean rangeSuspect() {
+    if (mainStatRangePct == null) return false;
+    return mainStatRangePct.compareTo(HUNDRED) > 0
+        || (polishStage == AccessoryMainStatRange.MAX_STAGE && mainStatRangePct.signum() < 0);
   }
 
   private static Integer mainStat(CharacterLoadout.EquipmentDetail detail) {

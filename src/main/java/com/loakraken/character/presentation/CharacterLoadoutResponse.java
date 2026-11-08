@@ -87,7 +87,7 @@ public record CharacterLoadoutResponse(
           Long paradisePower,
       @Schema(
               description =
-                  "4티어 고대·유물 목걸이·귀걸이·반지만: 기본 효과 힘민지가 그 연마 단계 범위(공식 아이템 사전)의 몇 %인지. 다른 장비·해석 불가면 null")
+                  "3·4티어 고대·유물 목걸이·귀걸이·반지만: 기본 효과 힘민지가 그 부위 3단계(연마 뒤) 범위(공식 아이템 사전)의 몇 %인지. 다른 장비·해석 불가면 null")
           @NullableResponse
           @OptionalResponse
           AccessoryStatsResponse accessoryStats) {
@@ -117,14 +117,16 @@ public record CharacterLoadoutResponse(
     }
   }
 
-  @Schema(description = "장신구 기본 스탯 범위. 범위 = 공식 아이템 사전 연마 효과 탭의 부위·연마 단계별 힘민지 최솟값~최댓값")
+  @Schema(
+      description = "장신구 기본 스탯 범위. 범위 = 공식 아이템 사전 표의 그 부위 3단계(연마 뒤) 힘민지 최솟값~최댓값(연마 단계와 상관없이 같음)")
   public record AccessoryStatsResponse(
       @Schema(description = "연마 단계(연마 효과 줄 수 0~3)", example = "3") int polishStage,
       @Schema(description = "기본 효과 힘·민첩·지능 값", example = "16009") int mainStat,
-      @Schema(description = "그 부위·연마 단계 힘민지 최솟값", example = "15178") int mainStatMin,
-      @Schema(description = "그 부위·연마 단계 힘민지 최댓값", example = "17857") int mainStatMax,
+      @Schema(description = "그 부위 3단계 힘민지 최솟값", example = "15178") int mainStatMin,
+      @Schema(description = "그 부위 3단계 힘민지 최댓값", example = "17857") int mainStatMax,
       @Schema(
-              description = "(힘민지 − 최솟값) ÷ (최댓값 − 최솟값) × 100, 소수 둘째 자리(반올림). 범위 밖이면 null",
+              description =
+                  "(힘민지 − 최솟값) ÷ (최댓값 − 최솟값) × 100, 소수 둘째 자리(반올림). 범위 밖은 음수·100 초과 그대로(지금은 늘 값이 있고 null은 예비)",
               example = "31.02")
           @NullableResponse
           BigDecimal mainStatRangePct) {

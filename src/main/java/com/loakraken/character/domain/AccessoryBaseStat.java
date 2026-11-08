@@ -6,9 +6,9 @@ import java.util.Set;
 import java.util.regex.Pattern;
 
 /**
- * 4티어 장신구 기본 효과 힘민지가 그 연마 단계 범위의 몇 %인지(흡수 #6). 범위는 시세 장신구 검색과 같은 공식 아이템 사전 표({@link
- * AccessoryMainStatRange})이고 연마 단계 = 연마 효과 줄 수다. 공식 Tooltip 기본 효과에는 힘·민첩·지능 세 줄이 같은 값으로 나오므로(다른 직업
- * 몫은 흐린 색) 첫 줄 값을 쓴다.
+ * 장신구 기본 효과 힘민지가 그 부위 3단계(연마 뒤) 범위의 몇 %인지(흡수 #6). 비교 기준과 같은 규칙(PM 결정 11-09): 연마 단계와 상관없이 같은 3단계 범위로
+ * 재고, 범위 밖은 음수·100 초과 그대로 준다(3티어 장신구도 같은 줄에서 음수). 범위는 공식 아이템 사전 표({@link AccessoryMainStatRange}).
+ * 공식 Tooltip 기본 효과에는 힘·민첩·지능 세 줄이 같은 값으로 나오므로(다른 직업 몫은 흐린 색) 첫 줄 값을 쓴다. 연마 단계 = 연마 효과 줄 수.
  */
 public record AccessoryBaseStat(
     int polishStage, int mainStat, int mainStatMin, int mainStatMax, BigDecimal mainStatRangePct) {
@@ -16,27 +16,28 @@ public record AccessoryBaseStat(
   private static final Set<String> GRADES = Set.of("고대", "유물");
   private static final BigDecimal HUNDRED = BigDecimal.valueOf(100);
 
-  /** 4티어 고대·유물 목걸이·귀걸이·반지가 아니거나, 힘민지 줄이 없거나, 연마 줄이 3개를 넘으면 null. */
+  /** 3·4티어 고대·유물 목걸이·귀걸이·반지가 아니거나, 힘민지 줄이 없거나, 연마 줄이 3개를 넘으면 null. */
   public static AccessoryBaseStat of(
       String type, String grade, CharacterLoadout.EquipmentDetail detail) {
     var slot = AccessoryMainStatRange.Slot.fromOfficial(type);
     if (slot == null || detail == null || !GRADES.contains(grade)) return null;
-    if (detail.tier() == null || detail.tier() != 4) return null;
+    if (detail.tier() == null || (detail.tier() != 3 && detail.tier() != 4)) return null;
     int stage = detail.polishEffects().size();
     if (stage > AccessoryMainStatRange.MAX_STAGE) return null;
     Integer value = mainStat(detail);
     if (value == null) return null;
-    int min = AccessoryMainStatRange.min(slot, stage);
-    int max = AccessoryMainStatRange.max(slot, stage);
-    var pct = AccessoryMainStatRange.rangePct(slot, stage, value);
-    // 범위 밖이면 표와 맞지 않는 값이라 %를 내지 않는다(표 점검 대상).
-    if (pct.signum() < 0 || pct.compareTo(HUNDRED) > 0) pct = null;
-    return new AccessoryBaseStat(stage, value, min, max, pct);
+    // 비교 기준처럼 연마 단계와 상관없이 3단계(연마 뒤) 범위로 잰다.
+    int line = AccessoryMainStatRange.MAX_STAGE;
+    int min = AccessoryMainStatRange.min(slot, line);
+    int max = AccessoryMainStatRange.max(slot, line);
+    return new AccessoryBaseStat(
+        stage, value, min, max, AccessoryMainStatRange.rangePct(slot, line, value));
   }
 
-  /** 힘민지가 그 단계 범위 밖이라 %를 내지 않았는가(범위표 점검 대상). */
+  /** %가 0 미만이거나 100 초과인가(3단계 범위 밖, 로그로 점검). */
   public boolean outOfRange() {
-    return mainStatRangePct == null;
+    return mainStatRangePct != null
+        && (mainStatRangePct.signum() < 0 || mainStatRangePct.compareTo(HUNDRED) > 0);
   }
 
   private static Integer mainStat(CharacterLoadout.EquipmentDetail detail) {

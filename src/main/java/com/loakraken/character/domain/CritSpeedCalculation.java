@@ -305,17 +305,33 @@ public final class CritSpeedCalculation {
       BigDecimal critStatPerPercent,
       CritDamage damage,
       // 치명 스탯(수치·Tooltip)을 읽지 못하면 이유. 그때 적중률은 스탯을 뺀 값이라 표시하지 않는다(코드 리뷰 10-25).
-      String unavailableReason) {}
+      String unavailableReason,
+      // 주력 스킬 치명타 적중률: 가장 많은 스킬이 같은 스킬별 치명타 적중률 + 스킬별 값에 없는 켠 가정(시너지·펫·자기 시너지 등). 스킬을 모르면 null.
+      BigDecimal mainSkillRate,
+      // mainSkillRate를 같이 쓰는 스킬 수. 스킬을 모르면 null.
+      Integer mainSkillCount,
+      // 켠 스킬 한정 치명타 적중률 토글 합. 없으면 null.
+      BigDecimal skillLimitedRate) {}
 
   /**
    * 치명타 피해(%). total = base 200 + 관측 출처 합(observed) + 가정 출처 합(assumed, 켠 토글 등). 스킬·조건 한정 문구는 더하지
    * 않는다.
    */
   public record CritDamage(
-      BigDecimal base, BigDecimal observed, BigDecimal total, BigDecimal assumed) {}
+      BigDecimal base,
+      BigDecimal observed,
+      BigDecimal total,
+      BigDecimal assumed,
+      // 켠 스킬 한정 치명타 피해 토글 합(total에 포함). 없으면 null.
+      BigDecimal skillLimited) {}
 
   public record SpeedAxis(
-      BigDecimal observed, BigDecimal assumed, BigDecimal total, BigDecimal effective) {}
+      BigDecimal observed,
+      BigDecimal assumed,
+      BigDecimal total,
+      BigDecimal effective,
+      // 켠 스킬 한정 토글 합(total에 포함). 없으면 null.
+      BigDecimal skillLimited) {}
 
   public record Supersonic(
       NodeSource source,
@@ -398,7 +414,20 @@ public final class CritSpeedCalculation {
       boolean coreState,
       boolean on,
       BigDecimal value,
-      String text) {}
+      String text,
+      // 일부 스킬에만 붙는 효과(예: 진격 태세 중 랜스 스킬). 켜면 합계에 넣고 화면에 '스킬 한정 효과 포함'으로 알린다(PM 총괄 #5).
+      boolean skillLimited) {
+    ToggleState(
+        String key,
+        String label,
+        Axis axis,
+        boolean coreState,
+        boolean on,
+        BigDecimal value,
+        String text) {
+      this(key, label, axis, coreState, on, value, text, false);
+    }
+  }
 
   public record Result(
       String ruleVersion,
@@ -521,8 +550,12 @@ public final class CritSpeedCalculation {
                     BASE_CRIT_DAMAGE
                         .add(sum(sources, Kind.OBSERVED, Axis.CRIT_DAMAGE))
                         .add(sum(sources, Kind.ASSUMED, Axis.CRIT_DAMAGE))),
-                scale(sum(sources, Kind.ASSUMED, Axis.CRIT_DAMAGE))),
-            critRead ? null : "치명 스탯을 읽지 못해 치명타 적중률을 계산하지 않았어요.");
+                scale(sum(sources, Kind.ASSUMED, Axis.CRIT_DAMAGE)),
+                null),
+            critRead ? null : "치명 스탯을 읽지 못해 치명타 적중률을 계산하지 않았어요.",
+            null,
+            null,
+            null);
 
     var attack = axis(sources, Axis.ATTACK_SPEED);
     var move = axis(sources, Axis.MOVE_SPEED);
@@ -1803,7 +1836,8 @@ public final class CritSpeedCalculation {
         scale(sum.observed()),
         scale(sum.assumed()),
         scale(sum.total()),
-        scale(sum.total().min(SPEED_CAP)));
+        scale(sum.total().min(SPEED_CAP)),
+        null);
   }
 
   private static StatSpeed statSpeed(List<Source> sources) {

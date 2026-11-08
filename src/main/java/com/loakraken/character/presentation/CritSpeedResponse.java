@@ -3,6 +3,7 @@ package com.loakraken.character.presentation;
 import com.loakraken.character.application.CritSpeedService;
 import com.loakraken.character.domain.CritSpeedCalculation;
 import com.loakraken.common.api.NullableResponse;
+import com.loakraken.common.api.OptionalResponse;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -70,8 +71,12 @@ public record CritSpeedResponse(
                 crit.damage().base(),
                 crit.damage().observed(),
                 crit.damage().total(),
-                crit.damage().assumed()),
-            crit.unavailableReason()),
+                crit.damage().assumed(),
+                crit.damage().skillLimited()),
+            crit.unavailableReason(),
+            crit.mainSkillRate(),
+            crit.mainSkillCount(),
+            crit.skillLimitedRate()),
         new CritSpeedSpeedResponse(
             speed.swiftnessStat(),
             speed.cap(),
@@ -119,7 +124,12 @@ public record CritSpeedResponse(
       @Schema(description = "직업 핵심 상태·자기 버프면 true(기본 켬), 상황 조건이면 false(기본 끔)") boolean coreState,
       @Schema(description = "이번 계산에서 켰는지. 동시에 적용되지 않는 효과와 함께 켜면 한쪽만 true") boolean on,
       @Schema(description = "켜면 axis에 더하는 값(%)") BigDecimal value,
-      @Schema(description = "공식 원문 또는 근거") String text) {
+      @Schema(description = "공식 원문 또는 근거") String text,
+      @Schema(
+              description =
+                  "일부 스킬에만 붙는 효과면 true(예: 진격 태세 중 랜스 스킬). 켜면 합계에 넣고, 축별 합은 crit.skillLimitedRate·crit.damage.skillLimited·speed.*.skillLimited")
+          @OptionalResponse
+          boolean skillLimited) {
     static CritSpeedToggleResponse from(CritSpeedCalculation.ToggleState toggle) {
       return new CritSpeedToggleResponse(
           toggle.key(),
@@ -128,7 +138,8 @@ public record CritSpeedResponse(
           toggle.coreState(),
           toggle.on(),
           toggle.value(),
-          toggle.text());
+          toggle.text(),
+          toggle.skillLimited());
     }
   }
 
@@ -217,13 +228,32 @@ public record CritSpeedResponse(
               description =
                   "치명 스탯(수치·Tooltip)을 읽지 못해 치명타 적중률을 계산하지 않았을 때 이유. 있으면 적중률·목표·스킬별 치명타 적중률은 스탯이 빠진 값이라 표시하지 않는다. 계산했으면 null")
           @NullableResponse
-          String unavailableReason) {}
+          String unavailableReason,
+      @Schema(
+              description =
+                  "주력 스킬 치명타 적중률: 가장 많은 스킬이 같은 skills[].total(같은 수면 낮은 값) + skills[].total에 없는 켠 가정(시너지·펫·서포터·자기 시너지 등, 백어택·트라이포드 가정 제외). targets는 이 값으로 잰다. 스킬을 모르면 null이고 targets는 totalRate로 잰다")
+          @NullableResponse
+          @OptionalResponse
+          BigDecimal mainSkillRate,
+      @Schema(description = "mainSkillRate를 같이 쓰는 스킬 수. 스킬을 모르면 null")
+          @NullableResponse
+          @OptionalResponse
+          Integer mainSkillCount,
+      @Schema(description = "켠 스킬 한정 치명타 적중률 토글 합(totalRate에 포함). 없으면 null")
+          @NullableResponse
+          @OptionalResponse
+          BigDecimal skillLimitedRate) {}
 
   public record CritSpeedCritDamageResponse(
       @Schema(description = "기본 치명타 피해(200)") BigDecimal base,
       @Schema(description = "관측 출처 합") BigDecimal observed,
-      @Schema(description = "base + observed + assumed(켠 토글 등 가정 출처)") BigDecimal total,
-      @Schema(description = "가정 출처 합(켠 치명타 피해 토글 등, 없으면 0)") BigDecimal assumed) {}
+      @Schema(description = "base + observed + assumed(켠 토글 등 가정 출처, 스킬 한정 토글 포함)")
+          BigDecimal total,
+      @Schema(description = "가정 출처 합(켠 치명타 피해 토글 등, 없으면 0)") BigDecimal assumed,
+      @Schema(description = "켠 스킬 한정 치명타 피해 토글 합(total에 포함). 없으면 null")
+          @NullableResponse
+          @OptionalResponse
+          BigDecimal skillLimited) {}
 
   public record CritSpeedBluntThornResponse(
       @Schema(description = "EQUIPPED_NODE: 장착 노드 공식 문구, REFERENCE_LEVEL_2: 미장착이라 공식 Lv.2 문구 기준")
@@ -237,6 +267,7 @@ public record CritSpeedResponse(
       @Schema(description = "현재 totalRate에서의 노드 진화형 피해") BigDecimal evolutionDamage,
       @Schema(description = "노드 장착 시 적용 치적") BigDecimal effectiveCritRate) {}
 
+  @Schema(description = "치명타 목표. crit.mainSkillRate가 있으면 그 값으로, 없으면 totalRate로 잰다(필요 스탯 올림)")
   public record CritSpeedTargetResponse(
       String key,
       BigDecimal targetRate,
@@ -274,10 +305,12 @@ public record CritSpeedResponse(
       BigDecimal observed,
       BigDecimal assumed,
       BigDecimal total,
-      @Schema(description = "상한 적용") BigDecimal effective) {
+      @Schema(description = "상한 적용") BigDecimal effective,
+      @Schema(description = "켠 스킬 한정 토글 합(total에 포함). 없으면 null") @NullableResponse @OptionalResponse
+          BigDecimal skillLimited) {
     static CritSpeedAxisResponse from(CritSpeedCalculation.SpeedAxis axis) {
       return new CritSpeedAxisResponse(
-          axis.observed(), axis.assumed(), axis.total(), axis.effective());
+          axis.observed(), axis.assumed(), axis.total(), axis.effective(), axis.skillLimited());
     }
   }
 

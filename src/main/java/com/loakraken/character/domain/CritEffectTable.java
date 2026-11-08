@@ -228,10 +228,31 @@ public final class CritEffectTable {
       boolean coreState,
       Pattern pattern,
       boolean incremental,
-      String exclusiveWith) {
+      String exclusiveWith,
+      boolean skillLimited) {
     Toggle(String node, String label, boolean coreState, Pattern pattern, boolean incremental) {
       this(
-          node, node, CritSpeedCalculation.Axis.CRIT, label, coreState, pattern, incremental, null);
+          node,
+          node,
+          CritSpeedCalculation.Axis.CRIT,
+          label,
+          coreState,
+          pattern,
+          incremental,
+          null,
+          false);
+    }
+
+    Toggle(
+        String node,
+        String key,
+        CritSpeedCalculation.Axis axis,
+        String label,
+        boolean coreState,
+        Pattern pattern,
+        boolean incremental,
+        String exclusiveWith) {
+      this(node, key, axis, label, coreState, pattern, incremental, exclusiveWith, false);
     }
   }
 

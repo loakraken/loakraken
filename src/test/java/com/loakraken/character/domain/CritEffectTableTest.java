@@ -86,12 +86,12 @@ class CritEffectTableTest {
     assertThat(values(result, Axis.CRIT_DAMAGE, Category.ARK_GRID))
         .containsExactly("질서의 별 코어 : 초극뇌연격 20P=1.56");
     assertThat(values(result, Axis.CRIT, Category.ARK_GRID)).isEmpty();
-    // 샷건 오버로드의 급소 노출은 자기 시너지 10(트라이포드 없이도) — 스킬 버프 가정이라 기본 끔(10-10 18:26)
-    assertThat(values(result, Axis.CRIT, Category.ASSUMPTION)).isEmpty();
+    // 샷건 오버로드의 급소 노출은 자기 시너지 10(트라이포드 없이도) — 기본 켬(PM 총괄 #5, 11-09)
+    assertThat(values(result, Axis.CRIT, Category.ASSUMPTION)).containsExactly("급소 노출 시너지(자신)=10");
     assertThat(result.toggles())
         .extracting(
             t -> t.key() + "=" + t.value().stripTrailingZeros().toPlainString() + "/" + t.on())
-        .contains("급소 노출 시너지(자신)=10/false");
+        .contains("급소 노출 시너지(자신)=10/true");
     assertThat(result.toggles())
         .extracting(
             t -> t.key() + "=" + t.value().stripTrailingZeros().toPlainString() + "/" + t.on())
@@ -468,12 +468,41 @@ class CritEffectTableTest {
   @Test
   void 노드_문구에_없는_직업_버프는_직업_스킬_트라이포드로_더하고_끄면_뺀다() {
     var skills = List.of(skill("용맹의 포효", "급소 노출", "빠른 준비"), skill("뇌명각", "급소 노출", "섬뢰"));
-    // 스킬·트라이포드 버프 가정은 기본 끔(중복 기능은 비교 기준 A 기준, PM 총괄 승인 10-10 18:26)
+    // 스킬·트라이포드 버프 가정은 기본 끔(중복 기능은 비교 기준 A 기준, PM 총괄 승인 10-10 18:26). 급소 노출(자신)만 기본 켬(PM 총괄 #5,
+    // 11-09)
     var defaults = calculate("배틀마스터", List.of(), skills, null, Assumptions.NONE);
-    assertThat(values(defaults, Axis.CRIT, Category.ASSUMPTION)).isEmpty();
+    assertThat(values(defaults, Axis.CRIT, Category.ASSUMPTION))
+        .containsExactly("급소 노출 시너지(자신)=10");
     assertThat(defaults.toggles())
         .extracting(t -> t.key() + "/" + t.coreState() + "/" + t.on())
-        .containsExactly("용맹의 포효 버프 유지 가정/false/false", "급소 노출 시너지(자신)/false/false");
+        .containsExactly(
+            "용맹의 포효 버프 유지 가정/false/false",
+            "급소 노출 시너지(자신)/true/true",
+            // 급소 노출 트라이포드가 둘 이상이면 중첩 여부를 모르니 나머지는 '가정' 토글(기본 끔)로 둔다(PM 총괄 11-09)
+            "급소 노출 중복 적용 (가정)/false/false");
+    var duplicate =
+        calculate(
+            "배틀마스터",
+            List.of(),
+            skills,
+            null,
+            new Assumptions(
+                false,
+                false,
+                0,
+                null,
+                null,
+                null,
+                null,
+                null,
+                true,
+                java.util.Map.of("급소 노출 중복 적용 (가정)", true)));
+    assertThat(values(duplicate, Axis.CRIT, Category.ASSUMPTION))
+        .containsExactly("급소 노출 시너지(자신)=10", "급소 노출 중복 적용 (가정)=10");
+    assertThat(duplicate.toggles())
+        .filteredOn(t -> t.key().equals("급소 노출 중복 적용 (가정)"))
+        .singleElement()
+        .satisfies(t -> assertThat(t.text()).contains("용맹의 포효", "뇌명각"));
     var on =
         calculate(
             "배틀마스터",
@@ -595,6 +624,246 @@ class CritEffectTableTest {
     // 공격 속도 증가분: 신속 1.32 + 가정 39.93 = 41.25 → 상한 40 (질량 증가 -10은 빼지 않음)
     assertThat(values(result, Axis.CRIT_DAMAGE, Category.ARK_PASSIVE))
         .containsExactly("기민함(공격 속도 40%)=48");
+  }
+
+  /**
+   * 직업 자기 시너지(#5, 계산 검증 최종 합본 11-09). 워로드 고독한 기사 빌드 '선봉장의 함성'은 진격 태세 중 랜스 스킬 한정 치명타 피해라 스킬 한정 토글(기본
+   * 켬)로 합계에 넣고 축별 합으로 알린다.
+   */
+  @Test
+  void 스킬_한정_자기_시너지는_기본_켬으로_합계에_넣고_축별_합을_낸다() {
+    var node =
+        node(
+            "깨달음 4티어 선봉장의 함성 Lv.3",
+            "진격 태세 중 랜스 스킬의 치명타 피해량이 45.0% 증가한다. 전장의 창 스킬 사용 시 자신에게 '선봉장의 함성' 효과를 10.0초간 부여한다. 선봉장의 함성 : 공격속도가 10.0% 증가한다.");
+    var on = calculate("워로드", List.of(node), List.of(), null, Assumptions.NONE);
+    assertThat(on.toggles())
+        .extracting(
+            t ->
+                t.key()
+                    + "/"
+                    + t.axis()
+                    + "/"
+                    + t.coreState()
+                    + "/"
+                    + t.on()
+                    + "/"
+                    + t.value().stripTrailingZeros().toPlainString()
+                    + "/"
+                    + t.skillLimited())
+        .contains("선봉장의 함성/CRIT_DAMAGE/true/true/45/true");
+    assertThat(on.crit().damage().total()).isEqualByComparingTo("245");
+    assertThat(on.crit().damage().skillLimited()).isEqualByComparingTo("45");
+    assertThat(on.crit().skillLimitedRate()).isNull();
+    // 함께 붙는 자기 공격 속도 +10(전장의 창 사용 후 10초)은 비교 기준이 넣지 않아 기본에서 빼고 이유를 남긴다
+    assertThat(on.speed().attack().total()).isEqualByComparingTo("1.32");
+    assertThat(on.limitations()).noneMatch(line -> line.contains("분류 중"));
+
+    var off =
+        calculate(
+            "워로드",
+            List.of(node),
+            List.of(),
+            null,
+            new Assumptions(
+                false,
+                false,
+                0,
+                null,
+                null,
+                null,
+                null,
+                null,
+                true,
+                java.util.Map.of("선봉장의 함성", false)));
+    assertThat(off.crit().damage().total()).isEqualByComparingTo("200");
+    assertThat(off.crit().damage().skillLimited()).isNull();
+  }
+
+  /**
+   * 블래스터 포격 빌드 '포격 출력 강화'(포격 스킬 치명타 적중률 +40)는 스킬 한정 토글로 합계와 주력 스킬 치명타 적중률에 넣고, 끄면 필요 치명 스탯이 움직인다.
+   * 주력 스킬 치명타 적중률 = 가장 많은 스킬이 같은 스킬별 값(관측 20.61 + 백 어택 10 + 트라이포드 4.4 = 35.01) + 켠 가정.
+   */
+  @Test
+  void 주력_스킬_치명타로_필요_치명_스탯을_재고_스킬_한정_치적_토글을_끄면_움직인다() {
+    var node = node("깨달음 1티어 포격 출력 강화 Lv.3", "포격 스킬의 치명타 적중률이 40.0% 증가한다.");
+    var skills =
+        List.of(
+            tripodSkill("가", CharacterLoadout.AttackType.BACK_ATTACK),
+            tripodSkill("나", CharacterLoadout.AttackType.BACK_ATTACK),
+            tripodSkill("다", CharacterLoadout.AttackType.NONE));
+    var on = calculate("블래스터", List.of(node), skills, null, Assumptions.NONE);
+    assertThat(on.toggles())
+        .extracting(t -> t.key() + "/" + t.axis() + "/" + t.on() + "/" + t.skillLimited())
+        .contains("포격 출력 강화/CRIT/true/true");
+    assertThat(on.crit().totalRate()).isEqualByComparingTo("60.61");
+    assertThat(on.crit().skillLimitedRate()).isEqualByComparingTo("40");
+    assertThat(on.crit().mainSkillRate()).isEqualByComparingTo("75.01");
+    assertThat(on.crit().mainSkillCount()).isEqualTo(2);
+    // 필요 총량 = 올림((목표 − (주력 75.01 − 스탯 20.61)) × 27.94): 100 → 45.6% → 1275, 120 → 65.6% → 1833
+    assertThat(on.crit().targets())
+        .extracting(
+            t -> t.key() + "=" + t.requiredCritStat() + "/" + t.requiredAdditionalCritStat())
+        .containsExactly("CRIT_100=1275/699", "BLUNT_THORN_OPTIMAL=1833/1257");
+
+    var off =
+        calculate(
+            "블래스터",
+            List.of(node),
+            skills,
+            null,
+            new Assumptions(
+                false,
+                false,
+                0,
+                null,
+                null,
+                null,
+                null,
+                null,
+                true,
+                java.util.Map.of("포격 출력 강화", false)));
+    assertThat(off.crit().mainSkillRate()).isEqualByComparingTo("35.01");
+    assertThat(off.crit().skillLimitedRate()).isNull();
+    assertThat(off.crit().targets())
+        .extracting(
+            t -> t.key() + "=" + t.requiredCritStat() + "/" + t.requiredAdditionalCritStat())
+        .containsExactly("CRIT_100=2392/1816", "BLUNT_THORN_OPTIMAL=2951/2375");
+
+    // 스킬을 모르면 주력 스킬 값은 null이고 목표는 totalRate(60.61)로 잰다: 100 → 60% → 1677
+    var unknown = calculate("블래스터", List.of(node), List.of(), null, Assumptions.NONE);
+    assertThat(unknown.crit().mainSkillRate()).isNull();
+    assertThat(unknown.crit().mainSkillCount()).isNull();
+    assertThat(unknown.crit().targets().getFirst().requiredCritStat()).isEqualTo(1677);
+  }
+
+  /**
+   * 계산 검증 기준 값(11-09): 치명 576(20.61%), 주력 스킬 치명타 88.71 → 필요 총량 올림(31.90 × 27.94) = 892(+316), 뭉툭한
+   * 가시 120% 올림(51.90 × 27.94) = 1451(+875). 버림이면 315·874라 올림을 한 번만 한다.
+   */
+  @Test
+  void 주력_스킬_치명타_기준_필요_치명_스탯은_계산_검증_기준값과_같다() {
+    var rate = new BigDecimal("88.71");
+    var nonStat = rate.subtract(new BigDecimal("20.61"));
+    var crit100 =
+        CritSpeedCalculation.target("CRIT_100", new BigDecimal("100"), rate, nonStat, 576, false);
+    assertThat(crit100.requiredCritStat()).isEqualTo(892);
+    assertThat(crit100.requiredAdditionalCritStat()).isEqualTo(316);
+    var thorn =
+        CritSpeedCalculation.target(
+            "BLUNT_THORN_OPTIMAL", new BigDecimal("120"), rate, nonStat, 576, false);
+    assertThat(thorn.requiredCritStat()).isEqualTo(1451);
+    assertThat(thorn.requiredAdditionalCritStat()).isEqualTo(875);
+  }
+
+  /** 같은 값을 쓰는 스킬 수가 같으면 낮은 값을 주력으로 본다(필요 치명 스탯이 커지는 안전한 쪽). */
+  @Test
+  void 주력_스킬_치명타는_같은_수면_낮은_값을_고른다() {
+    var result =
+        calculate(
+            "블래스터",
+            List.of(),
+            List.of(
+                tripodSkill("가", CharacterLoadout.AttackType.BACK_ATTACK),
+                tripodSkill("다", CharacterLoadout.AttackType.NONE)),
+            null,
+            Assumptions.NONE);
+    assertThat(result.crit().mainSkillRate()).isEqualByComparingTo("25.01");
+    assertThat(result.crit().mainSkillCount()).isEqualTo(1);
+  }
+
+  /** 주력 스킬 치명타가 목표 이상이면 추가 필요 치명은 0(음수 아님)이고 도달로 본다. */
+  @Test
+  void 주력_스킬_치명타가_목표_이상이면_추가_필요_치명은_0이다() {
+    var result =
+        calculate(
+            "블래스터",
+            List.of(node("깨달음 1티어 포격 출력 강화 Lv.3", "포격 스킬의 치명타 적중률이 40.0% 증가한다.")),
+            List.of(
+                tripodSkill("가", CharacterLoadout.AttackType.BACK_ATTACK),
+                tripodSkill("나", CharacterLoadout.AttackType.BACK_ATTACK)),
+            null,
+            new Assumptions(false, false, 3, null, null, null, null, null, true));
+    // 35.01 + 포격 40 + 시너지 30 = 105.01
+    assertThat(result.crit().mainSkillRate()).isEqualByComparingTo("105.01");
+    var crit100 = result.crit().targets().getFirst();
+    assertThat(crit100.reached()).isTrue();
+    assertThat(crit100.requiredAdditionalCritStat()).isZero();
+    assertThat(result.crit().targets().get(1).reached()).isFalse();
+  }
+
+  /** 주력 스킬 치명타에는 스킬별 값에 이미 있는 백어택·트라이포드 가정을 다시 더하지 않고, 시너지·펫 같은 가정은 더한다. */
+  @Test
+  void 주력_스킬_치명타는_백어택_트라이포드_가정을_두_번_세지_않는다() {
+    var skills =
+        List.of(
+            tripodSkill("가", CharacterLoadout.AttackType.BACK_ATTACK),
+            tripodSkill("나", CharacterLoadout.AttackType.BACK_ATTACK));
+    var result =
+        calculate(
+            "블래스터",
+            List.of(),
+            skills,
+            null,
+            new Assumptions(true, false, 1, null, new BigDecimal("4.4"), null, null, null, true));
+    // 스킬별 35.01 + 시너지 10(백어택 +10·트라이포드 4.4 가정은 스킬별 값에 이미 있음)
+    assertThat(result.crit().mainSkillRate()).isEqualByComparingTo("45.01");
+  }
+
+  /**
+   * 블레이드 버스트 강화 빌드의 자기 공이속은 공식 원문 줄이 없어 비교 기준 효율표 값(공격 32.79·이동 22.80)을 '가정' 토글(기본 켬)로 넣는다. 다른 블레이드
+   * 빌드는 읽은 값이 없어 넣지 않는다.
+   */
+  @Test
+  void 블레이드_버스트_강화_빌드는_공이속_가정_토글을_넣는다() {
+    var burst =
+        calculate(
+            "블레이드",
+            List.of(node("깨달음 1티어 버스트 강화 Lv.1", "블레이드 아츠가 버스트 강화로 바뀐다.")),
+            List.of(),
+            null,
+            Assumptions.NONE);
+    assertThat(burst.toggles())
+        .extracting(
+            t ->
+                t.key()
+                    + "/"
+                    + t.axis()
+                    + "/"
+                    + t.on()
+                    + "/"
+                    + t.value().stripTrailingZeros().toPlainString()
+                    + "/"
+                    + t.skillLimited())
+        .contains("버스트 강화/ATTACK_SPEED/true/32.79/false", "버스트 강화/MOVE_SPEED/true/22.8/false");
+    assertThat(burst.toggles()).anyMatch(t -> t.label().contains("가정"));
+    // 신속 1.32 + 32.79 / 1.32 + 22.80
+    assertThat(burst.speed().attack().total()).isEqualByComparingTo("34.11");
+    assertThat(burst.speed().move().total()).isEqualByComparingTo("24.12");
+    assertThat(burst.speed().attack().skillLimited()).isNull();
+
+    var other =
+        calculate(
+            "블레이드",
+            List.of(node("깨달음 1티어 잔재된 기운 Lv.1", "잔재된 기운을 얻는다.")),
+            List.of(),
+            null,
+            Assumptions.NONE);
+    assertThat(other.speed().attack().total()).isEqualByComparingTo("1.32");
+  }
+
+  private static CharacterLoadout.Skill tripodSkill(String name, CharacterLoadout.AttackType type) {
+    return new CharacterLoadout.Skill(
+        name,
+        null,
+        12,
+        null,
+        null,
+        null,
+        List.of(new CharacterLoadout.Tripod(1, 1, "정밀", null, "치명타 적중률이 4.4% 증가한다.")),
+        null,
+        List.of(),
+        type);
   }
 
   @Test

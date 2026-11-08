@@ -1,10 +1,12 @@
 package com.loakraken.character.presentation;
 
+import com.loakraken.character.domain.AccessoryBaseStat;
 import com.loakraken.character.domain.CharacterLoadout;
 import com.loakraken.character.domain.EquipmentSummary;
 import com.loakraken.character.domain.GemBaseAttack;
 import com.loakraken.character.domain.SkillCooldown;
 import com.loakraken.common.api.NullableResponse;
+import com.loakraken.common.api.OptionalResponse;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.math.BigDecimal;
 import java.util.List;
@@ -45,7 +47,7 @@ public record CharacterLoadoutResponse(
           value.name(),
           value.icon(),
           value.grade(),
-          EquipmentDetailResponse.from(value.detail(), "보주".equals(value.type())));
+          EquipmentDetailResponse.from(value.detail(), value.type(), value.grade()));
     }
   }
 
@@ -82,9 +84,17 @@ public record CharacterLoadoutResponse(
               description = "보주만: 공식 Tooltip의 '달성 최대 낙원력' 숫자(쉼표 없음). 보주가 아니거나 문구가 없으면 null",
               example = "18145692")
           @NullableResponse
-          Long paradisePower) {
-    static EquipmentDetailResponse from(CharacterLoadout.EquipmentDetail value, boolean orb) {
+          Long paradisePower,
+      @Schema(
+              description =
+                  "4티어 고대·유물 목걸이·귀걸이·반지만: 기본 효과 힘민지가 그 연마 단계 범위(공식 아이템 사전)의 몇 %인지. 다른 장비·해석 불가면 null")
+          @NullableResponse
+          @OptionalResponse
+          AccessoryStatsResponse accessoryStats) {
+    static EquipmentDetailResponse from(
+        CharacterLoadout.EquipmentDetail value, String type, String grade) {
       if (value == null) return null;
+      boolean orb = "보주".equals(type);
       return new EquipmentDetailResponse(
           CharacterLoadout.EquipmentDetail.PARSER_VERSION,
           value.refineLevel(),
@@ -102,7 +112,30 @@ public record CharacterLoadoutResponse(
               ? null
               : new RefineExpResponse(value.refineExp().current(), value.refineExp().max()),
           value.advancedRefineLevel(),
-          orb ? EquipmentSummary.paradisePower(value) : null);
+          orb ? EquipmentSummary.paradisePower(value) : null,
+          AccessoryStatsResponse.from(AccessoryBaseStat.of(type, grade, value)));
+    }
+  }
+
+  @Schema(description = "장신구 기본 스탯 범위. 범위 = 공식 아이템 사전 연마 효과 탭의 부위·연마 단계별 힘민지 최솟값~최댓값")
+  public record AccessoryStatsResponse(
+      @Schema(description = "연마 단계(연마 효과 줄 수 0~3)", example = "3") int polishStage,
+      @Schema(description = "기본 효과 힘·민첩·지능 값", example = "16009") int mainStat,
+      @Schema(description = "그 부위·연마 단계 힘민지 최솟값", example = "15178") int mainStatMin,
+      @Schema(description = "그 부위·연마 단계 힘민지 최댓값", example = "17857") int mainStatMax,
+      @Schema(
+              description = "(힘민지 − 최솟값) ÷ (최댓값 − 최솟값) × 100, 소수 둘째 자리(반올림). 범위 밖이면 null",
+              example = "31.02")
+          @NullableResponse
+          BigDecimal mainStatRangePct) {
+    static AccessoryStatsResponse from(AccessoryBaseStat value) {
+      if (value == null) return null;
+      return new AccessoryStatsResponse(
+          value.polishStage(),
+          value.mainStat(),
+          value.mainStatMin(),
+          value.mainStatMax(),
+          value.mainStatRangePct());
     }
   }
 

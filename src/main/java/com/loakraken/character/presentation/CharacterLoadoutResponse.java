@@ -113,7 +113,7 @@ public record CharacterLoadoutResponse(
               : new RefineExpResponse(value.refineExp().current(), value.refineExp().max()),
           value.advancedRefineLevel(),
           orb ? EquipmentSummary.paradisePower(value) : null,
-          AccessoryStatsResponse.from(AccessoryBaseStat.of(type, grade, value)));
+          AccessoryStatsResponse.from(AccessoryBaseStat.of(type, grade, value), type));
     }
   }
 
@@ -128,8 +128,28 @@ public record CharacterLoadoutResponse(
               example = "31.02")
           @NullableResponse
           BigDecimal mainStatRangePct) {
-    static AccessoryStatsResponse from(AccessoryBaseStat value) {
+    private static final org.slf4j.Logger log =
+        org.slf4j.LoggerFactory.getLogger(AccessoryStatsResponse.class);
+
+    /** 범위 밖 값은 인스턴스당 (부위·단계·값) 한 번만, 최대 200가지까지 남긴다(범위표 점검용, 캐릭터 이름 없음). */
+    private static final java.util.Set<String> OUT_OF_RANGE_SEEN =
+        java.util.concurrent.ConcurrentHashMap.newKeySet();
+
+    private static final int OUT_OF_RANGE_LOG_CAP = 200;
+
+    static AccessoryStatsResponse from(AccessoryBaseStat value, String slot) {
       if (value == null) return null;
+      if (value.outOfRange()) {
+        var key = slot + "|" + value.polishStage() + "|" + value.mainStat();
+        if (OUT_OF_RANGE_SEEN.size() < OUT_OF_RANGE_LOG_CAP && OUT_OF_RANGE_SEEN.add(key))
+          log.warn(
+              "event=accessory_stat_out_of_range slot={} stage={} mainStat={} min={} max={}",
+              slot,
+              value.polishStage(),
+              value.mainStat(),
+              value.mainStatMin(),
+              value.mainStatMax());
+      }
       return new AccessoryStatsResponse(
           value.polishStage(),
           value.mainStat(),

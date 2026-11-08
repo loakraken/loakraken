@@ -7,15 +7,16 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 
 /**
- * 장신구 기본 스탯 범위 %(흡수 #6): 공식 아이템 사전 연마 효과 탭의 부위·연마 단계별 힘민지 범위(시세 장신구 검색과 같은 표)로 계산한다. 연마 단계 = 연마
- * 효과 줄 수. 범위 밖이면 %는 null, 장신구가 아니거나 4티어 고대·유물이 아니거나 힘민지 줄이 없으면 전체 null.
+ * 장신구 기본 스탯 범위 %(흡수 #6): 공식 아이템 사전 연마 효과 탭의 부위·연마 단계별 힘민지 범위(시세 장신구 검색과 같은 표)로 계산한다. 연마 단계 = 연마 효과
+ * 줄 수. 범위 밖이면 %는 null, 장신구가 아니거나 4티어 고대·유물이 아니거나 힘민지 줄이 없으면 전체 null.
  */
 class AccessoryBaseStatTest {
   private static CharacterLoadout.EquipmentDetail detail(
       Integer tier, int polishLines, String... baseLines) {
     var polish = new ArrayList<CharacterLoadout.PolishEffect>();
     for (int i = 0; i < polishLines; i++)
-      polish.add(new CharacterLoadout.PolishEffect("추가 피해", "+0.70%", CharacterLoadout.EffectGrade.LOW));
+      polish.add(
+          new CharacterLoadout.PolishEffect("추가 피해", "+0.70%", CharacterLoadout.EffectGrade.LOW));
     return new CharacterLoadout.EquipmentDetail(
         null,
         67,

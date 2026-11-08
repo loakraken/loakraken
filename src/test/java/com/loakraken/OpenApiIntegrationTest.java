@@ -788,7 +788,8 @@ class OpenApiIntegrationTest {
         .doesNotContain("accessoryStats");
     assertThat(
             document
-                .at("/components/schemas/EquipmentDetailResponse/properties/accessoryStats/anyOf/1/type")
+                .at(
+                    "/components/schemas/EquipmentDetailResponse/properties/accessoryStats/anyOf/1/type")
                 .asText())
         .isEqualTo("null");
     var stats = document.at("/components/schemas/AccessoryStatsResponse");

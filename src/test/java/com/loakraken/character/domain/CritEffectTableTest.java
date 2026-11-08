@@ -743,20 +743,21 @@ class CritEffectTableTest {
     assertThat(off.crit().mainSkillRate()).isEqualByComparingTo("20.61");
     assertThat(off.crit().mainSkillCount()).isNull();
     assertThat(off.crit().skillLimitedRate()).isNull();
+    // 주력 20.61은 전부 스탯 몫(스탯 % 20.61)이라 스탯 외 몫 0: 100 → 100% → 2794(+2218), 120 → 120% → 3353(+2777)
     assertThat(off.crit().targets())
         .extracting(
             t -> t.key() + "=" + t.requiredCritStat() + "/" + t.requiredAdditionalCritStat())
-        .containsExactly("CRIT_100=2219/1643", "BLUNT_THORN_OPTIMAL=2777/2201");
+        .containsExactly("CRIT_100=2794/2218", "BLUNT_THORN_OPTIMAL=3353/2777");
 
     // 주력이 목록 밖 포격 스킬이면 스킬 목록이 비어도 시트 쪽 값을 낸다
     var noList = calculate("블래스터", List.of(node), List.of(), null, Assumptions.NONE);
     assertThat(noList.crit().mainSkillRate()).isEqualByComparingTo("60.61");
 
-    // 그 밖에 스킬을 모르면 주력 스킬 값은 null이고 목표는 예전처럼 totalRate(20.61)로 잰다: 100 → 79.39% → 2219
+    // 그 밖에 스킬을 모르면 주력 스킬 값은 null이고 목표는 예전처럼 totalRate(20.61, 전부 스탯 몫)로 잰다: 100 → 100% → 2794
     var unknown = calculate("블래스터", List.of(), List.of(), null, Assumptions.NONE);
     assertThat(unknown.crit().mainSkillRate()).isNull();
     assertThat(unknown.crit().mainSkillCount()).isNull();
-    assertThat(unknown.crit().targets().getFirst().requiredCritStat()).isEqualTo(2219);
+    assertThat(unknown.crit().targets().getFirst().requiredCritStat()).isEqualTo(2794);
   }
 
   /**

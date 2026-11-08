@@ -67,6 +67,38 @@ class CharacterLoadoutAccessoryStatsTest {
         .isEqualTo(1);
   }
 
+  /** 3단계 범위 아래(연마가 덜 된 장신구·3티어)는 흔한 값이라 음수 % 그대로 주고 로그는 남기지 않는다. 최댓값 위만 범위표 점검 대상. */
+  @Test
+  @org.junit.jupiter.api.extension.ExtendWith(
+      org.springframework.boot.test.system.OutputCaptureExtension.class)
+  void 범위_아래_값은_백분율을_그대로_주고_로그는_남기지_않는다(
+      org.springframework.boot.test.system.CapturedOutput output) {
+    var detail =
+        new CharacterLoadout.EquipmentDetail(
+            null,
+            90,
+            null,
+            4,
+            null,
+            java.util.List.of(
+                new CharacterLoadout.EffectGroup("기본 효과", java.util.List.of("힘 +9006"))),
+            java.util.List.of(),
+            java.util.List.of(),
+            java.util.List.of(),
+            null,
+            java.util.List.of(),
+            null,
+            java.util.List.of(),
+            null);
+    var stats =
+        CharacterLoadoutResponse.EquipmentResponse.from(
+                new CharacterLoadout.Equipment("귀걸이", "시험 귀걸이", null, "고대", detail))
+            .detail()
+            .accessoryStats();
+    assertThat(stats.mainStatRangePct()).isEqualByComparingTo("-134.42");
+    assertThat(output.getOut()).doesNotContain("mainStat=9006");
+  }
+
   @Test
   void 장신구가_아니면_싣지_않는다() throws Exception {
     var response =

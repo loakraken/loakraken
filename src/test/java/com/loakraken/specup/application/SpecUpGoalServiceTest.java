@@ -251,12 +251,12 @@ class SpecUpGoalServiceTest {
     levels.put("아드레날린", 1);
     var options =
         SpecUpGoalService.stoneOptions(new SpecUpGoalService.Stone(stoneItem(1, 1), levels));
-    // 97·106·107·109 두 배치씩 + 99(3·3)·1010(4·4) 하나씩 = 10
-    assertThat(options).hasSize(10);
+    // 97·106·107 두 배치씩 = 6. 99·109·1010돌은 기대 비용이 비현실적이라 넣지 않는다(핫픽스 v0.3.9.2).
+    assertThat(options).hasSize(6);
     assertThat(options)
         .extracting(SpecUpGoalService.Option::id)
-        .contains(
-            "ABILITY_STONE:3:2", "ABILITY_STONE:2:3", "ABILITY_STONE:3:3", "ABILITY_STONE:4:4");
+        .contains("ABILITY_STONE:3:2", "ABILITY_STONE:2:3", "ABILITY_STONE:4:2")
+        .doesNotContain("ABILITY_STONE:3:3", "ABILITY_STONE:4:3", "ABILITY_STONE:4:4");
     for (var option : options) {
       assertThat(option.kind()).isEqualTo("ABILITY_STONE");
       assertThat(option.slot()).isEqualTo("ABILITY_STONE");
@@ -284,7 +284,7 @@ class SpecUpGoalServiceTest {
     sharp.put("원한", 1);
     sharp.put("예리한 둔기", 1);
     assertThat(SpecUpGoalService.stoneOptions(new SpecUpGoalService.Stone(stoneItem(1, 1), sharp)))
-        .hasSize(10)
+        .hasSize(6)
         .allMatch(option -> option.changes().get(1).name().equals("예리한 둔기"));
     // 지금이 이미 3·2면 그 배치는 빠진다.
     levels.put("원한", 3);
@@ -314,6 +314,33 @@ class SpecUpGoalServiceTest {
       bySlot.values().forEach(all::addAll);
       var fresh = simulator.simulate(simulator.snapshot("목표테스트"), all).after();
       assertThat(step.combatPowerAfter()).isEqualByComparingTo(fresh);
+    }
+  }
+
+  /**
+   * 핫픽스 v0.3.9.2(PM 총괄 11-09): 전투력 우선(DELTA)은 Δ만 보고 고르므로, 전에는 Δ가 가장 큰 1010돌(기대 비용 약 314억)을 첫 단계로 골라
+   * 뒤 단계 누적 비용이 모두 314억을 넘었다. 스톤 목표는 97·106·107돌만이라 어떤 단계·누적 비용도 현실적인 범위를 넘지 않는다.
+   */
+  @Test
+  void 전투력_우선_추천_순서는_비현실적인_스톤_비용을_고르지_않는다() {
+    equipment = List.of(stoneItem(1, 1));
+    var service = service(System::nanoTime);
+    for (var pick : SpecUpGoalService.Pick.values()) {
+      var path = service.path("목표테스트", pick, 30);
+      assertThat(path.steps()).as(pick.name()).isNotEmpty();
+      for (var step : path.steps()) {
+        assertThat(step.candidateId())
+            .as(pick + " " + step.candidateId())
+            .isNotIn(
+                "ABILITY_STONE:3:3", "ABILITY_STONE:3:4", "ABILITY_STONE:4:3", "ABILITY_STONE:4:4");
+        // 107돌 기대 비용 약 131만이 가장 큰 스톤 비용이다.
+        if (step.cost() != null && step.cost().amount() != null)
+          assertThat(step.cost().amount())
+              .as(pick + " " + step.candidateId())
+              .isLessThanOrEqualTo(2_000_000L);
+        if (step.cumulativeCost() != null)
+          assertThat(step.cumulativeCost()).as(pick + " 누적").isLessThan(100_000_000L);
+      }
     }
   }
 

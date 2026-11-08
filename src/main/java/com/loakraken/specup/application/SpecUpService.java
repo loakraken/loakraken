@@ -357,6 +357,8 @@ public class SpecUpService {
   /** 반올림 전 Δ크라켄 점수(응답 값은 round2). */
   private Double krakenDelta(
       SpecUpKrakenScore.Context context, CharacterLoadout loadout, Planned plan) {
+    // 완갑은 Δ크라켄 점수도 비운다(핫픽스 v0.3.9.2, PM 총괄 11-09: 비교 기준 대조 전). 방어구 재련은 비교 기준과 같아 그대로 둔다.
+    if (plan.change() != null && plan.change().kind() == Kind.ARM_GUARD) return null;
     return plan.kraken() != null
         ? kraken.delta(context, plan.kraken())
         : kraken.delta(context, loadout, plan.change());

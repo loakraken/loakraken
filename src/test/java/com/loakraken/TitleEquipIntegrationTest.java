@@ -267,6 +267,83 @@ class TitleEquipIntegrationTest {
     assertThat(get("/api/v1/titles/equipped?date=2026-13-01").statusCode()).isEqualTo(400);
   }
 
+  /**
+   * 처리정지(public_exclusion)가 스냅숏 뒤에 생기면(#851 보안 점검): 지난 목록으로 만든 날짜는 바로 주지 않고(날짜 목록에서도 빠짐), 다음 만들기가 그
+   * 날짜들을 한 트랜잭션에서 지우고 오늘을 지금 목록으로 다시 만든다. 다시 만든 오늘에는 그 캐릭터가 세어지지 않는다.
+   */
+  @Test
+  void 처리정지가_스냅숏_뒤에_생기면_그날은_주지_않고_다시_만든_오늘은_그_캐릭터를_세지_않는다() throws Exception {
+    character(SERVER, "칭호가", UUID.randomUUID(), "빛을 꺼트리는 자", Instant.now());
+    character(SERVER, "칭호나", UUID.randomUUID(), "혼돈의 지배자", Instant.now());
+    character(SERVER, "칭호다", UUID.randomUUID(), null, Instant.now());
+    var today = LocalDate.now(TitleSnapshotService.KST);
+    var yesterday = today.minusDays(1);
+    assertThat(snapshots.build().resetDays()).isZero();
+    // 어제 스냅숏: 지금 목록 값으로 만든 것처럼 넣는다(그 캐릭터의 칭호가 세어진 값).
+    jdbc.sql(
+            "INSERT INTO title_equip_daily_meta (snapshot_date, server_key, population, built_at,"
+                + " exclusion_revision) VALUES (:d, :s, 3, now(), (" + REVISION + "))")
+        .param("d", yesterday)
+        .param("s", SERVER)
+        .update();
+    jdbc.sql(
+            "INSERT INTO title_equip_daily (snapshot_date, server_key, title, equipped_rosters,"
+                + " observed_rosters, new_rosters_30d, observed_characters)"
+                + " VALUES (:d, :s, '빛을 꺼트리는 자', 1, 1, 1, 1)")
+        .param("d", yesterday)
+        .param("s", SERVER)
+        .update();
+    assertThat(
+            data(get("/api/v1/titles/equipped?server=" + encode(SERVER) + "&date=" + yesterday))
+                .at("/meta/population")
+                .asLong())
+        .isEqualTo(3);
+
+    jdbc.sql(
+            "INSERT INTO public_exclusion (character_name, server_name, reason_code) VALUES ('칭호가', NULL, 'USER_REQUEST')")
+        .update();
+
+    // 다시 만들기 전: 지난 목록으로 만든 날짜(어제·오늘)는 주지 않는다.
+    assertThat(get("/api/v1/titles/equipped?server=" + encode(SERVER) + "&date=" + yesterday).statusCode())
+        .isEqualTo(404);
+    assertThat(get("/api/v1/titles/equipped?server=" + encode(SERVER) + "&date=" + today).statusCode())
+        .isEqualTo(404);
+    assertThat(
+            data(get("/api/v1/titles/equipped/dates?server=" + encode(SERVER)))
+                .path("dates")
+                .toString())
+        .isEqualTo("[]");
+    assertThat(snapshots.builtToday()).isFalse();
+    assertThat(snapshots.staleStored()).isTrue();
+
+    // 다시 만들기: 지난 목록 날짜 2개(어제·오늘)를 지우고 오늘을 지금 목록으로.
+    assertThat(snapshots.build().resetDays()).isEqualTo(2);
+    assertThat(snapshots.builtToday()).isTrue();
+    assertThat(snapshots.staleStored()).isFalse();
+    assertThat(
+            jdbc.sql("SELECT count(*) FROM title_equip_daily WHERE snapshot_date = :d")
+                .param("d", yesterday)
+                .query(Long.class)
+                .single())
+        .isZero();
+    var day = data(get("/api/v1/titles/equipped?server=" + encode(SERVER) + "&date=" + today));
+    assertThat(day.at("/meta/population").asLong()).isEqualTo(2);
+    assertThat(day.path("titles").size()).isEqualTo(1);
+    assertThat(day.at("/titles/0/title").asText()).isEqualTo("혼돈의 지배자");
+    assertThat(
+            data(get("/api/v1/titles/equipped/dates?server=" + encode(SERVER)))
+                .path("dates")
+                .toString())
+        .isEqualTo("[\"" + today + "\"]");
+    // 목록이 그대로면 다시 만들어도 지울 날짜가 없다.
+    assertThat(snapshots.build().resetDays()).isZero();
+  }
+
+  /** 지금 처리정지 목록 값(운영 코드 StopListRevisionSql.REVISION과 같은 식). */
+  private static final String REVISION =
+      "SELECT COALESCE(LEFT(md5(string_agg(character_name || '|' || COALESCE(server_name, ''), ','"
+          + " ORDER BY character_name, server_name)), 12), '0') FROM public_exclusion";
+
   private void title(UUID id, String title, Instant first, Instant last) {
     jdbc.sql(
             """

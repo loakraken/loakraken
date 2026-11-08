@@ -113,38 +113,52 @@ class SpecUpArmGuardSwitchIntegrationTest {
   }
 
   /**
-   * 추천 순서도 완갑 재련 단계를 다음 단계 후보로 둔다(실제 시뮬레이터). 기본 공격력 툴팁이 있어 완갑 전투력이 계산되는 프로필에서, 목록 완갑 줄(+15)이 OK면 추천
-   * 순서에도 같은 id·같은 Δ로 나온다(재료 시세가 없어 비용을 몰라 unpriced). 스위치를 끄면 어디에도 없다.
+   * P0 핫픽스(11-09): 방어구 재련·상급 재련과 완갑의 전투력 Δ는 같은 시점 공식 전투력 대비 약 0.66배라(주 스탯 경로) 계산하지 않는다. 기본 공격력 툴팁이
+   * 있어 재련 전투력을 계산할 수 있는 프로필에서도 목록의 방어구·완갑 줄은 UNSUPPORTED(MODEL_UNCONFIRMED, Δ 없음)이고 추천 순서는 그 줄을 단계로
+   * 쓰지 않는다. 무기 재련 줄은 그대로 계산한다.
    */
   @Test
-  void 추천_순서는_완갑_단계를_목록_완갑_줄과_같은_전투력으로_후보에_둔다() throws Exception {
+  void 방어구_재련과_완갑은_목록과_추천_순서에서_전투력을_계산하지_않고_무기는_그대로다() throws Exception {
     when(auctions.cachedGems()).thenReturn(List.of());
     search(
         List.of(
             new CharacterProfile.Stat(
                 "공격력", "0", List.of("힘, 민첩, 지능과 무기 공격력을 기반으로 증가한 기본 공격력은 267396 입니다."))));
-    var row = rows(guide()).get(ARM_GUARD_ROW);
+    var guide = guide();
+    var row = rows(guide).get(ARM_GUARD_ROW);
     assertThat(row).isNotNull();
-    assertThat(row.path("status").asText()).as(row.toString()).isEqualTo("OK");
+    assertThat(row.path("status").asText()).as(row.toString()).isEqualTo("UNSUPPORTED");
+    assertThat(row.path("reasonCode").asText()).isEqualTo("MODEL_UNCONFIRMED");
+    assertThat(row.path("deltaCombatPower").isNull()).isTrue();
+    // 방어구 재련·상급 재련 줄도 모두 Δ 없이 UNSUPPORTED, 무기 재련 줄은 OK(같은 프로필이라 재련 모델은 계산할 수 있다).
+    var weaponOk = 0;
+    var armorRows = 0;
+    for (var candidate : guide.path("candidates")) {
+      var id = candidate.path("id").asText();
+      if (!id.startsWith("EQUIPMENT_REFINE:") && !id.startsWith("EQUIPMENT_ADVANCED_REFINE:"))
+        continue;
+      if (id.startsWith("EQUIPMENT_REFINE:0:") || id.startsWith("EQUIPMENT_ADVANCED_REFINE:0:")) {
+        if ("OK".equals(candidate.path("status").asText())) weaponOk++;
+        continue;
+      }
+      armorRows++;
+      assertThat(candidate.path("status").asText()).as(id).isEqualTo("UNSUPPORTED");
+      assertThat(candidate.path("deltaCombatPower").isNull()).as(id).isTrue();
+      assertThat(candidate.path("reasonCode").asText()).as(id).isEqualTo("MODEL_UNCONFIRMED");
+    }
+    assertThat(armorRows).isPositive();
+    assertThat(weaponOk).isPositive();
+    // 추천 순서는 방어구·완갑 재련을 단계로도, 비용 모르는 후보로도 쓰지 않는다.
     var on = path();
-    assertThat(on.path("ruleVersion").asText()).isEqualTo("spec-up-path-v3");
-    JsonNode item = null;
-    for (var excluded : on.path("unpriced"))
-      if (ARM_GUARD_ROW.equals(excluded.path("candidateId").asText())) item = excluded;
-    assertThat(item).as(on.toString()).isNotNull();
-    assertThat(item.path("kind").asText()).isEqualTo("ARM_GUARD");
-    assertThat(item.path("deltaCombatPower").decimalValue())
-        .isEqualByComparingTo(row.path("deltaCombatPower").decimalValue());
-
-    environment
-        .getPropertySources()
-        .addFirst(
-            new MapPropertySource("arm-guard-off", Map.of("spec-up.arm-guard.enabled", "false")));
-    var off = path();
-    for (var excluded : off.path("unpriced"))
-      assertThat(excluded.path("candidateId").asText()).doesNotStartWith("EQUIPMENT_REFINE:16:");
-    for (var step : off.path("steps"))
-      assertThat(step.path("candidateId").asText()).doesNotStartWith("EQUIPMENT_REFINE:16:");
+    for (var step : on.path("steps")) {
+      var id = step.path("candidateId").asText();
+      assertThat(id).doesNotStartWith("EQUIPMENT_REFINE:16:");
+      assertThat(id.matches("EQUIPMENT_(ADVANCED_)?REFINE:[1-9][0-9]*:.*")).as(id).isFalse();
+    }
+    for (var excluded : on.path("unpriced")) {
+      var id = excluded.path("candidateId").asText();
+      assertThat(id.matches("EQUIPMENT_(ADVANCED_)?REFINE:[1-9][0-9]*:.*")).as(id).isFalse();
+    }
   }
 
   private JsonNode path() throws Exception {

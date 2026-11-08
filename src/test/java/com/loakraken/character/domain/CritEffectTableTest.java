@@ -682,7 +682,9 @@ class CritEffectTableTest {
 
   /**
    * 블래스터 포격 빌드 '포격 출력 강화'(포격 스킬 치명타 적중률 +40)는 스킬 한정 토글로 합계와 주력 스킬 치명타 적중률에 넣고, 끄면 필요 치명 스탯이 움직인다.
-   * 주력 스킬 치명타 적중률 = 가장 많은 스킬이 같은 스킬별 값(관측 20.61 + 백 어택 10 + 트라이포드 4.4 = 35.01) + 켠 가정.
+   * 포격 스킬은 전투 스킬 목록 밖(아이덴티티)이라 백 어택·트라이포드가 없으므로, 켜면 주력 스킬 값은 시트 쪽(관측 20.61 + 포격 40 = 60.61)이다(백엔드 2
+   * 검토 P1). 끄더라도 그 빌드의 주력은 포격 스킬이라 시트 쪽 20.61이다. 포격 스킬은 Lv.1·트라이포드 0이라 스킬별 목록에도 없다(계산 검증 원문 확인). 같은
+   * 값을 쓰는 목록 스킬 수(mainSkillCount)는 null.
    */
   @Test
   void 주력_스킬_치명타로_필요_치명_스탯을_재고_스킬_한정_치적_토글을_끄면_움직인다() {
@@ -691,20 +693,35 @@ class CritEffectTableTest {
         List.of(
             tripodSkill("가", CharacterLoadout.AttackType.BACK_ATTACK),
             tripodSkill("나", CharacterLoadout.AttackType.BACK_ATTACK),
-            tripodSkill("다", CharacterLoadout.AttackType.NONE));
+            tripodSkill("다", CharacterLoadout.AttackType.NONE),
+            // 원문처럼 포격 스킬은 Lv.1이라 스킬별 치명타 적중률 목록에서 빠진다
+            new CharacterLoadout.Skill(
+                "포격 : 시험", null, 1, null, null, null, List.of(), null, List.of(), null));
     var on = calculate("블래스터", List.of(node), skills, null, Assumptions.NONE);
     assertThat(on.toggles())
         .extracting(t -> t.key() + "/" + t.axis() + "/" + t.on() + "/" + t.skillLimited())
         .contains("포격 출력 강화/CRIT/true/true");
     assertThat(on.crit().totalRate()).isEqualByComparingTo("60.61");
     assertThat(on.crit().skillLimitedRate()).isEqualByComparingTo("40");
-    assertThat(on.crit().mainSkillRate()).isEqualByComparingTo("75.01");
-    assertThat(on.crit().mainSkillCount()).isEqualTo(2);
-    // 필요 총량 = 올림((목표 − (주력 75.01 − 스탯 20.61)) × 27.94): 100 → 45.6% → 1275, 120 → 65.6% → 1833
+    assertThat(on.crit().mainSkillRate()).isEqualByComparingTo("60.61");
+    // 목록 밖 스킬이 주력이라 같은 값을 쓰는 목록 스킬 수는 없음
+    assertThat(on.crit().mainSkillCount()).isNull();
+    // 필요 총량 = 올림((목표 − (주력 60.61 − 스탯 20.61)) × 27.94): 100 → 60% → 1677, 120 → 80% → 2236
     assertThat(on.crit().targets())
         .extracting(
             t -> t.key() + "=" + t.requiredCritStat() + "/" + t.requiredAdditionalCritStat())
-        .containsExactly("CRIT_100=1275/699", "BLUNT_THORN_OPTIMAL=1833/1257");
+        .containsExactly("CRIT_100=1677/1101", "BLUNT_THORN_OPTIMAL=2236/1660");
+
+    // 백어택 가정은 목록 밖 포격 스킬에 붙지 않으니 합계(70.61)에만 넣고 주력 스킬 값에는 넣지 않는다
+    var back =
+        calculate(
+            "블래스터",
+            List.of(node),
+            skills,
+            null,
+            new Assumptions(true, false, 0, null, null, null, null, null, true));
+    assertThat(back.crit().totalRate()).isEqualByComparingTo("70.61");
+    assertThat(back.crit().mainSkillRate()).isEqualByComparingTo("60.61");
 
     var off =
         calculate(
@@ -723,18 +740,23 @@ class CritEffectTableTest {
                 null,
                 true,
                 java.util.Map.of("포격 출력 강화", false)));
-    assertThat(off.crit().mainSkillRate()).isEqualByComparingTo("35.01");
+    assertThat(off.crit().mainSkillRate()).isEqualByComparingTo("20.61");
+    assertThat(off.crit().mainSkillCount()).isNull();
     assertThat(off.crit().skillLimitedRate()).isNull();
     assertThat(off.crit().targets())
         .extracting(
             t -> t.key() + "=" + t.requiredCritStat() + "/" + t.requiredAdditionalCritStat())
-        .containsExactly("CRIT_100=2392/1816", "BLUNT_THORN_OPTIMAL=2951/2375");
+        .containsExactly("CRIT_100=2219/1643", "BLUNT_THORN_OPTIMAL=2777/2201");
 
-    // 스킬을 모르면 주력 스킬 값은 null이고 목표는 totalRate(60.61)로 잰다: 100 → 60% → 1677
-    var unknown = calculate("블래스터", List.of(node), List.of(), null, Assumptions.NONE);
+    // 주력이 목록 밖 포격 스킬이면 스킬 목록이 비어도 시트 쪽 값을 낸다
+    var noList = calculate("블래스터", List.of(node), List.of(), null, Assumptions.NONE);
+    assertThat(noList.crit().mainSkillRate()).isEqualByComparingTo("60.61");
+
+    // 그 밖에 스킬을 모르면 주력 스킬 값은 null이고 목표는 예전처럼 totalRate(20.61)로 잰다: 100 → 79.39% → 2219
+    var unknown = calculate("블래스터", List.of(), List.of(), null, Assumptions.NONE);
     assertThat(unknown.crit().mainSkillRate()).isNull();
     assertThat(unknown.crit().mainSkillCount()).isNull();
-    assertThat(unknown.crit().targets().getFirst().requiredCritStat()).isEqualTo(1677);
+    assertThat(unknown.crit().targets().getFirst().requiredCritStat()).isEqualTo(2219);
   }
 
   /**
@@ -783,9 +805,9 @@ class CritEffectTableTest {
                 tripodSkill("가", CharacterLoadout.AttackType.BACK_ATTACK),
                 tripodSkill("나", CharacterLoadout.AttackType.BACK_ATTACK)),
             null,
-            new Assumptions(false, false, 3, null, null, null, null, null, true));
-    // 35.01 + 포격 40 + 시너지 30 = 105.01
-    assertThat(result.crit().mainSkillRate()).isEqualByComparingTo("105.01");
+            new Assumptions(false, false, 3, null, null, new BigDecimal("10"), null, null, true));
+    // 시트 쪽 20.61 + 포격 40 + 시너지 30 + 기타 10 = 100.61
+    assertThat(result.crit().mainSkillRate()).isEqualByComparingTo("100.61");
     var crit100 = result.crit().targets().getFirst();
     assertThat(crit100.reached()).isTrue();
     assertThat(crit100.requiredAdditionalCritStat()).isZero();

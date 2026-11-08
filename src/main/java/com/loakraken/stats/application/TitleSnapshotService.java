@@ -7,6 +7,7 @@ import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import org.springframework.stereotype.Service;
 
 /**
@@ -39,12 +40,12 @@ public class TitleSnapshotService {
   /** 오늘(KST) 스냅숏이 지금 처리정지 목록으로 이미 있으면 true(만들 필요 없음). */
   public boolean builtToday() {
     var today = LocalDate.now(clock.withZone(KST));
-    return snapshots.latest(stats.exclusionRevision()).filter(today::equals).isPresent();
+    return snapshots.latest().filter(today::equals).isPresent();
   }
 
   /** 지난 처리정지 목록으로 만든 날짜가 남아 있으면 true(지우고 오늘을 다시 만들어야 함). */
   public boolean staleStored() {
-    return snapshots.hasStale(stats.exclusionRevision());
+    return snapshots.hasStale();
   }
 
   /**
@@ -52,18 +53,29 @@ public class TitleSnapshotService {
    * 포함), rows = 넣은 칭호 줄 수, resetDays = 목록이 바뀌어 지운 날짜 수.
    */
   public Built build() {
-    // 목록 값은 집계보다 먼저 읽는다: 집계 중에 목록이 바뀌면 지난 값이 저장돼 다음 확인에서 다시 만든다(빠져야 할 캐릭터가 지금 값으로 남지 않음).
-    var revision = stats.exclusionRevision();
     var now = clock.instant();
     var today = LocalDate.now(clock.withZone(KST));
     var conditions = StatsConditions.defaults();
     var since = conditions.since(now);
-    var byServer = new LinkedHashMap<String, StatsPort.TitleEquip>();
-    byServer.put(ALL, query.titleEquipNow(null, since, now));
-    for (var server : stats.servers(conditions, since))
-      if (server.serverName() != null && !server.serverName().isBlank())
-        byServer.put(server.serverName(), query.titleEquipNow(server.serverName(), since, now));
-    int resetDays = snapshots.replace(today, now, byServer, today.minusDays(KEEP_DAYS), revision);
+    var built =
+        new java.util.concurrent.atomic.AtomicReference<Map<String, StatsPort.TitleEquip>>();
+    // 집계는 저장소의 트랜잭션 안에서 한다: 저장하는 처리정지 목록 값과 집계가 같은 스냅숏을 본다.
+    int resetDays =
+        snapshots.replace(
+            today,
+            now,
+            () -> {
+              var byServer = new LinkedHashMap<String, StatsPort.TitleEquip>();
+              byServer.put(ALL, query.titleEquipNow(null, since, now));
+              for (var server : stats.servers(conditions, since))
+                if (server.serverName() != null && !server.serverName().isBlank())
+                  byServer.put(
+                      server.serverName(), query.titleEquipNow(server.serverName(), since, now));
+              built.set(byServer);
+              return byServer;
+            },
+            today.minusDays(KEEP_DAYS));
+    var byServer = built.get();
     int rows = byServer.values().stream().mapToInt(value -> value.titles().size()).sum();
     return new Built(byServer.size(), rows, resetDays);
   }
@@ -73,7 +85,7 @@ public class TitleSnapshotService {
     var conditions = StatsConditions.defaults().withServer(server);
     var snapshot =
         snapshots
-            .find(date, server == null ? ALL : server, stats.exclusionRevision())
+            .find(date, server == null ? ALL : server)
             .orElseThrow(() -> new BusinessException(StatsErrorCode.TITLE_SNAPSHOT_NOT_FOUND));
     return query.titleResult(conditions, snapshot.builtAt(), snapshot.data(), title);
   }
@@ -83,6 +95,6 @@ public class TitleSnapshotService {
 
   /** server(null = 전체) 스냅숏 날짜(최신순, 최대 90개). */
   public List<LocalDate> dates(String server) {
-    return snapshots.dates(server == null ? ALL : server, MAX_DATES, stats.exclusionRevision());
+    return snapshots.dates(server == null ? ALL : server, MAX_DATES);
   }
 }

@@ -34,8 +34,8 @@ import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * 칭호 일별 스냅숏과 처리정지 목록의 경합(#864 보안 재점검): 만드는 도중 처리정지 캐릭터가 목록에서 빠졌다가 다시 들어가면 목록 값은 처음과 같아진다. 그
- * 사이에 센 값이 그 캐릭터를 포함하면 지금 목록 값으로 저장돼 그대로 보이면 안 된다. 만들기 전체가 한 스냅숏에서 목록 값과 집계를 읽어야 한다.
+ * 칭호 일별 스냅숏과 처리정지 목록의 경합(#864 보안 재점검): 만드는 도중 처리정지 캐릭터가 목록에서 빠졌다가 다시 들어가면 목록 값은 처음과 같아진다. 그 사이에 센
+ * 값이 그 캐릭터를 포함하면 지금 목록 값으로 저장돼 그대로 보이면 안 된다. 만들기 전체가 한 스냅숏에서 목록 값과 집계를 읽어야 한다.
  */
 @Import(TestcontainersConfiguration.class)
 @SpringBootTest(

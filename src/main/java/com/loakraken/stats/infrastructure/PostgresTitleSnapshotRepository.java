@@ -9,10 +9,12 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.function.Supplier;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
 /** 칭호 장착 확인 일별 스냅숏(title_equip_daily·title_equip_daily_meta). server_key '' = 전체. */
@@ -20,6 +22,9 @@ import org.springframework.transaction.annotation.Transactional;
 class PostgresTitleSnapshotRepository implements TitleSnapshotPort {
   /** 스냅숏 쓰기를 인스턴스 사이에 한 번에 하나로(트랜잭션 잠금). 값은 이 작업 전용 임의 상수. */
   static final long BUILD_LOCK = 0x6c6b5f7469746cL;
+
+  /** 지금 처리정지 목록 값(같은 문장·같은 스냅숏 안에서 읽는 부분 질의). */
+  private static final String CURRENT = "(" + StopListRevisionSql.REVISION + ")";
 
   private final JdbcClient jdbc;
   private final NamedParameterJdbcTemplate batch;
@@ -31,34 +36,37 @@ class PostgresTitleSnapshotRepository implements TitleSnapshotPort {
 
   @Override
   @Transactional(readOnly = true, timeout = 5)
-  public Optional<LocalDate> latest(String revision) {
+  public Optional<LocalDate> latest() {
     return jdbc.sql(
             "SELECT snapshot_date FROM title_equip_daily_meta WHERE server_key = ''"
-                + " AND exclusion_revision = :revision ORDER BY snapshot_date DESC LIMIT 1")
-        .param("revision", revision)
+                + " AND exclusion_revision = "
+                + CURRENT
+                + " ORDER BY snapshot_date DESC LIMIT 1")
         .query(LocalDate.class)
         .optional();
   }
 
   @Override
   @Transactional(readOnly = true, timeout = 5)
-  public boolean hasStale(String revision) {
+  public boolean hasStale() {
     return jdbc.sql(
-            "SELECT EXISTS (SELECT 1 FROM title_equip_daily_meta"
-                + " WHERE exclusion_revision <> :revision)")
-        .param("revision", revision)
+            "SELECT EXISTS (SELECT 1 FROM title_equip_daily_meta WHERE exclusion_revision <> "
+                + CURRENT
+                + ")")
         .query(Boolean.class)
         .single();
   }
 
   @Override
-  @Transactional(timeout = 120)
+  @Transactional(isolation = Isolation.REPEATABLE_READ, timeout = 120)
   public int replace(
       LocalDate date,
       Instant builtAt,
-      Map<String, StatsPort.TitleEquip> byServer,
-      LocalDate keepFrom,
-      String revision) {
+      Supplier<Map<String, StatsPort.TitleEquip>> compute,
+      LocalDate keepFrom) {
+    // 집계(같은 트랜잭션에 들어오는 통계 질의)와 아래 목록 값이 한 스냅숏을 본다. 다른 인스턴스와 겹치면 쓰기에서 직렬화 오류로 되돌아가고 다음 주기에 다시 한다.
+    var byServer = compute.get();
+    var revision = jdbc.sql(StopListRevisionSql.REVISION).query(String.class).single();
     jdbc.sql("SELECT 1 FROM (SELECT pg_advisory_xact_lock(:key)) l")
         .param("key", BUILD_LOCK)
         .query(Integer.class)
@@ -121,16 +129,17 @@ class PostgresTitleSnapshotRepository implements TitleSnapshotPort {
   }
 
   @Override
-  @Transactional(readOnly = true, timeout = 5)
-  public Optional<Snapshot> find(LocalDate date, String serverKey, String revision) {
+  @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ, timeout = 5)
+  public Optional<Snapshot> find(LocalDate date, String serverKey) {
+    // 메타(목록 값 확인 포함)와 칭호 행을 한 스냅숏에서 읽는다: 그 사이 다시 만들기가 끼어도 섞이지 않는다.
     var meta =
         jdbc.sql(
                 "SELECT population, built_at FROM title_equip_daily_meta"
                     + " WHERE snapshot_date = :date AND server_key = :key"
-                    + " AND exclusion_revision = :revision")
+                    + " AND exclusion_revision = "
+                    + CURRENT)
             .param("date", date)
             .param("key", serverKey)
-            .param("revision", revision)
             .query(
                 (row, index) ->
                     new Meta(row.getLong("population"), row.getTimestamp("built_at").toInstant()))
@@ -163,12 +172,13 @@ class PostgresTitleSnapshotRepository implements TitleSnapshotPort {
 
   @Override
   @Transactional(readOnly = true, timeout = 5)
-  public List<LocalDate> dates(String serverKey, int limit, String revision) {
+  public List<LocalDate> dates(String serverKey, int limit) {
     return jdbc.sql(
             "SELECT snapshot_date FROM title_equip_daily_meta WHERE server_key = :key"
-                + " AND exclusion_revision = :revision ORDER BY snapshot_date DESC LIMIT :limit")
+                + " AND exclusion_revision = "
+                + CURRENT
+                + " ORDER BY snapshot_date DESC LIMIT :limit")
         .param("key", serverKey)
-        .param("revision", revision)
         .param("limit", limit)
         .query(LocalDate.class)
         .list();

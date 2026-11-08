@@ -31,11 +31,11 @@ class CharacterLoadoutAccessoryStatsTest {
                 3, 15366, 15178, 17857, new BigDecimal("7.02")));
   }
 
-  /** 범위 밖 값은 비교 기준처럼 100 초과·음수 그대로 주고, 범위표 점검용으로 부위·단계·값을 한 번만 WARN으로 남긴다(캐릭터 이름 없음). */
+  /** 최댓값 위 값은 비교 기준처럼 100 초과 그대로 주고, 범위표 점검용으로 부위·단계·값을 한 번만 WARN으로 남긴다(캐릭터 이름 없음). */
   @Test
   @org.junit.jupiter.api.extension.ExtendWith(
       org.springframework.boot.test.system.OutputCaptureExtension.class)
-  void 범위_밖_값은_백분율을_그대로_주고_한_번만_남긴다(org.springframework.boot.test.system.CapturedOutput output) {
+  void 최댓값_위_값은_백분율을_그대로_주고_한_번만_남긴다(org.springframework.boot.test.system.CapturedOutput output) {
     var detail =
         new CharacterLoadout.EquipmentDetail(
             null,
@@ -62,7 +62,7 @@ class CharacterLoadoutAccessoryStatsTest {
       assertThat(stats.mainStatRangePct()).isEqualByComparingTo("179.96");
       assertThat(stats.mainStat()).isEqualTo(19999);
     }
-    var line = "event=accessory_stat_out_of_range slot=목걸이 stage=0 mainStat=19999";
+    var line = "event=accessory_stat_above_max slot=목걸이 stage=0 mainStat=19999";
     assertThat(output.getOut().split(java.util.regex.Pattern.quote(line), -1).length - 1)
         .isEqualTo(1);
   }

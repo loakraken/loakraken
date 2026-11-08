@@ -34,10 +34,9 @@ public record AccessoryBaseStat(
         stage, value, min, max, AccessoryMainStatRange.rangePct(slot, line, value));
   }
 
-  /** %가 0 미만이거나 100 초과인가(3단계 범위 밖, 로그로 점검). */
-  public boolean outOfRange() {
-    return mainStatRangePct != null
-        && (mainStatRangePct.signum() < 0 || mainStatRangePct.compareTo(HUNDRED) > 0);
+  /** 힘민지가 3단계 최댓값보다 큰가(% 100 초과). 범위표에 없는 값이라 표 점검 대상. 최솟값 아래는 연마가 덜 된 장신구·3티어에서 흔한 값이라 해당 없음. */
+  public boolean aboveMax() {
+    return mainStatRangePct != null && mainStatRangePct.compareTo(HUNDRED) > 0;
   }
 
   private static Integer mainStat(CharacterLoadout.EquipmentDetail detail) {

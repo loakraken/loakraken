@@ -133,7 +133,10 @@ public record CharacterLoadoutResponse(
     private static final org.slf4j.Logger log =
         org.slf4j.LoggerFactory.getLogger(AccessoryStatsResponse.class);
 
-    /** 범위 밖 값은 인스턴스당 (부위·단계·값) 한 번만, 최대 200가지까지 남긴다(범위표 점검용, 캐릭터 이름 없음). */
+    /**
+     * 3단계 최댓값 위 값은 인스턴스당 (부위·단계·값) 한 번만, 최대 200가지까지 남긴다(범위표 점검용, 캐릭터 이름 없음). 최솟값 아래는 흔한 값이라 남기지
+     * 않는다.
+     */
     private static final java.util.Set<String> OUT_OF_RANGE_SEEN =
         java.util.concurrent.ConcurrentHashMap.newKeySet();
 
@@ -141,11 +144,11 @@ public record CharacterLoadoutResponse(
 
     static AccessoryStatsResponse from(AccessoryBaseStat value, String slot) {
       if (value == null) return null;
-      if (value.outOfRange()) {
+      if (value.aboveMax()) {
         var key = slot + "|" + value.polishStage() + "|" + value.mainStat();
         if (OUT_OF_RANGE_SEEN.size() < OUT_OF_RANGE_LOG_CAP && OUT_OF_RANGE_SEEN.add(key))
           log.warn(
-              "event=accessory_stat_out_of_range slot={} stage={} mainStat={} min={} max={}",
+              "event=accessory_stat_above_max slot={} stage={} mainStat={} min={} max={}",
               slot,
               value.polishStage(),
               value.mainStat(),

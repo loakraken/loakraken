@@ -176,6 +176,71 @@ class CombatPowerSimulationIntegrationTest {
     SiteNames.assertAbsent(response.body());
   }
 
+  @org.springframework.beans.factory.annotation.Autowired
+  com.loakraken.character.application.CombatPowerSimulationService simulator;
+
+  @Test
+  void 시뮬레이터_화면은_방어구_재련_상급_재련을_계산하지_않고_스펙업_경로는_그대로다() throws Exception {
+    // 사용자 결정 11-08(옵션 B): 방어구 재련·상급 재련은 기준이 하나뿐이라 시뮬레이터 화면에서만 UNSUPPORTED(기존 코드 MODEL_UNCONFIRMED).
+    when(detailsPort.fetch(anyString()))
+        .thenAnswer(invocation -> fetchedEquipment(invocation.getArgument(0)));
+    assertThat(get("/api/v1/characters/search?characterName=" + encode("시뮬방어구")).statusCode())
+        .isEqualTo(200);
+    var response =
+        simulate(
+            "시뮬방어구",
+            """
+            [
+              {"kind": "EQUIPMENT_REFINE", "index": 1, "refine": 24},
+              {"kind": "EQUIPMENT_ADVANCED_REFINE", "index": 1, "level": 10},
+              {"kind": "EQUIPMENT_QUALITY", "index": 0, "quality": 90}
+            ]
+            """);
+    assertThat(response.statusCode()).as(response.body()).isEqualTo(200);
+    ApiContractFixture.write("character-combat-power-simulate-armor-refine.json", response.body());
+    var data = mapper.readTree(response.body()).path("data");
+    var contributions = data.path("contributions");
+    var armorReason = "방어구 재련·상급 재련의 전투력 계산식을 아직 확인하고 있어 계산하지 않았습니다.";
+    for (int i = 0; i < 2; i++) {
+      assertThat(contributions.get(i).path("status").asText()).isEqualTo("UNSUPPORTED");
+      assertThat(contributions.get(i).path("delta").isNull()).isTrue();
+      assertThat(contributions.get(i).path("basis").asText()).isEqualTo(armorReason);
+      assertThat(contributions.get(i).path("reasonCode").asText()).isEqualTo("MODEL_UNCONFIRMED");
+    }
+    // 다른 변경은 그대로 계산한다(무기 품질 100 → 90 = -326.15, 위 테스트와 같은 값).
+    assertThat(contributions.at("/2/status").asText()).isEqualTo("OK");
+    assertThat(contributions.at("/2/delta").decimalValue()).isEqualByComparingTo("-326.15");
+    assertThat(data.path("unsupportedCount").asInt()).isEqualTo(2);
+    // 스펙업 목록·추천 순서가 부르는 경로(캐릭터 스냅숏 + 변경)는 방어구 재련 이유를 쓰지 않는다(재련 모델의 결과 그대로).
+    var specUp =
+        simulator.simulate(
+            simulator.snapshot("시뮬방어구"),
+            List.of(
+                new com.loakraken.character.application.CombatPowerSimulationService.Change(
+                    com.loakraken.character.application.CombatPowerSimulationService.Kind
+                        .EQUIPMENT_REFINE,
+                    null,
+                    1,
+                    null,
+                    null,
+                    24,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null)));
+    assertThat(specUp.contributions().getFirst().basis()).isNotEqualTo(armorReason);
+    // 무기 재련은 시뮬레이터 화면에서도 방어구 이유가 붙지 않는다.
+    var weapon =
+        simulate("시뮬방어구", "[{\"kind\": \"EQUIPMENT_REFINE\", \"index\": 0, \"refine\": 11}]");
+    assertThat(weapon.statusCode()).isEqualTo(200);
+    assertThat(mapper.readTree(weapon.body()).at("/data/contributions/0/basis").asText())
+        .isNotEqualTo(armorReason);
+  }
+
   @Test
   void 범위_밖은_400_대상이_없으면_409다() throws Exception {
     when(detailsPort.fetch(anyString()))

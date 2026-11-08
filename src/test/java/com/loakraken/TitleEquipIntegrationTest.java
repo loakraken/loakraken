@@ -282,7 +282,9 @@ class TitleEquipIntegrationTest {
     // 어제 스냅숏: 지금 목록 값으로 만든 것처럼 넣는다(그 캐릭터의 칭호가 세어진 값).
     jdbc.sql(
             "INSERT INTO title_equip_daily_meta (snapshot_date, server_key, population, built_at,"
-                + " exclusion_revision) VALUES (:d, :s, 3, now(), (" + REVISION + "))")
+                + " exclusion_revision) VALUES (:d, :s, 3, now(), ("
+                + REVISION
+                + "))")
         .param("d", yesterday)
         .param("s", SERVER)
         .update();
@@ -304,9 +306,12 @@ class TitleEquipIntegrationTest {
         .update();
 
     // 다시 만들기 전: 지난 목록으로 만든 날짜(어제·오늘)는 주지 않는다.
-    assertThat(get("/api/v1/titles/equipped?server=" + encode(SERVER) + "&date=" + yesterday).statusCode())
+    assertThat(
+            get("/api/v1/titles/equipped?server=" + encode(SERVER) + "&date=" + yesterday)
+                .statusCode())
         .isEqualTo(404);
-    assertThat(get("/api/v1/titles/equipped?server=" + encode(SERVER) + "&date=" + today).statusCode())
+    assertThat(
+            get("/api/v1/titles/equipped?server=" + encode(SERVER) + "&date=" + today).statusCode())
         .isEqualTo(404);
     assertThat(
             data(get("/api/v1/titles/equipped/dates?server=" + encode(SERVER)))

@@ -31,25 +31,51 @@ class PostgresTitleSnapshotRepository implements TitleSnapshotPort {
 
   @Override
   @Transactional(readOnly = true, timeout = 5)
-  public Optional<LocalDate> latest() {
+  public Optional<LocalDate> latest(String revision) {
     return jdbc.sql(
             "SELECT snapshot_date FROM title_equip_daily_meta WHERE server_key = ''"
-                + " ORDER BY snapshot_date DESC LIMIT 1")
+                + " AND exclusion_revision = :revision ORDER BY snapshot_date DESC LIMIT 1")
+        .param("revision", revision)
         .query(LocalDate.class)
         .optional();
   }
 
   @Override
+  @Transactional(readOnly = true, timeout = 5)
+  public boolean hasStale(String revision) {
+    return jdbc.sql(
+            "SELECT EXISTS (SELECT 1 FROM title_equip_daily_meta"
+                + " WHERE exclusion_revision <> :revision)")
+        .param("revision", revision)
+        .query(Boolean.class)
+        .single();
+  }
+
+  @Override
   @Transactional(timeout = 120)
-  public void replace(
+  public int replace(
       LocalDate date,
       Instant builtAt,
       Map<String, StatsPort.TitleEquip> byServer,
-      LocalDate keepFrom) {
+      LocalDate keepFrom,
+      String revision) {
     jdbc.sql("SELECT 1 FROM (SELECT pg_advisory_xact_lock(:key)) l")
         .param("key", BUILD_LOCK)
         .query(Integer.class)
         .single();
+    // 처리정지 목록이 바뀌었으면 지난 목록으로 만든 날짜(그 캐릭터가 세어진 값)를 모두 지운다. 같은 트랜잭션·잠금 안이라 지운 뒤 다시 넣기까지 한 번에.
+    var stale =
+        jdbc.sql(
+                "SELECT DISTINCT snapshot_date FROM title_equip_daily_meta"
+                    + " WHERE exclusion_revision <> :revision")
+            .param("revision", revision)
+            .query(LocalDate.class)
+            .list();
+    if (!stale.isEmpty())
+      for (var table : List.of("title_equip_daily", "title_equip_daily_meta"))
+        jdbc.sql("DELETE FROM " + table + " WHERE snapshot_date IN (:dates)")
+            .param("dates", stale)
+            .update();
     for (var table : List.of("title_equip_daily", "title_equip_daily_meta"))
       jdbc.sql("DELETE FROM " + table + " WHERE snapshot_date = :date OR snapshot_date < :keepFrom")
           .param("date", date)
@@ -64,7 +90,8 @@ class PostgresTitleSnapshotRepository implements TitleSnapshotPort {
               .addValue("date", date)
               .addValue("key", entry.getKey())
               .addValue("population", entry.getValue().population())
-              .addValue("builtAt", Timestamp.from(builtAt)));
+              .addValue("builtAt", Timestamp.from(builtAt))
+              .addValue("revision", revision));
       for (var row : entry.getValue().titles())
         rows.add(
             new MapSqlParameterSource()
@@ -77,8 +104,9 @@ class PostgresTitleSnapshotRepository implements TitleSnapshotPort {
                 .addValue("characters", row.observedCharacters()));
     }
     batch.batchUpdate(
-        "INSERT INTO title_equip_daily_meta (snapshot_date, server_key, population, built_at)"
-            + " VALUES (:date, :key, :population, :builtAt)",
+        "INSERT INTO title_equip_daily_meta"
+            + " (snapshot_date, server_key, population, built_at, exclusion_revision)"
+            + " VALUES (:date, :key, :population, :builtAt, :revision)",
         metas.toArray(MapSqlParameterSource[]::new));
     if (!rows.isEmpty())
       batch.batchUpdate(
@@ -89,17 +117,20 @@ class PostgresTitleSnapshotRepository implements TitleSnapshotPort {
           VALUES (:date, :key, :title, :equipped, :observed, :newRosters, :characters)
           """,
           rows.toArray(MapSqlParameterSource[]::new));
+    return stale.size();
   }
 
   @Override
   @Transactional(readOnly = true, timeout = 5)
-  public Optional<Snapshot> find(LocalDate date, String serverKey) {
+  public Optional<Snapshot> find(LocalDate date, String serverKey, String revision) {
     var meta =
         jdbc.sql(
                 "SELECT population, built_at FROM title_equip_daily_meta"
-                    + " WHERE snapshot_date = :date AND server_key = :key")
+                    + " WHERE snapshot_date = :date AND server_key = :key"
+                    + " AND exclusion_revision = :revision")
             .param("date", date)
             .param("key", serverKey)
+            .param("revision", revision)
             .query(
                 (row, index) ->
                     new Meta(row.getLong("population"), row.getTimestamp("built_at").toInstant()))
@@ -132,11 +163,12 @@ class PostgresTitleSnapshotRepository implements TitleSnapshotPort {
 
   @Override
   @Transactional(readOnly = true, timeout = 5)
-  public List<LocalDate> dates(String serverKey, int limit) {
+  public List<LocalDate> dates(String serverKey, int limit, String revision) {
     return jdbc.sql(
             "SELECT snapshot_date FROM title_equip_daily_meta WHERE server_key = :key"
-                + " ORDER BY snapshot_date DESC LIMIT :limit")
+                + " AND exclusion_revision = :revision ORDER BY snapshot_date DESC LIMIT :limit")
         .param("key", serverKey)
+        .param("revision", revision)
         .param("limit", limit)
         .query(LocalDate.class)
         .list();

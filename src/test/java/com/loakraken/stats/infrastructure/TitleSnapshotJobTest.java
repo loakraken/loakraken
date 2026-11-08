@@ -21,8 +21,8 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 
 /**
- * 칭호 일별 스냅숏 작업: 처리정지 목록이 바뀌어 지난 목록으로 만든 날짜가 남아 있으면 정해진 시각을 기다리지 않고 지우고 오늘을 다시 만든다. 그때 지표·로그를 캐릭터
- * 이름 없이 남긴다. 남은 날짜가 없으면 아무것도 하지 않는다(오늘 몫을 미리 만들지 않음).
+ * 칭호 일별 스냅숏 작업: 처리정지 목록이 바뀌어 지난 목록으로 만든 날짜가 남아 있으면 정해진 시각을 기다리지 않고 지우고 오늘을 다시 만든다. 그때 지표·로그를 캐릭터 이름
+ * 없이 남긴다. 남은 날짜가 없으면 아무것도 하지 않는다(오늘 몫을 미리 만들지 않음).
  */
 @ExtendWith(OutputCaptureExtension.class)
 class TitleSnapshotJobTest {

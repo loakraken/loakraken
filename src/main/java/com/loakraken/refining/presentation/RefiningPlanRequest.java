@@ -47,8 +47,11 @@ public record RefiningPlanRequest(
         Boolean growthSupport,
     @DecimalMin("0")
         @DecimalMax("100")
-        @Digits(integer = 3, fraction = 2)
-        @Schema(description = "첫 단계의 현재 장인의 기운(%)", defaultValue = "0", example = "46.50")
+        @Digits(integer = 3, fraction = 3)
+        @Schema(
+            description = "첫 단계의 현재 장인의 기운(%). 게임 화면처럼 소수 셋째 자리까지 받되 0.01%p 단위여야 함(46.500 = 46.50)",
+            defaultValue = "0",
+            example = "46.50")
         BigDecimal currentArtisanEnergy,
     @Min(0) @Max(10) @Schema(description = "첫 단계에서 이미 실패한 횟수", defaultValue = "0")
         Integer currentFailedAttempts,
@@ -66,7 +69,15 @@ public record RefiningPlanRequest(
             description =
                 "숨결 사용 방식. NONE: 쓰지 않음, MAX: 매 시도 최대 개수, OPTIMAL: 시도마다 숨결 개수(와 useBook이면 책)를 골라 지금 시세 기준 기대 비용이 가장 작은 방법(재료 시세가 필요 — 없으면 409 REFINING_PRICE_PENDING. 서버 스위치가 꺼져 있으면 400 INVALID_REQUEST). 생략하면 useBreath(true면 MAX, 아니면 NONE)",
             example = "OPTIMAL")
-        Breath breath) {
+        Breath breath,
+    @DecimalMin("0")
+        @DecimalMax("100")
+        @Digits(integer = 3, fraction = 3)
+        @Schema(
+            description =
+                "첫 단계의 현재 성공 확률(%, 게임 재련 화면 값을 숨결·책을 올리기 전에 읽은 것, 화면처럼 소수 셋째 자리까지 받음: 3.300 = 3.30). currentFailedAttempts가 없을 때 이 값으로 실패 횟수를 정한다(기본 확률 × (1 + 0.1 × 실패 0~10)과 같아야 함, 아니면 400 REFINING_SUCCESS_RATE_MISMATCH). 장인의 기운은 그 실패 횟수로 쌓일 수 있는 값이어야 함(아니면 400 REFINING_ARTISAN_ENERGY_MISMATCH). 둘 다 없으면 실패 0",
+            example = "3.30")
+        BigDecimal currentSuccessRate) {
   public enum Breath {
     NONE,
     MAX,
@@ -114,8 +125,33 @@ public record RefiningPlanRequest(
     return (fromStage == null || fromStage >= 10) && (toStage == null || toStage >= 11);
   }
 
-  /** 팔 보호구면 책·성장 지원·장비 성장 비용·영지 연구가 없어 모두 끈다(응답에도 false로 나간다). */
+  @AssertTrue(message = "장인의 기운은 0.01% 단위입니다(예: 46.50, 46.500).")
+  @JsonIgnore
+  @Schema(hidden = true)
+  public boolean isArtisanEnergyOnGrid() {
+    return onHundredths(currentArtisanEnergy);
+  }
+
+  /** null이거나 0.01 단위(소수 셋째 자리가 0)인지. */
+  static boolean onHundredths(BigDecimal percent) {
+    return percent == null || percent.stripTrailingZeros().scale() <= 2;
+  }
+
+  /** 실패 횟수를 현재 성공 확률로 정하는지(실패 횟수는 없고 성공 확률이 있음). */
+  @JsonIgnore
+  boolean failuresFromSuccessRate() {
+    return currentFailedAttempts == null && currentSuccessRate != null;
+  }
+
   RefiningPlan.Options toOptions() {
+    return toOptions(currentFailedAttempts == null ? 0 : currentFailedAttempts);
+  }
+
+  /**
+   * startFailedAttempts는 첫 단계 실패 횟수(요청 값이나 성공 확률로 정한 값). 팔 보호구면 책·성장 지원·장비 성장 비용·영지 연구가 없어 모두
+   * 끈다(응답에도 false로 나간다).
+   */
+  RefiningPlan.Options toOptions(int startFailedAttempts) {
     boolean armGuard = equipmentType == RefiningRules.EquipmentType.ARM_GUARD;
     return new RefiningPlan.Options(
         fromStage,
@@ -124,7 +160,7 @@ public record RefiningPlanRequest(
         !armGuard && !Boolean.FALSE.equals(useBook),
         !armGuard && (growthSupport == null || growthSupport),
         currentArtisanEnergy == null ? 0 : currentArtisanEnergy.movePointRight(2).intValueExact(),
-        currentFailedAttempts == null ? 0 : currentFailedAttempts,
+        startFailedAttempts,
         !armGuard && Boolean.TRUE.equals(growthCost),
         !armGuard && (expResearch == null || expResearch));
   }

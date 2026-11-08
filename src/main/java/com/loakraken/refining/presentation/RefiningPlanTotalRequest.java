@@ -58,16 +58,28 @@ public record RefiningPlanTotalRequest(
           Integer toStage,
       @DecimalMin("0")
           @DecimalMax("100")
-          @Digits(integer = 3, fraction = 2)
-          @Schema(description = "첫 단계의 현재 장인의 기운(%)", defaultValue = "0")
+          @Digits(integer = 3, fraction = 3)
+          @Schema(description = "첫 단계의 현재 장인의 기운(%, 소수 셋째 자리까지 받되 0.01%p 단위)", defaultValue = "0")
           BigDecimal currentArtisanEnergy,
       @Min(0) @Max(10) @Schema(description = "첫 단계에서 이미 실패한 횟수", defaultValue = "0")
-          Integer currentFailedAttempts) {
+          Integer currentFailedAttempts,
+      @DecimalMin("0")
+          @DecimalMax("100")
+          @Digits(integer = 3, fraction = 3)
+          @Schema(description = "/plans의 currentSuccessRate와 같음(숨결·책 전 현재 성공 확률 %)")
+          BigDecimal currentSuccessRate) {
     @AssertTrue(message = "목표 단계는 현재 단계보다 커야 합니다.")
     @JsonIgnore
     @Schema(hidden = true)
     public boolean isValidRange() {
       return fromStage == null || toStage == null || toStage > fromStage;
+    }
+
+    @AssertTrue(message = "장인의 기운은 0.01% 단위입니다(예: 46.50, 46.500).")
+    @JsonIgnore
+    @Schema(hidden = true)
+    public boolean isArtisanEnergyOnGrid() {
+      return RefiningPlanRequest.onHundredths(currentArtisanEnergy);
     }
 
     @AssertTrue(message = "무기·방어구는 grade(UPHWA·JEONYUL)가 필요합니다.")
@@ -120,6 +132,7 @@ public record RefiningPlanTotalRequest(
         part.currentFailedAttempts(),
         growthCost,
         expResearch,
-        effectiveBreath());
+        effectiveBreath(),
+        part.currentSuccessRate());
   }
 }

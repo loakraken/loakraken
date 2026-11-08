@@ -76,6 +76,10 @@ public class CombatPowerSimulationService {
   /** 팔 보호구(완갑)도 같은 주 스탯 경로라 확인 전까지 계산하지 않는다(P0 핫픽스 11-09). */
   static final String ARM_GUARD_UNCONFIRMED = "팔 보호구 재련의 전투력 계산식을 아직 확인하고 있어 계산하지 않았습니다.";
 
+  /** 팔찌 힘·민첩·지능 줄도 같은 주 스탯 → 전투력 경로라 확인 전까지 계산하지 않는다(PM 총괄 11-09, 시뮬레이터 공개 전). */
+  static final String BRACELET_MAIN_STAT_UNCONFIRMED =
+      "팔찌 힘·민첩·지능 줄의 전투력 계산식을 아직 확인하고 있어 계산하지 않았습니다.";
+
   private static final String UNSUPPORTED_BASIS = "이 항목의 전투력 계산식을 아직 확인하고 있어 계산하지 않았습니다.";
   private static final String ARK_GRID_BASIS =
       "아크 그리드 코어 배수(1 + 코어 계수/100, 코어 계열·포인트 구간·등급 상한, 고대 17P 이상 +1.0%p)의 비율을 공식 전투력에 곱했습니다.";
@@ -426,7 +430,7 @@ public class CombatPowerSimulationService {
     for (var planned : merged.values()) {
       String reason = roleReason != null ? roleReason : planned.reason();
       if (roleReason == null) {
-        var hold = heldReason(loadout, planned.change());
+        var hold = heldReason(loadout, braceletModel, planned);
         if (hold != null) reason = hold;
       }
       if (planned.effect() != null && reason == null) {
@@ -1155,9 +1159,17 @@ public class CombatPowerSimulationService {
     };
   }
 
-  /** 확인 전이라 계산하지 않는 변경의 이유(방어구 재련·상급 재련, 팔 보호구). 그 밖이면 null. */
-  private static String heldReason(CharacterLoadout loadout, Change change) {
+  /** 확인 전이라 계산하지 않는 변경의 이유(방어구 재련·상급 재련, 팔 보호구, 팔찌 힘·민첩·지능 줄). 그 밖이면 null. */
+  private static String heldReason(
+      CharacterLoadout loadout, CombatPowerBraceletModel.Model braceletModel, Planned planned) {
+    var change = planned.change();
     if (change.kind() == Kind.ARM_GUARD) return ARM_GUARD_UNCONFIRMED;
+    // 새 팔찌 옵션은 특수 옵션뿐이라, 주 스탯 경로는 지금 줄이 힘·민첩·지능일 때(바꾸거나 뺄 때)만 탄다.
+    if (planned.effect() instanceof BraceletEffect line
+        && braceletModel != null
+        && line.line() < braceletModel.lines().size()
+        && braceletModel.lines().get(line.line()).kind() == CombatPowerBraceletModel.Kind.MAIN_STAT)
+      return BRACELET_MAIN_STAT_UNCONFIRMED;
     if (change.kind() != Kind.EQUIPMENT_REFINE && change.kind() != Kind.EQUIPMENT_ADVANCED_REFINE)
       return null;
     return "무기".equals(equipment(loadout, change.index()).type()) ? null : ARMOR_REFINE_UNCONFIRMED;

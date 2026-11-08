@@ -180,8 +180,10 @@ class CombatPowerSimulationIntegrationTest {
   com.loakraken.character.application.CombatPowerSimulationService simulator;
 
   @Test
-  void 시뮬레이터_화면은_방어구_재련_상급_재련을_계산하지_않고_스펙업_경로는_그대로다() throws Exception {
-    // 사용자 결정 11-08(옵션 B): 방어구 재련·상급 재련은 기준이 하나뿐이라 시뮬레이터 화면에서만 UNSUPPORTED(기존 코드 MODEL_UNCONFIRMED).
+  void 방어구_재련_상급_재련은_시뮬레이터와_스펙업_경로_모두_계산하지_않는다() throws Exception {
+    // 옵션 B(11-08) 뒤 P0 핫픽스(11-09, #870): 방어구 재련·상급 재련은 같은 시점 실측에서 약 0.66배라 시뮬레이터 화면과 스펙업 경로 모두
+    // UNSUPPORTED(기존 코드
+    // MODEL_UNCONFIRMED).
     when(detailsPort.fetch(anyString()))
         .thenAnswer(invocation -> fetchedEquipment(invocation.getArgument(0)));
     assertThat(get("/api/v1/characters/search?characterName=" + encode("시뮬방어구")).statusCode())
@@ -211,7 +213,7 @@ class CombatPowerSimulationIntegrationTest {
     assertThat(contributions.at("/2/status").asText()).isEqualTo("OK");
     assertThat(contributions.at("/2/delta").decimalValue()).isEqualByComparingTo("-326.15");
     assertThat(data.path("unsupportedCount").asInt()).isEqualTo(2);
-    // 스펙업 목록·추천 순서가 부르는 경로(캐릭터 스냅숏 + 변경)는 방어구 재련 이유를 쓰지 않는다(재련 모델의 결과 그대로).
+    // 스펙업 목록·추천 순서가 부르는 경로(캐릭터 스냅숏 + 변경)도 같은 이유로 계산하지 않는다.
     var specUp =
         simulator.simulate(
             simulator.snapshot("시뮬방어구"),
@@ -232,7 +234,8 @@ class CombatPowerSimulationIntegrationTest {
                     null,
                     null,
                     null)));
-    assertThat(specUp.contributions().getFirst().basis()).isNotEqualTo(armorReason);
+    assertThat(specUp.contributions().getFirst().basis()).isEqualTo(armorReason);
+    assertThat(specUp.contributions().getFirst().delta()).isNull();
     // 무기 재련은 시뮬레이터 화면에서도 방어구 이유가 붙지 않는다.
     var weapon =
         simulate("시뮬방어구", "[{\"kind\": \"EQUIPMENT_REFINE\", \"index\": 0, \"refine\": 11}]");

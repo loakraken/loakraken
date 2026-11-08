@@ -61,11 +61,27 @@ class ValkeyMarketCache implements MarketCache {
         result ->
             result.source() == source
                 && result.search().equals(search)
-                && fresh(result.observedAt(), properties.pricesTtl()));
+                && fresh(result.observedAt(), pricesTtl(search)));
   }
 
   public void savePrices(MarketResult result) {
-    write(priceKey(result.source(), result.search()), result, properties.pricesTtl(), Kind.PRICES);
+    write(
+        priceKey(result.source(), result.search()),
+        result,
+        pricesTtl(result.search()),
+        Kind.PRICES);
+  }
+
+  /** 천천히 바뀌는 분류(아바타·장비 상자)는 가격 캐시를 길게 둔다(#11 공식 호출 예산). */
+  private Duration pricesTtl(MarketSearch search) {
+    return MarketTab.slowCategory(search.categoryCode())
+        ? properties.slowPricesTtl()
+        : properties.pricesTtl();
+  }
+
+  /** 천천히 바뀌는 탭은 탭 전체 스캔도 그 가격 캐시와 같은 시간 둔다. */
+  private Duration boardScanTtl(MarketTab tab) {
+    return tab.slowMoving() ? properties.slowPricesTtl() : properties.boardScanTtl();
   }
 
   public Optional<MarketOptionsResult> findOptions() {
@@ -141,11 +157,11 @@ class ValkeyMarketCache implements MarketCache {
         scan ->
             scan.tab() == tab
                 && Objects.equals(scan.tier(), tier)
-                && fresh(scan.observedAt(), properties.boardScanTtl()));
+                && fresh(scan.observedAt(), boardScanTtl(tab)));
   }
 
   public void saveBoardScan(MarketBoardScan scan) {
-    write(boardKey(scan.tab(), scan.tier()), scan, properties.boardScanTtl(), Kind.BOARD_SCAN);
+    write(boardKey(scan.tab(), scan.tier()), scan, boardScanTtl(scan.tab()), Kind.BOARD_SCAN);
   }
 
   /**

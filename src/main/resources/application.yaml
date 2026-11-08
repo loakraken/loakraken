@@ -90,6 +90,8 @@ market:
     options-ttl: ${MARKET_OPTIONS_CACHE_TTL:10m}
     history-ttl: ${MARKET_HISTORY_CACHE_TTL:10m}
     board-scan-ttl: ${MARKET_BOARD_SCAN_CACHE_TTL:3m}
+    # 천천히 바뀌는 탭(아바타·장비 상자)의 가격·탭 스캔 캐시(#11, PM 공식 호출 예산 승인).
+    slow-prices-ttl: ${MARKET_SLOW_PRICES_CACHE_TTL:5m}
   warmup:
     enabled: ${MARKET_WARMUP_ENABLED:false}
     interval: ${MARKET_WARMUP_INTERVAL:9m}

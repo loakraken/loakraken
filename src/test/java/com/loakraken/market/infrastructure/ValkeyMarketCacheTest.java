@@ -131,7 +131,8 @@ class ValkeyMarketCacheTest {
   void 천천히_바뀌는_분류는_가격과_스캔을_길게_캐시한다() {
     var avatar = search(20000);
     cache.savePrices(
-        new MarketResult(MarketSource.ACTIVE_LISTING, now, avatar, new MarketPage(1, 10, 0, List.of())));
+        new MarketResult(
+            MarketSource.ACTIVE_LISTING, now, avatar, new MarketPage(1, 10, 0, List.of())));
     verify(values).set(anyString(), anyString(), eq(Duration.ofMinutes(5)));
     var refining = search(50010);
     cache.savePrices(
@@ -152,19 +153,32 @@ class ValkeyMarketCacheTest {
         .thenReturn(
             mapper.writeValueAsString(
                 new MarketResult(
-                    MarketSource.ACTIVE_LISTING, old, search(20000), new MarketPage(1, 10, 0, List.of()))));
+                    MarketSource.ACTIVE_LISTING,
+                    old,
+                    search(20000),
+                    new MarketPage(1, 10, 0, List.of()))));
     assertThat(cache.findPrices(MarketSource.ACTIVE_LISTING, search(20000))).isPresent();
     when(values.get(anyString()))
         .thenReturn(
             mapper.writeValueAsString(
                 new MarketResult(
-                    MarketSource.ACTIVE_LISTING, old, search(50010), new MarketPage(1, 10, 0, List.of()))));
+                    MarketSource.ACTIVE_LISTING,
+                    old,
+                    search(50010),
+                    new MarketPage(1, 10, 0, List.of()))));
     assertThat(cache.findPrices(MarketSource.ACTIVE_LISTING, search(50010))).isEmpty();
   }
 
   private static MarketSearch search(int categoryCode) {
     return new MarketSearch(
-        categoryCode, null, null, null, null, 1, MarketSearch.Sort.GRADE, MarketSearch.SortCondition.ASC);
+        categoryCode,
+        null,
+        null,
+        null,
+        null,
+        1,
+        MarketSearch.Sort.GRADE,
+        MarketSearch.SortCondition.ASC);
   }
 
   @Test

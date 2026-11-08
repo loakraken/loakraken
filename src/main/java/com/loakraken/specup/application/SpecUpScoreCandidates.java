@@ -38,18 +38,13 @@ final class SpecUpScoreCandidates {
   private static final String GRADE_CODES = "LMH";
 
   /**
-   * 어빌리티 스톤 목표(세공 성공 수 조합 → 각인 레벨): 9·7 = Lv.3·Lv.2, 10·6 = Lv.4·Lv.1, 10·7 = Lv.4·Lv.2, 9·9 =
-   * Lv.3·Lv.3, 10·9 = Lv.4·Lv.3, 10·10 = Lv.4·Lv.4. 두 각인 중 어느 쪽에 높은 레벨이 붙을지는 점수가 더 오르는 쪽(비교 기준 B와
-   * 같음).
+   * 어빌리티 스톤 목표(세공 성공 수 조합 → 각인 레벨): 9·7 = Lv.3·Lv.2, 10·6 = Lv.4·Lv.1, 10·7 = Lv.4·Lv.2. 두 각인 중 어느
+   * 쪽에 높은 레벨이 붙을지는 점수가 더 오르는 쪽(비교 기준 B와 같음). 99·109·1010돌은 넣지 않는다(핫픽스 v0.3.9.2, PM 총괄 11-09): 기대
+   * 비용(키트 50골드 ÷ 성공 확률)이 99돌 약 1,543만, 109돌 약 3.6억, 1010돌 약 314억 골드라 현실적인 목표가 아니고, 추천 순서 전투력 우선이 Δ만
+   * 보고 1010돌을 첫 단계로 골라 누적 비용이 314억이 됐다. 목록·추천 순서(두 정렬)·목표 경로 모두 이 목록을 쓴다.
    */
   static final List<int[]> STONE_TARGETS =
-      List.of(
-          new int[] {9, 7, 3, 2},
-          new int[] {10, 6, 4, 1},
-          new int[] {10, 7, 4, 2},
-          new int[] {9, 9, 3, 3},
-          new int[] {10, 9, 4, 3},
-          new int[] {10, 10, 4, 4});
+      List.of(new int[] {9, 7, 3, 2}, new int[] {10, 6, 4, 1}, new int[] {10, 7, 4, 2});
 
   /** 깨달음 카르마 지금 레벨 + 1 … 30. 입력에 레벨이 없으면 null. */
   static List<SpecUpService.Planned> karma(JsonNode input) {

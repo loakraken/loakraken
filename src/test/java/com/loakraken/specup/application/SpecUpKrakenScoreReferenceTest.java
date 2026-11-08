@@ -291,32 +291,28 @@ class SpecUpKrakenScoreReferenceTest {
 
   @Test
   void 후보_목록_모양이_레퍼런스와_같다() throws Exception {
-    // 기준 캐릭터 1: 연마 19줄(목걸이 3·귀걸이 5+5·반지 3+3), 스톤 6줄(배치는 점수가 더 오르는 쪽), 카르마 1줄(29 → 30).
+    // 기준 캐릭터 1: 연마 19줄(목걸이 3·귀걸이 5+5·반지 3+3), 스톤 3줄(배치는 점수가 더 오르는 쪽), 카르마 1줄(29 → 30). 비교 기준은
+    // 99·109·1010돌도
+    // 내지만 기대 비용이 비현실적이라 넣지 않는다(핫픽스 v0.3.9.2).
     var l01 = context("l01");
     var polish = SpecUpScoreCandidates.polish(l01.input(), loadout("l01"), polishValues());
     assertThat(polish).hasSize(19);
     var stone = SpecUpScoreCandidates.stone(scorer(), l01, loadout("l01"));
     assertThat(stone)
         .extracting(SpecUpService.Planned::id)
-        .containsExactly(
-            "ABILITY_STONE:2:3",
-            "ABILITY_STONE:1:4",
-            "ABILITY_STONE:2:4",
-            "ABILITY_STONE:3:3",
-            "ABILITY_STONE:3:4",
-            "ABILITY_STONE:4:4");
+        .containsExactly("ABILITY_STONE:2:3", "ABILITY_STONE:1:4", "ABILITY_STONE:2:4");
     assertThat(stone.getFirst().to()).isEqualTo("97돌 아드레날린 Lv.2 · 원한 Lv.3");
     assertThat(SpecUpScoreCandidates.karma(l01.input()))
         .extracting(SpecUpService.Planned::id)
         .containsExactly("KARMA_LEVEL:30");
-    // 기준 캐릭터 2: 연마는 부위마다 한 줄(나머지 옵션이 모두 상), 스톤은 점수가 오르는 4줄(107·99·109·1010), 카르마는 이미 30.
+    // 기준 캐릭터 2: 연마는 부위마다 한 줄(나머지 옵션이 모두 상), 스톤은 점수가 오르는 줄 가운데 107돌 하나(99·109·1010돌은 넣지 않음), 카르마는
+    // 이미 30.
     var l05 = context("l05");
     assertThat(SpecUpScoreCandidates.polish(l05.input(), loadout("l05"), polishValues()))
         .hasSize(5);
     assertThat(SpecUpScoreCandidates.stone(scorer(), l05, loadout("l05")))
         .extracting(SpecUpService.Planned::id)
-        .containsExactly(
-            "ABILITY_STONE:4:2", "ABILITY_STONE:3:3", "ABILITY_STONE:4:3", "ABILITY_STONE:4:4");
+        .containsExactly("ABILITY_STONE:4:2");
     assertThat(SpecUpScoreCandidates.karma(l05.input())).isEmpty();
   }
 

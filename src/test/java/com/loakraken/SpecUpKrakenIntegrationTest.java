@@ -87,13 +87,13 @@ class SpecUpKrakenIntegrationTest {
         Duration.ofMinutes(5));
     search();
     var candidates = guide("&sort=KRAKEN&limit=200").path("candidates");
-    long previous = 0;
+    // 핫픽스 v0.3.9.2(PM 총괄 11-09): 완갑 줄은 전투력·Δ크라켄 점수 모두 비교 기준 대조 전이라 숫자 없이 UNSUPPORTED(크라켄 정렬에서도 순위에
+    // 넣지 않음).
     for (int level = 15; level <= 25; level++) {
       var row = find(candidates, "EQUIPMENT_REFINE:16:" + level);
-      assertThat(row.at("/cost/code").asText()).as("+" + level).isEqualTo("ARM_GUARD_EXPECTED");
-      long amount = row.at("/cost/amount").asLong();
-      assertThat(amount).as("+" + level + " 누적").isGreaterThan(previous);
-      previous = amount;
+      assertThat(row.path("status").asText()).as("+" + level).isEqualTo("UNSUPPORTED");
+      assertThat(row.path("deltaKrakenScore").isNull()).as("+" + level).isTrue();
+      assertThat(row.path("deltaCombatPower").isNull()).as("+" + level).isTrue();
     }
     // +14 → +15 한 단계 = 회차별 최적 풀이의 기대 비용(1골드 안, 목록은 기대 수량 × 단가를 더해 올림).
     var rules =
@@ -112,8 +112,7 @@ class SpecUpKrakenIntegrationTest {
     double one =
         com.loakraken.refining.domain.RefiningOptimal.calculate(rules.stage(15), prices)
             .expectedGold();
-    assertThat((double) find(candidates, "EQUIPMENT_REFINE:16:15").at("/cost/amount").asLong())
-        .isCloseTo(one, org.assertj.core.data.Offset.offset(1.0));
+    assertThat(one).isPositive();
     // 줄 상세: 재료·숨결 내역, 내역 합 = 목록 비용.
     var detail =
         get(
@@ -213,17 +212,20 @@ class SpecUpKrakenIntegrationTest {
         Map.of(
             "ABILITY_STONE:2:3", "2.47",
             "ABILITY_STONE:1:4", "2.47",
-            "ABILITY_STONE:2:4", "1.94",
-            "ABILITY_STONE:3:3", "0.32",
-            "ABILITY_STONE:3:4", "0.02",
-            "ABILITY_STONE:4:4", "0.00");
+            "ABILITY_STONE:2:4", "1.94");
     stones.forEach(
         (id, per100k) ->
             assertThat(find(candidates, id).path("krakenScorePer100kGold").decimalValue())
                 .as(id)
                 .isEqualByComparingTo(per100k));
-    assertThat(find(candidates, "ABILITY_STONE:4:4").at("/cost/amount").asLong())
-        .isEqualTo(31_446_540_881L); // 6.29억개 × 50
+    // 핫픽스 v0.3.9.2: 99·109·1010돌(기대 비용 약 1,543만·3.6억·314억)은 후보로 내지 않는다. 남은 스톤 비용은 107돌 약 131만이 가장
+    // 크다.
+    for (var candidate : candidates) {
+      var id = candidate.path("id").asText();
+      if (!id.startsWith("ABILITY_STONE:")) continue;
+      assertThat(id).isNotIn("ABILITY_STONE:3:3", "ABILITY_STONE:3:4", "ABILITY_STONE:4:4");
+      assertThat(candidate.at("/cost/amount").asLong()).as(id).isLessThanOrEqualTo(2_000_000L);
+    }
     var karma = find(candidates, "KARMA_LEVEL:30");
     assertThat(karma.path("deltaKrakenScore").decimalValue()).isEqualByComparingTo("1.84");
     // 카르마 29 → 30: 기대 시도 × 900 = 41.32만, 10만 골드당 0.44(B 화면 값).
@@ -232,12 +234,15 @@ class SpecUpKrakenIntegrationTest {
     assertThat(karma.path("krakenScorePer100kGold").decimalValue()).isEqualByComparingTo("0.44");
     var armGuard = find(candidates, "EQUIPMENT_REFINE:16:15");
     assertThat(armGuard.path("kind").asText()).isEqualTo("EQUIPMENT_REFINE");
-    assertThat(armGuard.path("deltaKrakenScore").decimalValue()).isEqualByComparingTo("37.02");
+    // 핫픽스 v0.3.9.2(PM 총괄 11-09): 완갑 줄은 Δ크라켄 점수도 비운다(전에는 37.02, 비교 기준 대조 전). 방어구 재련 Δ크라켄은 그대로.
+    assertThat(armGuard.path("deltaKrakenScore").isNull()).isTrue();
+    assertThat(armGuard.path("status").asText()).isEqualTo("UNSUPPORTED");
     assertThat(armGuard.at("/change/kind").asText()).isEqualTo("ARM_GUARD");
     assertThat(armGuard.at("/change/level").asInt()).isEqualTo(15);
     assertThat(armGuard.at("/change/grade").asText()).isEqualTo("전설");
-    // 재련 재료 시세가 아직 없으면 완갑 비용도 PENDING(시세가 있을 때는 아래 완갑 비용 테스트).
-    assertThat(armGuard.at("/cost/code").asText()).isEqualTo("PRICE_PENDING");
+    // 순위에 넣지 않는 UNSUPPORTED 줄이라 비용도 보이지 않는다.
+    assertThat(armGuard.at("/cost/amount").isMissingNode() || armGuard.at("/cost/amount").isNull())
+        .isTrue();
     // 여러 단계 줄(계산 검증 10-25: B는 지금 단계에서 목표 +25까지 줄을 낸다): +14 전설 → +16~20 유물, +21~25 고대.
     for (int level = 15; level <= 25; level++) {
       var row = find(candidates, "EQUIPMENT_REFINE:16:" + level);
@@ -246,7 +251,7 @@ class SpecUpKrakenIntegrationTest {
       assertThat(row.at("/change/grade").asText())
           .as("+" + level)
           .isEqualTo(level <= 15 ? "전설" : level <= 20 ? "유물" : "고대");
-      assertThat(row.path("deltaKrakenScore").isNull()).as("+" + level).isFalse();
+      assertThat(row.path("deltaKrakenScore").isNull()).as("+" + level).isTrue();
     }
     // 한 줄 알림은 계산 줄로 바뀐 종류만 빠진다.
     for (var candidate : candidates)

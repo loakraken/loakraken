@@ -238,6 +238,21 @@ class SpecUpIntegrationTest {
     // 18.26 × 10000 / 60000 = 3.04
     assertThat(engraving.path("combatPowerPer10kGold").decimalValue()).isEqualByComparingTo("3.04");
     assertThat(mapper.readTree(response.body()).at("/data/pricesAt").isNull()).isFalse();
+    // 추천 순서(목표 경로)의 각인 단계도 같은 각인서 아이콘이다(사용자 제보 11-08: 경로만 null이었다).
+    var path =
+        mapper
+            .readTree(get("/api/v1/characters/spec-up/path?characterName=" + encode("스펙각인")).body())
+            .path("data");
+    var engravingSteps = new java.util.ArrayList<JsonNode>();
+    for (var group : List.of(path.path("steps"), path.path("unpriced")))
+      for (var step : group)
+        if (step.path("candidateId").asText().startsWith("ENGRAVING_LEVEL:"))
+          engravingSteps.add(step);
+    assertThat(engravingSteps).isNotEmpty();
+    for (var step : engravingSteps)
+      assertThat(step.path("icon").asText())
+          .as(step.path("candidateId").asText())
+          .isEqualTo("https://cdn.example/use_9_25.png");
     redis.delete("market:v1:relic-books");
   }
 

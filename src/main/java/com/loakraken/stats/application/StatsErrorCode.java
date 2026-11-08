@@ -12,6 +12,8 @@ public enum StatsErrorCode implements ErrorCode {
       HttpStatus.NOT_FOUND, "아직 LOAKraken에 기록되지 않은 캐릭터입니다. 캐릭터를 먼저 검색해 주세요."),
   STATS_GUILD_NOT_OBSERVED(
       HttpStatus.NOT_FOUND, "아직 LOAKraken에 기록된 길드원이 없는 길드입니다. 길드원 캐릭터를 먼저 검색해 주세요."),
+  /** 칭호 통계 날짜 비교: 그 날짜(·서버)의 일별 스냅숏이 없다. */
+  TITLE_SNAPSHOT_NOT_FOUND(HttpStatus.NOT_FOUND, "그 날짜의 칭호 통계 기록이 없습니다."),
   STATS_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "통계를 조회할 수 없습니다.");
 
   private final HttpStatus httpStatus;

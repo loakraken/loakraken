@@ -840,7 +840,8 @@ public class SpecUpGoalService {
               engraving.name() + " 각인",
               engraving.level() + "레벨",
               next + "레벨",
-              null,
+              // 추천 순서 줄도 스펙업 후보와 같은 유물 각인서 공식 아이콘(시세 캐시, 공식 호출 없음).
+              books.icon(engraving.name()).orElse(null),
               engraving.grade(),
               null,
               new Change(

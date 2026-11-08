@@ -2,6 +2,7 @@ package com.loakraken;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.loakraken.stats.application.TitleSnapshotService;
 import java.math.BigDecimal;
 import java.net.URI;
 import java.net.URLEncoder;
@@ -11,7 +12,9 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.ZoneOffset;
+import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -39,6 +42,7 @@ class TitleEquipIntegrationTest {
   @LocalServerPort int port;
   @Autowired JdbcClient jdbc;
   @Autowired StringRedisTemplate redis;
+  @Autowired TitleSnapshotService snapshots;
   private final JsonMapper mapper = new JsonMapper();
 
   @BeforeEach
@@ -49,6 +53,8 @@ class TitleEquipIntegrationTest {
         .param("b", BIG_SERVER)
         .update();
     jdbc.sql("DELETE FROM public_exclusion WHERE character_name LIKE '칭호%'").update();
+    jdbc.sql("DELETE FROM title_equip_daily").update();
+    jdbc.sql("DELETE FROM title_equip_daily_meta").update();
     var keys = redis.keys("stats:v1:*");
     if (keys != null && !keys.isEmpty()) redis.delete(keys);
   }
@@ -85,6 +91,15 @@ class TitleEquipIntegrationTest {
     assertThat(data.at("/titles/0/equippedRosters").asLong()).isEqualTo(1);
     assertThat(data.at("/titles/0/equippedPercent").decimalValue()).isEqualByComparingTo("33.33");
     assertThat(data.at("/titles/1/title").asText()).isEqualTo("혼돈의 지배자");
+    // 칭호 데이터 표의 등급·획득 조건(표에 있는 칭호), 표에 없는 칭호는 null. 변형이 아니면 parentTitle null.
+    assertThat(data.at("/titles/0/grade").asText()).isEqualTo("희귀");
+    assertThat(data.at("/titles/0/condition").asText()).isEqualTo("카멘을 처치한다");
+    assertThat(data.at("/titles/0/parentTitle").isNull()).isTrue();
+    assertThat(data.at("/titles/1/grade").isNull()).isTrue();
+    assertThat(data.at("/titles/1/condition").isNull()).isTrue();
+    assertThat(data.at("/titles/1/parentTitle").isNull()).isTrue();
+    // 표의 줄별 출처는 응답에 내지 않는다.
+    assertThat(response.body()).doesNotContain("내부 기록").doesNotContain("News/Notice");
     assertThat(response.body()).doesNotContain("칭호제외").doesNotContain("보유율");
     SiteNames.assertAbsent(response.body());
 
@@ -161,6 +176,24 @@ class TitleEquipIntegrationTest {
     assertThat(a1).isNotNull();
   }
 
+  /** 칭호 표에 없는 칭호는 인스턴스당 한 번 로그로 남는다(표 철자 차이를 찾게), 표에 있는 칭호는 남지 않는다. */
+  @Test
+  @org.junit.jupiter.api.extension.ExtendWith(
+      org.springframework.boot.test.system.OutputCaptureExtension.class)
+  void 칭호_표에_없는_칭호는_한_번만_로그로_남긴다(org.springframework.boot.test.system.CapturedOutput output)
+      throws Exception {
+    character(SERVER, "칭호표밖", UUID.randomUUID(), "표에 없는 시험 칭호", Instant.now());
+    character(SERVER, "칭호표안", UUID.randomUUID(), "빛을 꺼트리는 자", Instant.now());
+    data(get("/api/v1/titles/equipped?server=" + encode(SERVER)));
+    var keys = redis.keys("stats:v1:*");
+    if (keys != null && !keys.isEmpty()) redis.delete(keys);
+    data(get("/api/v1/titles/equipped?server=" + encode(SERVER)));
+    var miss = "event=title_catalog_miss title=표에 없는 시험 칭호";
+    assertThat(output.getOut().split(java.util.regex.Pattern.quote(miss), -1).length - 1)
+        .isEqualTo(1);
+    assertThat(output.getOut()).doesNotContain("event=title_catalog_miss title=빛을 꺼트리는 자");
+  }
+
   @Test
   void 관측_원정대가_없으면_빈_목록이다() throws Exception {
     var response = get("/api/v1/titles/equipped?server=" + encode("칭호없음서버"));
@@ -169,6 +202,69 @@ class TitleEquipIntegrationTest {
     var data = mapper.readTree(response.body()).path("data");
     assertThat(data.at("/meta/population").asLong()).isZero();
     assertThat(data.path("titles").size()).isZero();
+  }
+
+  /**
+   * 일별 스냅숏(칭호 통계 날짜 비교, 계약 v1.2): 만든 날짜로 전체·서버별을 읽고 지금 값과 같은 모양이다. 없는 날짜는 404, date와 activeDays(30
+   * 밖)는 400, 365일보다 오래된 날짜는 만들 때 지운다.
+   */
+  @Test
+  void 일별_스냅숏은_날짜와_서버로_읽고_없는_날짜는_404다() throws Exception {
+    var a = UUID.randomUUID();
+    character(SERVER, "칭호가", a, "빛을 꺼트리는 자", Instant.now());
+    character(SERVER, "칭호나", UUID.randomUUID(), "혼돈의 지배자", Instant.now());
+    character(SERVER, "칭호다", UUID.randomUUID(), null, Instant.now());
+    var old = LocalDate.now(TitleSnapshotService.KST).minusDays(TitleSnapshotService.KEEP_DAYS + 1);
+    jdbc.sql(
+            "INSERT INTO title_equip_daily_meta (snapshot_date, server_key, population, built_at)"
+                + " VALUES (:d, '', 1, now())")
+        .param("d", old)
+        .update();
+    var built = snapshots.build();
+    assertThat(built.keys()).isGreaterThanOrEqualTo(2);
+    // 전체·이 서버에 칭호 2줄씩은 있다.
+    assertThat(built.rows()).isGreaterThanOrEqualTo(4);
+    assertThat(snapshots.builtToday()).isTrue();
+    var today = LocalDate.now(TitleSnapshotService.KST);
+
+    var live = data(get("/api/v1/titles/equipped?server=" + encode(SERVER)));
+    assertThat(live.path("snapshotDate").isNull()).isTrue();
+    var day = data(get("/api/v1/titles/equipped?server=" + encode(SERVER) + "&date=" + today));
+    assertThat(day.path("snapshotDate").asText()).isEqualTo(today.toString());
+    assertThat(day.at("/meta/population").asLong()).isEqualTo(3);
+    assertThat(day.path("titles").size()).isEqualTo(2);
+    // 지금 값과 같은 숫자·순서(같은 계산을 저장).
+    for (int i = 0; i < 2; i++)
+      for (var field :
+          List.of("title", "equippedRosters", "equippedPercent", "observedRosters", "grade"))
+        assertThat(day.at("/titles/" + i + "/" + field).asText())
+            .as(i + " " + field)
+            .isEqualTo(live.at("/titles/" + i + "/" + field).asText());
+    // 전체(server 없음)도 같은 날짜에 있다. title로 거른다.
+    var all = data(get("/api/v1/titles/equipped?date=" + today + "&title=" + encode("빛을 꺼트리는 자")));
+    assertThat(all.path("snapshotDate").asText()).isEqualTo(today.toString());
+    assertThat(all.path("titles").size()).isEqualTo(1);
+    // 날짜 목록: 전체·서버별 모두 오늘 하나, 365일보다 오래된 날짜는 지웠다.
+    assertThat(data(get("/api/v1/titles/equipped/dates")).path("dates").toString())
+        .isEqualTo("[\"" + today + "\"]");
+    assertThat(
+            data(get("/api/v1/titles/equipped/dates?server=" + encode(SERVER)))
+                .path("dates")
+                .toString())
+        .isEqualTo("[\"" + today + "\"]");
+    // 없는 날짜·없는 서버 = 404, date + activeDays(30 밖) = 400, 30은 된다.
+    var missing = get("/api/v1/titles/equipped?date=" + today.minusDays(1));
+    assertThat(missing.statusCode()).isEqualTo(404);
+    assertThat(mapper.readTree(missing.body()).path("code").asText())
+        .isEqualTo("TITLE_SNAPSHOT_NOT_FOUND");
+    assertThat(
+            get("/api/v1/titles/equipped?server=" + encode("없는서버") + "&date=" + today).statusCode())
+        .isEqualTo(404);
+    assertThat(get("/api/v1/titles/equipped?activeDays=7&date=" + today).statusCode())
+        .isEqualTo(400);
+    assertThat(get("/api/v1/titles/equipped?activeDays=30&date=" + today).statusCode())
+        .isEqualTo(200);
+    assertThat(get("/api/v1/titles/equipped?date=2026-13-01").statusCode()).isEqualTo(400);
   }
 
   private void title(UUID id, String title, Instant first, Instant last) {

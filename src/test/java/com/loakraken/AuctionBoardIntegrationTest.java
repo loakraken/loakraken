@@ -156,7 +156,8 @@ class AuctionBoardIntegrationTest {
     assertThat(necklace.path("slot").asText()).isEqualTo("NECKLACE");
     assertThat(necklace.at("/options/0/shortName").asText()).isEqualTo("적주피");
     assertThat(necklace.at("/options/0/values/2").decimalValue()).isEqualByComparingTo("2.00");
-    assertThat(necklace.path("cells").size()).isEqualTo(8);
+    assertThat(necklace.path("cells").size()).isEqualTo(6);
+    assertThat(necklace.at("/cells/5/label").asText()).isEqualTo("하상");
     assertThat(necklace.at("/cells/1/label").asText()).isEqualTo("상중");
     assertThat(necklace.at("/cells/1/levels/1").asText()).isEqualTo("MID");
     ApiContractFixture.write(
@@ -176,6 +177,10 @@ class AuctionBoardIntegrationTest {
     ApiContractFixture.write(
         "auction-accessory-listings.json",
         get("/api/v1/markets/auctions/accessories/listings?slot=NECKLACE&levels=HIGH,HIGH").body());
+    // 표에서 뺀 중하 조합도 매물 목록으로는 그대로 검색한다(예전 링크가 400이 되지 않게).
+    var midLow = get("/api/v1/markets/auctions/accessories/listings?slot=NECKLACE&levels=MID,LOW");
+    assertThat(midLow.statusCode()).as(midLow.body()).isEqualTo(200);
+    assertThat(mapper.readTree(midLow.body()).at("/data/totalCount").asLong()).isEqualTo(25);
   }
 
   @Test
@@ -418,7 +423,7 @@ class AuctionBoardIntegrationTest {
 
   @Test
   void 시세표_칸_채우기도_요청_클라이언트의_공식_호출_한도에_매긴다() throws Exception {
-    // 가짜 검색도 실제 클라이언트처럼 호출마다 공유 게이트를 지난다. 딜러 장신구 표는 24칸이고 클라이언트 공식 한도는 분당 20이다.
+    // 가짜 검색도 실제 클라이언트처럼 호출마다 공유 게이트를 지난다. 딜러 장신구 표는 품질마다 18칸이고 클라이언트 공식 한도는 분당 20이다.
     when(search.search(any()))
         .thenAnswer(
             invocation -> {
@@ -429,22 +434,31 @@ class AuctionBoardIntegrationTest {
                 gate.release();
               }
             });
-    // 요청마다 최대 5칸: 4번의 요청이 20칸(클라이언트 한도 20)을 채우고, 5번째 요청의 첫 호출이 한도에 걸린다.
+    // 요청마다 최대 5칸: 품질 70 표(보이는 18칸 먼저, 표에서 뺀 중하·하중 6칸은 그 뒤)를 4번의 요청이 20회 채워 클라이언트 한도 20에 닿고,
+    // 품질 90 표 요청의 첫 호출이 한도에 걸린다.
     HttpResponse<String> response = null;
-    for (int visit = 1; visit <= 5; visit++) {
+    for (int visit = 1; visit <= 4; visit++) {
       response =
           get("/api/v1/markets/auctions/accessories?grade=ANCIENT&role=DEALER", "203.0.113.40");
       assertThat(response.statusCode()).isEqualTo(200);
     }
-    var cells = new ArrayList<JsonNode>();
-    for (var slot : mapper.readTree(response.body()).at("/data/slots"))
-      for (var cell : slot.path("cells")) cells.add(cell);
-    assertThat(cells).hasSize(24);
-    assertThat(cells.stream().filter(cell -> cell.path("status").asText().equals("READY")))
-        .hasSize(20);
-    assertThat(cells.stream().filter(cell -> cell.path("status").asText().equals("PENDING")))
-        .hasSize(4);
+    assertThat(statuses(response)).containsOnly("READY").hasSize(18);
+    response =
+        get(
+            "/api/v1/markets/auctions/accessories?grade=ANCIENT&role=DEALER&minQuality=90",
+            "203.0.113.40");
+    assertThat(response.statusCode()).isEqualTo(200);
+    var statuses = statuses(response);
+    assertThat(statuses).hasSize(18);
+    assertThat(statuses).containsOnly("PENDING");
     verify(search, times(21)).search(any());
+  }
+
+  private List<String> statuses(HttpResponse<String> response) throws Exception {
+    var statuses = new ArrayList<String>();
+    for (var slot : mapper.readTree(response.body()).at("/data/slots"))
+      for (var cell : slot.path("cells")) statuses.add(cell.path("status").asText());
+    return statuses;
   }
 
   @Test

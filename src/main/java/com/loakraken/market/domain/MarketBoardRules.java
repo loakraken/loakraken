@@ -19,11 +19,27 @@ public final class MarketBoardRules {
     HIGH,
     LOW,
     RISE,
-    FALL;
+    FALL,
+    VOLUME;
 
     public boolean scansWholeTab() {
-      return this == RISE || this == FALL;
+      return this == RISE || this == FALL || this == VOLUME;
     }
+  }
+
+  /** VOLUME: 최근 완료일 7일 거래량 내림차순, 같으면 전일 거래량 내림차순, 같으면 스캔 순서(공식 등급순). 거래량이 아직 없는 품목은 맨 뒤(스캔 순서). */
+  public static List<MarketPrice> sortByVolume(
+      List<MarketPrice> items, java.util.Map<Long, MarketVolume> volumes) {
+    var order = new java.util.HashMap<Long, Integer>();
+    for (int i = 0; i < items.size(); i++) order.putIfAbsent(items.get(i).id(), i);
+    Comparator<MarketPrice> byVolume =
+        Comparator.comparing(
+            (MarketPrice item) -> volumes.get(item.id()),
+            Comparator.nullsLast(
+                Comparator.comparingLong(MarketVolume::sevenDay)
+                    .reversed()
+                    .thenComparing(Comparator.comparingLong(MarketVolume::yesterday).reversed())));
+    return items.stream().sorted(byVolume.thenComparingInt(item -> order.get(item.id()))).toList();
   }
 
   /** 기준 가격이 없거나 0이면, 또는 현재 최저가가 없으면 null이다. */
@@ -68,7 +84,7 @@ public final class MarketBoardRules {
 
   /** RISE는 changeDay 내림차순, FALL은 오름차순. changeDay가 null인 품목은 맨 뒤, 같으면 이름·ID 순. */
   public static List<MarketPrice> sortByChange(List<MarketPrice> items, Sort sort) {
-    if (!sort.scansWholeTab()) throw new IllegalArgumentException("등락 정렬이 아닙니다.");
+    if (sort != Sort.RISE && sort != Sort.FALL) throw new IllegalArgumentException("등락 정렬이 아닙니다.");
     Comparator<BigDecimal> byValue =
         sort == Sort.RISE ? Comparator.reverseOrder() : Comparator.naturalOrder();
     return items.stream()

@@ -1,6 +1,7 @@
 package com.loakraken.market.presentation;
 
 import com.loakraken.common.api.NullableResponse;
+import com.loakraken.common.api.OptionalResponse;
 import com.loakraken.market.application.MarketBoard;
 import com.loakraken.market.application.MarketBoardService;
 import com.loakraken.market.domain.MarketBoardRules;
@@ -24,9 +25,10 @@ public record MarketBoardResponse(
     int pageSize,
     @Schema(description = "보드에 쓴 공식 페이지 중 가장 이른 수집 시각(UTC)") Instant observedAt,
     @Schema(description = "공식 검색의 탭 전체 품목 수. q(이름 검색)가 있으면 찾은 품목 수") int totalItems,
-    @Schema(description = "정렬에 사용한 품목 수. rise/fall과 q 검색은 스캔 품목 수, 그 외는 이 페이지 품목 수")
+    @Schema(description = "정렬에 사용한 품목 수. rise/fall/volume과 q 검색은 스캔 품목 수, 그 외는 이 페이지 품목 수")
         int scannedItems,
-    @Schema(description = "rise/fall·q 검색이 탭 전체를 스캔했는지. 스캔 상한(10페이지)을 넘으면 false") boolean complete,
+    @Schema(description = "rise/fall/volume·q 검색이 탭 전체를 스캔했는지. 스캔 상한(10페이지)을 넘으면 false")
+        boolean complete,
     List<MarketBoardItemResponse> items) {
 
   static MarketBoardResponse from(MarketBoard board) {
@@ -62,7 +64,19 @@ public record MarketBoardResponse(
           BigDecimal changeWeek,
       @Schema(description = "최근 완료일 최대 7일 평균가(오래된 날부터). 이력 캐시가 없으면 빈 배열")
           List<MarketSparkPointResponse> spark7,
-      @Schema(description = "이력 캐시로 changeWeek·spark7을 채웠는지") boolean historyAvailable) {
+      @Schema(description = "이력 캐시로 changeWeek·spark7을 채웠는지") boolean historyAvailable,
+      @Schema(description = "최근 완료일(volumeDate) 하루 거래량. 거래량을 아직 모으지 못했으면 null")
+          @NullableResponse
+          @OptionalResponse
+          Long tradesYesterday,
+      @Schema(description = "최근 완료일 최대 7일 거래량 합. 거래량을 아직 모으지 못했으면 null")
+          @NullableResponse
+          @OptionalResponse
+          Long trades7d,
+      @Schema(description = "tradesYesterday의 날짜(KST, 가장 최근 완료일). 거래량이 없으면 null")
+          @NullableResponse
+          @OptionalResponse
+          LocalDate volumeDate) {
     static MarketBoardItemResponse from(MarketBoard.Row row) {
       var price = row.price();
       return new MarketBoardItemResponse(
@@ -80,7 +94,10 @@ public record MarketBoardResponse(
           row.spark7().stream()
               .map(point -> new MarketSparkPointResponse(point.date(), point.averagePrice()))
               .toList(),
-          row.historyAvailable());
+          row.historyAvailable(),
+          row.volume() == null ? null : row.volume().yesterday(),
+          row.volume() == null ? null : row.volume().sevenDay(),
+          row.volume() == null ? null : row.volume().volumeDate());
     }
   }
 

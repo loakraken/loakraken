@@ -55,7 +55,17 @@ public class MarketMetrics {
     RELIC_BOOKS,
     REFINING_MATERIALS,
     LIFE_MATERIALS,
-    AUCTION_SEARCH
+    AUCTION_SEARCH,
+    VOLUME
+  }
+
+  /**
+   * 거래량 채우기 작업(시세 거래량 정렬) 사건: filled(공식 상세 1번으로 한 품목 채움), not_found(상세에 맞는 묶음 없음),
+   * official_failed(공식 호출 실패·한도), minute_cap(분당 상한), daily_cap(하루 상한), gate_reject(공유 예산 여유 없음). 값은
+   * 몇 가지로 고정이다.
+   */
+  public void volumeWarmup(String event) {
+    registry.counter("loakraken.market.volume_warmup", "event", event).increment();
   }
 
   public enum Outcome {

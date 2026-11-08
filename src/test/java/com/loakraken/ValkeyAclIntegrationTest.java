@@ -235,7 +235,12 @@ class ValkeyAclIntegrationTest {
             List.of("DEL", "k"),
             List.of("EXISTS", "k"),
             List.of("INCR", "k"),
+            List.of("INCRBY", "k", "10"),
             List.of("DECR", "k"),
+            // 해시(시세 거래량 지도: 품목 ID → 거래량).
+            List.of("HMGET", "h", "a", "b"),
+            List.of("HMSET", "h", "a", "1"),
+            List.of("HSET", "h", "a", "1"),
             List.of("EXPIRE", "k", "10"),
             List.of("PEXPIRE", "k", "10"),
             List.of("PERSIST", "k"),

@@ -13,6 +13,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
   RefiningMaterialWarmupProperties.class,
   GemWarmupProperties.class,
   LifeMaterialWarmupProperties.class,
+  MarketVolumeWarmupProperties.class,
   com.loakraken.market.application.AccessorySearchPolicy.class,
   com.loakraken.market.application.GemFilterPolicy.class
 })

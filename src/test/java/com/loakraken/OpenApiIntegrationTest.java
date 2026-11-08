@@ -201,6 +201,9 @@ class OpenApiIntegrationTest {
                   .asText())
           .as(field)
           .isEqualTo("null");
+    // 쓰지 않던 각인 그림 목록은 없앴다(#836).
+    assertThat(document.at("/paths/~1api~1v1~1markets~1engraving-icons").isMissingNode()).isTrue();
+    assertThat(document.at("/components/schemas/EngravingIconsResponse").isMissingNode()).isTrue();
     // 인기 길드(M21): 새 경로, 숫자 없이 순위·서버·길드 이름만(모두 필수).
     assertThat(document.at("/paths/~1api~1v1~1guilds~1popular/get").isMissingNode()).isFalse();
     assertThat(document.at("/components/schemas/GuildPopularResponse/required").toString())
@@ -488,6 +491,27 @@ class OpenApiIntegrationTest {
         .contains("observedAt", "lastConfirmedAt", "itemLevel", "combatPower");
     assertThat(document.at("/components/schemas/CharacterHistoryResponse/required").toString())
         .contains("points", "titles");
+    // 칭호 통계 날짜 비교: snapshotDate는 api 배포 전까지 선택 필드, 날짜 목록 경로와 date 쿼리가 있다.
+    assertThat(document.at("/components/schemas/TitleEquipResponse/required").toString())
+        .contains("titles")
+        .doesNotContain("snapshotDate");
+    assertThat(
+            document
+                .at("/components/schemas/TitleEquipResponse/properties/snapshotDate")
+                .isMissingNode())
+        .isFalse();
+    assertThat(document.at("/paths/~1api~1v1~1titles~1equipped~1dates/get").isMissingNode())
+        .isFalse();
+    assertThat(document.at("/paths/~1api~1v1~1titles~1equipped/get/parameters").toString())
+        .contains("\"date\"");
+    // 칭호 등급·상위 칭호·획득 조건: api 배포 전까지 선택 필드, 등급은 닫힌 enum이 아닌 문자열(새 등급이 깨지는 변경이 되지 않게).
+    var equippedTitle = document.at("/components/schemas/EquippedTitleResponse");
+    assertThat(equippedTitle.path("required").toString())
+        .contains("sampleReady")
+        .doesNotContain("grade", "parentTitle", "condition");
+    for (var field : List.of("grade", "parentTitle", "condition"))
+      assertThat(equippedTitle.at("/properties/" + field).isMissingNode()).as(field).isFalse();
+    assertThat(equippedTitle.at("/properties/grade").toString()).doesNotContain("\"enum\"");
     var siblings = document.at("/paths/~1api~1v1~1characters~1siblings/get");
     assertThat(siblings.path("responses").has("404")).isTrue();
     assertThat(document.at("/components/schemas/CharacterSiblingsResponse/required").toString())
@@ -761,7 +785,21 @@ class OpenApiIntegrationTest {
     var document = JsonMapper.builder().build().readTree(request("/v3/api-docs").body());
     var board = document.path("paths").path("/api/v1/markets/board").path("get");
     assertThat(board.path("parameters").toString())
-        .contains("tab", "sort", "default|high|low|rise|fall");
+        .contains("tab", "sort", "default|high|low|rise|fall|volume");
+    // 거래량 칸은 api가 먼저 배포되기 전까지 optional(required 아님)이고 null을 허용한다.
+    for (var field : List.of("tradesYesterday", "trades7d", "volumeDate")) {
+      assertThat(document.at("/components/schemas/MarketBoardItemResponse/required").toString())
+          .doesNotContain(field);
+      assertThat(
+              document
+                  .at(
+                      "/components/schemas/MarketBoardItemResponse/properties/"
+                          + field
+                          + "/anyOf/1/type")
+                  .asText())
+          .as(field)
+          .isEqualTo("null");
+    }
     assertThat(document.path("paths").path("/api/v1/markets/tabs").path("get").isMissingNode())
         .isFalse();
     assertThat(document.at("/components/schemas/MarketBoardResponse/required").toString())

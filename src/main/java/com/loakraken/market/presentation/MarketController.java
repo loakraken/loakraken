@@ -6,7 +6,6 @@ import com.loakraken.market.application.MarketQueryService;
 import com.loakraken.market.application.MarketSource;
 import com.loakraken.market.application.MaterialQuoteService;
 import com.loakraken.market.application.MaterialUnitPriceService;
-import com.loakraken.market.application.RelicBookPriceService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -60,19 +59,16 @@ public class MarketController {
   private final MaterialQuoteService quotes;
   private final MaterialUnitPriceService unitPrices;
   private final MarketBoardService board;
-  private final RelicBookPriceService relicBooks;
 
   public MarketController(
       MarketQueryService service,
       MaterialQuoteService quotes,
       MaterialUnitPriceService unitPrices,
-      MarketBoardService board,
-      RelicBookPriceService relicBooks) {
+      MarketBoardService board) {
     this.service = service;
     this.quotes = quotes;
     this.unitPrices = unitPrices;
     this.board = board;
-    this.relicBooks = relicBooks;
   }
 
   @GetMapping("/items")
@@ -101,16 +97,6 @@ public class MarketController {
         MarketPriceResponse.from(service.search(source, request.toSearch())));
   }
 
-  @GetMapping("/engraving-icons")
-  @Operation(
-      summary = "각인 그림 목록",
-      description =
-          "공백을 뺀 각인 이름 → 유물 각인서 공식 아이콘 주소. 저장해 둔 시세(예열)에서만 만들며 공식 호출이 없습니다. 예열 전이면 빈 목록일 수 있습니다.")
-  public ApiResponse<EngravingIconsResponse> engravingIcons() {
-    return ApiResponse.of(
-        MarketSuccessCode.ENGRAVING_ICONS_SUCCESS, EngravingIconsResponse.from(relicBooks.icons()));
-  }
-
   @GetMapping("/tabs")
   @Operation(summary = "시세 보드 탭", description = "보드 탭과 공식 카테고리 코드, 기본 티어, 정렬 값입니다. 외부 호출이 없습니다.")
   public ApiResponse<MarketTabsResponse> tabs() {
@@ -137,6 +123,24 @@ public class MarketController {
                 request.toSort(),
                 request.pageOrDefault(),
                 request.query())));
+  }
+
+  @PostMapping(value = "/items/prices", consumes = MediaType.APPLICATION_JSON_VALUE)
+  @Operation(
+      summary = "즐겨찾기 묶음 시세",
+      description =
+          "품목(최대 50개, 공식 상품 ID + 보드 탭·티어)마다 현재 최저가·전일 대비를 줍니다. (탭, 티어)마다 보드 상승·하락 정렬과 같은 탭 전체 스캔(같은 3분 캐시·합치기)에서 찾습니다. "
+              + "캐시에 없는 (탭, 티어)는 요청당 3개까지만 새로 스캔하고(묶음마다 공식 검색 최대 10번, 요청 클라이언트의 공식 호출 한도에 매김), 넘거나 한도에 걸리면 그 품목은 PENDING입니다(다음 갱신 때 다시). "
+              + "스캔에 없는 품목은 NOT_FOUND입니다. 요청 순서대로, 같은 itemId는 처음 것만 줍니다. 새로 저장하는 값은 없습니다.")
+  @io.swagger.v3.oas.annotations.responses.ApiResponse(
+      responseCode = "415",
+      description = "UNSUPPORTED_MEDIA_TYPE",
+      content = @Content(schema = @Schema(ref = "#/components/schemas/ErrorResponse")))
+  public ApiResponse<MarketItemPricesResponse> itemPrices(
+      @Valid @RequestBody MarketItemPricesRequest request) {
+    return ApiResponse.of(
+        MarketSuccessCode.MARKET_ITEM_PRICES_SUCCESS,
+        MarketItemPricesResponse.from(board.prices(request.toRequests())));
   }
 
   @GetMapping("/items/{itemId}/history")

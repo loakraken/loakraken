@@ -2,26 +2,34 @@ package com.loakraken.stats.presentation;
 
 import com.loakraken.common.api.ApiResponse;
 import com.loakraken.common.api.NullableResponse;
+import com.loakraken.common.api.OptionalResponse;
 import com.loakraken.common.api.ResponseContracts;
 import com.loakraken.stats.application.StatsQueryService;
+import com.loakraken.stats.application.TitleSnapshotService;
 import com.loakraken.stats.domain.StatsConditions;
 import com.loakraken.stats.domain.StatsRules;
+import com.loakraken.stats.domain.TitleCatalog;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 import org.springdoc.core.customizers.OpenApiCustomizer;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.server.ResponseStatusException;
 
 /**
  * 칭호 장착 확인 비율(#311, PM 총괄 10-11 15:02 판정). 공식 프로필에는 장착 칭호 하나만 있어 보유 여부는 알 수 없으므로, 관측 원정대 가운데 그 칭호
@@ -32,10 +40,36 @@ import org.springframework.web.bind.annotation.RestController;
 @Validated
 @Tag(name = "통계·랭킹")
 public class TitleEquipController {
-  private final StatsQueryService stats;
+  private static final org.slf4j.Logger log =
+      org.slf4j.LoggerFactory.getLogger(TitleEquipController.class);
 
-  public TitleEquipController(StatsQueryService stats) {
+  /** 표에 없다고 남긴 칭호 수 상한(인스턴스당). 칭호 문자열은 공식 표기라 개인 정보가 아니다. */
+  static final int MAX_MISS_LOGGED = 1000;
+
+  private final StatsQueryService stats;
+  private final TitleSnapshotService snapshots;
+  private final Map<String, TitleCatalog.Entry> catalog;
+  private final java.util.Set<String> missLogged =
+      java.util.concurrent.ConcurrentHashMap.newKeySet();
+
+  public TitleEquipController(
+      StatsQueryService stats, TitleSnapshotService snapshots, TitleCatalog catalog) {
     this.stats = stats;
+    this.snapshots = snapshots;
+    this.catalog = catalog.index();
+  }
+
+  /**
+   * 칭호 표의 줄. 표에 없으면 null이고, 처음 본 칭호면 한 번 남긴다(표 철자 차이를 찾게 — 표에 없으면 조용히 중립 색이 되므로). 인스턴스당 칭호마다 한 번,
+   * 최대 MAX_MISS_LOGGED개.
+   */
+  private TitleCatalog.Entry catalogEntry(String title) {
+    var entry = catalog.get(title);
+    if (entry == null
+        && title != null
+        && missLogged.size() < MAX_MISS_LOGGED
+        && missLogged.add(title)) log.info("event=title_catalog_miss title={}", title);
+    return entry;
   }
 
   @GetMapping(value = "/api/v1/titles/equipped", produces = MediaType.APPLICATION_JSON_VALUE)
@@ -45,7 +79,8 @@ public class TitleEquipController {
           "activeDays 안에 프로필을 관측한 원정대(공개 캐릭터가 있는 원정대) N개(meta.population) 가운데, 그 칭호를 장착한 공개 캐릭터가 같은 기간에 확인된 원정대 수(equippedRosters)와 비율입니다. "
               + "공식 프로필에는 장착 중인 칭호만 있어 가진 칭호 전체는 알 수 없습니다(장착하지 않은 칭호는 세지 않음). "
               + "title을 주면 그 칭호만, 없으면 확인된 칭호 전체(원정대 수 내림차순)입니다. 모집단이 30 미만이면 sampleStatus=COLLECTING이지만 비율은 그대로 줍니다(참고값). "
-              + "400 INVALID_REQUEST·STATS_INVALID_RANGE, 503 STATS_UNAVAILABLE")
+              + "date(KST 날짜)를 주면 그날 저장한 일별 스냅숏(30일 창, 서버별·전체)이고 snapshotDate에 그 날짜가 옵니다. date와 activeDays(30 밖)는 함께 쓸 수 없습니다. "
+              + "400 INVALID_REQUEST·STATS_INVALID_RANGE, 404 TITLE_SNAPSHOT_NOT_FOUND(그날 기록 없음), 503 STATS_UNAVAILABLE")
   @StatsController.StandardErrors
   public ApiResponse<TitleEquipResponse> equipped(
       @Parameter(description = "서버 이름. 없으면 전체")
@@ -56,30 +91,63 @@ public class TitleEquipController {
       @Parameter(description = "최근 며칠 안에 관측한 원정대(7·30·90, 기본 30)") @RequestParam(required = false)
           Integer activeDays,
       @Parameter(description = "공식 칭호 문자열. 없으면 전체") @RequestParam(required = false) @Size(max = 128)
-          String title) {
-    var conditions =
-        new StatsConditions(
-            server, null, null, ActiveDays.of(activeDays), null, null, null, null, false);
+          String title,
+      @Parameter(description = "일별 스냅숏 날짜(KST, YYYY-MM-DD). 없으면 지금")
+          @RequestParam(required = false)
+          @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+          LocalDate date) {
+    var wanted = title == null || title.isBlank() ? null : title.strip();
+    int days = ActiveDays.of(activeDays);
+    if (date != null && days != StatsConditions.defaults().activeDays())
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST);
     var result =
-        stats.titleEquip(conditions, title == null || title.isBlank() ? null : title.strip());
+        date != null
+            ? snapshots.on(date, server == null || server.isBlank() ? null : server, wanted)
+            : stats.titleEquip(
+                new StatsConditions(server, null, null, days, null, null, null, null, false),
+                wanted);
     return ApiResponse.of(
         StatsSuccessCode.TITLE_EQUIP_SUCCESS,
         new TitleEquipResponse(
             StatsResponses.StatsMetaResponse.from(result.meta(), "ROSTER"),
             result.title(),
+            date,
             result.titles().stream()
                 .map(
-                    row ->
-                        new EquippedTitleResponse(
-                            row.title(),
-                            row.equippedRosters(),
-                            row.equippedPercent(),
-                            row.observedRosters(),
-                            row.observedPercent(),
-                            row.newRosters30d(),
-                            row.observedCharacters(),
-                            row.observedCharacters() >= StatsRules.MIN_SAMPLE))
+                    row -> {
+                      var entry = catalogEntry(row.title());
+                      return new EquippedTitleResponse(
+                          row.title(),
+                          row.equippedRosters(),
+                          row.equippedPercent(),
+                          row.observedRosters(),
+                          row.observedPercent(),
+                          row.newRosters30d(),
+                          row.observedCharacters(),
+                          row.observedCharacters() >= StatsRules.MIN_SAMPLE,
+                          entry == null ? null : entry.grade(),
+                          entry == null ? null : entry.parentTitle(),
+                          entry == null ? null : entry.condition());
+                    })
                 .toList()));
+  }
+
+  @GetMapping(value = "/api/v1/titles/equipped/dates", produces = MediaType.APPLICATION_JSON_VALUE)
+  @Operation(
+      summary = "칭호 통계 스냅숏 날짜",
+      description =
+          "칭호 장착 확인 일별 스냅숏이 있는 KST 날짜(최신순, 최대 90개). server를 주면 그 서버, 없으면 전체. 400 INVALID_REQUEST, 503 STATS_UNAVAILABLE")
+  @StatsController.StandardErrors
+  public ApiResponse<TitleSnapshotDatesResponse> snapshotDates(
+      @Parameter(description = "서버 이름. 없으면 전체")
+          @RequestParam(required = false)
+          @Size(max = 16)
+          @jakarta.validation.constraints.Pattern(regexp = "[\\p{L}\\p{N}]+")
+          String server) {
+    return ApiResponse.of(
+        StatsSuccessCode.TITLE_SNAPSHOT_DATES_SUCCESS,
+        new TitleSnapshotDatesResponse(
+            snapshots.dates(server == null || server.isBlank() ? null : server)));
   }
 
   @GetMapping(value = "/api/v1/emblems/equipped", produces = MediaType.APPLICATION_JSON_VALUE)
@@ -131,8 +199,16 @@ public class TitleEquipController {
   public record TitleEquipResponse(
       StatsResponses.StatsMetaResponse meta,
       @Schema(description = "요청한 칭호(없으면 null = 전체)") @NullableResponse String title,
+      @Schema(description = "일별 스냅숏 날짜(KST, date를 줬을 때). 지금 값이면 null", example = "2026-11-09")
+          @NullableResponse
+          @OptionalResponse
+          LocalDate snapshotDate,
       @Schema(description = "장착이 확인된 칭호(원정대 수 내림차순, 같으면 칭호 문자열의 코드 포인트 순)")
           List<EquippedTitleResponse> titles) {}
+
+  public record TitleSnapshotDatesResponse(
+      @Schema(description = "일별 스냅숏이 있는 KST 날짜(최신순, 최대 90개). 기록을 켠 날부터 쌓인다")
+          List<LocalDate> dates) {}
 
   public record EquippedTitleResponse(
       @Schema(description = "공식 칭호 문자열", example = "빛을 꺼트리는 자") String title,
@@ -156,7 +232,22 @@ public class TitleEquipController {
       @Schema(
               description =
                   "표본 기준을 넘었는지: observedCharacters가 30 이상이면 true. false면 보유율·희소도는 참고값(가장 드문 칭호 같은 순위에는 넣지 않음)")
-          boolean sampleReady) {}
+          boolean sampleReady,
+      @Schema(
+              description =
+                  "칭호 등급(칭호 데이터 표). 닫힌 목록이 아닌 문자열이다: 지금 쓰는 값은 일반·고급·희귀·영웅·전설·유물·고대·에스더이고, 모르는 값은 등급 없음처럼 다룬다. 표에 없는 칭호는 null",
+              example = "전설")
+          @NullableResponse
+          @OptionalResponse
+          String grade,
+      @Schema(description = "같은 칭호의 변형이면 상위 칭호 문자열(공식 표기 그대로), 아니면 null. 상위 칭호 줄이 목록에 없을 수도 있다")
+          @NullableResponse
+          @OptionalResponse
+          String parentTitle,
+      @Schema(description = "획득 조건 한 줄(칭호 데이터 표). 표에 없거나 조건이 확인되지 않은 칭호는 null")
+          @NullableResponse
+          @OptionalResponse
+          String condition) {}
 
   @Configuration(proxyBeanMethods = false)
   @ConditionalOnProperty(prefix = "ranking.titles", name = "enabled", havingValue = "true")
@@ -165,6 +256,8 @@ public class TitleEquipController {
     OpenApiCustomizer titleEquipResponseContract() {
       return document -> {
         ResponseContracts.apply(TitleEquipResponse.class, document.getComponents().getSchemas());
+        ResponseContracts.apply(
+            TitleSnapshotDatesResponse.class, document.getComponents().getSchemas());
         ResponseContracts.apply(EquippedTitleResponse.class, document.getComponents().getSchemas());
         ResponseContracts.apply(EmblemEquipResponse.class, document.getComponents().getSchemas());
         ResponseContracts.apply(

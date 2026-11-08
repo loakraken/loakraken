@@ -83,7 +83,7 @@ public final class AuctionResponses {
       @Schema(allowableValues = {"NECKLACE", "EARRING", "RING"}) String slot,
       @Schema(example = "목걸이") String slotName,
       List<AuctionPolishOptionResponse> options,
-      @Schema(description = "옵션 2개면 상상·상중·중상·중중·상하·하상·중하·하중, 1개면 상·중·하")
+      @Schema(description = "옵션 2개면 상상·상중·중상·중중·상하·하상, 1개면 상·중·하")
           List<AuctionAccessoryCellResponse> cells) {
     static AuctionAccessorySlotResponse from(MarketAuctionService.AccessorySlot slot) {
       return new AuctionAccessorySlotResponse(

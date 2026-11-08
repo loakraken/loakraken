@@ -231,11 +231,11 @@ public record CritSpeedResponse(
           String unavailableReason,
       @Schema(
               description =
-                  "주력 스킬 치명타 적중률: 가장 많은 스킬이 같은 skills[].total(같은 수면 낮은 값) + skills[].total에 없는 켠 가정(시너지·펫·서포터·자기 시너지 등, 백어택·트라이포드 가정 제외). targets는 이 값으로 잰다. 스킬을 모르면 null이고 targets는 totalRate로 잰다")
+                  "주력 스킬 치명타 적중률: 가장 많은 스킬이 같은 skills[].total(같은 수면 낮은 값) + skills[].total에 없는 켠 가정(시너지·펫·서포터·자기 시너지 등, 백어택·트라이포드 가정 제외). 주력 스킬이 전투 스킬 목록 밖인 빌드(예: 포격 스킬)는 시트 쪽 값(관측 + 켠 가정, 백어택·트라이포드 가정 제외). targets는 이 값으로 잰다. 스킬을 모르면 null이고 targets는 totalRate로 잰다")
           @NullableResponse
           @OptionalResponse
           BigDecimal mainSkillRate,
-      @Schema(description = "mainSkillRate를 같이 쓰는 스킬 수. 스킬을 모르면 null")
+      @Schema(description = "mainSkillRate를 같이 쓰는 스킬 수. 스킬을 모르거나 주력 스킬이 목록 밖이면 null")
           @NullableResponse
           @OptionalResponse
           Integer mainSkillCount,

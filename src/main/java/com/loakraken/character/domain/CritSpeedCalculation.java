@@ -1914,7 +1914,7 @@ public final class CritSpeedCalculation {
         : scale(values.stream().reduce(BigDecimal.ZERO, BigDecimal::add));
   }
 
-  record MainSkill(BigDecimal rate, int count) {}
+  record MainSkill(BigDecimal rate, Integer count) {}
 
   /** 스킬별 값에 이미 들어 있는 가정(백어택 +10, 트라이포드 치명타)은 주력 스킬 치명타 적중률에 다시 더하지 않는다. */
   private static final java.util.Set<String> IN_SKILL_TOTAL = java.util.Set.of("백어택", "트라이포드 치명타");
@@ -1923,9 +1923,36 @@ public final class CritSpeedCalculation {
    * 주력 스킬 치명타 적중률(#5, 계산 검증 11-09): 가장 많은 스킬이 같은 skills[].total(같은 수면 낮은 값) + skills[].total에 없는 켠
    * 가정(직업 상태 가정이 아닌 가정 출처: 시너지·펫·서포터·기타·자기 시너지 토글). 같은 수면 낮은 값을 고른다(필요 치명 스탯이 커지는 안전한 쪽). 스킬 한정 치명타
    * 적중률 토글은 그 빌드의 주력 스킬에 붙는다고 표(CritEffectTable.MAIN_SKILL_LIMITED)에 적은 것만 더한다. 값을 아는 스킬이 없으면 null.
+   *
+   * <p>그 빌드의 주력 스킬이 전투 스킬 목록 밖이면(CritEffectTable.MAIN_SKILL_OUTSIDE_LIST, 예: 포격 스킬은
+   * 아이덴티티·Lv.1·트라이포드 없음) 목록 스킬의 값을 쓰지 않고 시트 쪽 값을 낸다: 관측 + 켠 가정(백어택·트라이포드 가정 제외, 주력이 아닌 스킬 한정 토글
+   * 제외). 토글을 꺼도 그 빌드의 주력은 같아 시트 쪽 값(그 토글만 빠짐)이고, 같은 값을 쓰는 목록 스킬 수는 null이다(백엔드 2 검토 P1, 계산 검증 원문 확인
+   * 11-09).
    */
   static MainSkill mainSkill(
       List<SkillCrit> skills, List<Source> sources, List<ToggleState> toggles) {
+    var notMain =
+        toggles.stream()
+            .filter(
+                t ->
+                    t.skillLimited()
+                        && t.on()
+                        && t.axis() == Axis.CRIT
+                        && !CritEffectTable.MAIN_SKILL_LIMITED.contains(t.key()))
+            .map(ToggleState::value)
+            .reduce(BigDecimal.ZERO, BigDecimal::add);
+    if (toggles.stream().anyMatch(t -> CritEffectTable.MAIN_SKILL_OUTSIDE_LIST.contains(t.key()))) {
+      var sheet =
+          sources.stream()
+              .filter(
+                  source ->
+                      source.axis() == Axis.CRIT
+                          && !(source.kind() == Kind.ASSUMED
+                              && IN_SKILL_TOTAL.contains(source.name())))
+              .map(Source::value)
+              .reduce(BigDecimal.ZERO, BigDecimal::add);
+      return new MainSkill(scale(sheet.subtract(notMain)), null);
+    }
     var counts = new java.util.TreeMap<BigDecimal, Integer>();
     for (var skill : skills)
       if (skill.total() != null) counts.merge(skill.total(), 1, Integer::sum);
@@ -1946,16 +1973,6 @@ public final class CritSpeedCalculation {
                         && !source.classState()
                         && !IN_SKILL_TOTAL.contains(source.name()))
             .map(Source::value)
-            .reduce(BigDecimal.ZERO, BigDecimal::add);
-    var notMain =
-        toggles.stream()
-            .filter(
-                t ->
-                    t.skillLimited()
-                        && t.on()
-                        && t.axis() == Axis.CRIT
-                        && !CritEffectTable.MAIN_SKILL_LIMITED.contains(t.key()))
-            .map(ToggleState::value)
             .reduce(BigDecimal.ZERO, BigDecimal::add);
     return new MainSkill(scale(mode.add(extra).subtract(notMain)), best);
   }

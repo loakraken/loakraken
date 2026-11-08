@@ -542,6 +542,15 @@ public final class CritEffectTable {
           // 블래스터 포격 강화 빌드의 주력 피해는 포격 스킬(계산 검증 11-09 확인: '포격 출력 강화' Lv.3 = 포격 강화 빌드 노드)
           "포격 출력 강화");
 
+  /**
+   * 그 빌드의 주력 스킬이 전투 스킬 목록(스킬별 치명타 적중률) 밖인 토글 key. 이 토글이 있으면(켬·끔 무관) 주력 스킬 치명타 적중률은 목록 스킬이 아니라 시트 쪽
+   * 값으로 잰다.
+   */
+  public static final java.util.Set<String> MAIN_SKILL_OUTSIDE_LIST =
+      java.util.Set.of(
+          // 포격 스킬은 [포격 모드] 아이덴티티, Lv.1·트라이포드 0·백/헤드 어택 표시 없음(계산 검증 원문 11-09)
+          "포격 출력 강화");
+
   public record AssumedSpeedSynergy(
       String node, String label, BigDecimal attack, BigDecimal move, String basis) {}
 

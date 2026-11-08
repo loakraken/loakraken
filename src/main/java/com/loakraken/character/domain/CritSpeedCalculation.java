@@ -15,7 +15,7 @@ import java.util.regex.Pattern;
  * 스탯 계산에만 쓴다. 뭉툭한 가시·음속 돌파는 장착 노드의 공식 문구에서 수치를 읽고, 미장착이면 2026-10-05 공식 Lv.2 문구를 기준값으로 쓴다.
  */
 public final class CritSpeedCalculation {
-  public static final String RULE_VERSION = "crit-speed-v8";
+  public static final String RULE_VERSION = "crit-speed-v9";
 
   /**
    * 치명타 피해 앞(같은 문장)에 오면 조건부로 보고 합산하지 않는 말. 비교 기준 2곳은 "폭주 중"·"마력 해방 중"(각성 상태)은 넣고 "사신화 상태에서"· "페르소나
@@ -305,17 +305,33 @@ public final class CritSpeedCalculation {
       BigDecimal critStatPerPercent,
       CritDamage damage,
       // 치명 스탯(수치·Tooltip)을 읽지 못하면 이유. 그때 적중률은 스탯을 뺀 값이라 표시하지 않는다(코드 리뷰 10-25).
-      String unavailableReason) {}
+      String unavailableReason,
+      // 주력 스킬 치명타 적중률: 가장 많은 스킬이 같은 스킬별 치명타 적중률 + 스킬별 값에 없는 켠 가정(시너지·펫·자기 시너지 등). 스킬을 모르면 null.
+      BigDecimal mainSkillRate,
+      // mainSkillRate를 같이 쓰는 스킬 수. 스킬을 모르면 null.
+      Integer mainSkillCount,
+      // 켠 스킬 한정 치명타 적중률 토글 합. 없으면 null.
+      BigDecimal skillLimitedRate) {}
 
   /**
    * 치명타 피해(%). total = base 200 + 관측 출처 합(observed) + 가정 출처 합(assumed, 켠 토글 등). 스킬·조건 한정 문구는 더하지
-   * 않는다.
+   * 않는다. 다만 직업 자기 시너지의 스킬 한정 토글(켬)은 assumed에 넣고 skillLimited로 따로 알린다(#5).
    */
   public record CritDamage(
-      BigDecimal base, BigDecimal observed, BigDecimal total, BigDecimal assumed) {}
+      BigDecimal base,
+      BigDecimal observed,
+      BigDecimal total,
+      BigDecimal assumed,
+      // 켠 스킬 한정 치명타 피해 토글 합(total에 포함). 없으면 null.
+      BigDecimal skillLimited) {}
 
   public record SpeedAxis(
-      BigDecimal observed, BigDecimal assumed, BigDecimal total, BigDecimal effective) {}
+      BigDecimal observed,
+      BigDecimal assumed,
+      BigDecimal total,
+      BigDecimal effective,
+      // 켠 스킬 한정 토글 합(total에 포함). 없으면 null.
+      BigDecimal skillLimited) {}
 
   public record Supersonic(
       NodeSource source,
@@ -398,7 +414,20 @@ public final class CritSpeedCalculation {
       boolean coreState,
       boolean on,
       BigDecimal value,
-      String text) {}
+      String text,
+      // 일부 스킬에만 붙는 효과(예: 진격 태세 중 랜스 스킬). 켜면 합계에 넣고 화면에 '스킬 한정 효과 포함'으로 알린다(PM 총괄 #5).
+      boolean skillLimited) {
+    ToggleState(
+        String key,
+        String label,
+        Axis axis,
+        boolean coreState,
+        boolean on,
+        BigDecimal value,
+        String text) {
+      this(key, label, axis, coreState, on, value, text, false);
+    }
+  }
 
   public record Result(
       String ruleVersion,
@@ -463,6 +492,7 @@ public final class CritSpeedCalculation {
     braceletToggles(loadout, input, sources, toggles, conditionalRate, conditional);
     classBuffSources(profile, loadout, input, sources, toggles);
     classSpeedSources(profile, input, sources, toggles);
+    assumedSpeedSynergies(loadout, input, sources, toggles);
     tripodSpeedSources(loadout, input, sources, toggles, speedNotes);
     assumptionSources(input, critStat, sources);
     agilitySources(agility, sources);
@@ -480,9 +510,29 @@ public final class CritSpeedCalculation {
     var observedCrit = sum(sources, Kind.OBSERVED, Axis.CRIT);
     var assumedCrit = sum(sources, Kind.ASSUMED, Axis.CRIT);
     var totalCrit = observedCrit.add(assumedCrit);
-    var nonStatCrit = totalCrit.subtract(critFromStat);
 
     var thornRule = equippedThorn == null ? BLUNT_THORN_REFERENCE : equippedThorn;
+    // 스킬별 치명타 적중률은 주력 스킬 치명타 적중률(목표 기준)에 쓰므로 먼저 구한다. 한계 문구·토글 순서는 예전 자리에 붙인다.
+    var skillLimitations = new ArrayList<String>();
+    var skillToggles = new ArrayList<ToggleState>();
+    var skills =
+        // 스킬별 기본은 관측 + 직업 상태 가정(비교 기준값과 같은 기준, #189).
+        skillCrits(
+            loadout,
+            observedCrit.add(classStateCrit),
+            equippedThorn == null ? CRIT_CAP : thornRule.critCap(),
+            // 스킬별 기본 치명타 피해도 치명타 적중률처럼 관측 + 직업 상태 가정.
+            BASE_CRIT_DAMAGE
+                .add(sum(sources, Kind.OBSERVED, Axis.CRIT_DAMAGE))
+                .add(classState(sources, Axis.CRIT_DAMAGE)),
+            skillLimitations,
+            skillBonuses,
+            input,
+            skillToggles);
+    var mainSkill = mainSkill(skills, sources, toggles);
+    // 목표는 주력 스킬 치명타 적중률(2자리)로 잰다. 스킬을 모르면 totalRate(#5, 계산 검증 11-09).
+    var targetBase = mainSkill == null ? totalCrit : mainSkill.rate();
+    var targetNonStat = targetBase.subtract(critFromStat);
     var thornSource =
         equippedThorn == null ? NodeSource.REFERENCE_LEVEL_2 : NodeSource.EQUIPPED_NODE;
     var thornOptimal = thornRule.optimalCritRate();
@@ -495,12 +545,12 @@ public final class CritSpeedCalculation {
             scale(totalCrit.min(thornRule.critCap())));
     var targets =
         List.of(
-            target("CRIT_100", CRIT_CAP, totalCrit, nonStatCrit, critStat, input.critPet()),
+            target("CRIT_100", CRIT_CAP, targetBase, targetNonStat, critStat, input.critPet()),
             target(
                 "BLUNT_THORN_OPTIMAL",
                 thornOptimal,
-                totalCrit,
-                nonStatCrit,
+                targetBase,
+                targetNonStat,
                 critStat,
                 input.critPet()));
     var crit =
@@ -521,8 +571,12 @@ public final class CritSpeedCalculation {
                     BASE_CRIT_DAMAGE
                         .add(sum(sources, Kind.OBSERVED, Axis.CRIT_DAMAGE))
                         .add(sum(sources, Kind.ASSUMED, Axis.CRIT_DAMAGE))),
-                scale(sum(sources, Kind.ASSUMED, Axis.CRIT_DAMAGE))),
-            critRead ? null : "치명 스탯을 읽지 못해 치명타 적중률을 계산하지 않았어요.");
+                scale(sum(sources, Kind.ASSUMED, Axis.CRIT_DAMAGE)),
+                skillLimited(toggles, Axis.CRIT_DAMAGE)),
+            critRead ? null : "치명 스탯을 읽지 못해 치명타 적중률을 계산하지 않았어요.",
+            mainSkill == null ? null : mainSkill.rate(),
+            mainSkill == null ? null : mainSkill.count(),
+            skillLimited(toggles, Axis.CRIT));
 
     var attack = axis(sources, Axis.ATTACK_SPEED);
     var move = axis(sources, Axis.MOVE_SPEED);
@@ -540,8 +594,8 @@ public final class CritSpeedCalculation {
         new Speed(
             swiftness,
             SPEED_CAP,
-            scaled(attack),
-            scaled(move),
+            scaled(attack, skillLimited(toggles, Axis.ATTACK_SPEED)),
+            scaled(move, skillLimited(toggles, Axis.MOVE_SPEED)),
             new Supersonic(
                 equippedSupersonic == null
                     ? NodeSource.REFERENCE_LEVEL_2
@@ -563,20 +617,16 @@ public final class CritSpeedCalculation {
     limitations.add("특정 스킬·조건 한정 효과(예: '…의 치명타 적중률', 백어택 한정)는 자동 합산하지 않습니다.");
     limitations.add(
         "치명타 피해는 기본 200%에 장비·팔찌·각인·아크 패시브·카드의 일반 문구만 더합니다. 스킬 한정('방향성 공격 스킬의 치명타 피해' 등), 받는 치명타 피해, 특정 상태 한정('…상태에서')은 제외하고, 각성 중 상시 효과('폭주 중', '마력 해방 중')는 더합니다.");
-    var skills =
-        // 스킬별 기본은 관측 + 직업 상태 가정(비교 기준값과 같은 기준, #189).
-        skillCrits(
-            loadout,
-            observedCrit.add(classStateCrit),
-            equippedThorn == null ? CRIT_CAP : thornRule.critCap(),
-            // 스킬별 기본 치명타 피해도 치명타 적중률처럼 관측 + 직업 상태 가정.
-            BASE_CRIT_DAMAGE
-                .add(sum(sources, Kind.OBSERVED, Axis.CRIT_DAMAGE))
-                .add(classState(sources, Axis.CRIT_DAMAGE)),
-            limitations,
-            skillBonuses,
-            input,
-            toggles);
+    limitations.addAll(skillLimitations);
+    toggles.addAll(skillToggles);
+    var included =
+        toggles.stream()
+            .filter(ToggleState::skillLimited)
+            .filter(ToggleState::on)
+            .map(t -> t.label() + " " + plain(t.value()) + "%")
+            .toList();
+    if (!included.isEmpty())
+      limitations.add("스킬 한정 효과 포함(직업 자기 시너지, 끄기 가능): " + String.join(", ", included));
     if (!conditionalRate.isEmpty())
       limitations.add(
           "기본 치명타 적중률에 넣지 않은 효과(공식 문구의 조건·대상 스킬, 스킬 한정은 스킬별 치명타 적중률에 반영): "
@@ -1011,7 +1061,8 @@ public final class CritSpeedCalculation {
               toggle.coreState(),
               on,
               scale(value),
-              text));
+              text,
+              toggle.skillLimited()));
       if (on)
         sources.add(
             new Source(
@@ -1543,7 +1594,51 @@ public final class CritSpeedCalculation {
       if (on)
         sources.add(
             new Source(Kind.ASSUMED, Category.ASSUMPTION, Axis.CRIT, buff.label(), value, text));
+      if ("급소 노출".equals(buff.tripod()))
+        weakPointDuplicates(loadout, value, input, sources, toggles);
     }
+  }
+
+  static final String WEAK_POINT_DUPLICATE = "급소 노출 중복 적용 (가정)";
+
+  /**
+   * 급소 노출 트라이포드를 둘 이상 고르면 첫째만 기본으로 세고, 나머지는 중첩 여부가 확인되지 않아 '가정' 토글(기본 끔) 하나로 둔다. 켜면 나머지 수 × 값을
+   * 더한다(PM 총괄 11-09).
+   */
+  private static void weakPointDuplicates(
+      CharacterLoadout loadout,
+      BigDecimal value,
+      Assumptions input,
+      List<Source> sources,
+      List<ToggleState> toggles) {
+    if (loadout.skills() == null) return;
+    var names = new ArrayList<String>();
+    String official = null;
+    for (var skill : loadout.skills()) {
+      if (skill == null || skill.level() == null || skill.level() < 2) continue;
+      for (var tripod : skill.tripods())
+        if (tripod != null && "급소 노출".equals(tripod.name())) {
+          names.add(skill.name());
+          if (official == null && tripod.effect() != null) official = tripod.effect();
+        }
+    }
+    if (names.size() < 2) return;
+    var extra = value.multiply(BigDecimal.valueOf(names.size() - 1L));
+    var text =
+        "급소 노출 트라이포드 "
+            + names.size()
+            + "개("
+            + String.join(", ", names)
+            + "). 같은 효과가 중첩되는지 확인되지 않아 첫째만 기본으로 셉니다."
+            + (official == null ? "" : " 공식 문구: " + official);
+    boolean on = input.on(WEAK_POINT_DUPLICATE, false);
+    toggles.add(
+        new ToggleState(
+            WEAK_POINT_DUPLICATE, WEAK_POINT_DUPLICATE, Axis.CRIT, false, on, scale(extra), text));
+    if (on)
+      sources.add(
+          new Source(
+              Kind.ASSUMED, Category.ASSUMPTION, Axis.CRIT, WEAK_POINT_DUPLICATE, extra, text));
   }
 
   private static boolean hasSkill(CharacterLoadout loadout, String name) {
@@ -1798,12 +1893,127 @@ public final class CritSpeedCalculation {
     return new AxisSum(observed, assumed, observed.add(assumed));
   }
 
-  private static SpeedAxis scaled(AxisSum sum) {
+  private static SpeedAxis scaled(AxisSum sum, BigDecimal skillLimited) {
     return new SpeedAxis(
         scale(sum.observed()),
         scale(sum.assumed()),
         scale(sum.total()),
-        scale(sum.total().min(SPEED_CAP)));
+        scale(sum.total().min(SPEED_CAP)),
+        skillLimited);
+  }
+
+  /** 켠 스킬 한정 토글의 axis 합. 켠 것이 없으면 null(웹은 그 축의 '스킬 한정 효과 포함' 줄을 그리지 않는다). */
+  private static BigDecimal skillLimited(List<ToggleState> toggles, Axis axis) {
+    var values =
+        toggles.stream()
+            .filter(t -> t.skillLimited() && t.on() && t.axis() == axis)
+            .map(ToggleState::value)
+            .toList();
+    return values.isEmpty()
+        ? null
+        : scale(values.stream().reduce(BigDecimal.ZERO, BigDecimal::add));
+  }
+
+  record MainSkill(BigDecimal rate, Integer count) {}
+
+  /** 스킬별 값에 이미 들어 있는 가정(백어택 +10, 트라이포드 치명타)은 주력 스킬 치명타 적중률에 다시 더하지 않는다. */
+  private static final java.util.Set<String> IN_SKILL_TOTAL = java.util.Set.of("백어택", "트라이포드 치명타");
+
+  /**
+   * 주력 스킬 치명타 적중률(#5, 계산 검증 11-09): 가장 많은 스킬이 같은 skills[].total(같은 수면 낮은 값) + skills[].total에 없는 켠
+   * 가정(직업 상태 가정이 아닌 가정 출처: 시너지·펫·서포터·기타·자기 시너지 토글). 같은 수면 낮은 값을 고른다(필요 치명 스탯이 커지는 안전한 쪽). 스킬 한정 치명타
+   * 적중률 토글은 그 빌드의 주력 스킬에 붙는다고 표(CritEffectTable.MAIN_SKILL_LIMITED)에 적은 것만 더한다. 값을 아는 스킬이 없으면 null.
+   *
+   * <p>그 빌드의 주력 스킬이 전투 스킬 목록 밖이면(CritEffectTable.MAIN_SKILL_OUTSIDE_LIST, 예: 포격 스킬은
+   * 아이덴티티·Lv.1·트라이포드 없음) 목록 스킬의 값을 쓰지 않고 시트 쪽 값을 낸다: 관측 + 켠 가정(백어택·트라이포드 가정 제외, 주력이 아닌 스킬 한정 토글
+   * 제외). 토글을 꺼도 그 빌드의 주력은 같아 시트 쪽 값(그 토글만 빠짐)이고, 같은 값을 쓰는 목록 스킬 수는 null이다(백엔드 2 검토 P1, 계산 검증 원문 확인
+   * 11-09).
+   */
+  static MainSkill mainSkill(
+      List<SkillCrit> skills, List<Source> sources, List<ToggleState> toggles) {
+    var notMain =
+        toggles.stream()
+            .filter(
+                t ->
+                    t.skillLimited()
+                        && t.on()
+                        && t.axis() == Axis.CRIT
+                        && !CritEffectTable.MAIN_SKILL_LIMITED.contains(t.key()))
+            .map(ToggleState::value)
+            .reduce(BigDecimal.ZERO, BigDecimal::add);
+    if (toggles.stream().anyMatch(t -> CritEffectTable.MAIN_SKILL_OUTSIDE_LIST.contains(t.key()))) {
+      var sheet =
+          sources.stream()
+              .filter(
+                  source ->
+                      source.axis() == Axis.CRIT
+                          && !(source.kind() == Kind.ASSUMED
+                              && IN_SKILL_TOTAL.contains(source.name())))
+              .map(Source::value)
+              .reduce(BigDecimal.ZERO, BigDecimal::add);
+      return new MainSkill(scale(sheet.subtract(notMain)), null);
+    }
+    var counts = new java.util.TreeMap<BigDecimal, Integer>();
+    for (var skill : skills)
+      if (skill.total() != null) counts.merge(skill.total(), 1, Integer::sum);
+    if (counts.isEmpty()) return null;
+    BigDecimal mode = null;
+    int best = 0;
+    for (var entry : counts.entrySet())
+      if (entry.getValue() > best) {
+        mode = entry.getKey();
+        best = entry.getValue();
+      }
+    var extra =
+        sources.stream()
+            .filter(
+                source ->
+                    source.kind() == Kind.ASSUMED
+                        && source.axis() == Axis.CRIT
+                        && !source.classState()
+                        && !IN_SKILL_TOTAL.contains(source.name()))
+            .map(Source::value)
+            .reduce(BigDecimal.ZERO, BigDecimal::add);
+    return new MainSkill(scale(mode.add(extra).subtract(notMain)), best);
+  }
+
+  /** 공식 원문 줄이 없는 직업 자기 공이속 가정(#5). 장착한 깨달음 노드가 표에 있으면 공격·이동 속도 토글(기본 켬)을 넣는다. */
+  private static void assumedSpeedSynergies(
+      CharacterLoadout loadout,
+      Assumptions input,
+      List<Source> sources,
+      List<ToggleState> toggles) {
+    if (loadout.arkPassive() == null) return;
+    for (var effect : loadout.arkPassive().effects()) {
+      if (effect == null) continue;
+      var row = CritEffectTable.assumedSpeedSynergy(nodeName(effect.description()));
+      if (row == null) continue;
+      boolean on = input.on(row.node(), true);
+      for (var entry :
+          List.of(
+              java.util.Map.entry(Axis.ATTACK_SPEED, row.attack()),
+              java.util.Map.entry(Axis.MOVE_SPEED, row.move()))) {
+        toggles.add(
+            new ToggleState(
+                row.node(),
+                row.label(),
+                entry.getKey(),
+                true,
+                on,
+                scale(entry.getValue()),
+                row.basis()));
+        if (on)
+          sources.add(
+              new Source(
+                  Kind.ASSUMED,
+                  Category.ASSUMPTION,
+                  entry.getKey(),
+                  row.label(),
+                  entry.getValue(),
+                  row.basis()));
+      }
+      return;
+    }
   }
 
   private static StatSpeed statSpeed(List<Source> sources) {

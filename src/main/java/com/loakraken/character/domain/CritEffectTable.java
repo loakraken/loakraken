@@ -80,7 +80,8 @@ public final class CritEffectTable {
           new NodeRule("라이플 숙련", Decision.INCLUDE, null),
           new NodeRule("급소 전문가", null, Decision.EXCLUDE),
           new NodeRule("정밀 사격 훈련", Decision.INCLUDE, Decision.INCLUDE),
-          new NodeRule("포격 출력 강화", Decision.SKILL, null),
+          // 블래스터 포격 빌드 자기 시너지(#5): 포격 스킬 한정이지만 그 빌드의 주력 스킬이라 스킬 한정 토글(기본 켬)로 합계에 넣는다
+          new NodeRule("포격 출력 강화", Decision.TOGGLE, null),
           new NodeRule("신속 포격", null, Decision.EXCLUDE),
           new NodeRule("코어 인챈트", Decision.INCLUDE, null),
           new NodeRule("페일 노트", null, Decision.INCLUDE),
@@ -97,7 +98,9 @@ public final class CritEffectTable {
           new NodeRule("환수의 정기", null, Decision.SKILL),
           new NodeRule("깨어나는 힘", Decision.INCLUDE, null),
           new NodeRule("완전 연소", Decision.INCLUDE, null),
-          new NodeRule("할버드의 대가", null, Decision.SKILL));
+          new NodeRule("할버드의 대가", null, Decision.SKILL),
+          // 워로드 고독한 기사 빌드 자기 시너지(#5): "진격 태세 중 랜스 스킬의 치명타 피해량이 45.0% 증가한다." 스킬 한정 토글(기본 켬)
+          new NodeRule("선봉장의 함성", null, Decision.TOGGLE));
 
   static final Map<String, NodeRule> NODES =
       RULES.stream().collect(Collectors.toUnmodifiableMap(NodeRule::node, Function.identity()));
@@ -160,9 +163,6 @@ public final class CritEffectTable {
               3,
               false,
               "코어 3개 소모"),
-          // "포격 스킬의 … 치명타 적중률이 40.0% 증가" — 포격 스킬은 전투 스킬 목록에 없어(아이덴티티) 표시만 한다
-          new SkillBonus(
-              "포격 출력 강화", CritSpeedCalculation.Axis.CRIT, Target.CATEGORY, "포격 스킬", 1, false, null),
           // "소환 스킬의 치명타 적중률이 2.8% 증가"
           new SkillBonus(
               "교감 강화", CritSpeedCalculation.Axis.CRIT, Target.CATEGORY, "소환 스킬", 1, false, null),
@@ -228,10 +228,31 @@ public final class CritEffectTable {
       boolean coreState,
       Pattern pattern,
       boolean incremental,
-      String exclusiveWith) {
+      String exclusiveWith,
+      boolean skillLimited) {
     Toggle(String node, String label, boolean coreState, Pattern pattern, boolean incremental) {
       this(
-          node, node, CritSpeedCalculation.Axis.CRIT, label, coreState, pattern, incremental, null);
+          node,
+          node,
+          CritSpeedCalculation.Axis.CRIT,
+          label,
+          coreState,
+          pattern,
+          incremental,
+          null,
+          false);
+    }
+
+    Toggle(
+        String node,
+        String key,
+        CritSpeedCalculation.Axis axis,
+        String label,
+        boolean coreState,
+        Pattern pattern,
+        boolean incremental,
+        String exclusiveWith) {
+      this(node, key, axis, label, coreState, pattern, incremental, exclusiveWith, false);
     }
   }
 
@@ -267,6 +288,28 @@ public final class CritEffectTable {
               "방어 태세 가정",
               false,
               Pattern.compile("방어 태세 중에는\\s*([0-9]+(?:\\.[0-9]+)?)%"),
+              true),
+          // 직업 자기 시너지 중 스킬 한정(#5, 계산 검증 최종 합본 11-09). 합계에 넣고 skillLimited로 알린다(PM 총괄).
+          // 포격 스킬은 전투 스킬 목록에 없어(아이덴티티) 스킬별 치명타 적중률에는 없고, 주력 스킬 치명타 적중률에만 더한다.
+          new Toggle(
+              "포격 출력 강화",
+              "포격 출력 강화",
+              CritSpeedCalculation.Axis.CRIT,
+              "포격 출력 강화(포격 스킬)",
+              true,
+              Pattern.compile("포격 스킬의.*?치명타 적중률이\\s*([0-9]+(?:\\.[0-9]+)?)%"),
+              false,
+              null,
+              true),
+          new Toggle(
+              "선봉장의 함성",
+              "선봉장의 함성",
+              CritSpeedCalculation.Axis.CRIT_DAMAGE,
+              "선봉장의 함성(진격 태세 랜스 스킬)",
+              true,
+              Pattern.compile("랜스 스킬의 치명타 피해량이\\s*([0-9]+(?:\\.[0-9]+)?)%"),
+              false,
+              null,
               true));
 
   static List<Toggle> toggles(String base) {
@@ -318,8 +361,8 @@ public final class CritEffectTable {
               null,
               "급소 노출",
               new BigDecimal("10"),
-              "자기 스킬 트라이포드 '급소 노출' 치명타 적중률 시너지(스킬·트라이포드 버프 가정, 기본 끔)",
-              false),
+              "자기 스킬 트라이포드 '급소 노출' 치명타 적중률 시너지(직업 자기 시너지, 기본 켬)",
+              true),
           new ClassBuff(
               "나를 위한 연주 버프 상시 유지 가정",
               "바드",
@@ -448,7 +491,9 @@ public final class CritEffectTable {
           new SpeedRule("야성", SpeedDecision.EXCLUDE, null, "둔갑 스킬의 공격속도"),
           new SpeedRule("난무 강화", SpeedDecision.EXCLUDE, null, "오의 스킬의 공격속도"),
           new SpeedRule("막을 수 없는 분노", SpeedDecision.EXCLUDE, null, "블러드러스트의 공격 속도"),
-          new SpeedRule("초비행", SpeedDecision.EXCLUDE, null, "활공의 이동 속도"));
+          new SpeedRule("초비행", SpeedDecision.EXCLUDE, null, "활공의 이동 속도"),
+          // "선봉장의 함성 : 공격속도가 10.0% 증가한다."(전장의 창 사용 후 10초) — 비교 기준 효율표가 넣지 않음(#5)
+          new SpeedRule("선봉장의 함성", SpeedDecision.EXCLUDE, null, "전장의 창 사용 후 10초 자기 공격 속도, 기본 제외"));
 
   static final Map<String, SpeedRule> SPEED =
       SPEED_RULES.stream()
@@ -483,6 +528,48 @@ public final class CritEffectTable {
       List.of(
           // 슬레이어 폭주: 비교 기준 2곳 공이속 +20(c02 21.86/31.86 → 41.86/51.86, 계산 검증 10-10 02:10)
           new ClassSpeedBuff("폭주 상태 가정", "슬레이어", new BigDecimal("20"), new BigDecimal("20")));
+
+  /**
+   * 공식 원문 줄이 없는 직업 자기 공이속(#5). 비교 기준 효율표 값을 그 빌드의 깨달음 노드 장착을 조건으로 '가정' 토글(기본 켬, key = 노드 이름)로 넣는다.
+   * 같은 직업의 다른 빌드는 읽은 값이 없어 넣지 않는다.
+   */
+  /**
+   * 스킬 한정 치명타 적중률 토글 중 그 빌드의 주력 스킬에 붙는 것(key). 주력 스킬 치명타 적중률(필요 치명 스탯 기준)에 더한다. 여기 없는 스킬 한정 치명타 적중률
+   * 토글은 합계에는 넣지만 주력 스킬 값에는 넣지 않는다(주력이 아닌 스킬이면 필요 스탯을 줄여 잡게 되므로).
+   */
+  public static final java.util.Set<String> MAIN_SKILL_LIMITED =
+      java.util.Set.of(
+          // 블래스터 포격 강화 빌드의 주력 피해는 포격 스킬(계산 검증 11-09 확인: '포격 출력 강화' Lv.3 = 포격 강화 빌드 노드)
+          "포격 출력 강화");
+
+  /**
+   * 그 빌드의 주력 스킬이 전투 스킬 목록(스킬별 치명타 적중률) 밖인 토글 key. 이 토글이 있으면(켬·끔 무관) 주력 스킬 치명타 적중률은 목록 스킬이 아니라 시트 쪽
+   * 값으로 잰다.
+   */
+  public static final java.util.Set<String> MAIN_SKILL_OUTSIDE_LIST =
+      java.util.Set.of(
+          // 포격 스킬은 [포격 모드] 아이덴티티, Lv.1·트라이포드 0·백/헤드 어택 표시 없음(계산 검증 원문 11-09)
+          "포격 출력 강화");
+
+  public record AssumedSpeedSynergy(
+      String node, String label, BigDecimal attack, BigDecimal move, String basis) {}
+
+  public static final List<AssumedSpeedSynergy> ASSUMED_SPEED_SYNERGIES =
+      List.of(
+          // 블레이드 버스트 강화 빌드(레퍼런스 11-09: 비교 기준 효율표 머리말 '블레이드 · 버스트'에서 읽은 값)
+          new AssumedSpeedSynergy(
+              "버스트 강화",
+              "버스트 강화 자기 공이속(가정)",
+              new BigDecimal("32.79"),
+              new BigDecimal("22.80"),
+              "공식 원문 줄 없음. 비교 기준 효율표의 버스트 빌드 자기 공격·이동 속도(가정, 기본 켬)"));
+
+  static AssumedSpeedSynergy assumedSpeedSynergy(String nodeName) {
+    if (nodeName == null) return null;
+    var base = nodeName.replaceFirst("\\s+Lv\\.\\d+$", "").strip();
+    for (var row : ASSUMED_SPEED_SYNERGIES) if (row.node().equals(base)) return row;
+    return null;
+  }
 
   static SpeedRule speed(String nodeName) {
     if (nodeName == null) return null;

@@ -7,6 +7,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
@@ -36,6 +37,10 @@ public final class CombatPowerRefineModel {
   private static final Pattern KARMA_LEVEL = Pattern.compile("(\\d+)레벨");
   private static final Pattern MAIN_STAT = Pattern.compile("^(힘|민첩|지능) \\+([\\d,]+)$");
   private static final String BASE_EFFECT = "기본 효과";
+
+  /** 직업 주스탯 이름을 읽는 부위: 방어구 5·팔 보호구(그 직업 줄 하나만 나온다). */
+  private static final Set<String> ARMOR_STAT_PARTS =
+      Set.of("투구", "상의", "하의", "장갑", "어깨", ARM_GUARD);
 
   /** S의 Σ에 넣는 부위: 방어구 5·팔 보호구·장신구 5(무기는 빼고, 팔찌는 따로). */
   private static final Set<String> MAIN_STAT_PARTS =
@@ -381,28 +386,42 @@ public final class CombatPowerRefineModel {
   public record MainStatSum(BigDecimal sum, String reason) {}
 
   /**
-   * Σ = 방어구 5·팔 보호구·장신구 5의 기본 효과 힘·민첩·지능 +N(장신구는 세 줄이 같은 값이라 첫 줄) + 팔찌 힘·민첩·지능 줄. 비어 있는 부위는 0이고, 있는
-   * 장비의 값을 읽지 못하면 계산하지 않는다(추정 금지).
+   * Σ = 방어구 5·팔 보호구·장신구 5의 기본 효과 힘·민첩·지능 +N + 팔찌의 직업 주스탯 줄. 직업 주스탯은 방어구·팔 보호구 기본 효과에 나오는 줄
+   * 이름이다(방어구에는 그 직업 줄 하나만 나온다). 장신구는 세 줄이 같은 값이라 그 이름 줄(이름을 모르면 첫 줄), 팔찌는 그 이름 줄만 더한다(다른 직업 몫은 효과
+   * 없음, 계산 검증·코드 리뷰 11-09). 비어 있는 부위는 0이고, 있는 장비의 값을 읽지 못하면 계산하지 않는다(추정 금지).
    */
   public static MainStatSum mainStatSum(CharacterLoadout loadout) {
+    String statName = null;
+    for (var item : loadout.equipment()) {
+      if (item == null || !ARMOR_STAT_PARTS.contains(item.type()) || item.detail() == null)
+        continue;
+      var line = mainStatLine(item.detail(), null);
+      if (line != null) {
+        statName = line.group(1);
+        break;
+      }
+    }
     var sum = BigDecimal.ZERO;
     for (var item : loadout.equipment()) {
       if (item == null || !MAIN_STAT_PARTS.contains(item.type())) continue;
-      var value = item.detail() == null ? null : mainStat(item.detail());
-      if (value == null)
+      var line = item.detail() == null ? null : mainStatLine(item.detail(), statName);
+      if (line == null)
         return new MainStatSum(null, "장비(" + item.type() + ")의 힘·민첩·지능을 읽지 못해 계산하지 않았습니다.");
-      sum = sum.add(value);
+      sum = sum.add(new BigDecimal(line.group(2).replace(",", "")));
     }
-    return new MainStatSum(sum.add(CombatPowerBraceletModel.mainStat(loadout)), null);
+    var bracelet = CombatPowerBraceletModel.mainStat(loadout, statName);
+    if (bracelet == null) return new MainStatSum(null, "직업 주스탯을 알 수 없어 팔찌 힘·민첩·지능 줄을 계산하지 않았습니다.");
+    return new MainStatSum(sum.add(bracelet), null);
   }
 
-  private static BigDecimal mainStat(CharacterLoadout.EquipmentDetail detail) {
+  /** 기본 효과의 힘·민첩·지능 +N 줄. name이 있으면 그 이름 줄만, 없으면 첫 줄. 없으면 null. */
+  private static Matcher mainStatLine(CharacterLoadout.EquipmentDetail detail, String name) {
     for (var group : detail.effects()) {
       if (group == null || !BASE_EFFECT.equals(group.title())) continue;
       for (var line : group.lines()) {
         var matcher = line == null ? null : MAIN_STAT.matcher(line.strip());
-        if (matcher != null && matcher.matches())
-          return new BigDecimal(matcher.group(2).replace(",", ""));
+        if (matcher != null && matcher.matches() && (name == null || name.equals(matcher.group(1))))
+          return matcher;
       }
     }
     return null;

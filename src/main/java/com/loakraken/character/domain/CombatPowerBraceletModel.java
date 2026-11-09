@@ -223,15 +223,20 @@ public final class CombatPowerBraceletModel {
     return new Line(family.text(grade), Kind.SPECIAL, value.pct(), null, 0, BigDecimal.ZERO, null);
   }
 
-  /** 팔찌 힘·민첩·지능 +N 줄의 합(재련 모델 S의 Σ, 계산 검증 11-09). 줄 해석은 parse의 MAIN_STAT과 같다. */
-  public static BigDecimal mainStat(CharacterLoadout loadout) {
+  /**
+   * 팔찌의 직업 주스탯(statName) +N 줄 합(재련 모델 S의 Σ, 계산 검증 11-09). 다른 직업 몫 줄은 더하지 않는다. 줄 해석은 parse의
+   * MAIN_STAT과 같다. 힘·민첩·지능 줄이 있는데 statName을 모르면 null(계산하지 않음).
+   */
+  public static BigDecimal mainStat(CharacterLoadout loadout, String statName) {
     var bracelet = bracelet(loadout);
     if (bracelet == null) return BigDecimal.ZERO;
     var total = BigDecimal.ZERO;
     for (var effect : bracelet.detail().braceletEffects()) {
       if (effect == null || effect.text() == null) continue;
       var matcher = MAIN_STAT.matcher(normalize(effect.text()));
-      if (matcher.matches()) total = total.add(new BigDecimal(matcher.group(2)));
+      if (!matcher.matches()) continue;
+      if (statName == null) return null;
+      if (statName.equals(matcher.group(1))) total = total.add(new BigDecimal(matcher.group(2)));
     }
     return total;
   }

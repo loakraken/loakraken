@@ -9,7 +9,8 @@ public record MarketCacheProperties(
     @DefaultValue("30s") Duration pricesTtl,
     @DefaultValue("10m") Duration optionsTtl,
     @DefaultValue("10m") Duration historyTtl,
-    @DefaultValue("3m") Duration boardScanTtl) {
+    @DefaultValue("3m") Duration boardScanTtl,
+    @DefaultValue("5m") Duration slowPricesTtl) {
   public MarketCacheProperties {
     if (pricesTtl == null
         || optionsTtl == null
@@ -22,6 +23,9 @@ public record MarketCacheProperties(
         || historyTtl.isNegative()
         || boardScanTtl == null
         || boardScanTtl.isZero()
-        || boardScanTtl.isNegative()) throw new IllegalArgumentException("거래소 캐시 TTL은 양수여야 합니다.");
+        || boardScanTtl.isNegative()
+        || slowPricesTtl == null
+        || slowPricesTtl.isZero()
+        || slowPricesTtl.isNegative()) throw new IllegalArgumentException("거래소 캐시 TTL은 양수여야 합니다.");
   }
 }

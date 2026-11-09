@@ -61,11 +61,27 @@ class ValkeyMarketCache implements MarketCache {
         result ->
             result.source() == source
                 && result.search().equals(search)
-                && fresh(result.observedAt(), properties.pricesTtl()));
+                && fresh(result.observedAt(), pricesTtl(search)));
   }
 
   public void savePrices(MarketResult result) {
-    write(priceKey(result.source(), result.search()), result, properties.pricesTtl(), Kind.PRICES);
+    write(
+        priceKey(result.source(), result.search()),
+        result,
+        pricesTtl(result.search()),
+        Kind.PRICES);
+  }
+
+  /** 천천히 바뀌는 분류(아바타·장비 상자)는 가격 캐시를 길게 둔다(#11 공식 호출 예산). */
+  private Duration pricesTtl(MarketSearch search) {
+    return MarketTab.slowCategory(search.categoryCode())
+        ? properties.slowPricesTtl()
+        : properties.pricesTtl();
+  }
+
+  /** 천천히 바뀌는 탭은 탭 전체 스캔도 그 가격 캐시와 같은 시간 둔다. */
+  private Duration boardScanTtl(MarketTab tab) {
+    return tab.slowMoving() ? properties.slowPricesTtl() : properties.boardScanTtl();
   }
 
   public Optional<MarketOptionsResult> findOptions() {
@@ -141,11 +157,88 @@ class ValkeyMarketCache implements MarketCache {
         scan ->
             scan.tab() == tab
                 && Objects.equals(scan.tier(), tier)
-                && fresh(scan.observedAt(), properties.boardScanTtl()));
+                && fresh(scan.observedAt(), boardScanTtl(tab)));
   }
 
   public void saveBoardScan(MarketBoardScan scan) {
-    write(boardKey(scan.tab(), scan.tier()), scan, properties.boardScanTtl(), Kind.BOARD_SCAN);
+    write(boardKey(scan.tab(), scan.tier()), scan, boardScanTtl(scan.tab()), Kind.BOARD_SCAN);
+  }
+
+  /**
+   * 거래량 지도 TTL: 하루 + 여유(이틀째 오전까지). 약관의 저장 제한 안에서 다른 시세 캐시처럼 짧게 둔다(PM 판단 11-08: Valkey만, ≤ 36시간).
+   */
+  static final Duration VOLUME_TTL = Duration.ofHours(36);
+
+  private static String volumeKey(java.time.LocalDate day) {
+    return "market:v1:volume:" + day;
+  }
+
+  private static String volumeCallsKey(java.time.LocalDate day) {
+    return "market:v1:volume-calls:" + day;
+  }
+
+  @Override
+  public Map<Long, com.loakraken.market.domain.MarketVolume> findVolumes(
+      java.time.LocalDate day, Collection<Long> itemIds) {
+    if (itemIds.isEmpty()) return Map.of();
+    var ids = List.copyOf(itemIds);
+    try {
+      var values =
+          redis
+              .<String, String>opsForHash()
+              .multiGet(volumeKey(day), ids.stream().map(String::valueOf).toList());
+      var result = new LinkedHashMap<Long, com.loakraken.market.domain.MarketVolume>();
+      for (int i = 0; i < ids.size(); i++) {
+        var value = values.get(i);
+        if (value == null) continue;
+        var parts = value.split(",");
+        if (parts.length != 3) continue;
+        try {
+          result.put(
+              ids.get(i),
+              new com.loakraken.market.domain.MarketVolume(
+                  ids.get(i),
+                  java.time.LocalDate.parse(parts[0]),
+                  Long.parseLong(parts[1]),
+                  Long.parseLong(parts[2])));
+        } catch (RuntimeException ignored) {
+          // 모양이 다른 값은 없는 것으로 본다.
+        }
+      }
+      return result;
+    } catch (DataAccessException exception) {
+      metrics.cache(Kind.VOLUME, Outcome.READ_ERROR);
+      return Map.of();
+    }
+  }
+
+  @Override
+  public void saveVolumes(
+      java.time.LocalDate day, Collection<com.loakraken.market.domain.MarketVolume> volumes) {
+    if (volumes.isEmpty()) return;
+    var fields = new LinkedHashMap<String, String>();
+    for (var volume : volumes)
+      fields.put(
+          String.valueOf(volume.itemId()),
+          volume.volumeDate() + "," + volume.yesterday() + "," + volume.sevenDay());
+    try {
+      redis.opsForHash().putAll(volumeKey(day), fields);
+      redis.expire(volumeKey(day), VOLUME_TTL);
+    } catch (DataAccessException exception) {
+      metrics.cache(Kind.VOLUME, Outcome.WRITE_ERROR);
+    }
+  }
+
+  @Override
+  public long addVolumeCalls(java.time.LocalDate day, int calls) {
+    try {
+      Long count = redis.opsForValue().increment(volumeCallsKey(day), calls);
+      redis.expire(volumeCallsKey(day), VOLUME_TTL);
+      return count == null ? Long.MAX_VALUE : count;
+    } catch (DataAccessException exception) {
+      metrics.cache(Kind.VOLUME, Outcome.WRITE_ERROR);
+      return Long.MAX_VALUE;
+    }
   }
 
   @Override

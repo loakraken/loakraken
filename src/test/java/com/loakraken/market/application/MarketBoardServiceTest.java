@@ -61,6 +61,93 @@ class MarketBoardServiceTest {
     assertThat(all.getAllValues().get(2).itemTier()).isEqualTo(3);
   }
 
+  /** 즐겨찾기 묶음 시세: 캐시에 있는 묶음은 공식 호출 없이, 새 묶음은 요청당 2개까지만 스캔하고 나머지는 PENDING. */
+  @Test
+  void 묶음_시세는_새_탭_스캔을_요청당_2묶음까지만_하고_나머지는_PENDING이다() {
+    var cachedScan = new MarketBoardScan(MarketTab.FOOD, null, OBSERVED, 1, List.of(item(7)));
+    when(cache.findBoardScan(MarketTab.FOOD, null)).thenReturn(Optional.of(cachedScan));
+    for (var tab :
+        List.of(
+            MarketTab.LIFE, MarketTab.BATTLE_ITEM, MarketTab.ARK_GRID, MarketTab.ENGRAVING_BOOK))
+      stubPages(tab, null, 3);
+    var result =
+        service.prices(
+            List.of(
+                new MarketBoardService.PriceRequest(7, MarketTab.FOOD, null),
+                new MarketBoardService.PriceRequest(1, MarketTab.LIFE, null),
+                new MarketBoardService.PriceRequest(2, MarketTab.BATTLE_ITEM, null),
+                new MarketBoardService.PriceRequest(3, MarketTab.ARK_GRID, null),
+                new MarketBoardService.PriceRequest(5, MarketTab.ENGRAVING_BOOK, null),
+                new MarketBoardService.PriceRequest(1, MarketTab.WEAPON_EVOLUTION, null)));
+    assertThat(result)
+        .extracting(MarketBoardService.ItemPrice::status)
+        // 셋째·넷째 새 묶음(ARK_GRID·ENGRAVING_BOOK)은 스캔하지 않고 PENDING이다. 같은 itemId(마지막 1)는 처음 것만.
+        .containsExactly(
+            MarketBoardService.PriceStatus.READY,
+            MarketBoardService.PriceStatus.READY,
+            MarketBoardService.PriceStatus.READY,
+            MarketBoardService.PriceStatus.PENDING,
+            MarketBoardService.PriceStatus.PENDING);
+    // 새 묶음 2개 × 1페이지 = 공식 검색 2번(FOOD는 캐시). 묶음당 최대 10번이라 요청당 최대 20번 = 방문자 한도(분당 20).
+    verify(markets, times(2)).search(any(), any());
+    assertThat(MarketBoardService.MAX_COLD_GROUPS * MarketBoardService.MAX_SCAN_PAGES)
+        .isLessThanOrEqualTo(20);
+    assertThat(result.get(0).price().currentMinPrice()).isEqualByComparingTo("107");
+  }
+
+  @Test
+  void 묶음_시세의_새_스캔이_한도에_걸리면_그_묶음과_뒤_새_묶음은_PENDING이고_캐시_묶음은_그대로다() {
+    when(markets.search(
+            any(), argThat(s -> s != null && s.categoryCode() == MarketTab.LIFE.categoryCode())))
+        .thenThrow(
+            new com.loakraken.common.api.BusinessException(
+                com.loakraken.common.lostark.LostArkErrorCode.CLIENT_RATE_LIMITED));
+    stubPages(MarketTab.BATTLE_ITEM, null, 3);
+    var cachedScan = new MarketBoardScan(MarketTab.FOOD, null, OBSERVED, 1, List.of(item(7)));
+    when(cache.findBoardScan(MarketTab.FOOD, null)).thenReturn(Optional.of(cachedScan));
+    var result =
+        service.prices(
+            List.of(
+                new MarketBoardService.PriceRequest(1, MarketTab.LIFE, null),
+                new MarketBoardService.PriceRequest(2, MarketTab.BATTLE_ITEM, null),
+                new MarketBoardService.PriceRequest(7, MarketTab.FOOD, null),
+                new MarketBoardService.PriceRequest(9, MarketTab.FOOD, null)));
+    assertThat(result)
+        .extracting(MarketBoardService.ItemPrice::status)
+        .containsExactly(
+            MarketBoardService.PriceStatus.PENDING,
+            MarketBoardService.PriceStatus.PENDING,
+            MarketBoardService.PriceStatus.READY,
+            MarketBoardService.PriceStatus.NOT_FOUND);
+    assertThat(result.get(0).observedAt()).isNull();
+    assertThat(result.get(3).observedAt()).isEqualTo(OBSERVED);
+    // 한도에 걸린 뒤 BATTLE_ITEM은 부르지 않는다.
+    verify(markets, times(1)).search(any(), any());
+  }
+
+  @Test
+  void 묶음_시세의_새_스캔이_업무_예외가_아닌_오류로_실패해도_500_대신_그_묶음과_뒤_새_묶음은_PENDING이다() {
+    when(markets.search(
+            any(), argThat(s -> s != null && s.categoryCode() == MarketTab.LIFE.categoryCode())))
+        .thenThrow(new IllegalStateException("예상하지 못한 오류"));
+    stubPages(MarketTab.BATTLE_ITEM, null, 3);
+    var cachedScan = new MarketBoardScan(MarketTab.FOOD, null, OBSERVED, 1, List.of(item(7)));
+    when(cache.findBoardScan(MarketTab.FOOD, null)).thenReturn(Optional.of(cachedScan));
+    var result =
+        service.prices(
+            List.of(
+                new MarketBoardService.PriceRequest(1, MarketTab.LIFE, null),
+                new MarketBoardService.PriceRequest(2, MarketTab.BATTLE_ITEM, null),
+                new MarketBoardService.PriceRequest(7, MarketTab.FOOD, null)));
+    assertThat(result)
+        .extracting(MarketBoardService.ItemPrice::status)
+        .containsExactly(
+            MarketBoardService.PriceStatus.PENDING,
+            MarketBoardService.PriceStatus.PENDING,
+            MarketBoardService.PriceStatus.READY);
+    verify(markets, times(1)).search(any(), any());
+  }
+
   @Test
   void 기본_보드_예열은_사용자_기본_보드와_같은_검색_키를_강제_갱신한다() {
     stubPages(MarketTab.REFINING, 4, 11);
@@ -137,6 +224,75 @@ class MarketBoardServiceTest {
     assertThat(row.spark7()).hasSize(7);
     assertThat(row.spark7().getFirst().date()).isEqualTo(today.minusDays(7));
     assertThat(row.spark7().getLast().date()).isEqualTo(today.minusDays(1));
+  }
+
+  @Test
+  void 거래량_정렬은_탭_전체_스캔을_거래량_지도로_정렬하고_오늘_없으면_어제_값을_날짜와_함께_쓴다() {
+    var clock = java.time.Clock.fixed(OBSERVED, java.time.ZoneOffset.UTC);
+    var withClock = new MarketBoardService(markets, cache, clock);
+    var today = LocalDate.ofInstant(OBSERVED, ZoneId.of("Asia/Seoul"));
+    var items = IntStream.rangeClosed(1, 5).mapToObj(MarketBoardServiceTest::item).toList();
+    when(cache.findBoardScan(MarketTab.FOOD, null))
+        .thenReturn(Optional.of(new MarketBoardScan(MarketTab.FOOD, null, OBSERVED, 5, items)));
+    when(cache.findVolumes(eq(today), any()))
+        .thenReturn(
+            Map.of(
+                2L, new com.loakraken.market.domain.MarketVolume(2, today.minusDays(1), 5, 50),
+                4L, new com.loakraken.market.domain.MarketVolume(4, today.minusDays(1), 1, 90)));
+    when(cache.findVolumes(eq(today.minusDays(1)), any()))
+        .thenReturn(
+            Map.of(5L, new com.loakraken.market.domain.MarketVolume(5, today.minusDays(2), 9, 50)));
+
+    var board = withClock.board(MarketTab.FOOD, null, MarketBoardRules.Sort.VOLUME, 1);
+
+    verifyNoInteractions(markets);
+    assertThat(board.sort()).isEqualTo(MarketBoardRules.Sort.VOLUME);
+    assertThat(board.scannedItems()).isEqualTo(5);
+    assertThat(board.rows())
+        .extracting(row -> row.price().id())
+        .containsExactly(4L, 5L, 2L, 1L, 3L);
+    assertThat(board.rows().getFirst().volume().sevenDay()).isEqualTo(90);
+    assertThat(board.rows().get(1).volume().volumeDate()).isEqualTo(today.minusDays(2));
+    assertThat(board.rows().get(3).volume()).isNull();
+    // 어제 지도는 오늘 지도에 없는 품목만 찾는다.
+    @SuppressWarnings("unchecked")
+    ArgumentCaptor<java.util.Collection<Long>> missing =
+        ArgumentCaptor.forClass(java.util.Collection.class);
+    verify(cache, atLeastOnce()).findVolumes(eq(today.minusDays(1)), missing.capture());
+    assertThat(missing.getAllValues().getFirst()).containsExactly(1L, 3L, 5L);
+
+    // 이름 검색도 같은 거래량 정렬을 쓴다.
+    var searched = withClock.board(MarketTab.FOOD, null, MarketBoardRules.Sort.VOLUME, 1, "품목");
+    assertThat(searched.rows())
+        .extracting(row -> row.price().id())
+        .containsExactly(4L, 5L, 2L, 1L, 3L);
+  }
+
+  @Test
+  void 거래량_지도가_없으면_행의_거래량은_이력_캐시의_완료일로_채우고_맞는_변형이_없으면_null이다() {
+    stubPages(MarketTab.REFINING, 4, 1);
+    var today = LocalDate.ofInstant(OBSERVED, ZoneId.of("Asia/Seoul"));
+    var days = new ArrayList<MarketItemHistory.DailyStat>();
+    days.add(new MarketItemHistory.DailyStat(today, new BigDecimal("999"), 4)); // 부분 집계
+    for (int i = 1; i <= 9; i++)
+      days.add(new MarketItemHistory.DailyStat(today.minusDays(i), BigDecimal.valueOf(100), i));
+    var history =
+        new MarketItemHistory(1L, List.of(new MarketItemHistory.Variant("품목1", null, 1, days)));
+    when(cache.findItemHistories(List.of(1L)))
+        .thenReturn(Map.of(1L, new MarketItemHistoryResult(OBSERVED, history)));
+
+    var row =
+        service.board(MarketTab.REFINING, null, MarketBoardRules.Sort.DEFAULT, 1).rows().getFirst();
+
+    // 완료일 최신순 1~7번째: 거래량 1+2+...+7 = 28, 전일 = 1
+    assertThat(row.volume().volumeDate()).isEqualTo(today.minusDays(1));
+    assertThat(row.volume().yesterday()).isEqualTo(1);
+    assertThat(row.volume().sevenDay()).isEqualTo(28);
+    var otherBundle =
+        new MarketPrice(1, "품목1", "일반", null, 10, null, BigDecimal.TEN, null, BigDecimal.TEN);
+    assertThat(MarketBoardService.volumeOf(history, otherBundle, today)).isNull();
+    assertThat(MarketBoardService.volumeOf(history, item(1), today.minusDays(9))).isNull();
+    assertThat(MarketBoardService.volumeOf(null, item(1), today)).isNull();
   }
 
   @Test

@@ -176,6 +176,74 @@ class CombatPowerSimulationIntegrationTest {
     SiteNames.assertAbsent(response.body());
   }
 
+  @org.springframework.beans.factory.annotation.Autowired
+  com.loakraken.character.application.CombatPowerSimulationService simulator;
+
+  @Test
+  void 방어구_재련_상급_재련은_시뮬레이터와_스펙업_경로_모두_계산하지_않는다() throws Exception {
+    // 옵션 B(11-08) 뒤 P0 핫픽스(11-09, #870): 방어구 재련·상급 재련은 같은 시점 실측에서 약 0.66배라 시뮬레이터 화면과 스펙업 경로 모두
+    // UNSUPPORTED(기존 코드
+    // MODEL_UNCONFIRMED).
+    when(detailsPort.fetch(anyString()))
+        .thenAnswer(invocation -> fetchedEquipment(invocation.getArgument(0)));
+    assertThat(get("/api/v1/characters/search?characterName=" + encode("시뮬방어구")).statusCode())
+        .isEqualTo(200);
+    var response =
+        simulate(
+            "시뮬방어구",
+            """
+            [
+              {"kind": "EQUIPMENT_REFINE", "index": 1, "refine": 24},
+              {"kind": "EQUIPMENT_ADVANCED_REFINE", "index": 1, "level": 10},
+              {"kind": "EQUIPMENT_QUALITY", "index": 0, "quality": 90}
+            ]
+            """);
+    assertThat(response.statusCode()).as(response.body()).isEqualTo(200);
+    ApiContractFixture.write("character-combat-power-simulate-armor-refine.json", response.body());
+    var data = mapper.readTree(response.body()).path("data");
+    var contributions = data.path("contributions");
+    var armorReason = "방어구 재련·상급 재련의 전투력 계산식을 아직 확인하고 있어 계산하지 않았습니다.";
+    for (int i = 0; i < 2; i++) {
+      assertThat(contributions.get(i).path("status").asText()).isEqualTo("UNSUPPORTED");
+      assertThat(contributions.get(i).path("delta").isNull()).isTrue();
+      assertThat(contributions.get(i).path("basis").asText()).isEqualTo(armorReason);
+      assertThat(contributions.get(i).path("reasonCode").asText()).isEqualTo("MODEL_UNCONFIRMED");
+    }
+    // 다른 변경은 그대로 계산한다(무기 품질 100 → 90 = -326.15, 위 테스트와 같은 값).
+    assertThat(contributions.at("/2/status").asText()).isEqualTo("OK");
+    assertThat(contributions.at("/2/delta").decimalValue()).isEqualByComparingTo("-326.15");
+    assertThat(data.path("unsupportedCount").asInt()).isEqualTo(2);
+    // 스펙업 목록·추천 순서가 부르는 경로(캐릭터 스냅숏 + 변경)도 같은 이유로 계산하지 않는다.
+    var specUp =
+        simulator.simulate(
+            simulator.snapshot("시뮬방어구"),
+            List.of(
+                new com.loakraken.character.application.CombatPowerSimulationService.Change(
+                    com.loakraken.character.application.CombatPowerSimulationService.Kind
+                        .EQUIPMENT_REFINE,
+                    null,
+                    1,
+                    null,
+                    null,
+                    24,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null)));
+    assertThat(specUp.contributions().getFirst().basis()).isEqualTo(armorReason);
+    assertThat(specUp.contributions().getFirst().delta()).isNull();
+    // 무기 재련은 시뮬레이터 화면에서도 방어구 이유가 붙지 않는다.
+    var weapon =
+        simulate("시뮬방어구", "[{\"kind\": \"EQUIPMENT_REFINE\", \"index\": 0, \"refine\": 11}]");
+    assertThat(weapon.statusCode()).isEqualTo(200);
+    assertThat(mapper.readTree(weapon.body()).at("/data/contributions/0/basis").asText())
+        .isNotEqualTo(armorReason);
+  }
+
   @Test
   void 범위_밖은_400_대상이_없으면_409다() throws Exception {
     when(detailsPort.fetch(anyString()))
@@ -687,6 +755,90 @@ class CombatPowerSimulationIntegrationTest {
         new CharacterLoadout(List.of(bracelet), null, null, null, arkPassive, null, List.of());
     return new FetchedCharacter(
         CharacterTestFixture.details(profile, loadout, List.of()), "{}", "[]");
+  }
+
+  @Test
+  void 완갑과_팔찌_주스탯_줄은_계산하지_않고_다른_팔찌_줄은_그대로다() throws Exception {
+    // PM 총괄 11-09: 완갑과 팔찌 힘·민첩·지능 줄은 주 스탯 → 전투력 경로라(같은 시점 실측에서 약 1.524배 작음) 계산하지 않는다.
+    when(detailsPort.fetch(anyString()))
+        .thenAnswer(
+            invocation -> {
+              var base = fetchedBracelet(invocation.getArgument(0));
+              var details = base.details();
+              var old = details.loadout();
+              var bracelet = old.equipment().getFirst();
+              var effects = new java.util.ArrayList<>(bracelet.detail().braceletEffects());
+              effects.add(new CharacterLoadout.BraceletEffect("힘 +12000", EffectGrade.MID));
+              var detail = bracelet.detail();
+              var withMainStat =
+                  new CharacterLoadout.Equipment(
+                      bracelet.type(),
+                      bracelet.name(),
+                      bracelet.icon(),
+                      bracelet.grade(),
+                      new CharacterLoadout.EquipmentDetail(
+                          detail.refineLevel(),
+                          detail.quality(),
+                          detail.itemLevel(),
+                          detail.tier(),
+                          detail.arkPassivePoint(),
+                          detail.effects(),
+                          detail.stoneEngravings(),
+                          detail.polishEffects(),
+                          List.copyOf(effects)));
+              var armGuard =
+                  new CharacterLoadout.Equipment(
+                      "완갑",
+                      "+16 테스트 팔 보호구",
+                      null,
+                      "유물",
+                      new CharacterLoadout.EquipmentDetail(
+                          16, null, null, 4, null, List.of(), List.of(), List.of(), List.of()));
+              var loadout =
+                  new CharacterLoadout(
+                      List.of(withMainStat, armGuard),
+                      old.engravings(),
+                      old.gems(),
+                      old.cards(),
+                      old.arkPassive(),
+                      old.arkGrid(),
+                      old.skills());
+              return new FetchedCharacter(
+                  CharacterTestFixture.details(details.profile(), loadout, List.of()), "{}", "[]");
+            });
+    assertThat(get("/api/v1/characters/search?characterName=" + encode("시뮬주스탯")).statusCode())
+        .isEqualTo(200);
+    var response =
+        simulate(
+            "시뮬주스탯",
+            """
+            [
+              {"kind": "BRACELET_EFFECT", "line": 3, "name": "없음"},
+              {"kind": "BRACELET_EFFECT", "line": 5, "name": "추가 피해", "grade": "MID"},
+              {"kind": "ARM_GUARD", "level": 17, "grade": "유물"}
+            ]
+            """);
+    assertThat(response.statusCode()).as(response.body()).isEqualTo(200);
+    ApiContractFixture.write(
+        "character-combat-power-simulate-main-stat-held.json", response.body());
+    var data = mapper.readTree(response.body()).path("data");
+    var contributions = data.path("contributions");
+    // 추가 피해 +3.50% 빼기는 그대로 계산한다(위 팔찌 테스트와 같은 3,345.24 → 3,257.54).
+    assertThat(contributions.at("/0/status").asText()).isEqualTo("OK");
+    assertThat(contributions.at("/0/delta").decimalValue()).isEqualByComparingTo("-87.70");
+    // 힘 +12000 줄을 바꾸면 주 스탯 경로라 계산하지 않는다.
+    assertThat(contributions.at("/1/status").asText()).isEqualTo("UNSUPPORTED");
+    assertThat(contributions.at("/1/delta").isNull()).isTrue();
+    assertThat(contributions.at("/1/reasonCode").asText()).isEqualTo("MODEL_UNCONFIRMED");
+    assertThat(contributions.at("/1/basis").asText())
+        .isEqualTo("팔찌 힘·민첩·지능 줄의 전투력 계산식을 아직 확인하고 있어 계산하지 않았습니다.");
+    // 완갑도 같은 경로라 계산하지 않는다.
+    assertThat(contributions.at("/2/status").asText()).isEqualTo("UNSUPPORTED");
+    assertThat(contributions.at("/2/reasonCode").asText()).isEqualTo("MODEL_UNCONFIRMED");
+    assertThat(contributions.at("/2/basis").asText())
+        .isEqualTo("팔 보호구 재련의 전투력 계산식을 아직 확인하고 있어 계산하지 않았습니다.");
+    assertThat(data.path("after").decimalValue()).isEqualByComparingTo("3257.54");
+    assertThat(data.path("unsupportedCount").asInt()).isEqualTo(2);
   }
 
   @Test

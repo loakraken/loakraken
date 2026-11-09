@@ -70,7 +70,13 @@ class CritSpeedIntegrationTest {
     assertThat(response.statusCode()).isEqualTo(200);
     var json = mapper.readTree(response.body());
     assertThat(json.path("code").asText()).isEqualTo("CHARACTER_CRIT_SPEED_SUCCESS");
-    assertThat(json.at("/data/ruleVersion").asText()).isEqualTo("crit-speed-v8");
+    assertThat(json.at("/data/ruleVersion").asText()).isEqualTo("crit-speed-v9");
+    // 스킬을 모르면 주력 스킬 치명타는 null이고 목표는 totalRate로 잰다. 스킬 한정 토글이 없으면 축별 합도 null(#5)
+    assertThat(json.at("/data/crit").has("mainSkillRate")).isTrue();
+    assertThat(json.at("/data/crit/mainSkillRate").isNull()).isTrue();
+    assertThat(json.at("/data/crit/skillLimitedRate").isNull()).isTrue();
+    assertThat(json.at("/data/crit/damage/skillLimited").isNull()).isTrue();
+    assertThat(json.at("/data/speed/attack").has("skillLimited")).isTrue();
     assertThat(json.at("/data/characterName").asText()).isEqualTo(NAME);
     assertThat(json.at("/data/crit/observedRate").decimalValue()).isEqualByComparingTo("25.71");
     assertThat(json.at("/data/crit/assumedRate").decimalValue()).isEqualByComparingTo("10");

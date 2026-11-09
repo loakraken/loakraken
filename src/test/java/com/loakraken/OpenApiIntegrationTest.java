@@ -780,12 +780,46 @@ class OpenApiIntegrationTest {
         .contains("startAt", "endAt", "rewardAt", "thumbnail");
   }
 
+  /** 장신구 기본 스탯 범위(흡수 #6): api 배포 전까지 칸 자체는 optional·nullable, 안의 값은 항상 있고 %만 null을 허용한다. */
+  @Test
+  void 장비_상세의_장신구_기본_스탯_범위는_optional_nullable이고_안은_백분율만_null이다() throws Exception {
+    var document = JsonMapper.builder().build().readTree(request("/v3/api-docs").body());
+    assertThat(document.at("/components/schemas/EquipmentDetailResponse/required").toString())
+        .doesNotContain("accessoryStats");
+    assertThat(
+            document
+                .at(
+                    "/components/schemas/EquipmentDetailResponse/properties/accessoryStats/anyOf/1/type")
+                .asText())
+        .isEqualTo("null");
+    var stats = document.at("/components/schemas/AccessoryStatsResponse");
+    for (var field :
+        List.of("polishStage", "mainStat", "mainStatMin", "mainStatMax", "mainStatRangePct"))
+      assertThat(stats.path("required").toString()).as(field).contains(field);
+    assertThat(stats.at("/properties/mainStatRangePct/anyOf/1/type").asText()).isEqualTo("null");
+    assertThat(stats.at("/properties/mainStat/type").asText()).isEqualTo("integer");
+  }
+
   @Test
   void 시세_보드는_탭_정렬_검증과_null_등락률_계약을_명시한다() throws Exception {
     var document = JsonMapper.builder().build().readTree(request("/v3/api-docs").body());
     var board = document.path("paths").path("/api/v1/markets/board").path("get");
     assertThat(board.path("parameters").toString())
-        .contains("tab", "sort", "default|high|low|rise|fall");
+        .contains("tab", "sort", "default|high|low|rise|fall|volume");
+    // 거래량 칸은 api가 먼저 배포되기 전까지 optional(required 아님)이고 null을 허용한다.
+    for (var field : List.of("tradesYesterday", "trades7d", "volumeDate")) {
+      assertThat(document.at("/components/schemas/MarketBoardItemResponse/required").toString())
+          .doesNotContain(field);
+      assertThat(
+              document
+                  .at(
+                      "/components/schemas/MarketBoardItemResponse/properties/"
+                          + field
+                          + "/anyOf/1/type")
+                  .asText())
+          .as(field)
+          .isEqualTo("null");
+    }
     assertThat(document.path("paths").path("/api/v1/markets/tabs").path("get").isMissingNode())
         .isFalse();
     assertThat(document.at("/components/schemas/MarketBoardResponse/required").toString())

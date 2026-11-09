@@ -17,6 +17,8 @@ class MarketOpenApiConfiguration {
       ResponseContracts.apply(
           MarketItemHistoryResponse.class, document.getComponents().getSchemas());
       ResponseContracts.apply(MarketBoardResponse.class, document.getComponents().getSchemas());
+      ResponseContracts.apply(
+          MarketItemPricesResponse.class, document.getComponents().getSchemas());
       ResponseContracts.apply(MarketTabsResponse.class, document.getComponents().getSchemas());
       for (var type :
           java.util.List.of(

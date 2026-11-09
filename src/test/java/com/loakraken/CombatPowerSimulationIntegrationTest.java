@@ -136,7 +136,7 @@ class CombatPowerSimulationIntegrationTest {
       assertThat(contributions.get(i).path("delta").isNull()).isTrue();
     }
     for (var item : contributions) {
-      assertThat(item.path("basis").asText()).doesNotContain("로아", "lo4");
+      assertThat(item.path("basis").asText()).doesNotContain("로아");
       SiteNames.assertAbsent(item.path("basis").asText());
     }
     verify(detailsPort, times(1)).fetch(anyString());

@@ -43,7 +43,12 @@ import org.springframework.stereotype.Service;
  */
 @Service
 public class SpecUpGoalService {
-  public static final String RULE_VERSION = "spec-up-goal-v2";
+  /**
+   * v3: 목표 경로도 추천 순서와 같은 단계 종류(어빌리티 스톤 목표 조합, 완갑 스위치)를 고른다(계산 검증 11-09: 스톤으로만 닿는 목표가 '더 올릴 수
+   * 없음'이었다).
+   */
+  public static final String RULE_VERSION = "spec-up-goal-v3";
+
   static final int MAX_STEPS = 30;
   static final Duration TIME_LIMIT = Duration.ofSeconds(2);
   static final Duration CACHE_TTL = Duration.ofMinutes(10);
@@ -394,7 +399,8 @@ public class SpecUpGoalService {
             String.valueOf(books.observedAt().map(Instant::toEpochMilli).orElse(0L)),
             RULE_VERSION,
             CombatPowerSimulationService.RULE_VERSION,
-            String.valueOf(specUp.costRuleVersions()));
+            String.valueOf(specUp.costRuleVersions()),
+            specUp.armGuardEnabled() ? "ag" : "-");
     var cached = store.find(key);
     if (cached.isPresent()) return cached.get();
     return single(
@@ -427,7 +433,15 @@ public class SpecUpGoalService {
           snapshot, before, target, before, ALREADY_REACHED, null, 0L, 0, null, List.of());
     var chain =
         chain(
-            snapshot, before, target, Pick.EFFICIENCY, false, MAX_STEPS, false, gems, refinePrices);
+            snapshot,
+            before,
+            target,
+            Pick.EFFICIENCY,
+            false,
+            MAX_STEPS,
+            specUp.armGuardEnabled(),
+            gems,
+            refinePrices);
     return result(
         snapshot,
         before,
@@ -472,8 +486,8 @@ public class SpecUpGoalService {
       Optional<RefiningMaterialPriceService.Prices> refinePrices) {
     var pricesAt = new Instant[1];
     var steps = new ArrayList<Step>();
-    // 추천 순서(armGuard 인자를 받는 쪽)는 어빌리티 스톤도 고른다. 목표 경로는 그대로.
-    var state = State.of(snapshot.details().loadout(), armGuard, pricedOnly);
+    // 추천 순서와 목표 경로 모두 어빌리티 스톤 목표 조합도 고른다(목표 경로 v3).
+    var state = State.of(snapshot.details().loadout(), armGuard, true);
     // 칸마다 그 칸의 마지막 단계 변경(스톤은 각인 둘이라 여러 개).
     var applied = new LinkedHashMap<String, List<Change>>();
     var current = before;

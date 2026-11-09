@@ -32,7 +32,7 @@ class BlockedTermsGuardTest {
    * 이름 목록에 있어야 하는 이름 수(숫자만 공개). 로컬 목록에 이름을 더하면 이 수와 CI 비밀값 {@code BLOCKED_TERMS}도 같이 고친다. CI 비밀값이
    * 로컬보다 오래돼 테스트 주석의 이름을 놓친 일(#576) 뒤로, 목록이 이보다 적으면 실패한다.
    */
-  static final int EXPECTED_NAMES = 34;
+  static final int EXPECTED_NAMES = 38;
 
   @Test
   void 이름_목록은_비거나_모자라지_않다() {

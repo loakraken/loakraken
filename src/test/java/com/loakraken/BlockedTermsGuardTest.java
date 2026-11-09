@@ -16,11 +16,14 @@ import org.junit.jupiter.api.Test;
  * 이름 목록은 {@link SiteNames}가 저장소 밖에서 읽고, 없으면(포크 PR 등) 이름 검사만 건너뛰고 간접 표현은 늘 검사한다. 실패해도 일치한 파일·줄 번호와
  * 목록 번호만 보이고 이름은 출력하지 않는다(CI 로그가 공개라서).
  *
- * <p>예외: 이미 적용된 Flyway 마이그레이션(바꾸면 체크섬이 달라진다), 목록을 다루는 {@link SiteNames}와 이 검사 자체.
+ * <p>예외: 이미 적용된 Flyway 마이그레이션(바꾸면 체크섬이 달라진다), 목록을 다루는 {@link SiteNames}와 이 검사 자체, 오픈소스 라이선스가 저작자
+ * 표시를 요구하는 NOTICE와 MIT 라이선스 사본.
  */
 class BlockedTermsGuardTest {
   private static final List<String> EXCLUDED =
       List.of(
+          "NOTICE",
+          "src/main/resources/refining/THIRD-PARTY-LICENSE-",
           "src/main/resources/db/migration/",
           "src/test/java/com/loakraken/SiteNames.java",
           "src/test/java/com/loakraken/BlockedTermsGuardTest.java");

@@ -71,6 +71,8 @@ jobs:
     permissions:
       contents: read
       packages: write
+      # 이미지 검사 결과(SARIF)를 코드 스캐닝에 올릴 때만 쓴다. 공개 저장소에서도 알림 목록은 쓰기 권한이 있는 사람만 본다.
+      security-events: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
@@ -87,6 +89,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        id: api-image
         with:
           context: .
           push: true
@@ -112,3 +115,33 @@ jobs:
           tags: ${{ steps.bundle-meta.outputs.tags }}
           labels: ${{ steps.bundle-meta.outputs.labels }}
           provenance: false
+      # 올린 api 이미지의 취약점 검사(보고만). 2주 동안 결과를 본 뒤 빌드를 막을지 정한다.
+      # 검사·업로드가 실패해도 이미지 발행은 성공으로 남는다(continue-on-error, exit-code 0).
+      # 결과는 로그에 표로 찍지 않고 SARIF 파일로만 만들어 코드 스캐닝에 올린다(공개 저장소의 실행 로그는 누구나 본다).
+      # trivy-action은 2026-03 태그 변조 사고 뒤에 나온 불변 릴리스 v0.36.0을 커밋 SHA로 고정하고, trivy 본체 버전도 적어 둔다.
+      - name: Scan api image (report only)
+        id: trivy
+        continue-on-error: true
+        timeout-minutes: 10
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          version: v0.70.0
+          scan-type: image
+          image-ref: ${{ env.IMAGE }}@${{ steps.api-image.outputs.digest }}
+          format: sarif
+          output: trivy-api.sarif
+          exit-code: '0'
+          hide-progress: true
+      - name: Upload scan to code scanning
+        if: always() && hashFiles('trivy-api.sarif') != ''
+        continue-on-error: true
+        uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        with:
+          sarif_file: trivy-api.sarif
+          category: trivy-image-api
+      - name: Scan summary
+        if: always()
+        env:
+          SCAN: ${{ steps.trivy.outcome }}
+        run: |
+          echo "이미지 검사(보고만): ${SCAN} — 결과는 Security 탭 코드 스캐닝(trivy-image-api)에서 봅니다." >> "$GITHUB_STEP_SUMMARY"

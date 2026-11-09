@@ -223,6 +223,19 @@ public final class CombatPowerBraceletModel {
     return new Line(family.text(grade), Kind.SPECIAL, value.pct(), null, 0, BigDecimal.ZERO, null);
   }
 
+  /** 팔찌 힘·민첩·지능 +N 줄의 합(재련 모델 S의 Σ, 계산 검증 11-09). 줄 해석은 parse의 MAIN_STAT과 같다. */
+  public static BigDecimal mainStat(CharacterLoadout loadout) {
+    var bracelet = bracelet(loadout);
+    if (bracelet == null) return BigDecimal.ZERO;
+    var total = BigDecimal.ZERO;
+    for (var effect : bracelet.detail().braceletEffects()) {
+      if (effect == null || effect.text() == null) continue;
+      var matcher = MAIN_STAT.matcher(normalize(effect.text()));
+      if (matcher.matches()) total = total.add(new BigDecimal(matcher.group(2)));
+    }
+    return total;
+  }
+
   /** 팔찌의 W 항 고정 무기 공격력 합("무기 공격력 +N"과 "무기 공격력이 N 증가한다"의 N, 계산 검증 23:45). */
   public static BigDecimal weaponFlat(CharacterLoadout loadout) {
     var bracelet = bracelet(loadout);

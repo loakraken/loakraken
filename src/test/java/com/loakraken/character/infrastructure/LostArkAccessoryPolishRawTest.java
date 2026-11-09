@@ -40,4 +40,22 @@ class LostArkAccessoryPolishRawTest {
             new CharacterCardPort.PolishLine("목걸이", 1640, "유물", "적에게 주는 피해", "+1.20%", "MID"),
             new CharacterCardPort.PolishLine("목걸이", 1640, "유물", "낙인력", "+4.80%", "MID"));
   }
+
+  /**
+   * 실제 원문의 기본 효과는 힘·민첩·지능 세 줄이 같은 값(다른 직업 몫은 흐린 색)이고 체력 줄이 따로 있다. 첫 힘민지 줄 값 15366, 연마 3줄 → 목걸이 3단계
+   * 15178~17857의 7.02%(흡수 #6).
+   */
+  @Test
+  void 실제_장신구_원문의_힘민지와_연마_단계로_범위_백분율을_낸다() throws Exception {
+    String tooltip;
+    try (var in =
+        getClass().getResourceAsStream("/fixtures/accessory-tooltip-relic-necklace.json")) {
+      tooltip = new String(in.readAllBytes(), StandardCharsets.UTF_8);
+    }
+    var detail = LostArkEquipmentTooltip.parse("엄숙한 결의의 목걸이", tooltip);
+    assertThat(com.loakraken.character.domain.AccessoryBaseStat.of("목걸이", "유물", detail))
+        .isEqualTo(
+            new com.loakraken.character.domain.AccessoryBaseStat(
+                3, 15366, 15178, 17857, new java.math.BigDecimal("7.02")));
+  }
 }

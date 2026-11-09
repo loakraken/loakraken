@@ -1,10 +1,12 @@
 package com.loakraken.character.presentation;
 
+import com.loakraken.character.domain.AccessoryBaseStat;
 import com.loakraken.character.domain.CharacterLoadout;
 import com.loakraken.character.domain.EquipmentSummary;
 import com.loakraken.character.domain.GemBaseAttack;
 import com.loakraken.character.domain.SkillCooldown;
 import com.loakraken.common.api.NullableResponse;
+import com.loakraken.common.api.OptionalResponse;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.math.BigDecimal;
 import java.util.List;
@@ -45,7 +47,7 @@ public record CharacterLoadoutResponse(
           value.name(),
           value.icon(),
           value.grade(),
-          EquipmentDetailResponse.from(value.detail(), "보주".equals(value.type())));
+          EquipmentDetailResponse.from(value.detail(), value.type(), value.grade()));
     }
   }
 
@@ -82,9 +84,17 @@ public record CharacterLoadoutResponse(
               description = "보주만: 공식 Tooltip의 '달성 최대 낙원력' 숫자(쉼표 없음). 보주가 아니거나 문구가 없으면 null",
               example = "18145692")
           @NullableResponse
-          Long paradisePower) {
-    static EquipmentDetailResponse from(CharacterLoadout.EquipmentDetail value, boolean orb) {
+          Long paradisePower,
+      @Schema(
+              description =
+                  "3·4티어 고대·유물 목걸이·귀걸이·반지만: 기본 효과 힘민지가 그 부위 3단계(연마 뒤) 범위(공식 아이템 사전)의 몇 %인지. 다른 장비·해석 불가면 null")
+          @NullableResponse
+          @OptionalResponse
+          AccessoryStatsResponse accessoryStats) {
+    static EquipmentDetailResponse from(
+        CharacterLoadout.EquipmentDetail value, String type, String grade) {
       if (value == null) return null;
+      boolean orb = "보주".equals(type);
       return new EquipmentDetailResponse(
           CharacterLoadout.EquipmentDetail.PARSER_VERSION,
           value.refineLevel(),
@@ -102,7 +112,55 @@ public record CharacterLoadoutResponse(
               ? null
               : new RefineExpResponse(value.refineExp().current(), value.refineExp().max()),
           value.advancedRefineLevel(),
-          orb ? EquipmentSummary.paradisePower(value) : null);
+          orb ? EquipmentSummary.paradisePower(value) : null,
+          AccessoryStatsResponse.from(AccessoryBaseStat.of(type, grade, value), type));
+    }
+  }
+
+  @Schema(
+      description = "장신구 기본 스탯 범위. 범위 = 공식 아이템 사전 표의 그 부위 3단계(연마 뒤) 힘민지 최솟값~최댓값(연마 단계와 상관없이 같음)")
+  public record AccessoryStatsResponse(
+      @Schema(description = "연마 단계(연마 효과 줄 수 0~3)", example = "3") int polishStage,
+      @Schema(description = "기본 효과 힘·민첩·지능 값", example = "16009") int mainStat,
+      @Schema(description = "그 부위 3단계 힘민지 최솟값", example = "15178") int mainStatMin,
+      @Schema(description = "그 부위 3단계 힘민지 최댓값", example = "17857") int mainStatMax,
+      @Schema(
+              description =
+                  "(힘민지 − 최솟값) ÷ (최댓값 − 최솟값) × 100, 소수 둘째 자리(반올림). 범위 밖은 음수·100 초과 그대로(지금은 늘 값이 있고 null은 예비)",
+              example = "31.02")
+          @NullableResponse
+          BigDecimal mainStatRangePct) {
+    private static final org.slf4j.Logger log =
+        org.slf4j.LoggerFactory.getLogger(AccessoryStatsResponse.class);
+
+    /**
+     * 범위표 점검 대상(3단계 최댓값 위, 연마 3단계인데 최솟값 아래)은 인스턴스당 (부위·단계·값) 한 번만, 최대 200가지까지 남긴다(캐릭터 이름 없음). 연마가 덜
+     * 된 장신구·3티어의 최솟값 아래는 흔한 값이라 남기지 않는다.
+     */
+    private static final java.util.Set<String> OUT_OF_RANGE_SEEN =
+        java.util.concurrent.ConcurrentHashMap.newKeySet();
+
+    private static final int OUT_OF_RANGE_LOG_CAP = 200;
+
+    static AccessoryStatsResponse from(AccessoryBaseStat value, String slot) {
+      if (value == null) return null;
+      if (value.rangeSuspect()) {
+        var key = slot + "|" + value.polishStage() + "|" + value.mainStat();
+        if (OUT_OF_RANGE_SEEN.size() < OUT_OF_RANGE_LOG_CAP && OUT_OF_RANGE_SEEN.add(key))
+          log.warn(
+              "event=accessory_stat_range_suspect slot={} stage={} mainStat={} min={} max={}",
+              slot,
+              value.polishStage(),
+              value.mainStat(),
+              value.mainStatMin(),
+              value.mainStatMax());
+      }
+      return new AccessoryStatsResponse(
+          value.polishStage(),
+          value.mainStat(),
+          value.mainStatMin(),
+          value.mainStatMax(),
+          value.mainStatRangePct());
     }
   }
 

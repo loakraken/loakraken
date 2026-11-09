@@ -11,6 +11,7 @@ import com.loakraken.market.application.MarketPricesPort;
 import com.loakraken.market.application.MarketSearch;
 import com.loakraken.market.domain.MarketItemHistory;
 import com.loakraken.market.domain.MarketPrice;
+import com.loakraken.market.domain.MarketTab;
 import java.math.BigDecimal;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -262,17 +263,30 @@ class MarketBoardIntegrationTest {
     assertThat(json.at("/data/tabs/0/categoryCode").asInt()).isEqualTo(50010);
     assertThat(json.at("/data/tabs/0/defaultTier").asInt()).isEqualTo(4);
     assertThat(json.at("/data/sorts").toString()).contains("rise", "fall");
-    // #11: 아바타·장비 상자(분류 조사, 공식 분류 코드). 티어 조건 없음.
+    // #11: 아바타(분류 조사, 공식 분류 코드). 티어 조건 없음.
     var added = new java.util.HashMap<String, tools.jackson.databind.JsonNode>();
     json.at("/data/tabs").forEach(tab -> added.put(tab.path("tab").asText(), tab));
     assertThat(added.get("AVATAR").path("label").asText()).isEqualTo("아바타");
     assertThat(added.get("AVATAR").path("categoryCode").asInt()).isEqualTo(20000);
     assertThat(added.get("AVATAR").path("defaultTier").isNull()).isTrue();
-    assertThat(added.get("EQUIPMENT_BOX").path("label").asText()).isEqualTo("장비 상자");
-    assertThat(added.get("EQUIPMENT_BOX").path("categoryCode").asInt()).isEqualTo(10100);
-    assertThat(added.get("EQUIPMENT_BOX").path("defaultTier").isNull()).isTrue();
+    // 장비 상자(10100)는 공식 분류 코드가 맞지만 공식 거래소 매물이 0이라 탭 목록에서 뺀다(웹은 이 목록으로 탭을 만든다).
+    assertThat(added).doesNotContainKey("EQUIPMENT_BOX");
+    assertThat(json.at("/data/tabs").size()).isEqualTo(MarketTab.values().length - 1);
     verifyNoInteractions(prices, options, history);
     ApiContractFixture.write("market-tabs.json", response.body());
+  }
+
+  @Test
+  void 탭_목록에서_뺀_장비_상자도_보드_조회는_그대로_받는다() throws Exception {
+    when(prices.fetch(any(), any())).thenReturn(new MarketPage(1, 10, 0, List.of()));
+    var response = get("/api/v1/markets/board?tab=EQUIPMENT_BOX");
+    assertThat(response.statusCode()).as(response.body()).isEqualTo(200);
+    var json = mapper.readTree(response.body());
+    assertThat(json.at("/data/tab").asText()).isEqualTo("EQUIPMENT_BOX");
+    assertThat(json.at("/data/items").size()).isZero();
+    var search = org.mockito.ArgumentCaptor.forClass(MarketSearch.class);
+    verify(prices, org.mockito.Mockito.atLeastOnce()).fetch(any(), search.capture());
+    assertThat(search.getValue().categoryCode()).isEqualTo(10100);
   }
 
   @ParameterizedTest

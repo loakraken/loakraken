@@ -231,7 +231,7 @@ class SpecUpGoalServiceTest {
         .extracting(SpecUpGoalService.Step::extraCost)
         .containsExactly(150_000L, 160_000L, 170_000L);
     assertThat(path.totalCost()).isEqualTo(480_000L);
-    assertThat(path.ruleVersion()).isEqualTo("spec-up-path-v3");
+    assertThat(path.ruleVersion()).isEqualTo("spec-up-path-v4");
 
     when(specUp.armGuardEnabled()).thenReturn(false);
     var off = service.path("목표테스트", SpecUpGoalService.Pick.EFFICIENCY, 3);
@@ -363,6 +363,60 @@ class SpecUpGoalServiceTest {
                 "ABILITY_STONE:1:4",
                 "ABILITY_STONE:4:2",
                 "ABILITY_STONE:2:4");
+  }
+
+  /**
+   * 스톤은 칸처럼 센다(PM 총괄 11-09): 스톤 단계가 둘 이상이면 새 스톤을 다시 깎는 것이라 합계에는 마지막 스톤 비용만 들어가고, 뒤 스톤 단계의 더 드는 비용은
+   * 그 스톤 비용 − 앞 스톤 비용이다. 보석 칸도 같은 규칙(칸마다 마지막 단계 누적 비용). 추천 순서(두 정렬)와 목표 경로 모두.
+   */
+  @Test
+  void 스톤_단계가_이어지면_합계에는_마지막_스톤_비용만_센다() {
+    equipment = List.of(stoneItem(1, 1));
+    var service = service(System::nanoTime);
+    var runs = new java.util.LinkedHashMap<String, List<SpecUpGoalService.Step>>();
+    for (var pick : SpecUpGoalService.Pick.values())
+      runs.put(pick.name(), service.path("목표테스트", pick, 30).steps());
+    runs.put("GOAL", service.goal("목표테스트", new BigDecimal("6000")).steps());
+    int multiStone = 0;
+    for (var run : runs.entrySet()) {
+      var slots = new java.util.LinkedHashMap<String, Long>();
+      long others = 0;
+      int stones = 0;
+      for (var step : run.getValue()) {
+        var amount = step.cost() == null ? null : step.cost().amount();
+        String slot =
+            "ABILITY_STONE".equals(step.kind())
+                ? "ABILITY_STONE"
+                : step.candidateId().startsWith("GEM_LEVEL:")
+                    ? step.candidateId().substring(0, step.candidateId().lastIndexOf(':'))
+                    : null;
+        if ("ABILITY_STONE".equals(step.kind())) {
+          stones++;
+          if (amount != null && slots.containsKey(slot) && slots.get(slot) != null)
+            assertThat(step.extraCost())
+                .as(run.getKey() + " " + step.candidateId() + " 더 드는 비용")
+                .isEqualTo(amount - slots.get(slot));
+        }
+        Long expected;
+        if (slot != null) {
+          slots.put(slot, amount);
+          expected = null;
+        } else if (amount != null) others += amount;
+        if (amount == null && slot == null) {
+          others = Long.MIN_VALUE / 2;
+        }
+        expected =
+            others < 0 || slots.containsValue(null)
+                ? null
+                : others + slots.values().stream().mapToLong(Long::longValue).sum();
+        assertThat(step.cumulativeCost())
+            .as(run.getKey() + " " + step.order() + " " + step.candidateId() + " 누적")
+            .isEqualTo(expected);
+      }
+      if (stones >= 2) multiStone++;
+    }
+    // 이 픽스처에서 스톤 단계가 둘 이상인 경로가 있어야 규칙을 시험한다.
+    assertThat(multiStone).as("스톤 단계가 둘 이상인 경로 수").isPositive();
   }
 
   /**

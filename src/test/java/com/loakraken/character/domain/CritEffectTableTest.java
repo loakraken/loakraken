@@ -7,6 +7,7 @@ import com.loakraken.character.domain.CritSpeedCalculation.Axis;
 import com.loakraken.character.domain.CritSpeedCalculation.Category;
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -894,6 +895,73 @@ class CritEffectTableTest {
     assertThat(CritEffectTable.node("광기 Lv.3").rate()).isEqualTo(CritEffectTable.Decision.INCLUDE);
     assertThat(CritEffectTable.node("곡예사 Lv.1").damage()).isEqualTo(CritEffectTable.Decision.SKILL);
     assertThat(CritEffectTable.node("없는 노드 Lv.1")).isNull();
+  }
+
+  /**
+   * '자신 및 파티원' 공이속 트라이포드(PM 총괄 11-09 규칙, 계산 검증 21:13): 선택한 트라이포드 문구가 자신 및 파티원의 공격·이동 속도를 올리면 기본 켬
+   * 토글(가정 출처)로 더한다. 표본 캐릭터(11-09 공식 원문) 번개의 속삭임 '번개의 축복' +8. 자기만 콤보 적중 시 오르는 붕천퇴 '바람의 축복'은 지금처럼 상황
+   * 조건(기본 끔)이다. 이름이 같아도 문구가 자신 및 파티원이면(발키리 숭고한 도약 '바람의 축복') 파티 공이속으로 본다.
+   */
+  @Test
+  void 자신_및_파티원_공이속_트라이포드는_기본_켬_토글로_더한다() {
+    var party =
+        tripodSkill("번개의 속삭임", "번개의 축복", "스킬 시전 시 8.0 초간 24.0m 내 자신 및 파티원의 공격속도가 8.0% 증가한다.");
+    var self =
+        tripodSkill("붕천퇴", "바람의 축복", "적에게 콤보 공격 적중 시 4.0 초간 공격속도가 19.2% 증가하고 이동속도가 19.2% 증가한다.");
+    var striker = calculate("스트라이커", List.of(), List.of(party, self), null, Assumptions.NONE);
+    // 신속 1.32 + 번개의 축복 8
+    assertThat(striker.speed().attack().total()).isEqualByComparingTo("9.32");
+    assertThat(striker.speed().move().total()).isEqualByComparingTo("1.32");
+    assertThat(striker.toggles())
+        .extracting(
+            t ->
+                t.key()
+                    + "/"
+                    + t.axis()
+                    + "="
+                    + t.value().stripTrailingZeros().toPlainString()
+                    + "/"
+                    + t.on())
+        .contains("번개의 축복/ATTACK_SPEED=8/true", "바람의 축복/ATTACK_SPEED=19.2/false");
+    assertThat(striker.limitations()).noneMatch(line -> line.contains("번개의 축복(분류 중)"));
+
+    var off =
+        calculate(
+            "스트라이커",
+            List.of(),
+            List.of(party),
+            null,
+            new Assumptions(
+                false, false, 0, null, null, null, null, null, true, Map.of("번개의 축복", false)));
+    assertThat(off.speed().attack().total()).isEqualByComparingTo("1.32");
+
+    var valkyrie =
+        calculate(
+            "발키리",
+            List.of(),
+            List.of(
+                tripodSkill(
+                    "숭고한 도약",
+                    "바람의 축복",
+                    "스킬 시전 시 8.0 초간 자신 및 24.0m 범위 내의 파티원의 공격 속도와 이동 속도가 각각 8.0% 증가한다.")),
+            null,
+            Assumptions.NONE);
+    assertThat(valkyrie.speed().attack().total()).isEqualByComparingTo("9.32");
+    assertThat(valkyrie.speed().move().total()).isEqualByComparingTo("9.32");
+  }
+
+  private static CharacterLoadout.Skill tripodSkill(String skill, String tripod, String effect) {
+    return new CharacterLoadout.Skill(
+        skill,
+        null,
+        12,
+        null,
+        null,
+        null,
+        List.of(new CharacterLoadout.Tripod(1, 1, tripod, null, effect)),
+        null,
+        List.of(),
+        CharacterLoadout.AttackType.NONE);
   }
 
   private static List<String> values(

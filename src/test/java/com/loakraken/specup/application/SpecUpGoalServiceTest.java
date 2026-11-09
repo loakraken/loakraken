@@ -345,6 +345,27 @@ class SpecUpGoalServiceTest {
   }
 
   /**
+   * 목표 경로도 추천 순서와 같은 단계 종류를 고른다(v3, 계산 검증 11-09): 전에는 목표 경로가 스톤 단계를 쓰지 않아 스톤으로만 닿는 목표가 '더 올릴 수
+   * 없음'이었다. 닿지 않는 목표(6000)면 오르는 단계를 다 고르므로 스톤 단계도 들어 있어야 한다.
+   */
+  @Test
+  void 목표_경로도_어빌리티_스톤_단계를_고른다() {
+    equipment = List.of(stoneItem(1, 1));
+    var goal = service(System::nanoTime).goal("목표테스트", new BigDecimal("6000"));
+    assertThat(goal.steps()).extracting(SpecUpGoalService.Step::kind).contains("ABILITY_STONE");
+    for (var step : goal.steps())
+      if ("ABILITY_STONE".equals(step.kind()))
+        assertThat(step.candidateId())
+            .isIn(
+                "ABILITY_STONE:3:2",
+                "ABILITY_STONE:2:3",
+                "ABILITY_STONE:4:1",
+                "ABILITY_STONE:1:4",
+                "ABILITY_STONE:4:2",
+                "ABILITY_STONE:2:4");
+  }
+
+  /**
    * 실제 원문 스톤(감소 줄이 셋째로 붙음)에서도 스톤 상태를 만든다. 감소 줄을 각인으로 세면 줄이 셋이라 스톤 단계가 하나도 나오지 않았다(계산 검증 11-01 P1).
    */
   @Test

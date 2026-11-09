@@ -782,7 +782,7 @@ class SpecUpIntegrationTest {
     ApiContractFixture.write("character-spec-up-goal.json", response.body());
     SiteNames.assertAbsent(response.body());
     var data = mapper.readTree(response.body()).path("data");
-    assertThat(data.path("ruleVersion").asText()).isEqualTo("spec-up-goal-v2");
+    assertThat(data.path("ruleVersion").asText()).isEqualTo("spec-up-goal-v3");
     assertThat(data.path("combatPower").decimalValue()).isEqualByComparingTo("3000.00");
     assertThat(data.path("targetCombatPower").decimalValue()).isEqualByComparingTo("3100.00");
     assertThat(data.path("stopReasonCode").asText()).isEqualTo("REACHED");

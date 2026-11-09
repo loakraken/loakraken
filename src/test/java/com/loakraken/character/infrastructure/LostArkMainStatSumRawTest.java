@@ -11,7 +11,8 @@ import tools.jackson.databind.json.JsonMapper;
 
 /**
  * 재련 모델 S의 Σ(계산 검증 11-09 방어구 전투력 근본 원인)를 실제 공식 원문(크라켄 점수 표본의 armories 원문)에서 실제 수집 경로와 같은 변환으로 읽는다.
- * 기대값은 원문 툴팁의 방어구 5·팔 보호구·장신구 5 첫 힘·민첩·지능 +N 합(m01은 장신구 한 칸이 비어 10부위). 표본 팔찌에는 힘·민첩·지능 줄이 없다.
+ * 기대값은 원문 툴팁의 방어구 5·팔 보호구·장신구 5 첫 힘·민첩·지능 +N 합 + 팔찌 힘·민첩·지능 줄(l07 민첩 +15,360, m01 지능 +9,921). m01은
+ * 팔 보호구가 없어 10부위다.
  */
 class LostArkMainStatSumRawTest {
   private static final JsonMapper MAPPER = new JsonMapper();
@@ -26,8 +27,8 @@ class LostArkMainStatSumRawTest {
             "l04", 710_479L,
             "l05", 740_666L,
             "l06", 829_323L,
-            "l07", 826_939L,
-            "m01", 356_848L);
+            "l07", 842_299L,
+            "m01", 366_769L);
     for (var entry : expected.entrySet()) {
       var raw =
           MAPPER

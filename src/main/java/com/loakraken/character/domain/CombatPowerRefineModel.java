@@ -365,6 +365,14 @@ public final class CombatPowerRefineModel {
     return none;
   }
 
+  /** S의 Σ(주스탯 합)와 읽지 못한 이유. */
+  public record MainStatSum(BigDecimal sum, String reason) {}
+
+  /** 시험 먼저 올리는 칸(아직 0). */
+  public static MainStatSum mainStatSum(CharacterLoadout loadout) {
+    return new MainStatSum(BigDecimal.ZERO, null);
+  }
+
   /** 캐릭터 하나의 재련 모델. baseAttackPct는 보석 모델이 구한 지금 기본 공격력 %(백분율, null이면 계산하지 않음). */
   public static Model of(
       Coefficients c,

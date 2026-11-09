@@ -112,8 +112,9 @@ class CombatPowerRefineModelTest {
     var afterNone = after("3345.24", none, Map.of(0, 20));
     var afterCore = after("3345.24", core, Map.of(0, 20));
     assertThat(afterNone).isEqualByComparingTo("3383.60");
-    // 코어가 W를 키우면 같은 무기 단계 차이의 비중이 줄어 Δ가 작아진다(코드 리뷰 손계산 약 3382.73과 같음).
-    assertThat(afterCore).isEqualByComparingTo("3382.73");
+    // 코어가 W를 키우면 같은 무기 단계 차이의 비중이 줄어 Δ가 작아진다. S는 장비 주스탯으로 정해져 W가 커져도 줄지 않으므로(계산 검증 11-09)
+    // 표시 기본 공격력에서 S를 거꾸로 구하던 때의 손계산 3382.73보다 0.01 크다.
+    assertThat(afterCore).isEqualByComparingTo("3382.74");
   }
 
   @Test
@@ -176,7 +177,8 @@ class CombatPowerRefineModelTest {
             "9050",
             "22940",
             List.of("+960", "+195", "+3", "+3.00%", "+3.00%"),
-            30);
+            30,
+            844_751);
     var model =
         CombatPowerRefineModel.of(coefficients, c01, stats("267396"), new BigDecimal("17.7"));
     assertThat(after("11028.4", model, Map.of(1, 24))).isEqualByComparingTo("11007.13");
@@ -192,7 +194,8 @@ class CombatPowerRefineModelTest {
             "9050",
             "22940",
             List.of("+960", "+960", "+960", "+3.00%", "+3.00%"),
-            30);
+            30,
+            842_008);
     var other =
         CombatPowerRefineModel.of(coefficients, manbae, stats("267757"), new BigDecimal("17.7"));
     assertThat(after("10724.16", other, Map.of(1, 24))).isEqualByComparingTo("10703.41");
@@ -313,6 +316,176 @@ class CombatPowerRefineModelTest {
   }
 
   @Test
+  void 장비_주스탯으로_만든_S로_표본_캐릭터의_방어구_단계가_비교_기준과_같다() {
+    // 계산 검증 11-09 방어구 전투력 근본 원인: 11-08 공식 응답(전투력 3,180.29)으로 만든 입력, 비교 기준 실시간 값과 ±0.01.
+    var model =
+        CombatPowerRefineModel.of(
+            coefficients, sampleLoadout(), stats("211867"), new BigDecimal("4.50"));
+    assertThat(model.unsupportedReason()).isNull();
+    assertThat(model.armGuardReason()).isNull();
+    var cp = new BigDecimal("3180.29");
+    var tolerance = new BigDecimal("0.01");
+    // 투구 +20→+21(주스탯 +3,081): 6.38. 표시 기본 공격력에서 S를 구하던 때는 6.34.
+    assertThat(delta(cp, model.ratio(Map.of(1, 21))).subtract(new BigDecimal("6.38")).abs())
+        .isLessThanOrEqualTo(tolerance);
+    // 장갑 +21→+22(+3,788): 7.84. 예전 7.79.
+    assertThat(delta(cp, model.ratio(Map.of(4, 22))).subtract(new BigDecimal("7.84")).abs())
+        .isLessThanOrEqualTo(tolerance);
+    // 완갑 고대 +21→+22(주스탯 +6,672, 무기 공격력·기본 공격력 같음): 13.80. 예전 13.71.
+    var guard =
+        model.ratioFull(
+            Map.of(),
+            BigDecimal.ZERO,
+            BigDecimal.ZERO,
+            BigDecimal.ZERO,
+            new CombatPowerRefineModel.ArmGuard(22, "고대"));
+    assertThat(delta(cp, guard).subtract(new BigDecimal("13.80")).abs())
+        .isLessThanOrEqualTo(tolerance);
+    // 무기 +25→+24(무기 공격력 −5,887): −33.85, 예전과 같다.
+    assertThat(delta(cp, model.ratio(Map.of(0, 24))).subtract(new BigDecimal("-33.85")).abs())
+        .isLessThanOrEqualTo(tolerance);
+    // S = (Σ 741,989 + 2,400) × mS 1.09(펫 1% + 아바타 전설 4부위 8%), W = (무기 241,367 + 완갑 20,832 + 귀걸이
+    // 480 + 팔찌
+    // 7,200) × (1 + 연마 2.6% + 카르마 28 × 0.1%). 팔찌 조건부 2,000·중첩 1,320은 넣지 않는다.
+    assertThat(model.s()).isEqualByComparingTo("811384.01");
+    assertThat(model.w()).isEqualByComparingTo("284452.466");
+  }
+
+  @Test
+  void 장비_주스탯을_읽지_못하면_계산하지_않고_팔찌_주스탯_줄은_S에_더한다() {
+    var base =
+        loadout(19, 19, "운명의 전율 검", "208130", "2030", "14817", List.of("+1.80%", "+0.80%"), 29);
+    var noLine = new ArrayList<>(base.equipment());
+    noLine.add(accessory("목걸이", 0, List.of()));
+    var missing =
+        CombatPowerRefineModel.of(
+            coefficients, withEquipment(base, noLine), stats("188163"), new BigDecimal("7.45"));
+    assertThat(missing.unsupportedReason()).contains("목걸이").contains("힘·민첩·지능");
+    assertThat(missing.cannotSet(1, 20)).contains("힘·민첩·지능");
+    // 팔찌 "민첩 +15360" 줄은 Σ에 들어간다: S가 15,360 × mS 1.09만큼 크다.
+    var withBracelet = new ArrayList<>(base.equipment());
+    withBracelet.add(bracelet(List.of("민첩 +15360", "특화 +111")));
+    var plain =
+        CombatPowerRefineModel.of(coefficients, base, stats("188163"), new BigDecimal("7.45"));
+    var more =
+        CombatPowerRefineModel.of(
+            coefficients,
+            withEquipment(base, withBracelet),
+            stats("188163"),
+            new BigDecimal("7.45"));
+    assertThat(more.s().subtract(plain.s())).isEqualByComparingTo("16742.4");
+  }
+
+  /** 표본 캐릭터(11-08 공식 응답의 값): 장비 순번 0 무기, 1 투구, 2 상의, 3 하의, 4 장갑, 5 어깨, 6 완갑, 7~11 장신구, 12 팔찌. */
+  private static CharacterLoadout sampleLoadout() {
+    var equipment = new ArrayList<CharacterLoadout.Equipment>();
+    equipment.add(item("무기", "+25 운명의 전율 런처", 25, List.of("무기 공격력 +241367")));
+    equipment.add(item("투구", "+20 운명의 전율 모자", 20, List.of("민첩 +123155")));
+    equipment.add(item("상의", "+20 운명의 전율 상의", 20, List.of("민첩 +98524")));
+    equipment.add(item("하의", "+20 운명의 전율 하의", 20, List.of("민첩 +106441")));
+    equipment.add(item("장갑", "+21 운명의 전율 장갑", 21, List.of("민첩 +151483")));
+    equipment.add(item("어깨", "+21 운명의 전율 견갑", 21, List.of("민첩 +134351")));
+    equipment.add(
+        item(
+            "완갑",
+            "+21 운명의 전율 완갑",
+            21,
+            List.of("민첩 +60216", "무기 공격력 +20832", "기본 공격력 +5980", "기본 공격력 +3.00%")));
+    equipment.add(accessory("목걸이", 16706, List.of()));
+    equipment.add(accessory("귀걸이", 13660, List.of("+0.80%")));
+    equipment.add(accessory("귀걸이", 12973, List.of("+1.80%", "+480")));
+    equipment.add(accessory("반지", 12569, List.of()));
+    equipment.add(accessory("반지", 11911, List.of()));
+    equipment.add(
+        bracelet(
+            List.of(
+                "특화 +111",
+                "치명 +70",
+                "무기 공격력이 7200 증가한다. 자신의 생명력이 50% 이상일 경우 적에게 공격 적중 시 5초 동안 무기 공격력이 2000 증가한다.",
+                "적에게 주는 피해가 2.5% 증가한다. 공격 적중 시 매 초마다 10초 동안 무기 공격력이 1320 , 공격 및 이동 속도가 1% 증가한다. (최대"
+                    + " 6중첩)")));
+    var avatars = new ArrayList<CharacterLoadout.Avatar>();
+    for (var type : List.of("무기 아바타", "머리 아바타", "상의 아바타", "하의 아바타")) {
+      avatars.add(avatar(type, "전설", true, new BigDecimal("2")));
+      avatars.add(avatar(type, "영웅", false, new BigDecimal("1")));
+    }
+    var arkPassive =
+        new CharacterLoadout.ArkPassive(
+            "깨달음",
+            true,
+            List.of(new CharacterLoadout.PassivePoint("깨달음", 101, "6랭크 28레벨")),
+            List.of());
+    return new CharacterLoadout(
+        equipment, null, null, null, arkPassive, null, List.of(), avatars, List.of());
+  }
+
+  /** 기본 효과 힘·민첩·지능 세 줄(값 mainStat, 0이면 기본 효과 없음)과 연마 무기 공격력 줄을 가진 고대 장신구. */
+  private static CharacterLoadout.Equipment accessory(
+      String type, int mainStat, List<String> polishWeaponAttack) {
+    var effects =
+        mainStat == 0
+            ? List.<CharacterLoadout.EffectGroup>of()
+            : List.of(
+                new CharacterLoadout.EffectGroup(
+                    "기본 효과", List.of("힘 +" + mainStat, "민첩 +" + mainStat, "지능 +" + mainStat)));
+    return new CharacterLoadout.Equipment(
+        type,
+        "테스트 " + type,
+        null,
+        "고대",
+        new CharacterLoadout.EquipmentDetail(
+            null,
+            90,
+            null,
+            4,
+            null,
+            effects,
+            List.of(),
+            polishWeaponAttack.stream()
+                .map(value -> new CharacterLoadout.PolishEffect("무기 공격력", value, EffectGrade.MID))
+                .toList(),
+            List.of()));
+  }
+
+  private static CharacterLoadout.Equipment bracelet(List<String> lines) {
+    return new CharacterLoadout.Equipment(
+        "팔찌",
+        "테스트 팔찌",
+        null,
+        "고대",
+        new CharacterLoadout.EquipmentDetail(
+            null,
+            null,
+            null,
+            4,
+            null,
+            List.of(),
+            List.of(),
+            List.of(),
+            lines.stream()
+                .map(text -> new CharacterLoadout.BraceletEffect(text, EffectGrade.MID))
+                .toList()));
+  }
+
+  private static CharacterLoadout withEquipment(
+      CharacterLoadout loadout, List<CharacterLoadout.Equipment> equipment) {
+    return new CharacterLoadout(
+        equipment,
+        null,
+        null,
+        null,
+        loadout.arkPassive(),
+        null,
+        List.of(),
+        loadout.avatars(),
+        List.of());
+  }
+
+  private static BigDecimal delta(BigDecimal combatPower, BigDecimal ratio) {
+    return combatPower.multiply(ratio).subtract(combatPower).setScale(2, RoundingMode.HALF_UP);
+  }
+
+  @Test
   void 팔_보호구_단계와_등급을_바꾸면_표본_7건과_같다() {
     // #341 표본(ref-a-bracer-armguard-2026-10-11.json): 기준 캐릭터 완갑 +13 전설, q 7.45%(보석 4.95 + 스톤 1.50 +
     // 완갑 1.00).
@@ -425,6 +598,13 @@ class CombatPowerRefineModelTest {
                 "힘, 민첩, 지능과 무기 공격력을 기반으로 증가한 기본 공격력은 " + baseAttack + " 입니다.")));
   }
 
+  /**
+   * 기준 캐릭터 표본의 장비 주스탯 합 Σ. 표본에는 장비 주스탯이 없어, 장비로 만든 S = (Σ + 2,400) × mS 1.09가 표본 S(공식 기본 공격력에서 구한
+   * 6R²/W = 764,231.7)와 같아지는 값이다(698,730.0001로 정수에 맞음). c01·c02도 같은 방법(844,750.54 → 844,751,
+   * 842,008.27 → 842,008).
+   */
+  private static final long BASE_MAIN_STAT_SUM = 698_730;
+
   /** 장비 순번: 0 무기, 1 투구, 2 상의, 3 하의, 4 장갑, 5 어깨, 6 완갑, 7~ 장신구(연마 무기 공격력). */
   private static CharacterLoadout loadout(
       int weaponLevel,
@@ -435,6 +615,30 @@ class CombatPowerRefineModelTest {
       String armGuardWeapon,
       List<String> polishWeaponAttack,
       int karma) {
+    return loadout(
+        weaponLevel,
+        armorLevel,
+        weaponName,
+        weaponAttack,
+        armGuardBase,
+        armGuardWeapon,
+        polishWeaponAttack,
+        karma,
+        BASE_MAIN_STAT_SUM);
+  }
+
+  /** 장비 주스탯 합이 mainStatSum이 되도록 투구에 나머지를 둔다(나머지 방어구·완갑·장신구는 각 100). */
+  private static CharacterLoadout loadout(
+      int weaponLevel,
+      int armorLevel,
+      String weaponName,
+      String weaponAttack,
+      String armGuardBase,
+      String armGuardWeapon,
+      List<String> polishWeaponAttack,
+      int karma,
+      long mainStatSum) {
+    long helmet = mainStatSum - 100L * (4 + 1 + polishWeaponAttack.size());
     var equipment = new ArrayList<CharacterLoadout.Equipment>();
     equipment.add(
         item(
@@ -444,13 +648,17 @@ class CombatPowerRefineModelTest {
             List.of("무기 공격력 +" + weaponAttack)));
     for (var part : List.of("투구", "상의", "하의", "장갑", "어깨"))
       equipment.add(
-          item(part, "+" + armorLevel + " 운명의 전율 " + part, armorLevel, List.of("힘 +100")));
+          item(
+              part,
+              "+" + armorLevel + " 운명의 전율 " + part,
+              armorLevel,
+              List.of("힘 +" + ("투구".equals(part) ? helmet : 100))));
     equipment.add(
         item(
             "완갑",
             "+13 운명의 전율 완갑",
             null,
-            List.of("무기 공격력 +" + armGuardWeapon, "기본 공격력 +" + armGuardBase)));
+            List.of("힘 +100", "무기 공격력 +" + armGuardWeapon, "기본 공격력 +" + armGuardBase)));
     for (var value : polishWeaponAttack)
       equipment.add(
           new CharacterLoadout.Equipment(
@@ -464,7 +672,9 @@ class CombatPowerRefineModelTest {
                   null,
                   4,
                   null,
-                  List.of(),
+                  List.of(
+                      new CharacterLoadout.EffectGroup(
+                          "기본 효과", List.of("힘 +100", "민첩 +100", "지능 +100"))),
                   List.of(),
                   List.of(new CharacterLoadout.PolishEffect("무기 공격력", value, EffectGrade.MID)),
                   List.of())));

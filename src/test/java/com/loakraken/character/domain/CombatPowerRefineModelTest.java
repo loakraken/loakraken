@@ -362,9 +362,9 @@ class CombatPowerRefineModelTest {
             coefficients, withEquipment(base, noLine), stats("188163"), new BigDecimal("7.45"));
     assertThat(missing.unsupportedReason()).contains("목걸이").contains("힘·민첩·지능");
     assertThat(missing.cannotSet(1, 20)).contains("힘·민첩·지능");
-    // 팔찌 "민첩 +15360" 줄은 Σ에 들어간다: S가 15,360 × mS 1.09만큼 크다.
+    // 방어구 주스탯(힘)과 같은 팔찌 "힘 +15360" 줄은 Σ에 들어간다: S가 15,360 × mS 1.09만큼 크다.
     var withBracelet = new ArrayList<>(base.equipment());
-    withBracelet.add(bracelet(List.of("민첩 +15360", "특화 +111")));
+    withBracelet.add(bracelet(List.of("힘 +15360", "특화 +111")));
     var plain =
         CombatPowerRefineModel.of(coefficients, base, stats("188163"), new BigDecimal("7.45"));
     var more =
@@ -374,6 +374,14 @@ class CombatPowerRefineModelTest {
             stats("188163"),
             new BigDecimal("7.45"));
     assertThat(more.s().subtract(plain.s())).isEqualByComparingTo("16742.4");
+    // 다른 직업 몫(민첩) 줄은 넣지 않는다(계산 검증·코드 리뷰 11-09, 실제 원문 110명에는 없음).
+    var offStat = new ArrayList<>(base.equipment());
+    offStat.add(bracelet(List.of("민첩 +15360", "특화 +111")));
+    var same =
+        CombatPowerRefineModel.of(
+            coefficients, withEquipment(base, offStat), stats("188163"), new BigDecimal("7.45"));
+    assertThat(same.unsupportedReason()).isNull();
+    assertThat(same.s()).isEqualByComparingTo(plain.s());
   }
 
   /** 표본 캐릭터(11-08 공식 응답의 값): 장비 순번 0 무기, 1 투구, 2 상의, 3 하의, 4 장갑, 5 어깨, 6 완갑, 7~11 장신구, 12 팔찌. */

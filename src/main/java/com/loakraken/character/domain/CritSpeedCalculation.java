@@ -1491,6 +1491,13 @@ public final class CritSpeedCalculation {
     }
   }
 
+  /** 트라이포드 문구의 "자신 및 (범위 안의) 파티원의 공격·이동 속도". 거리 표기(24.0m)에 점이 있어 문장 경계 대신 길이로 묶는다. */
+  private static final Pattern PARTY_SPEED =
+      Pattern.compile("자신 및.{0,30}?파티원의.{0,10}?(?:공격|이동) ?속도");
+
+  /** 자신 및 파티원 문구를 자기 속도로 읽을 때 뺄 말: "파티원의"(다른 대상 한정으로 읽힘), "각각"(공격 속도와 이동 속도가 각각 n%). */
+  private static final Pattern PARTY_POSSESSIVE = Pattern.compile("파티원의\\s*|각각\\s*");
+
   /** 레벨 2 이상 스킬의 선택 트라이포드 공이속을 트라이포드 표로 판정한다. */
   private static void tripodSpeedSources(
       CharacterLoadout loadout,
@@ -1503,14 +1510,25 @@ public final class CritSpeedCalculation {
       if (skill == null || skill.level() == null || skill.level() < 2) continue;
       for (var tripod : skill.tripods()) {
         if (tripod == null || tripod.effect() == null) continue;
+        // 자신 및 파티원 공이속(PM 총괄 11-09 규칙)은 이름 표보다 먼저 문구로 판정한다. "파티원의 공격 속도"는 다른 대상 한정으로 읽히므로
+        // 자기 속도도 오르는 이 문구에서는 소유격을 빼고 읽는다. 같은 이름이라도 자기만 오르는 트라이포드(붕천퇴 바람의 축복)는 표를 따른다.
+        boolean party = PARTY_SPEED.matcher(tripod.effect()).find();
         var scanned = new ArrayList<Source>();
-        scan(Category.ASSUMPTION, tripod.name(), tripod.effect(), scanned, false);
+        scan(
+            Category.ASSUMPTION,
+            tripod.name(),
+            party ? PARTY_POSSESSIVE.matcher(tripod.effect()).replaceAll("") : tripod.effect(),
+            scanned,
+            false);
         var speeds =
             scanned.stream()
                 .filter(s -> s.axis() == Axis.ATTACK_SPEED || s.axis() == Axis.MOVE_SPEED)
                 .toList();
         if (speeds.isEmpty()) continue;
-        var rule = CritEffectTable.tripodSpeed(tripod.name());
+        var rule =
+            party
+                ? CritEffectTable.partyTripodSpeed(tripod.name())
+                : CritEffectTable.tripodSpeed(tripod.name());
         String name = skill.name() + " - " + tripod.name();
         if (rule == null) {
           notes.add(name + "(분류 중)");

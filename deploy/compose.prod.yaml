@@ -102,6 +102,9 @@ services:
       POPULATION_STATS: "${POPULATION_STATS:-}"
       # 스펙업 추천 순서 화면(web #1216). api는 스펙업 가이드 스위치(SPEC_UP_ENABLED)를 그대로 쓴다.
       SPEC_UP_PATH: "${SPEC_UP_PATH:-}"
+      # 지옥·나락 열쇠 보상 도구(web #1525). on|off, 비우면 web 기본값(운영 SITE_URL이면 숨김).
+      # 백엔드 짝 스위치는 없다(이미 쓰는 재료 시세 API로 값을 매긴다).
+      HELL_REWARD_TOOL: "${HELL_REWARD_TOOL:-}"
       # 이 둘은 비우면 어디서나 꺼짐(on일 때만 켜짐): 검색엔진 색인, 시세 알림 화면.
       CHARACTER_INDEXING: "${CHARACTER_INDEXING:-}"
       PRICE_ALERTS: "${PRICE_ALERTS:-}"

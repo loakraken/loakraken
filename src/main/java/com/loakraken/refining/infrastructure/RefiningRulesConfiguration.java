@@ -15,7 +15,10 @@ class RefiningRulesConfiguration {
   static final String GROWTH_RESOURCE = "refining/t4-growth-costs.json";
   static final String VAMBRACE_RESOURCE = "refining/t4-vambrace-rules.json";
 
-  /** 아이스펭(MIT) 데이터를 고정한 리소스를 시작 시 한 번 읽는다. 읽을 수 없으면 애플리케이션이 시작하지 않는다. */
+  /**
+   * MIT 라이선스 데이터(저작자 표시는 NOTICE와 THIRD-PARTY-LICENSE 사본)를 고정한 리소스를 시작 시 한 번 읽는다. 읽을 수 없으면 애플리케이션이
+   * 시작하지 않는다.
+   */
   @Bean
   RefiningRules refiningRules(JsonMapper mapper) throws IOException {
     try (var input = new ClassPathResource(RESOURCE).getInputStream()) {

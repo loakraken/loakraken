@@ -581,6 +581,97 @@ class CritSpeedCalculationTest {
         "기준캐릭터", "카단", "블레이드", 70, null, null, null, null, null, null, stats);
   }
 
+  /**
+   * 기민함 환산(계산 검증 11-09, 표본 캐릭터 11-09 공식 원문의 속도 줄): 신속 15.92 + 질풍노도 12 + 팔찌 5, 질량 증가 −10. 웹 기본 가정(갈망
+   * 9 + 만찬 5 = 14)을 질량 전에 더해 상한 40으로 환산하면 비교 기준 값(치명타 적중률 몫 12, 치명타 피해 몫 48)과 같다. 가정이 0이면 관측 속도
+   * 32.92만 환산한다.
+   */
+  @Test
+  void 기민함은_웹_기본_가정을_더한_질량_전_속도를_상한_40으로_환산한다() {
+    var profile =
+        new CharacterProfile(
+            "표본",
+            "카단",
+            "기상술사",
+            70,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            List.of(
+                new CharacterProfile.Stat("치명", "1138", List.of("치명타 적중률이 40.73% 증가합니다.")),
+                new CharacterProfile.Stat(
+                    "신속", "927", List.of("공격 속도가 15.92% 증가합니다.", "이동 속도가 15.92% 증가합니다."))));
+    var bracelet =
+        new CharacterLoadout.Equipment(
+            "팔찌",
+            "팔찌",
+            null,
+            "고대",
+            new CharacterLoadout.EquipmentDetail(
+                null,
+                null,
+                null,
+                4,
+                null,
+                List.of(),
+                List.of(),
+                List.of(),
+                List.of(new CharacterLoadout.BraceletEffect("공격 및 이동 속도가 5% 증가한다.", null))));
+    var loadout =
+        new CharacterLoadout(
+            List.of(bracelet),
+            new CharacterLoadout.Engravings(
+                List.of(),
+                List.of(),
+                List.of(
+                    new CharacterLoadout.PassiveEngraving(
+                        null, "유물", 4, "질량 증가", "공격속도가 10.00% 감소하지만, 적에게 주는 피해가 19.00% 증가한다."))),
+            null,
+            null,
+            new CharacterLoadout.ArkPassive(
+                "깨달음",
+                true,
+                List.of(),
+                List.of(
+                    new CharacterLoadout.PassiveEffect(
+                        "깨달음", "깨달음 1티어 질풍노도 Lv.1", null, "질풍노도 : 공격 및 이동 속도가 12.0% 증가한다."),
+                    new CharacterLoadout.PassiveEffect(
+                        "깨달음",
+                        "깨달음 1티어 기민함 Lv.3",
+                        null,
+                        "기본 공격 속도 증가량 %의 120.0% 만큼 치명타 피해량이 증가하고 기본 이동 속도 증가량 %의 30.0% 만큼 치명타 적중률이 증가한다."))),
+            null);
+    var web =
+        CritSpeedCalculation.calculate(
+            profile,
+            loadout,
+            new Assumptions(
+                false, false, 0, null, null, null, new BigDecimal("14"), new BigDecimal("14")));
+    // 이동 15.92 + 12 + 5 + 14 = 46.92, 공격 같은 증가분(질량 −10은 빼지 않음) → 상한 40 → 30% × 40 = 12, 120% × 40 =
+    // 48
+    assertThat(agility(web)).containsExactly("기민함(이동 속도 40%)=12", "기민함(공격 속도 40%)=48");
+    assertThat(web.speed().attack().total()).isEqualByComparingTo("36.92");
+    assertThat(web.speed().move().total()).isEqualByComparingTo("46.92");
+    var none =
+        CritSpeedCalculation.calculate(
+            profile,
+            loadout,
+            new Assumptions(false, false, 0, null, null, null, BigDecimal.ZERO, BigDecimal.ZERO));
+    // 가정 0: 15.92 + 12 + 5 = 32.92 → 9.876 / 39.504(계산 검증 스텁 덤프가 본 값)
+    assertThat(agility(none))
+        .containsExactly("기민함(이동 속도 32.92%)=9.876", "기민함(공격 속도 32.92%)=39.504");
+  }
+
+  private static List<String> agility(CritSpeedCalculation.Result result) {
+    return result.sources().stream()
+        .filter(source -> source.name().startsWith("기민함("))
+        .map(source -> source.name() + "=" + source.value().stripTrailingZeros().toPlainString())
+        .toList();
+  }
+
   private static CharacterProfile profile(String crit, String swiftness) {
     return new CharacterProfile(
         "기준캐릭터",

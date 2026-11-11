@@ -43,7 +43,12 @@ import org.springframework.stereotype.Service;
  */
 @Service
 public class SpecUpGoalService {
-  public static final String RULE_VERSION = "spec-up-goal-v2";
+  /**
+   * v3: 목표 경로도 추천 순서와 같은 단계 종류(어빌리티 스톤 목표 조합, 완갑 스위치)를 고른다(계산 검증 11-09: 스톤으로만 닿는 목표가 '더 올릴 수
+   * 없음'이었다).
+   */
+  public static final String RULE_VERSION = "spec-up-goal-v4";
+
   static final int MAX_STEPS = 30;
   static final Duration TIME_LIMIT = Duration.ofSeconds(2);
   static final Duration CACHE_TTL = Duration.ofMinutes(10);
@@ -120,7 +125,7 @@ public class SpecUpGoalService {
   }
 
   // v2: 완갑(팔 보호구) 재련 단계를 고른다. v3: 어빌리티 스톤 목표 조합(각인 둘을 한 단계에), 단계 changes.
-  public static final String PATH_RULE_VERSION = "spec-up-path-v3";
+  public static final String PATH_RULE_VERSION = "spec-up-path-v4";
   static final int PATH_MAX_STEPS = 30;
   static final int PATH_MAX_CONCURRENT = 2;
   static final Duration PATH_RETRY_AFTER = Duration.ofSeconds(2);
@@ -394,7 +399,8 @@ public class SpecUpGoalService {
             String.valueOf(books.observedAt().map(Instant::toEpochMilli).orElse(0L)),
             RULE_VERSION,
             CombatPowerSimulationService.RULE_VERSION,
-            String.valueOf(specUp.costRuleVersions()));
+            String.valueOf(specUp.costRuleVersions()),
+            specUp.armGuardEnabled() ? "ag" : "-");
     var cached = store.find(key);
     if (cached.isPresent()) return cached.get();
     return single(
@@ -427,7 +433,15 @@ public class SpecUpGoalService {
           snapshot, before, target, before, ALREADY_REACHED, null, 0L, 0, null, List.of());
     var chain =
         chain(
-            snapshot, before, target, Pick.EFFICIENCY, false, MAX_STEPS, false, gems, refinePrices);
+            snapshot,
+            before,
+            target,
+            Pick.EFFICIENCY,
+            false,
+            MAX_STEPS,
+            specUp.armGuardEnabled(),
+            gems,
+            refinePrices);
     return result(
         snapshot,
         before,
@@ -472,14 +486,15 @@ public class SpecUpGoalService {
       Optional<RefiningMaterialPriceService.Prices> refinePrices) {
     var pricesAt = new Instant[1];
     var steps = new ArrayList<Step>();
-    // 추천 순서(armGuard 인자를 받는 쪽)는 어빌리티 스톤도 고른다. 목표 경로는 그대로.
-    var state = State.of(snapshot.details().loadout(), armGuard, pricedOnly);
+    // 추천 순서와 목표 경로 모두 어빌리티 스톤 목표 조합도 고른다(목표 경로 v3).
+    var state = State.of(snapshot.details().loadout(), armGuard, true);
     // 칸마다 그 칸의 마지막 단계 변경(스톤은 각인 둘이라 여러 개).
     var applied = new LinkedHashMap<String, List<Change>>();
     var current = before;
     Long cumulative = 0L;
     int unpriced = 0;
-    // 경로 합계: 보석 칸은 그 칸의 마지막 단계 누적 비용(칸마다 하나), 그 밖은 단계 비용의 합. 모르는 값이 있으면 합계도 모름.
+    // 경로 합계: 보석 칸·어빌리티 스톤은 그 칸의 마지막 단계 비용(칸마다 하나, 스톤은 새로 깎은 마지막 스톤만), 그 밖은 단계 비용의 합. 모르는 값이 있으면
+    // 합계도 모름(path v4·goal v4, PM 총괄 11-09).
     var gemTotals = new HashMap<String, Long>();
     long others = 0;
     boolean othersUnknown = false;
@@ -533,7 +548,7 @@ public class SpecUpGoalService {
       current = best.after();
       var amount = best.cost() == null ? null : best.cost().amount();
       if (amount == null) unpriced++;
-      if (best.change().kind() == Kind.GEM_LEVEL) gemTotals.put(best.slot(), amount);
+      if (slotCost(best)) gemTotals.put(best.slot(), amount);
       else if (amount == null) othersUnknown = true;
       else others += amount;
       cumulative = total(others, othersUnknown, gemTotals);
@@ -604,13 +619,21 @@ public class SpecUpGoalService {
   }
 
   /** 효율 있음(내림차순) → 비용 모름(Δ 내림차순) → id 순. 스펙업 가이드의 효율 순과 같다. */
-  /** 이 단계에 더 드는 비용: 보석은 지금 누적 − 그 칸에서 이미 낸 누적(처음 단계는 0), 그 밖은 단계 비용. 모르면 null. */
+  /**
+   * 이 단계에 더 드는 비용: 보석은 지금 누적 − 그 칸에서 이미 낸 누적(처음 단계는 0), 어빌리티 스톤은 이 스톤 비용 − 앞 스톤 단계 비용(처음은 0), 그 밖은
+   * 단계 비용. 모르면 null.
+   */
   static Long marginal(Option option, Map<String, Long> gemTotals) {
     var amount = option.cost() == null ? null : option.cost().amount();
-    if (amount == null || option.change().kind() != Kind.GEM_LEVEL) return amount;
+    if (amount == null || !slotCost(option)) return amount;
     var paid =
         gemTotals.containsKey(option.slot()) ? gemTotals.get(option.slot()) : Long.valueOf(0);
     return paid == null ? null : amount - paid;
+  }
+
+  /** 칸마다 마지막 단계 비용만 합계에 세는 단계: 보석 레벨(누적 비용)과 어빌리티 스톤(새로 깎는 스톤, PM 총괄 11-09). */
+  static boolean slotCost(Option option) {
+    return option.change().kind() == Kind.GEM_LEVEL || "ABILITY_STONE".equals(option.kind());
   }
 
   /** 더 드는 비용이 0 이하로 확인된 단계(거꾸로 시세의 보석 단계 등). 효율은 '-'(null)이지만 경로에는 먼저 넣는다. */

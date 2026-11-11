@@ -7,7 +7,7 @@ LOAKraken
 loa-calc
 https://github.com/icepeng/loa-calc
 사용 범위: src/app/refining/data.ts의 재련 단계별 수치(커밋 5b870d267dc05245bfc1f55ad1cb4a2d9bbab765)
-포함 위치: src/main/resources/refining/t4-refining-rules.json(라이선스 사본: src/main/resources/refining/THIRD-PARTY-LICENSE-icepeng-loa-calc.txt)
+포함 위치: src/main/resources/refining/t4-refining-rules.json(라이선스 사본: src/main/resources/refining/THIRD-PARTY-LICENSE-refining-data.txt)
 
 MIT License
 

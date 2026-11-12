@@ -10,17 +10,17 @@ COMMENT ON COLUMN characters.server_name IS '서버 이름.';
 COMMENT ON COLUMN characters.class_name IS '직업 이름.';
 COMMENT ON COLUMN characters.item_level IS '아이템 레벨(마지막 관측).';
 COMMENT ON COLUMN characters.combat_power IS '전투력(마지막 관측). 원정대로만 발견해 프로필을 아직 못 받았으면 NULL.';
-COMMENT ON COLUMN characters.last_synced_at IS '캐릭터 행을 마지막으로 갱신한 시각.';
+COMMENT ON COLUMN characters.last_synced_at IS '프로필(공식 응답)을 받아 이 행에 기록한 마지막 시각. 원정대에서 처음 발견해 만든 행은 발견 시각이고, 그 뒤 원정대 목록 갱신(직업·레벨·원정대 키)은 이 값을 바꾸지 않는다.';
 COMMENT ON COLUMN characters.position IS '포지션: DEALER(딜러) 또는 SUPPORT(서포터). 프로필을 받기 전에는 NULL.';
 COMMENT ON COLUMN characters.profile_refreshed_at IS '프로필(전투력 등)을 마지막으로 성공해서 받은 시각. 통계 모집단의 최근 확인 기준.';
 COMMENT ON COLUMN characters.roster_scanned_at IS '수집기가 이 캐릭터의 원정대 목록을 마지막으로 훑은 시각.';
 COMMENT ON COLUMN characters.discovered_at IS '수집기가 원정대에서 이 캐릭터를 처음 발견한 시각. 사용자 검색으로 먼저 생긴 행은 NULL.';
 COMMENT ON COLUMN characters.roster_key IS '원정대 키. 같은 계정의 캐릭터들이 같은 값을 가진다(대표 캐릭터·원정대 집계용). 아직 모르면 NULL.';
 COMMENT ON COLUMN characters.gem_mean_level IS '4티어 보석 평균 레벨(소수 둘째 자리).';
-COMMENT ON COLUMN characters.profile_checked_at IS '수집기가 프로필을 마지막으로 시도한 시각(성공·못 찾음·해석 실패 모두). 다시 고를 순서에만 쓴다.';
+COMMENT ON COLUMN characters.profile_checked_at IS '프로필을 마지막으로 시도한 시각(사용자 검색·수집기 모두, 성공·못 찾음·해석 실패 포함). 수집기가 다시 고를 순서에 쓴다.';
 COMMENT ON COLUMN characters.expedition_level IS '원정대 레벨. 프로필에 값이 없으면 이전 값을 둔다.';
 COMMENT ON COLUMN characters.guild_name IS '길드 이름. 길드가 없으면 NULL.';
-COMMENT ON COLUMN characters.image_url IS '공식 프로필 이미지 주소(이름 자동완성 초상). 없으면 NULL.';
+COMMENT ON COLUMN characters.image_url IS '공식 프로필 이미지 주소(이름 자동완성 초상). 새 응답에 주소가 없으면 이전 값을 둔다. NULL이면 받은 적이 없음.';
 COMMENT ON COLUMN characters.bracelet_efficiency_pct IS '팔찌 효율(%, 전투력 기여 모델). 계산된 값만 남긴다.';
 COMMENT ON COLUMN characters.bracelet_rule_version IS '팔찌 효율을 계산한 규칙 버전. 랭킹은 지금 버전 값만 센다.';
 COMMENT ON COLUMN characters.ark_grid_gem_pct IS '아크 그리드 젬 효율(%, 전투력 기여 모델). 계산된 값만 남긴다.';
@@ -36,7 +36,7 @@ COMMENT ON COLUMN characters.position_observed_at IS '포지션을 마지막으�
 COMMENT ON COLUMN characters.emblems_observed_at IS '장착 휘장을 마지막으로 관측한 시각. NULL이면 모름(휘장 없음과 구분).';
 
 -- character_snapshot
-COMMENT ON TABLE character_snapshot IS '캐릭터 공식 응답(armory) 원본 스냅숏. 관측마다 한 행.';
+COMMENT ON TABLE character_snapshot IS '캐릭터 공식 응답(armory) 원본 스냅숏. 받은 원본(armory·원정대 목록)이 직전 행과 달라졌을 때만 새 행을 쓴다.';
 COMMENT ON COLUMN character_snapshot.snapshot_id IS '스냅숏 ID(UUID).';
 COMMENT ON COLUMN character_snapshot.snapshot_sequence IS '저장 순서 번호(같은 시각 정렬용).';
 COMMENT ON COLUMN character_snapshot.character_id IS '캐릭터 ID. 캐릭터를 지우면 함께 지운다.';
@@ -80,7 +80,7 @@ COMMENT ON COLUMN character_card.grade IS '카드 등급(공식 문자열).';
 COMMENT ON COLUMN character_card.icon IS '카드 아이콘 주소(공식 이미지).';
 COMMENT ON COLUMN character_card.awake_count IS '관측한 최고 각성 수.';
 COMMENT ON COLUMN character_card.awake_total IS '최대 각성 수.';
-COMMENT ON COLUMN character_card.observed_at IS '마지막으로 관측한 시각.';
+COMMENT ON COLUMN character_card.observed_at IS '이 행을 마지막으로 바꾼 관측 시각. 각성이 더 낮은 관측이나 더 오래된 관측은 행을 바꾸지 않는다.';
 
 -- card_set_member
 COMMENT ON TABLE card_set_member IS '카드 세트 구성원. 공식 응답에서 세트별 카드 이름을 배운다.';
@@ -94,10 +94,10 @@ COMMENT ON COLUMN card_set_effect.set_name IS '카드 세트 이름.';
 COMMENT ON COLUMN card_set_effect.pieces IS '효과가 켜지는 카드 장수.';
 COMMENT ON COLUMN card_set_effect.awakening IS '효과가 켜지는 각성 합계 조건. 조건이 없으면 0.';
 COMMENT ON COLUMN card_set_effect.description IS '효과 설명 문구(공식 그대로).';
-COMMENT ON COLUMN card_set_effect.observed_at IS '마지막으로 관측한 시각.';
+COMMENT ON COLUMN card_set_effect.observed_at IS '이 문구를 마지막으로 저장한 시각. 이미 아는 효과는 다시 쓰지 않아, 마지막 관측보다 이를 수 있다.';
 
 -- character_popular_hourly
-COMMENT ON TABLE character_popular_hourly IS '인기 검색 캐릭터 시간별 집계. 같은 사람·같은 캐릭터는 KST 하루 1회만 센다. 원본 IP는 저장하지 않는다.';
+COMMENT ON TABLE character_popular_hourly IS '인기 검색 캐릭터 시간별 집계. 같은 접속 주소(정규화)·같은 캐릭터는 KST 하루 1회만 센다. 중복 판단 키는 저장하지 않고, 원본 IP도 저장하지 않는다.';
 COMMENT ON COLUMN character_popular_hourly.character_name IS '캐릭터 이름.';
 COMMENT ON COLUMN character_popular_hourly.server_name IS '서버 이름.';
 COMMENT ON COLUMN character_popular_hourly.hour_bucket IS '집계 시간 칸(정시).';
@@ -142,7 +142,7 @@ COMMENT ON COLUMN character_equipment_summary.character_level IS '전투 레벨.
 COMMENT ON COLUMN character_equipment_summary.class_name IS '직업 이름.';
 COMMENT ON COLUMN character_equipment_summary.ark_passive_title IS '아크 패시브 이름.';
 COMMENT ON COLUMN character_equipment_summary.features IS '정규화한 장비 특성(JSON).';
-COMMENT ON COLUMN character_equipment_summary.features_hash IS '특성의 SHA-256 해시(16진). 같은 요약인지 비교용.';
+COMMENT ON COLUMN character_equipment_summary.features_hash IS '요약 형식 버전·정렬한 특성 JSON·전투력을 합친 SHA-256 해시(16진). 같은 요약인지 비교용(하나라도 바뀌면 새 행).';
 
 -- roster_collectible
 COMMENT ON TABLE roster_collectible IS '원정대 수집품(내실) 점수. 원정대·수집품 종류마다 한 행, 공식 값 그대로.';
@@ -161,7 +161,7 @@ COMMENT ON COLUMN collectible_item.type IS '수집품 종류 이름.';
 COMMENT ON COLUMN collectible_item.name IS '항목 이름.';
 COMMENT ON COLUMN collectible_item.sort_order IS '종류 안에서의 공식 순서.';
 COMMENT ON COLUMN collectible_item.max_point IS '항목 만점(모코코 씨앗은 지역별 개수).';
-COMMENT ON COLUMN collectible_item.last_seen_at IS '마지막으로 관측한 시각.';
+COMMENT ON COLUMN collectible_item.last_seen_at IS '이 항목을 관측해 마지막으로 기록한 시각. 순서·만점이 같으면 하루(UTC)에 한 번만 갱신한다.';
 COMMENT ON COLUMN collectible_item.type_order IS '공식 응답의 종류 순서. 관측 전에는 0.';
 
 -- roster_collectible_item
@@ -190,7 +190,7 @@ COMMENT ON COLUMN price_alert.comparator IS '조건: AT_OR_BELOW(최저가가 �
 COMMENT ON COLUMN price_alert.price IS '기준 가격(G).';
 COMMENT ON COLUMN price_alert.armed IS '조건이 지금 거짓이라 다음에 참이 되면 보낼 수 있는 상태.';
 COMMENT ON COLUMN price_alert.pending_price IS '보낼 차례인 가격(G, 발송 대기). 없으면 NULL.';
-COMMENT ON COLUMN price_alert.last_sent_at IS '마지막으로 알림을 보낸 시각.';
+COMMENT ON COLUMN price_alert.last_sent_at IS '마지막 발송 처리 시각(재발송 간격의 기준). 영구 실패나 재시도까지 실패한 경우에도 기록되므로 전달 성공의 증거는 아니다.';
 COMMENT ON COLUMN price_alert.created_at IS '알림을 만든 시각.';
 
 -- alert_item_price
@@ -232,8 +232,8 @@ COMMENT ON COLUMN stats_population_snapshot_meta.built_at IS '만든 시각.';
 COMMENT ON TABLE character_polish_line IS '캐릭터 장신구 연마 효과 줄(마지막 관측). 관측마다 그 캐릭터의 줄을 바꾼다.';
 COMMENT ON COLUMN character_polish_line.character_id IS '캐릭터 ID. 캐릭터를 지우면 함께 지운다.';
 COMMENT ON COLUMN character_polish_line.line_no IS '줄 번호(캐릭터 안 순서).';
-COMMENT ON COLUMN character_polish_line.slot IS '부위: NECKLACE(목걸이)·EARRING(귀걸이)·RING(반지).';
-COMMENT ON COLUMN character_polish_line.item_level IS '장신구 아이템 레벨.';
+COMMENT ON COLUMN character_polish_line.slot IS '부위: 목걸이·귀걸이·반지(공식 장비 종류 문자열 그대로).';
+COMMENT ON COLUMN character_polish_line.item_level IS '장신구 아이템 레벨. 공식 값이 없으면 거래 제한 아이템 레벨 줄에서 읽고, 둘 다 없으면 NULL.';
 COMMENT ON COLUMN character_polish_line.item_grade IS '장신구 등급(공식 문자열).';
 COMMENT ON COLUMN character_polish_line.option_name IS '연마 효과 이름.';
 COMMENT ON COLUMN character_polish_line.option_value IS '연마 효과 값(공식 표기 그대로).';
@@ -246,7 +246,7 @@ COMMENT ON COLUMN title_equip_daily_meta.snapshot_date IS '스냅숏 날짜(KST)
 COMMENT ON COLUMN title_equip_daily_meta.server_key IS '서버 이름. 빈 문자열이면 전체.';
 COMMENT ON COLUMN title_equip_daily_meta.population IS '그날 집계의 모집단 원정대 수(비율의 분모).';
 COMMENT ON COLUMN title_equip_daily_meta.built_at IS '만든 시각.';
-COMMENT ON COLUMN title_equip_daily_meta.exclusion_revision IS '만들 때의 처리정지 목록 값. 지금 목록과 다르면 다음 만들기가 다시 만든다.';
+COMMENT ON COLUMN title_equip_daily_meta.exclusion_revision IS '만들 때의 처리정지 목록 값. 목록이 바뀌면 지난 목록으로 만든 날짜는 지우고(다시 만들지 않음) 오늘만 다시 만든다.';
 
 -- title_equip_daily
 COMMENT ON TABLE title_equip_daily IS '칭호 장착 일별 스냅숏(최근 30일 기준). 날짜·서버·칭호마다 한 행, 365일보다 오래되면 지운다.';
@@ -266,5 +266,5 @@ COMMENT ON COLUMN market_price_daily.bundle_key IS '묶음 수(변형 구분). �
 COMMENT ON COLUMN market_price_daily.kst_date IS '날짜(KST).';
 COMMENT ON COLUMN market_price_daily.item_name IS '품목 이름.';
 COMMENT ON COLUMN market_price_daily.avg_price IS '그날 평균 거래가(G).';
-COMMENT ON COLUMN market_price_daily.trade_count IS '그날 거래 수.';
+COMMENT ON COLUMN market_price_daily.trade_count IS '그날 거래 수. 공식 값이 없으면 0으로 저장하므로, 0은 거래 없음 또는 모름.';
 COMMENT ON COLUMN market_price_daily.observed_at IS '관측 시각.';

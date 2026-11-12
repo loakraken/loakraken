@@ -33,7 +33,7 @@ public record CharacterResponse(
     @NullableResponse String guildMemberGrade,
     @Schema(
             description =
-                "장착 아바타. isInner=true는 기본(안쪽) 아바타, false는 덧입기 아바타(공식 IsInner 그대로). 염색 정보는 공식 응답에서 확인되지 않아 제공하지 않습니다.")
+                "장착 아바타. isInner=true는 기본(안쪽) 아바타. 덧입기가 있는 칸에서 false는 덧입기 아바타이고, 얼굴·악기·이동 효과처럼 한 겹뿐인 칸은 늘 false(공식 IsInner 그대로). 염색 정보는 공식 응답에서 확인되지 않아 제공하지 않습니다.")
         List<AvatarResponse> avatars,
     @Schema(description = "수집품 종류별 진행도와 항목") List<CollectibleResponse> collectibles,
     CharacterLoadoutResponse loadout,

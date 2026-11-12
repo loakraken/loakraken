@@ -57,6 +57,8 @@ class MarketDailyStoreIntegrationTest {
             "-1/100/2026-11-11/10.2000/1200",
             "5/100/2026-11-11/10.4000/30");
 
+    // 같은 값을 다시 받으면(예열마다) 쓰지 않는다.
+    assertThat(store.upsert(history, TODAY, FIRST.plusSeconds(30))).isZero();
     // 더 이른 관측은 덮지 않고, 더 늦은 관측은 덮는다.
     var changed =
         new MarketItemHistory(

@@ -2,7 +2,6 @@ package com.loakraken.market.application;
 
 import com.loakraken.common.api.BusinessException;
 import java.time.Clock;
-import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
@@ -23,7 +22,7 @@ public class MarketQueryService {
   private final MarketOptionsPort options;
   private final MarketCache cache;
   private final MarketItemHistoryPort itemHistory;
-  private final MarketDailyStore daily;
+  private final MarketDailyRecorder daily;
   private final ConcurrentHashMap<PriceKey, CompletableFuture<MarketResult>> priceFlights =
       new ConcurrentHashMap<>();
   private final ConcurrentHashMap<String, CompletableFuture<MarketOptionsResult>> optionFlights =
@@ -38,7 +37,7 @@ public class MarketQueryService {
       MarketCache cache,
       Clock clock,
       MarketItemHistoryPort itemHistory,
-      MarketDailyStore daily) {
+      MarketDailyRecorder daily) {
     this.prices = prices;
     this.options = options;
     this.cache = cache;
@@ -54,7 +53,7 @@ public class MarketQueryService {
       MarketCache cache,
       Clock clock,
       MarketItemHistoryPort itemHistory) {
-    this(prices, options, cache, clock, itemHistory, MarketDailyStore.NONE);
+    this(prices, options, cache, clock, itemHistory, MarketDailyRecorder.NONE);
   }
 
   /** 테스트·기존 호출 호환: 상품 이력을 쓰지 않는 구성. */
@@ -129,15 +128,6 @@ public class MarketQueryService {
 
   /** 이미 받은 공식 상세(14일)의 완료일을 일별 시세 표에 덮어쓴다(새 공식 호출 없음). 저장 실패는 상세 응답을 바꾸지 않는다(로그만, 상품 ID와 예외 유형). */
   private MarketItemHistoryResult recordDaily(MarketItemHistoryResult result) {
-    try {
-      daily.upsert(
-          result.history(), LocalDate.ofInstant(result.observedAt(), KST), result.observedAt());
-    } catch (RuntimeException exception) {
-      log.warn(
-          "event=market_daily_save_failed itemId={} exceptionType={}",
-          result.history().itemId(),
-          exception.getClass().getSimpleName());
-    }
     return result;
   }
 

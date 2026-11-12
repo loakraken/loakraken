@@ -71,6 +71,26 @@ class MarketDailyStoreIntegrationTest {
     assertThat(rows()).contains("-1/100/2026-11-10/11.0000/900");
   }
 
+  /** 줄 하나가 틀려도(이름 길이 초과·숫자 칸 넘침·같은 변형 칸) 그 줄만 건너뛰고 나머지는 저장한다(지표 남김). */
+  @Test
+  void 잘못된_줄은_그_줄만_건너뛰고_나머지는_저장한다() {
+    var history =
+        new MarketItemHistory(
+            ITEM,
+            List.of(
+                new Variant("정상", null, 1, List.of(day("2026-11-11", "10", 5))),
+                new Variant("가".repeat(129), 3, 1, List.of(day("2026-11-11", "10", 5))),
+                new Variant("같은 칸", null, 1, List.of(day("2026-11-10", "12", 6))),
+                new Variant(
+                    "넘침",
+                    7,
+                    1,
+                    List.of(day("2026-11-11", "1000000000000", 1), day("2026-11-10", "9", 2)))));
+
+    assertThat(store.upsert(history, TODAY, FIRST)).isEqualTo(2);
+    assertThat(rows()).containsExactly("-1/1/2026-11-11/10.0000/5", "7/1/2026-11-10/9.0000/2");
+  }
+
   private List<String> rows() {
     return jdbc.sql(
             """

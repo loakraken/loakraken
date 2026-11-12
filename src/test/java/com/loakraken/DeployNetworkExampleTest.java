@@ -12,27 +12,32 @@ import org.junit.jupiter.api.Test;
 
 /**
  * 배포 env 예시의 고정 망 값(#632): 운영·스테이징이 같은 서버에 올라가도 망 대역이 겹치지 않고, 고정 주소가 자기 망 안에 있는지 본다. 값이 비면 compose가
- * 멈추고(필수 변수), 겹치면 도커가 망을 만들지 못하므로 예시부터 맞춰 둔다.
+ * 멈추고(필수 변수), 겹치면 도커가 망을 만들지 못하므로 예시부터 맞춰 둔다. 망을 나눈 뒤(#702)에도 서버에 남아 있는 옛 internal 망 대역과 겹치지 않아야
+ * 하고, api가 믿는 프록시 정규식은 web 주소와 맞아야 한다(맞지 않으면 모든 접속이 web 주소 하나로 보인다).
  */
 class DeployNetworkExampleTest {
   private static final List<String> ENVS = List.of("production", "staging");
+  // 망을 나누기 전 internal 망(운영·스테이징). 되돌리기를 위해 서버에 한동안 남는다.
+  private static final List<String> LEGACY =
+      List.of("legacy internal 172.31.250.0/24", "legacy internal 172.31.251.0/24");
 
   @Test
   void 환경별_망_대역은_서로_겹치지_않고_고정_주소는_자기_망_안에_있다() throws Exception {
-    var subnets = new ArrayList<String>();
+    var subnets = new ArrayList<String>(LEGACY);
     for (var env : ENVS) {
       var values = read(Path.of("deploy", "stack." + env + ".env.example"));
-      var internal = values.get("INTERNAL_SUBNET");
+      var app = values.get("APP_SUBNET");
       var metrics = values.get("METRICS_SUBNET");
-      assertThat(internal).as(env + " INTERNAL_SUBNET").isNotBlank();
+      assertThat(app).as(env + " APP_SUBNET").isNotBlank();
       assertThat(metrics).as(env + " METRICS_SUBNET").isNotBlank();
-      assertThat(contains(internal, values.get("WEB_INTERNAL_IP")))
-          .as(env + " WEB_INTERNAL_IP")
+      assertThat(contains(app, values.get("WEB_APP_IP"))).as(env + " WEB_APP_IP").isTrue();
+      assertThat(values.get("WEB_APP_IP").matches(values.get("TRUSTED_PROXY_REGEX")))
+          .as(env + " TRUSTED_PROXY_REGEX matches WEB_APP_IP")
           .isTrue();
       assertThat(contains(metrics, values.get("API_METRICS_IP")))
           .as(env + " API_METRICS_IP")
           .isTrue();
-      subnets.add(env + " internal " + internal);
+      subnets.add(env + " app " + app);
       subnets.add(env + " metrics " + metrics);
     }
     for (int i = 0; i < subnets.size(); i++)

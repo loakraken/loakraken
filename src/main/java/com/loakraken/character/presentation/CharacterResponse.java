@@ -31,7 +31,9 @@ public record CharacterResponse(
     @Schema(description = "영지 이름") @NullableResponse String townName,
     @NullableResponse Integer townLevel,
     @NullableResponse String guildMemberGrade,
-    @Schema(description = "장착 아바타. 덧입기는 isInner=true. 염색 정보는 공식 응답에서 확인되지 않아 제공하지 않습니다.")
+    @Schema(
+            description =
+                "장착 아바타. isInner=true는 기본(안쪽) 아바타, false는 덧입기 아바타(공식 IsInner 그대로). 염색 정보는 공식 응답에서 확인되지 않아 제공하지 않습니다.")
         List<AvatarResponse> avatars,
     @Schema(description = "수집품 종류별 진행도와 항목") List<CollectibleResponse> collectibles,
     CharacterLoadoutResponse loadout,

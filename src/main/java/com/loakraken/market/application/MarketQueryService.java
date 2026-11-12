@@ -18,6 +18,7 @@ public class MarketQueryService {
   private final MarketOptionsPort options;
   private final MarketCache cache;
   private final MarketItemHistoryPort itemHistory;
+  private final MarketDailyStore daily;
   private final ConcurrentHashMap<PriceKey, CompletableFuture<MarketResult>> priceFlights =
       new ConcurrentHashMap<>();
   private final ConcurrentHashMap<String, CompletableFuture<MarketOptionsResult>> optionFlights =
@@ -31,12 +32,24 @@ public class MarketQueryService {
       MarketOptionsPort options,
       MarketCache cache,
       Clock clock,
-      MarketItemHistoryPort itemHistory) {
+      MarketItemHistoryPort itemHistory,
+      MarketDailyStore daily) {
     this.prices = prices;
     this.options = options;
     this.cache = cache;
     this.clock = clock;
     this.itemHistory = itemHistory;
+    this.daily = daily;
+  }
+
+  /** 테스트·기존 호출 호환: 일별 시세를 저장하지 않는 구성. */
+  public MarketQueryService(
+      MarketPricesPort prices,
+      MarketOptionsPort options,
+      MarketCache cache,
+      Clock clock,
+      MarketItemHistoryPort itemHistory) {
+    this(prices, options, cache, clock, itemHistory, MarketDailyStore.NONE);
   }
 
   /** 테스트·기존 호출 호환: 상품 이력을 쓰지 않는 구성. */

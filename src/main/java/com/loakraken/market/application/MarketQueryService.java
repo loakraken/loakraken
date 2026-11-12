@@ -2,6 +2,7 @@ package com.loakraken.market.application;
 
 import com.loakraken.common.api.BusinessException;
 import java.time.Clock;
+import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
@@ -126,8 +127,20 @@ public class MarketQueryService {
     return Optional.of(result);
   }
 
-  /** 이미 받은 공식 상세(14일)의 완료일을 일별 시세 표에 덮어쓴다(새 공식 호출 없음). 저장 실패는 상세 응답을 바꾸지 않는다(로그만, 상품 ID와 예외 유형). */
+  /**
+   * 이미 받은 공식 상세(14일)의 완료일 저장을 요청 경로 밖으로 넘긴다(새 공식 호출 없음, 기다리지 않음). 넘기기 실패도 상세 응답을 바꾸지 않는다(로그만, 상품
+   * ID와 예외 유형).
+   */
   private MarketItemHistoryResult recordDaily(MarketItemHistoryResult result) {
+    try {
+      daily.record(
+          result.history(), LocalDate.ofInstant(result.observedAt(), KST), result.observedAt());
+    } catch (RuntimeException exception) {
+      log.warn(
+          "event=market_daily_handoff_failed itemId={} exceptionType={}",
+          result.history().itemId(),
+          exception.getClass().getSimpleName());
+    }
     return result;
   }
 

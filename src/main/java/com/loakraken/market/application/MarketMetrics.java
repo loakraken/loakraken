@@ -61,8 +61,8 @@ public class MarketMetrics {
 
   /**
    * 거래소 일별 시세 저장(market_price_daily) 사건: saved(품목 저장 끝남, 바뀐 행이 0이어도), dropped(넘기기 큐 가득), failed(품목
-   * 저장 실패), skipped_variant_key(같은 변형 칸), skipped_name_length(이름 128자 초과), skipped_value(가격·거래량이 칸에 맞지
-   * 않음). 값은 이 여섯 개뿐이다.
+   * 저장 실패), skipped_variant_key(같은 변형 칸), skipped_name_length(이름 128자 초과), skipped_value(가격·거래량이 칸에
+   * 맞지 않음). 값은 이 여섯 개뿐이다.
    */
   public void dailyRecord(String event) {
     registry.counter("loakraken.market.daily_record", "event", event).increment();

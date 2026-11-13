@@ -23,8 +23,8 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * 거래소 품목 일별 시세(market_price_daily). 변형(거래 가능 횟수·묶음 수, 없으면 -1)마다 완료일을 넣고, 같은 날짜는 더 늦은 관측이고 값이 바뀌었을
  * 때만 덮는다(완료일은 거의 바뀌지 않아, 예열마다 같은 행을 다시 쓰지 않게). 품목 하나를 한 번의 배치로 쓴다. 줄 하나가 표에 맞지 않으면(이름 길이·숫자 칸·
- * 음수·같은 변형 칸) 그 줄만 건너뛰고 지표는 매번, WARN 로그는 (품목, 이유)마다 하루(KST)에 한 번만 남긴다(예열이 같은 품목을 하루 여러 번 받아도
- * 로그가 쌓이지 않게). 지우지 않는다.
+ * 음수·같은 변형 칸) 그 줄만 건너뛰고 지표는 매번, WARN 로그는 (품목, 이유)마다 하루(KST)에 한 번만 남긴다(예열이 같은 품목을 하루 여러 번 받아도 로그가
+ * 쌓이지 않게). 지우지 않는다.
  */
 @Component
 class PostgresMarketDailyStore implements MarketDailyStore {

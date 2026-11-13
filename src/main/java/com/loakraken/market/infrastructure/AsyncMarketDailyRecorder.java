@@ -25,8 +25,8 @@ import org.springframework.stereotype.Component;
  * (daily_record dropped)를 남긴다. 버린 날짜는 다음에 같은 품목의 상세를 받을 때 14일 덮어쓰기로 다시 채워진다. 로그는 첫 번째와 100번째마다만.
  *
  * <p>관측: 저장 성공은 daily_record saved와 바뀐 행 수(daily_record.rows), 마지막 성공 시각 게이지
- * (background.last_success{job=market_daily}), 큐 깊이 게이지(daily_record.queue). 넘긴 쪽의 MDC(requestId·entryPoint)를
- * 저장 스레드로 옮겨, 저장 실패·건너뜀 로그를 어느 요청·작업이 넘겼는지 찾을 수 있게 한다.
+ * (background.last_success{job=market_daily}), 큐 깊이 게이지(daily_record.queue). 넘긴 쪽의
+ * MDC(requestId·entryPoint)를 저장 스레드로 옮겨, 저장 실패·건너뜀 로그를 어느 요청·작업이 넘겼는지 찾을 수 있게 한다.
  */
 @Component
 class AsyncMarketDailyRecorder implements MarketDailyRecorder {

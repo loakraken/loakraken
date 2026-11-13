@@ -226,6 +226,14 @@ class MarketBoardIntegrationTest {
     assertThat(ttl).isGreaterThan(7 * 24 * 3600).isLessThanOrEqualTo(8 * 24 * 3600);
     assertThat(marketCache.addVolumeCalls(today, 3)).isEqualTo(3);
     assertThat(marketCache.addVolumeCalls(today, 2)).isEqualTo(5);
+    // 돌림 위치: 재시도 수까지 저장하고, 재시도 수가 없는 이전 값("page,date")은 0으로 읽는다.
+    var cursor = new com.loakraken.market.application.MarketVolumeCursor(4, today.minusDays(2), 2);
+    marketCache.saveVolumeCursor(com.loakraken.market.domain.MarketTab.AVATAR, cursor);
+    assertThat(marketCache.findVolumeCursor(com.loakraken.market.domain.MarketTab.AVATAR))
+        .contains(cursor);
+    redis.opsForValue().set("market:v1:volume-cursor:AVATAR", "5," + today.minusDays(3));
+    assertThat(marketCache.findVolumeCursor(com.loakraken.market.domain.MarketTab.AVATAR))
+        .contains(new com.loakraken.market.application.MarketVolumeCursor(5, today.minusDays(3)));
     assertThat(
             redis.getExpire(
                 "market:v1:volume-calls:" + today, java.util.concurrent.TimeUnit.SECONDS))

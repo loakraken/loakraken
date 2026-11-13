@@ -52,6 +52,9 @@ class MarketVolumeWarmup {
   static final int RESERVE = 40;
   static final ZoneId KST = ZoneId.of("Asia/Seoul");
 
+  /** 돌림 페이지 하나를 받는 최대 시도 수. 실패한 품목이 있으면 다음 주기에 다시 받고, 이 횟수를 채우면 넘긴다(rotation_gave_up). */
+  static final int MAX_PAGE_ATTEMPTS = 3;
+
   private final MarketBoardService boards;
   private final MarketQueryService markets;
   private final MarketCache cache;
@@ -78,6 +81,8 @@ class MarketVolumeWarmup {
   private final java.util.Map<MarketTab, MarketVolumeCursor> cursors =
       new java.util.EnumMap<>(MarketTab.class);
   private Rotation rotation;
+  // 지금 대기열의 돌림 페이지에서 공식 상세가 실패한 품목 수(한도·관문 미룸은 빼고). 0이 아니면 위치를 넘기지 않고 다음 주기에 그 페이지를 다시 받는다.
+  private int rotationFailures;
   private final Set<MarketTab> rotatedToday = java.util.EnumSet.noneOf(MarketTab.class);
   private final java.util.Map<MarketTab, RotationGauges> rotationGauges =
       new java.util.EnumMap<>(MarketTab.class);
@@ -156,7 +161,7 @@ class MarketVolumeWarmup {
     if (!today.equals(day)) startDay(today);
     while (true) {
       if (queue.isEmpty()) {
-        if (rotation != null) advance(today);
+        if (rotation != null && !advance(today)) return;
         if (tabs.isEmpty()) {
           finishDay(today);
           return;
@@ -238,6 +243,7 @@ class MarketVolumeWarmup {
       gauges.page().set(cursor.page());
       gauges.pages().set(totalPages);
       rotation = new Rotation(tab, cursor, totalPages);
+      rotationFailures = 0;
       enqueue(page.items(), today);
       return true;
     } catch (BusinessException exception) {
@@ -257,11 +263,38 @@ class MarketVolumeWarmup {
     }
   }
 
-  /** 대기열의 돌림 페이지를 다 채웠다: 위치를 다음 페이지로(마지막이면 1페이지로 돌아가 한 바퀴 일수를 남김). */
-  private void advance(LocalDate today) {
+  /**
+   * 대기열의 돌림 페이지를 다 돌았다. 실패한 품목이 있고 시도가 남았으면 위치를 그대로 두고(시도 수만 늘려 저장) 이번 주기를 멈춘다(false): 다음 주기에 같은
+   * 페이지를 다시 받고, 이미 채운 품목은 오늘 지도에 있어 다시 부르지 않는다. 아니면 위치를 다음 페이지로(마지막이면 1페이지로 돌아가 한 바퀴 일수를 남김).
+   */
+  private boolean advance(LocalDate today) {
     var done = rotation;
     rotation = null;
     var tab = done.tab();
+    if (rotationFailures > 0) {
+      int attempts = done.cursor().attempts() + 1;
+      if (attempts < MAX_PAGE_ATTEMPTS) {
+        var retry =
+            new MarketVolumeCursor(done.cursor().page(), done.cursor().cycleStartedOn(), attempts);
+        cursors.put(tab, retry);
+        cache.saveVolumeCursor(tab, retry);
+        metrics.volumeWarmup("rotation_retry");
+        log.info(
+            "event=volume_warmup_rotation_retry tab={} page={} failures={} attempts={}",
+            tab,
+            retry.page(),
+            rotationFailures,
+            attempts);
+        return false;
+      }
+      metrics.volumeWarmup("rotation_gave_up");
+      log.warn(
+          "event=volume_warmup_rotation_gave_up tab={} page={} failures={} attempts={}",
+          tab,
+          done.cursor().page(),
+          rotationFailures,
+          attempts);
+    }
     MarketVolumeCursor next;
     if (done.cursor().page() >= done.totalPages()) {
       long days =
@@ -280,6 +313,14 @@ class MarketVolumeWarmup {
     cursors.put(tab, next);
     rotationGauges.get(tab).page().set(next.page());
     cache.saveVolumeCursor(tab, next);
+    return true;
+  }
+
+  /** 돌림 페이지 품목의 공식 상세가 (한도·관문 미룸이 아닌 이유로) 실패: 페이지를 다시 받을 때 그 품목을 다시 넣도록 오늘 본 목록에서 뺀다. */
+  private void rotationItemFailed(long itemId) {
+    if (rotation == null) return;
+    rotationFailures++;
+    seen.remove(itemId);
   }
 
   /** 이미 그날 지도에 있는 품목은 빼고, 오늘 받은 이력 캐시로 계산되는 품목은 공식 호출 없이 채운 뒤 나머지를 대기열에 넣는다. */
@@ -338,9 +379,10 @@ class MarketVolumeWarmup {
       metrics.volumeWarmup(failure("itemId=" + item.id(), exception));
       if (exception.errorCode() == LostArkErrorCode.LOST_ARK_RATE_LIMITED
           || exception.errorCode() == LostArkErrorCode.LOST_ARK_GATE_UNAVAILABLE) return false;
-      // 그 품목만의 실패면 건너뛰고 계속한다(다음 날 다시).
+      // 그 품목만의 실패면 건너뛰고 계속한다(다음 날 다시, 돌림 페이지면 다음 주기에 다시).
       queue.pollFirst();
       pending.set(queue.size());
+      rotationItemFailed(item.id());
       return true;
     } catch (RuntimeException exception) {
       metrics.volumeWarmup("official_failed");
@@ -350,6 +392,7 @@ class MarketVolumeWarmup {
           exception.getClass().getName());
       queue.pollFirst();
       pending.set(queue.size());
+      rotationItemFailed(item.id());
       return true;
     }
   }

@@ -259,10 +259,13 @@ class ValkeyMarketCache implements MarketCache {
       var value = redis.opsForValue().get(volumeCursorKey(tab));
       if (value == null) return Optional.empty();
       var parts = value.split(",");
-      if (parts.length != 2) return Optional.empty();
+      // "page,date" 또는 "page,date,attempts"(페이지 재시도 수, 없으면 0)
+      if (parts.length != 2 && parts.length != 3) return Optional.empty();
       return Optional.of(
           new com.loakraken.market.application.MarketVolumeCursor(
-              Integer.parseInt(parts[0]), java.time.LocalDate.parse(parts[1])));
+              Integer.parseInt(parts[0]),
+              java.time.LocalDate.parse(parts[1]),
+              parts.length == 3 ? Integer.parseInt(parts[2]) : 0));
     } catch (DataAccessException exception) {
       metrics.cache(Kind.VOLUME, Outcome.READ_ERROR);
       return Optional.empty();
@@ -281,7 +284,7 @@ class ValkeyMarketCache implements MarketCache {
           .opsForValue()
           .set(
               volumeCursorKey(tab),
-              cursor.page() + "," + cursor.cycleStartedOn(),
+              cursor.page() + "," + cursor.cycleStartedOn() + "," + cursor.attempts(),
               VOLUME_CURSOR_TTL);
     } catch (DataAccessException exception) {
       metrics.cache(Kind.VOLUME, Outcome.WRITE_ERROR);

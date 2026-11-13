@@ -147,6 +147,8 @@ public record CharacterAnalysisResponse(
       @Schema(description = "보석 스킬 효과가 \"재사용 대기시간 N% 감소\"인 개수") int cooldownEffectCount,
       @Schema(description = "두 형식에 해당하지 않아 분류하지 않은 보석 스킬 효과 개수") int unknownEffectCount) {}
 
+  /** 보석 레벨별 개수. 통계의 아이템 레벨 구간 개수(LevelCountResponse)와 단순 이름이 같아 스키마 이름을 따로 둔다. */
+  @Schema(name = "CharacterLevelCountResponse")
   public record LevelCountResponse(int level, int count) {}
 
   public record CardSummaryResponse(

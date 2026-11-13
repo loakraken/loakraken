@@ -73,15 +73,11 @@ public class SpecUpGoalService {
   private final SpecUpGoalStorePort store;
   private final LongSupplier nanoTime;
 
-  /** 추천 순서 계산(캐시에 없을 때) 동시 수. 넘으면 기다리지 않고 429 SPEC_UP_BUSY(요청 스레드를 붙잡지 않게). */
-  private final java.util.concurrent.Semaphore pathSolves;
-
   /**
-   * 목표 경로 계산(캐시에 없을 때) 동시 수. 넘으면 기다리지 않고 429 SPEC_UP_BUSY(추천 순서와 같은 방식, 보안 점검 11-13: 기능을 켜기 전에 계산
-   * 동시 수를 막는다).
+   * 추천 순서·목표 경로 계산(캐시에 없을 때)이 함께 쓰는 자리. 운영 서버(4GB)에서 무거운 계산이 SOLVE_MAX_CONCURRENT개를 넘지 않게 한다(PM 총괄
+   * 11-13). 넘으면 기다리지 않고 429 SPEC_UP_BUSY(요청 스레드를 붙잡지 않게).
    */
-  private final java.util.concurrent.Semaphore goalSolves =
-      new java.util.concurrent.Semaphore(GOAL_MAX_CONCURRENT);
+  private final java.util.concurrent.Semaphore solves;
 
   private final ConcurrentHashMap<String, CompletableFuture<Object>> flights =
       new ConcurrentHashMap<>();
@@ -115,7 +111,7 @@ public class SpecUpGoalService {
     this.store = store;
     this.nanoTime = nanoTime;
     this.meters = meters;
-    this.pathSolves = new java.util.concurrent.Semaphore(PATH_MAX_CONCURRENT);
+    this.solves = new java.util.concurrent.Semaphore(SOLVE_MAX_CONCURRENT);
   }
 
   private static final Logger log = LoggerFactory.getLogger(SpecUpGoalService.class);
@@ -139,8 +135,7 @@ public class SpecUpGoalService {
   // v2: 완갑(팔 보호구) 재련 단계를 고른다. v3: 어빌리티 스톤 목표 조합(각인 둘을 한 단계에), 단계 changes.
   public static final String PATH_RULE_VERSION = "spec-up-path-v4";
   static final int PATH_MAX_STEPS = 30;
-  static final int PATH_MAX_CONCURRENT = 2;
-  static final int GOAL_MAX_CONCURRENT = 2;
+  static final int SOLVE_MAX_CONCURRENT = 2;
   static final Duration PATH_RETRY_AFTER = Duration.ofSeconds(2);
   private static final Map<String, String> PATH_STOP_TEXT =
       Map.of(
@@ -183,7 +178,7 @@ public class SpecUpGoalService {
   /**
    * 추천 순서(스펙업 순서 시안 '나'): 지금 상태에서 pick 기준으로 가장 앞의 다음 한 단계를 적용하고 다시 재기를 limit 단계까지(목표 없음). 시세(더 드는
    * 비용)를 모르는 단계는 고르지 않고 unpriced로 따로 준다. 목표 경로와 같은 단계·비용·시뮬레이터를 쓴다. 같은 캐릭터 수집 시각·시세·기준·단계 수는 10분
-   * 캐시, 같은 키는 한 번만 계산, 캐시에 없는 계산은 동시에 PATH_MAX_CONCURRENT개까지(넘으면 바로 429).
+   * 캐시, 같은 키는 한 번만 계산, 캐시에 없는 계산은 동시에 SOLVE_MAX_CONCURRENT개까지(넘으면 바로 429).
    */
   public Path path(String characterName, Pick pick, int limit) {
     if (!specUp.enabled()) throw new BusinessException(SpecUpErrorCode.SPEC_UP_DISABLED);
@@ -219,13 +214,13 @@ public class SpecUpGoalService {
     return single(
         "path:" + key,
         () -> {
-          if (!pathSolves.tryAcquire()) {
+          if (!solves.tryAcquire()) {
             pathOutcome("busy");
             log.warn(
                 "event=spec_up_path_busy pick={} limit={} slots={}",
                 pick,
                 limit,
-                PATH_MAX_CONCURRENT);
+                SOLVE_MAX_CONCURRENT);
             throw new BusinessException(SpecUpErrorCode.SPEC_UP_BUSY, PATH_RETRY_AFTER);
           }
           try {
@@ -249,7 +244,7 @@ public class SpecUpGoalService {
             else store.savePath(key, result, CACHE_TTL);
             return result;
           } finally {
-            pathSolves.release();
+            solves.release();
           }
         });
   }
@@ -422,9 +417,9 @@ public class SpecUpGoalService {
     return single(
         key,
         () -> {
-          if (!goalSolves.tryAcquire()) {
+          if (!solves.tryAcquire()) {
             goalOutcome("busy");
-            log.warn("event=spec_up_goal_busy slots={}", GOAL_MAX_CONCURRENT);
+            log.warn("event=spec_up_goal_busy slots={}", SOLVE_MAX_CONCURRENT);
             throw new BusinessException(SpecUpErrorCode.SPEC_UP_BUSY, PATH_RETRY_AFTER);
           }
           try {
@@ -434,7 +429,7 @@ public class SpecUpGoalService {
             if (!TIME_LIMITED.equals(result.stopReasonCode())) store.save(key, result, CACHE_TTL);
             return result;
           } finally {
-            goalSolves.release();
+            solves.release();
           }
         });
   }

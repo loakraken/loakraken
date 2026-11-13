@@ -482,7 +482,7 @@ class SpecUpGoalServiceTest {
   @Test
   void 추천_순서_계산_자리가_차_있으면_바로_SPEC_UP_BUSY다() throws Exception {
     var service = service(System::nanoTime);
-    var field = SpecUpGoalService.class.getDeclaredField("pathSolves");
+    var field = SpecUpGoalService.class.getDeclaredField("solves");
     field.setAccessible(true);
     var slots = (java.util.concurrent.Semaphore) field.get(service);
     slots.acquire(slots.availablePermits());
@@ -500,7 +500,7 @@ class SpecUpGoalServiceTest {
   @Test
   void 목표_경로_계산_자리가_차_있으면_바로_SPEC_UP_BUSY이고_끝나면_자리를_돌려준다() throws Exception {
     var service = service(System::nanoTime);
-    var field = SpecUpGoalService.class.getDeclaredField("goalSolves");
+    var field = SpecUpGoalService.class.getDeclaredField("solves");
     field.setAccessible(true);
     var slots = (java.util.concurrent.Semaphore) field.get(service);
     int permits = slots.availablePermits();
@@ -526,7 +526,7 @@ class SpecUpGoalServiceTest {
   @Test
   void 추천_순서와_목표_경로는_계산_자리_2개를_함께_쓴다() throws Exception {
     var service = service(System::nanoTime);
-    var field = SpecUpGoalService.class.getDeclaredField("pathSolves");
+    var field = SpecUpGoalService.class.getDeclaredField("solves");
     field.setAccessible(true);
     var slots = (java.util.concurrent.Semaphore) field.get(service);
     assertThat(slots.availablePermits()).isEqualTo(2);

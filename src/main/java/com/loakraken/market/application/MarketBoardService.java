@@ -71,6 +71,16 @@ public class MarketBoardService {
    * 적용한다(#619). totalItems는 걸러진 품목 수, scannedItems는 스캔한 품목 수, complete는 스캔이 탭 전체를 덮었는지다.
    */
   public MarketBoard board(
+      MarketTab tab,
+      Integer tier,
+      MarketBoardRules.Sort sort,
+      int page,
+      String query,
+      String grade) {
+    return board(tab, tier, sort, page, query);
+  }
+
+  public MarketBoard board(
       MarketTab tab, Integer tier, MarketBoardRules.Sort sort, int page, String query) {
     Integer effectiveTier = tier == null ? tab.defaultTier() : tier;
     if (query != null) {

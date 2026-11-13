@@ -125,7 +125,9 @@ public class MarketController {
                 request.tier(),
                 request.toSort(),
                 request.pageOrDefault(),
-                request.query())));
+                request.query(),
+                request.grade()),
+            request.grade()));
   }
 
   @PostMapping(value = "/items/prices", consumes = MediaType.APPLICATION_JSON_VALUE)

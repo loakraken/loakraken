@@ -29,9 +29,17 @@ public record MarketBoardResponse(
         int scannedItems,
     @Schema(description = "rise/fall/volume·q 검색이 탭 전체를 스캔했는지. 스캔 상한(10페이지)을 넘으면 false")
         boolean complete,
-    List<MarketBoardItemResponse> items) {
+    List<MarketBoardItemResponse> items,
+    @Schema(description = "적용한 등급 거르기. 없으면 null(모든 등급)", example = "유물")
+        @OptionalResponse
+        @NullableResponse
+        String grade) {
 
   static MarketBoardResponse from(MarketBoard board) {
+    return from(board, null);
+  }
+
+  static MarketBoardResponse from(MarketBoard board, String grade) {
     return new MarketBoardResponse(
         MarketBoardRules.RULE_VERSION,
         MarketBoardRules.CHANGE_BASIS,
@@ -45,7 +53,8 @@ public record MarketBoardResponse(
         board.totalItems(),
         board.scannedItems(),
         board.complete(),
-        board.rows().stream().map(MarketBoardItemResponse::from).toList());
+        board.rows().stream().map(MarketBoardItemResponse::from).toList(),
+        grade);
   }
 
   public record MarketBoardItemResponse(

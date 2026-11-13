@@ -76,6 +76,10 @@ public class SpecUpGoalService {
   /** 추천 순서 계산(캐시에 없을 때) 동시 수. 넘으면 기다리지 않고 429 SPEC_UP_BUSY(요청 스레드를 붙잡지 않게). */
   private final java.util.concurrent.Semaphore pathSolves;
 
+  /** 목표 경로 계산(캐시에 없을 때) 동시 수. */
+  private final java.util.concurrent.Semaphore goalSolves =
+      new java.util.concurrent.Semaphore(GOAL_MAX_CONCURRENT);
+
   private final ConcurrentHashMap<String, CompletableFuture<Object>> flights =
       new ConcurrentHashMap<>();
 
@@ -128,6 +132,7 @@ public class SpecUpGoalService {
   public static final String PATH_RULE_VERSION = "spec-up-path-v4";
   static final int PATH_MAX_STEPS = 30;
   static final int PATH_MAX_CONCURRENT = 2;
+  static final int GOAL_MAX_CONCURRENT = 2;
   static final Duration PATH_RETRY_AFTER = Duration.ofSeconds(2);
   private static final Map<String, String> PATH_STOP_TEXT =
       Map.of(

@@ -496,6 +496,32 @@ class SpecUpGoalServiceTest {
     assertThat(meters.counter("loakraken.spec_up.path", "outcome", "busy").count()).isEqualTo(1);
   }
 
+  /** 목표 경로 계산도 자리(2)가 모두 차 있으면 기다리지 않고 429 SPEC_UP_BUSY. 끝난 계산은 자리를 돌려준다(보안 점검 11-13). */
+  @Test
+  void 목표_경로_계산_자리가_차_있으면_바로_SPEC_UP_BUSY이고_끝나면_자리를_돌려준다() throws Exception {
+    var service = service(System::nanoTime);
+    var field = SpecUpGoalService.class.getDeclaredField("goalSolves");
+    field.setAccessible(true);
+    var slots = (java.util.concurrent.Semaphore) field.get(service);
+    int permits = slots.availablePermits();
+    assertThat(permits).isEqualTo(2);
+    slots.acquire(permits);
+    org.assertj.core.api.Assertions.assertThatThrownBy(
+            () -> service.goal("목표테스트", new BigDecimal("6000")))
+        .isInstanceOf(com.loakraken.common.api.BusinessException.class)
+        .satisfies(
+            e ->
+                assertThat(((com.loakraken.common.api.BusinessException) e).errorCode())
+                    .isEqualTo(SpecUpErrorCode.SPEC_UP_BUSY));
+    assertThat(meters.counter("loakraken.spec_up.goal", "outcome", "busy").count()).isEqualTo(1);
+
+    slots.release(permits);
+    service.goal("목표테스트", new BigDecimal("6000"));
+    assertThat(slots.availablePermits()).isEqualTo(2);
+    assertThat(meters.counter("loakraken.spec_up.goal", "outcome", "computed").count())
+        .isEqualTo(1);
+  }
+
   /** 겁화 1~10레벨 칸(값은 레벨 × 1,000골드), 같은 관측 시각. */
   private static List<MarketAuctionService.GemCell> gemCells(Instant at, boolean stale) {
     var cells = new java.util.ArrayList<MarketAuctionService.GemCell>();

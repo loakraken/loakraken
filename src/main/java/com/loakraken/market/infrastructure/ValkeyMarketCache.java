@@ -165,8 +165,8 @@ class ValkeyMarketCache implements MarketCache {
   }
 
   /**
-   * 거래량 지도 TTL: 보드가 거슬러 찾는 7일 + 하루 여유. 돌림 탭(아바타)은 한 바퀴에 약 5일이라 그 사이 값을 날짜와 함께 보이려고 늘렸다(PM 11-13, 11-08의
-   * ≤ 36시간에서 바꿈). 같은 공식 일별 거래량은 이미 일별 시세 표(market_price_daily)에 지우지 않고 남는다.
+   * 거래량 지도 TTL: 보드가 거슬러 찾는 7일 + 하루 여유. 돌림 탭(아바타)은 한 바퀴에 약 5일이라 그 사이 값을 날짜와 함께 보이려고 늘렸다(PM 11-13,
+   * 11-08의 ≤ 36시간에서 바꿈). 같은 공식 일별 거래량은 이미 일별 시세 표(market_price_daily)에 지우지 않고 남는다.
    */
   static final Duration VOLUME_TTL = Duration.ofDays(8);
 

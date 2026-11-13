@@ -36,13 +36,13 @@ import org.springframework.stereotype.Component;
  * 거래량을 그날 거래량 지도(Valkey, TTL 36시간)에 둔다. 완료일 값이라 하루에 한 번이면 된다.
  *
  * <p>기본은 꺼짐. 켜진 인스턴스끼리 리더 임대로 한 곳만 돈다. 공식 호출은 사용자 몫(reserve)을 남기도록 관문에서 판정하고, 이 작업만의 분당 상한(기본 15)과
- * 하루 상한(기본 2,000, Valkey 카운터)을 따로 지킨다. 탭 스캔은 캐시에 없을 때만 부르고 10번으로 미리 센다. 이미 그날 지도에 있거나 오늘 받은 이력
- * 캐시로 계산할 수 있는 품목은 공식 호출 없이 채운다. 공식 한도·관문 장애를 만나면 이번 주기를 멈추고 다음 주기에 이어 받는다.
+ * 하루 상한(기본 2,000, Valkey 카운터)을 따로 지킨다. 탭 스캔은 캐시에 없을 때만 부르고 10번으로 미리 센다. 이미 그날 지도에 있거나 오늘 받은 이력 캐시로
+ * 계산할 수 있는 품목은 공식 호출 없이 채운다. 공식 한도·관문 장애를 만나면 이번 주기를 멈추고 다음 주기에 이어 받는다.
  *
  * <p>돌림 탭(기본 아바타, 수천 개)은 맨 뒤에서 한 페이지(공식 검색 1번)씩 받아 그 품목들을 채우고, 페이지를 다 채우면 위치(Valkey)를 다음 페이지로 넘긴다.
- * 하루 상한에 닿으면 다음 날 그 자리부터 잇는다(중간에 멈춘 페이지는 다시 받음). 마지막 페이지를 마치면 1페이지로 돌아가 한 바퀴 일수를 남기고 그날은 더 돌지
- * 않는다. 상세를 받을 때마다 일별 시세 표가 완료일 13일을 다시 쓰므로, 한 바퀴가 13일 안이면 모든 품목의 일별 시세에 빈 날이 없다. 지표: 위치
- * (rotation_page), 전체 페이지 수(rotation_pages), 지난 한 바퀴 일수(rotation_cycle_days), 탭 이름 라벨.
+ * 하루 상한에 닿으면 다음 날 그 자리부터 잇는다(중간에 멈춘 페이지는 다시 받음). 마지막 페이지를 마치면 1페이지로 돌아가 한 바퀴 일수를 남기고 그날은 더 돌지 않는다.
+ * 상세를 받을 때마다 일별 시세 표가 완료일 13일을 다시 쓰므로, 한 바퀴가 13일 안이면 모든 품목의 일별 시세에 빈 날이 없다. 지표: 위치 (rotation_page),
+ * 전체 페이지 수(rotation_pages), 지난 한 바퀴 일수(rotation_cycle_days), 탭 이름 라벨.
  */
 @Component
 @ConditionalOnProperty(prefix = "market.volume-warmup", name = "enabled", havingValue = "true")
@@ -122,7 +122,8 @@ class MarketVolumeWarmup {
           .tag("tab", tab.name())
           .description("돌림 탭에서 지금 받는(또는 다음에 받을) 공식 검색 페이지. 0이면 아직 없음")
           .register(registry);
-      Gauge.builder("loakraken.market.volume_warmup.rotation_pages", gauges.pages(), AtomicLong::get)
+      Gauge.builder(
+              "loakraken.market.volume_warmup.rotation_pages", gauges.pages(), AtomicLong::get)
           .tag("tab", tab.name())
           .description("돌림 탭의 전체 페이지 수(공식 TotalCount / 10)")
           .register(registry);
@@ -231,7 +232,8 @@ class MarketVolumeWarmup {
       int totalPages =
           Math.max(
               1,
-              (page.totalCount() + MarketBoardService.PAGE_SIZE - 1) / MarketBoardService.PAGE_SIZE);
+              (page.totalCount() + MarketBoardService.PAGE_SIZE - 1)
+                  / MarketBoardService.PAGE_SIZE);
       var gauges = rotationGauges.get(tab);
       gauges.page().set(cursor.page());
       gauges.pages().set(totalPages);
@@ -262,7 +264,8 @@ class MarketVolumeWarmup {
     var tab = done.tab();
     MarketVolumeCursor next;
     if (done.cursor().page() >= done.totalPages()) {
-      long days = java.time.temporal.ChronoUnit.DAYS.between(done.cursor().cycleStartedOn(), today) + 1;
+      long days =
+          java.time.temporal.ChronoUnit.DAYS.between(done.cursor().cycleStartedOn(), today) + 1;
       rotationGauges.get(tab).cycleDays().set(days);
       log.info(
           "event=volume_warmup_rotation_cycle tab={} pages={} days={}",

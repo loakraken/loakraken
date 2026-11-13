@@ -40,6 +40,7 @@ public class MarketBoardService {
    * 거래량을 찾는 지난 지도 일수. 돌림 탭(아바타)은 한 바퀴에 약 5일이 걸려 그 사이 값을 그 volumeDate와 함께 보인다(날짜가 오래된 값임을 화면이 보임).
    */
   public static final int VOLUME_LOOKBACK_DAYS = 7;
+
   static final ZoneId KST = ZoneId.of("Asia/Seoul");
 
   private final MarketQueryService markets;
@@ -268,8 +269,7 @@ public class MarketBoardService {
   }
 
   /**
-   * 거래량 채우기 돌림 탭 전용: 탭 기본 티어·기본 정렬의 page번째 페이지(공식 검색 1회, 캐시 없음). 보드 스캔의 10페이지 상한과 상관없이 끝까지 받을 수
-   * 있다.
+   * 거래량 채우기 돌림 탭 전용: 탭 기본 티어·기본 정렬의 page번째 페이지(공식 검색 1회, 캐시 없음). 보드 스캔의 10페이지 상한과 상관없이 끝까지 받을 수 있다.
    */
   public MarketPage volumePage(MarketTab tab, int page) {
     return markets

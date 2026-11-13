@@ -34,7 +34,9 @@ class OpenApiSchemaNameTest {
     for (var bean : scanner.findCandidateComponents("com.loakraken")) {
       var controller = Class.forName(bean.getBeanClassName());
       for (var method : controller.getDeclaredMethods()) {
-        if (!java.lang.reflect.Modifier.isPublic(method.getModifiers())) continue;
+        // 공개 여부가 아니라 요청 매핑(@GetMapping 등은 @RequestMapping 메타 애너테이션)으로 핸들러를 고른다(패키지 공개 핸들러도 포함).
+        if (!org.springframework.core.annotation.AnnotatedElementUtils.hasAnnotation(
+            method, org.springframework.web.bind.annotation.RequestMapping.class)) continue;
         walk(method.getGenericReturnType(), seen);
         for (var parameter : method.getParameters())
           if (parameter.isAnnotationPresent(RequestBody.class)

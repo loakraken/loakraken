@@ -1498,6 +1498,21 @@ public final class CritSpeedCalculation {
   /** 자신 및 파티원 문구를 자기 속도로 읽을 때 뺄 말: "파티원의"(다른 대상 한정으로 읽힘), "각각"(공격 속도와 이동 속도가 각각 n%). */
   private static final Pattern PARTY_POSSESSIVE = Pattern.compile("파티원의\\s*|각각\\s*");
 
+  /**
+   * 트라이포드 문구의 자신 및 파티원 공이속. attack·move는 그 절에서 읽은 합(없으면 null), rest는 파티 절을 뺀 나머지 문구. found()면 파티
+   * 규칙을 쓴다.
+   */
+  public record PartySpeeds(BigDecimal attack, BigDecimal move, String rest) {
+    public boolean found() {
+      return attack != null || move != null;
+    }
+  }
+
+  /** 자신 및 파티원 공이속 절을 문장 단위로 읽는다. */
+  public static PartySpeeds partyTripodSpeeds(String effect) {
+    return new PartySpeeds(null, null, effect);
+  }
+
   /** 레벨 2 이상 스킬의 선택 트라이포드 공이속을 트라이포드 표로 판정한다. */
   private static void tripodSpeedSources(
       CharacterLoadout loadout,

@@ -950,6 +950,54 @@ class CritEffectTableTest {
     assertThat(valkyrie.speed().move().total()).isEqualByComparingTo("9.32");
   }
 
+  @Test
+  void 자신_및_파티원_문구는_그_문장만_파티로_읽는다() {
+    // (1) 따로 있는 파티원만 오르는 문장은 자기 속도가 아니고, 적에게 거는 감소도 자기 속도가 아니다.
+    var partyOnly =
+        party(
+            "스킬 시전 시 8.0초간 자신 및 파티원의 공격 속도가 8.0% 증가한다. 파티원의 이동 속도가 12.0% 증가한다."
+                + " 적의 공격 속도와 이동 속도가 각각 10.0% 감소한다.");
+    assertThat(partyOnly.speed().attack().total()).isEqualByComparingTo("9.32");
+    assertThat(partyOnly.speed().move().total()).isEqualByComparingTo("1.32");
+
+    // (2) '각각 a%, b%'는 축마다 다른 값
+    var each = party("8.0초간 자신 및 파티원의 공격 속도와 이동 속도가 각각 8.0%, 12.0% 증가한다.");
+    assertThat(each.speed().attack().total()).isEqualByComparingTo("9.32");
+    assertThat(each.speed().move().total()).isEqualByComparingTo("13.32");
+
+    // (3) 문장을 넘어 묶지 않는다: 앞 문장의 '자신 및 파티원'은 뒤 문장 공격 속도의 대상이 아니다(이름 표의 기본 끔 그대로).
+    var crossed =
+        calculate(
+            "스트라이커",
+            List.of(),
+            List.of(
+                tripodSkill(
+                    "붕천퇴", "바람의 축복", "자신 및 파티원의 방어력이 10.0% 증가한다. 4.0초간 공격 속도가 19.2% 증가한다.")),
+            null,
+            Assumptions.NONE);
+    assertThat(crossed.speed().attack().total()).isEqualByComparingTo("1.32");
+    assertThat(crossed.toggles())
+        .extracting(t -> t.key() + "/" + t.on())
+        .containsExactly("바람의 축복/false");
+
+    // (5) 공식 문구 그대로(발키리 마나의 축복): 공격 속도 값 뒤에 다른 값이 이어져도 공격 속도 +8, 마나 회복 속도는 속도가 아니다.
+    var mana = party("스킬 시전 시 8.0초간 자신 및 24.0m 범위 내의 파티원의 공격 속도가 8.0%, 마나 회복 속도가 50.0% 증가한다.");
+    assertThat(mana.speed().attack().total()).isEqualByComparingTo("9.32");
+    assertThat(mana.speed().move().total()).isEqualByComparingTo("1.32");
+    assertThat(mana.toggles())
+        .extracting(t -> t.label() + "/" + t.axis() + "/" + t.on())
+        .containsExactly("축복(자신 및 파티원)/ATTACK_SPEED/true");
+
+    // (4) 절 안의 줄바꿈(공식 <br>)이 있어도 읽는다.
+    var lineBreak = party("스킬 시전 시 8.0초간 자신 및\n파티원의 공격속도가 8.0% 증가한다.");
+    assertThat(lineBreak.speed().attack().total()).isEqualByComparingTo("9.32");
+  }
+
+  private static CritSpeedCalculation.Result party(String effect) {
+    return calculate(
+        "발키리", List.of(), List.of(tripodSkill("숭고한 도약", "축복", effect)), null, Assumptions.NONE);
+  }
+
   private static CharacterLoadout.Skill tripodSkill(String skill, String tripod, String effect) {
     return new CharacterLoadout.Skill(
         skill,

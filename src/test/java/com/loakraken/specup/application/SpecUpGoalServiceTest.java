@@ -522,6 +522,25 @@ class SpecUpGoalServiceTest {
         .isEqualTo(1);
   }
 
+  /** 추천 순서와 목표 경로는 계산 자리 2개를 함께 쓴다(운영 4GB, PM 11-13): 추천 순서가 둘 다 쓰면 목표 경로도 바로 SPEC_UP_BUSY. */
+  @Test
+  void 추천_순서와_목표_경로는_계산_자리_2개를_함께_쓴다() throws Exception {
+    var service = service(System::nanoTime);
+    var field = SpecUpGoalService.class.getDeclaredField("pathSolves");
+    field.setAccessible(true);
+    var slots = (java.util.concurrent.Semaphore) field.get(service);
+    assertThat(slots.availablePermits()).isEqualTo(2);
+    slots.acquire(2);
+    org.assertj.core.api.Assertions.assertThatThrownBy(
+            () -> service.goal("목표테스트", new BigDecimal("6000")))
+        .isInstanceOf(com.loakraken.common.api.BusinessException.class)
+        .satisfies(
+            e ->
+                assertThat(((com.loakraken.common.api.BusinessException) e).errorCode())
+                    .isEqualTo(SpecUpErrorCode.SPEC_UP_BUSY));
+    slots.release(2);
+  }
+
   /** 겁화 1~10레벨 칸(값은 레벨 × 1,000골드), 같은 관측 시각. */
   private static List<MarketAuctionService.GemCell> gemCells(Instant at, boolean stale) {
     var cells = new java.util.ArrayList<MarketAuctionService.GemCell>();

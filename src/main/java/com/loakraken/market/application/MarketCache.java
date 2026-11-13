@@ -52,6 +52,14 @@ public interface MarketCache {
     return Long.MAX_VALUE;
   }
 
+  /** 거래량 채우기 돌림 탭의 위치. 없거나 읽지 못하면 빈 값(1페이지부터). */
+  default Optional<MarketVolumeCursor> findVolumeCursor(MarketTab tab) {
+    return Optional.empty();
+  }
+
+  /** 거래량 채우기 돌림 탭의 위치를 저장한다. 쓰지 못해도 예외를 내지 않는다. */
+  default void saveVolumeCursor(MarketTab tab, MarketVolumeCursor cursor) {}
+
   /** 유물 각인서 시세 스캔(L30). 키 TTL이 지났으면 없다. */
   default Optional<RelicBookScan> findRelicBooks() {
     return Optional.empty();

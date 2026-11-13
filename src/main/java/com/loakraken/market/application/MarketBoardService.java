@@ -263,6 +263,17 @@ public class MarketBoardService {
   }
 
   /**
+   * 거래량 채우기 돌림 탭 전용: 탭 기본 티어·기본 정렬의 page번째 페이지(공식 검색 1회, 캐시 없음). 보드 스캔의 10페이지 상한과 상관없이 끝까지 받을 수 있다.
+   */
+  public MarketPage volumePage(MarketTab tab, int page) {
+    return markets
+        .search(
+            MarketSource.ACTIVE_LISTING,
+            search(tab, tab.defaultTier(), MarketBoardRules.Sort.DEFAULT, page))
+        .page();
+  }
+
+  /**
    * 품목들의 완료일 거래량. 오늘(KST) 거래량 지도에서 찾고, 없는 품목은 어제 지도에서 찾는다(자정 뒤 채우기 작업이 다시 채우기 전까지 어제 값을 그 날짜와 함께 보여
    * 준다). 둘 다 없으면 빠진다.
    */

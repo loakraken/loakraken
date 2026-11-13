@@ -34,7 +34,8 @@ public record MarketVolumeWarmupProperties(
           "BATTLE_ITEM",
           "FOOD"
         })
-        List<MarketTab> tabs) {
+        List<MarketTab> tabs,
+    List<MarketTab> rotatingTabs) {
   public MarketVolumeWarmupProperties {
     if (interval == null || interval.isZero() || interval.isNegative())
       throw new IllegalArgumentException("거래량 채우기 주기는 양수여야 합니다.");
@@ -46,5 +47,6 @@ public record MarketVolumeWarmupProperties(
     if (maxCallsPerDay < maxCallsPerMinute)
       throw new IllegalArgumentException("거래량 채우기 하루 상한은 분당 상한 이상이어야 합니다.");
     tabs = tabs == null ? List.of() : tabs.stream().distinct().toList();
+    rotatingTabs = rotatingTabs == null ? List.of() : rotatingTabs.stream().distinct().toList();
   }
 }

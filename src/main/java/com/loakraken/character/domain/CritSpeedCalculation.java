@@ -1491,12 +1491,21 @@ public final class CritSpeedCalculation {
     }
   }
 
-  /** 트라이포드 문구의 "자신 및 (범위 안의) 파티원의 공격·이동 속도". 거리 표기(24.0m)에 점이 있어 문장 경계 대신 길이로 묶는다. */
-  private static final Pattern PARTY_SPEED =
-      Pattern.compile("자신 및.{0,30}?파티원의.{0,10}?(?:공격|이동) ?속도");
+  /** 문장 끝(마침표 뒤 공백). 8.0·24.0m 같은 숫자 안의 점은 뒤에 공백이 없어 나누지 않는다. */
+  private static final Pattern SENTENCE_END = Pattern.compile("(?<=\\.)\\s+");
 
-  /** 자신 및 파티원 문구를 자기 속도로 읽을 때 뺄 말: "파티원의"(다른 대상 한정으로 읽힘), "각각"(공격 속도와 이동 속도가 각각 n%). */
-  private static final Pattern PARTY_POSSESSIVE = Pattern.compile("파티원의\\s*|각각\\s*");
+  /** 한 문장 안의 "자신 및 (범위 안의) 파티원의 ". 이 뒤가 자신과 파티원이 함께 받는 효과다. */
+  private static final Pattern PARTY_SUBJECT = Pattern.compile("자신 및.{0,30}?파티원의\\s*");
+
+  /** "공격 속도와 이동 속도가 각각 a%(, b%)": b가 없으면 둘 다 a. */
+  private static final Pattern PARTY_EACH =
+      Pattern.compile(
+          "공격 ?속도(?:와| 및) 이동 ?속도(?:가)?\\s*각각\\s*"
+              + NUMBER
+              + "%(?:\\s*(?:,|와|및)\\s*"
+              + NUMBER
+              + "%)?"
+              + DIRECTION);
 
   /**
    * 트라이포드 문구의 자신 및 파티원 공이속. attack·move는 그 절에서 읽은 합(없으면 null), rest는 파티 절을 뺀 나머지 문구. found()면 파티
@@ -1508,9 +1517,56 @@ public final class CritSpeedCalculation {
     }
   }
 
-  /** 자신 및 파티원 공이속 절을 문장 단위로 읽는다. */
+  /**
+   * 자신 및 파티원 공이속 절을 문장 단위로 읽는다(PM 총괄 11-09 규칙). 공식 줄바꿈은 공백으로 본다. 문장마다 "자신 및 … 파티원의 " 뒤만 자기 속도로
+   * 읽고(같은 문장의 다른 "…의 공격 속도"는 여전히 다른 대상), 앞부분과 파티 주어가 없는 문장은 rest로 남긴다. 문장을 넘어 묶지 않는다.
+   */
   public static PartySpeeds partyTripodSpeeds(String effect) {
-    return new PartySpeeds(null, null, effect);
+    if (effect == null) return new PartySpeeds(null, null, null);
+    BigDecimal attack = null;
+    BigDecimal move = null;
+    var rest = new StringBuilder();
+    for (var sentence : SENTENCE_END.split(effect.replaceAll("\\s+", " ").strip())) {
+      var subject = PARTY_SUBJECT.matcher(sentence);
+      if (!subject.find()) {
+        rest.append(sentence).append(' ');
+        continue;
+      }
+      var clause = sentence.substring(subject.end());
+      var found = new ArrayList<Source>();
+      var eachSpans = new ArrayList<int[]>();
+      var each = PARTY_EACH.matcher(clause);
+      while (each.find()) {
+        var direction = each.group(3);
+        var a = signed(each.group(1), direction);
+        var m = each.group(2) == null ? a : signed(each.group(2), direction);
+        found.add(new Source(Kind.ASSUMED, Category.ASSUMPTION, Axis.ATTACK_SPEED, "", a, clause));
+        found.add(new Source(Kind.ASSUMED, Category.ASSUMPTION, Axis.MOVE_SPEED, "", m, clause));
+        eachSpans.add(new int[] {each.start(), each.end()});
+      }
+      var both = BOTH_SPEED.matcher(clause);
+      while (both.find()) {
+        if (inside(eachSpans, both.start())) continue;
+        var value = signed(both.group(1), both.group(2));
+        found.add(
+            new Source(Kind.ASSUMED, Category.ASSUMPTION, Axis.ATTACK_SPEED, "", value, clause));
+        found.add(
+            new Source(Kind.ASSUMED, Category.ASSUMPTION, Axis.MOVE_SPEED, "", value, clause));
+        eachSpans.add(new int[] {both.start(), both.end()});
+      }
+      speed(ATTACK_SPEED, Axis.ATTACK_SPEED, Category.ASSUMPTION, "", clause, eachSpans, found);
+      speed(MOVE_SPEED, Axis.MOVE_SPEED, Category.ASSUMPTION, "", clause, eachSpans, found);
+      if (found.isEmpty()) {
+        rest.append(sentence).append(' ');
+        continue;
+      }
+      rest.append(sentence, 0, subject.start()).append(' ');
+      for (var source : found)
+        if (source.axis() == Axis.ATTACK_SPEED)
+          attack = attack == null ? source.value() : attack.add(source.value());
+        else move = move == null ? source.value() : move.add(source.value());
+    }
+    return new PartySpeeds(attack, move, rest.toString().strip());
   }
 
   /** 레벨 2 이상 스킬의 선택 트라이포드 공이속을 트라이포드 표로 판정한다. */
@@ -1525,26 +1581,49 @@ public final class CritSpeedCalculation {
       if (skill == null || skill.level() == null || skill.level() < 2) continue;
       for (var tripod : skill.tripods()) {
         if (tripod == null || tripod.effect() == null) continue;
-        // 자신 및 파티원 공이속(PM 총괄 11-09 규칙)은 이름 표보다 먼저 문구로 판정한다. "파티원의 공격 속도"는 다른 대상 한정으로 읽히므로
-        // 자기 속도도 오르는 이 문구에서는 소유격을 빼고 읽는다. 같은 이름이라도 자기만 오르는 트라이포드(붕천퇴 바람의 축복)는 표를 따른다.
-        boolean party = PARTY_SPEED.matcher(tripod.effect()).find();
-        var scanned = new ArrayList<Source>();
-        scan(
-            Category.ASSUMPTION,
-            tripod.name(),
-            party ? PARTY_POSSESSIVE.matcher(tripod.effect()).replaceAll("") : tripod.effect(),
-            scanned,
-            false);
-        var speeds =
-            scanned.stream()
-                .filter(s -> s.axis() == Axis.ATTACK_SPEED || s.axis() == Axis.MOVE_SPEED)
-                .toList();
+        // 자신 및 파티원 공이속(PM 총괄 11-09 규칙)은 이름 표보다 먼저 문구로 판정한다. 그 문장의 "자신 및 … 파티원의 " 뒤만 자기 속도로
+        // 읽는다(partyTripodSpeeds). 같은 이름이라도 자기만 오르는 트라이포드(붕천퇴 바람의 축복)는 표를 따른다.
+        var partySpeeds = partyTripodSpeeds(tripod.effect());
+        boolean party = partySpeeds.found();
+        String name = skill.name() + " - " + tripod.name();
+        var speeds = new ArrayList<Source>();
+        if (party) {
+          if (partySpeeds.attack() != null)
+            speeds.add(
+                new Source(
+                    Kind.ASSUMED,
+                    Category.ASSUMPTION,
+                    Axis.ATTACK_SPEED,
+                    tripod.name(),
+                    partySpeeds.attack(),
+                    tripod.effect()));
+          if (partySpeeds.move() != null)
+            speeds.add(
+                new Source(
+                    Kind.ASSUMED,
+                    Category.ASSUMPTION,
+                    Axis.MOVE_SPEED,
+                    tripod.name(),
+                    partySpeeds.move(),
+                    tripod.effect()));
+          // 같은 트라이포드의 파티 절 밖 자기 공이속은 키가 겹쳐 따로 토글을 낼 수 없다. 실제 원문엔 없고, 생기면 안내만 남긴다.
+          var other = new ArrayList<Source>();
+          scan(Category.ASSUMPTION, tripod.name(), partySpeeds.rest(), other, false);
+          if (other.stream()
+              .anyMatch(s -> s.axis() == Axis.ATTACK_SPEED || s.axis() == Axis.MOVE_SPEED))
+            notes.add(name + "(파티 절 밖 공이속 분류 중)");
+        } else {
+          var scanned = new ArrayList<Source>();
+          scan(Category.ASSUMPTION, tripod.name(), tripod.effect(), scanned, false);
+          scanned.stream()
+              .filter(s -> s.axis() == Axis.ATTACK_SPEED || s.axis() == Axis.MOVE_SPEED)
+              .forEach(speeds::add);
+        }
         if (speeds.isEmpty()) continue;
         var rule =
             party
                 ? CritEffectTable.partyTripodSpeed(tripod.name())
                 : CritEffectTable.tripodSpeed(tripod.name());
-        String name = skill.name() + " - " + tripod.name();
         if (rule == null) {
           notes.add(name + "(분류 중)");
           continue;

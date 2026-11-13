@@ -35,6 +35,20 @@ public interface AuctionPort {
   /** 각 칸의 전날 마지막 최저가. */
   Map<String, Long> previousDay(List<String> keys, LocalDate day);
 
+  /** 칸 하나의 일별 마지막 관측 최저가 가운데 from 이후(포함), 최신순과 처음 저장한 날짜(기간과 상관없이, 없으면 null). 시세 기간 차트가 읽는다. */
+  default AuctionDailyRange dailyRange(String key, LocalDate from) {
+    return new AuctionDailyRange(List.of(), null);
+  }
+
+  /** 칸 하나의 저장된 하루(그날 마지막 관측). */
+  record AuctionDailyDay(LocalDate date, long minBuyPrice, long totalCount, Instant observedAt) {}
+
+  record AuctionDailyRange(List<AuctionDailyDay> days, LocalDate firstDate) {
+    public AuctionDailyRange {
+      days = List.copyOf(days);
+    }
+  }
+
   /** 보석 매물 직업·스킬 필터(#542)의 이번 분 기능 몫에서 공식 호출 하나를 가져온다. 넘었거나 저장소 장애면 false(공식 예산 보호). */
   /**
    * 보석 필터 기능 몫 하나를 얻는다(#542, 모든 사용자·인스턴스 공유 분당 카운터). 얻으면 돌려줄 때 쓰는 그 분의 키, 몫을 다 썼거나 저장소를 쓰지 못하면 빈

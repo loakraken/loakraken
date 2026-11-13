@@ -1,6 +1,8 @@
 package com.loakraken.market.presentation;
 
 import com.loakraken.common.api.NullableResponse;
+import com.loakraken.common.api.OptionalResponse;
+import com.loakraken.market.application.MarketHistoryRangeService;
 import com.loakraken.market.application.MarketItemHistoryResult;
 import com.loakraken.market.domain.MarketItemHistory;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -10,13 +12,17 @@ import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.List;
 
-@Schema(description = "공식 거래소 상품의 최근 14일 일별 평균가·거래량. 같은 상품 ID의 거래 가능 횟수·묶음별 변형을 나눠 제공합니다.")
+@Schema(
+    description =
+        "공식 거래소 상품의 일별 평균가·거래량. 기본(range=14d)은 공식 최근 14일이고, 30d 이상은 저장한 완료일을 더합니다. 같은 상품 ID의 거래 가능 횟수·묶음별 변형을 나눠 제공합니다.")
 public record MarketItemHistoryResponse(
     long itemId,
     @Schema(description = "서버가 공식 상세를 읽은 UTC 시각. 캐시 적중 시 유지") Instant observedAt,
     @Schema(description = "부분 집계 판단 기준일(observedAt의 한국 날짜). 이 날짜 이후 값은 partial=true")
         LocalDate baseDate,
-    List<MarketItemVariantResponse> variants) {
+    List<MarketItemVariantResponse> variants,
+    @Schema(description = "적용한 기간(7d·14d·30d·90d·365d). 늘 보냄", example = "14d") @OptionalResponse
+        String range) {
   static final ZoneId KST = ZoneId.of("Asia/Seoul");
 
   static MarketItemHistoryResponse from(MarketItemHistoryResult result) {
@@ -27,7 +33,15 @@ public record MarketItemHistoryResponse(
         today,
         result.history().variants().stream()
             .map(variant -> MarketItemVariantResponse.from(variant, today))
-            .toList());
+            .toList(),
+        "14d");
+  }
+
+  /** 기간 조회. */
+  static MarketItemHistoryResponse from(MarketHistoryRangeService.ItemRange ranged) {
+    var base = from(ranged.base());
+    return new MarketItemHistoryResponse(
+        base.itemId(), base.observedAt(), base.baseDate(), base.variants(), ranged.range().value());
   }
 
   public record MarketItemVariantResponse(
@@ -35,8 +49,17 @@ public record MarketItemHistoryResponse(
       @Schema(description = "남은 거래 가능 횟수. 공식 값이 없으면 null") @NullableResponse
           Integer tradeRemainCount,
       @NullableResponse Integer bundleCount,
-      @Schema(description = "최신순 일별 시세") List<MarketDailyStatResponse> days,
-      MarketItemSummaryResponse summary) {
+      @Schema(description = "최신순 일별 시세. 30d 이상은 저장한 완료일 포함(같은 날짜는 공식 값), 저장 없는 날은 행 없음")
+          List<MarketDailyStatResponse> days,
+      MarketItemSummaryResponse summary,
+      @Schema(description = "이 변형을 처음 저장한 날짜(기간과 상관없이). 30d 이상에서만, 저장 행이 없으면 null")
+          @OptionalResponse
+          @NullableResponse
+          LocalDate recordedSince,
+      @Schema(description = "기간 안 저장 완료일 수. 30d 이상에서만, 아니면 null")
+          @OptionalResponse
+          @NullableResponse
+          Integer storedDays) {
     static MarketItemVariantResponse from(MarketItemHistory.Variant variant, LocalDate today) {
       var summary = variant.summary(today);
       return new MarketItemVariantResponse(
@@ -60,7 +83,9 @@ public record MarketItemHistoryResponse(
               summary.sevenDayDays(),
               summary.sevenDayAveragePrice(),
               summary.sevenDayChangeRate(),
-              summary.sevenDayTradeCount()));
+              summary.sevenDayTradeCount()),
+          null,
+          null);
     }
   }
 

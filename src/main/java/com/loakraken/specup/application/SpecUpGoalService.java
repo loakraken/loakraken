@@ -76,7 +76,10 @@ public class SpecUpGoalService {
   /** 추천 순서 계산(캐시에 없을 때) 동시 수. 넘으면 기다리지 않고 429 SPEC_UP_BUSY(요청 스레드를 붙잡지 않게). */
   private final java.util.concurrent.Semaphore pathSolves;
 
-  /** 목표 경로 계산(캐시에 없을 때) 동시 수. */
+  /**
+   * 목표 경로 계산(캐시에 없을 때) 동시 수. 넘으면 기다리지 않고 429 SPEC_UP_BUSY(추천 순서와 같은 방식, 보안 점검 11-13: 기능을 켜기 전에 계산
+   * 동시 수를 막는다).
+   */
   private final java.util.concurrent.Semaphore goalSolves =
       new java.util.concurrent.Semaphore(GOAL_MAX_CONCURRENT);
 
@@ -126,6 +129,11 @@ public class SpecUpGoalService {
 
   private void pathOutcome(String outcome) {
     meters.counter("loakraken.spec_up.path", "outcome", outcome).increment();
+  }
+
+  /** 목표 경로 운영 지표 loakraken.spec_up.goal{outcome=cache_hit|computed|busy}. */
+  private void goalOutcome(String outcome) {
+    meters.counter("loakraken.spec_up.goal", "outcome", outcome).increment();
   }
 
   // v2: 완갑(팔 보호구) 재련 단계를 고른다. v3: 어빌리티 스톤 목표 조합(각인 둘을 한 단계에), 단계 changes.
@@ -407,14 +415,27 @@ public class SpecUpGoalService {
             String.valueOf(specUp.costRuleVersions()),
             specUp.armGuardEnabled() ? "ag" : "-");
     var cached = store.find(key);
-    if (cached.isPresent()) return cached.get();
+    if (cached.isPresent()) {
+      goalOutcome("cache_hit");
+      return cached.get();
+    }
     return single(
         key,
         () -> {
-          var result = compute(snapshot, before, goal, gems, refinePrices);
-          // 시간 상한으로 멈춘 부분 결과는 캐시하지 않는다(PM-프론트 L31 ③).
-          if (!TIME_LIMITED.equals(result.stopReasonCode())) store.save(key, result, CACHE_TTL);
-          return result;
+          if (!goalSolves.tryAcquire()) {
+            goalOutcome("busy");
+            log.warn("event=spec_up_goal_busy slots={}", GOAL_MAX_CONCURRENT);
+            throw new BusinessException(SpecUpErrorCode.SPEC_UP_BUSY, PATH_RETRY_AFTER);
+          }
+          try {
+            var result = compute(snapshot, before, goal, gems, refinePrices);
+            goalOutcome("computed");
+            // 시간 상한으로 멈춘 부분 결과는 캐시하지 않는다(PM-프론트 L31 ③).
+            if (!TIME_LIMITED.equals(result.stopReasonCode())) store.save(key, result, CACHE_TTL);
+            return result;
+          } finally {
+            goalSolves.release();
+          }
         });
   }
 

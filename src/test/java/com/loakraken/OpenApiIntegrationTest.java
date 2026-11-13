@@ -73,6 +73,15 @@ class OpenApiIntegrationTest {
                 .asText())
         .isEqualTo("null");
     assertThat(document.at("/components/schemas/GemsResponse/type").asText()).isEqualTo("object");
+    // 경매장 칸 기간: 저장이 없으면 recordedSince는 null(계약에 null 허용), 나머지는 필수.
+    assertThat(
+            document
+                .at(
+                    "/components/schemas/AuctionCellHistoryResponse/properties/recordedSince/anyOf/1/type")
+                .asText())
+        .isEqualTo("null");
+    assertThat(document.at("/components/schemas/AuctionCellHistoryResponse/required").toString())
+        .contains("ruleVersion", "range", "recordedSince", "storedDays", "days");
     // 보석별 기본 공격력 %(#543): 두 필드 모두 required이고 null을 허용하며, 근거 값은 enum이 아닌 문자열이다(값이 늘 수 있음).
     assertThat(document.at("/components/schemas/GemResponse/required").toString())
         .contains("baseAttackPct", "baseAttackPctSource");

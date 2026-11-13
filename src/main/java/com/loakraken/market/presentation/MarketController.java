@@ -59,16 +59,19 @@ public class MarketController {
   private final MaterialQuoteService quotes;
   private final MaterialUnitPriceService unitPrices;
   private final MarketBoardService board;
+  private final com.loakraken.market.application.MarketHistoryRangeService ranges;
 
   public MarketController(
       MarketQueryService service,
       MaterialQuoteService quotes,
       MaterialUnitPriceService unitPrices,
-      MarketBoardService board) {
+      MarketBoardService board,
+      com.loakraken.market.application.MarketHistoryRangeService ranges) {
     this.service = service;
     this.quotes = quotes;
     this.unitPrices = unitPrices;
     this.board = board;
+    this.ranges = ranges;
   }
 
   @GetMapping("/items")
@@ -145,19 +148,30 @@ public class MarketController {
 
   @GetMapping("/items/{itemId}/history")
   @Operation(
-      summary = "상품 14일 시세 이력",
+      summary = "상품 시세 이력(기간)",
       description =
-          "공식 거래소 상품 상세의 최근 14일 일별 평균가·거래량입니다. 오늘(한국 날짜) 값은 진행 중인 부분 집계라 partial=true이며 요약에서 제외합니다. "
+          "공식 거래소 상품 상세의 일별 평균가·거래량입니다. range(7d·14d·30d·90d·365d, 생략 시 14d = 공식 최근 14일)로 기간을 고르고, 응답 range로 적용한 기간을 돌려줍니다. "
+              + "30d 이상은 LOAKraken이 저장한 완료일을 더하며(같은 날짜는 공식 값, 새 공식 호출 없음) 변형마다 recordedSince(처음 저장한 날)·storedDays(기간 안 저장 일수)를 줍니다. 저장이 없는 날은 행이 없습니다. "
+              + "오늘(한국 날짜) 값은 진행 중인 부분 집계라 partial=true이며 요약에서 제외합니다. "
               + "기본 캐시 10분, 같은 상품 동시 요청 병합, 캐릭터·거래소 공유 호출 예산을 사용합니다. 공식 API가 모르는 상품은 404 MARKET_ITEM_NOT_FOUND입니다.")
   @io.swagger.v3.oas.annotations.responses.ApiResponse(
       responseCode = "404",
       description = "MARKET_ITEM_NOT_FOUND",
       content = @Content(schema = @Schema(ref = "#/components/schemas/ErrorResponse")))
   public ApiResponse<MarketItemHistoryResponse> itemHistory(
-      @PathVariable @Positive @Max(999_999_999) long itemId) {
+      @PathVariable @Positive @Max(999_999_999) long itemId,
+      @io.swagger.v3.oas.annotations.Parameter(
+              description = "기간: 7d, 14d(기본), 30d, 90d, 365d",
+              example = "30d")
+          @RequestParam(required = false)
+          @jakarta.validation.constraints.Pattern(
+              regexp = com.loakraken.market.domain.MarketHistoryRange.PATTERN)
+          String range) {
     return ApiResponse.of(
         MarketSuccessCode.MARKET_ITEM_HISTORY_SUCCESS,
-        MarketItemHistoryResponse.from(service.itemHistory(itemId)));
+        MarketItemHistoryResponse.from(
+            ranges.itemHistory(
+                itemId, com.loakraken.market.domain.MarketHistoryRange.parse(range))));
   }
 
   @GetMapping("/options")

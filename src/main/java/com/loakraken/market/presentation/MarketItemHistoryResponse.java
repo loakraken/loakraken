@@ -1,6 +1,8 @@
 package com.loakraken.market.presentation;
 
 import com.loakraken.common.api.NullableResponse;
+import com.loakraken.common.api.OptionalResponse;
+import com.loakraken.market.application.MarketHistoryRangeService;
 import com.loakraken.market.application.MarketItemHistoryResult;
 import com.loakraken.market.domain.MarketItemHistory;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -10,13 +12,17 @@ import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.List;
 
-@Schema(description = "공식 거래소 상품의 최근 14일 일별 평균가·거래량. 같은 상품 ID의 거래 가능 횟수·묶음별 변형을 나눠 제공합니다.")
+@Schema(
+    description =
+        "공식 거래소 상품의 일별 평균가·거래량. 기본(range=14d)은 공식 최근 14일이고, 30d 이상은 저장한 완료일을 더합니다. 같은 상품 ID의 거래 가능 횟수·묶음별 변형을 나눠 제공합니다.")
 public record MarketItemHistoryResponse(
     long itemId,
     @Schema(description = "서버가 공식 상세를 읽은 UTC 시각. 캐시 적중 시 유지") Instant observedAt,
     @Schema(description = "부분 집계 판단 기준일(observedAt의 한국 날짜). 이 날짜 이후 값은 partial=true")
         LocalDate baseDate,
-    List<MarketItemVariantResponse> variants) {
+    List<MarketItemVariantResponse> variants,
+    @Schema(description = "적용한 기간(7d·14d·30d·90d·365d). 늘 보냄", example = "14d") @OptionalResponse
+        String range) {
   static final ZoneId KST = ZoneId.of("Asia/Seoul");
 
   static MarketItemHistoryResponse from(MarketItemHistoryResult result) {
@@ -27,7 +33,117 @@ public record MarketItemHistoryResponse(
         today,
         result.history().variants().stream()
             .map(variant -> MarketItemVariantResponse.from(variant, today))
-            .toList());
+            .toList(),
+        "14d");
+  }
+
+  /**
+   * 기간 조회. 7d는 공식 14일 중 기준일 포함 7일, 14d는 지금과 같음, 30d 이상은 공식 14일에 저장 완료일(같은 변형 칸, 공식에 없는 날짜만)을 더하고
+   * recordedSince·storedDays를 채운다. 공식 응답에 없는 변형 칸도 기간 안 저장 행이 있으면 공식 변형 뒤에 따로 준다(가진 기록을 버리지 않음, 이름은
+   * 저장한 공식 이름, 요약은 저장 완료일로 계산).
+   */
+  static MarketItemHistoryResponse from(MarketHistoryRangeService.ItemRange ranged) {
+    var base = from(ranged.base());
+    var range = ranged.range();
+    var from = range.from(base.baseDate());
+    var stored = ranged.stored();
+    var variants = new java.util.ArrayList<MarketItemVariantResponse>();
+    var officialVariants = ranged.base().history().variants();
+    for (int i = 0; i < officialVariants.size(); i++) {
+      var variant = base.variants().get(i);
+      var key =
+          com.loakraken.market.application.MarketDailyStore.variantKey(
+              officialVariants.get(i).tradeRemainCount(), officialVariants.get(i).bundleCount());
+      var days = new java.util.ArrayList<MarketDailyStatResponse>();
+      var officialDates = new java.util.HashSet<LocalDate>();
+      for (var day : variant.days()) {
+        officialDates.add(day.date());
+        if (!day.date().isBefore(from)) days.add(day);
+      }
+      LocalDate recordedSince = null;
+      Integer storedDays = null;
+      if (stored != null) {
+        int count = 0;
+        for (var day : stored.days()) {
+          if (!day.variantKey().equals(key) || day.date().isBefore(from)) continue;
+          count++;
+          if (!officialDates.contains(day.date()))
+            days.add(
+                new MarketDailyStatResponse(
+                    day.date(), day.averagePrice(), day.tradeCount(), false));
+        }
+        storedDays = count;
+        recordedSince = stored.firstDates().get(key);
+      }
+      days.sort(java.util.Comparator.comparing(MarketDailyStatResponse::date).reversed());
+      variants.add(
+          new MarketItemVariantResponse(
+              variant.name(),
+              variant.tradeRemainCount(),
+              variant.bundleCount(),
+              days,
+              variant.summary(),
+              recordedSince,
+              storedDays));
+    }
+    if (stored != null)
+      variants.addAll(storedOnly(stored, officialVariants, from, base.baseDate()));
+    return new MarketItemHistoryResponse(
+        base.itemId(), base.observedAt(), base.baseDate(), variants, range.value());
+  }
+
+  /** 공식 응답에 없는 변형 칸의 기간 안 저장 행(칸 키 순서). */
+  private static List<MarketItemVariantResponse> storedOnly(
+      com.loakraken.market.application.MarketDailyStore.StoredRange stored,
+      List<MarketItemHistory.Variant> officialVariants,
+      LocalDate from,
+      LocalDate baseDate) {
+    var official = new java.util.HashSet<String>();
+    for (var variant : officialVariants)
+      official.add(
+          com.loakraken.market.application.MarketDailyStore.variantKey(
+              variant.tradeRemainCount(), variant.bundleCount()));
+    var byKey =
+        new java.util.TreeMap<
+            String, java.util.List<com.loakraken.market.application.MarketDailyStore.StoredDay>>();
+    for (var day : stored.days())
+      if (!official.contains(day.variantKey()) && !day.date().isBefore(from))
+        byKey.computeIfAbsent(day.variantKey(), key -> new java.util.ArrayList<>()).add(day);
+    var result = new java.util.ArrayList<MarketItemVariantResponse>();
+    byKey.forEach(
+        (key, days) -> {
+          var parts = key.split("/");
+          var latest =
+              days.stream().max(java.util.Comparator.comparing(d -> d.date())).orElseThrow();
+          var variant =
+              new MarketItemHistory.Variant(
+                  latest.name(),
+                  part(parts[0]),
+                  part(parts[1]),
+                  days.stream()
+                      .map(
+                          day ->
+                              new MarketItemHistory.DailyStat(
+                                  day.date(), day.averagePrice(), day.tradeCount()))
+                      .toList());
+          var response = MarketItemVariantResponse.from(variant, baseDate);
+          result.add(
+              new MarketItemVariantResponse(
+                  response.name(),
+                  response.tradeRemainCount(),
+                  response.bundleCount(),
+                  response.days(),
+                  response.summary(),
+                  stored.firstDates().get(key),
+                  days.size()));
+        });
+    return result;
+  }
+
+  /** 칸 키 한 부분: -1은 공식 값 없음(null). */
+  private static Integer part(String value) {
+    int number = Integer.parseInt(value);
+    return number < 0 ? null : number;
   }
 
   public record MarketItemVariantResponse(
@@ -35,8 +151,17 @@ public record MarketItemHistoryResponse(
       @Schema(description = "남은 거래 가능 횟수. 공식 값이 없으면 null") @NullableResponse
           Integer tradeRemainCount,
       @NullableResponse Integer bundleCount,
-      @Schema(description = "최신순 일별 시세") List<MarketDailyStatResponse> days,
-      MarketItemSummaryResponse summary) {
+      @Schema(description = "최신순 일별 시세. 30d 이상은 저장한 완료일 포함(같은 날짜는 공식 값), 저장 없는 날은 행 없음")
+          List<MarketDailyStatResponse> days,
+      MarketItemSummaryResponse summary,
+      @Schema(description = "이 변형을 처음 저장한 날짜(기간과 상관없이). 30d 이상에서만, 저장 행이 없으면 null")
+          @OptionalResponse
+          @NullableResponse
+          LocalDate recordedSince,
+      @Schema(description = "기간 안 저장 완료일 수. 30d 이상에서만, 아니면 null")
+          @OptionalResponse
+          @NullableResponse
+          Integer storedDays) {
     static MarketItemVariantResponse from(MarketItemHistory.Variant variant, LocalDate today) {
       var summary = variant.summary(today);
       return new MarketItemVariantResponse(
@@ -60,7 +185,9 @@ public record MarketItemHistoryResponse(
               summary.sevenDayDays(),
               summary.sevenDayAveragePrice(),
               summary.sevenDayChangeRate(),
-              summary.sevenDayTradeCount()));
+              summary.sevenDayTradeCount()),
+          null,
+          null);
     }
   }
 

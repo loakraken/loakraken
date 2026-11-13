@@ -105,6 +105,42 @@ class PostgresMarketDailyStore implements MarketDailyStore {
     return Arrays.stream(counts).map(count -> Math.max(count, 0)).sum();
   }
 
+  /** 기간 읽기: 기본키(item_id, 변형, kst_date) 앞부분 범위 하나와 변형별 첫 날짜 하나. 둘 다 이름 있는 매개변수. */
+  @Override
+  public StoredRange findRange(long itemId, LocalDate from) {
+    var days =
+        jdbc.query(
+            """
+            SELECT trade_remain_key, bundle_key, kst_date, avg_price, trade_count, item_name
+            FROM market_price_daily
+            WHERE item_id = :id AND kst_date >= :from
+            ORDER BY kst_date DESC, trade_remain_key, bundle_key
+            """,
+            new MapSqlParameterSource().addValue("id", itemId).addValue("from", from),
+            (row, n) ->
+                new StoredDay(
+                    MarketDailyStore.variantKey(row.getInt(1), row.getInt(2)),
+                    row.getObject(3, LocalDate.class),
+                    row.getBigDecimal(4),
+                    row.getLong(5),
+                    row.getString(6)));
+    var first = new java.util.HashMap<String, LocalDate>();
+    jdbc.query(
+        """
+        SELECT trade_remain_key, bundle_key, min(kst_date)
+        FROM market_price_daily
+        WHERE item_id = :id
+        GROUP BY trade_remain_key, bundle_key
+        """,
+        new MapSqlParameterSource().addValue("id", itemId),
+        (java.sql.ResultSet row) -> {
+          first.put(
+              MarketDailyStore.variantKey(row.getInt(1), row.getInt(2)),
+              row.getObject(3, LocalDate.class));
+        });
+    return new StoredRange(days, first);
+  }
+
   /** NUMERIC(16, 4)에 맞게 소수 넷째 자리로 반올림한다. 음수·null·정수 12자리 초과는 null(건너뜀). */
   private static BigDecimal price(BigDecimal value) {
     if (value == null || value.signum() < 0) return null;

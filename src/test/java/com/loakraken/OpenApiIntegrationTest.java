@@ -73,6 +73,12 @@ class OpenApiIntegrationTest {
                 .asText())
         .isEqualTo("null");
     assertThat(document.at("/components/schemas/GemsResponse/type").asText()).isEqualTo("object");
+    // 단순 이름이 같은 두 레코드는 스키마를 따로 둔다: 캐릭터 보석 레벨별 개수(level, count)와 통계 아이템 레벨 구간(from, to, count).
+    assertThat(
+            document.at("/components/schemas/CharacterLevelCountResponse/properties").has("level"))
+        .isTrue();
+    assertThat(document.at("/components/schemas/LevelCountResponse/properties").has("from"))
+        .isTrue();
     // 보석별 기본 공격력 %(#543): 두 필드 모두 required이고 null을 허용하며, 근거 값은 enum이 아닌 문자열이다(값이 늘 수 있음).
     assertThat(document.at("/components/schemas/GemResponse/required").toString())
         .contains("baseAttackPct", "baseAttackPctSource");

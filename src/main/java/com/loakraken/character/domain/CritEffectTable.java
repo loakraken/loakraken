@@ -515,6 +515,15 @@ public final class CritEffectTable {
           // 버서커 마운틴 크래쉬 "스킬 사용 시 공격 속도가 4.0초 간 30.0% 증가한다." — 비교 기준 한 곳만(c16)
           new TripodSpeed("속공 준비", SpeedDecision.SITUATIONAL, "속공 준비 4초 가정", "공식 문구 상황 조건이라 기본 끔"));
 
+  /**
+   * 선택한 트라이포드 문구가 자신 및 파티원의 공격·이동 속도를 올리면 기본 켬 토글(가정 출처)이다(PM 총괄 11-09 규칙: '자신 및 파티원' 치명·공이속 줄은 공식
+   * 문구로 기본 켬, 직업별 행 없이). 예: 스트라이커 번개의 축복 +8(비교 기준 '자시너지 8'과 같음), 발키리 마나의 축복·바람의 축복, 워로드 리더쉽.
+   */
+  static TripodSpeed partyTripodSpeed(String name) {
+    return new TripodSpeed(
+        name, SpeedDecision.INCLUDE, name + "(자신 및 파티원)", "자신 및 파티원 공이속 트라이포드, 기본 켬");
+  }
+
   static TripodSpeed tripodSpeed(String name) {
     for (var rule : TRIPOD_SPEEDS) if (rule.tripod().equals(name)) return rule;
     return null;

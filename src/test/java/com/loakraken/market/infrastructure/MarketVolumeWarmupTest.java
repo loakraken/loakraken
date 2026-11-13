@@ -310,6 +310,57 @@ class MarketVolumeWarmupTest {
     verify(boards, times(2)).volumePage(MarketTab.AVATAR, 2);
   }
 
+  @Test
+  void 돌림_페이지의_상세_받기가_실패하면_위치를_넘기지_않고_다음_주기에_실패한_품목만_다시_받는다() {
+    when(cache.findVolumeCursor(MarketTab.AVATAR))
+        .thenReturn(Optional.of(new MarketVolumeCursor(2, today.minusDays(1))));
+    when(boards.volumePage(MarketTab.AVATAR, 2))
+        .thenReturn(page(2, 25, LongStream.rangeClosed(11, 20).toArray()));
+    when(markets.refreshItemHistory(anyLong()))
+        .thenAnswer(invocation -> Optional.of(history(invocation.getArgument(0), clock.now)));
+    // 13번은 처음 한 번 공식 상세 시간 초과
+    when(markets.refreshItemHistory(13L))
+        .thenThrow(new IllegalStateException("timeout"))
+        .thenAnswer(invocation -> Optional.of(history(13L, clock.now)));
+    var job = warmup("key", List.of(MarketTab.AVATAR), 15, 800);
+
+    job.tick();
+    // 실패한 품목이 있으니 3페이지로 넘기지 않고, 시도 횟수만 남긴다.
+    verify(cache, never())
+        .saveVolumeCursor(MarketTab.AVATAR, new MarketVolumeCursor(3, today.minusDays(1)));
+    verify(cache)
+        .saveVolumeCursor(MarketTab.AVATAR, new MarketVolumeCursor(2, today.minusDays(1), 1));
+
+    // 다음 주기: 같은 페이지를 다시 받되 이미 채운 품목은 부르지 않고 13번만 다시 받는다.
+    clock.now = clock.now.plusSeconds(60);
+    job.tick();
+    verify(boards, times(2)).volumePage(MarketTab.AVATAR, 2);
+    verify(markets, times(2)).refreshItemHistory(13L);
+    verify(markets, times(11)).refreshItemHistory(anyLong());
+    verify(cache).saveVolumeCursor(MarketTab.AVATAR, new MarketVolumeCursor(3, today.minusDays(1)));
+  }
+
+  @Test
+  void 돌림_페이지_재시도는_세_번까지이고_그래도_실패하면_넘기며_포기를_지표로_남긴다() {
+    when(cache.findVolumeCursor(MarketTab.AVATAR))
+        .thenReturn(Optional.of(new MarketVolumeCursor(2, today.minusDays(1))));
+    when(boards.volumePage(MarketTab.AVATAR, 2)).thenReturn(page(2, 25, 11, 12));
+    when(markets.refreshItemHistory(11L))
+        .thenAnswer(invocation -> Optional.of(history(11L, clock.now)));
+    when(markets.refreshItemHistory(12L)).thenThrow(new IllegalStateException("5xx"));
+    var job = warmup("key", List.of(MarketTab.AVATAR), 15, 800);
+
+    for (int i = 0; i < 3; i++) {
+      job.tick();
+      clock.now = clock.now.plusSeconds(60);
+    }
+
+    verify(markets, times(3)).refreshItemHistory(12L);
+    verify(cache).saveVolumeCursor(MarketTab.AVATAR, new MarketVolumeCursor(3, today.minusDays(1)));
+    assertThat(count("rotation_gave_up")).isEqualTo(1);
+    assertThat(count("rotation_retry")).isEqualTo(2);
+  }
+
   private double rotation(String name) {
     var found =
         registry

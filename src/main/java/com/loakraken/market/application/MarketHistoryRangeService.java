@@ -1,5 +1,6 @@
 package com.loakraken.market.application;
 
+import com.loakraken.common.api.BusinessException;
 import com.loakraken.market.domain.AuctionCatalog;
 import com.loakraken.market.domain.AuctionCatalog.Grade;
 import com.loakraken.market.domain.AuctionCatalog.Level;
@@ -12,6 +13,7 @@ import java.time.ZoneId;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataAccessException;
 import org.springframework.stereotype.Service;
 
 /**
@@ -51,11 +53,23 @@ public class MarketHistoryRangeService {
 
   public ItemRange itemHistory(long itemId, MarketHistoryRange range) {
     var base = markets.itemHistory(itemId);
-    return new ItemRange(base, range, null);
+    if (range.officialOnly()) return new ItemRange(base, range, null);
+    var baseDate = LocalDate.ofInstant(base.observedAt(), KST);
+    try {
+      return new ItemRange(base, range, daily.findRange(itemId, range.from(baseDate)));
+    } catch (DataAccessException exception) {
+      // 공식 14일은 그대로 답한다(저장 표 장애가 시세 상세를 막지 않게).
+      log.warn(
+          "event=market_range_read_failed itemId={} range={} exceptionType={}",
+          itemId,
+          range.value(),
+          exception.getClass().getSimpleName());
+      return new ItemRange(base, range, null);
+    }
   }
 
   public CellRange gemHistory(String kind, int level, MarketHistoryRange range) {
-    return new CellRange(range, today(), new AuctionPort.AuctionDailyRange(List.of(), null));
+    return cell(gemCellKey(kind, level), range);
   }
 
   public CellRange accessoryHistory(
@@ -65,7 +79,26 @@ public class MarketHistoryRangeService {
       Slot slot,
       List<Level> levels,
       MarketHistoryRange range) {
-    return new CellRange(range, today(), new AuctionPort.AuctionDailyRange(List.of(), null));
+    var options = AuctionCatalog.options(role, slot);
+    // 표에 보이는 칸만(프론트 합의: 표의 값과 levels 순서 그대로, 그 밖은 400).
+    if (levels.size() != options.size()
+        || !AuctionCatalog.combinations(options.size()).contains(levels)
+        || !AuctionCatalog.shown(levels))
+      throw new BusinessException(MarketErrorCode.INVALID_AUCTION_LEVELS);
+    return cell(accessoryCellKey(grade, role, minQuality, slot, levels), range);
+  }
+
+  private CellRange cell(String key, MarketHistoryRange range) {
+    var today = today();
+    try {
+      return new CellRange(range, today, auctions.dailyRange(key, range.from(today)));
+    } catch (DataAccessException exception) {
+      log.warn(
+          "event=auction_range_read_failed range={} exceptionType={}",
+          range.value(),
+          exception.getClass().getSimpleName());
+      throw new BusinessException(MarketErrorCode.MARKET_CACHE_UNAVAILABLE);
+    }
   }
 
   /** 보석 표 칸 키(표·일별 기록과 같은 키). */

@@ -37,11 +37,56 @@ public record MarketItemHistoryResponse(
         "14d");
   }
 
-  /** 기간 조회. */
+  /**
+   * 기간 조회. 7d는 공식 14일 중 기준일 포함 7일, 14d는 지금과 같음, 30d 이상은 공식 14일에 저장 완료일(같은 변형 칸, 공식에 없는 날짜만)을 더하고
+   * recordedSince·storedDays를 채운다. 공식 응답에 없는 변형 칸의 저장 행은 붙이지 않는다.
+   */
   static MarketItemHistoryResponse from(MarketHistoryRangeService.ItemRange ranged) {
     var base = from(ranged.base());
+    var range = ranged.range();
+    var from = range.from(base.baseDate());
+    var stored = ranged.stored();
+    var variants = new java.util.ArrayList<MarketItemVariantResponse>();
+    var officialVariants = ranged.base().history().variants();
+    for (int i = 0; i < officialVariants.size(); i++) {
+      var variant = base.variants().get(i);
+      var key =
+          com.loakraken.market.application.MarketDailyStore.variantKey(
+              officialVariants.get(i).tradeRemainCount(), officialVariants.get(i).bundleCount());
+      var days = new java.util.ArrayList<MarketDailyStatResponse>();
+      var officialDates = new java.util.HashSet<LocalDate>();
+      for (var day : variant.days()) {
+        officialDates.add(day.date());
+        if (!day.date().isBefore(from)) days.add(day);
+      }
+      LocalDate recordedSince = null;
+      Integer storedDays = null;
+      if (stored != null) {
+        int count = 0;
+        for (var day : stored.days()) {
+          if (!day.variantKey().equals(key) || day.date().isBefore(from)) continue;
+          count++;
+          if (!officialDates.contains(day.date()))
+            days.add(
+                new MarketDailyStatResponse(
+                    day.date(), day.averagePrice(), day.tradeCount(), false));
+        }
+        storedDays = count;
+        recordedSince = stored.firstDates().get(key);
+      }
+      days.sort(java.util.Comparator.comparing(MarketDailyStatResponse::date).reversed());
+      variants.add(
+          new MarketItemVariantResponse(
+              variant.name(),
+              variant.tradeRemainCount(),
+              variant.bundleCount(),
+              days,
+              variant.summary(),
+              recordedSince,
+              storedDays));
+    }
     return new MarketItemHistoryResponse(
-        base.itemId(), base.observedAt(), base.baseDate(), base.variants(), ranged.range().value());
+        base.itemId(), base.observedAt(), base.baseDate(), variants, range.value());
   }
 
   public record MarketItemVariantResponse(

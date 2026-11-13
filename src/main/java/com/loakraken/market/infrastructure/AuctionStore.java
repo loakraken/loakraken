@@ -195,6 +195,39 @@ class AuctionStore implements AuctionPort {
     return result;
   }
 
+  @Override
+  public AuctionDailyRange dailyRange(String key, java.time.LocalDate from) {
+    var days =
+        jdbc.sql(
+                """
+            SELECT kst_date, min_buy_price, total_count, observed_at
+            FROM auction_price_daily
+            WHERE cell_key = :key AND kst_date >= :from
+            ORDER BY kst_date DESC
+            """)
+            .param("key", key)
+            .param("from", from)
+            .query(
+                (row, n) ->
+                    new AuctionDailyDay(
+                        row.getObject(1, java.time.LocalDate.class),
+                        row.getLong(2),
+                        row.getLong(3),
+                        row.getObject(4, java.time.OffsetDateTime.class).toInstant()))
+            .list();
+    var first =
+        jdbc
+            .sql("SELECT min(kst_date) FROM auction_price_daily WHERE cell_key = :key")
+            .param("key", key)
+            .query(java.time.LocalDate.class)
+            .list()
+            .stream()
+            .filter(java.util.Objects::nonNull)
+            .findFirst()
+            .orElse(null);
+    return new AuctionDailyRange(days, first);
+  }
+
   private <T> Optional<T> read(String key, Class<T> type) {
     try {
       var json = redis.opsForValue().get(key);

@@ -102,7 +102,7 @@ class PostgresMarketDailyStore implements MarketDailyStore {
     var days =
         jdbc.query(
             """
-            SELECT trade_remain_key, bundle_key, kst_date, avg_price, trade_count
+            SELECT trade_remain_key, bundle_key, kst_date, avg_price, trade_count, item_name
             FROM market_price_daily
             WHERE item_id = :id AND kst_date >= :from
             ORDER BY kst_date DESC, trade_remain_key, bundle_key
@@ -113,7 +113,8 @@ class PostgresMarketDailyStore implements MarketDailyStore {
                     MarketDailyStore.variantKey(row.getInt(1), row.getInt(2)),
                     row.getObject(3, LocalDate.class),
                     row.getBigDecimal(4),
-                    row.getLong(5)));
+                    row.getLong(5),
+                    row.getString(6)));
     var first = new java.util.HashMap<String, LocalDate>();
     jdbc.query(
         """

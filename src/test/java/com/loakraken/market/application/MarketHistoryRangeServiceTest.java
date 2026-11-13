@@ -44,7 +44,9 @@ class MarketHistoryRangeServiceTest {
   void 거래소_30일_이상은_기준일을_포함한_기간의_저장_완료일을_읽는다() {
     var stored =
         new MarketDailyStore.StoredRange(
-            List.of(new MarketDailyStore.StoredDay("-1/1", TODAY.minusDays(20), BigDecimal.TEN, 3)),
+            List.of(
+                new MarketDailyStore.StoredDay(
+                    "-1/1", TODAY.minusDays(20), BigDecimal.TEN, 3, "품목")),
             Map.of("-1/1", TODAY.minusDays(40)));
     when(daily.findRange(7L, TODAY.minusDays(29))).thenReturn(stored);
 

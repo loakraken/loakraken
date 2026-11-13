@@ -27,11 +27,15 @@ class MarketItemHistoryRangeResponseTest {
         new MarketDailyStore.StoredRange(
             List.of(
                 // 공식 14일과 겹치는 날(공식 값이 이김)
-                new MarketDailyStore.StoredDay("-1/1", TODAY.minusDays(1), new BigDecimal("99"), 9),
-                new MarketDailyStore.StoredDay("-1/1", TODAY.minusDays(20), new BigDecimal("8"), 4),
-                new MarketDailyStore.StoredDay("-1/1", TODAY.minusDays(29), new BigDecimal("7"), 2),
-                // 다른 변형 칸(공식 응답에 없는 변형)은 붙이지 않는다
-                new MarketDailyStore.StoredDay("3/1", TODAY.minusDays(20), new BigDecimal("1"), 1)),
+                new MarketDailyStore.StoredDay(
+                    "-1/1", TODAY.minusDays(1), new BigDecimal("99"), 9, "품목"),
+                new MarketDailyStore.StoredDay(
+                    "-1/1", TODAY.minusDays(20), new BigDecimal("8"), 4, "품목"),
+                new MarketDailyStore.StoredDay(
+                    "-1/1", TODAY.minusDays(29), new BigDecimal("7"), 2, "품목"),
+                // 공식 응답에 없는 변형 칸도 저장 기록이 있으면 따로 준다(코드 리뷰 P2-1)
+                new MarketDailyStore.StoredDay(
+                    "3/1", TODAY.minusDays(20), new BigDecimal("1"), 1, "품목")),
             Map.of("-1/1", TODAY.minusDays(40), "3/1", TODAY.minusDays(25)));
 
     var response =
@@ -39,6 +43,7 @@ class MarketItemHistoryRangeResponseTest {
             new MarketHistoryRangeService.ItemRange(official(), MarketHistoryRange.D30, stored));
 
     assertThat(response.range()).isEqualTo("30d");
+    assertThat(response.variants()).hasSize(2);
     var variant = response.variants().getFirst();
     assertThat(variant.recordedSince()).isEqualTo(TODAY.minusDays(40));
     assertThat(variant.storedDays()).isEqualTo(3);
@@ -52,6 +57,37 @@ class MarketItemHistoryRangeResponseTest {
             day -> day.date() + "/" + day.averagePrice().stripTrailingZeros().toPlainString())
         .endsWith(TODAY.minusDays(20) + "/8", TODAY.minusDays(29) + "/7");
     assertThat(variant.days().getLast().partial()).isFalse();
+  }
+
+  @Test
+  void 공식_응답에_없는_변형도_저장_기록이_있으면_기간_안의_날을_준다() {
+    var stored =
+        new MarketDailyStore.StoredRange(
+            List.of(
+                new MarketDailyStore.StoredDay(
+                    "3/1", TODAY.minusDays(20), new BigDecimal("4"), 2, "품목(3회)"),
+                new MarketDailyStore.StoredDay(
+                    "3/1", TODAY.minusDays(200), new BigDecimal("5"), 1, "품목(3회)")),
+            Map.of("3/1", TODAY.minusDays(200)));
+
+    var response =
+        MarketItemHistoryResponse.from(
+            new MarketHistoryRangeService.ItemRange(official(), MarketHistoryRange.D365, stored));
+
+    assertThat(response.variants()).hasSize(2);
+    var storedOnly = response.variants().get(1);
+    assertThat(storedOnly.name()).isEqualTo("품목(3회)");
+    assertThat(storedOnly.tradeRemainCount()).isEqualTo(3);
+    assertThat(storedOnly.bundleCount()).isEqualTo(1);
+    assertThat(storedOnly.days())
+        .extracting(day -> day.date())
+        .containsExactly(TODAY.minusDays(20), TODAY.minusDays(200));
+    assertThat(storedOnly.days()).allMatch(day -> !day.partial());
+    assertThat(storedOnly.recordedSince()).isEqualTo(TODAY.minusDays(200));
+    assertThat(storedOnly.storedDays()).isEqualTo(2);
+    // 공식 변형은 그대로(저장 없음 → storedDays 0, recordedSince null)
+    assertThat(response.variants().getFirst().storedDays()).isZero();
+    assertThat(response.variants().getFirst().recordedSince()).isNull();
   }
 
   @Test

@@ -40,6 +40,9 @@ class MarketRangeHistoryIntegrationTest {
   private static final ZoneId KST = ZoneId.of("Asia/Seoul");
   @LocalServerPort int port;
   @MockitoBean MarketItemHistoryPort history;
+
+  // 공식 상세를 받을 때 일별 표에 쓰는 비동기 기록을 막아, 시험이 넣은 행만 읽게 한다(기록 경합 없음).
+  @MockitoBean com.loakraken.market.application.MarketDailyRecorder recorder;
   @Autowired MarketDailyStore store;
   @Autowired JdbcClient jdbc;
   @Autowired StringRedisTemplate redis;

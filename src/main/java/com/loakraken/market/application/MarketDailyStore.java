@@ -32,8 +32,9 @@ public interface MarketDailyStore {
         + (bundleCount == null ? -1 : bundleCount);
   }
 
-  /** 저장한 완료일 하루(변형 칸 키 = variantKey). */
-  record StoredDay(String variantKey, LocalDate date, BigDecimal averagePrice, long tradeCount) {}
+  /** 저장한 완료일 하루(변형 칸 키 = variantKey, name = 그날 저장한 공식 이름). */
+  record StoredDay(
+      String variantKey, LocalDate date, BigDecimal averagePrice, long tradeCount, String name) {}
 
   /** days는 최신순, firstDates는 변형 칸 키 → 처음 저장한 날짜. */
   record StoredRange(List<StoredDay> days, Map<String, LocalDate> firstDates) {

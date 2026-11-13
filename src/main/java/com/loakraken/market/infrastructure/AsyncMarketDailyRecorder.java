@@ -4,6 +4,8 @@ import com.loakraken.market.application.MarketDailyRecorder;
 import com.loakraken.market.application.MarketDailyStore;
 import com.loakraken.market.application.MarketMetrics;
 import com.loakraken.market.domain.MarketItemHistory;
+import io.micrometer.core.instrument.MeterRegistry;
+import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.concurrent.ArrayBlockingQueue;
@@ -30,11 +32,17 @@ class AsyncMarketDailyRecorder implements MarketDailyRecorder {
   private final AtomicLong dropped = new AtomicLong();
 
   @Autowired
-  AsyncMarketDailyRecorder(MarketDailyStore store, MarketMetrics metrics) {
-    this(store, metrics, QUEUE);
+  AsyncMarketDailyRecorder(
+      MarketDailyStore store, MarketMetrics metrics, MeterRegistry registry, Clock clock) {
+    this(store, metrics, registry, clock, QUEUE);
   }
 
-  AsyncMarketDailyRecorder(MarketDailyStore store, MarketMetrics metrics, int queue) {
+  AsyncMarketDailyRecorder(
+      MarketDailyStore store,
+      MarketMetrics metrics,
+      MeterRegistry registry,
+      Clock clock,
+      int queue) {
     this.store = store;
     this.metrics = metrics;
     this.executor =

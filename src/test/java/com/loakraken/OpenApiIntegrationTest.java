@@ -79,11 +79,21 @@ class OpenApiIntegrationTest {
         .isTrue();
     assertThat(document.at("/components/schemas/LevelCountResponse/properties").has("from"))
         .isTrue();
-    // 필수 규칙도 각자 스키마에(이름이 같은 다른 레코드의 규칙이 덮지 않게).
-    assertThat(document.at("/components/schemas/CharacterLevelCountResponse/required").toString())
-        .isEqualTo("[\"level\",\"count\"]");
-    assertThat(document.at("/components/schemas/LevelCountResponse/required").toString())
-        .isEqualTo("[\"from\",\"to\",\"count\"]");
+    // 필수 규칙도 각자 스키마에(이름이 같은 다른 레코드의 규칙이 덮지 않게). 생성 문서는 required를 이름순으로 낸다.
+    assertThat(
+            document
+                .at("/components/schemas/CharacterLevelCountResponse/required")
+                .valueStream()
+                .map(n -> n.asText())
+                .toList())
+        .containsExactlyInAnyOrder("level", "count");
+    assertThat(
+            document
+                .at("/components/schemas/LevelCountResponse/required")
+                .valueStream()
+                .map(n -> n.asText())
+                .toList())
+        .containsExactlyInAnyOrder("from", "to", "count");
     // 보석별 기본 공격력 %(#543): 두 필드 모두 required이고 null을 허용하며, 근거 값은 enum이 아닌 문자열이다(값이 늘 수 있음).
     assertThat(document.at("/components/schemas/GemResponse/required").toString())
         .contains("baseAttackPct", "baseAttackPctSource");

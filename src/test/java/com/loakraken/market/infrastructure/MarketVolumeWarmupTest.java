@@ -18,6 +18,7 @@ import com.loakraken.market.application.MarketCache;
 import com.loakraken.market.application.MarketItemHistoryResult;
 import com.loakraken.market.application.MarketMetrics;
 import com.loakraken.market.application.MarketQueryService;
+import com.loakraken.market.application.MarketVolumeCursor;
 import com.loakraken.market.domain.MarketItemHistory;
 import com.loakraken.market.domain.MarketPrice;
 import com.loakraken.market.domain.MarketTab;
@@ -218,6 +219,167 @@ class MarketVolumeWarmupTest {
     assertThat(defaults.tabs()).isEmpty();
   }
 
+  @Test
+  void 기본값은_하루_2000번이고_재련_각인서_생활을_먼저_돌고_아바타는_맨_뒤에서_돌림으로_받는다() {
+    var bound =
+        new org.springframework.boot.context.properties.bind.Binder(
+                new org.springframework.boot.context.properties.source
+                    .MapConfigurationPropertySource(Map.of("market.volume-warmup.enabled", "true")))
+            .bind("market.volume-warmup", MarketVolumeWarmupProperties.class)
+            .get();
+    assertThat(bound.maxCallsPerDay()).isEqualTo(2000);
+    assertThat(bound.maxCallsPerMinute()).isEqualTo(15);
+    assertThat(bound.tabs())
+        .containsExactly(
+            MarketTab.REFINING,
+            MarketTab.REFINING_EXTRA,
+            MarketTab.ENGRAVING_BOOK,
+            MarketTab.LIFE,
+            MarketTab.ARK_GRID,
+            MarketTab.WEAPON_EVOLUTION,
+            MarketTab.BATTLE_ITEM,
+            MarketTab.FOOD,
+            MarketTab.AVATAR);
+    assertThat(bound.rotatingTabs()).containsExactly(MarketTab.AVATAR);
+  }
+
+  @Test
+  void 돌림_탭은_어제_멈춘_페이지부터_한_페이지씩_받고_페이지를_다_채우면_다음_페이지로_넘긴다() {
+    // 아바타 25개 = 3페이지. 어제 2페이지까지 받았다(1페이지 시작 2일 전).
+    when(cache.findVolumeCursor(MarketTab.AVATAR))
+        .thenReturn(Optional.of(new MarketVolumeCursor(2, today.minusDays(2))));
+    when(boards.volumePage(MarketTab.AVATAR, 2))
+        .thenReturn(page(2, 25, LongStream.rangeClosed(11, 20).toArray()));
+    when(markets.refreshItemHistory(anyLong()))
+        .thenAnswer(invocation -> Optional.of(history(invocation.getArgument(0), clock.now)));
+    var job = warmup("key", List.of(MarketTab.AVATAR), 11, 800);
+
+    job.tick();
+
+    // 페이지 1번 + 품목 10번 = 11번(분당 11). 3페이지는 다음 분에.
+    verify(boards).volumePage(MarketTab.AVATAR, 2);
+    verify(markets, times(10)).refreshItemHistory(anyLong());
+    verify(cache).saveVolumeCursor(MarketTab.AVATAR, new MarketVolumeCursor(3, today.minusDays(2)));
+    // 위치 = 다음에 받을 페이지
+    assertThat(rotation("rotation_page")).isEqualTo(3);
+    assertThat(rotation("rotation_pages")).isEqualTo(3);
+    // 품목의 volumeDate는 그 품목을 받은 날 기준(어제)이다.
+    assertThat(savedVolumes()).allMatch(volume -> volume.volumeDate().equals(today.minusDays(1)));
+  }
+
+  @Test
+  void 돌림_탭의_마지막_페이지를_마치면_1페이지로_돌아가고_한_바퀴_일수를_남기며_그날은_더_돌지_않는다() {
+    when(cache.findVolumeCursor(MarketTab.AVATAR))
+        .thenReturn(Optional.of(new MarketVolumeCursor(3, today.minusDays(4))));
+    when(boards.volumePage(MarketTab.AVATAR, 3)).thenReturn(page(3, 25, 21, 22, 23, 24, 25));
+    when(markets.refreshItemHistory(anyLong()))
+        .thenAnswer(invocation -> Optional.of(history(invocation.getArgument(0), clock.now)));
+    var job = warmup("key", List.of(MarketTab.AVATAR), 15, 800);
+
+    job.tick();
+    clock.now = clock.now.plusSeconds(60);
+    job.tick();
+
+    verify(cache).saveVolumeCursor(MarketTab.AVATAR, new MarketVolumeCursor(1, today));
+    // 11-04 시작 ~ 11-08 끝 = 5일
+    assertThat(rotation("rotation_cycle_days")).isEqualTo(5);
+    verify(boards, times(1)).volumePage(eq(MarketTab.AVATAR), anyInt());
+    verify(markets, times(5)).refreshItemHistory(anyLong());
+  }
+
+  @Test
+  void 돌림_탭은_하루_상한으로_페이지_중간에_멈추면_위치를_넘기지_않아_다음_날_그_페이지를_다시_받는다() {
+    when(cache.findVolumeCursor(MarketTab.AVATAR))
+        .thenReturn(Optional.of(new MarketVolumeCursor(2, today.minusDays(1))));
+    when(boards.volumePage(MarketTab.AVATAR, 2))
+        .thenReturn(page(2, 25, LongStream.rangeClosed(11, 20).toArray()));
+    when(markets.refreshItemHistory(anyLong()))
+        .thenAnswer(invocation -> Optional.of(history(invocation.getArgument(0), clock.now)));
+    // 하루 상한 800: 페이지 1번 + 품목 4번 뒤 상한
+    when(cache.addVolumeCalls(eq(today), anyInt())).thenReturn(1L, 2L, 3L, 4L, 5L, 801L);
+    var job = warmup("key", List.of(MarketTab.AVATAR), 15, 800);
+
+    job.tick();
+    verify(markets, times(4)).refreshItemHistory(anyLong());
+    verify(cache, never()).saveVolumeCursor(any(), any());
+
+    // 다음 날: 같은 2페이지부터
+    clock.now = Instant.parse("2026-11-08T15:05:00Z");
+    when(cache.addVolumeCalls(eq(today.plusDays(1)), anyInt())).thenReturn(1L);
+    job.tick();
+    verify(boards, times(2)).volumePage(MarketTab.AVATAR, 2);
+  }
+
+  @Test
+  void 돌림_페이지의_상세_받기가_실패하면_위치를_넘기지_않고_다음_주기에_실패한_품목만_다시_받는다() {
+    when(cache.findVolumeCursor(MarketTab.AVATAR))
+        .thenReturn(Optional.of(new MarketVolumeCursor(2, today.minusDays(1))));
+    when(boards.volumePage(MarketTab.AVATAR, 2))
+        .thenReturn(page(2, 25, LongStream.rangeClosed(11, 20).toArray()));
+    when(markets.refreshItemHistory(anyLong()))
+        .thenAnswer(invocation -> Optional.of(history(invocation.getArgument(0), clock.now)));
+    // 13번은 처음 한 번 공식 상세 시간 초과
+    when(markets.refreshItemHistory(13L))
+        .thenThrow(new IllegalStateException("timeout"))
+        .thenAnswer(invocation -> Optional.of(history(13L, clock.now)));
+    var job = warmup("key", List.of(MarketTab.AVATAR), 15, 800);
+
+    job.tick();
+    // 실패한 품목이 있으니 3페이지로 넘기지 않고, 시도 횟수만 남긴다.
+    verify(cache, never())
+        .saveVolumeCursor(MarketTab.AVATAR, new MarketVolumeCursor(3, today.minusDays(1)));
+    verify(cache)
+        .saveVolumeCursor(MarketTab.AVATAR, new MarketVolumeCursor(2, today.minusDays(1), 1));
+
+    // 다음 주기: 같은 페이지를 다시 받되 이미 채운 품목은 부르지 않고 13번만 다시 받는다.
+    clock.now = clock.now.plusSeconds(60);
+    job.tick();
+    verify(boards, times(2)).volumePage(MarketTab.AVATAR, 2);
+    verify(markets, times(2)).refreshItemHistory(13L);
+    verify(markets, times(11)).refreshItemHistory(anyLong());
+    verify(cache).saveVolumeCursor(MarketTab.AVATAR, new MarketVolumeCursor(3, today.minusDays(1)));
+  }
+
+  @Test
+  void 돌림_페이지_재시도는_세_번까지이고_그래도_실패하면_넘기며_포기를_지표로_남긴다() {
+    when(cache.findVolumeCursor(MarketTab.AVATAR))
+        .thenReturn(Optional.of(new MarketVolumeCursor(2, today.minusDays(1))));
+    when(boards.volumePage(MarketTab.AVATAR, 2)).thenReturn(page(2, 25, 11, 12));
+    when(markets.refreshItemHistory(11L))
+        .thenAnswer(invocation -> Optional.of(history(11L, clock.now)));
+    when(markets.refreshItemHistory(12L)).thenThrow(new IllegalStateException("5xx"));
+    var job = warmup("key", List.of(MarketTab.AVATAR), 15, 800);
+
+    for (int i = 0; i < 3; i++) {
+      job.tick();
+      clock.now = clock.now.plusSeconds(60);
+    }
+
+    verify(markets, times(3)).refreshItemHistory(12L);
+    verify(cache).saveVolumeCursor(MarketTab.AVATAR, new MarketVolumeCursor(3, today.minusDays(1)));
+    assertThat(count("rotation_gave_up")).isEqualTo(1);
+    assertThat(count("rotation_retry")).isEqualTo(2);
+  }
+
+  private double rotation(String name) {
+    var found =
+        registry
+            .find("loakraken.market.volume_warmup." + name)
+            .tag("tab", MarketTab.AVATAR.name())
+            .gauge();
+    assertThat(found).as(name + " 게이지(tab=AVATAR)").isNotNull();
+    return found.value();
+  }
+
+  private static com.loakraken.market.application.MarketPage page(
+      int pageNo, int total, long... ids) {
+    return new com.loakraken.market.application.MarketPage(
+        pageNo,
+        MarketBoardService.PAGE_SIZE,
+        total,
+        LongStream.of(ids).mapToObj(MarketVolumeWarmupTest::item).toList());
+  }
+
   private List<MarketVolume> savedVolumes() {
     @SuppressWarnings("unchecked")
     ArgumentCaptor<Collection<MarketVolume>> captor = ArgumentCaptor.forClass(Collection.class);
@@ -263,7 +425,13 @@ class MarketVolumeWarmupTest {
   private static MarketVolumeWarmupProperties properties(
       List<MarketTab> tabs, int perMinute, int perDay) {
     return new MarketVolumeWarmupProperties(
-        true, Duration.ofSeconds(60), Duration.ZERO, perMinute, perDay, tabs);
+        true,
+        Duration.ofSeconds(60),
+        Duration.ZERO,
+        perMinute,
+        perDay,
+        tabs,
+        List.of(MarketTab.AVATAR));
   }
 
   private static MarketBoardScan scan(MarketTab tab, long... ids) {

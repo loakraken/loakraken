@@ -221,11 +221,24 @@ class MarketBoardIntegrationTest {
             new com.loakraken.market.domain.MarketVolume(3, volumeDate, 12, 80),
             new com.loakraken.market.domain.MarketVolume(1, volumeDate, 40, 80),
             new com.loakraken.market.domain.MarketVolume(4, volumeDate, 0, 5)));
-    // 거래량 지도는 Valkey 해시 하나, TTL 36시간 이하(DB 저장 없음).
+    // 거래량 지도는 Valkey 해시 하나, TTL 8일(보드가 7일까지 거슬러 찾음, PM 11-13). 하루 호출 카운터는 36시간 그대로.
     long ttl = redis.getExpire("market:v1:volume:" + today, java.util.concurrent.TimeUnit.SECONDS);
-    assertThat(ttl).isPositive().isLessThanOrEqualTo(36 * 3600);
+    assertThat(ttl).isGreaterThan(7 * 24 * 3600).isLessThanOrEqualTo(8 * 24 * 3600);
     assertThat(marketCache.addVolumeCalls(today, 3)).isEqualTo(3);
     assertThat(marketCache.addVolumeCalls(today, 2)).isEqualTo(5);
+    // 돌림 위치: 재시도 수까지 저장하고, 재시도 수가 없는 이전 값("page,date")은 0으로 읽는다.
+    var cursor = new com.loakraken.market.application.MarketVolumeCursor(4, today.minusDays(2), 2);
+    marketCache.saveVolumeCursor(com.loakraken.market.domain.MarketTab.AVATAR, cursor);
+    assertThat(marketCache.findVolumeCursor(com.loakraken.market.domain.MarketTab.AVATAR))
+        .contains(cursor);
+    redis.opsForValue().set("market:v1:volume-cursor:AVATAR", "5," + today.minusDays(3));
+    assertThat(marketCache.findVolumeCursor(com.loakraken.market.domain.MarketTab.AVATAR))
+        .contains(new com.loakraken.market.application.MarketVolumeCursor(5, today.minusDays(3)));
+    assertThat(
+            redis.getExpire(
+                "market:v1:volume-calls:" + today, java.util.concurrent.TimeUnit.SECONDS))
+        .isPositive()
+        .isLessThanOrEqualTo(36 * 3600);
 
     var response = get("/api/v1/markets/board?tab=FOOD&sort=volume");
     assertThat(response.statusCode()).isEqualTo(200);

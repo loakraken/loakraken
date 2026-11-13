@@ -75,8 +75,9 @@ public class MarketMetrics {
 
   /**
    * 거래량 채우기 작업(시세 거래량 정렬) 사건: filled(공식 상세 1번으로 한 품목 채움), not_found(상세에 맞는 묶음 없음),
-   * official_failed(공식 호출 실패·한도), minute_cap(분당 상한), daily_cap(하루 상한), gate_reject(공유 예산 여유 없음). 값은
-   * 몇 가지로 고정이다.
+   * official_failed(공식 호출 실패·한도), minute_cap(분당 상한), daily_cap(하루 상한), gate_reject(공유 예산 여유 없음),
+   * rotation_retry(돌림 페이지에 실패한 품목이 있어 다음 주기에 다시 받음), rotation_gave_up(세 번 받아도 실패가 남아 넘김). 값은 이 여덟
+   * 개로 고정이다.
    */
   public void volumeWarmup(String event) {
     registry.counter("loakraken.market.volume_warmup", "event", event).increment();

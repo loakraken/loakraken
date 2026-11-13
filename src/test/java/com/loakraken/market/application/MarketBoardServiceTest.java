@@ -269,6 +269,32 @@ class MarketBoardServiceTest {
   }
 
   @Test
+  void 돌림_탭처럼_며칠_전에_받은_거래량도_7일_안이면_그_날짜와_함께_쓰고_더_오래되면_쓰지_않는다() {
+    var clock = java.time.Clock.fixed(OBSERVED, java.time.ZoneOffset.UTC);
+    var withClock = new MarketBoardService(markets, cache, clock);
+    var today = LocalDate.ofInstant(OBSERVED, ZoneId.of("Asia/Seoul"));
+    var items = IntStream.rangeClosed(1, 3).mapToObj(MarketBoardServiceTest::item).toList();
+    when(cache.findBoardScan(MarketTab.AVATAR, null))
+        .thenReturn(Optional.of(new MarketBoardScan(MarketTab.AVATAR, null, OBSERVED, 3, items)));
+    // 1번은 5일 전 지도에만, 2번은 8일 전 지도에만 있다.
+    when(cache.findVolumes(eq(today.minusDays(5)), any()))
+        .thenReturn(
+            Map.of(1L, new com.loakraken.market.domain.MarketVolume(1, today.minusDays(6), 4, 30)));
+    when(cache.findVolumes(eq(today.minusDays(8)), any()))
+        .thenReturn(
+            Map.of(2L, new com.loakraken.market.domain.MarketVolume(2, today.minusDays(9), 9, 90)));
+
+    var board = withClock.board(MarketTab.AVATAR, null, MarketBoardRules.Sort.VOLUME, 1);
+
+    verifyNoInteractions(markets);
+    assertThat(board.rows()).extracting(row -> row.price().id()).containsExactly(1L, 2L, 3L);
+    assertThat(board.rows().getFirst().volume()).as("5일 전 지도의 거래량").isNotNull();
+    assertThat(board.rows().getFirst().volume().volumeDate()).isEqualTo(today.minusDays(6));
+    assertThat(board.rows().get(1).volume()).isNull();
+    verify(cache, never()).findVolumes(eq(today.minusDays(8)), any());
+  }
+
+  @Test
   void 거래량_지도가_없으면_행의_거래량은_이력_캐시의_완료일로_채우고_맞는_변형이_없으면_null이다() {
     stubPages(MarketTab.REFINING, 4, 1);
     var today = LocalDate.ofInstant(OBSERVED, ZoneId.of("Asia/Seoul"));

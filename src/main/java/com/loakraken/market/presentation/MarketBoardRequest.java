@@ -31,7 +31,16 @@ public record MarketBoardRequest(
             description =
                 "품목 이름 검색(앞뒤 공백 정리 뒤 1~20자, 한글·자모·영숫자·공백·'·()+-:'). 이름 포함 또는 초성(예: ㅇㅂㄷ) 포함으로 탭 전체 스캔 결과를 거른 뒤 정렬·페이지를 적용합니다. 생략하거나 공백뿐이면 검색하지 않습니다",
             example = "파괴석")
-        String q) {
+        String q,
+    @Pattern(regexp = GRADES)
+        @Schema(
+            description =
+                "공식 아이템 등급으로 거르기(일반·고급·희귀·영웅·전설·유물·고대·에스더). q처럼 탭 전체 스캔 결과를 거른 뒤 정렬·페이지를 적용합니다. 생략하면 모든 등급",
+            example = "유물")
+        String grade) {
+  /** 공식 거래소 아이템 등급 이름. */
+  static final String GRADES = "일반|고급|희귀|영웅|전설|유물|고대|에스더";
+
   static final int QUERY_MAX = 20;
   private static final java.util.regex.Pattern QUERY =
       java.util.regex.Pattern.compile("[가-힣ㄱ-ㅎㅏ-ㅣA-Za-z0-9 ·()+\\-:]+");

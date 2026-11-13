@@ -72,12 +72,27 @@ public class MarketBoardService {
    */
   public MarketBoard board(
       MarketTab tab, Integer tier, MarketBoardRules.Sort sort, int page, String query) {
+    return board(tab, tier, sort, page, query, null);
+  }
+
+  /**
+   * grade(공식 아이템 등급 이름)가 있으면 query처럼 탭 전체 스캔에서 그 등급만 남긴 뒤 정렬·페이지를 적용한다(공식 추가 호출 없음). query와 함께 쓰면 둘
+   * 다 맞는 품목만 남는다.
+   */
+  public MarketBoard board(
+      MarketTab tab,
+      Integer tier,
+      MarketBoardRules.Sort sort,
+      int page,
+      String query,
+      String grade) {
     Integer effectiveTier = tier == null ? tab.defaultTier() : tier;
-    if (query != null) {
+    if (query != null || grade != null) {
       var scan = scan(tab, effectiveTier);
       var matched =
           scan.items().stream()
-              .filter(item -> MarketBoardRules.nameMatches(item.name(), query))
+              .filter(item -> query == null || MarketBoardRules.nameMatches(item.name(), query))
+              .filter(item -> grade == null || grade.equals(item.grade()))
               .toList();
       var volumes =
           sort == MarketBoardRules.Sort.VOLUME

@@ -10,7 +10,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 class MarketBoardRequestTest {
   private static MarketBoardRequest request(String q) {
-    return new MarketBoardRequest(MarketTab.REFINING, null, null, null, q);
+    return new MarketBoardRequest(MarketTab.REFINING, null, null, null, q, null);
   }
 
   @Test

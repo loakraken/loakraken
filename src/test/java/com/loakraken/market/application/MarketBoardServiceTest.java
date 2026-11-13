@@ -422,6 +422,37 @@ class MarketBoardServiceTest {
             });
   }
 
+  @Test
+  void 등급을_주면_탭_전체_스캔을_등급으로_거른_뒤_정렬_페이지를_적용하고_검색어와_함께_쓸_수_있다() {
+    var items =
+        List.of(
+            graded(1, "품목1", "유물"),
+            graded(2, "품목2", "전설"),
+            graded(3, "다른3", "유물"),
+            graded(4, "품목4", "영웅"));
+    when(cache.findBoardScan(MarketTab.ENGRAVING_BOOK, null))
+        .thenReturn(
+            Optional.of(new MarketBoardScan(MarketTab.ENGRAVING_BOOK, null, OBSERVED, 4, items)));
+
+    var relic =
+        service.board(MarketTab.ENGRAVING_BOOK, null, MarketBoardRules.Sort.RISE, 1, null, "유물");
+    assertThat(relic.rows()).extracting(row -> row.price().id()).containsExactlyInAnyOrder(1L, 3L);
+    assertThat(relic.totalItems()).isEqualTo(2);
+    assertThat(relic.scannedItems()).isEqualTo(4);
+    assertThat(relic.complete()).isTrue();
+
+    // 검색어와 함께: 이름에 '품목'이 있고 유물
+    var both =
+        service.board(MarketTab.ENGRAVING_BOOK, null, MarketBoardRules.Sort.RISE, 1, "품목", "유물");
+    assertThat(both.rows()).extracting(row -> row.price().id()).containsExactly(1L);
+    verifyNoInteractions(markets);
+  }
+
+  private static MarketPrice graded(int i, String name, String grade) {
+    return new MarketPrice(
+        i, name, grade, null, 1, null, BigDecimal.TEN, BigDecimal.TEN, BigDecimal.TEN);
+  }
+
   private static MarketPrice item(int i) {
     return new MarketPrice(
         i,

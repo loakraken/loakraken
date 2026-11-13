@@ -541,6 +541,82 @@ class SpecUpGoalServiceTest {
     slots.release(2);
   }
 
+  /**
+   * 실제 경합: 추천 순서 계산 둘이 자리 2개를 잡고 있으면(계산 중) 세 번째 호출은 추천 순서든 목표 경로든 바로 429 SPEC_UP_BUSY. 계산이 끝나면 목표
+   * 경로가 자리를 잡아 계산한다.
+   */
+  @Test
+  void 추천_순서_계산_둘이_자리를_쓰는_동안_세_번째_호출은_종류와_상관없이_바로_SPEC_UP_BUSY다() throws Exception {
+    var entered = new java.util.concurrent.CountDownLatch(2);
+    var release = new java.util.concurrent.CountDownLatch(1);
+    var holding = java.util.concurrent.ConcurrentHashMap.<String>newKeySet();
+    LongSupplier clock =
+        () -> {
+          var name = Thread.currentThread().getName();
+          // 계산 자리 안에서 처음 읽는 시각: 추천 순서 계산 스레드는 여기서 놓아줄 때까지 기다린다.
+          if (name.startsWith("seat-path-") && holding.add(name)) {
+            entered.countDown();
+            try {
+              release.await(10, java.util.concurrent.TimeUnit.SECONDS);
+            } catch (InterruptedException exception) {
+              Thread.currentThread().interrupt();
+            }
+          }
+          return System.nanoTime();
+        };
+    var service = service(clock);
+    var errors = new java.util.concurrent.ConcurrentLinkedQueue<Throwable>();
+    var first =
+        new Thread(
+            () -> {
+              try {
+                service.path("목표테스트", SpecUpGoalService.Pick.EFFICIENCY, 3);
+              } catch (Throwable error) {
+                errors.add(error);
+              }
+            },
+            "seat-path-1");
+    var second =
+        new Thread(
+            () -> {
+              try {
+                service.path("목표테스트", SpecUpGoalService.Pick.EFFICIENCY, 4);
+              } catch (Throwable error) {
+                errors.add(error);
+              }
+            },
+            "seat-path-2");
+    first.start();
+    second.start();
+    try {
+      assertThat(entered.await(10, java.util.concurrent.TimeUnit.SECONDS))
+          .as("추천 순서 계산 둘이 자리를 잡음")
+          .isTrue();
+
+      for (org.assertj.core.api.ThrowableAssert.ThrowingCallable third :
+          List.<org.assertj.core.api.ThrowableAssert.ThrowingCallable>of(
+              () -> service.goal("목표테스트", new BigDecimal("6000")),
+              () -> service.path("목표테스트", SpecUpGoalService.Pick.EFFICIENCY, 5)))
+        org.assertj.core.api.Assertions.assertThatThrownBy(third)
+            .isInstanceOf(com.loakraken.common.api.BusinessException.class)
+            .satisfies(
+                e ->
+                    assertThat(((com.loakraken.common.api.BusinessException) e).errorCode())
+                        .isEqualTo(SpecUpErrorCode.SPEC_UP_BUSY));
+    } finally {
+      release.countDown();
+      first.join(10_000);
+      second.join(10_000);
+    }
+    assertThat(errors).isEmpty();
+    // 자리가 비면 목표 경로가 계산한다.
+    service.goal("목표테스트", new BigDecimal("6000"));
+    assertThat(meters.counter("loakraken.spec_up.goal", "outcome", "computed").count())
+        .isEqualTo(1);
+    assertThat(meters.counter("loakraken.spec_up.goal", "outcome", "busy").count()).isEqualTo(1);
+    assertThat(meters.counter("loakraken.spec_up.path", "outcome", "busy").count()).isEqualTo(1);
+  }
+
   /** 겁화 1~10레벨 칸(값은 레벨 × 1,000골드), 같은 관측 시각. */
   private static List<MarketAuctionService.GemCell> gemCells(Instant at, boolean stale) {
     var cells = new java.util.ArrayList<MarketAuctionService.GemCell>();

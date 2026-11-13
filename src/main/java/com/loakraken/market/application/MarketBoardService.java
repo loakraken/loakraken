@@ -35,6 +35,11 @@ public class MarketBoardService {
       org.slf4j.LoggerFactory.getLogger(MarketBoardService.class);
   public static final int PAGE_SIZE = 10;
   public static final int MAX_SCAN_PAGES = 10;
+
+  /**
+   * 거래량을 찾는 지난 지도 일수. 돌림 탭(아바타)은 한 바퀴에 약 5일이 걸려 그 사이 값을 그 volumeDate와 함께 보인다(날짜가 오래된 값임을 화면이 보임).
+   */
+  public static final int VOLUME_LOOKBACK_DAYS = 7;
   static final ZoneId KST = ZoneId.of("Asia/Seoul");
 
   private final MarketQueryService markets;
@@ -263,7 +268,8 @@ public class MarketBoardService {
   }
 
   /**
-   * 거래량 채우기 돌림 탭 전용: 탭 기본 티어·기본 정렬의 page번째 페이지(공식 검색 1회, 캐시 없음). 보드 스캔의 10페이지 상한과 상관없이 끝까지 받을 수 있다.
+   * 거래량 채우기 돌림 탭 전용: 탭 기본 티어·기본 정렬의 page번째 페이지(공식 검색 1회, 캐시 없음). 보드 스캔의 10페이지 상한과 상관없이 끝까지 받을 수
+   * 있다.
    */
   public MarketPage volumePage(MarketTab tab, int page) {
     return markets
@@ -274,16 +280,18 @@ public class MarketBoardService {
   }
 
   /**
-   * 품목들의 완료일 거래량. 오늘(KST) 거래량 지도에서 찾고, 없는 품목은 어제 지도에서 찾는다(자정 뒤 채우기 작업이 다시 채우기 전까지 어제 값을 그 날짜와 함께 보여
-   * 준다). 둘 다 없으면 빠진다.
+   * 품목들의 완료일 거래량. 오늘(KST) 거래량 지도에서 찾고, 없는 품목은 하루씩 거슬러 최근 VOLUME_LOOKBACK_DAYS일 지도에서 찾는다(자정 뒤 채우기
+   * 전까지 어제 값, 돌림 탭은 며칠 전 값을 그 volumeDate와 함께 보여 준다). 그래도 없으면 빠진다.
    */
   public Map<Long, MarketVolume> volumes(Collection<Long> itemIds) {
     if (itemIds.isEmpty()) return Map.of();
     LocalDate today = LocalDate.now(clock.withZone(KST));
     var result = new LinkedHashMap<Long, MarketVolume>(cache.findVolumes(today, itemIds));
-    var missing = itemIds.stream().filter(id -> !result.containsKey(id)).distinct().toList();
-    if (!missing.isEmpty())
-      cache.findVolumes(today.minusDays(1), missing).forEach(result::putIfAbsent);
+    for (int back = 1; back <= VOLUME_LOOKBACK_DAYS; back++) {
+      var missing = itemIds.stream().filter(id -> !result.containsKey(id)).distinct().toList();
+      if (missing.isEmpty()) break;
+      cache.findVolumes(today.minusDays(back), missing).forEach(result::putIfAbsent);
+    }
     return result;
   }
 

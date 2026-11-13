@@ -221,11 +221,16 @@ class MarketBoardIntegrationTest {
             new com.loakraken.market.domain.MarketVolume(3, volumeDate, 12, 80),
             new com.loakraken.market.domain.MarketVolume(1, volumeDate, 40, 80),
             new com.loakraken.market.domain.MarketVolume(4, volumeDate, 0, 5)));
-    // 거래량 지도는 Valkey 해시 하나, TTL 36시간 이하(DB 저장 없음).
+    // 거래량 지도는 Valkey 해시 하나, TTL 8일(보드가 7일까지 거슬러 찾음, PM 11-13). 하루 호출 카운터는 36시간 그대로.
     long ttl = redis.getExpire("market:v1:volume:" + today, java.util.concurrent.TimeUnit.SECONDS);
-    assertThat(ttl).isPositive().isLessThanOrEqualTo(36 * 3600);
+    assertThat(ttl).isGreaterThan(7 * 24 * 3600).isLessThanOrEqualTo(8 * 24 * 3600);
     assertThat(marketCache.addVolumeCalls(today, 3)).isEqualTo(3);
     assertThat(marketCache.addVolumeCalls(today, 2)).isEqualTo(5);
+    assertThat(
+            redis.getExpire(
+                "market:v1:volume-calls:" + today, java.util.concurrent.TimeUnit.SECONDS))
+        .isPositive()
+        .isLessThanOrEqualTo(36 * 3600);
 
     var response = get("/api/v1/markets/board?tab=FOOD&sort=volume");
     assertThat(response.statusCode()).isEqualTo(200);

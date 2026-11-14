@@ -423,8 +423,16 @@ public class SpecUpGoalService {
             throw new BusinessException(SpecUpErrorCode.SPEC_UP_BUSY, PATH_RETRY_AFTER);
           }
           try {
+            // 계산 시간 측정은 시간 상한 판정에 쓰는 시계(nanoTime)와 따로 잰다(상한 판정을 건드리지 않게).
+            long started = System.nanoTime();
             var result = compute(snapshot, before, goal, gems, refinePrices);
             goalOutcome("computed");
+            // 추천 순서처럼 계산 시간(p95·p99)을 남긴다. stop은 멈춘 이유 코드(작은 고정 집합).
+            Timer.builder("loakraken.spec_up.goal_compute")
+                .tag("stop", result.stopReasonCode())
+                .publishPercentiles(0.5, 0.95, 0.99)
+                .register(meters)
+                .record(Duration.ofNanos(System.nanoTime() - started));
             // 시간 상한으로 멈춘 부분 결과는 캐시하지 않는다(PM-프론트 L31 ③).
             if (!TIME_LIMITED.equals(result.stopReasonCode())) store.save(key, result, CACHE_TTL);
             return result;

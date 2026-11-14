@@ -32,7 +32,7 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 /** 길드 탭 집계(L36·K28·M10). */
-@Import(TestcontainersConfiguration.class)
+@Import({TestcontainersConfiguration.class, GuildDetailIntegrationTest.FixedClock.class})
 @SpringBootTest(
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
     properties = {"ranking.guilds.enabled=true", "ranking.guilds.list.enabled=true"})
@@ -45,6 +45,21 @@ class GuildDetailIntegrationTest {
   @Autowired CharacterHistoryPort history;
   private final JsonMapper mapper = new JsonMapper();
   private final Instant now = Instant.now();
+
+  /**
+   * 집계 시각(meta.aggregatedAt)은 이 시계에서 온다. 소수 자리에 '9000'이 들어가는 시각(.190001)으로 고정해, 응답 원문 전체에서 숫자 조각을
+   * 찾는 검사가 시각과 우연히 겹치면 늘 드러나게 한다(CI 간헐 실패 11-14: 운영 시계는 마이크로초까지라 가끔 겹침).
+   */
+  static final Instant CLOCK = Instant.now().truncatedTo(ChronoUnit.SECONDS).plusNanos(190_001_000);
+
+  @org.springframework.boot.test.context.TestConfiguration
+  static class FixedClock {
+    @org.springframework.context.annotation.Bean
+    @org.springframework.context.annotation.Primary
+    java.time.Clock guildDetailTestClock() {
+      return java.time.Clock.fixed(CLOCK, ZoneOffset.UTC);
+    }
+  }
 
   @BeforeEach
   @AfterEach

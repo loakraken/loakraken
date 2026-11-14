@@ -557,9 +557,12 @@ class SpecUpGoalServiceTest {
           if (name.startsWith("seat-path-") && holding.add(name)) {
             entered.countDown();
             try {
-              release.await(10, java.util.concurrent.TimeUnit.SECONDS);
+              // 놓아주지 못하고 시간이 다 되면 그냥 계산을 이어가지 않고 실패로 남긴다(조용히 통과하지 않게).
+              if (!release.await(10, java.util.concurrent.TimeUnit.SECONDS))
+                throw new AssertionError("계산 자리 놓아주기 대기 시간 초과");
             } catch (InterruptedException exception) {
               Thread.currentThread().interrupt();
+              throw new AssertionError("계산 자리 놓아주기 대기 중 중단", exception);
             }
           }
           return System.nanoTime();
@@ -608,11 +611,16 @@ class SpecUpGoalServiceTest {
       first.join(10_000);
       second.join(10_000);
     }
+    assertThat(first.isAlive()).as("추천 순서 계산 1이 끝남").isFalse();
+    assertThat(second.isAlive()).as("추천 순서 계산 2가 끝남").isFalse();
     assertThat(errors).isEmpty();
-    // 자리가 비면 목표 경로가 계산한다.
+    // 자리가 비면 목표 경로가 계산한다. 계산 시간은 추천 순서처럼 타이머(p95·p99)로 남는다.
     service.goal("목표테스트", new BigDecimal("6000"));
     assertThat(meters.counter("loakraken.spec_up.goal", "outcome", "computed").count())
         .isEqualTo(1);
+    var goalTimer = meters.find("loakraken.spec_up.goal_compute").timer();
+    assertThat(goalTimer).as("목표 경로 계산 시간 타이머").isNotNull();
+    assertThat(goalTimer.count()).isEqualTo(1);
     assertThat(meters.counter("loakraken.spec_up.goal", "outcome", "busy").count()).isEqualTo(1);
     assertThat(meters.counter("loakraken.spec_up.path", "outcome", "busy").count()).isEqualTo(1);
   }

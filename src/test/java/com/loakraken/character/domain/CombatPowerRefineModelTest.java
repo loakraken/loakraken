@@ -740,8 +740,6 @@ class CombatPowerRefineModelTest {
       byId.computeIfAbsent(id, key -> new ArrayList<>())
           .add(avatar(type, row.path("grade").asText(), row.path("inner").asBoolean(), pct));
       var slots = expected.computeIfAbsent(id, key -> new java.util.HashMap<>());
-      // 덧입기(inner=false)는 효과가 없다(공식 가이드 '요즈의 항아리 › 아바타 덧입기', 2026-11-15).
-      if (!row.path("inner").asBoolean()) continue;
       if (row.path("onePiece").asBoolean()) {
         var half = pct.divide(BigDecimal.TWO);
         slots.merge("상의 아바타", half, BigDecimal::max);
@@ -762,7 +760,7 @@ class CombatPowerRefineModelTest {
   @Test
   void 한벌_아바타는_상의_칸의_퍼센트를_상의와_하의에_나눈다() {
     // 한벌만(영웅, 공식 2%): 상의 1% + 하의 1% = 2%. 예전에는 상의 칸을 1%로 보고 하의를 놓쳤다.
-    var onePiece = avatar("상의 아바타", "영웅", true, new BigDecimal("2"));
+    var onePiece = avatar("상의 아바타", "영웅", false, new BigDecimal("2"));
     assertThat(CombatPowerRefineModel.avatarStat(coefficients, List.of(onePiece)).sum())
         .isEqualByComparingTo("0.02");
     // 한벌 + 안쪽 전설 상의·하의(각 2%): 부위마다 큰 값 → 4%.
@@ -789,29 +787,6 @@ class CombatPowerRefineModelTest {
     var unknown = new CharacterLoadout.Avatar("무기 아바타", "무기", null, "희귀", false, false, List.of());
     assertThat(CombatPowerRefineModel.avatarStat(coefficients, List.of(unknown)).reason())
         .contains("희귀");
-  }
-
-  /**
-   * 덧입기(IsInner=false) 아바타의 효과는 캐릭터에 적용되지 않는다. 공식 게임 가이드 '요즈의 항아리' › '아바타 덧입기'(2026-11-15 확인,
-   * https://lostark.game.onstove.com/GameGuide/Pages/요즈의%20항아리): 덧입기 슬롯 아바타는 외형만 적용. 안쪽이 없는 칸의 덧입기는
-   * 0이다(예전 규칙은 칸마다 큰 값이라 덧입기 %를 셌다).
-   */
-  @Test
-  void 덧입기_아바타의_주스탯은_세지_않고_안쪽만_센다() {
-    // 무기는 안쪽 전설 2% + 덧입기 영웅 1%, 상의는 안쪽 없이 덧입기 영웅 1%만
-    var avatars =
-        List.of(
-            avatar("무기 아바타", "전설", true, new BigDecimal("2")),
-            avatar("무기 아바타", "영웅", false, new BigDecimal("1")),
-            avatar("상의 아바타", "영웅", false, new BigDecimal("1")));
-    assertThat(CombatPowerRefineModel.avatarStat(coefficients, avatars).sum())
-        .isEqualByComparingTo("0.02");
-    // 덧입기 한벌(영웅 2%)도 효과 없음
-    assertThat(
-            CombatPowerRefineModel.avatarStat(
-                    coefficients, List.of(avatar("상의 아바타", "영웅", false, new BigDecimal("2"))))
-                .sum())
-        .isEqualByComparingTo("0");
   }
 
   private static CharacterLoadout.Avatar avatar(

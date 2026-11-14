@@ -269,13 +269,15 @@ public final class CombatPowerRefineModel {
    * 아바타 주스탯 %(E29, 검증 표본 official-avatar-stat-2026-10-12.json). 공식 툴팁의 "힘·민첩·지능 +n%"를 그대로 읽고, 줄이 없을
    * 때만 등급 표를 쓴다. 부위(무기·머리·상의·하의)마다 안쪽·겉 중 큰 값을 더한다. 한벌 아바타는 상의 칸 하나에 상의·하의 두 부위 값(예: 영웅 2% = 1% +
    * 1%)이 붙어 있어, 상의 칸의 공식 %가 그 등급 부위 값보다 크면 반씩 상의·하의 부위로 나눈다(한벌만 입어도 하의 1%를 놓치지 않고, 안쪽 아바타와 겹치면 부위마다
-   * 큰 값).
+   * 큰 값). 덧입기 칸에 입어 공식 툴팁에 '적용되지 않는 상태' 줄이 붙은 아바타(effectsDisabled=true)는 그 칸의 능력이 적용되지 않으므로 뺀다. 줄이
+   * 없거나 모르면(null) 센다.
    */
-  static AvatarStat avatarStat(Coefficients c, List<CharacterLoadout.Avatar> avatars) {
+  public static AvatarStat avatarStat(Coefficients c, List<CharacterLoadout.Avatar> avatars) {
     var best = new java.util.HashMap<String, BigDecimal>();
     String reason = null;
     for (var avatar : avatars) {
       if (avatar == null || !c.avatarStatTypes().contains(avatar.type())) continue;
+      if (Boolean.TRUE.equals(avatar.effectsDisabled())) continue;
       var table = avatar.grade() == null ? null : c.avatarStatPctByGrade().get(avatar.grade());
       var pct = officialAvatarPct(avatar);
       if (pct == null) pct = table;

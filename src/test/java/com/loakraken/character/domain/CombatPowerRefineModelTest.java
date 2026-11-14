@@ -789,6 +789,31 @@ class CombatPowerRefineModelTest {
         .contains("희귀");
   }
 
+  /** 덧입기 표시 줄이 있는 아바타(effectsDisabled=true)는 아래에 안쪽이 없어도 효과에서 뺀다. 표시 줄이 없거나 모르면(null) 센다. */
+  @Test
+  void 덧입기_표시_줄이_있는_아바타는_안쪽이_없어도_효과에서_뺀다() {
+    var overlay =
+        new CharacterLoadout.Avatar(
+            "상의 아바타", "영웅 상의 아바타", null, "영웅", false, false, List.of("민첩 +1.00%"), List.of(), true);
+    var weapon = avatar("무기 아바타", "전설", true, new BigDecimal("2"));
+    assertThat(CombatPowerRefineModel.avatarStat(coefficients, List.of(weapon, overlay)).sum())
+        .isEqualByComparingTo("0.02");
+    // 같은 아바타라도 표시 줄이 없으면(혼자 입은 IsInner=false) 센다
+    var lone =
+        new CharacterLoadout.Avatar(
+            "상의 아바타",
+            "영웅 상의 아바타",
+            null,
+            "영웅",
+            false,
+            false,
+            List.of("민첩 +1.00%"),
+            List.of(),
+            false);
+    assertThat(CombatPowerRefineModel.avatarStat(coefficients, List.of(weapon, lone)).sum())
+        .isEqualByComparingTo("0.03");
+  }
+
   private static CharacterLoadout.Avatar avatar(
       String type, String grade, boolean inner, BigDecimal pct) {
     return new CharacterLoadout.Avatar(

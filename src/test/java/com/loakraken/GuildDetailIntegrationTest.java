@@ -171,8 +171,15 @@ class GuildDetailIntegrationTest {
     assertThat(ranking.path("guildName").asText()).isEqualTo("새벽길드");
     assertThat(ranking.path("memberCount").asLong()).isEqualTo(6);
 
-    // 두 번째 요청은 캐시에서 같은 응답이다.
+    // 두 번째 요청은 캐시에서 같은 응답이다. 시계가 고정이라 다시 계산해도 같은 원문이 나오므로, 집계에 들어갈 길드원을 하나 더 넣은 뒤에도 원문이 그대로면
+    // 캐시에서 온 것이다(다시 계산했다면 7명).
+    member(SERVER, "새벽길드", "탭추가", "블레이드", 1700, null, null, now);
     assertThat(get(path).body()).isEqualTo(body);
+    // 캐시를 비우면 새로 넣은 길드원이 집계에 들어간다(위 같음이 캐시 덕분이었음을 확인).
+    var keys = redis.keys("stats:v1:*");
+    if (keys != null && !keys.isEmpty()) redis.delete(keys);
+    assertThat(mapper.readTree(get(path).body()).at("/data/meta/memberCount").asLong())
+        .isEqualTo(7);
     ApiContractFixture.write("guild-detail.json", body);
   }
 

@@ -742,9 +742,9 @@ class CombatPowerRefineModelTest {
       var slots = expected.computeIfAbsent(id, key -> new java.util.HashMap<>());
       if (row.path("onePiece").asBoolean()) {
         var half = pct.divide(BigDecimal.TWO);
-        slots.merge("상의 아바타", half, BigDecimal::max);
-        slots.merge("하의 아바타", half, BigDecimal::max);
-      } else slots.merge(type, pct, BigDecimal::max);
+        slots.merge("상의 아바타", half, BigDecimal::add);
+        slots.merge("하의 아바타", half, BigDecimal::add);
+      } else slots.merge(type, pct, BigDecimal::add);
     }
     for (var entry : byId.entrySet()) {
       var stat = CombatPowerRefineModel.avatarStat(coefficients, entry.getValue());
@@ -763,7 +763,7 @@ class CombatPowerRefineModelTest {
     var onePiece = avatar("상의 아바타", "영웅", false, new BigDecimal("2"));
     assertThat(CombatPowerRefineModel.avatarStat(coefficients, List.of(onePiece)).sum())
         .isEqualByComparingTo("0.02");
-    // 한벌 + 안쪽 전설 상의·하의(각 2%): 부위마다 큰 값 → 4%.
+    // 한벌 + 안쪽 전설 상의·하의(각 2%): 부위마다 안쪽 + 겉(사용자 게임 안 확인 11-12) → 상의 2+1, 하의 2+1 = 6%.
     assertThat(
             CombatPowerRefineModel.avatarStat(
                     coefficients,
@@ -772,14 +772,14 @@ class CombatPowerRefineModelTest {
                         avatar("상의 아바타", "전설", true, new BigDecimal("2")),
                         avatar("하의 아바타", "전설", true, new BigDecimal("2"))))
                 .sum())
-        .isEqualByComparingTo("0.04");
-    // 한벌 + 안쪽 전설 상의만: 상의 2% + 하의 1%(한벌 절반) = 3%.
+        .isEqualByComparingTo("0.06");
+    // 한벌 + 안쪽 전설 상의만: 상의 2% + 1%(한벌 절반) + 하의 1%(한벌 절반) = 4%.
     assertThat(
             CombatPowerRefineModel.avatarStat(
                     coefficients,
                     List.of(onePiece, avatar("상의 아바타", "전설", true, new BigDecimal("2"))))
                 .sum())
-        .isEqualByComparingTo("0.03");
+        .isEqualByComparingTo("0.04");
     // 공식 줄이 없으면 등급 표(영웅 1%), 표에도 없는 등급이면 이유 문장.
     var noLine = new CharacterLoadout.Avatar("무기 아바타", "무기", null, "영웅", false, false, List.of());
     assertThat(CombatPowerRefineModel.avatarStat(coefficients, List.of(noLine)).sum())
@@ -787,6 +787,33 @@ class CombatPowerRefineModelTest {
     var unknown = new CharacterLoadout.Avatar("무기 아바타", "무기", null, "희귀", false, false, List.of());
     assertThat(CombatPowerRefineModel.avatarStat(coefficients, List.of(unknown)).reason())
         .contains("희귀");
+  }
+
+  /**
+   * 사용자 게임 안 표본(기준 캐릭터, 11-12, 공식 호출 0 — 저장 원문의 아바타 등급·% 그대로): 안쪽(IsInner=true) 전설 4부위 각 2%, 겉 영웅
+   * 4부위 각 1%, 펫 1%. 전설 상의를 벗기면 공격력 213,328 → 211,439(전투력 3,648.15 → 3,615.21). 공격력 ∝ √S, S ∝ mS라
+   * 부위마다 안쪽 + 겉이면 mS 1.13 → 1.11로 211,432(±10 안). 부위마다 큰 값(1.09 → 1.08)이면 212,347로 908 어긋남.
+   */
+  @Test
+  void 아바타_주스탯은_부위마다_안쪽과_겉을_더한다_사용자_게임_안_표본() {
+    var all = new ArrayList<CharacterLoadout.Avatar>();
+    for (var type : List.of("무기 아바타", "머리 아바타", "상의 아바타", "하의 아바타")) {
+      all.add(avatar(type, "전설", true, new BigDecimal("2")));
+      all.add(avatar(type, "영웅", false, new BigDecimal("1")));
+    }
+    var before = CombatPowerRefineModel.avatarStat(coefficients, all).sum();
+    var removed = new ArrayList<>(all);
+    removed.remove(4); // 안쪽 전설 상의
+    var after = CombatPowerRefineModel.avatarStat(coefficients, removed).sum();
+
+    var pet = new BigDecimal("0.01");
+    var msBefore = BigDecimal.ONE.add(pet).add(before);
+    var msAfter = BigDecimal.ONE.add(pet).add(after);
+    assertThat(msBefore).isEqualByComparingTo("1.13");
+    assertThat(msAfter).isEqualByComparingTo("1.11");
+    // 공격력 ∝ √mS(같은 무기·장비): 213,328 × √(1.11 / 1.13)
+    double predicted = 213_328 * Math.sqrt(msAfter.doubleValue() / msBefore.doubleValue());
+    assertThat(predicted).isCloseTo(211_439, org.assertj.core.data.Offset.offset(10.0));
   }
 
   private static CharacterLoadout.Avatar avatar(

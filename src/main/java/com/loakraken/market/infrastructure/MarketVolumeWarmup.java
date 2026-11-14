@@ -75,6 +75,8 @@ class MarketVolumeWarmup {
   private int filledToday;
   private boolean doneLogged;
   private boolean dailyCapLogged;
+  // 직전 주기에 리더였는가. 리더를 잃었다가 다시 잡으면 그날 상태를 처음부터 다시 만든다.
+  private boolean leading;
   private long callWindow = -1;
   private int callsInWindow;
   // 돌림 탭: 그날 읽은 위치, 대기열에 든 페이지(다 채우면 넘김), 그날 한 바퀴를 마친 탭.
@@ -156,7 +158,15 @@ class MarketVolumeWarmup {
 
   synchronized void tick() {
     if (lostArk.apiKey().isBlank()) return;
-    if (!lease.hold(LEASE, properties.interval().plusMinutes(2))) return;
+    if (!lease.hold(LEASE, properties.interval().plusMinutes(2))) {
+      leading = false;
+      return;
+    }
+    if (!leading) {
+      // 리더를 (다시) 잡음: 다른 인스턴스가 그사이 돌림 위치·하루 진행을 바꿨을 수 있으니 메모리 상태를 버리고 저장소에서 다시 읽는다.
+      leading = true;
+      day = null;
+    }
     LocalDate today = LocalDate.now(clock.withZone(KST));
     if (!today.equals(day)) startDay(today);
     while (true) {
@@ -231,6 +241,12 @@ class MarketVolumeWarmup {
     var cursor =
         cursors.computeIfAbsent(
             tab, key -> cache.findVolumeCursor(key).orElse(new MarketVolumeCursor(1, today)));
+    // 오늘 한 바퀴를 마친 탭(다음 바퀴가 내일부터)은 오늘 더 돌지 않는다(리더를 다시 잡아 그날 상태를 새로 만든 경우에도).
+    if (cursor.cycleStartedOn().isAfter(today)) {
+      rotatedToday.add(tab);
+      tabs.pollFirst();
+      return true;
+    }
     if (!reserve(today, 1)) return false;
     try {
       var page = gate.withReserve(RESERVE, () -> boards.volumePage(tab, cursor.page()));
@@ -305,7 +321,8 @@ class MarketVolumeWarmup {
           tab,
           done.totalPages(),
           days);
-      next = new MarketVolumeCursor(1, today);
+      // 오늘은 이 탭을 더 돌지 않으니 다음 바퀴는 내일부터 센다(바퀴 일수가 하루 더 붙지 않게).
+      next = new MarketVolumeCursor(1, today.plusDays(1));
       rotatedToday.add(tab);
     } else {
       next = new MarketVolumeCursor(done.cursor().page() + 1, done.cursor().cycleStartedOn());
@@ -408,8 +425,15 @@ class MarketVolumeWarmup {
       metrics.volumeWarmup("minute_cap");
       return false;
     }
+    if (dailyCapLogged) {
+      // 그날 이미 하루 상한에 닿음: 카운터를 더 늘리지 않는다(카운터 = 실제 공식 호출 수).
+      metrics.volumeWarmup("daily_cap");
+      return false;
+    }
     long total = cache.addVolumeCalls(today, calls);
     if (total > properties.maxCallsPerDay()) {
+      // 막힌 시도는 되돌린다. 단 카운터를 읽지 못한 경우(Long.MAX_VALUE)는 INCR이 실패했을 수 있어 되돌리지 않는다(장애 때 막는 쪽으로).
+      if (total != Long.MAX_VALUE) cache.addVolumeCalls(today, -calls);
       metrics.volumeWarmup("daily_cap");
       if (!dailyCapLogged) {
         dailyCapLogged = true;

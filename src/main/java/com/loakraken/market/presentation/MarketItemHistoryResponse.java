@@ -84,7 +84,8 @@ public record MarketItemHistoryResponse(
               days,
               variant.summary(),
               recordedSince,
-              storedDays));
+              storedDays,
+              false));
     }
     if (stored != null)
       variants.addAll(storedOnly(stored, officialVariants, from, base.baseDate()));
@@ -135,7 +136,8 @@ public record MarketItemHistoryResponse(
                   response.days(),
                   response.summary(),
                   stored.firstDates().get(key),
-                  days.size()));
+                  days.size(),
+                  true));
         });
     return result;
   }
@@ -161,7 +163,10 @@ public record MarketItemHistoryResponse(
       @Schema(description = "기간 안 저장 완료일 수. 30d 이상에서만, 아니면 null")
           @OptionalResponse
           @NullableResponse
-          Integer storedDays) {
+          Integer storedDays,
+      @Schema(description = "공식 응답(최근 14일)에 없고 저장한 지난 기록에만 있는 변형이면 true. 화면이 '지난 기록'으로 따로 보일 수 있다")
+          @OptionalResponse
+          boolean storedOnly) {
     static MarketItemVariantResponse from(MarketItemHistory.Variant variant, LocalDate today) {
       var summary = variant.summary(today);
       return new MarketItemVariantResponse(
@@ -187,7 +192,8 @@ public record MarketItemHistoryResponse(
               summary.sevenDayChangeRate(),
               summary.sevenDayTradeCount()),
           null,
-          null);
+          null,
+          false);
     }
   }
 

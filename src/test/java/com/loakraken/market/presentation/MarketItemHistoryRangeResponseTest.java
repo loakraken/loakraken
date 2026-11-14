@@ -84,6 +84,9 @@ class MarketItemHistoryRangeResponseTest {
         .containsExactly(TODAY.minusDays(20), TODAY.minusDays(200));
     assertThat(storedOnly.days()).allMatch(day -> !day.partial());
     assertThat(storedOnly.recordedSince()).isEqualTo(TODAY.minusDays(200));
+    // 공식 응답에 없는 지난 기록이라는 표시(화면이 '지난 기록'으로 묶을 수 있게)
+    assertThat(storedOnly.storedOnly()).isTrue();
+    assertThat(response.variants().getFirst().storedOnly()).isFalse();
     assertThat(storedOnly.storedDays()).isEqualTo(2);
     // 공식 변형은 그대로(저장 없음 → storedDays 0, recordedSince null)
     assertThat(response.variants().getFirst().storedDays()).isZero();

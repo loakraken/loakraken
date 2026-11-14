@@ -156,7 +156,9 @@ class PostgresMarketDailyStore implements MarketDailyStore {
 
   /** 그날 처음 보는 (품목, 이유)인가. 날짜가 바뀌면 비운다. 상한을 넘으면 false(로그 없이 지표만). */
   private synchronized boolean firstToday(String key, LocalDate today) {
-    if (!today.equals(skipLogDay)) {
+    // 날짜는 앞으로만: 자정 전에 시작해 늦게 끝난 요청(이전 날짜)은 지금 날짜의 기억을 지우지 않고, 지난 날짜라 로그도 남기지 않는다(지표는 셈).
+    if (skipLogDay != null && today.isBefore(skipLogDay)) return false;
+    if (skipLogDay == null || today.isAfter(skipLogDay)) {
       skipLogDay = today;
       skipLogged.clear();
     }

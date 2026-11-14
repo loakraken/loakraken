@@ -241,6 +241,12 @@ class MarketVolumeWarmup {
     var cursor =
         cursors.computeIfAbsent(
             tab, key -> cache.findVolumeCursor(key).orElse(new MarketVolumeCursor(1, today)));
+    // 오늘 한 바퀴를 마친 탭(다음 바퀴가 내일부터)은 오늘 더 돌지 않는다(리더를 다시 잡아 그날 상태를 새로 만든 경우에도).
+    if (cursor.cycleStartedOn().isAfter(today)) {
+      rotatedToday.add(tab);
+      tabs.pollFirst();
+      return true;
+    }
     if (!reserve(today, 1)) return false;
     try {
       var page = gate.withReserve(RESERVE, () -> boards.volumePage(tab, cursor.page()));
@@ -426,8 +432,8 @@ class MarketVolumeWarmup {
     }
     long total = cache.addVolumeCalls(today, calls);
     if (total > properties.maxCallsPerDay()) {
-      // 막힌 시도는 되돌린다.
-      cache.addVolumeCalls(today, -calls);
+      // 막힌 시도는 되돌린다. 단 카운터를 읽지 못한 경우(Long.MAX_VALUE)는 INCR이 실패했을 수 있어 되돌리지 않는다(장애 때 막는 쪽으로).
+      if (total != Long.MAX_VALUE) cache.addVolumeCalls(today, -calls);
       metrics.volumeWarmup("daily_cap");
       if (!dailyCapLogged) {
         dailyCapLogged = true;

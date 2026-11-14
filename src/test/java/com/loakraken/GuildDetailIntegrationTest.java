@@ -148,8 +148,17 @@ class GuildDetailIntegrationTest {
     // 관측 시각은 분 단위.
     var observed = Instant.parse(members.at("/0/observedAt").asText());
     assertThat(observed).isEqualTo(now.truncatedTo(ChronoUnit.MINUTES));
-    // 처리정지·기간 밖·다른 서버는 없다.
-    assertThat(body).doesNotContain("탭정지", "탭오래", "탭다른", "9000");
+    // 처리정지·기간 밖·다른 서버는 없다. 원문 전체에서 숫자 조각을 찾지 않고(집계 시각 등과 우연히 겹침) 길드원 목록의 이름·전투력으로 본다.
+    var names = new java.util.ArrayList<String>();
+    var combatPowers = new java.util.ArrayList<BigDecimal>();
+    for (var member : members) {
+      names.add(member.path("characterName").asText());
+      if (!member.path("combatPower").isNull())
+        combatPowers.add(member.path("combatPower").decimalValue());
+    }
+    assertThat(names).doesNotContain("탭정지", "탭오래", "탭다른");
+    assertThat(combatPowers).noneMatch(value -> value.compareTo(new BigDecimal("9000")) == 0);
+    assertThat(body).doesNotContain("탭정지", "탭오래", "탭다른");
     // 원정대를 모르는 길드원은 묶음 번호가 null이다.
     assertThat(members.at("/0/rosterGroup").isNull()).isTrue();
     assertThat(members.at("/0").has("rosterGroup")).isTrue();

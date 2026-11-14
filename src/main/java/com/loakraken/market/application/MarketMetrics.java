@@ -79,6 +79,16 @@ public class MarketMetrics {
    * rotation_retry(돌림 페이지에 실패한 품목이 있어 다음 주기에 다시 받음), rotation_gave_up(세 번 받아도 실패가 남아 넘김). 값은 이 여덟
    * 개로 고정이다.
    */
+  /**
+   * 시세 기간 읽기 장애. target = item(거래소, outcome=fallback: 공식 14일로 답함) 또는 auction(경매장 칸, outcome=failed:
+   * 503). 값은 이 두 쌍뿐이다.
+   */
+  public void rangeRead(String target, String outcome) {
+    registry
+        .counter("loakraken.market.range_read", "target", target, "outcome", outcome)
+        .increment();
+  }
+
   public void volumeWarmup(String event) {
     registry.counter("loakraken.market.volume_warmup", "event", event).increment();
   }

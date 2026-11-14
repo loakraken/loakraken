@@ -137,7 +137,7 @@ public record MarketItemHistoryResponse(
                   response.summary(),
                   stored.firstDates().get(key),
                   days.size(),
-                  false));
+                  true));
         });
     return result;
   }

@@ -66,6 +66,7 @@ public class MarketHistoryRangeService {
       return new ItemRange(base, range, daily.findRange(itemId, range.from(baseDate)));
     } catch (DataAccessException exception) {
       // 공식 14일은 그대로 답한다(저장 표 장애가 시세 상세를 막지 않게).
+      metrics.rangeRead("item", "fallback");
       log.warn(
           "event=market_range_read_failed itemId={} range={} exceptionType={}",
           itemId,
@@ -100,6 +101,7 @@ public class MarketHistoryRangeService {
     try {
       return new CellRange(range, today, auctions.dailyRange(key, range.from(today)));
     } catch (DataAccessException exception) {
+      metrics.rangeRead("auction", "failed");
       log.warn(
           "event=auction_range_read_failed range={} exceptionType={}",
           range.value(),

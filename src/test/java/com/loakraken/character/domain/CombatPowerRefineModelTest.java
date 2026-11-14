@@ -723,7 +723,7 @@ class CombatPowerRefineModelTest {
   }
 
   @Test
-  void 아바타_주스탯은_공식_툴팁_퍼센트를_읽고_부위마다_큰_값을_더한다() throws IOException {
+  void 아바타_주스탯은_공식_툴팁_퍼센트를_읽고_부위마다_안쪽과_겉을_모두_더한다() throws IOException {
     // E29 표본(official-avatar-stat-2026-10-12.json): 한벌이 아닌 34줄은 전설 2%·영웅 1%로 표와 같다.
     var sample =
         new JsonMapper()

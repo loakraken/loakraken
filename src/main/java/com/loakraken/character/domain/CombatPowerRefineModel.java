@@ -267,12 +267,12 @@ public final class CombatPowerRefineModel {
 
   /**
    * 아바타 주스탯 %(E29, 검증 표본 official-avatar-stat-2026-10-12.json). 공식 툴팁의 "힘·민첩·지능 +n%"를 그대로 읽고, 줄이 없을
-   * 때만 등급 표를 쓴다. 부위(무기·머리·상의·하의)마다 안쪽·겉 중 큰 값을 더한다. 한벌 아바타는 상의 칸 하나에 상의·하의 두 부위 값(예: 영웅 2% = 1% +
-   * 1%)이 붙어 있어, 상의 칸의 공식 %가 그 등급 부위 값보다 크면 반씩 상의·하의 부위로 나눈다(한벌만 입어도 하의 1%를 놓치지 않고, 안쪽 아바타와 겹치면 부위마다
-   * 큰 값).
+   * 때만 등급 표를 쓴다. 부위(무기·머리·상의·하의)마다 안쪽(기본)과 겉(덧입기) 아바타 %를 더한다(사용자 게임 안 확인 11-12: 기준 캐릭터에서 전설 상의를 벗기면
+   * 공격력이 두 겹을 더한 값대로 줄었고, 큰 값 하나만 쓰면 908 어긋남). 한벌 아바타는 상의 칸 하나에 상의·하의 두 부위 값(예: 영웅 2% = 1% + 1%)이
+   * 붙어 있어, 상의 칸의 공식 %가 그 등급 부위 값보다 크면 반씩 상의·하의 부위로 나눈다. 크라켄 점수는 이 규칙을 쓰지 않는다(안쪽만, 별도 결정).
    */
   static AvatarStat avatarStat(Coefficients c, List<CharacterLoadout.Avatar> avatars) {
-    var best = new java.util.HashMap<String, BigDecimal>();
+    var slots = new java.util.HashMap<String, BigDecimal>();
     String reason = null;
     for (var avatar : avatars) {
       if (avatar == null || !c.avatarStatTypes().contains(avatar.type())) continue;
@@ -286,11 +286,11 @@ public final class CombatPowerRefineModel {
       }
       if (TOP.equals(avatar.type()) && table != null && pct.compareTo(table) > 0) {
         var half = pct.divide(BigDecimal.TWO, MATH);
-        best.merge(TOP, half, BigDecimal::max);
-        best.merge(BOTTOM, half, BigDecimal::max);
-      } else best.merge(avatar.type(), pct, BigDecimal::max);
+        slots.merge(TOP, half, BigDecimal::add);
+        slots.merge(BOTTOM, half, BigDecimal::add);
+      } else slots.merge(avatar.type(), pct, BigDecimal::add);
     }
-    return new AvatarStat(best.values().stream().reduce(BigDecimal.ZERO, BigDecimal::add), reason);
+    return new AvatarStat(slots.values().stream().reduce(BigDecimal.ZERO, BigDecimal::add), reason);
   }
 
   /** 공식 아바타 툴팁의 "힘·민첩·지능 +n%"(비율). 줄이 없으면 null. */

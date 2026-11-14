@@ -783,10 +783,10 @@ class CombatPowerRefineModelTest {
                 .sum())
         .isEqualByComparingTo("0.03");
     // 공식 줄이 없으면 등급 표(영웅 1%), 표에도 없는 등급이면 이유 문장.
-    var noLine = new CharacterLoadout.Avatar("무기 아바타", "무기", null, "영웅", false, false, List.of());
+    var noLine = new CharacterLoadout.Avatar("무기 아바타", "무기", null, "영웅", false, true, List.of());
     assertThat(CombatPowerRefineModel.avatarStat(coefficients, List.of(noLine)).sum())
         .isEqualByComparingTo("0.01");
-    var unknown = new CharacterLoadout.Avatar("무기 아바타", "무기", null, "희귀", false, false, List.of());
+    var unknown = new CharacterLoadout.Avatar("무기 아바타", "무기", null, "희귀", false, true, List.of());
     assertThat(CombatPowerRefineModel.avatarStat(coefficients, List.of(unknown)).reason())
         .contains("희귀");
   }

@@ -267,15 +267,19 @@ public final class CombatPowerRefineModel {
 
   /**
    * 아바타 주스탯 %(E29, 검증 표본 official-avatar-stat-2026-10-12.json). 공식 툴팁의 "힘·민첩·지능 +n%"를 그대로 읽고, 줄이 없을
-   * 때만 등급 표를 쓴다. 부위(무기·머리·상의·하의)마다 안쪽·겉 중 큰 값을 더한다. 한벌 아바타는 상의 칸 하나에 상의·하의 두 부위 값(예: 영웅 2% = 1% +
-   * 1%)이 붙어 있어, 상의 칸의 공식 %가 그 등급 부위 값보다 크면 반씩 상의·하의 부위로 나눈다(한벌만 입어도 하의 1%를 놓치지 않고, 안쪽 아바타와 겹치면 부위마다
-   * 큰 값).
+   * 때만 등급 표를 쓴다. 안쪽(IsInner=true) 아바타만 센다: 덧입기(IsInner=false) 슬롯 아바타는 외형만 적용되고 효과는 적용되지 않는다(공식 게임
+   * 가이드 '요즈의 항아리' › '아바타 덧입기', 2026-11-15 확인,
+   * https://lostark.game.onstove.com/GameGuide/Pages/요즈의%20항아리). IsInner가 없는 옛 캐시는 센다. 한벌 아바타는 상의 칸
+   * 하나에 상의·하의 두 부위 값(예: 영웅 2% = 1% + 1%)이 붙어 있어, 상의 칸의 공식 %가 그 등급 부위 값보다 크면 반씩 상의·하의 부위로 나눈다(부위마다 큰
+   * 값).
    */
   static AvatarStat avatarStat(Coefficients c, List<CharacterLoadout.Avatar> avatars) {
     var best = new java.util.HashMap<String, BigDecimal>();
     String reason = null;
     for (var avatar : avatars) {
       if (avatar == null || !c.avatarStatTypes().contains(avatar.type())) continue;
+      // 덧입기는 효과가 없다(위 공식 가이드).
+      if (Boolean.FALSE.equals(avatar.isInner())) continue;
       var table = avatar.grade() == null ? null : c.avatarStatPctByGrade().get(avatar.grade());
       var pct = officialAvatarPct(avatar);
       if (pct == null) pct = table;

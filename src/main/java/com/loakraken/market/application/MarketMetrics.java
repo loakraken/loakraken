@@ -60,9 +60,24 @@ public class MarketMetrics {
   }
 
   /**
+   * 거래소 일별 시세 저장(market_price_daily) 사건: saved(품목 저장 끝남, 바뀐 행이 0이어도), dropped(넘기기 큐 가득), failed(품목
+   * 저장 실패), skipped_variant_key(같은 변형 칸), skipped_name_length(이름 128자 초과), skipped_value(가격·거래량이 칸에
+   * 맞지 않음). 값은 이 여섯 개뿐이다.
+   */
+  public void dailyRecord(String event) {
+    registry.counter("loakraken.market.daily_record", "event", event).increment();
+  }
+
+  /** 거래소 일별 시세 저장에서 실제로 넣거나 바꾼 행 수(같은 값 다시 받기는 0). '쌓이고 있나'에 답한다. */
+  public void dailyRows(int rows) {
+    if (rows > 0) registry.counter("loakraken.market.daily_record.rows").increment(rows);
+  }
+
+  /**
    * 거래량 채우기 작업(시세 거래량 정렬) 사건: filled(공식 상세 1번으로 한 품목 채움), not_found(상세에 맞는 묶음 없음),
-   * official_failed(공식 호출 실패·한도), minute_cap(분당 상한), daily_cap(하루 상한), gate_reject(공유 예산 여유 없음). 값은
-   * 몇 가지로 고정이다.
+   * official_failed(공식 호출 실패·한도), minute_cap(분당 상한), daily_cap(하루 상한), gate_reject(공유 예산 여유 없음),
+   * rotation_retry(돌림 페이지에 실패한 품목이 있어 다음 주기에 다시 받음), rotation_gave_up(세 번 받아도 실패가 남아 넘김). 값은 이 여덟
+   * 개로 고정이다.
    */
   public void volumeWarmup(String event) {
     registry.counter("loakraken.market.volume_warmup", "event", event).increment();

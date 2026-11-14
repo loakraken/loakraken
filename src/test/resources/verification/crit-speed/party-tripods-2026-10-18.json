@@ -1,0 +1,60 @@
+{
+  "_source": "공식 armories ArmorySkills[].Tripods[] Tooltip 원문(저장된 원문 2026-10-18, 캐릭터 정보 제외). 계산 시험용으로 IsSelected만 true로 둠.",
+  "tripods": [
+    {
+      "className": "발키리",
+      "skill": "숭고한 도약",
+      "tripod": {
+        "Tier": 1,
+        "Slot": 1,
+        "Name": "마나의 축복",
+        "IsSelected": true,
+        "Tooltip": "<font color='#FFFDE7'>스킬 시전 시 <FONT COLOR='#ffff99'>8.0</FONT>초간 자신 및 <FONT COLOR='#ffff99'>24.0m</FONT> 범위 내의 파티원의 공격 속도가 <FONT COLOR='#99ff99'>8.0%</FONT>, 마나 회복 속도가 <FONT COLOR='#99ff99'>50.0%</FONT> 증가한다.</font>"
+      }
+    },
+    {
+      "className": "발키리",
+      "skill": "숭고한 도약",
+      "tripod": {
+        "Tier": 1,
+        "Slot": 2,
+        "Name": "바람의 축복",
+        "IsSelected": true,
+        "Tooltip": "<font color='#FFFDE7'>스킬 시전 시 <FONT COLOR='#ffff99'>8.0</FONT>초간 자신 및 <FONT COLOR='#ffff99'>24.0m</FONT> 범위 내의 파티원의 공격 속도와 이동 속도가 각각 <FONT COLOR='#99ff99'>8.0%</FONT> 증가한다.</font>"
+      }
+    },
+    {
+      "className": "스트라이커",
+      "skill": "번개의 속삭임",
+      "tripod": {
+        "Tier": 1,
+        "Slot": 1,
+        "Name": "번개의 축복",
+        "IsSelected": true,
+        "Tooltip": "<font color='#FFFDE7'>스킬 시전 시 <FONT COLOR='#ffff99'>8.0</FONT>초간 <FONT COLOR='#99ff99'>24.0m</FONT> 내 자신 및 파티원의 공격속도가 <FONT COLOR='#99ff99'>8.0%</FONT> 증가한다.</font>"
+      }
+    },
+    {
+      "className": "워로드",
+      "skill": "넬라시아의 기운",
+      "tripod": {
+        "Tier": 2,
+        "Slot": 1,
+        "Name": "리더쉽",
+        "IsSelected": true,
+        "Tooltip": "<font color='#FFFDE7'>스킬 시전 중 피격이상에 면역이 되고, <FONT COLOR='#ffff99'>6.0</FONT>초간 자신 및 <FONT COLOR='#ffff99'>24.0m</FONT> 범위 안에 있는 파티원의 공격 속도가 <FONT COLOR='#99ff99'>25.0%</FONT> 증가한다.</font>"
+      }
+    },
+    {
+      "className": "스트라이커",
+      "skill": "붕천퇴",
+      "tripod": {
+        "Tier": 1,
+        "Slot": 3,
+        "Name": "바람의 축복",
+        "IsSelected": true,
+        "Tooltip": "<font color='#FFFDE7'>적에게 콤보 공격 적중 시 <FONT COLOR='#ffff99'>4.0</FONT>초간 공격속도가 <FONT COLOR='#99ff99'>19.2%</FONT> 증가하고 이동속도가 <FONT COLOR='#99ff99'>19.2%</FONT> 증가한다.</font>"
+      }
+    }
+  ]
+}

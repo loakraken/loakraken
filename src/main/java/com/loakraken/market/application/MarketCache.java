@@ -32,8 +32,8 @@ public interface MarketCache {
   void saveBoardScan(MarketBoardScan scan);
 
   /**
-   * day(KST) 거래량 지도에서 그 품목들의 완료일 거래량. 없거나 읽지 못하면 빈 값. 거래량 지도는 하루짜리 캐시다(DB 없음, TTL ≤ 36시간 — 다른 시세
-   * 캐시와 같은 성격).
+   * day(KST) 거래량 지도에서 그 품목들의 완료일 거래량. 없거나 읽지 못하면 빈 값. 거래량 지도는 날짜별 캐시다(DB 없음). 돌림 탭(아바타)은 며칠에 한 번
+   * 받으므로 보드가 최근 7일 지도까지 거슬러 찾을 수 있게 TTL을 8일로 둔다.
    */
   default Map<Long, com.loakraken.market.domain.MarketVolume> findVolumes(
       java.time.LocalDate day, Collection<Long> itemIds) {
@@ -51,6 +51,14 @@ public interface MarketCache {
   default long addVolumeCalls(java.time.LocalDate day, int calls) {
     return Long.MAX_VALUE;
   }
+
+  /** 거래량 채우기 돌림 탭의 위치. 없거나 읽지 못하면 빈 값(1페이지부터). */
+  default Optional<MarketVolumeCursor> findVolumeCursor(MarketTab tab) {
+    return Optional.empty();
+  }
+
+  /** 거래량 채우기 돌림 탭의 위치를 저장한다. 쓰지 못해도 예외를 내지 않는다. */
+  default void saveVolumeCursor(MarketTab tab, MarketVolumeCursor cursor) {}
 
   /** 유물 각인서 시세 스캔(L30). 키 TTL이 지났으면 없다. */
   default Optional<RelicBookScan> findRelicBooks() {

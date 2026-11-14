@@ -165,9 +165,16 @@ class ValkeyMarketCache implements MarketCache {
   }
 
   /**
-   * 거래량 지도 TTL: 하루 + 여유(이틀째 오전까지). 약관의 저장 제한 안에서 다른 시세 캐시처럼 짧게 둔다(PM 판단 11-08: Valkey만, ≤ 36시간).
+   * 거래량 지도 TTL: 보드가 거슬러 찾는 7일 + 하루 여유. 돌림 탭(아바타)은 한 바퀴에 약 5일이라 그 사이 값을 날짜와 함께 보이려고 늘렸다(PM 11-13,
+   * 11-08의 ≤ 36시간에서 바꿈). 같은 공식 일별 거래량은 이미 일별 시세 표(market_price_daily)에 지우지 않고 남는다.
    */
-  static final Duration VOLUME_TTL = Duration.ofHours(36);
+  static final Duration VOLUME_TTL = Duration.ofDays(8);
+
+  /** 하루 공식 호출 카운터 TTL(그날 + 여유). */
+  static final Duration VOLUME_CALLS_TTL = Duration.ofHours(36);
+
+  /** 돌림 탭 위치 TTL. 한 바퀴보다 넉넉히. 없어지면 1페이지부터 다시 돈다. */
+  static final Duration VOLUME_CURSOR_TTL = Duration.ofDays(30);
 
   private static String volumeKey(java.time.LocalDate day) {
     return "market:v1:volume:" + day;
@@ -233,11 +240,54 @@ class ValkeyMarketCache implements MarketCache {
   public long addVolumeCalls(java.time.LocalDate day, int calls) {
     try {
       Long count = redis.opsForValue().increment(volumeCallsKey(day), calls);
-      redis.expire(volumeCallsKey(day), VOLUME_TTL);
+      redis.expire(volumeCallsKey(day), VOLUME_CALLS_TTL);
       return count == null ? Long.MAX_VALUE : count;
     } catch (DataAccessException exception) {
       metrics.cache(Kind.VOLUME, Outcome.WRITE_ERROR);
       return Long.MAX_VALUE;
+    }
+  }
+
+  private static String volumeCursorKey(com.loakraken.market.domain.MarketTab tab) {
+    return "market:v1:volume-cursor:" + tab.name();
+  }
+
+  @Override
+  public Optional<com.loakraken.market.application.MarketVolumeCursor> findVolumeCursor(
+      com.loakraken.market.domain.MarketTab tab) {
+    try {
+      var value = redis.opsForValue().get(volumeCursorKey(tab));
+      if (value == null) return Optional.empty();
+      var parts = value.split(",");
+      // "page,date" 또는 "page,date,attempts"(페이지 재시도 수, 없으면 0)
+      if (parts.length != 2 && parts.length != 3) return Optional.empty();
+      return Optional.of(
+          new com.loakraken.market.application.MarketVolumeCursor(
+              Integer.parseInt(parts[0]),
+              java.time.LocalDate.parse(parts[1]),
+              parts.length == 3 ? Integer.parseInt(parts[2]) : 0));
+    } catch (DataAccessException exception) {
+      metrics.cache(Kind.VOLUME, Outcome.READ_ERROR);
+      return Optional.empty();
+    } catch (RuntimeException exception) {
+      // 모양이 다른 값은 없는 것으로 본다(1페이지부터).
+      return Optional.empty();
+    }
+  }
+
+  @Override
+  public void saveVolumeCursor(
+      com.loakraken.market.domain.MarketTab tab,
+      com.loakraken.market.application.MarketVolumeCursor cursor) {
+    try {
+      redis
+          .opsForValue()
+          .set(
+              volumeCursorKey(tab),
+              cursor.page() + "," + cursor.cycleStartedOn() + "," + cursor.attempts(),
+              VOLUME_CURSOR_TTL);
+    } catch (DataAccessException exception) {
+      metrics.cache(Kind.VOLUME, Outcome.WRITE_ERROR);
     }
   }
 

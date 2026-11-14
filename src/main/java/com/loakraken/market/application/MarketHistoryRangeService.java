@@ -33,8 +33,15 @@ public class MarketHistoryRangeService {
   private final AuctionPort auctions;
   private final Clock clock;
 
+  private final MarketMetrics metrics;
+
   public MarketHistoryRangeService(
-      MarketQueryService markets, MarketDailyStore daily, AuctionPort auctions, Clock clock) {
+      MarketQueryService markets,
+      MarketDailyStore daily,
+      AuctionPort auctions,
+      Clock clock,
+      MarketMetrics metrics) {
+    this.metrics = metrics;
     this.markets = markets;
     this.daily = daily;
     this.auctions = auctions;

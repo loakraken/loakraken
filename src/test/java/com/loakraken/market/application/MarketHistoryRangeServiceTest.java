@@ -32,8 +32,11 @@ class MarketHistoryRangeServiceTest {
   private final MarketQueryService markets = mock(MarketQueryService.class);
   private final MarketDailyStore daily = mock(MarketDailyStore.class);
   private final AuctionPort auctions = mock(AuctionPort.class);
+  private final io.micrometer.core.instrument.simple.SimpleMeterRegistry registry =
+      new io.micrometer.core.instrument.simple.SimpleMeterRegistry();
   private final MarketHistoryRangeService service =
-      new MarketHistoryRangeService(markets, daily, auctions, Clock.fixed(NOW, ZoneOffset.UTC));
+      new MarketHistoryRangeService(
+          markets, daily, auctions, Clock.fixed(NOW, ZoneOffset.UTC), new MarketMetrics(registry));
 
   {
     when(markets.itemHistory(anyLong()))
@@ -69,6 +72,12 @@ class MarketHistoryRangeServiceTest {
         .thenThrow(new DataAccessResourceFailureException("db down"));
     var ranged = service.itemHistory(7L, MarketHistoryRange.D90);
     assertThat(ranged.stored()).isNull();
+    // 공식 14일로 답했다는 것이 200 응답에 묻히지 않게 지표로 센다.
+    assertThat(
+            registry
+                .counter("loakraken.market.range_read", "target", "item", "outcome", "fallback")
+                .count())
+        .isEqualTo(1);
     assertThat(ranged.base().history().itemId()).isEqualTo(7L);
   }
 
@@ -140,5 +149,10 @@ class MarketHistoryRangeServiceTest {
             e ->
                 assertThat(((BusinessException) e).errorCode())
                     .isEqualTo(MarketErrorCode.MARKET_CACHE_UNAVAILABLE));
+    assertThat(
+            registry
+                .counter("loakraken.market.range_read", "target", "auction", "outcome", "failed")
+                .count())
+        .isEqualTo(1);
   }
 }

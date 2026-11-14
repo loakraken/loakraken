@@ -141,6 +141,45 @@ class AsyncMarketDailyRecorderTest {
     }
   }
 
+  @Test
+  void 저장이_성공해도_실패해도_작업이_끝나면_저장_스레드의_MDC를_비운다() throws Exception {
+    var store = mock(MarketDailyStore.class);
+    when(store.upsert(any(), any(), any()))
+        .thenReturn(1)
+        .thenThrow(new IllegalStateException("db down"));
+    var recorder = recorder(store, 4);
+    try {
+      for (int i = 1; i <= 2; i++) {
+        MDC.put("requestId", "req-" + i);
+        recorder.record(history(i), TODAY, NOW);
+        MDC.clear();
+        // 기록 경로를 거치지 않는 작업을 같은 스레드에 넣어, 앞 작업이 남긴 MDC를 그대로 본다.
+        var left = new AtomicReference<java.util.Map<String, String>>(java.util.Map.of("x", "y"));
+        var probed = new CountDownLatch(1);
+        executor(recorder)
+            .execute(
+                () -> {
+                  left.set(MDC.getCopyOfContextMap());
+                  probed.countDown();
+                });
+        assertThat(probed.await(5, TimeUnit.SECONDS)).isTrue();
+        assertThat(left.get() == null || left.get().isEmpty())
+            .as((i == 1 ? "성공" : "실패") + " 뒤 저장 스레드 MDC")
+            .isTrue();
+      }
+    } finally {
+      MDC.clear();
+      recorder.shutdown();
+    }
+  }
+
+  private static java.util.concurrent.ThreadPoolExecutor executor(AsyncMarketDailyRecorder recorder)
+      throws Exception {
+    var field = AsyncMarketDailyRecorder.class.getDeclaredField("executor");
+    field.setAccessible(true);
+    return (java.util.concurrent.ThreadPoolExecutor) field.get(recorder);
+  }
+
   private AsyncMarketDailyRecorder recorder(MarketDailyStore store, int queue) {
     return new AsyncMarketDailyRecorder(store, metrics, registry, clock, queue);
   }

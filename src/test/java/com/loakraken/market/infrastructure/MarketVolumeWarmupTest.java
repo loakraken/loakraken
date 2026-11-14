@@ -201,6 +201,67 @@ class MarketVolumeWarmupTest {
   }
 
   @Test
+  void 하루_상한에_막힌_시도는_호출_카운터에_남기지_않고_그날은_더_세지_않는다() {
+    when(cache.findBoardScan(MarketTab.FOOD, null))
+        .thenReturn(Optional.of(scan(MarketTab.FOOD, 1, 2, 3)));
+    when(boards.scanForVolume(MarketTab.FOOD)).thenReturn(scan(MarketTab.FOOD, 1, 2, 3));
+    when(markets.refreshItemHistory(anyLong()))
+        .thenAnswer(invocation -> Optional.of(history(invocation.getArgument(0), clock.now)));
+    // 하루 상한 800: 1번째 품목에서 800(통과), 2번째에서 801(막힘)
+    when(cache.addVolumeCalls(eq(today), eq(1))).thenReturn(800L, 801L);
+    var job = warmup("key", List.of(MarketTab.FOOD), 15, 800);
+
+    job.tick();
+    // 막힌 1번은 되돌려 카운터가 실제 호출 수와 같게 한다.
+    verify(cache).addVolumeCalls(today, -1);
+    clock.now = clock.now.plusSeconds(60);
+    job.tick();
+    // 그날 상한에 닿은 뒤로는 카운터를 더 늘리지 않는다(시도도 하지 않음).
+    verify(cache, times(2)).addVolumeCalls(today, 1);
+    assertThat(count("daily_cap")).isEqualTo(2);
+    verify(markets, times(1)).refreshItemHistory(anyLong());
+  }
+
+  @Test
+  void 리더를_잃었다가_다시_잡으면_돌림_위치를_저장소에서_다시_읽는다() {
+    // 처음엔 2페이지, 다른 인스턴스가 리더였던 동안 5페이지까지 진행됨
+    when(cache.findVolumeCursor(MarketTab.AVATAR))
+        .thenReturn(
+            Optional.of(new MarketVolumeCursor(2, today.minusDays(1))),
+            Optional.of(new MarketVolumeCursor(5, today.minusDays(1))));
+    when(boards.volumePage(eq(MarketTab.AVATAR), anyInt()))
+        .thenAnswer(
+            invocation -> {
+              int pageNo = invocation.getArgument(1);
+              // 페이지마다 품목 10개: 페이지 1번 + 상세 10번 = 11번(분당 11)이라 한 주기에 한 페이지
+              return page(
+                  pageNo,
+                  100,
+                  LongStream.rangeClosed(pageNo * 10L + 1, pageNo * 10L + 10).toArray());
+            });
+    when(markets.refreshItemHistory(anyLong()))
+        .thenAnswer(invocation -> Optional.of(history(invocation.getArgument(0), clock.now)));
+    var job = warmup("key", List.of(MarketTab.AVATAR), 11, 800);
+
+    job.tick();
+    verify(boards).volumePage(MarketTab.AVATAR, 2);
+
+    // 리더를 잃은 주기
+    reset(lease);
+    when(lease.hold(any(), any())).thenReturn(false);
+    clock.now = clock.now.plusSeconds(60);
+    job.tick();
+
+    // 다시 잡으면 메모리의 3페이지가 아니라 저장소의 5페이지부터
+    reset(lease);
+    when(lease.hold(any(), any())).thenReturn(true);
+    clock.now = clock.now.plusSeconds(60);
+    job.tick();
+    verify(boards).volumePage(MarketTab.AVATAR, 5);
+    verify(boards, never()).volumePage(MarketTab.AVATAR, 3);
+  }
+
+  @Test
   void 리더가_아니면_돌지_않는다() {
     reset(lease);
     when(lease.hold(any(), any())).thenReturn(false);
@@ -280,7 +341,8 @@ class MarketVolumeWarmupTest {
     clock.now = clock.now.plusSeconds(60);
     job.tick();
 
-    verify(cache).saveVolumeCursor(MarketTab.AVATAR, new MarketVolumeCursor(1, today));
+    // 그날 한 바퀴를 마쳤으니 다음 바퀴는 내일부터 센다(다음 바퀴 일수가 하루 더 붙지 않게).
+    verify(cache).saveVolumeCursor(MarketTab.AVATAR, new MarketVolumeCursor(1, today.plusDays(1)));
     // 11-04 시작 ~ 11-08 끝 = 5일
     assertThat(rotation("rotation_cycle_days")).isEqualTo(5);
     verify(boards, times(1)).volumePage(eq(MarketTab.AVATAR), anyInt());

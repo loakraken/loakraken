@@ -38,10 +38,23 @@ public record CharacterLoadout(
       Boolean isSet,
       Boolean isInner,
       List<String> effects,
-      List<AvatarTendency> tendencies) {
+      List<AvatarTendency> tendencies,
+      Boolean effectsDisabled) {
     public Avatar {
       effects = effects == null ? List.of() : List.copyOf(effects);
       tendencies = tendencies == null ? List.of() : List.copyOf(tendencies);
+    }
+
+    public Avatar(
+        String type,
+        String name,
+        String icon,
+        String grade,
+        Boolean isSet,
+        Boolean isInner,
+        List<String> effects,
+        List<AvatarTendency> tendencies) {
+      this(type, name, icon, grade, isSet, isInner, effects, tendencies, null);
     }
 
     public Avatar(

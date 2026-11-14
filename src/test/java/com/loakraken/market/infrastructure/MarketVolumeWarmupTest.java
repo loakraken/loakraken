@@ -223,6 +223,33 @@ class MarketVolumeWarmupTest {
   }
 
   @Test
+  void 호출_카운터를_읽지_못한_시도는_되돌리지_않고_막는다() {
+    when(cache.findBoardScan(MarketTab.FOOD, null))
+        .thenReturn(Optional.of(scan(MarketTab.FOOD, 1, 2)));
+    when(boards.scanForVolume(MarketTab.FOOD)).thenReturn(scan(MarketTab.FOOD, 1, 2));
+    // 저장소 장애: INCR이 실패하면 Long.MAX_VALUE(막음). 되돌리면(DECR 성공) 카운터가 실제보다 작아져 상한을 넘을 수 있다.
+    when(cache.addVolumeCalls(eq(today), eq(1))).thenReturn(Long.MAX_VALUE);
+
+    warmup("key", List.of(MarketTab.FOOD), 15, 800).tick();
+
+    verify(cache, never()).addVolumeCalls(today, -1);
+    verify(markets, never()).refreshItemHistory(anyLong());
+    assertThat(count("daily_cap")).isEqualTo(1);
+  }
+
+  @Test
+  void 오늘_한_바퀴를_마친_탭은_리더를_다시_잡아도_오늘_다시_돌지_않는다() {
+    // 다른 인스턴스가 오늘 한 바퀴를 마쳐 다음 바퀴를 내일로 저장해 둠
+    when(cache.findVolumeCursor(MarketTab.AVATAR))
+        .thenReturn(Optional.of(new MarketVolumeCursor(1, today.plusDays(1))));
+    var job = warmup("key", List.of(MarketTab.AVATAR), 15, 800);
+
+    job.tick();
+
+    verify(boards, never()).volumePage(any(), anyInt());
+  }
+
+  @Test
   void 리더를_잃었다가_다시_잡으면_돌림_위치를_저장소에서_다시_읽는다() {
     // 처음엔 2페이지, 다른 인스턴스가 리더였던 동안 5페이지까지 진행됨
     when(cache.findVolumeCursor(MarketTab.AVATAR))

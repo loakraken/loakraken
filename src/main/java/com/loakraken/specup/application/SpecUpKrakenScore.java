@@ -77,6 +77,14 @@ public class SpecUpKrakenScore {
 
   Context context(CharacterResult snapshot) {
     if (!enabled) return new Context(null, Double.NaN, "DISABLED");
+    return internalContext(snapshot);
+  }
+
+  /**
+   * 점수 표시 스위치(kraken-score.enabled)와 상관없이 만든 점수 문맥. 화면에 점수를 보이지 않을 때도 비교 기준처럼 점수로 정하는 것(스톤 배치)에만
+   * 쓴다(PM 총괄 11-15).
+   */
+  Context internalContext(CharacterResult snapshot) {
     var input = snapshot.krakenScoreInput();
     if (input == null || !input.isObject()) return new Context(null, Double.NaN, "INPUT_PENDING");
     var details = snapshot.details();

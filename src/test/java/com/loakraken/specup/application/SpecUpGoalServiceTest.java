@@ -31,6 +31,12 @@ class SpecUpGoalServiceTest {
   private final MarketAuctionService auctions = mock(MarketAuctionService.class);
   private final RefiningMaterialPriceService materials = mock(RefiningMaterialPriceService.class);
   private final SpecUpService specUp = mock(SpecUpService.class);
+
+  {
+    // 실제 서비스는 점수 입력을 읽을 수 없을 때 null(앞 배치)이다. 목은 빈 목록(점수가 오르는 조합 없음)을 돌려주므로 null로 둔다.
+    when(specUp.stoneOrientations(org.mockito.ArgumentMatchers.any())).thenReturn(null);
+  }
+
   private final MemoryStore store = new MemoryStore();
 
   /** 테스트 캐릭터 장비(기본 없음). service() 전에 바꾼다. */
@@ -358,6 +364,31 @@ class SpecUpGoalServiceTest {
     assertThat(options)
         .extracting(SpecUpGoalService.Option::id)
         .containsExactly("ABILITY_STONE:2:3", "ABILITY_STONE:4:1", "ABILITY_STONE:4:2");
+    // 목록에 없는 조합(점수가 오르지 않음)은 내지 않는다(비교 기준과 같음).
+    assertThat(
+            SpecUpGoalService.stoneOptions(
+                new SpecUpGoalService.Stone(
+                    stoneItem(1, 1),
+                    levels,
+                    java.util.List.<java.util.Map<String, Integer>>of(
+                        java.util.Map.of("원한", 3, "아드레날린", 2)))))
+        .extracting(SpecUpGoalService.Option::id)
+        .containsExactly("ABILITY_STONE:3:2");
+    // 점수 입력과 툴팁의 각인 이름이 갈라지면(배치가 이 스톤과 이름이 다름) 스톤 단계를 빼지 않고 앞 배치로(코드 리뷰 #975 P3).
+    assertThat(
+            SpecUpGoalService.stoneOptions(
+                new SpecUpGoalService.Stone(
+                    stoneItem(1, 1),
+                    levels,
+                    java.util.List.<java.util.Map<String, Integer>>of(
+                        java.util.Map.of("다른 각인", 3, "아드레날린", 2)))))
+        .extracting(SpecUpGoalService.Option::id)
+        .containsExactly("ABILITY_STONE:3:2", "ABILITY_STONE:4:1", "ABILITY_STONE:4:2");
+    // 점수가 오르는 조합이 하나도 없으면(빈 목록) 스톤 단계가 없다.
+    assertThat(
+            SpecUpGoalService.stoneOptions(
+                new SpecUpGoalService.Stone(stoneItem(1, 1), levels, java.util.List.of())))
+        .isEmpty();
     // 단계를 지나도(스톤 상태가 바뀌어도) 같은 배치를 지킨다.
     var after = new java.util.LinkedHashMap<String, Integer>();
     after.put("원한", 2);

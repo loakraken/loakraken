@@ -270,16 +270,17 @@ class MarketVolumeWarmupTest {
     job.tick();
     assertThat(saved.get()).isEqualTo(new MarketVolumeCursor(1, today.plusDays(1)));
 
-    // 리더를 잃은 주기
+    // 리더를 잃은 주기: 임대 확인 말고는 아무것도 하지 않는다.
     reset(lease);
     when(lease.hold(any(), any())).thenReturn(false);
+    clearInvocations(boards, markets, gate, cache);
     clock.now = clock.now.plusSeconds(60);
     job.tick();
+    verifyNoInteractions(boards, markets, gate, cache);
 
     // 같은 날 다시 잡음: 메모리 상태는 버리지만 저장소의 내일 위치를 보고 건너뛴다.
     reset(lease);
     when(lease.hold(any(), any())).thenReturn(true);
-    clearInvocations(boards, markets, gate, cache);
     clock.now = clock.now.plusSeconds(60);
     job.tick();
 

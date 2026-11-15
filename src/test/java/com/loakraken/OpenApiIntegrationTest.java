@@ -151,10 +151,10 @@ class OpenApiIntegrationTest {
         .contains("effects")
         .doesNotContain("tendencies", "overlay");
     // 덧입기 표시(다음 릴리스): true/false/null(모름). api 배포 전까지 선택 필드, enum 아님.
-    assertThat(document.at("/components/schemas/AvatarResponse/properties/overlay").toString())
-        .contains("boolean")
-        .contains("null")
-        .doesNotContain("enum");
+    var overlay = document.at("/components/schemas/AvatarResponse/properties/overlay");
+    assertThat(overlay.at("/anyOf").valueStream().map(n -> n.at("/type").asText()).toList())
+        .containsExactlyInAnyOrder("boolean", "null");
+    assertThat(overlay.toString()).doesNotContain("\"enum\"");
     assertThat(
             document.at("/components/schemas/AvatarResponse/properties/tendencies/type").asText())
         .isEqualTo("array");

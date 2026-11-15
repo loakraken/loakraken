@@ -73,6 +73,27 @@ class OpenApiIntegrationTest {
                 .asText())
         .isEqualTo("null");
     assertThat(document.at("/components/schemas/GemsResponse/type").asText()).isEqualTo("object");
+    // 단순 이름이 같은 두 레코드는 스키마를 따로 둔다: 캐릭터 보석 레벨별 개수(level, count)와 통계 아이템 레벨 구간(from, to, count).
+    assertThat(
+            document.at("/components/schemas/CharacterLevelCountResponse/properties").has("level"))
+        .isTrue();
+    assertThat(document.at("/components/schemas/LevelCountResponse/properties").has("from"))
+        .isTrue();
+    // 필수 규칙도 각자 스키마에(이름이 같은 다른 레코드의 규칙이 덮지 않게). 생성 문서는 required를 이름순으로 낸다.
+    assertThat(
+            document
+                .at("/components/schemas/CharacterLevelCountResponse/required")
+                .valueStream()
+                .map(n -> n.asText())
+                .toList())
+        .containsExactlyInAnyOrder("level", "count");
+    assertThat(
+            document
+                .at("/components/schemas/LevelCountResponse/required")
+                .valueStream()
+                .map(n -> n.asText())
+                .toList())
+        .containsExactlyInAnyOrder("from", "to", "count");
     // 경매장 칸 기간: 저장이 없으면 recordedSince는 null(계약에 null 허용), 나머지는 필수.
     assertThat(
             document

@@ -458,6 +458,35 @@ class MarketAuctionServiceTest {
     assertThat(MarketAuctionService.GEM_CELLS).isEqualTo(20);
   }
 
+  @Test
+  void 장신구_칸_예열은_기본_필터_칸을_오래된_칸부터_받고_새로우면_멈춘다() {
+    // PM 총괄 11-16: 장신구 기본 필터(고대·딜러·품질 70) 칸을 한 시간에 한 번 꼴로 받아 일별 기록에 빈 날이 없게. 받은 값만 남긴다.
+    int cells = MarketAuctionService.ACCESSORY_WARM_QUERIES.size();
+    // 목걸이·귀걸이·반지 딜러 옵션의 등급 조합(표 기본 필터) = 24칸.
+    assertThat(cells).isEqualTo(24);
+    var one =
+        service.warmAccessories(
+            1, java.time.Duration.ofMinutes(60), () -> true, search -> search.get());
+    assertThat(one.refreshed()).isEqualTo(1);
+    assertThat(one.outcome()).isEqualTo("refreshed");
+    assertThat(port.last).hasSize(1);
+    // 나머지를 모두 받으면 그다음 틱은 새로운 칸뿐이라 받지 않는다(idle).
+    var rest =
+        service.warmAccessories(
+            cells, java.time.Duration.ofMinutes(60), () -> true, search -> search.get());
+    assertThat(rest.refreshed()).isEqualTo(cells - 1);
+    assertThat(port.last).hasSize(cells);
+    var idle =
+        service.warmAccessories(
+            1, java.time.Duration.ofMinutes(60), () -> true, search -> search.get());
+    assertThat(idle.outcome()).isEqualTo("idle");
+    assertThat(idle.refreshed()).isZero();
+    // 분당 상한이면 받지 않는다(오래된 칸이 있을 때).
+    var capped =
+        service.warmAccessories(1, java.time.Duration.ZERO, () -> false, search -> search.get());
+    assertThat(capped.outcome()).isEqualTo("capped");
+  }
+
   private final class FakeAuctions implements AuctionPort, AuctionSearchPort {
     int searches;
     final Map<String, AuctionCell> cells = new HashMap<>();

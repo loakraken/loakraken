@@ -58,8 +58,10 @@ public final class CritEffectTable {
           new NodeRule("발화", null, Decision.TOGGLE),
           new NodeRule("혼돈 강화", Decision.TOGGLE, null),
           new NodeRule("잠식 제어", Decision.INCLUDE, null),
-          new NodeRule("날카로운 해머", Decision.SKILL, null),
-          new NodeRule("분노의 망치", null, Decision.SKILL),
+          // 디스트로이어 해방 스킬 코어 3개 소모: 비교 기준은 합계에 넣는다(계산 검증 11-16 표 고치기 A) → 기본 켬 토글(스킬 한정 알림), 코어 3개
+          // 가정.
+          new NodeRule("날카로운 해머", Decision.TOGGLE, null),
+          new NodeRule("분노의 망치", null, Decision.TOGGLE),
           new NodeRule("영역 강화", Decision.EXCLUDE, null),
           new NodeRule("중력 수련", Decision.EXCLUDE, null),
           new NodeRule("정교함", Decision.INCLUDE, null),
@@ -90,13 +92,15 @@ public final class CritEffectTable {
           new NodeRule("마에스트로", Decision.INCLUDE, null),
           new NodeRule("격노의 악장", null, Decision.INCLUDE),
           new NodeRule("교감 강화", Decision.SKILL, null),
-          new NodeRule("고대의 힘", Decision.SKILL, null),
+          // 비교 기준은 합계에 넣는다(표 고치기 A) → 기본 켬 토글(스킬 한정 알림).
+          new NodeRule("고대의 힘", Decision.TOGGLE, null),
           new NodeRule("기민함", Decision.INCLUDE, Decision.INCLUDE),
           new NodeRule("단련", Decision.TOGGLE, Decision.TOGGLE),
           new NodeRule("피스메이커 - 샷건", Decision.TOGGLE, null),
           new NodeRule("가속 강화", Decision.INCLUDE, null),
           new NodeRule("분침 강화", Decision.INCLUDE, null),
-          new NodeRule("깨어난 잠재력", Decision.SKILL, null),
+          // 비교 기준은 합계에 넣는다(표 고치기 A) → 기본 켬 토글(둔갑 스킬 한정 알림).
+          new NodeRule("깨어난 잠재력", Decision.TOGGLE, null),
           new NodeRule("환수의 정기", null, Decision.SKILL),
           new NodeRule("깨어나는 힘", Decision.INCLUDE, null),
           new NodeRule("완전 연소", Decision.INCLUDE, null),
@@ -147,33 +151,9 @@ public final class CritEffectTable {
           // "피니쉬 스텝의 치명타 적중률이 30.0% 증가"
           new SkillBonus(
               "그림자 맹수", CritSpeedCalculation.Axis.CRIT, Target.SKILL, "피니쉬 스텝", 1, false, null),
-          // "해방 스킬 사용 중 소모한 코어 당 치명타 적중률이 6.0% 증가" — 디스트로이어 코어 최대 3개(정답표 6-1 ×3)
-          new SkillBonus(
-              "날카로운 해머",
-              CritSpeedCalculation.Axis.CRIT,
-              Target.CATEGORY,
-              "해방 스킬",
-              3,
-              false,
-              "코어 3개 소모"),
-          // "해방 스킬 사용 시 소모한 코어 당 치명타 피해가 17.0% 증가"
-          new SkillBonus(
-              "분노의 망치",
-              CritSpeedCalculation.Axis.CRIT_DAMAGE,
-              Target.CATEGORY,
-              "해방 스킬",
-              3,
-              false,
-              "코어 3개 소모"),
           // "소환 스킬의 치명타 적중률이 2.8% 증가"
           new SkillBonus(
               "교감 강화", CritSpeedCalculation.Axis.CRIT, Target.CATEGORY, "소환 스킬", 1, false, null),
-          // "일반 및 고대의 정령 스킬의 치명타 적중률이 16.0% 증가" — 고대의 정령 스킬은 전투 스킬 목록에 없다
-          new SkillBonus(
-              "고대의 힘", CritSpeedCalculation.Axis.CRIT, Target.CATEGORY, "일반 스킬", 1, false, null),
-          // "둔갑 스킬 치명타 적중률이 30.0% 증가"
-          new SkillBonus(
-              "깨어난 잠재력", CritSpeedCalculation.Axis.CRIT, Target.CATEGORY, "둔갑 스킬", 1, false, null),
           // "환수 각성 상태에서 환수 스킬의 치명타 피해량이 60.0% 증가"
           new SkillBonus(
               "환수의 정기",
@@ -231,7 +211,22 @@ public final class CritEffectTable {
       Pattern pattern,
       boolean incremental,
       String exclusiveWith,
-      boolean skillLimited) {
+      boolean skillLimited,
+      int multiplier) {
+    /** multiplier = 문구 값에 곱하는 수(디스트로이어 코어 3개 소모 가정 등). */
+    Toggle(
+        String node,
+        String key,
+        CritSpeedCalculation.Axis axis,
+        String label,
+        boolean coreState,
+        Pattern pattern,
+        boolean incremental,
+        String exclusiveWith,
+        boolean skillLimited) {
+      this(node, key, axis, label, coreState, pattern, incremental, exclusiveWith, skillLimited, 1);
+    }
+
     Toggle(String node, String label, boolean coreState, Pattern pattern, boolean incremental) {
       this(
           node,
@@ -308,6 +303,53 @@ public final class CritEffectTable {
               false,
               Pattern.compile("방어 태세 중에는\\s*([0-9]+(?:\\.[0-9]+)?)%"),
               true),
+          // 표 고치기 A(PM 총괄 11-16, 계산 검증 출처 표): 비교 기준이 합계에 넣는 노드. 기본 켬, 스킬 한정으로 알린다.
+          // "해방 스킬 사용 중 소모한 코어 당 치명타 적중률이 6.0% 증가한다." 코어 최대 3개(직업 가이드) 가정.
+          new Toggle(
+              "날카로운 해머",
+              "날카로운 해머",
+              CritSpeedCalculation.Axis.CRIT,
+              "해방 스킬 코어 3개 소모 가정",
+              true,
+              Pattern.compile("코어 당 치명타 적중률이\\s*([0-9]+(?:\\.[0-9]+)?)%"),
+              false,
+              null,
+              true,
+              3),
+          // "해방 스킬 사용 시 소모한 코어 당 치명타 피해가 17.0% 증가한다."
+          new Toggle(
+              "분노의 망치",
+              "분노의 망치",
+              CritSpeedCalculation.Axis.CRIT_DAMAGE,
+              "해방 스킬 코어 3개 소모 가정(치명타 피해)",
+              true,
+              Pattern.compile("코어 당 치명타 피해(?:량)?(?:이|가)?\\s*([0-9]+(?:\\.[0-9]+)?)%"),
+              false,
+              null,
+              true,
+              3),
+          // "일반 및 고대의 정령 스킬의 치명타 적중률이 16.0% 증가한다."
+          new Toggle(
+              "고대의 힘",
+              "고대의 힘",
+              CritSpeedCalculation.Axis.CRIT,
+              "고대의 힘(일반·고대의 정령 스킬)",
+              true,
+              null,
+              false,
+              null,
+              true),
+          // "둔갑 스킬 치명타 적중률이 30.0% 증가한다."
+          new Toggle(
+              "깨어난 잠재력",
+              "깨어난 잠재력",
+              CritSpeedCalculation.Axis.CRIT,
+              "깨어난 잠재력(둔갑 스킬)",
+              true,
+              null,
+              false,
+              null,
+              true),
           // 직업 자기 시너지 중 스킬 한정(#5, 계산 검증 최종 합본 11-09). 합계에 넣고 skillLimited로 알린다(PM 총괄).
           // 포격 스킬은 전투 스킬 목록에 없어(아이덴티티) 스킬별 치명타 적중률에는 없고, 주력 스킬 치명타 적중률에만 더한다.
           new Toggle(
@@ -346,7 +388,20 @@ public final class CritEffectTable {
       String tripod,
       BigDecimal value,
       String basis,
-      boolean defaultOn) {}
+      boolean defaultOn,
+      String exclusiveWith) {
+    /** exclusiveWith = 같은 효과라 동시에 세지 않는 노드 토글 key(그 토글을 켜면 이 가정은 끈다). */
+    public ClassBuff(
+        String label,
+        String className,
+        String skill,
+        String tripod,
+        BigDecimal value,
+        String basis,
+        boolean defaultOn) {
+      this(label, className, skill, tripod, value, basis, defaultOn, null);
+    }
+  }
 
   public static final List<ClassBuff> CLASS_BUFFS =
       List.of(
@@ -364,8 +419,8 @@ public final class CritEffectTable {
               "용맹의 포효",
               null,
               new BigDecimal("20"),
-              "용맹의 포효 8초 버프(스킬·트라이포드 버프 가정, 기본 끔)",
-              false),
+              "용맹의 포효 8초 버프(스킬 버프 가정, 비교 기준이 합계에 넣어 기본 켬, 표 고치기 B)",
+              true),
           new ClassBuff(
               "번개의 속삭임 버프 유지 가정",
               "스트라이커",
@@ -396,8 +451,38 @@ public final class CritEffectTable {
               null,
               "빛의 성장",
               new BigDecimal("11.8"),
-              "슈르디 트라이포드 '빛의 성장'(스킬·트라이포드 버프 가정, 기본 끔)",
-              false));
+              "슈르디 트라이포드 '빛의 성장'(트라이포드 버프 가정, 비교 기준이 합계에 넣어 기본 켬, 표 고치기 B)",
+              true),
+          // 표 고치기 A(계산 검증 출처 표 11-16): 비교 기준이 합계에 넣는 스킬·트라이포드 자기 버프, 기본 켬.
+          // 창술사 청룡진 "스킬 시전 시 연가공법을 발동시켜 6초 동안 치명타 적중률이 20.0% 증가한다."
+          new ClassBuff(
+              "청룡진 연가공법 유지 가정",
+              "창술사",
+              "청룡진",
+              null,
+              new BigDecimal("20"),
+              "청룡진 연가공법 6초(스킬 버프 가정, 비교 기준이 합계에 넣어 기본 켬)",
+              true,
+              // 연가비기 토글(연가공법 16초)과 같은 연가공법 +20이라 함께 세지 않는다(코드 리뷰 #979 P2).
+              "연가비기"),
+          // 아르카나 스트림 오브 엣지 '다크니스 엣지' "적중 시 마다 … 치명타 적중률이 3.0초간 5.5% 씩 최대 27.6% 까지 증가한다."
+          new ClassBuff(
+              "다크니스 엣지 최대 중첩 가정",
+              "아르카나",
+              null,
+              "다크니스 엣지",
+              new BigDecimal("27.6"),
+              "스트림 오브 엣지 트라이포드 '다크니스 엣지' 최대 27.6(트라이포드 버프 가정, 비교 기준이 합계에 넣어 기본 켬)",
+              true),
+          // 소울이터 아스타로스 '데런의 족쇄' "치명타 적중률이 20.0% 증가하고 적에게 주는 피해가 100.0% 증가한다."
+          new ClassBuff(
+              "데런의 족쇄 버프 가정",
+              "소울이터",
+              null,
+              "데런의 족쇄",
+              new BigDecimal("20"),
+              "아스타로스 트라이포드 '데런의 족쇄'(트라이포드 버프 가정, 비교 기준이 합계에 넣어 기본 켬)",
+              true));
 
   /** 공용 아크 그리드 코어. 비교 기준 2곳이 기본에 넣는다. 직업 코어의 치명 효과는 비교 기준으로 넣지 않는다. */
   public static final Map<String, CritSpeedCalculation.Axis> COMMON_CORES =
@@ -568,7 +653,25 @@ public final class CritEffectTable {
   public static final java.util.Set<String> MAIN_SKILL_LIMITED =
       java.util.Set.of(
           // 블래스터 포격 강화 빌드의 주력 피해는 포격 스킬(계산 검증 11-09 확인: '포격 출력 강화' Lv.3 = 포격 강화 빌드 노드)
-          "포격 출력 강화");
+          "포격 출력 강화",
+          // 표 고치기 A(계산 검증 11-16): 비교 기준 주력기에 들어가는 노드(디스트로이어 해방·서머너 일반·고대의 정령·환수사 둔갑이 주력).
+          "날카로운 해머",
+          "고대의 힘",
+          "깨어난 잠재력");
+
+  /**
+   * 합계에는 넣고 스킬별로는 그 분류(공식 스킬 Tooltip 제목)의 스킬에만 붙는 직업 버프 가정 → 분류. 비교 기준과 같음(계산 검증 11-16: 창술사 연가공법은
+   * '[난무 스킬]'에만, '[집중 스킬]'에는 없음).
+   */
+  /**
+   * 합계·주력 스킬에는 넣고 스킬별로는 그 분류 스킬에만 붙는 노드 토글 key → 분류(비교 기준과 같음, 계산 검증 11-16: 서머너 고대의 힘은 일반 스킬, 환수사
+   * 깨어난 잠재력은 둔갑 스킬).
+   */
+  public static final Map<String, String> CATEGORY_LIMITED_TOGGLES =
+      Map.of("고대의 힘", "일반 스킬", "깨어난 잠재력", "둔갑 스킬");
+
+  public static final Map<String, String> CATEGORY_LIMITED_BUFFS =
+      Map.of("청룡진 연가공법 유지 가정", "난무 스킬");
 
   /**
    * 그 빌드의 주력 스킬이 전투 스킬 목록(스킬별 치명타 적중률) 밖인 토글 key. 이 토글이 있으면(켬·끔 무관) 주력 스킬 치명타 적중률은 목록 스킬이 아니라 시트 쪽

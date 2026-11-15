@@ -92,6 +92,8 @@ public class CombatPowerSimulationService {
   private final CombatPowerRefineModel.Coefficients refineCoefficients;
   private final CombatPowerBraceletModel.Coefficients braceletCoefficients;
   private final CombatPowerArkGridModel.Coefficients arkGridCoefficients;
+  private final com.loakraken.character.domain.CombatPowerArkPassiveModel.Coefficients
+      arkPassiveCoefficients;
 
   public CombatPowerSimulationService(
       CharacterCache cache,
@@ -101,7 +103,9 @@ public class CombatPowerSimulationService {
       CombatPowerPolishValues polishValues,
       CombatPowerRefineModel.Coefficients refineCoefficients,
       CombatPowerBraceletModel.Coefficients braceletCoefficients,
-      CombatPowerArkGridModel.Coefficients arkGridCoefficients) {
+      CombatPowerArkGridModel.Coefficients arkGridCoefficients,
+      com.loakraken.character.domain.CombatPowerArkPassiveModel.Coefficients
+          arkPassiveCoefficients) {
     this.cache = cache;
     this.stored = stored;
     this.gemCoefficients = gemCoefficients;
@@ -110,6 +114,7 @@ public class CombatPowerSimulationService {
     this.refineCoefficients = refineCoefficients;
     this.braceletCoefficients = braceletCoefficients;
     this.arkGridCoefficients = arkGridCoefficients;
+    this.arkPassiveCoefficients = arkPassiveCoefficients;
   }
 
   public enum Kind {
@@ -368,8 +373,30 @@ public class CombatPowerSimulationService {
 
   private static final String LEAP_BASIS =
       "도약 포인트 합의 전투력 배수(1 + 0.002 × 포인트)를 바꾼 비율을 공식 전투력에 곱했습니다.";
-  private static final String EVOLUTION_ENLIGHTENMENT_REASON =
-      "진화·깨달음 포인트의 전투력 계산식을 아직 확인하고 있어 계산하지 않았습니다.";
+  private static final String EVOLUTION = "진화";
+  private static final String ENLIGHTENMENT = "깨달음";
+  private static final String EVOLUTION_BASIS =
+      "진화 포인트 합의 전투력 배수(1 + 0.0075 × (포인트 − 40), 40 이하는 1)를 바꾼 비율을 공식 전투력에 곱한 모델값입니다(40~140 사이 포인트당"
+          + " 기울기는 한 곳에서만 확인).";
+  private static final String ENLIGHTENMENT_BASIS =
+      "깨달음 포인트 합의 전투력 배수(1 + 0.007 × 포인트)를 바꾼 비율을 공식 전투력에 곱했습니다.";
+  private static final String ENLIGHTENMENT_OVER_REASON =
+      "깨달음 포인트 100 초과의 전투력 계산식을 아직 확인하고 있어 계산하지 않았습니다.";
+  private static final String PASSIVE_UNREAD = "아크 패시브 포인트 합을 읽지 못해 계산하지 않았습니다.";
+
+  /** 트리 포인트 합의 전투력 배수. 계산할 수 없으면(깨달음 100 초과·모르는 트리) null. */
+  private BigDecimal passiveFactor(String tree, int points) {
+    if (LEAP.equals(tree))
+      return BigDecimal.ONE.add(
+          braceletCoefficients.leapPerPoint().multiply(BigDecimal.valueOf(points), MATH), MATH);
+    if (EVOLUTION.equals(tree))
+      return com.loakraken.character.domain.CombatPowerArkPassiveModel.evolution(
+          arkPassiveCoefficients, points);
+    if (ENLIGHTENMENT.equals(tree))
+      return com.loakraken.character.domain.CombatPowerArkPassiveModel.enlightenment(
+          arkPassiveCoefficients, points);
+    return null;
+  }
 
   /** 팔찌 변화의 전투력 비(W·S 항은 재련 모델로). 계산할 수 없으면 null. */
   private static BigDecimal removalRatio(
@@ -587,7 +614,7 @@ public class CombatPowerSimulationService {
     var engravings = currentEngravings(loadout);
     var weaponAddDamage = CombatPowerEquipmentModel.currentWeaponAddDamage(weaponDetail(loadout));
     var state =
-        new State(Map.of(), null, Map.of(), Map.of(), Map.of(), null, Map.of(), Map.of(), null);
+        new State(Map.of(), null, Map.of(), Map.of(), Map.of(), null, Map.of(), Map.of(), Map.of());
     var running = before;
     var contributions = new ArrayList<Contribution>();
     int unsupported = 0;
@@ -667,8 +694,8 @@ public class CombatPowerSimulationService {
   /** 팔찌 효과 줄(#327): 줄 번호 → 새 줄(빼기 포함). */
   private record BraceletEffect(int line, CombatPowerBraceletModel.Line next) implements Effect {}
 
-  /** 아크 패시브 도약 포인트 합: 지금 → 새 합. */
-  private record LeapEffect(int current, int next) implements Effect {}
+  /** 아크 패시브 트리(진화·깨달음·도약) 포인트 합: 지금 → 새 합. */
+  private record PassiveEffect(String tree, int current, int next) implements Effect {}
 
   /** 아크 그리드 코어(slotIndex) 등급·포인트: 지금·바꾼 뒤 코어 계수 C(%). */
   private record ArkGridCoreEffect(int slot, BigDecimal nowPct, BigDecimal nextPct)
@@ -687,7 +714,7 @@ public class CombatPowerSimulationService {
       CombatPowerRefineModel.ArmGuard armGuard,
       Map<String, PolishEffect> polish,
       Map<Integer, ArkGridCoreEffect> cores,
-      LeapEffect leap) {
+      Map<String, PassiveEffect> passives) {
     State apply(Effect effect, Map<String, CharacterLoadout.PassiveEngraving> currents) {
       return switch (effect) {
         case GemEffect gem -> {
@@ -702,7 +729,7 @@ public class CombatPowerSimulationService {
               armGuard,
               polish,
               cores,
-              leap);
+              passives);
         }
         case WeaponQualityEffect quality ->
             new State(
@@ -714,7 +741,7 @@ public class CombatPowerSimulationService {
                 armGuard,
                 polish,
                 cores,
-                leap);
+                passives);
         case RefineEffect refine -> {
           var next = new HashMap<>(refines);
           var base = refines.getOrDefault(refine.index(), refine.current());
@@ -732,7 +759,7 @@ public class CombatPowerSimulationService {
               armGuard,
               polish,
               cores,
-              leap);
+              passives);
         }
         case BraceletEffect line -> {
           var next = new HashMap<>(bracelet);
@@ -746,7 +773,7 @@ public class CombatPowerSimulationService {
               armGuard,
               polish,
               cores,
-              leap);
+              passives);
         }
         case ArmGuardEffect guard ->
             new State(
@@ -758,7 +785,7 @@ public class CombatPowerSimulationService {
                 guard.target(),
                 polish,
                 cores,
-                leap);
+                passives);
         case NeutralEffect neutral -> this;
         case ArkGridCoreEffect core -> {
           var next = new HashMap<>(cores);
@@ -772,7 +799,7 @@ public class CombatPowerSimulationService {
               armGuard,
               polish,
               Map.copyOf(next),
-              leap);
+              passives);
         }
         case PolishEffect line -> {
           var next = new HashMap<>(polish);
@@ -786,19 +813,22 @@ public class CombatPowerSimulationService {
               armGuard,
               Map.copyOf(next),
               cores,
-              leap);
+              passives);
         }
-        case LeapEffect next ->
-            new State(
-                gems,
-                weaponAddDamage,
-                engravings,
-                refines,
-                bracelet,
-                armGuard,
-                polish,
-                cores,
-                next);
+        case PassiveEffect next -> {
+          var map = new HashMap<>(passives);
+          map.put(next.tree(), next);
+          yield new State(
+              gems,
+              weaponAddDamage,
+              engravings,
+              refines,
+              bracelet,
+              armGuard,
+              polish,
+              cores,
+              Map.copyOf(map));
+        }
         case EngravingEffect engraving -> {
           var next = new HashMap<>(engravings);
           var base = engravings.get(engraving.name());
@@ -823,7 +853,7 @@ public class CombatPowerSimulationService {
               armGuard,
               polish,
               cores,
-              leap);
+              passives);
         }
       };
     }
@@ -928,15 +958,13 @@ public class CombatPowerSimulationService {
               CombatPowerArkGridModel.factor(core.nextPct())
                   .divide(CombatPowerArkGridModel.factor(core.nowPct()), MATH),
               MATH);
-    // 도약 포인트 합 P: (1 + c·P) 독립 배수(c = 팔찌 도약과 같은 계수, 0.002/점).
-    if (state.leap() != null) {
-      var perPoint = braceletCoefficients.leapPerPoint();
-      var now =
-          BigDecimal.ONE.add(
-              perPoint.multiply(BigDecimal.valueOf(state.leap().current()), MATH), MATH);
-      var next =
-          BigDecimal.ONE.add(
-              perPoint.multiply(BigDecimal.valueOf(state.leap().next()), MATH), MATH);
+    // 아크 패시브 트리 포인트 합 P: 트리마다 독립 배수 f(P), 바꾼 비율 f(새)/f(지금)을 곱한다. 도약 (1 + 0.002·P, 팔찌 도약과 같은
+    // 계수), 진화 (1 + 0.0075·max(P − 40, 0), 모델값), 깨달음 (1 + 0.007·P, 100 이하만).
+    for (var passive : state.passives().values()) {
+      var now = passiveFactor(passive.tree(), passive.current());
+      var next = passiveFactor(passive.tree(), passive.next());
+      // 계획 단계에서 계산할 수 없는 트리·값(깨달음 100 초과 등)은 이미 걸러 효과가 없으므로 여기 오지 않는다(지키는 줄).
+      if (now == null || next == null) return null;
       ratio = ratio.multiply(next.divide(now, MATH), MATH);
     }
     for (var entry : state.engravings().entrySet()) {
@@ -1277,21 +1305,46 @@ public class CombatPowerSimulationService {
         // 요청도
         // 막는다(코드 리뷰 web #1706 P2).
         if (LEAP.equals(point.name())) range("points", change.points(), 0, LEAP_MAX);
+        // 진화 포인트 최대 140(공식 공지 13307, 계수 리소스 evolutionMaxPoints): 넘으면 웹을 거치지 않은 요청도 400(코드 리뷰 #965
+        // P2).
+        if (EVOLUTION.equals(point.name()))
+          range("points", change.points(), 0, arkPassiveCoefficients.evolutionMaxPoints());
+        // 깨달음 포인트 최대 101(계수 리소스 enlightenmentLimitPoints): 넘으면 400, 100 초과는 계산하지 않음(아래).
+        if (ENLIGHTENMENT.equals(point.name()))
+          range("points", change.points(), 0, arkPassiveCoefficients.enlightenmentLimitPoints());
         var target = "아크 패시브 " + point.name();
         var from = str(point.value());
         var to = str(change.points());
-        // 진화·깨달음은 비교 기준 둘의 식이 달라 확인 전까지 계산하지 않는다(PM 총괄 11-02). 도약은 둘이 같다.
-        if (!LEAP.equals(point.name()))
-          yield new Planned(change, target, from, to, null, null, EVOLUTION_ENLIGHTENMENT_REASON);
+        // 트리마다 독립 배수(PM 총괄 11-15 19:12): 도약은 비교 기준 둘이 같고, 진화는 모델값, 깨달음은 100 이하만(지금 값이나 바꿀 값이 100을
+        // 넘으면 계산하지 않음). 그 밖 트리는 계산하지 않는다.
+        var basis =
+            LEAP.equals(point.name())
+                ? LEAP_BASIS
+                : EVOLUTION.equals(point.name())
+                    ? EVOLUTION_BASIS
+                    : ENLIGHTENMENT.equals(point.name()) ? ENLIGHTENMENT_BASIS : null;
+        if (basis == null)
+          yield new Planned(
+              change, target, from, to, null, null, CombatPowerReasons.MODEL_UNCONFIRMED.text());
         if (point.value() == null)
-          yield new Planned(change, target, from, to, null, null, LEAP_UNREAD);
+          yield new Planned(
+              change,
+              target,
+              from,
+              to,
+              null,
+              null,
+              LEAP.equals(point.name()) ? LEAP_UNREAD : PASSIVE_UNREAD);
+        if (passiveFactor(point.name(), point.value()) == null
+            || passiveFactor(point.name(), change.points()) == null)
+          yield new Planned(change, target, from, to, null, null, ENLIGHTENMENT_OVER_REASON);
         yield new Planned(
             change,
             target,
             from,
             to,
-            new LeapEffect(point.value(), change.points()),
-            LEAP_BASIS,
+            new PassiveEffect(point.name(), point.value(), change.points()),
+            basis,
             null);
       }
       case ARM_GUARD -> armGuard(loadout, refineModel, change);

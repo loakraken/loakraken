@@ -149,7 +149,12 @@ class OpenApiIntegrationTest {
     // 아바타별 성향(다음 릴리스): 응답은 늘 보내지만(없으면 빈 목록) api 배포 전까지 계약에서는 선택 필드다(배포 순서 규칙).
     assertThat(document.at("/components/schemas/AvatarResponse/required").toString())
         .contains("effects")
-        .doesNotContain("tendencies");
+        .doesNotContain("tendencies", "overlay");
+    // 덧입기 표시(다음 릴리스): true/false/null(모름). api 배포 전까지 선택 필드, enum 아님.
+    assertThat(document.at("/components/schemas/AvatarResponse/properties/overlay").toString())
+        .contains("boolean")
+        .contains("null")
+        .doesNotContain("enum");
     assertThat(
             document.at("/components/schemas/AvatarResponse/properties/tendencies/type").asText())
         .isEqualTo("array");

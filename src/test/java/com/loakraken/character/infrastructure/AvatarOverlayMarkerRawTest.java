@@ -74,6 +74,20 @@ class AvatarOverlayMarkerRawTest {
     assertThat(LostArkAvatarTooltip.effectsDisabled(null)).isNull();
   }
 
+  @Test
+  void 실제_원문의_덧입기_아바타만_남으면_아바타_주스탯은_0이다() throws Exception {
+    // 안쪽을 벗기고 겉 아바타만 남은 경우: 공식 툴팁에 표시 줄이 있으니 파서 → 계산까지 0.
+    var overlays = new ArrayList<CharacterLoadout.Avatar>();
+    for (var character : fixture().path("characters"))
+      for (var raw : character.path("avatars")) {
+        var avatar = domain(raw, raw.path("Tooltip").asText());
+        if (Boolean.TRUE.equals(avatar.effectsDisabled())) overlays.add(avatar);
+      }
+    assertThat(overlays).hasSize(4);
+    assertThat(CombatPowerRefineModel.avatarStat(coefficients(), overlays).sum())
+        .isEqualByComparingTo("0");
+  }
+
   private static CharacterLoadout.Avatar domain(JsonNode raw, String tooltip) {
     return new LostArkArmoryResponse.Avatar(
             raw.path("Type").asText(),

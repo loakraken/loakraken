@@ -205,7 +205,8 @@ final class SpecUpScoreCandidates {
         var next = target(values, part, mains, position, new int[] {a, b});
         if (next == null) continue;
         var swap = swapLines(values, part, mains, lines, position, flats, new int[] {a, b}, null);
-        rows.add(row(item, index, slot, scoring, next, swap, code(a) + "" + code(b), values));
+        rows.add(
+            row(item, index, slot, scoring, next, lines, swap, code(a) + "" + code(b), values));
       }
     if (grade[0] == 2 && grade[1] == 2)
       for (var name : FLAT_OPTIONS)
@@ -222,6 +223,7 @@ final class SpecUpScoreCandidates {
                   slot,
                   scoring,
                   next,
+                  lines,
                   swapLines(values, part, mains, lines, position, flats, grade, text),
                   "HH" + ("무기 공격력".equals(name) ? "W" : "A") + code(g),
                   values));
@@ -258,6 +260,7 @@ final class SpecUpScoreCandidates {
       String slot,
       List<String> before,
       List<String> after,
+      List<String> current,
       List<String> swap,
       String code,
       CombatPowerPolishValues values) {
@@ -270,7 +273,7 @@ final class SpecUpScoreCandidates {
         item.icon(),
         item.grade(),
         SpecUpCost.POLISH_COST_UNCONFIRMED,
-        new SpecUpKrakenScore.Polish(slot, List.copyOf(after), index, swap));
+        new SpecUpKrakenScore.Polish(slot, List.copyOf(after), index, List.copyOf(current), swap));
   }
 
   /**

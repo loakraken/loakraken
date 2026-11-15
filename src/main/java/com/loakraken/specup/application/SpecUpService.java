@@ -37,6 +37,8 @@ import org.springframework.stereotype.Service;
  */
 @Service
 public class SpecUpService {
+  private static final org.slf4j.Logger log =
+      org.slf4j.LoggerFactory.getLogger(SpecUpService.class);
   public static final String RULE_VERSION = "spec-up-v1";
   static final Pattern GEM = Pattern.compile("(\\d+)레벨 (\\S+)의 보석");
   static final Set<String> WEAPON_ARMOR = Set.of("무기", "투구", "상의", "하의", "장갑", "어깨");
@@ -127,22 +129,8 @@ public class SpecUpService {
     var changes = new ArrayList<Change>();
     for (var entry : levels.entrySet()) {
       if (!names.contains(entry.getKey())) return null;
-      changes.add(
-          new Change(
-              Kind.STONE_ENGRAVING,
-              null,
-              null,
-              null,
-              entry.getValue(),
-              null,
-              null,
-              null,
-              null,
-              entry.getKey(),
-              null,
-              null,
-              null,
-              null));
+      // 추천 순서의 스톤 단계와 같은 변경(코드 리뷰 #947 P3).
+      changes.add(SpecUpGoalService.stoneChange(entry.getKey(), entry.getValue()));
     }
     return changes.isEmpty() ? null : changes;
   }
@@ -350,6 +338,8 @@ public class SpecUpService {
     var unsupported = new ArrayList<Candidate>();
     // 딜러가 아니면 모든 후보를 역할 이유로 UNSUPPORTED(PM-백엔드 P0 10-11 20:23).
     var roleReason = CombatPowerSimulationService.roleReason(snapshot);
+    // 점수 입력 줄(연마 교체·스톤)의 계산 모델(보석·재련·팔찌)은 같은 캐시라 요청마다 한 번만 만든다(코드 리뷰 #945 P3: 줄마다 다시 만들었다).
+    var models = new Models(snapshot);
     for (var plan : planned) {
       if (!cooldownGemsIncluded && "COOLDOWN".equals(plan.gemType())) continue;
       var candidate =
@@ -362,7 +352,7 @@ public class SpecUpService {
                   null,
                   CombatPowerReasons.classify(roleReason),
                   null)
-              : evaluate(snapshot, plan);
+              : evaluate(snapshot, models, plan);
       var raw = krakenDelta(krakenContext, loadout, plan);
       candidate =
           candidate.withKraken(
@@ -461,21 +451,35 @@ public class SpecUpService {
         candidate.deltaCombatPower(), candidate.cost() == null ? null : candidate.cost().amount());
   }
 
-  private Candidate evaluate(CharacterResult snapshot, Planned plan) {
-    if (plan.change() == null
-        && plan.kraken() instanceof SpecUpKrakenScore.Polish polish
-        && polish.index() != null
-        && polish.lines() != null
-        && polishCpEnabled()) {
-      var swap = simulator.simulatePolishSwap(snapshot, polish.index(), polish.lines());
-      if (swap != null) return evaluated(plan, swap);
+  /** 요청 하나에서 나눠 쓰는 시뮬레이터 계산 모델(처음 쓸 때 만든다). */
+  private final class Models {
+    private final CharacterResult snapshot;
+    private CombatPowerSimulationService.Models value;
+
+    Models(CharacterResult snapshot) {
+      this.snapshot = snapshot;
     }
-    if (plan.change() == null
-        && plan.kraken() instanceof SpecUpKrakenScore.Stone stone
-        && stoneCpEnabled()) {
-      var changes = stoneChanges(snapshot.details().loadout(), stone.levels());
-      if (changes != null) return evaluated(plan, simulator.simulate(snapshot, changes));
+
+    CombatPowerSimulationService.Models get() {
+      if (value == null) value = simulator.models(snapshot);
+      return value;
     }
+  }
+
+  private Candidate evaluate(CharacterResult snapshot, Models models, Planned plan) {
+    // 점수 입력에서 만든 줄(연마 교체·스톤)의 전투력: 한 줄이 실패해도 목록 전체가 실패하지 않게 그 줄만 점수만 남긴다(PM 총괄 11-15 14:14, 스위치를
+    // 켜기 전 필수).
+    if (plan.change() == null && plan.kraken() != null)
+      try {
+        var scored = scoreRowCombatPower(snapshot, models, plan);
+        if (scored != null) return scored;
+      } catch (RuntimeException exception) {
+        log.warn(
+            "event=spec_up_row_cp_failed id={} kind={} error={}",
+            plan.id(),
+            plan.kind(),
+            exception.getClass().getSimpleName());
+      }
     if (plan.change() == null)
       return plan.candidate(
           "UNSUPPORTED",
@@ -488,6 +492,26 @@ public class SpecUpService {
               : CombatPowerReasons.MODEL_UNCONFIRMED,
           null);
     return evaluated(plan, simulator.simulate(snapshot, List.of(plan.change())));
+  }
+
+  /** 연마 교체·스톤 줄의 전투력(스위치가 켜졌고 계산할 수 있을 때). 그렇지 않으면 null(점수만). */
+  private Candidate scoreRowCombatPower(CharacterResult snapshot, Models models, Planned plan) {
+    if (plan.kraken() instanceof SpecUpKrakenScore.Polish polish
+        && polish.index() != null
+        && polish.lines() != null
+        && polishCpEnabled()) {
+      var swap =
+          simulator.simulatePolishSwap(
+              snapshot, models.get(), polish.index(), polish.current(), polish.lines());
+      return swap == null ? null : evaluated(plan, swap);
+    }
+    if (plan.kraken() instanceof SpecUpKrakenScore.Stone stone && stoneCpEnabled()) {
+      var changes = stoneChanges(snapshot.details().loadout(), stone.levels());
+      return changes == null
+          ? null
+          : evaluated(plan, simulator.simulate(snapshot, models.get(), changes));
+    }
+    return null;
   }
 
   /** 시뮬레이터 결과 → 후보. 바꾼 줄 가운데 하나라도 계산할 수 없으면 그 이유로 UNSUPPORTED(연마 교체는 줄 여럿, 그 밖은 변경 하나). */

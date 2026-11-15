@@ -401,6 +401,19 @@ public class CombatPowerSimulationService {
 
   /** 이미 읽은 캐릭터로 시뮬레이션한다(공식 호출 없음). */
   public Result simulate(CharacterResult result, List<Change> changes) {
+    return simulate(result, models(result), changes);
+  }
+
+  /**
+   * 한 캐릭터 캐시의 계산 모델(보석·재련·팔찌). 캐릭터 캐시에서만 만들고 바꾸지 않으므로, 같은 캐시로 후보 여럿을 잴 때(스펙업 목록) 요청마다 한 번 만들어 나눠
+   * 쓴다.
+   */
+  public record Models(
+      CombatPowerGemModel.Model gem,
+      CombatPowerRefineModel.Model refine,
+      CombatPowerBraceletModel.Model bracelet) {}
+
+  public Models models(CharacterResult result) {
     var loadout = result.details().loadout();
     var gemModel = CombatPowerGemModel.of(gemCoefficients, loadout);
     var refineModel =
@@ -412,36 +425,43 @@ public class CombatPowerSimulationService {
     var braceletModel =
         CombatPowerBraceletModel.of(
             braceletCoefficients, loadout, result.details().profile().stats());
+    return new Models(gemModel, refineModel, braceletModel);
+  }
+
+  /** models는 같은 result로 만든 것이어야 한다(models(result)). */
+  public Result simulate(CharacterResult result, Models models, List<Change> changes) {
+    var loadout = result.details().loadout();
     // 같은 대상은 뒤의 변경이 이긴다. 순서는 처음 나온 자리를 지킨다.
     var merged = new LinkedHashMap<String, Planned>();
     for (var change : changes)
-      merged.put(key(change), describe(loadout, gemModel, refineModel, braceletModel, change));
-    return compute(result, gemModel, refineModel, braceletModel, merged.values());
+      merged.put(
+          key(change), describe(loadout, models.gem(), models.refine(), models.bracelet(), change));
+    return compute(result, models.gem(), models.refine(), models.bracelet(), merged.values());
   }
 
   /**
    * 스펙업 연마 후보의 장신구 바꾸기(공개 시뮬레이터 요청에는 없는 내부 계산). 장비 순번 index의 연마 줄을 lines(줄 순서, 툴팁 꼴 '이름 +값')로 바꾼다.
    * null 줄은 빠진 줄로 보고 전투력 몫 0(Δ크라켄 점수와 같은 목표 장신구: 지금 고정값 공격력·무기 공격력 줄이 빠진 매물, 규칙은
    * SpecUpScoreCandidates.swapLines). 지금 줄과 같은 줄은 바꾸지 않는다. 줄마다 POLISH 한 줄 교체와 같은 규칙(수치표 1680 고대만,
-   * 확인하지 않은 계수는 계산하지 않음, 무기 공격력 줄은 재련 모델 W 항)이다. 줄 수가 지금과 다르면 계산하지 않는다(null).
+   * 확인하지 않은 계수는 계산하지 않음, 무기 공격력 줄은 재련 모델 W 항)이다. 줄 수가 지금과 다르거나, 목표를 만든 지금 줄(expected, 점수 입력)이 툴팁 줄과
+   * 줄마다 같지 않으면 계산하지 않는다(null). models는 같은 result로 만든 것(models(result)).
    */
-  public Result simulatePolishSwap(CharacterResult result, int index, List<String> lines) {
+  public Result simulatePolishSwap(
+      CharacterResult result, Models models, int index, List<String> expected, List<String> lines) {
     var loadout = result.details().loadout();
     if (index < 0 || index >= loadout.equipment().size()) return null;
     var item = loadout.equipment().get(index);
-    if (item == null || item.detail() == null || lines == null) return null;
+    if (item == null || item.detail() == null || lines == null || expected == null) return null;
     var current = item.detail().polishEffects();
-    if (current.size() != lines.size()) return null;
-    var gemModel = CombatPowerGemModel.of(gemCoefficients, loadout);
-    var refineModel =
-        CombatPowerRefineModel.of(
-            refineCoefficients,
-            loadout,
-            result.details().profile().stats(),
-            gemModel.currentBaseAttackPct());
-    var braceletModel =
-        CombatPowerBraceletModel.of(
-            braceletCoefficients, loadout, result.details().profile().stats());
+    if (current.size() != lines.size() || current.size() != expected.size()) return null;
+    // 줄 짝은 순서로 맞추므로, 목표 줄을 만든 지금 줄(점수 입력)이 툴팁 줄과 줄마다 같아야 한다. 하나라도 다르면(두 원문 파서가 갈라짐) 틀린 Δ 대신 계산하지
+    // 않는다(코드 리뷰 #945 P3).
+    for (int line = 0; line < current.size(); line++) {
+      var now = current.get(line);
+      if (now == null || expected.get(line) == null) return null;
+      if (!sameLine(expected.get(line), now.name() + " " + now.value())) return null;
+    }
+    var refineModel = models.refine();
     boolean tableFits = polishTableFits(polishValues, item);
     var planned = new ArrayList<Planned>();
     for (int line = 0; line < lines.size(); line++) {
@@ -487,7 +507,7 @@ public class CombatPowerSimulationService {
                       ? refineModel.unsupportedReason()
                       : null));
     }
-    return compute(result, gemModel, refineModel, braceletModel, planned);
+    return compute(result, models.gem(), refineModel, models.bracelet(), planned);
   }
 
   /** 같은 줄인지(빈칸·천 단위 쉼표 차이는 무시: 점수 입력 줄과 툴팁 줄의 표기 차이). */

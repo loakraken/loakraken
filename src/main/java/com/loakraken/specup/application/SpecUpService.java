@@ -80,7 +80,8 @@ public class SpecUpService {
       @Value("${spec-up.enabled:false}") boolean enabled,
       // 연마 시세 칸을 요청에서 채우는가(PM 총괄 10-25: 기본 꺼짐 — 꺼져 있으면 캐시된 칸만 쓰고 없으면 비용 미확정).
       @Value("${spec-up.polish-price-fill.enabled:false}") boolean polishPriceFill,
-      org.springframework.core.env.Environment environment) {
+      org.springframework.core.env.Environment environment,
+      io.micrometer.core.instrument.MeterRegistry meters) {
     this.simulator = simulator;
     this.auctions = auctions;
     this.books = books;
@@ -94,7 +95,14 @@ public class SpecUpService {
     this.polishPriceFill = polishPriceFill;
     this.enabled = enabled;
     this.environment = environment;
+    this.meters = meters;
   }
+
+  /**
+   * 점수 입력 줄 전투력 실패 수(loakraken.spec_up.row_cp_failed{kind, error}). 스위치를 켠 뒤 줄이 조용히 점수만으로 떨어지는지 보는
+   * 값이다. kind는 POLISH·ABILITY_STONE, error는 예외 클래스 이름이라 값이 몇 개뿐이다.
+   */
+  private final io.micrometer.core.instrument.MeterRegistry meters;
 
   boolean armGuardEnabled() {
     return environment.getProperty("spec-up.arm-guard.enabled", Boolean.class, true);
@@ -474,11 +482,12 @@ public class SpecUpService {
         var scored = scoreRowCombatPower(snapshot, models, plan);
         if (scored != null) return scored;
       } catch (RuntimeException exception) {
+        var error = exception.getClass().getSimpleName();
         log.warn(
-            "event=spec_up_row_cp_failed id={} kind={} error={}",
-            plan.id(),
-            plan.kind(),
-            exception.getClass().getSimpleName());
+            "event=spec_up_row_cp_failed id={} kind={} error={}", plan.id(), plan.kind(), error);
+        meters
+            .counter("loakraken.spec_up.row_cp_failed", "kind", plan.kind(), "error", error)
+            .increment();
       }
     if (plan.change() == null)
       return plan.candidate(

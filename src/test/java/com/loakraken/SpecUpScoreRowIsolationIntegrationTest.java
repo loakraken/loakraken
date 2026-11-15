@@ -60,6 +60,7 @@ class SpecUpScoreRowIsolationIntegrationTest {
   @MockitoBean CharacterDetailsPort detailsPort;
   @MockitoBean MarketAuctionService auctions;
   @MockitoSpyBean CombatPowerSimulationService simulator;
+  @Autowired io.micrometer.core.instrument.MeterRegistry meters;
 
   private final JsonMapper mapper = new JsonMapper();
 
@@ -109,6 +110,18 @@ class SpecUpScoreRowIsolationIntegrationTest {
     assertThat(failed).isGreaterThanOrEqualTo(4);
     // 다른 장신구 연마 줄은 계산된다(한 줄 실패가 다른 줄로 번지지 않음).
     assertThat(computed).isPositive();
+    // 실패 수: 줄마다 하나(종류·예외 클래스 태그만).
+    assertThat(
+            meters
+                .get("loakraken.spec_up.row_cp_failed")
+                .tag("kind", "ABILITY_STONE")
+                .tag("error", "IllegalStateException")
+                .counter()
+                .count())
+        .isEqualTo(3.0);
+    assertThat(
+            meters.get("loakraken.spec_up.row_cp_failed").tag("kind", "POLISH").counter().count())
+        .isEqualTo(failed - 3);
   }
 
   private static JsonNode find(JsonNode candidates, String id) {

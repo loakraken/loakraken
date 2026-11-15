@@ -250,6 +250,47 @@ class MarketVolumeWarmupTest {
   }
 
   @Test
+  void 오늘_한_바퀴를_마치고_리더를_잃었다가_다시_잡으면_공식_호출도_하루_몫도_더_잡지_않는다() {
+    // 한 페이지짜리 돌림 탭: 첫 주기에 한 바퀴를 마치고 다음 바퀴를 내일로 저장한다.
+    var saved = new java.util.concurrent.atomic.AtomicReference<MarketVolumeCursor>();
+    when(cache.findVolumeCursor(MarketTab.AVATAR))
+        .thenAnswer(invocation -> Optional.ofNullable(saved.get()));
+    doAnswer(
+            invocation -> {
+              saved.set(invocation.getArgument(1));
+              return null;
+            })
+        .when(cache)
+        .saveVolumeCursor(eq(MarketTab.AVATAR), any());
+    when(boards.volumePage(MarketTab.AVATAR, 1)).thenReturn(page(1, 2, 1, 2));
+    when(markets.refreshItemHistory(anyLong()))
+        .thenAnswer(invocation -> Optional.of(history(invocation.getArgument(0), clock.now)));
+    var job = warmup("key", List.of(MarketTab.AVATAR), 15, 800);
+
+    job.tick();
+    assertThat(saved.get()).isEqualTo(new MarketVolumeCursor(1, today.plusDays(1)));
+
+    // 리더를 잃은 주기
+    reset(lease);
+    when(lease.hold(any(), any())).thenReturn(false);
+    clock.now = clock.now.plusSeconds(60);
+    job.tick();
+
+    // 같은 날 다시 잡음: 메모리 상태는 버리지만 저장소의 내일 위치를 보고 건너뛴다.
+    reset(lease);
+    when(lease.hold(any(), any())).thenReturn(true);
+    clearInvocations(boards, markets, gate, cache);
+    clock.now = clock.now.plusSeconds(60);
+    job.tick();
+
+    verify(cache).findVolumeCursor(MarketTab.AVATAR);
+    verify(boards, never()).volumePage(any(), anyInt());
+    verify(markets, never()).refreshItemHistory(anyLong());
+    verify(gate, never()).withReserve(anyInt(), any());
+    verify(cache, never()).addVolumeCalls(any(), anyInt());
+  }
+
+  @Test
   void 리더를_잃었다가_다시_잡으면_돌림_위치를_저장소에서_다시_읽는다() {
     // 처음엔 2페이지, 다른 인스턴스가 리더였던 동안 5페이지까지 진행됨
     when(cache.findVolumeCursor(MarketTab.AVATAR))

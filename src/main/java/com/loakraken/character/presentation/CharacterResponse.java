@@ -136,7 +136,8 @@ public record CharacterResponse(
                         a.effects(),
                         a.tendencies().stream()
                             .map(t -> new AvatarTendencyResponse(t.type(), t.point()))
-                            .toList()))
+                            .toList(),
+                        a.effectsDisabled()))
             .toList(),
         result.details().loadout().collectibles().stream()
             .map(
@@ -293,7 +294,13 @@ public record CharacterResponse(
               description =
                   "이 아바타가 주는 성향 점수(공식 툴팁 순서). 성향 줄이 없는 아바타(이동 효과 등)는 빈 목록. 캐릭터 성향 합계는 tendencies. 배포 순서 때문에 계약에서는 아직 선택 필드")
           @OptionalResponse
-          List<AvatarTendencyResponse> tendencies) {}
+          List<AvatarTendencyResponse> tendencies,
+      @Schema(
+              description =
+                  "덧입기 칸에 입어 효과가 적용되지 않는 아바타면 true(공식 툴팁의 '아래 능력들이 적용되지 않는 상태입니다.(덧입기 슬롯에 착용 중)' 줄). 줄이 없으면 false, 툴팁을 읽지 못했으면 null. 배포 순서 때문에 계약에서는 아직 선택 필드")
+          @NullableResponse
+          @OptionalResponse
+          Boolean overlay) {}
 
   public record AvatarTendencyResponse(
       @Schema(example = "지성") String type, @Schema(example = "5") Integer point) {}

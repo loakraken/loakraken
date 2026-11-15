@@ -662,20 +662,39 @@ class CombatPowerSimulationIntegrationTest {
     assertThat(down.path("after").decimalValue()).isEqualByComparingTo("3227.86");
     assertThat(down.at("/contributions/0/delta").decimalValue()).isEqualByComparingTo("-117.38");
     assertThat(down.path("partial").asBoolean()).isFalse();
-    // 70 → 80: 3,345.24 × 1.16 / 1.14 = 3,403.93. 같은 대상은 뒤의 변경이 이긴다.
-    var up =
+    // 같은 대상은 뒤의 변경이 이긴다(10 → 50 = 70 → 50).
+    var later =
         mapper
             .readTree(
                 simulate(
                         "시뮬도약",
                         """
                         [{"kind": "ARK_PASSIVE_POINT", "tree": "도약", "points": 10},
-                         {"kind": "ARK_PASSIVE_POINT", "tree": "도약", "points": 80}]
+                         {"kind": "ARK_PASSIVE_POINT", "tree": "도약", "points": 50}]
                         """)
                     .body())
             .path("data");
-    assertThat(up.path("contributions").size()).isEqualTo(1);
-    assertThat(up.path("after").decimalValue()).isEqualByComparingTo("3403.93");
+    assertThat(later.path("contributions").size()).isEqualTo(1);
+    assertThat(later.path("after").decimalValue()).isEqualByComparingTo("3227.86");
+    // 도약 최대 70(고대 장비 18 + 전투 레벨 40 + 랭크 12, 공식 가이드 2026-06-24): 넘으면 웹을 거치지 않아도 400(코드 리뷰 web #1706
+    // P2).
+    var over =
+        simulate("시뮬도약", "[{\"kind\": \"ARK_PASSIVE_POINT\", \"tree\": \"도약\", \"points\": 71}]");
+    assertThat(over.statusCode()).isEqualTo(400);
+    assertThat(over.body()).contains("INVALID_REQUEST", "points", "0~70");
+    var overLater =
+        simulate(
+            "시뮬도약",
+            """
+            [{"kind": "ARK_PASSIVE_POINT", "tree": "도약", "points": 50},
+             {"kind": "ARK_PASSIVE_POINT", "tree": "도약", "points": 80}]
+            """);
+    assertThat(overLater.statusCode()).isEqualTo(400);
+    assertThat(
+            simulate(
+                    "시뮬도약", "[{\"kind\": \"ARK_PASSIVE_POINT\", \"tree\": \"도약\", \"points\": 70}]")
+                .statusCode())
+        .isEqualTo(200);
     // 같은 값이면 배수 1.
     var same =
         mapper

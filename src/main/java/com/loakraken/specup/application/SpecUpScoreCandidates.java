@@ -204,7 +204,8 @@ final class SpecUpScoreCandidates {
         if (a == grade[0] && b == grade[1]) continue;
         var next = target(values, part, mains, position, new int[] {a, b});
         if (next == null) continue;
-        rows.add(row(item, index, slot, scoring, next, code(a) + "" + code(b), values));
+        var swap = swapLines(values, part, mains, lines, position, flats, new int[] {a, b}, null);
+        rows.add(row(item, index, slot, scoring, next, swap, code(a) + "" + code(b), values));
       }
     if (grade[0] == 2 && grade[1] == 2)
       for (var name : FLAT_OPTIONS)
@@ -221,6 +222,7 @@ final class SpecUpScoreCandidates {
                   slot,
                   scoring,
                   next,
+                  swapLines(values, part, mains, lines, position, flats, grade, text),
                   "HH" + ("무기 공격력".equals(name) ? "W" : "A") + code(g),
                   values));
         }
@@ -256,6 +258,7 @@ final class SpecUpScoreCandidates {
       String slot,
       List<String> before,
       List<String> after,
+      List<String> swap,
       String code,
       CombatPowerPolishValues values) {
     return SpecUpService.Planned.scored(
@@ -267,7 +270,40 @@ final class SpecUpScoreCandidates {
         item.icon(),
         item.grade(),
         SpecUpCost.POLISH_COST_UNCONFIRMED,
-        new SpecUpKrakenScore.Polish(slot, List.copyOf(after)));
+        new SpecUpKrakenScore.Polish(slot, List.copyOf(after), index, swap));
+  }
+
+  /**
+   * 전투력 계산용 목표 줄(지금 줄 순서): Δ크라켄 점수와 같은 목표 장신구다(비교 기준 B 스펙업 후보 규칙, 계산 검증 11-15). 주옵션은 목표 등급, 지금 고정값
+   * 공격력·무기 공격력 줄은 빠진다(null = 전투력 몫 0). 다만 두 주옵션이 모두 상인 장신구(셋째 줄 고정값 후보)는 고정값 줄을 그 후보 값으로 둔다. 주옵션도
+   * 고정값도 아닌 줄(딜러 전투력 0인 옵션)은 그대로 둔다. 새로 붙는 주옵션은 빠지는 고정값 줄 자리부터, 없으면 그 밖 줄에 놓는다. 줄 자리는 전투력에 영향이
+   * 없다(줄마다 독립 배수).
+   */
+  static List<String> swapLines(
+      CombatPowerPolishValues values,
+      String part,
+      List<String> mains,
+      List<String> current,
+      int[] position,
+      List<Integer> flats,
+      int[] grades,
+      String flatText) {
+    var swap = new ArrayList<String>(current);
+    for (int i : flats) swap.set(i, null);
+    var free = new ArrayList<Integer>(flats);
+    for (int i = 0; i < current.size(); i++)
+      if (i != position[0] && i != position[1] && !flats.contains(i)) free.add(i);
+    if (flatText != null) {
+      int at = flats.isEmpty() ? free.getFirst() : flats.getFirst();
+      free.remove(Integer.valueOf(at));
+      swap.set(at, flatText);
+    }
+    for (int k = 0; k < 2; k++) {
+      if (grades[k] < 0) continue;
+      int at = position[k] >= 0 ? position[k] : free.removeFirst();
+      swap.set(at, text(values, part, mains.get(k), true, grades[k]));
+    }
+    return java.util.Collections.unmodifiableList(swap);
   }
 
   private static String shown(CombatPowerPolishValues values, String part, List<String> lines) {

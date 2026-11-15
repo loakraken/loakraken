@@ -104,7 +104,16 @@ public class SpecUpKrakenScore {
 
   record Stone(Map<String, Integer> levels) implements Edit {}
 
-  record Polish(String slot, List<String> option) implements Edit {}
+  /**
+   * 연마 교체: slot은 점수 입력의 부위, option은 목표 장신구의 점수 줄. index·lines는 전투력 계산용(장비 순번, 지금 줄 순서대로 바꿀 줄, null은
+   * 옵션을 모르는 줄)이고 없으면 null(서포터 후보 등).
+   */
+  record Polish(String slot, List<String> option, Integer index, List<String> lines)
+      implements Edit {
+    Polish(String slot, List<String> option) {
+      this(slot, option, null, null);
+    }
+  }
 
   /** 후보 하나를 적용한 Δ점수(반올림 전). 계산할 수 없으면 null. */
   Double delta(Context context, CharacterLoadout loadout, Change change) {

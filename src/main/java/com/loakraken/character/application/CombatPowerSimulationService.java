@@ -416,6 +416,100 @@ public class CombatPowerSimulationService {
     var merged = new LinkedHashMap<String, Planned>();
     for (var change : changes)
       merged.put(key(change), describe(loadout, gemModel, refineModel, braceletModel, change));
+    return compute(result, gemModel, refineModel, braceletModel, merged.values());
+  }
+
+  /**
+   * 스펙업 연마 후보의 장신구 바꾸기(공개 시뮬레이터 요청에는 없는 내부 계산). 장비 순번 index의 연마 줄을 lines(줄 순서, 툴팁 꼴 '이름 +값')로 바꾼다.
+   * null 줄은 빠진 줄로 보고 전투력 몫 0(Δ크라켄 점수와 같은 목표 장신구: 지금 고정값 공격력·무기 공격력 줄이 빠진 매물, 규칙은
+   * SpecUpScoreCandidates.swapLines). 지금 줄과 같은 줄은 바꾸지 않는다. 줄마다 POLISH 한 줄 교체와 같은 규칙(수치표 1680 고대만,
+   * 확인하지 않은 계수는 계산하지 않음, 무기 공격력 줄은 재련 모델 W 항)이다. 줄 수가 지금과 다르면 계산하지 않는다(null).
+   */
+  public Result simulatePolishSwap(CharacterResult result, int index, List<String> lines) {
+    var loadout = result.details().loadout();
+    if (index < 0 || index >= loadout.equipment().size()) return null;
+    var item = loadout.equipment().get(index);
+    if (item == null || item.detail() == null || lines == null) return null;
+    var current = item.detail().polishEffects();
+    if (current.size() != lines.size()) return null;
+    var gemModel = CombatPowerGemModel.of(gemCoefficients, loadout);
+    var refineModel =
+        CombatPowerRefineModel.of(
+            refineCoefficients,
+            loadout,
+            result.details().profile().stats(),
+            gemModel.currentBaseAttackPct());
+    var braceletModel =
+        CombatPowerBraceletModel.of(
+            braceletCoefficients, loadout, result.details().profile().stats());
+    boolean tableFits = polishTableFits(polishValues, item);
+    var planned = new ArrayList<Planned>();
+    for (int line = 0; line < lines.size(); line++) {
+      var now = current.get(line);
+      var next = lines.get(line);
+      var nowText = now == null ? null : now.name() + " " + now.value();
+      if (next != null && nowText != null && sameLine(next, nowText)) continue;
+      var change =
+          new Change(
+              Kind.POLISH,
+              null,
+              index,
+              line,
+              null,
+              null,
+              null,
+              next,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null);
+      var from = now == null ? null : CombatPowerPolishModel.line(now.name(), now.value());
+      var to = next == null ? CombatPowerPolishModel.Line.NEUTRAL : polishLine(next);
+      String reason =
+          !tableFits
+              ? POLISH_TABLE_MISMATCH
+              : from == null
+                  ? "지금 연마 줄(" + nowText + ")의 전투력 계수를 확인하지 않아 계산하지 않았습니다."
+                  : to == null ? "이 연마 옵션의 전투력 계수를 확인하지 않아 계산하지 않았습니다." : null;
+      planned.add(
+          new Planned(
+              change,
+              item.name() + " 연마 " + (line + 1),
+              nowText,
+              next == null ? "모르는 옵션" : next,
+              reason == null ? new PolishEffect(key(change), from, to) : null,
+              POLISH_BASIS,
+              reason != null
+                  ? reason
+                  : touchesWeapon(from) || touchesWeapon(to)
+                      ? refineModel.unsupportedReason()
+                      : null));
+    }
+    return compute(result, gemModel, refineModel, braceletModel, planned);
+  }
+
+  /** 같은 줄인지(빈칸·천 단위 쉼표 차이는 무시: 점수 입력 줄과 툴팁 줄의 표기 차이). */
+  private static boolean sameLine(String a, String b) {
+    return a.replaceAll("[\\s,]", "").equals(b.replaceAll("[\\s,]", ""));
+  }
+
+  /** 툴팁 꼴 줄('이름 +값')의 몫. 꼴이 아니면 null. */
+  private static CombatPowerPolishModel.Line polishLine(String text) {
+    int split = text.lastIndexOf(" +");
+    return split <= 0
+        ? null
+        : CombatPowerPolishModel.line(text.substring(0, split), text.substring(split + 1));
+  }
+
+  private Result compute(
+      CharacterResult result,
+      CombatPowerGemModel.Model gemModel,
+      CombatPowerRefineModel.Model refineModel,
+      CombatPowerBraceletModel.Model braceletModel,
+      java.util.Collection<Planned> merged) {
+    var loadout = result.details().loadout();
     var official = result.details().profile().combatPower();
     // 반올림은 서버에서 끝낸다(PM-프론트 18:31 (g)): 전투력 소수 둘째 자리, deltaPercent 소수 셋째 자리.
     var before = official == null ? null : official.setScale(2, RoundingMode.HALF_UP);
@@ -427,7 +521,7 @@ public class CombatPowerSimulationService {
     var contributions = new ArrayList<Contribution>();
     int unsupported = 0;
     var roleReason = roleReason(result);
-    for (var planned : merged.values()) {
+    for (var planned : merged) {
       String reason = roleReason != null ? roleReason : planned.reason();
       if (roleReason == null) {
         var hold = heldReason(loadout, braceletModel, planned);

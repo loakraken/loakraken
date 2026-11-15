@@ -98,6 +98,14 @@ public class SpecUpService {
     return environment.getProperty("spec-up.arm-guard.enabled", Boolean.class, true);
   }
 
+  /**
+   * 연마 교체 줄의 Δ전투력(spec-up.polish-cp.enabled, 기본 끔). 켜면 딜러 연마 교체 줄(연마 수치표 1680 고대 장신구)에 Δ크라켄 점수와 같은
+   * 목표 장신구로 Δ전투력을 낸다(점수 옵션만 아는 매물, 나머지 줄은 전투력 몫 0). 꺼져 있으면 지금처럼 점수만 낸다. 요청마다 읽는다.
+   */
+  boolean polishCpEnabled() {
+    return environment.getProperty("spec-up.polish-cp.enabled", Boolean.class, false);
+  }
+
   /** 완갑 target 단계의 등급(목록 줄과 같은 규칙). 정할 수 없으면 null. */
   String armGuardGrade(String current, int target) {
     return kraken.armGuardGrade(current, target);
@@ -413,6 +421,14 @@ public class SpecUpService {
   }
 
   private Candidate evaluate(CharacterResult snapshot, Planned plan) {
+    if (plan.change() == null
+        && plan.kraken() instanceof SpecUpKrakenScore.Polish polish
+        && polish.index() != null
+        && polish.lines() != null
+        && polishCpEnabled()) {
+      var swap = simulator.simulatePolishSwap(snapshot, polish.index(), polish.lines());
+      if (swap != null) return evaluated(plan, swap);
+    }
     if (plan.change() == null)
       return plan.candidate(
           "UNSUPPORTED",
@@ -424,8 +440,19 @@ public class SpecUpService {
               ? CombatPowerReasons.SCORE_ONLY
               : CombatPowerReasons.MODEL_UNCONFIRMED,
           null);
-    var result = simulator.simulate(snapshot, List.of(plan.change()));
-    var contribution = result.contributions().getFirst();
+    return evaluated(plan, simulator.simulate(snapshot, List.of(plan.change())));
+  }
+
+  /** 시뮬레이터 결과 → 후보. 바꾼 줄 가운데 하나라도 계산할 수 없으면 그 이유로 UNSUPPORTED(연마 교체는 줄 여럿, 그 밖은 변경 하나). */
+  private Candidate evaluated(Planned plan, CombatPowerSimulationService.Result result) {
+    var contribution =
+        result.contributions().stream()
+            .filter(item -> item.status() != CombatPowerSimulationService.Status.OK)
+            .findFirst()
+            .orElse(result.contributions().isEmpty() ? null : result.contributions().getFirst());
+    if (contribution == null)
+      return plan.candidate(
+          "UNSUPPORTED", null, null, null, null, CombatPowerReasons.SCORE_ONLY, null);
     if (contribution.status() != CombatPowerSimulationService.Status.OK) {
       var reason = CombatPowerReasons.classify(contribution.basis());
       return plan.candidate(
@@ -437,7 +464,7 @@ public class SpecUpService {
           reason,
           reason.text().equals(contribution.basis()) ? null : contribution.basis());
     }
-    var delta = contribution.delta();
+    var delta = result.delta();
     var percent =
         result.before() == null || result.before().signum() == 0
             ? null

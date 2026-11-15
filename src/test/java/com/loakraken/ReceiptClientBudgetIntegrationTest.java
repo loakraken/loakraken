@@ -20,7 +20,10 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.time.Clock;
 import java.time.Instant;
+import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.AfterEach;
@@ -28,8 +31,11 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.test.web.server.LocalServerPort;
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
+import org.springframework.context.annotation.Primary;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -39,8 +45,12 @@ import tools.jackson.databind.json.JsonMapper;
 /**
  * 영수증 이어 받기와 방문자 공식 호출 한도: 원정대 20명을 이어 받는 동안 방문자의 분당 공식 호출 칸(20)을 넘지 않고, 다른 조회 몫이 늘 남는다. 칸이 모자라면 이어
  * 받을 시각은 칸이 다시 차는 분 경계다. 공식 API는 대역이지만 호출마다 실제 게이트를 지나 방문자 칸에 매긴다.
+ *
+ * <p>시각은 시험이 정한다(방문자 칸의 1분 창과 이어 받을 시각이 같은 시계를 읽음). 창이 넘어가는 것은 시계를 이어 받을 시각(분 경계)으로 옮겨 만든다. 예전에는
+ * 벽시계를 쓰고 '1초보다 멀면 칸 비우기'로 창 넘김을 흉내 냈는데, 분 경계 1초 안에 걸리면 칸을 비우지 않은 채 같은 창에서 검색이 이어져 남겨 둔 몫(6)을 다 쓰고
+ * 429가 났다(간헐 실패). 그래서 일부러 분 경계 0.5초 전에서 시작한다.
  */
-@Import(TestcontainersConfiguration.class)
+@Import({TestcontainersConfiguration.class, ReceiptClientBudgetIntegrationTest.Clocks.class})
 @SpringBootTest(
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
     properties = {
@@ -61,13 +71,46 @@ class ReceiptClientBudgetIntegrationTest {
   @Autowired JdbcClient jdbc;
   @Autowired LostArkRequestGate gate;
   @Autowired MeterRegistry registry;
+  @Autowired MutableClock clock;
   @MockitoBean CharacterDetailsPort detailsPort;
   @MockitoBean MaterialUnitPriceService materials;
   @MockitoBean MarketAuctionService auctions;
   private final JsonMapper mapper = new JsonMapper();
 
+  @TestConfiguration(proxyBeanMethods = false)
+  static class Clocks {
+    @Bean
+    @Primary
+    MutableClock mutableClock() {
+      return new MutableClock();
+    }
+  }
+
+  /** 시험이 옮기는 시계(방문자 칸 창·이어 받을 시각·게이트가 같이 읽음). */
+  static final class MutableClock extends Clock {
+    volatile Instant now = Instant.now();
+
+    @Override
+    public ZoneId getZone() {
+      return ZoneOffset.UTC;
+    }
+
+    @Override
+    public Clock withZone(ZoneId zone) {
+      return this;
+    }
+
+    @Override
+    public Instant instant() {
+      return now;
+    }
+  }
+
   @BeforeEach
   void 준비() {
+    // 분 경계 0.5초 전(가장 나쁜 때)에서 시작한다.
+    var minute = Instant.now().getEpochSecond() / 60 * 60;
+    clock.now = Instant.ofEpochSecond(minute + 59, 500_000_000);
     정리();
     var roster = new ArrayList<CharacterSibling>();
     for (int i = 0; i < ROSTER; i++)
@@ -139,11 +182,11 @@ class ReceiptClientBudgetIntegrationTest {
       assertThat(search(SEARCH + searches++)).isEqualTo(200);
       if (last.at("/coverage/pending").asInt() == 0) break;
       var next = Instant.parse(last.at("/coverage/nextAvailableAt").asText());
-      if (next.isAfter(Instant.now().plusSeconds(1))) {
-        // 칸이 다시 차는 시각은 1분 창의 끝(분 경계)이다. 기다리는 대신 창이 넘어간 것처럼 방문자 칸을 비운다.
+      if (next.isAfter(clock.instant())) {
+        // 칸이 다시 차는 시각은 1분 창의 끝(분 경계)이다. 기다리는 대신 시계를 그 시각으로 옮겨 창을 넘긴다.
         assertThat(next.getEpochSecond() % 60).isZero();
-        var keys = redis.keys("lostark:client-limit:*");
-        if (keys != null && !keys.isEmpty()) redis.delete(keys);
+        assertThat(next.getNano()).isZero();
+        clock.now = next;
         refills++;
       }
     }
@@ -163,7 +206,7 @@ class ReceiptClientBudgetIntegrationTest {
     var first = receipt();
     assertThat(first.at("/coverage/ready").asInt()).isEqualTo(2);
     var next = Instant.parse(first.at("/coverage/nextAvailableAt").asText());
-    assertThat(next).isBeforeOrEqualTo(Instant.now());
+    assertThat(next).isBeforeOrEqualTo(clock.instant());
   }
 
   private double rejects() {

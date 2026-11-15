@@ -119,9 +119,52 @@ class SpecUpScoreRowIsolationIntegrationTest {
                 .counter()
                 .count())
         .isEqualTo(3.0);
-    assertThat(
-            meters.get("loakraken.spec_up.row_cp_failed").tag("kind", "POLISH").counter().count())
-        .isEqualTo(failed - 3);
+    assertThat(count("POLISH", "IllegalStateException")).isEqualTo(failed - 3);
+  }
+
+  @Test
+  void 점수_입력_줄이_툴팁_줄과_다르면_그_장신구_줄만_점수만이고_line_mismatch로_센다() throws Exception {
+    when(auctions.cachedGems()).thenReturn(List.of());
+    double mismatchBefore = count("POLISH", "line_mismatch");
+    double unmappableBefore = count("POLISH", "unmappable");
+    double stoneBefore = count("ABILITY_STONE", "unmappable");
+    // 점수 입력 원문만 귀걸이 1(장비 순번 7)의 공격력 +80 줄을 +195로: 두 원문 파서가 갈라진 경우(예외 없이 계산하지 않는 줄).
+    var raw = raw();
+    var scoreRaw = raw.deepCopy();
+    var item = (tools.jackson.databind.node.ObjectNode) scoreRaw.path("ArmoryEquipment").get(7);
+    var tooltip = item.path("Tooltip").asText();
+    assertThat(tooltip).contains("+80</FONT>");
+    item.put("Tooltip", tooltip.replace("+80</FONT>", "+195</FONT>"));
+    search(raw, scoreRaw);
+    var candidates = guide("&sort=DELTA&limit=200").path("candidates");
+    int rejected = 0;
+    int computed = 0;
+    for (var candidate : candidates) {
+      var id = candidate.path("id").asText();
+      if (id.startsWith("POLISH:7:")) {
+        rejected++;
+        assertThat(candidate.path("status").asText()).as(id).isEqualTo("UNSUPPORTED");
+        assertThat(candidate.path("reasonCode").asText()).as(id).isEqualTo("SCORE_ONLY");
+        assertThat(candidate.path("deltaKrakenScore").isNull()).as(id).isFalse();
+      } else if (id.startsWith("POLISH:") && "OK".equals(candidate.path("status").asText()))
+        computed++;
+    }
+    assertThat(rejected).isPositive();
+    assertThat(computed).isPositive();
+    // 거른 줄마다 하나, 이 원문의 다른 줄은 거르지 않는다.
+    assertThat(count("POLISH", "line_mismatch") - mismatchBefore).isEqualTo(rejected);
+    assertThat(count("POLISH", "unmappable") - unmappableBefore).isZero();
+    assertThat(count("ABILITY_STONE", "unmappable") - stoneBefore).isZero();
+  }
+
+  private double count(String kind, String error) {
+    var counter =
+        meters
+            .find("loakraken.spec_up.row_cp_failed")
+            .tag("kind", kind)
+            .tag("error", error)
+            .counter();
+    return counter == null ? 0 : counter.count();
   }
 
   private static JsonNode find(JsonNode candidates, String id) {
@@ -136,13 +179,20 @@ class SpecUpScoreRowIsolationIntegrationTest {
     return mapper.readTree(response.body()).path("data");
   }
 
+  private JsonNode raw() throws Exception {
+    return mapper
+        .readTree(
+            new ClassPathResource("kraken-score/l01.json")
+                .getContentAsString(StandardCharsets.UTF_8))
+        .path("raw");
+  }
+
   private void search() throws Exception {
-    var raw =
-        mapper
-            .readTree(
-                new ClassPathResource("kraken-score/l01.json")
-                    .getContentAsString(StandardCharsets.UTF_8))
-            .path("raw");
+    var raw = raw();
+    search(raw, raw);
+  }
+
+  private void search(JsonNode raw, JsonNode scoreRaw) throws Exception {
     var profile =
         new CharacterProfile(
             NAME,
@@ -158,7 +208,8 @@ class SpecUpScoreRowIsolationIntegrationTest {
             List.of());
     var details = CharacterTestFixture.details(profile, ArmoryRawFixtures.loadout(raw), List.of());
     when(detailsPort.fetch(anyString()))
-        .thenReturn(new FetchedCharacter(details, "{}", "[]", KrakenScoreInputMapper.from(raw)));
+        .thenReturn(
+            new FetchedCharacter(details, "{}", "[]", KrakenScoreInputMapper.from(scoreRaw)));
     assertThat(get("/api/v1/characters/search?characterName=" + encode(NAME)).statusCode())
         .isEqualTo(200);
   }

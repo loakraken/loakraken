@@ -422,7 +422,7 @@ public class SpecUpController {
           Boolean supportOrderAvailable,
       @Schema(
               description =
-                  "크라켄 점수에 쓴 점수식: DEALER(딜러 점수)·SUPPORT(서포터 점수식, 웹 표기 '서포터 점수'). supportOrderAvailable이 true일 때만 있고 그 밖에는 null. 배포 순서 때문에 계약에서는 선택 필드")
+                  "크라켄 점수에 쓴 점수식(문자열, 값이 늘 수 있음): DEALER(딜러 점수)·SUPPORT(서포터 점수식, 웹 표기 '서포터 점수'). supportOrderAvailable이 true일 때만 있고 그 밖에는 null. 배포 순서 때문에 계약에서는 선택 필드")
           @NullableResponse
           @OptionalResponse
           String krakenScoreRole) {
@@ -518,7 +518,7 @@ public class SpecUpController {
           Boolean supportOrderAvailable,
       @Schema(
               description =
-                  "크라켄 점수에 쓴 점수식: DEALER(딜러 점수)·SUPPORT(서포터 점수식, 웹 표기 '서포터 점수'). 점수를 낼 수 없으면 null. 배포 순서 때문에 계약에서는 선택 필드")
+                  "크라켄 점수에 쓴 점수식(문자열, 값이 늘 수 있음): DEALER(딜러 점수)·SUPPORT(서포터 점수식, 웹 표기 '서포터 점수'). 점수를 낼 수 없으면 null. 배포 순서 때문에 계약에서는 선택 필드")
           @NullableResponse
           @OptionalResponse
           String krakenScoreRole) {

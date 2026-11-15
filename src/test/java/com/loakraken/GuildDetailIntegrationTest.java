@@ -32,7 +32,7 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 /** 길드 탭 집계(L36·K28·M10). */
-@Import(TestcontainersConfiguration.class)
+@Import({TestcontainersConfiguration.class, GuildDetailIntegrationTest.FixedClock.class})
 @SpringBootTest(
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
     properties = {"ranking.guilds.enabled=true", "ranking.guilds.list.enabled=true"})
@@ -45,6 +45,21 @@ class GuildDetailIntegrationTest {
   @Autowired CharacterHistoryPort history;
   private final JsonMapper mapper = new JsonMapper();
   private final Instant now = Instant.now();
+
+  /**
+   * 집계 시각(meta.aggregatedAt)은 이 시계에서 온다. 소수 자리에 '9000'이 들어가는 시각(.190001)으로 고정해, 응답 원문 전체에서 숫자 조각을
+   * 찾는 검사가 시각과 우연히 겹치면 늘 드러나게 한다(CI 간헐 실패 11-14: 운영 시계는 마이크로초까지라 가끔 겹침).
+   */
+  static final Instant CLOCK = Instant.now().truncatedTo(ChronoUnit.SECONDS).plusNanos(190_001_000);
+
+  @org.springframework.boot.test.context.TestConfiguration
+  static class FixedClock {
+    @org.springframework.context.annotation.Bean
+    @org.springframework.context.annotation.Primary
+    java.time.Clock guildDetailTestClock() {
+      return java.time.Clock.fixed(CLOCK, ZoneOffset.UTC);
+    }
+  }
 
   @BeforeEach
   @AfterEach
@@ -133,8 +148,17 @@ class GuildDetailIntegrationTest {
     // 관측 시각은 분 단위.
     var observed = Instant.parse(members.at("/0/observedAt").asText());
     assertThat(observed).isEqualTo(now.truncatedTo(ChronoUnit.MINUTES));
-    // 처리정지·기간 밖·다른 서버는 없다.
-    assertThat(body).doesNotContain("탭정지", "탭오래", "탭다른", "9000");
+    // 처리정지·기간 밖·다른 서버는 없다. 원문 전체에서 숫자 조각을 찾지 않고(집계 시각 등과 우연히 겹침) 길드원 목록의 이름·전투력으로 본다.
+    var names = new java.util.ArrayList<String>();
+    var combatPowers = new java.util.ArrayList<BigDecimal>();
+    for (var member : members) {
+      names.add(member.path("characterName").asText());
+      if (!member.path("combatPower").isNull())
+        combatPowers.add(member.path("combatPower").decimalValue());
+    }
+    assertThat(names).doesNotContain("탭정지", "탭오래", "탭다른");
+    assertThat(combatPowers).noneMatch(value -> value.compareTo(new BigDecimal("9000")) == 0);
+    assertThat(body).doesNotContain("탭정지", "탭오래", "탭다른");
     // 원정대를 모르는 길드원은 묶음 번호가 null이다.
     assertThat(members.at("/0/rosterGroup").isNull()).isTrue();
     assertThat(members.at("/0").has("rosterGroup")).isTrue();
@@ -147,8 +171,15 @@ class GuildDetailIntegrationTest {
     assertThat(ranking.path("guildName").asText()).isEqualTo("새벽길드");
     assertThat(ranking.path("memberCount").asLong()).isEqualTo(6);
 
-    // 두 번째 요청은 캐시에서 같은 응답이다.
+    // 두 번째 요청은 캐시에서 같은 응답이다. 시계가 고정이라 다시 계산해도 같은 원문이 나오므로, 집계에 들어갈 길드원을 하나 더 넣은 뒤에도 원문이 그대로면
+    // 캐시에서 온 것이다(다시 계산했다면 7명).
+    member(SERVER, "새벽길드", "탭추가", "블레이드", 1700, null, null, now);
     assertThat(get(path).body()).isEqualTo(body);
+    // 캐시를 비우면 새로 넣은 길드원이 집계에 들어간다(위 같음이 캐시 덕분이었음을 확인).
+    var keys = redis.keys("stats:v1:*");
+    if (keys != null && !keys.isEmpty()) redis.delete(keys);
+    assertThat(mapper.readTree(get(path).body()).at("/data/meta/memberCount").asLong())
+        .isEqualTo(7);
     ApiContractFixture.write("guild-detail.json", body);
   }
 

@@ -8,11 +8,51 @@ import com.loakraken.market.domain.GemSkillCatalog;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 
 /** 경매장 시세 표 응답(auction-board-v1). 가격 단위는 골드다. */
 public final class AuctionResponses {
   private AuctionResponses() {}
+
+  @Schema(
+      description =
+          "경매장 칸 하나의 기간 시세(LOAKraken 관측). 값은 그날 마지막으로 관측한 즉시 구매 최저가(공식 일평균 아님)이고, 누군가 그 칸을 본 날만 행이 있습니다.")
+  public record AuctionCellHistoryResponse(
+      @Schema(example = "auction-board-v1") String ruleVersion,
+      @Schema(description = "적용한 기간(7d·14d·30d·90d·365d)", example = "30d") String range,
+      @NullableResponse @Schema(description = "이 칸을 처음 저장한 날짜(기간과 상관없이). 없으면 null")
+          LocalDate recordedSince,
+      @Schema(description = "기간 안 저장 일수") int storedDays,
+      @Schema(description = "최신순. 저장이 없는 날은 행 없음") List<AuctionCellDayResponse> days) {
+    static AuctionCellHistoryResponse from(
+        com.loakraken.market.application.MarketHistoryRangeService.CellRange ranged) {
+      var days =
+          ranged.stored().days().stream()
+              .map(
+                  day ->
+                      new AuctionCellDayResponse(
+                          day.date(),
+                          day.minBuyPrice(),
+                          day.totalCount(),
+                          day.observedAt(),
+                          !day.date().isBefore(ranged.today())))
+              .toList();
+      return new AuctionCellHistoryResponse(
+          AuctionCatalog.RULE_VERSION,
+          ranged.range().value(),
+          ranged.stored().firstDate(),
+          days.size(),
+          days);
+    }
+  }
+
+  public record AuctionCellDayResponse(
+      LocalDate date,
+      @Schema(description = "그날 마지막 관측 즉시 구매 최저가") long minBuyPrice,
+      @Schema(description = "그 관측의 매물 수(공식 TotalCount)") long totalCount,
+      @Schema(description = "그 관측 시각(UTC)") Instant observedAt,
+      @Schema(description = "오늘(한국 날짜)이면 true: 하루가 끝나지 않아 값이 바뀔 수 있음") boolean partial) {}
 
   public record AuctionGemBoardResponse(
       @Schema(example = "auction-board-v1") String ruleVersion,

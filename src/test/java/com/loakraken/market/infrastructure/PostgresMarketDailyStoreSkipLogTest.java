@@ -72,6 +72,31 @@ class PostgresMarketDailyStoreSkipLogTest {
   }
 
   /** 거래 가능 횟수·묶음이 같은 변형 둘(같은 칸) → 두 번째 변형을 건너뛴다. */
+  @Test
+  void 자정_무렵_늦게_끝난_이전_날짜_요청이_와도_로그_날짜는_되돌아가지_않는다() {
+    store.upsert(collision(1), TODAY, NOW);
+    store.upsert(collision(2), TODAY.plusDays(1), NOW); // 자정 뒤
+    store.upsert(collision(1), TODAY, NOW); // 자정 전에 시작해 늦게 끝난 요청
+    store.upsert(collision(2), TODAY.plusDays(1), NOW);
+
+    assertThat(skipLogs()).containsExactly("1/variant_key", "2/variant_key");
+  }
+
+  @Test
+  void 하루_기억_상한을_넘으면_로그_없이_지표만_세고_다음_날_다시_남긴다() {
+    for (long item = 1; item <= PostgresMarketDailyStore.SKIP_LOG_KEYS + 1; item++)
+      store.upsert(collision(item), TODAY, NOW);
+    assertThat(skipLogs()).hasSize(PostgresMarketDailyStore.SKIP_LOG_KEYS);
+    assertThat(
+            registry
+                .counter("loakraken.market.daily_record", "event", "skipped_variant_key")
+                .count())
+        .isEqualTo(PostgresMarketDailyStore.SKIP_LOG_KEYS + 1);
+
+    store.upsert(collision(1), TODAY.plusDays(1), NOW);
+    assertThat(skipLogs()).hasSize(PostgresMarketDailyStore.SKIP_LOG_KEYS + 1);
+  }
+
   private static MarketItemHistory collision(long itemId) {
     var day = new MarketItemHistory.DailyStat(LocalDate.parse("2026-11-12"), BigDecimal.TEN, 5);
     return new MarketItemHistory(

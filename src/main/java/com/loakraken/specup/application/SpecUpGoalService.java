@@ -327,6 +327,8 @@ public class SpecUpGoalService {
             pricesAt,
             polish)) {
       if (option.cost() != null && option.cost().amount() != null) continue;
+      // '상·상 뒤' 후보는 처음 상태에서 고를 수 없다.
+      if (afterTop(polish, option.id())) continue;
       var simulated = simulator.simulate(snapshot, option.changes());
       if (simulated.unsupportedCount() > 0 || simulated.after() == null) continue;
       var delta = simulated.after().subtract(before);
@@ -569,6 +571,10 @@ public class SpecUpGoalService {
       for (var listed : options(state, gems, refinePrices, pricesAt, polish)) {
         var option = listed;
         var polishStep = polishById.get(option.id());
+        // '상·상 뒤' 셋째 줄 후보는 이 장신구의 지금 매물이 상·상(HH)일 때만(비교 기준은 지금 상태에서 후보를 만든다).
+        if (polishStep != null
+            && polishStep.afterTop()
+            && !"HH".equals(polishCode(polishChosen.get(option.slot())))) continue;
         if (polishStep != null && applied.containsKey(option.slot())) {
           // 같은 장신구를 다시 바꾸는 단계: 앞 단계보다 등급을 낮추는 매물은 고르지 않고(비교 기준과 같음), 앞 단계가 바꾼 줄을 이 단계가 바꾸지 않으면 그 줄을
           // 처음
@@ -638,19 +644,28 @@ public class SpecUpGoalService {
 
   /**
    * 연마 후보 id 끝의 등급 코드(주옵션 둘: N 없음·L 하·M 중·H 상, 셋째 줄 고정값 후보는 A 공격력·W 무기 공격력 + 등급)를 앞 단계와 견준다. 주옵션
-   * 가운데 하나라도 낮추거나, 같은 고정값 줄 등급을 낮추거나, 앞 단계의 고정값 줄을 버리면 true.
+   * 가운데 하나라도 낮추면 true. 앞 단계에 셋째 줄 고정값이 있으면 비교 기준처럼 그보다 높은 등급의 고정값(공격력·무기 공격력 어느 쪽이든)만 다음 후보다: 고정값을
+   * 버리거나 같거나 낮은 등급이면 true(코드 리뷰 #951 P3: 옵션이 다른 고정값도 등급으로 견줌).
    */
   static boolean lowersPolish(String id, String chosen) {
     if (chosen == null) return false;
-    var next = id.substring(id.lastIndexOf(':') + 1);
-    var before = chosen.substring(chosen.lastIndexOf(':') + 1);
+    var next = polishCode(id);
+    var before = polishCode(chosen);
     for (int k = 0; k < 2; k++)
       if (polishRank(next.charAt(k)) < polishRank(before.charAt(k))) return true;
-    if (before.length() == 4) {
-      if (next.length() < 4) return true;
-      if (next.charAt(2) == before.charAt(2)
-          && polishRank(next.charAt(3)) < polishRank(before.charAt(3))) return true;
-    }
+    if (before.length() == 4)
+      return next.length() < 4 || polishRank(next.charAt(3)) <= polishRank(before.charAt(3));
+    return false;
+  }
+
+  /** 연마 후보 id 끝의 등급 코드(없으면 null). */
+  static String polishCode(String id) {
+    return id == null ? null : id.substring(id.lastIndexOf(':') + 1);
+  }
+
+  /** 이 후보가 '상·상 뒤' 셋째 줄 후보인지. */
+  private static boolean afterTop(List<SpecUpService.PolishStep> polish, String id) {
+    for (var step : polish) if (step.id().equals(id)) return step.afterTop();
     return false;
   }
 

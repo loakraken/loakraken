@@ -148,7 +148,22 @@ public class SpecUpService {
       String grade,
       SpecUpCost cost,
       List<Change> changes,
-      List<Change> full) {
+      List<Change> full,
+      boolean afterTop) {
+    PolishStep(
+        String slot,
+        String id,
+        String target,
+        String from,
+        String to,
+        String icon,
+        String grade,
+        SpecUpCost cost,
+        List<Change> changes,
+        List<Change> full) {
+      this(slot, id, target, from, to, icon, grade, cost, changes, full, false);
+    }
+
     /** 줄 번호 line의 목표 변경(full: 지금과 같은 줄까지 줄마다 하나). 없으면 null. */
     Change lineChange(int line) {
       for (var change : full) if (change.line() != null && change.line() == line) return change;
@@ -168,6 +183,16 @@ public class SpecUpService {
     var loadout = snapshot.details().loadout();
     var rows = SpecUpScoreCandidates.polish(context.input(), loadout, polishValues);
     if (rows == null) return List.of();
+    // 경로가 장신구를 상·상으로 바꾼 뒤에만 쓰는 셋째 줄 고정값 후보(afterTop).
+    var afterTop = SpecUpScoreCandidates.polishAfterTop(context.input(), loadout, polishValues);
+    var topIds = new java.util.HashSet<String>();
+    if (afterTop != null) {
+      rows = new ArrayList<>(rows);
+      for (var row : afterTop) {
+        topIds.add(row.id());
+        rows.add(row);
+      }
+    }
     var fill = new MarketAuctionService.PolishFill(false);
     var pricesAt = new Instant[1];
     var steps = new ArrayList<PolishStep>();
@@ -210,7 +235,8 @@ public class SpecUpService {
               row.grade(),
               polishCost(loadout, context, row, fill, pricesAt),
               changes,
-              full));
+              full,
+              topIds.contains(row.id())));
     }
     return List.copyOf(steps);
   }

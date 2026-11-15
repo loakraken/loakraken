@@ -19,11 +19,15 @@ class SpecUpPolishLowerTest {
   }
 
   @Test
-  void 셋째_줄_고정값은_같은_옵션의_등급을_낮추거나_버리면_고르지_않는다() {
+  void 셋째_줄_고정값이_있으면_그보다_높은_등급의_고정값만_다음_후보다() {
     assertThat(SpecUpGoalService.lowersPolish("POLISH:7:HHAM", "POLISH:7:HHAH")).isTrue();
     assertThat(SpecUpGoalService.lowersPolish("POLISH:7:HHAH", "POLISH:7:HHAM")).isFalse();
     assertThat(SpecUpGoalService.lowersPolish("POLISH:7:HH", "POLISH:7:HHAM")).isTrue();
-    // 다른 고정값 옵션(공격력 → 무기 공격력)은 등급으로 견주지 않는다.
-    assertThat(SpecUpGoalService.lowersPolish("POLISH:7:HHWL", "POLISH:7:HHAH")).isFalse();
+    // 옵션이 달라도 등급으로 견준다(비교 기준은 두 옵션 모두 지금보다 높은 등급만 냄, 코드 리뷰 #951 P3).
+    assertThat(SpecUpGoalService.lowersPolish("POLISH:7:HHWL", "POLISH:7:HHAH")).isTrue();
+    assertThat(SpecUpGoalService.lowersPolish("POLISH:7:HHWM", "POLISH:7:HHAM")).isTrue();
+    assertThat(SpecUpGoalService.lowersPolish("POLISH:7:HHWH", "POLISH:7:HHAM")).isFalse();
+    // 상·상(셋째 줄 없음) 다음 셋째 줄 상은 낮춤이 아니다.
+    assertThat(SpecUpGoalService.lowersPolish("POLISH:9:HHAH", "POLISH:9:HH")).isFalse();
   }
 }

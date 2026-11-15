@@ -129,7 +129,10 @@ final class SpecUpScoreCandidates {
     return best == null ? null : new Oriented(best, bestDelta);
   }
 
-  /** 목록 스톤 줄과 같은 배치(목표 조합마다 하나). 점수를 낼 수 없거나 스톤 줄을 읽지 못하면 null. */
+  /**
+   * 목록 스톤 줄과 같은 배치: 점수가 오르는(둘째 자리 반올림 > 0) 목표 조합마다 하나. 비교 기준도 점수가 오르는 조합만 낸다. 점수를 낼 수 없거나 스톤 줄을 읽지
+   * 못하면 null.
+   */
   static List<Map<String, Integer>> stoneOrientations(
       SpecUpKrakenScore scorer, SpecUpKrakenScore.Context context) {
     if (context == null || !context.available()) return null;
@@ -139,7 +142,8 @@ final class SpecUpScoreCandidates {
     var result = new ArrayList<Map<String, Integer>>();
     for (var target : STONE_TARGETS) {
       var oriented = orientation(scorer, context, names, target);
-      if (oriented != null) result.add(oriented.levels());
+      if (oriented != null && SpecUpKrakenScore.round2(oriented.delta()).signum() > 0)
+        result.add(oriented.levels());
     }
     return List.copyOf(result);
   }

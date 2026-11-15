@@ -1329,8 +1329,12 @@ public class SpecUpGoalService {
       var flipped = new LinkedHashMap<String, Integer>();
       flipped.put(names.get(0), target[3]);
       flipped.put(names.get(1), target[2]);
-      var chosen =
-          stone.orientations() != null && stone.orientations().contains(flipped) ? flipped : first;
+      // 목록 배치가 있으면(점수를 읽을 수 있음) 그 배치만, 목록에 없는 조합(점수가 오르지 않음)은 뺀다. 점수 입력을 읽을 수 없으면 앞 배치.
+      Map<String, Integer> chosen;
+      if (stone.orientations() == null) chosen = first;
+      else if (stone.orientations().contains(first)) chosen = first;
+      else if (stone.orientations().contains(flipped)) chosen = flipped;
+      else continue;
       for (var order : List.of(new int[] {chosen.get(names.get(0)), chosen.get(names.get(1))})) {
         var levels = new LinkedHashMap<String, Integer>();
         levels.put(names.get(0), order[0]);

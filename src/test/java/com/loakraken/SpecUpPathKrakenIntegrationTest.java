@@ -177,9 +177,12 @@ class SpecUpPathKrakenIntegrationTest {
       assertThat(cooldown).as(id).doesNotContain(id.substring(0, id.lastIndexOf(':')));
     }
     assertThat(kraken.path("finalKrakenScore").decimalValue()).isEqualByComparingTo(previous);
-    // 단계가 다 떨어지면 점수 문장(코드 리뷰 #967 P3).
+    // 단계가 다 떨어지면 점수 문장(코드 리뷰 #967 P3). 서포터는 '서포터 점수'라 부르므로 이름 없이 '점수'(프론트 11-15).
     if ("NO_CANDIDATE".equals(kraken.path("stopReasonCode").asText()))
-      assertThat(kraken.path("stopReason").asText()).contains("크라켄 점수");
+      assertThat(kraken.path("stopReason").asText())
+          .contains("점수가 오르는")
+          .doesNotContain("전투력")
+          .doesNotContain("크라켄");
     // 서포터 EFFICIENCY·DELTA는 지금과 같다: 단계 없이 서포터 이유로 멈춘다(점수 필드 없음).
     for (var sort : List.of("EFFICIENCY", "DELTA")) {
       var other = path(SUPPORTER, sort);

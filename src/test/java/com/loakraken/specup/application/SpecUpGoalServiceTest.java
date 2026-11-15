@@ -277,7 +277,7 @@ class SpecUpGoalServiceTest {
         .extracting(SpecUpGoalService.Step::extraCost)
         .containsExactly(150_000L, 160_000L, 170_000L);
     assertThat(path.totalCost()).isEqualTo(480_000L);
-    assertThat(path.ruleVersion()).isEqualTo("spec-up-path-v4");
+    assertThat(path.ruleVersion()).isEqualTo("spec-up-path-v5");
 
     when(specUp.armGuardEnabled()).thenReturn(false);
     var off = service.path("목표테스트", SpecUpGoalService.Pick.EFFICIENCY, 3);
@@ -287,8 +287,8 @@ class SpecUpGoalServiceTest {
   }
 
   /**
-   * 어빌리티 스톤 목표 조합(목록 스톤 줄과 같은 목표·id·비용): 조합마다 두 배치, 한 단계에 각인 둘(STONE_ENGRAVING 둘)을 바꾼다. 두 레벨이 같은
-   * 99돌(3·3)·1010돌(4·4)은 하나, 지금과 같은 레벨 조합은 뺀다.
+   * 어빌리티 스톤 목표 조합(목록 스톤 줄과 같은 목표·id·비용): 조합마다 목록과 같은 배치 하나(목록 배치를 모르면 앞 배치), 한 단계에 각인
+   * 둘(STONE_ENGRAVING 둘)을 바꾼다. 지금과 같은 레벨 조합은 뺀다(PM 총괄 11-15: 뒤집은 배치는 고르지 않음).
    */
   @Test
   void 스톤_목표_조합은_각인_둘을_한_단계로_바꾸고_목록과_같은_id와_비용이다() {
@@ -297,12 +297,10 @@ class SpecUpGoalServiceTest {
     levels.put("아드레날린", 1);
     var options =
         SpecUpGoalService.stoneOptions(new SpecUpGoalService.Stone(stoneItem(1, 1), levels));
-    // 97·106·107 두 배치씩 = 6. 99·109·1010돌은 기대 비용이 비현실적이라 넣지 않는다(핫픽스 v0.3.9.2).
-    assertThat(options).hasSize(6);
+    // 97·106·107 하나씩 = 3(앞 배치). 99·109·1010돌은 기대 비용이 비현실적이라 넣지 않는다(핫픽스 v0.3.9.2).
     assertThat(options)
         .extracting(SpecUpGoalService.Option::id)
-        .contains("ABILITY_STONE:3:2", "ABILITY_STONE:2:3", "ABILITY_STONE:4:2")
-        .doesNotContain("ABILITY_STONE:3:3", "ABILITY_STONE:4:3", "ABILITY_STONE:4:4");
+        .containsExactly("ABILITY_STONE:3:2", "ABILITY_STONE:4:1", "ABILITY_STONE:4:2");
     for (var option : options) {
       assertThat(option.kind()).isEqualTo("ABILITY_STONE");
       assertThat(option.slot()).isEqualTo("ABILITY_STONE");
@@ -330,15 +328,45 @@ class SpecUpGoalServiceTest {
     sharp.put("원한", 1);
     sharp.put("예리한 둔기", 1);
     assertThat(SpecUpGoalService.stoneOptions(new SpecUpGoalService.Stone(stoneItem(1, 1), sharp)))
-        .hasSize(6)
+        .hasSize(3)
         .allMatch(option -> option.changes().get(1).name().equals("예리한 둔기"));
-    // 지금이 이미 3·2면 그 배치는 빠진다.
+    // 지금이 이미 3·2면 그 배치는 빠지고 뒤집은 2·3은 내지 않는다.
     levels.put("원한", 3);
     levels.put("아드레날린", 2);
     assertThat(SpecUpGoalService.stoneOptions(new SpecUpGoalService.Stone(stoneItem(3, 2), levels)))
         .extracting(SpecUpGoalService.Option::id)
-        .doesNotContain("ABILITY_STONE:3:2")
-        .contains("ABILITY_STONE:2:3");
+        .containsExactly("ABILITY_STONE:4:1", "ABILITY_STONE:4:2");
+  }
+
+  /**
+   * 목록이 뒤집은 배치를 보이면(높은 레벨이 둘째 각인) 추천 순서도 그 배치 하나만 낸다. 같은 점수에 다른 전투력인 반대 배치는 고르지 않는다(PM 총괄 11-15: 계산
+   * 검증 표본에서 같은 점수, 전투력 19.56 대 17.67인 두 배치를 id로 갈라 목록에 없는 배치를 골랐음).
+   */
+  @Test
+  void 스톤_배치는_목록과_같은_배치만_낸다() {
+    var levels = new java.util.LinkedHashMap<String, Integer>();
+    levels.put("원한", 1);
+    levels.put("아드레날린", 1);
+    // 목록 배치: 97돌은 아드레날린이 높게, 106·107은 원한이 높게(점수 입력의 각인 순서가 반대여도 이름으로 맞춘다).
+    var list =
+        java.util.List.<java.util.Map<String, Integer>>of(
+            java.util.Map.of("아드레날린", 3, "원한", 2),
+            java.util.Map.of("원한", 4, "아드레날린", 1),
+            java.util.Map.of("원한", 4, "아드레날린", 2));
+    var options =
+        SpecUpGoalService.stoneOptions(new SpecUpGoalService.Stone(stoneItem(1, 1), levels, list));
+    assertThat(options)
+        .extracting(SpecUpGoalService.Option::id)
+        .containsExactly("ABILITY_STONE:2:3", "ABILITY_STONE:4:1", "ABILITY_STONE:4:2");
+    // 단계를 지나도(스톤 상태가 바뀌어도) 같은 배치를 지킨다.
+    var after = new java.util.LinkedHashMap<String, Integer>();
+    after.put("원한", 2);
+    after.put("아드레날린", 3);
+    assertThat(
+            SpecUpGoalService.stoneOptions(
+                new SpecUpGoalService.Stone(stoneItem(2, 3), after, list)))
+        .extracting(SpecUpGoalService.Option::id)
+        .containsExactly("ABILITY_STONE:4:1", "ABILITY_STONE:4:2");
   }
 
   /** 추천 순서는 스톤 단계도 고르고, 단계 changes(각인 둘)를 같은 칸은 마지막만 남겨 다시 넣으면 그 단계 전투력과 같다. */

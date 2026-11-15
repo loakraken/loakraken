@@ -1331,7 +1331,7 @@ public class SpecUpGoalService {
       flipped.put(names.get(1), target[2]);
       // 목록 배치가 있으면(점수를 읽을 수 있음) 그 배치만, 목록에 없는 조합(점수가 오르지 않음)은 뺀다. 점수 입력을 읽을 수 없으면 앞 배치.
       Map<String, Integer> chosen;
-      if (stone.orientations() == null) chosen = first;
+      if (!orientationsMatch(stone)) chosen = first;
       else if (stone.orientations().contains(first)) chosen = first;
       else if (stone.orientations().contains(flipped)) chosen = flipped;
       else continue;
@@ -1361,6 +1361,19 @@ public class SpecUpGoalService {
       }
     }
     return result;
+  }
+
+  /**
+   * 목록 배치를 이 스톤에 쓸 수 있는지: 배치가 있고(빈 목록 = 점수가 오르는 조합 없음도 씀) 각인 이름이 이 스톤과 같다. 점수 입력과 장비 툴팁의 각인 이름이
+   * 갈라지면 모든 스톤 단계를 조용히 빼지 않고 앞 배치로 둔다(코드 리뷰 #975 P3).
+   */
+  static boolean orientationsMatch(Stone stone) {
+    if (stone.orientations() == null) return false;
+    if (stone.orientations().isEmpty()) return true;
+    var names = stone.levels().keySet();
+    for (var orientation : stone.orientations())
+      if (orientation.keySet().equals(names)) return true;
+    return false;
   }
 
   /** 어빌리티 스톤의 감소 줄 이름(각인이 아니라 스톤 단계에서 바꾸지 않는다). */

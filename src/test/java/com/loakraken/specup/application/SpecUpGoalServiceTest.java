@@ -374,6 +374,21 @@ class SpecUpGoalServiceTest {
                         java.util.Map.of("원한", 3, "아드레날린", 2)))))
         .extracting(SpecUpGoalService.Option::id)
         .containsExactly("ABILITY_STONE:3:2");
+    // 점수 입력과 툴팁의 각인 이름이 갈라지면(배치가 이 스톤과 이름이 다름) 스톤 단계를 빼지 않고 앞 배치로(코드 리뷰 #975 P3).
+    assertThat(
+            SpecUpGoalService.stoneOptions(
+                new SpecUpGoalService.Stone(
+                    stoneItem(1, 1),
+                    levels,
+                    java.util.List.<java.util.Map<String, Integer>>of(
+                        java.util.Map.of("다른 각인", 3, "아드레날린", 2)))))
+        .extracting(SpecUpGoalService.Option::id)
+        .containsExactly("ABILITY_STONE:3:2", "ABILITY_STONE:4:1", "ABILITY_STONE:4:2");
+    // 점수가 오르는 조합이 하나도 없으면(빈 목록) 스톤 단계가 없다.
+    assertThat(
+            SpecUpGoalService.stoneOptions(
+                new SpecUpGoalService.Stone(stoneItem(1, 1), levels, java.util.List.of())))
+        .isEmpty();
     // 단계를 지나도(스톤 상태가 바뀌어도) 같은 배치를 지킨다.
     var after = new java.util.LinkedHashMap<String, Integer>();
     after.put("원한", 2);

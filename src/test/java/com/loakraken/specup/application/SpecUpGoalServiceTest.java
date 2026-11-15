@@ -64,6 +64,52 @@ class SpecUpGoalServiceTest {
     assertThat(store.saved).isEmpty();
   }
 
+  /**
+   * 연마 단계 스위치가 꺼져 있으면(연마 후보 없음) 목표 경로·추천 순서 캐시 키는 연마 단계를 넣기 전(develop)과 글자까지 같다. 배포 뒤 기존 캐시를 그대로
+   * 쓴다(코드 리뷰 #951 P2: 키 끝에 '-'가 붙어 배포 뒤 캐시가 한꺼번에 비었다).
+   */
+  @Test
+  void 연마_단계_스위치가_꺼지면_캐시_키는_연마_단계_전과_같다() {
+    var service = service(System::nanoTime);
+    service.goal("목표테스트", new BigDecimal("3002"));
+    service.path("목표테스트", SpecUpGoalService.Pick.EFFICIENCY, 5);
+    var fetched = String.valueOf(Instant.parse("2026-10-12T00:00:00Z").toEpochMilli());
+    // 서버·이름·목표·수집 시각·보석 시세 시각·이전 시세 칸·재련 시세 시각·각인서 시세 시각·규칙 버전 셋·완갑 스위치.
+    assertThat(store.saved.keySet())
+        .containsExactly(
+            String.join(
+                ":",
+                "목표서버",
+                "목표테스트",
+                "3002.00",
+                fetched,
+                "0",
+                "0",
+                "0",
+                "0",
+                SpecUpGoalService.RULE_VERSION,
+                CombatPowerSimulationService.RULE_VERSION,
+                "null",
+                "-"));
+    assertThat(store.paths.keySet())
+        .containsExactly(
+            String.join(
+                ":",
+                "목표서버",
+                "목표테스트",
+                "EFFICIENCY",
+                "5",
+                fetched,
+                "0",
+                "0",
+                "0",
+                "0",
+                SpecUpGoalService.PATH_RULE_VERSION,
+                CombatPowerSimulationService.RULE_VERSION,
+                "null",
+                "-"));
+  }
+
   @Test
   void 각인서_시세_시각이_바뀌면_캐시_키가_달라져_다시_계산하고_그대로면_캐시를_쓴다() {
     var service = service(System::nanoTime);

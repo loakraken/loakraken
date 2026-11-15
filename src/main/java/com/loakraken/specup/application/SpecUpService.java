@@ -100,7 +100,8 @@ public class SpecUpService {
 
   /**
    * 점수 입력 줄 전투력 실패 수(loakraken.spec_up.row_cp_failed{kind, error}). 스위치를 켠 뒤 줄이 조용히 점수만으로 떨어지는지 보는
-   * 값이다. kind는 POLISH·ABILITY_STONE, error는 예외 클래스 이름이라 값이 몇 개뿐이다.
+   * 값이다. kind는 POLISH·ABILITY_STONE(목록 줄)·POLISH_STEP(추천 순서 연마 단계가 빠짐), error는 예외 클래스 이름 또는
+   * unmappable이라 값이 몇 개뿐이다.
    */
   private final io.micrometer.core.instrument.MeterRegistry meters;
 
@@ -122,6 +123,96 @@ public class SpecUpService {
    */
   boolean stoneCpEnabled() {
     return environment.getProperty("spec-up.stone-cp.enabled", Boolean.class, false);
+  }
+
+  /**
+   * 추천 순서·목표 경로의 연마 단계(spec-up.polish-path.enabled, 기본 끔, 목록 연마 전투력 스위치와 따로). 켜면 딜러 연마 교체 줄을 같은
+   * 목표·id·비용으로 단계 후보에 넣는다. 요청마다 읽는다.
+   */
+  boolean polishPathEnabled() {
+    return environment.getProperty("spec-up.polish-path.enabled", Boolean.class, false);
+  }
+
+  /**
+   * 추천 순서·목표 경로의 연마 단계 후보 하나. slot은 장신구 칸(POLISH:장비 순번, 같은 칸은 뒤 단계가 앞 매물을 바꿈), changes는 처음 장신구와 다른
+   * 줄의 공개 시뮬레이터 변경(줄마다 POLISH, 빠진 줄은 option NONE), full은 같은 줄까지 줄마다 하나(같은 장신구의 앞 단계가 바꾼 줄을 되돌릴 때
+   * 씀).
+   */
+  record PolishStep(
+      String slot,
+      String id,
+      String target,
+      String from,
+      String to,
+      String icon,
+      String grade,
+      SpecUpCost cost,
+      List<Change> changes,
+      List<Change> full) {
+    /** 줄 번호 line의 목표 변경(full: 지금과 같은 줄까지 줄마다 하나). 없으면 null. */
+    Change lineChange(int line) {
+      for (var change : full) if (change.line() != null && change.line() == line) return change;
+      return null;
+    }
+  }
+
+  /**
+   * 연마 단계 후보(스위치가 꺼졌거나, 딜러가 아니거나, 크라켄 점수 입력이 없으면 빈 목록). 비용은 목록과 같은 식이고 캐시된 연마 시세 칸만 쓴다(경로는 시세 칸을
+   * 채우지 않음). 변경을 만들 수 없는 줄(점수 입력·툴팁이 다름, 수치표에 없음)은 뺀다.
+   */
+  List<PolishStep> polishSteps(CharacterResult snapshot) {
+    if (!polishPathEnabled() || CombatPowerSimulationService.roleReason(snapshot) != null)
+      return List.of();
+    var context = kraken.context(snapshot);
+    if (!context.available() || context.support()) return List.of();
+    var loadout = snapshot.details().loadout();
+    var rows = SpecUpScoreCandidates.polish(context.input(), loadout, polishValues);
+    if (rows == null) return List.of();
+    var fill = new MarketAuctionService.PolishFill(false);
+    var pricesAt = new Instant[1];
+    var steps = new ArrayList<PolishStep>();
+    for (var row : rows) {
+      if (!(row.kraken() instanceof SpecUpKrakenScore.Polish polish) || polish.index() == null)
+        continue;
+      List<Change> changes;
+      List<Change> full;
+      try {
+        changes =
+            simulator.polishSwapChanges(snapshot, polish.index(), polish.current(), polish.lines());
+        full =
+            simulator.polishSwapChanges(
+                snapshot, polish.index(), polish.current(), polish.lines(), true);
+      } catch (RuntimeException exception) {
+        var error = exception.getClass().getSimpleName();
+        log.warn("event=spec_up_polish_step_skipped id={} error={}", row.id(), error);
+        meters
+            .counter("loakraken.spec_up.row_cp_failed", "kind", "POLISH_STEP", "error", error)
+            .increment();
+        continue;
+      }
+      if (changes == null || full == null) {
+        // 점수 입력 줄과 툴팁 줄이 다르거나 목표 줄이 수치표에 없음: 단계에서 빠지는 것을 셈한다(스위치를 켠 뒤 조용히 빠지는지).
+        meters
+            .counter(
+                "loakraken.spec_up.row_cp_failed", "kind", "POLISH_STEP", "error", "unmappable")
+            .increment();
+        continue;
+      }
+      if (changes.isEmpty()) continue;
+      steps.add(
+          new PolishStep(
+              "POLISH:" + polish.index(),
+              row.id(),
+              row.target(),
+              row.from(),
+              row.to(),
+              row.icon(),
+              row.grade(),
+              polishCost(loadout, context, row, fill, pricesAt),
+              changes,
+              full));
+    }
+    return List.copyOf(steps);
   }
 
   /**

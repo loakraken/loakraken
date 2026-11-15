@@ -329,9 +329,63 @@ public class MarketAuctionService {
     return java.util.Set.copyOf(keys);
   }
 
+  /** 장신구 예열 칸: 표 기본 필터(고대·딜러·품질 70)의 부위 × 등급 조합 전부(표·스펙업 연마 비용이 읽는 칸). */
+  public static final List<AuctionQuery> ACCESSORY_WARM_QUERIES = accessoryWarmQueries();
+
+  private static final java.util.Set<String> ACCESSORY_WARM_KEYS =
+      ACCESSORY_WARM_QUERIES.stream()
+          .map(AuctionQuery::key)
+          .collect(java.util.stream.Collectors.toUnmodifiableSet());
+
+  private static List<AuctionQuery> accessoryWarmQueries() {
+    var queries = new ArrayList<AuctionQuery>();
+    for (var slot : Slot.values()) {
+      var options = AuctionCatalog.options(Role.DEALER, slot);
+      for (var levels : AuctionCatalog.combinations(options.size()))
+        queries.add(accessoryQuery(Grade.ANCIENT, slot, options, levels, 70, 1));
+    }
+    return List.copyOf(queries);
+  }
+
+  /**
+   * 장신구 기본 필터 칸 예열(PM 총괄 11-16): 마지막 관측이 maxAge보다 오래된 칸(없는 칸이 먼저)부터 최대 max칸을 공식 경매장에서 다시 받아 칸·마지막
+   * 값·일별 기록에 남긴다(받은 값만 기록, 없는 날을 만들지 않음). allow는 예열 전체 분당 상한, call은 예열 게이트(예약분)로 공식 호출을 감싼다.
+   */
+  public GemWarm warmAccessories(
+      int max,
+      java.time.Duration maxAge,
+      java.util.function.BooleanSupplier allow,
+      java.util.function.Function<java.util.function.Supplier<AuctionPage>, AuctionPage> call) {
+    var queries = new ArrayList<>(ACCESSORY_WARM_QUERIES);
+    var last = new java.util.HashMap<String, Instant>();
+    for (var query : queries)
+      last.put(
+          query.key(),
+          auctions.findLastCell(query.key()).map(AuctionCell::observedAt).orElse(Instant.EPOCH));
+    queries.sort(java.util.Comparator.comparing((AuctionQuery query) -> last.get(query.key())));
+    var stale = clock.instant().minus(maxAge);
+    int refreshed = 0;
+    for (var query : queries) {
+      if (refreshed >= max) break;
+      // 오래된 순이라 이 칸이 아직 새로우면 나머지도 새롭다.
+      if (last.get(query.key()).isAfter(stale)) break;
+      if (!allow.getAsBoolean()) return new GemWarm(refreshed, "capped");
+      try {
+        var cell = toCell(call.apply(() -> search.search(query)));
+        remember(query.key(), cell);
+        refreshed++;
+      } catch (BusinessException exception) {
+        log.debug("장신구 시세 칸 예열 실패. 코드={}", exception.errorCode().code());
+        return new GemWarm(refreshed, "failed");
+      }
+    }
+    return new GemWarm(refreshed, refreshed > 0 ? "refreshed" : "idle");
+  }
+
   private void remember(String key, AuctionCell cell) {
     auctions.saveCell(key, cell);
-    if (GEM_KEYS.contains(key)) auctions.saveLastCell(key, cell);
+    if (GEM_KEYS.contains(key) || ACCESSORY_WARM_KEYS.contains(key))
+      auctions.saveLastCell(key, cell);
     if (cell.minBuyPrice() == null) return;
     dailyWriter.execute(() -> recordDaily(key, cell));
   }

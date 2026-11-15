@@ -63,8 +63,27 @@ final class SpecUpPolishCost {
       List<String> next,
       CombatPowerPolishValues values,
       Instant[] pricesAt) {
+    return cost(auctions, fill, fillEnabled, support, item, current, next, values, pricesAt, false);
+  }
+
+  /**
+   * targetKeepFlat: 목표 매물 시세 키에 셋째 줄 고정값을 남긴다(지금 장신구가 아니라 경로의 앞 단계 상태가 상·상일 때, 추천 순서의 '상·상 뒤' 셋째 줄
+   * 후보 — 비교 기준은 상·상 상태에서 후보를 만들어 고정값을 키에 남긴다, 코드 리뷰 #957 P1). 지금 매물 시세 키는 그대로(처음 장신구 기준)라 금액은 처음
+   * 장신구에서 목표 매물까지다.
+   */
+  static SpecUpCost cost(
+      MarketAuctionService auctions,
+      MarketAuctionService.PolishFill fill,
+      boolean fillEnabled,
+      boolean support,
+      CharacterLoadout.Equipment item,
+      List<String> current,
+      List<String> next,
+      CombatPowerPolishValues values,
+      Instant[] pricesAt,
+      boolean targetKeepFlat) {
     boolean keepFlat = keepFlat(support, item.type(), current, values);
-    var target = keyLines(support, next, keepFlat);
+    var target = keyLines(support, next, keepFlat || targetKeepFlat);
     if (target == null) return SpecUpCost.POLISH_COST_UNCONFIRMED;
     var tradeable = tradeable(item);
     if (tradeable == null) return SpecUpCost.POLISH_COST_UNCONFIRMED;

@@ -233,7 +233,7 @@ public class SpecUpService {
               row.to(),
               row.icon(),
               row.grade(),
-              polishCost(loadout, context, row, fill, pricesAt),
+              polishCost(loadout, context, row, fill, pricesAt, topIds.contains(row.id())),
               changes,
               full,
               topIds.contains(row.id())));
@@ -1515,6 +1515,17 @@ public class SpecUpService {
       Planned row,
       MarketAuctionService.PolishFill fill,
       Instant[] pricesAt) {
+    return polishCost(loadout, context, row, fill, pricesAt, false);
+  }
+
+  /** afterTop: '상·상 뒤' 셋째 줄 후보(목표 시세 키에 고정값을 남김, SpecUpPolishCost.cost의 targetKeepFlat). */
+  private SpecUpCost polishCost(
+      CharacterLoadout loadout,
+      SpecUpKrakenScore.Context context,
+      Planned row,
+      MarketAuctionService.PolishFill fill,
+      Instant[] pricesAt,
+      boolean afterTop) {
     if (!(row.kraken() instanceof SpecUpKrakenScore.Polish polish)) return row.cost();
     int index = Integer.parseInt(row.id().split(":")[1]);
     var item = loadout.equipment().get(index);
@@ -1535,7 +1546,8 @@ public class SpecUpService {
         current,
         polish.option(),
         polishValues,
-        pricesAt);
+        pricesAt,
+        afterTop);
   }
 
   private static Change change(

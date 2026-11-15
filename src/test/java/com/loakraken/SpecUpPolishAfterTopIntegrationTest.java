@@ -105,7 +105,12 @@ class SpecUpPolishAfterTopIntegrationTest {
       var slot = id.substring(0, id.lastIndexOf(':'));
       var code = id.substring(id.lastIndexOf(':') + 1);
       // 셋째 줄 단계(코드 네 글자)는 그 장신구의 앞 선택이 상·상(HH…)일 때만 온다.
-      if ((code.equals("HHAH") || code.equals("HHWH")) && "HH".equals(chosen.get(slot))) afterTop++;
+      if ((code.equals("HHAH") || code.equals("HHWH")) && "HH".equals(chosen.get(slot))) {
+        afterTop++;
+        // 상·상 매물 다음 셋째 줄 상은 더 드는 비용이 있다(목표 시세 키에 고정값을 남김, 코드 리뷰 #957 P1: 처음 장신구 기준이면 HH와 같은 키라
+        // 0이었다).
+        assertThat(step.path("extraCost").asLong()).as(id + " 더 드는 비용").isPositive();
+      }
       if (code.length() == 4 && chosen.containsKey(slot))
         assertThat(chosen.get(slot)).as(id + " " + ids).startsWith("HH");
       chosen.put(slot, code);
@@ -122,6 +127,63 @@ class SpecUpPolishAfterTopIntegrationTest {
       assertThat(excluded.path("candidateId").asText())
           .doesNotEndWith("HHAH")
           .doesNotEndWith("HHWH");
+  }
+
+  @Test
+  void 셋째_줄_매물_시세가_없으면_비용을_모르고_추천_순서에_들지_않으며_공짜로_앞서지_않는다() throws Exception {
+    when(auctions.cachedGems()).thenReturn(List.of());
+    // 실제 시세 키처럼 두 줄 조합만 매물이 있다: 고정값 줄이 든 키는 시세 없음(MISSING).
+    when(auctions.polishPrice(anyString(), anyList(), any()))
+        .thenAnswer(
+            invocation -> {
+              List<MarketAuctionService.PolishLine> lines = invocation.getArgument(1);
+              if (lines.stream().anyMatch(line -> !line.percent()))
+                return new MarketAuctionService.PolishPrice(
+                    MarketAuctionService.PolishStatus.MISSING, null, null);
+              long price = 10_000;
+              for (var line : lines)
+                price += (long) (Double.parseDouble(line.value().replaceAll("[+,%]", "")) * 1_000);
+              return new MarketAuctionService.PolishPrice(
+                  MarketAuctionService.PolishStatus.OK,
+                  price,
+                  Instant.parse("2026-11-15T05:00:00Z"));
+            });
+    search();
+    // 추천 순서(시세가 있는 단계만): 셋째 줄 상 단계는 없다.
+    var path =
+        get(
+            "/api/v1/characters/spec-up/path?characterName="
+                + encode(NAME)
+                + "&sort=EFFICIENCY&limit=30");
+    assertThat(path.statusCode()).as(path.body()).isEqualTo(200);
+    var hh = 0;
+    for (var step : mapper.readTree(path.body()).at("/data/steps")) {
+      var id = step.path("candidateId").asText();
+      if (id.endsWith(":HH")) hh++;
+      assertThat(id).doesNotEndWith("HHAH").doesNotEndWith("HHWH");
+    }
+    // 상·상 단계는 골랐다(그래서 셋째 줄 후보가 열렸지만 시세가 없어 빠졌다).
+    assertThat(hh).isPositive();
+    // 목표 경로(비용 모르는 단계도 Δ 순으로 뒤에): 셋째 줄 상 단계가 나오면 비용·더 드는 비용은 모름이고 0이 아니다.
+    var before = mapper.readTree(path.body()).at("/data/combatPower").decimalValue();
+    var goal =
+        get(
+            "/api/v1/characters/spec-up/goal?characterName="
+                + encode(NAME)
+                + "&targetCombatPower="
+                + before
+                    .multiply(new java.math.BigDecimal("1.3"))
+                    .setScale(0, java.math.RoundingMode.UP));
+    assertThat(goal.statusCode()).as(goal.body()).isEqualTo(200);
+    for (var step : mapper.readTree(goal.body()).at("/data/steps")) {
+      var id = step.path("candidateId").asText();
+      var unknown = step.at("/cost/amount").isNull() || step.at("/cost/amount").isMissingNode();
+      if (id.endsWith("HHAH") || id.endsWith("HHWH")) {
+        assertThat(unknown).as(id + " 비용").isTrue();
+        assertThat(step.at("/cost/status").asText()).as(id).isNotEqualTo("OK");
+        assertThat(step.path("extraCost").isNull()).as(id + " 더 드는 비용").isTrue();
+      }
+    }
   }
 
   private static JsonNode find(JsonNode candidates, String id) {

@@ -142,7 +142,7 @@ public class SpecUpGoalService {
           NO_CANDIDATE,
           "시세가 있는 항목 가운데 전투력이 오르는 것을 모두 골랐어요.",
           NO_CANDIDATE + ":KRAKEN",
-          "시세가 있는 항목 가운데 크라켄 점수가 오르는 것을 모두 골랐어요.",
+          "시세가 있는 항목 가운데 점수가 오르는 것을 모두 골랐어요.",
           STEP_LIMIT,
           "정한 단계 수까지 보여 드려요.",
           TIME_LIMITED,

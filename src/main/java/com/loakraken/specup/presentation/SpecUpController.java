@@ -419,7 +419,13 @@ public class SpecUpController {
               description =
                   "추천 순서(/spec-up/path) sort=KRAKEN을 이 캐릭터에 쓸 수 있는지: 스위치 spec-up.support-order.enabled가 켜졌고 크라켄 점수를 낼 수 있으면 true. 웹은 이 값으로 KRAKEN 순서 버튼을 보인다(시험 요청으로 알아보지 않음). 배포 순서 때문에 계약에서는 선택 필드")
           @OptionalResponse
-          Boolean supportOrderAvailable) {
+          Boolean supportOrderAvailable,
+      @Schema(
+              description =
+                  "크라켄 점수에 쓴 점수식: DEALER(딜러 점수)·SUPPORT(서포터 점수식, 웹 표기 '서포터 점수'). supportOrderAvailable이 true일 때만 있고 그 밖에는 null. 배포 순서 때문에 계약에서는 선택 필드")
+          @NullableResponse
+          @OptionalResponse
+          String krakenScoreRole) {
     static SpecUpPathResponse from(SpecUpGoalService.Path path) {
       return new SpecUpPathResponse(
           path.characterName(),
@@ -455,7 +461,8 @@ public class SpecUpController {
           path.krakenScore(),
           path.finalKrakenScore(),
           path.krakenSortUnavailableReason(),
-          path.supportOrderAvailable());
+          path.supportOrderAvailable(),
+          path.krakenScoreRole());
     }
   }
 
@@ -508,7 +515,13 @@ public class SpecUpController {
               description =
                   "추천 순서(/spec-up/path) sort=KRAKEN을 이 캐릭터에 쓸 수 있는지: 스위치 spec-up.support-order.enabled가 켜졌고 크라켄 점수를 낼 수 있으면 true. 웹은 이 값으로 KRAKEN 순서 버튼을 보인다(시험 요청으로 알아보지 않음). 배포 순서 때문에 계약에서는 선택 필드")
           @OptionalResponse
-          Boolean supportOrderAvailable) {
+          Boolean supportOrderAvailable,
+      @Schema(
+              description =
+                  "크라켄 점수에 쓴 점수식: DEALER(딜러 점수)·SUPPORT(서포터 점수식, 웹 표기 '서포터 점수'). 점수를 낼 수 없으면 null. 배포 순서 때문에 계약에서는 선택 필드")
+          @NullableResponse
+          @OptionalResponse
+          String krakenScoreRole) {
     static SpecUpResponse from(SpecUpService.Guide guide) {
       return new SpecUpResponse(
           guide.characterName(),
@@ -527,7 +540,8 @@ public class SpecUpController {
           guide.krakenRuleVersion(),
           guide.cooldownGemsIncluded(),
           guide.krakenSortUnavailableReason(),
-          guide.supportOrderAvailable());
+          guide.supportOrderAvailable(),
+          guide.krakenScoreRole());
     }
   }
 

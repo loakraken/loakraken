@@ -94,6 +94,10 @@ class SpecUpPathKrakenIntegrationTest {
     assertThat(list.statusCode()).isEqualTo(200);
     assertThat(mapper.readTree(list.body()).at("/data/supportOrderAvailable").asBoolean(false))
         .isTrue();
+    // 점수식: 딜러(웹 표기를 이 값으로 고른다).
+    assertThat(kraken.path("krakenScoreRole").asText()).isEqualTo("DEALER");
+    assertThat(mapper.readTree(list.body()).at("/data/krakenScoreRole").asText())
+        .isEqualTo("DEALER");
     assertThat(absent(kraken.path("krakenSortUnavailableReason"))).isTrue();
     var start = kraken.path("krakenScore").decimalValue();
     assertThat(start).isNotNull();
@@ -155,6 +159,7 @@ class SpecUpPathKrakenIntegrationTest {
     var cooldown = searchSupporter();
     var kraken = path(SUPPORTER, "KRAKEN");
     assertThat(kraken.path("sort").asText()).isEqualTo("KRAKEN");
+    assertThat(kraken.path("krakenScoreRole").asText()).isEqualTo("SUPPORT");
     assertThat(kraken.path("krakenScore").decimalValue()).isNotNull();
     assertThat(absent(kraken.path("finalCombatPower"))).isTrue();
     var steps = kraken.path("steps");

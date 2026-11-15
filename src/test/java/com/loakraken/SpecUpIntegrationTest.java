@@ -928,6 +928,8 @@ class SpecUpIntegrationTest {
     assertThat(kraken.path("krakenSortUnavailableReason").asText()).isEqualTo("DISABLED");
     assertThat(kraken.path("supportOrderAvailable").asBoolean(true)).isFalse();
     assertThat(one.path("supportOrderAvailable").asBoolean(true)).isFalse();
+    // 추천 순서 점수식은 스위치가 켜졌을 때만(꺼져 있으면 점수 계산 없음).
+    assertThat(absent(one.path("krakenScoreRole"))).isTrue();
     assertThat(absent(kraken.path("krakenScore"))).isTrue();
     for (var step : kraken.path("steps"))
       assertThat(absent(step.path("deltaKrakenScore"))).isTrue();

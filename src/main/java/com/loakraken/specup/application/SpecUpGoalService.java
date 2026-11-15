@@ -177,7 +177,8 @@ public class SpecUpGoalService {
       BigDecimal krakenScore,
       BigDecimal finalKrakenScore,
       String krakenSortUnavailableReason,
-      Boolean supportOrderAvailable) {
+      Boolean supportOrderAvailable,
+      String krakenScoreRole) {
     /** supportOrderAvailable 없이(경로를 만드는 곳에서 따로 채운다). */
     Path(
         String characterName,
@@ -219,10 +220,11 @@ public class SpecUpGoalService {
           krakenScore,
           finalKrakenScore,
           krakenSortUnavailableReason,
+          null,
           null);
     }
 
-    Path withSupportOrderAvailable(boolean available) {
+    Path withSupportOrderAvailable(boolean available, String role) {
       return new Path(
           characterName,
           serverName,
@@ -243,7 +245,8 @@ public class SpecUpGoalService {
           krakenScore,
           finalKrakenScore,
           krakenSortUnavailableReason,
-          available);
+          available,
+          role);
     }
 
     /** KRAKEN이 아닌 경로(점수 필드 없음). */
@@ -303,9 +306,13 @@ public class SpecUpGoalService {
     var krakenContext = resolved.context();
     var krakenUnavailable = resolved.unavailable();
     // 웹이 KRAKEN 버튼을 보일지(스위치 + 점수 문맥). 캐시와 따로 돌려줄 때마다 채운다(스위치를 바꿔도 캐시가 옛 값을 주지 않게).
-    boolean supportOrderAvailable =
-        specUp.supportOrderEnabled()
-            && (krakenContext != null || specUp.krakenContext(snapshot).available());
+    // 스위치가 켜졌을 때만 점수 문맥을 본다(꺼져 있으면 점수 계산 없음). 점수식(DEALER·SUPPORT)도 그때만.
+    var orderContext =
+        !specUp.supportOrderEnabled()
+            ? null
+            : krakenContext != null ? krakenContext : specUp.krakenContext(snapshot);
+    boolean supportOrderAvailable = orderContext != null && orderContext.available();
+    String krakenScoreRole = SpecUpService.krakenScoreRole(orderContext);
     var profile = snapshot.details().profile();
     var before =
         profile.combatPower() == null
@@ -337,7 +344,7 @@ public class SpecUpGoalService {
     var cached = store.findPath(key);
     if (cached.isPresent()) {
       pathOutcome("cache_hit");
-      return cached.get().withSupportOrderAvailable(supportOrderAvailable);
+      return cached.get().withSupportOrderAvailable(supportOrderAvailable, krakenScoreRole);
     }
     var computed =
         single(
@@ -386,7 +393,7 @@ public class SpecUpGoalService {
                     solves.release();
                   }
                 })
-            .withSupportOrderAvailable(supportOrderAvailable);
+            .withSupportOrderAvailable(supportOrderAvailable, krakenScoreRole);
     return computed;
   }
 

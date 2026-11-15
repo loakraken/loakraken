@@ -448,7 +448,8 @@ public class SpecUpService {
       String krakenRuleVersion,
       boolean cooldownGemsIncluded,
       String krakenSortUnavailableReason,
-      boolean supportOrderAvailable) {
+      boolean supportOrderAvailable,
+      String krakenScoreRole) {
     /** supportOrderAvailable 없이(시험 등). */
     public Guide(
         String characterName,
@@ -484,8 +485,15 @@ public class SpecUpService {
           krakenRuleVersion,
           cooldownGemsIncluded,
           krakenSortUnavailableReason,
-          false);
+          false,
+          null);
     }
+  }
+
+  /** 크라켄 점수에 쓴 점수식(DEALER·SUPPORT). 점수를 낼 수 없으면 null. */
+  static String krakenScoreRole(SpecUpKrakenScore.Context context) {
+    if (context == null || !context.available()) return null;
+    return context.support() ? "SUPPORT" : "DEALER";
   }
 
   boolean enabled() {
@@ -607,7 +615,8 @@ public class SpecUpService {
         cooldownGemsIncluded,
         krakenContext.unavailable(),
         // 추천 순서 sort=KRAKEN을 이 캐릭터에 쓸 수 있는지(스위치 + 점수 문맥, 프론트·PM 11-15: 웹은 이 값으로 버튼을 보인다).
-        supportOrderEnabled() && krakenContext.available());
+        supportOrderEnabled() && krakenContext.available(),
+        krakenScoreRole(krakenContext));
   }
 
   /**

@@ -193,21 +193,22 @@ public class SpecUpGoalService {
     var polish = specUp.polishSteps(snapshot);
     var key =
         String.join(
-            ":",
-            profile.serverName(),
-            profile.characterName(),
-            pick.name(),
-            String.valueOf(limit),
-            String.valueOf(snapshot.fetchedAt() == null ? 0 : snapshot.fetchedAt().toEpochMilli()),
-            String.valueOf(latest(gems)),
-            staleSignature(gems),
-            String.valueOf(refinePrices.map(p -> p.observedAt().toEpochMilli()).orElse(0L)),
-            String.valueOf(books.observedAt().map(Instant::toEpochMilli).orElse(0L)),
-            PATH_RULE_VERSION,
-            CombatPowerSimulationService.RULE_VERSION,
-            String.valueOf(specUp.costRuleVersions()),
-            specUp.armGuardEnabled() ? "ag" : "-",
-            polishSignature(polish));
+                ":",
+                profile.serverName(),
+                profile.characterName(),
+                pick.name(),
+                String.valueOf(limit),
+                String.valueOf(
+                    snapshot.fetchedAt() == null ? 0 : snapshot.fetchedAt().toEpochMilli()),
+                String.valueOf(latest(gems)),
+                staleSignature(gems),
+                String.valueOf(refinePrices.map(p -> p.observedAt().toEpochMilli()).orElse(0L)),
+                String.valueOf(books.observedAt().map(Instant::toEpochMilli).orElse(0L)),
+                PATH_RULE_VERSION,
+                CombatPowerSimulationService.RULE_VERSION,
+                String.valueOf(specUp.costRuleVersions()),
+                specUp.armGuardEnabled() ? "ag" : "-")
+            + polishSignature(polish);
     var cached = store.findPath(key);
     if (cached.isPresent()) {
       pathOutcome("cache_hit");
@@ -403,23 +404,25 @@ public class SpecUpGoalService {
     var polish = specUp.polishSteps(snapshot);
     var key =
         String.join(
-            ":",
-            profile.serverName(),
-            profile.characterName(),
-            goal.toPlainString(),
-            String.valueOf(snapshot.fetchedAt() == null ? 0 : snapshot.fetchedAt().toEpochMilli()),
-            String.valueOf(latest(gems)),
-            // 이전 시세(stale)로 바뀐 칸은 관측 시각이 그대로라, 어느 칸이 이전 시세인지도 키에 넣는다(코드 리뷰 10-25 P1: 지금 시세로 만든 경로를
-            // 이전 시세가 된 뒤에도 stale=false로 주지 않게).
-            staleSignature(gems),
-            String.valueOf(refinePrices.map(p -> p.observedAt().toEpochMilli()).orElse(0L)),
-            // 각인서 시세가 바뀌면 각인 비용이 달라지므로 다시 계산한다(시세가 그대로면 캐시 그대로).
-            String.valueOf(books.observedAt().map(Instant::toEpochMilli).orElse(0L)),
-            RULE_VERSION,
-            CombatPowerSimulationService.RULE_VERSION,
-            String.valueOf(specUp.costRuleVersions()),
-            specUp.armGuardEnabled() ? "ag" : "-",
-            polishSignature(polish));
+                ":",
+                profile.serverName(),
+                profile.characterName(),
+                goal.toPlainString(),
+                String.valueOf(
+                    snapshot.fetchedAt() == null ? 0 : snapshot.fetchedAt().toEpochMilli()),
+                String.valueOf(latest(gems)),
+                // 이전 시세(stale)로 바뀐 칸은 관측 시각이 그대로라, 어느 칸이 이전 시세인지도 키에 넣는다(코드 리뷰 10-25 P1: 지금 시세로 만든
+                // 경로를
+                // 이전 시세가 된 뒤에도 stale=false로 주지 않게).
+                staleSignature(gems),
+                String.valueOf(refinePrices.map(p -> p.observedAt().toEpochMilli()).orElse(0L)),
+                // 각인서 시세가 바뀌면 각인 비용이 달라지므로 다시 계산한다(시세가 그대로면 캐시 그대로).
+                String.valueOf(books.observedAt().map(Instant::toEpochMilli).orElse(0L)),
+                RULE_VERSION,
+                CombatPowerSimulationService.RULE_VERSION,
+                String.valueOf(specUp.costRuleVersions()),
+                specUp.armGuardEnabled() ? "ag" : "-")
+            + polishSignature(polish);
     var cached = store.find(key);
     if (cached.isPresent()) {
       goalOutcome("cache_hit");
@@ -539,6 +542,10 @@ public class SpecUpGoalService {
     // 경로 합계: 보석 칸·어빌리티 스톤은 그 칸의 마지막 단계 비용(칸마다 하나, 스톤은 새로 깎은 마지막 스톤만), 그 밖은 단계 비용의 합. 모르는 값이 있으면
     // 합계도 모름(path v4·goal v4, PM 총괄 11-09).
     var gemTotals = new HashMap<String, Long>();
+    // 연마: 후보 id → 단계(줄마다 목표 변경), 칸마다 마지막으로 고른 연마 후보 id.
+    var polishById = new HashMap<String, SpecUpService.PolishStep>();
+    for (var step : polish) polishById.put(step.id(), step);
+    var polishChosen = new HashMap<String, String>();
     long others = 0;
     boolean othersUnknown = false;
     long started = nanoTime.getAsLong();
@@ -559,7 +566,17 @@ public class SpecUpGoalService {
       Option best = null;
       boolean bestFree = false;
       Long bestMarginal = null;
-      for (var option : options(state, gems, refinePrices, pricesAt, polish)) {
+      for (var listed : options(state, gems, refinePrices, pricesAt, polish)) {
+        var option = listed;
+        var polishStep = polishById.get(option.id());
+        if (polishStep != null && applied.containsKey(option.slot())) {
+          // 같은 장신구를 다시 바꾸는 단계: 앞 단계보다 등급을 낮추는 매물은 고르지 않고(비교 기준과 같음), 앞 단계가 바꾼 줄을 이 단계가 바꾸지 않으면 그 줄을
+          // 처음
+          // 값으로 되돌리는 변경을 더한다(단계 changes를 이어 다시 재도 같은 값, 계산 검증 11-15 #951 HOLD).
+          if (lowersPolish(option.id(), polishChosen.get(option.slot()))) continue;
+          option = withPolishResets(option, polishStep, applied.get(option.slot()));
+          if (option == null) continue;
+        }
         // 고르는 효율은 이 단계에 더 드는 비용(보석은 누적 차이)으로: 같은 칸을 이어서 올릴 때 이미 낸 비용을 다시 세지 않는다.
         var marginal = marginal(option, gemTotals);
         if (pricedOnly && marginal == null) continue;
@@ -587,6 +604,7 @@ public class SpecUpGoalService {
         break;
       }
       applied.put(best.slot(), best.changes());
+      if (polishById.containsKey(best.id())) polishChosen.put(best.slot(), best.id());
       state = state.after(best);
       current = best.after();
       var amount = best.cost() == null ? null : best.cost().amount();
@@ -616,6 +634,58 @@ public class SpecUpGoalService {
               best.changes()));
     }
     return new Chain(List.copyOf(steps), stop, cumulative, unpriced, current, pricesAt[0]);
+  }
+
+  /**
+   * 연마 후보 id 끝의 등급 코드(주옵션 둘: N 없음·L 하·M 중·H 상, 셋째 줄 고정값 후보는 A 공격력·W 무기 공격력 + 등급)를 앞 단계와 견준다. 주옵션
+   * 가운데 하나라도 낮추거나, 같은 고정값 줄 등급을 낮추거나, 앞 단계의 고정값 줄을 버리면 true.
+   */
+  static boolean lowersPolish(String id, String chosen) {
+    if (chosen == null) return false;
+    var next = id.substring(id.lastIndexOf(':') + 1);
+    var before = chosen.substring(chosen.lastIndexOf(':') + 1);
+    for (int k = 0; k < 2; k++)
+      if (polishRank(next.charAt(k)) < polishRank(before.charAt(k))) return true;
+    if (before.length() == 4) {
+      if (next.length() < 4) return true;
+      if (next.charAt(2) == before.charAt(2)
+          && polishRank(next.charAt(3)) < polishRank(before.charAt(3))) return true;
+    }
+    return false;
+  }
+
+  private static int polishRank(char grade) {
+    return "NLMH".indexOf(grade);
+  }
+
+  /** 앞 단계 변경 가운데 이 단계가 바꾸지 않는 줄을 이 단계의 목표 값(처음 장신구 값)으로 되돌리는 변경을 더한 후보. 목표 값이 없으면 null. */
+  private static Option withPolishResets(
+      Option option, SpecUpService.PolishStep step, List<Change> prior) {
+    var changes = new ArrayList<>(option.changes());
+    var lines = new java.util.HashSet<Integer>();
+    for (var change : changes) lines.add(change.line());
+    for (var change : prior) {
+      if (change.kind() != Kind.POLISH || lines.contains(change.line())) continue;
+      var reset = step.lineChange(change.line());
+      if (reset == null) return null;
+      changes.add(reset);
+      lines.add(change.line());
+    }
+    return new Option(
+        option.slot(),
+        option.id(),
+        option.target(),
+        option.from(),
+        option.to(),
+        option.icon(),
+        option.grade(),
+        option.skillName(),
+        changes.getFirst(),
+        option.cost(),
+        option.delta(),
+        option.after(),
+        option.efficiency(),
+        List.copyOf(changes.subList(1, changes.size())));
   }
 
   private static List<Change> flatten(Map<String, List<Change>> applied) {
@@ -684,9 +754,12 @@ public class SpecUpGoalService {
         || "POLISH".equals(option.kind());
   }
 
-  /** 연마 단계 후보가 캐시 키에 주는 값: 스위치가 꺼졌거나 후보가 없으면 "-", 있으면 id·비용·관측 시각의 해시(연마 시세가 바뀌면 다시 계산). */
+  /**
+   * 연마 단계 후보가 캐시 키 끝에 붙이는 값: 스위치가 꺼졌거나 후보가 없으면 ""(키가 그대로라 배포 뒤 캐시가 한꺼번에 비지 않음, 코드 리뷰 #951 P2), 있으면
+   * ":pp" + id·비용·관측 시각의 해시(연마 시세가 바뀌면 다시 계산).
+   */
   static String polishSignature(List<SpecUpService.PolishStep> polish) {
-    if (polish.isEmpty()) return "-";
+    if (polish.isEmpty()) return "";
     var parts = new ArrayList<String>();
     for (var step : polish)
       parts.add(
@@ -697,7 +770,7 @@ public class SpecUpGoalService {
               + (step.cost() == null || step.cost().priceObservedAt() == null
                   ? ""
                   : step.cost().priceObservedAt().toEpochMilli()));
-    return "pp" + Integer.toHexString(String.join(",", parts).hashCode());
+    return ":pp" + Integer.toHexString(String.join(",", parts).hashCode());
   }
 
   /** 더 드는 비용이 0 이하로 확인된 단계(거꾸로 시세의 보석 단계 등). 효율은 '-'(null)이지만 경로에는 먼저 넣는다. */

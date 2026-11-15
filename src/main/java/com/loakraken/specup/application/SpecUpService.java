@@ -134,8 +134,9 @@ public class SpecUpService {
   }
 
   /**
-   * 추천 순서·목표 경로의 연마 단계 후보 하나. slot은 장신구 칸(POLISH:장비 순번, 같은 칸은 뒤 단계가 앞 매물을 바꿈), changes는 공개 시뮬레이터
-   * 변경(줄마다 POLISH, 빠진 줄은 option NONE)이라 다시 재면 같은 값이다.
+   * 추천 순서·목표 경로의 연마 단계 후보 하나. slot은 장신구 칸(POLISH:장비 순번, 같은 칸은 뒤 단계가 앞 매물을 바꿈), changes는 처음 장신구와 다른
+   * 줄의 공개 시뮬레이터 변경(줄마다 POLISH, 빠진 줄은 option NONE), full은 같은 줄까지 줄마다 하나(같은 장신구의 앞 단계가 바꾼 줄을 되돌릴 때
+   * 씀).
    */
   record PolishStep(
       String slot,
@@ -146,7 +147,14 @@ public class SpecUpService {
       String icon,
       String grade,
       SpecUpCost cost,
-      List<Change> changes) {}
+      List<Change> changes,
+      List<Change> full) {
+    /** 줄 번호 line의 목표 변경(full: 지금과 같은 줄까지 줄마다 하나). 없으면 null. */
+    Change lineChange(int line) {
+      for (var change : full) if (change.line() != null && change.line() == line) return change;
+      return null;
+    }
+  }
 
   /**
    * 연마 단계 후보(스위치가 꺼졌거나, 딜러가 아니거나, 크라켄 점수 입력이 없으면 빈 목록). 비용은 목록과 같은 식이고 캐시된 연마 시세 칸만 쓴다(경로는 시세 칸을
@@ -167,9 +175,13 @@ public class SpecUpService {
       if (!(row.kraken() instanceof SpecUpKrakenScore.Polish polish) || polish.index() == null)
         continue;
       List<Change> changes;
+      List<Change> full;
       try {
         changes =
             simulator.polishSwapChanges(snapshot, polish.index(), polish.current(), polish.lines());
+        full =
+            simulator.polishSwapChanges(
+                snapshot, polish.index(), polish.current(), polish.lines(), true);
       } catch (RuntimeException exception) {
         var error = exception.getClass().getSimpleName();
         log.warn("event=spec_up_polish_step_skipped id={} error={}", row.id(), error);
@@ -178,7 +190,7 @@ public class SpecUpService {
             .increment();
         continue;
       }
-      if (changes == null) {
+      if (changes == null || full == null) {
         // 점수 입력 줄과 툴팁 줄이 다르거나 목표 줄이 수치표에 없음: 단계에서 빠지는 것을 셈한다(스위치를 켠 뒤 조용히 빠지는지).
         meters
             .counter(
@@ -197,7 +209,8 @@ public class SpecUpService {
               row.icon(),
               row.grade(),
               polishCost(loadout, context, row, fill, pricesAt),
-              changes));
+              changes,
+              full));
     }
     return List.copyOf(steps);
   }

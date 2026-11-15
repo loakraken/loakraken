@@ -464,6 +464,19 @@ public class CombatPowerSimulationService {
    */
   public List<Change> polishSwapChanges(
       CharacterResult result, int index, List<String> expected, List<String> lines) {
+    return polishSwapChanges(result, index, expected, lines, false);
+  }
+
+  /**
+   * allLines면 지금과 같은 줄도 변경으로 낸다(줄마다 하나, 장신구 전체를 다시 정함). 스펙업 추천 순서는 단계 changes를 차례로 이어 다시 재므로(같은 줄은
+   * 뒤의 변경이 이김), 같은 장신구의 앞 단계가 바꾼 줄을 이 단계가 원래 값으로 되돌릴 때도 그 줄을 내야 한다(계산 검증 11-15 #951 HOLD).
+   */
+  public List<Change> polishSwapChanges(
+      CharacterResult result,
+      int index,
+      List<String> expected,
+      List<String> lines,
+      boolean allLines) {
     var loadout = result.details().loadout();
     if (index < 0 || index >= loadout.equipment().size()) return null;
     var item = loadout.equipment().get(index);
@@ -482,7 +495,7 @@ public class CombatPowerSimulationService {
     for (int line = 0; line < lines.size(); line++) {
       var now = current.get(line);
       var next = lines.get(line);
-      if (next != null && sameLine(next, now.name() + " " + now.value())) continue;
+      if (!allLines && next != null && sameLine(next, now.name() + " " + now.value())) continue;
       if (next == null) {
         none.add(polishChange(index, line, POLISH_NONE, null));
         continue;

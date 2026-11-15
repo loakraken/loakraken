@@ -21,7 +21,6 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -91,7 +90,8 @@ class SpecUpPolishPathIntegrationTest {
             });
     // 원문 그대로: 귀걸이 1 등 고정값 줄이 빠지는 단계(NONE).
     search();
-    var original = replay();
+    var original = replay("DELTA");
+    replay("EFFICIENCY");
     assertThat(original.drop()).as("NONE 줄이 있는 단계 " + original.ids()).isTrue();
     // 합성 상·상 귀걸이 1: 고정값 줄이 남아 셋째 줄 후보 값이 되는 단계.
     정리();
@@ -104,23 +104,30 @@ class SpecUpPolishPathIntegrationTest {
                 .replace(
                     "공격력 <FONT COLOR='00B5FF'>+0.40%</FONT>",
                     "공격력 <FONT COLOR='FE9600'>+1.55%</FONT>"));
-    var keep = replay();
+    var keep = replay("DELTA");
+    var rebuy = replay("EFFICIENCY");
+    // 효율 순은 같은 장신구를 여러 번 바꾼다(앞 단계보다 높은 매물로): 이어 다시 재도 같은 값인지가 이 경우를 지난다.
+    var slots = new java.util.HashMap<String, Integer>();
+    for (var id : rebuy.ids()) slots.merge(id.substring(0, id.lastIndexOf(':')), 1, Integer::sum);
+    assertThat(slots.values()).as("같은 장신구를 다시 바꾼 단계 " + rebuy.ids()).anyMatch(n -> n >= 2);
     assertThat(keep.keep()).as("상·상 귀걸이 단계 " + keep.ids()).isTrue();
   }
 
   private record Replayed(boolean drop, boolean keep, List<String> ids) {}
 
   /** 추천 순서(DELTA, 30단계)를 받아 단계마다 changes를 시뮬레이터에 다시 넣어 본다. */
-  private Replayed replay() throws Exception {
+  private Replayed replay(String sort) throws Exception {
     var response =
         get(
             "/api/v1/characters/spec-up/path?characterName="
                 + encode(NAME)
-                + "&sort=DELTA&limit=30");
+                + "&sort="
+                + sort
+                + "&limit=30");
     assertThat(response.statusCode()).as(response.body()).isEqualTo(200);
     SiteNames.assertAbsent(response.body());
     var steps = mapper.readTree(response.body()).at("/data/steps");
-    var bySlot = new LinkedHashMap<String, List<JsonNode>>();
+    var all = new ArrayList<JsonNode>();
     boolean keep = false;
     boolean drop = false;
     var ids = new ArrayList<String>();
@@ -142,10 +149,8 @@ class SpecUpPolishPathIntegrationTest {
         } else assertThat(change.path("grade").asText()).as(id).isIn("LOW", "MID", "HIGH");
       }
       if (id.startsWith("POLISH:7:HH")) keep = true;
-      bySlot.put(id.substring(0, id.lastIndexOf(':')), changes);
-      // 지금까지 고른 단계(칸마다 마지막)를 공개 시뮬레이터에 다시 넣는다.
-      var all = new ArrayList<JsonNode>();
-      bySlot.values().forEach(all::addAll);
+      // 웹 '시뮬레이터에서 열기'와 같이 지금까지 모든 단계의 changes를 차례로 이어 다시 넣는다(같은 줄은 뒤의 변경이 이김).
+      all.addAll(changes);
       var simulated = simulate(mapper.writeValueAsString(all));
       assertThat(simulated.statusCode()).as(simulated.body()).isEqualTo(200);
       var data = mapper.readTree(simulated.body()).path("data");

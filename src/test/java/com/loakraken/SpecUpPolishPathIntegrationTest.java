@@ -128,6 +128,8 @@ class SpecUpPolishPathIntegrationTest {
     SiteNames.assertAbsent(response.body());
     var steps = mapper.readTree(response.body()).at("/data/steps");
     var all = new ArrayList<JsonNode>();
+    // 칸(장신구)마다 앞 단계들이 바꾼 줄.
+    var touched = new java.util.HashMap<String, java.util.Set<Integer>>();
     boolean keep = false;
     boolean drop = false;
     var ids = new ArrayList<String>();
@@ -149,6 +151,21 @@ class SpecUpPolishPathIntegrationTest {
         } else assertThat(change.path("grade").asText()).as(id).isIn("LOW", "MID", "HIGH");
       }
       if (id.startsWith("POLISH:7:HH")) keep = true;
+      // changes의 꼴(PM 총괄 11-15 고정): 처음 장신구와 다른 줄 + 앞 단계가 바꾼 줄의 되돌림. 줄은 한 번씩, 앞 단계가 바꾼 줄은 모두 들어 있고,
+      // 처음 값과
+      // 같은 변경(되돌림)은 앞 단계가 바꾼 줄에만 있다. 변경 하나만 처음 장신구에 넣어 from·to가 같으면 되돌림이다.
+      var slot = id.substring(0, id.lastIndexOf(':'));
+      var before = touched.getOrDefault(slot, java.util.Set.of());
+      var lines = new java.util.HashSet<Integer>();
+      for (var change : changes) {
+        assertThat(lines.add(change.path("line").asInt())).as(id + " 줄 중복").isTrue();
+        var alone = simulate(mapper.writeValueAsString(List.of(change)));
+        var contribution = mapper.readTree(alone.body()).at("/data/contributions/0");
+        if (contribution.path("from").asText().equals(contribution.path("to").asText()))
+          assertThat(before).as(id + " 되돌림 줄 " + change).contains(change.path("line").asInt());
+      }
+      assertThat(lines).as(id + " 앞 단계가 바꾼 줄").containsAll(before);
+      touched.computeIfAbsent(slot, key -> new java.util.HashSet<>()).addAll(lines);
       // 웹 '시뮬레이터에서 열기'와 같이 지금까지 모든 단계의 changes를 차례로 이어 다시 넣는다(같은 줄은 뒤의 변경이 이김).
       all.addAll(changes);
       var simulated = simulate(mapper.writeValueAsString(all));

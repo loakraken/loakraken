@@ -25,7 +25,40 @@ class CritBerserkerFrenzyTest {
     assertThat(result.toggles())
         .filteredOn(t -> t.key().equals("폭주 상태 가정(특화 증폭)"))
         .extracting(CritSpeedCalculation.ToggleState::text)
-        .containsExactly("폭주 효과가 63.01% 증폭됩니다.");
+        // 치명·공격 속도·이동 속도 세 줄이 같은 문구(표 고치기 D).
+        .containsOnly("폭주 효과가 63.01% 증폭됩니다.");
+  }
+
+  /** 표 고치기 D(D1): 폭주 공격·이동 속도 20(공식 공지)에 같은 특화 증폭을 곱한다. 치명과 한 토글. */
+  @Test
+  void 폭주_공격_이동_속도도_같은_증폭으로_같은_토글에_더한다() {
+    var result = calculate("버서커", "폭주 효과가 63.01% 증폭됩니다.", List.of());
+    // 20 × 1.6301 = 32.602 → 32.60, 신속 1.32
+    assertThat(result.speed().attack().total()).isEqualByComparingTo("33.92");
+    assertThat(result.speed().move().total()).isEqualByComparingTo("33.92");
+    assertThat(result.toggles())
+        .filteredOn(t -> t.key().equals("폭주 상태 가정(특화 증폭)"))
+        .extracting(t -> t.axis() + "=" + t.value().toPlainString() + "/" + t.on())
+        .containsExactly("CRIT=48.90/true", "ATTACK_SPEED=32.60/true", "MOVE_SPEED=32.60/true");
+
+    var off =
+        CritSpeedCalculation.calculate(
+            profile("버서커", "폭주 효과가 63.01% 증폭됩니다."),
+            loadout(List.of()),
+            new Assumptions(
+                false,
+                false,
+                0,
+                null,
+                null,
+                null,
+                null,
+                null,
+                true,
+                java.util.Map.of("폭주 상태 가정(특화 증폭)", false)));
+    assertThat(off.speed().attack().total()).isEqualByComparingTo("1.32");
+    assertThat(calculate("버서커", "치명타 피해가 증가합니다.", List.of()).speed().attack().total())
+        .isEqualByComparingTo("1.32");
   }
 
   @Test

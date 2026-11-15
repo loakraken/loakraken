@@ -1207,6 +1207,261 @@ class CritEffectTableTest {
     assertThat(decimal.attack()).isEqualByComparingTo("8.0");
   }
 
+  /**
+   * 표 고치기 D(계산 검증 출처 표 11-16): 비교 기준이 합계에 넣는 직업 상태 노드의 공이속을 기본 켬으로 더한다. 공식 원문(11-15) 그대로. 브레이커 무아지경
+   * 15/15(수라의 길의 같은 수라결 이동 속도는 함께 세지 않음), 가디언나이트 한계 초월 공격 15, 창술사 절정 I 15/15, 건슬링어 평화주의자 공격 16,
+   * 호크아이 두 번째 동료 '자신 및 … 파티원의' 이동 8.
+   */
+  @Test
+  void 표_고치기_D_직업_상태_노드_공이속은_기본_켬으로_더한다() {
+    var breaker =
+        calculate(
+            "브레이커",
+            List.of(
+                node(
+                    "깨달음 1티어 수라의 길 Lv.1",
+                    "투기 : 이동속도가 15.0% 증가한다.수라 상태 : '수라결' 효과를 획득하며 이동기 스킬이 변경된다.수라결 : 진정한 수라가 되어"
+                        + " 일시적으로 야성적인 기운이 몸을 감싸며 강력한 힘을 얻고 이동속도가 15.0% 증가한다."),
+                node(
+                    "깨달음 4티어 무아지경 Lv.3",
+                    "적에게 주는 피해량이 16.0% 증가한다.수라결 기본 공격의 연속타격 시전 속도가 10.0% 증가하고, 피해량이 15.0% 증가한다."
+                        + " 또한, '수라결' 효과가 강화된다.수라결 : 진정한 수라가 되어 일시적으로 야성적인 기운이 몸을 감싸며 강력한 힘을 얻고"
+                        + " 공격속도 및 이동속도가 15.0% 증가한다.")),
+            List.of(),
+            null,
+            Assumptions.NONE);
+    assertThat(breaker.speed().attack().total()).isEqualByComparingTo("16.32");
+    assertThat(breaker.speed().move().total()).isEqualByComparingTo("16.32");
+    assertThat(breaker.toggles())
+        .extracting(t -> t.key() + "/" + t.label() + "/" + t.axis() + "/" + t.on())
+        .contains("무아지경/수라결 상태 가정/ATTACK_SPEED/true", "무아지경/수라결 상태 가정/MOVE_SPEED/true");
+    assertThat(breaker.limitations())
+        .anyMatch(line -> line.contains("수라의 길 Lv.1(수라결 이동 속도는 무아지경과 같은 효과라 함께 세지 않음)"))
+        .noneMatch(line -> line.contains("무아지경 Lv.3(분류 중)"));
+    var breakerOff = calculate("브레이커", breakerNodes(), List.of(), null, toggle("무아지경", false));
+    assertThat(breakerOff.speed().attack().total()).isEqualByComparingTo("1.32");
+
+    var guardian =
+        calculate(
+            "가디언나이트",
+            List.of(
+                node(
+                    "깨달음 4티어 한계 초월 Lv.3",
+                    "가디언 피어 사용 시 5.0초간 '초월' 상태로 전환한다.초월 상태에선 피격이상에 면역이 되며 공격 속도가 15.0% 증가하고,"
+                        + " 일반 스킬 간의 연계가 빨라진다.")),
+            List.of(),
+            null,
+            Assumptions.NONE);
+    assertThat(guardian.speed().attack().total()).isEqualByComparingTo("16.32");
+    assertThat(guardian.speed().move().total()).isEqualByComparingTo("1.32");
+
+    var lancer =
+        calculate(
+            "창술사",
+            List.of(
+                node(
+                    "깨달음 1티어 절정 I Lv.3",
+                    "난무 스탠스 전환 시 이동속도가 15.0% 증가하고, 집중 스탠스 전환 시 공격속도가 15.0% 증가한다.")),
+            List.of(),
+            null,
+            Assumptions.NONE);
+    assertThat(lancer.speed().attack().total()).isEqualByComparingTo("16.32");
+    assertThat(lancer.speed().move().total()).isEqualByComparingTo("16.32");
+
+    var gunslinger =
+        calculate(
+            "건슬링어",
+            List.of(
+                node(
+                    "깨달음 4티어 평화주의자 Lv.3",
+                    "평화주의자 : 스탠스 변경 시 공격 속도 16.0%, 치명타 적중률 15.0%, 적에게 주는 피해가 50.0% 증가하는 효과를 12.0초동안"
+                        + " 획득한다.")),
+            List.of(),
+            null,
+            Assumptions.NONE);
+    assertThat(gunslinger.speed().attack().total()).isEqualByComparingTo("17.32");
+
+    var hawkeye =
+        calculate(
+            "호크아이",
+            List.of(
+                node(
+                    "깨달음 1티어 두 번째 동료 Lv.3",
+                    "실버호크 MK-II 를 소환하며, 실버호크 소환 중 자신 및 24m 범위 내에 있는 파티원의 이동속도가 8.0% 증가한다.실버호크의 기본"
+                        + " 공격 범위가 60% 및 유지 시간이 100.0% 증가한다.")),
+            List.of(),
+            null,
+            Assumptions.NONE);
+    assertThat(hawkeye.speed().attack().total()).isEqualByComparingTo("1.32");
+    assertThat(hawkeye.speed().move().total()).isEqualByComparingTo("9.32");
+    assertThat(hawkeye.toggles())
+        .extracting(t -> t.key() + "/" + t.axis() + "/" + t.on())
+        .containsExactly("두 번째 동료/MOVE_SPEED/true");
+  }
+
+  private static List<CharacterLoadout.PassiveEffect> breakerNodes() {
+    return List.of(
+        node(
+            "깨달음 4티어 무아지경 Lv.3",
+            "수라결 : 진정한 수라가 되어 일시적으로 야성적인 기운이 몸을 감싸며 강력한 힘을 얻고 공격속도 및 이동속도가 15.0% 증가한다."));
+  }
+
+  /**
+   * 표 고치기 D: 자기 공이속 트라이포드는 그 스킬 한정 행의 공식 문구로 자기 속도만 읽는다(기본 켬). 퀵 스텝 '생기 흡수'의 대상 감소(−5)는 자기 속도가 아니다.
+   * 바람의 속삭임 '바람의 축복'은 붕천퇴의 같은 이름 트라이포드(상황 조건, 기본 끔)와 다른 행이고 토글 key도 '스킬 - 트라이포드'.
+   */
+  @Test
+  void 표_고치기_D_자기_공이속_트라이포드는_스킬_한정_행의_문구로_읽는다() {
+    var quickStep =
+        tripodSkill(
+            "퀵 스텝",
+            "생기 흡수",
+            "스킬 시전 시 자신의 공격 속도와 이동 속도가 8.0초간 13.8% 증가하며, 공격 적중 시 적중된 대상의 공격 속도와 이동 속도가"
+                + " 4.0초간 5.0% 감소한다.");
+    var gunslinger = calculate("건슬링어", List.of(), List.of(quickStep), null, Assumptions.NONE);
+    assertThat(gunslinger.speed().attack().total()).isEqualByComparingTo("15.12");
+    assertThat(gunslinger.speed().move().total()).isEqualByComparingTo("15.12");
+    assertThat(gunslinger.toggles())
+        .extracting(t -> t.key() + "/" + t.label() + "/" + t.on())
+        .containsOnly("퀵 스텝 - 생기 흡수/생기 흡수 8초 유지 가정/true");
+
+    var whisper = tripodSkill("바람의 속삭임", "바람의 축복", "스킬 시전 시 자신의 공격 속도가 8.0초간 12.8% 증가한다.");
+    var battleMaster = calculate("배틀마스터", List.of(), List.of(whisper), null, Assumptions.NONE);
+    // 신속 1.32 + 바람의 축복 12.8 + 바람의 속삭임 스킬 버프 8(이동 16)
+    assertThat(battleMaster.speed().attack().total()).isEqualByComparingTo("22.12");
+    assertThat(battleMaster.speed().move().total()).isEqualByComparingTo("17.32");
+    assertThat(battleMaster.toggles())
+        .extracting(t -> t.key() + "/" + t.axis() + "/" + t.on())
+        .contains("바람의 속삭임 - 바람의 축복/ATTACK_SPEED/true");
+    var whisperOff =
+        calculate("배틀마스터", List.of(), List.of(whisper), null, toggle("바람의 속삭임 - 바람의 축복", false));
+    assertThat(whisperOff.speed().attack().total()).isEqualByComparingTo("9.32");
+
+    var safety =
+        tripodSkill(
+            "스크래치 딜러",
+            "안전 장치",
+            "콤보 조작이 3회로 증가한다. 마지막 콤보를 사용 시 후방으로 7.0m 순간이동을 하며 스킬 사용 시 5.0초간 공격속도가 19.2% 증가하고,"
+                + " 이동속도가 30.0% 증가한다.");
+    var arcana = calculate("아르카나", List.of(), List.of(safety), null, Assumptions.NONE);
+    assertThat(arcana.speed().attack().total()).isEqualByComparingTo("20.52");
+    assertThat(arcana.speed().move().total()).isEqualByComparingTo("31.32");
+
+    // 문구가 달라 패턴으로 읽지 못하면 일반 해석으로 더하지 않고 분류 중으로 남긴다.
+    var changed =
+        calculate(
+            "건슬링어",
+            List.of(),
+            List.of(
+                tripodSkill("퀵 스텝", "생기 흡수", "적중된 대상의 이동 속도가 4.0초간 5.0% 감소한다. 이동 속도가 10.0% 증가한다.")),
+            null,
+            Assumptions.NONE);
+    assertThat(changed.speed().move().total()).isEqualByComparingTo("1.32");
+    assertThat(changed.limitations()).anyMatch(line -> line.contains("퀵 스텝 - 생기 흡수(분류 중)"));
+  }
+
+  /**
+   * 표 고치기 D: 노드 문구에 없는 직업 상태 공이속(기본 켬). 리퍼 혼돈 상태 10/10은 피냄새 노드가 있을 때 피냄새 토글과 한 토글, 스카우터 하이퍼 싱크
+   * 15/30은 진화의 유산 노드가 있을 때, 배틀마스터 바람의 속삭임 8/16은 스킬(레벨 2 이상)이 있을 때만.
+   */
+  @Test
+  void 표_고치기_D_직업_상태_공이속은_노드와_스킬이_있을_때만_더한다() {
+    var reaper =
+        calculate("리퍼", List.of(node("깨달음 1티어 피냄새 Lv.3", "")), List.of(), null, Assumptions.NONE);
+    assertThat(reaper.speed().attack().total()).isEqualByComparingTo("11.32");
+    assertThat(reaper.speed().move().total()).isEqualByComparingTo("11.32");
+    assertThat(reaper.toggles())
+        .extracting(t -> t.key() + "/" + t.label() + "/" + t.axis())
+        .contains("피냄새/혼돈 상태 가정/ATTACK_SPEED", "피냄새/혼돈 상태 가정/MOVE_SPEED");
+    var reaperOff =
+        calculate(
+            "리퍼", List.of(node("깨달음 1티어 피냄새 Lv.3", "")), List.of(), null, toggle("피냄새", false));
+    assertThat(reaperOff.speed().attack().total()).isEqualByComparingTo("1.32");
+    var reaperOther =
+        calculate("리퍼", List.of(node("깨달음 1티어 달의 소리 Lv.3", "")), List.of(), null, Assumptions.NONE);
+    assertThat(reaperOther.speed().attack().total()).isEqualByComparingTo("1.32");
+
+    var scouter =
+        calculate(
+            "스카우터", List.of(node("깨달음 1티어 진화의 유산 Lv.3", "")), List.of(), null, Assumptions.NONE);
+    assertThat(scouter.speed().attack().total()).isEqualByComparingTo("16.32");
+    assertThat(scouter.speed().move().total()).isEqualByComparingTo("31.32");
+    var scouterOther =
+        calculate(
+            "스카우터", List.of(node("깨달음 1티어 아르데타인의 기술 Lv.3", "")), List.of(), null, Assumptions.NONE);
+    assertThat(scouterOther.speed().attack().total()).isEqualByComparingTo("1.32");
+
+    var battleMaster =
+        calculate("배틀마스터", List.of(), List.of(skill("바람의 속삭임")), null, Assumptions.NONE);
+    assertThat(battleMaster.speed().attack().total()).isEqualByComparingTo("9.32");
+    assertThat(battleMaster.speed().move().total()).isEqualByComparingTo("17.32");
+    var noSkill = calculate("배틀마스터", List.of(), List.of(), null, Assumptions.NONE);
+    assertThat(noSkill.speed().attack().total()).isEqualByComparingTo("1.32");
+  }
+
+  /** 표 고치기 D: 직업 코어 '운명' 상태 공이속(데모닉 서프레서 10/10, 환수사 곰은 사람을 찢어 15/15). 달성 구간만, 기본 켬. */
+  @Test
+  void 표_고치기_D_직업_코어_운명_공이속은_달성_구간만_기본_켬으로_더한다() {
+    var suppressor =
+        List.of(
+            new CharacterLoadout.CoreOption(10, "일반 및 잠식 스킬의 피해량이 1.5% 증가한다."),
+            new CharacterLoadout.CoreOption(
+                14,
+                "'운명' 발동 시 30.0초 동안 '운명: 서프레서' 효과를 획득한다.'운명: 서프레서' : 공격 속도와 이동 속도가 10.0% 증가하고,"
+                    + " 일반 스킬의 피해량이 3.0% 증가한다."));
+    var demonic =
+        calculate(
+            "데모닉",
+            List.of(),
+            List.of(),
+            grid(core("질서의 해 코어 : 서프레서", 20, suppressor)),
+            Assumptions.NONE);
+    assertThat(demonic.speed().attack().total()).isEqualByComparingTo("11.32");
+    assertThat(demonic.speed().move().total()).isEqualByComparingTo("11.32");
+    assertThat(demonic.toggles())
+        .extracting(t -> t.key() + "/" + t.axis() + "/" + t.on())
+        .containsExactly("운명: 서프레서 유지 가정/ATTACK_SPEED/true", "운명: 서프레서 유지 가정/MOVE_SPEED/true");
+    var low =
+        calculate(
+            "데모닉",
+            List.of(),
+            List.of(),
+            grid(core("질서의 해 코어 : 서프레서", 10, suppressor)),
+            Assumptions.NONE);
+    assertThat(low.speed().attack().total()).isEqualByComparingTo("1.32");
+    var off =
+        calculate(
+            "데모닉",
+            List.of(),
+            List.of(),
+            grid(core("질서의 해 코어 : 서프레서", 20, suppressor)),
+            toggle("운명: 서프레서 유지 가정", false));
+    assertThat(off.speed().move().total()).isEqualByComparingTo("1.32");
+
+    var bear =
+        calculate(
+            "환수사",
+            List.of(),
+            List.of(),
+            grid(
+                core(
+                    "질서의 해 코어 : 곰은 사람을 찢어",
+                    17,
+                    List.of(
+                        new CharacterLoadout.CoreOption(
+                            17,
+                            "금술 : 찢 곰의 피해량이 10.5% 증가한다.'운명' 발동 시 60.0초 동안 '운명: 곰은 사람을 찢어' 효과를 획득한다."
+                                + "'운명: 곰은 사람을 찢어' : 금술 : 찢 곰 스킬이 상시 강화되며 공격 및 이동 속도가 15.0%"
+                                + " 증가한다.")))),
+            Assumptions.NONE);
+    assertThat(bear.speed().attack().total()).isEqualByComparingTo("16.32");
+    assertThat(bear.speed().move().total()).isEqualByComparingTo("16.32");
+  }
+
+  private static CharacterLoadout.ArkGrid grid(CharacterLoadout.GridSlot slot) {
+    return new CharacterLoadout.ArkGrid(List.of(slot), List.of());
+  }
+
   private static CritSpeedCalculation.Result party(String effect) {
     return calculate(
         "발키리", List.of(), List.of(tripodSkill("숭고한 도약", "축복", effect)), null, Assumptions.NONE);

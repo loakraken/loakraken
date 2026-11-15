@@ -321,7 +321,7 @@ public class SpecUpController {
           Long extraCost,
       @Schema(
               description =
-                  "이 단계의 시뮬레이터 변경 전부(전투력 시뮬레이터 요청의 changes[]와 같은 모양). 대부분 하나(= change)이고, 어빌리티 스톤은 각인 둘. 다시 잴 때는 단계마다 이 목록을 넣고 같은 칸(candidateId의 마지막 ':' 앞)은 마지막 단계의 목록만 남긴다")
+                  "이 단계의 시뮬레이터 변경 전부(전투력 시뮬레이터 요청의 changes[]와 같은 모양). 대부분 하나(= change)이고, 어빌리티 스톤은 각인 둘. 다시 잴 때는 단계마다 이 목록을 넣고 같은 칸(candidateId의 마지막 ':' 앞)은 마지막 단계의 목록만 남긴다. 장신구 연마(POLISH) 단계는 그 장신구의 처음 상태와 다른 줄마다 POLISH 하나(빠지는 줄은 option NONE, 이름 있는 옵션이 먼저)에, 같은 장신구의 앞 단계가 바꾼 줄 가운데 이 단계가 바꾸지 않는 줄을 처음 값으로 되돌리는 POLISH를 더한 목록이다. 그래서 칸마다 마지막 목록만 남기든, 모든 단계를 차례로 이어 줄마다 뒤의 변경이 이기게 하든 단계 전투력과 같다")
           List<ChangeResponse> changes) {
     static SpecUpGoalStepResponse from(SpecUpGoalService.Step step) {
       return new SpecUpGoalStepResponse(

@@ -191,15 +191,18 @@ class CritEffectTableTest {
     assertThat(result.speed().move().total()).isEqualByComparingTo("1.32");
   }
 
-  /** PM-백엔드 10-10 01:46 P1: 켠 상황 조건 토글도 스킬별 치명타 적중률 기본에 들어간다. */
+  /**
+   * PM-백엔드 10-10 01:46 P1: 켠 상황 조건 토글도 스킬별 치명타 적중률에 들어간다. 연가공법은 공식 분류 '[난무 스킬]' 스킬에만(PM 총괄 11-16
+   * D3, 계산 검증 비교 기준) — 집중 스킬은 그대로.
+   */
   @Test
-  void 켠_치명타_적중률_토글은_스킬별_기본에도_들어간다() {
+  void 켠_치명타_적중률_토글은_그_효과가_붙는_스킬별_값에도_들어간다() {
     var nodes =
         List.of(
             node(
                 "깨달음 4티어 연가비기 Lv.3",
                 "연가비기 사용 시 연가공법을 발동시켜 16.0초 동안 치명타 적중률이 20.0% 증가하며, 적중 시 최대 마나의 15.0%를 즉시 회복한다."));
-    var skills = List.of(categorized("난무 스킬", "일반 스킬"));
+    var skills = List.of(categorized("반월섬", "난무 스킬"), categorized("적룡포", "집중 스킬"));
     var off = calculate("창술사", nodes, skills, null, Assumptions.NONE);
     var on =
         calculate(
@@ -218,8 +221,9 @@ class CritEffectTableTest {
                 null,
                 true,
                 java.util.Map.of("연가비기", true)));
-    assertThat(skill(on, "난무 스킬").base())
-        .isEqualByComparingTo(skill(off, "난무 스킬").base().add(new BigDecimal("20")));
+    assertThat(skill(on, "반월섬").total())
+        .isEqualByComparingTo(skill(off, "반월섬").total().add(new BigDecimal("20")));
+    assertThat(skill(on, "적룡포").total()).isEqualByComparingTo(skill(off, "적룡포").total());
     assertThat(on.crit().totalRate())
         .isEqualByComparingTo(off.crit().totalRate().add(new BigDecimal("20")));
   }
@@ -564,6 +568,19 @@ class CritEffectTableTest {
     // 주력(가장 많은 스킬 값)은 집중 스킬 쪽이라 그대로.
     assertThat(lanceOn.crit().mainSkillRate())
         .isEqualByComparingTo(lanceOff.crit().mainSkillRate());
+    // 연가비기 토글(같은 연가공법)을 켜도 같다: 합계 +20 한 번, 스킬별로는 난무 스킬에만(코드 리뷰 #979 P2 후속).
+    var yeongaNodes =
+        List.of(
+            node(
+                "깨달음 4티어 연가비기 Lv.3",
+                "연가비기 사용 시 연가공법을 발동시켜 16.0초 동안 치명타 적중률이 20.0% 증가하며, 적중 시 최대 마나의 15.0%를 즉시 회복한다."));
+    var yeonga = calculate("창술사", yeongaNodes, lanceSkills, null, toggle("연가비기", true));
+    assertThat(yeonga.crit().totalRate())
+        .isEqualByComparingTo(lanceOff.crit().totalRate().add(new BigDecimal("20")));
+    assertThat(skill(yeonga, "적룡포").total()).isEqualByComparingTo(skill(lanceOff, "적룡포").total());
+    assertThat(skill(yeonga, "반월섬").total())
+        .isEqualByComparingTo(skill(lanceOff, "반월섬").total().add(new BigDecimal("20")));
+    assertThat(yeonga.crit().mainSkillRate()).isEqualByComparingTo(lanceOff.crit().mainSkillRate());
     assertThat(
             values(
                 calculate("창술사", List.of(), List.of(), null, Assumptions.NONE),

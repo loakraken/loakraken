@@ -660,18 +660,28 @@ public final class CritEffectTable {
           "깨어난 잠재력");
 
   /**
-   * 합계에는 넣고 스킬별로는 그 분류(공식 스킬 Tooltip 제목)의 스킬에만 붙는 직업 버프 가정 → 분류. 비교 기준과 같음(계산 검증 11-16: 창술사 연가공법은
-   * '[난무 스킬]'에만, '[집중 스킬]'에는 없음).
-   */
-  /**
    * 합계·주력 스킬에는 넣고 스킬별로는 그 분류 스킬에만 붙는 노드 토글 key → 분류(비교 기준과 같음, 계산 검증 11-16: 서머너 고대의 힘은 일반 스킬, 환수사
    * 깨어난 잠재력은 둔갑 스킬).
    */
   public static final Map<String, String> CATEGORY_LIMITED_TOGGLES =
       Map.of("고대의 힘", "일반 스킬", "깨어난 잠재력", "둔갑 스킬");
 
+  /**
+   * 합계에는 넣고 스킬별로는 그 분류(공식 스킬 Tooltip 제목)의 스킬에만 붙는 직업 버프 가정 출처 이름 → 분류. 이름이 같거나 '이름(' 으로 시작하면(노드 토글
+   * 출처는 '라벨(노드 Lv.N)') 해당한다. 비교 기준과 같음(계산 검증 11-16: 창술사 연가공법은 '[난무 스킬]'에만, '[집중 스킬]'에는 없음 —
+   * 청룡진·연가비기 모두 같은 연가공법, 코드 리뷰 #979 P2 후속).
+   */
   public static final Map<String, String> CATEGORY_LIMITED_BUFFS =
-      Map.of("청룡진 연가공법 유지 가정", "난무 스킬");
+      Map.of("청룡진 연가공법 유지 가정", "난무 스킬", "연가공법 16초 유지 가정", "난무 스킬");
+
+  /** 출처 이름의 분류 한정(CATEGORY_LIMITED_BUFFS). 해당하지 않으면 null. */
+  public static String categoryLimit(String sourceName) {
+    if (sourceName == null) return null;
+    for (var entry : CATEGORY_LIMITED_BUFFS.entrySet())
+      if (sourceName.equals(entry.getKey()) || sourceName.startsWith(entry.getKey() + "("))
+        return entry.getValue();
+    return null;
+  }
 
   /**
    * 그 빌드의 주력 스킬이 전투 스킬 목록(스킬별 치명타 적중률) 밖인 토글 key. 이 토글이 있으면(켬·끔 무관) 주력 스킬 치명타 적중률은 목록 스킬이 아니라 시트 쪽

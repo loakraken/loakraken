@@ -1677,7 +1677,6 @@ public final class CritSpeedCalculation {
     }
   }
 
-  /** 노드 문구에 없는 직업 버프(정답표 1절 "일치 포함"). 트라이포드 문구가 있으면 그 값을, 없으면 표 값을 쓴다. */
   static final String BERSERKER_FRENZY = "폭주 상태 가정(특화 증폭)";
 
   private static final Pattern FRENZY_AMPLIFY =
@@ -1699,9 +1698,15 @@ public final class CritSpeedCalculation {
     String text = null;
     for (var stat : profile.stats()) {
       if (stat == null || !"특화".equals(stat.type())) continue;
-      text = String.join(" ", stat.tooltip());
-      var matcher = FRENZY_AMPLIFY.matcher(text);
-      if (matcher.find()) amplify = new BigDecimal(matcher.group(1));
+      // 표시 문구는 특화 툴팁 전체가 아니라 폭주 증폭 줄만(계산 검증 #981 P3).
+      for (var line : stat.tooltip()) {
+        if (line == null) continue;
+        var matcher = FRENZY_AMPLIFY.matcher(line);
+        if (matcher.find()) {
+          amplify = new BigDecimal(matcher.group(1));
+          text = line.strip();
+        }
+      }
     }
     if (amplify == null) return;
     if (loadout.arkPassive() != null)
@@ -1732,6 +1737,7 @@ public final class CritSpeedCalculation {
   /** 버서커 폭주 기본 치명타 적중률(공식 공지 13116, 공식 툴팁 값 기준). */
   static final BigDecimal FRENZY_BASE_CRIT = new BigDecimal("30");
 
+  /** 노드 문구에 없는 직업 버프(정답표 1절 "일치 포함"). 트라이포드 문구가 있으면 그 값을, 없으면 표 값을 쓴다. */
   private static void classBuffSources(
       CharacterProfile profile,
       CharacterLoadout loadout,

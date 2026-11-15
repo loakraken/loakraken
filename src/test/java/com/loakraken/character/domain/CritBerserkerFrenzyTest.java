@@ -21,6 +21,11 @@ class CritBerserkerFrenzyTest {
     assertThat(result.toggles())
         .extracting(t -> t.key() + "/" + t.coreState() + "/" + t.on())
         .contains("폭주 상태 가정(특화 증폭)/true/true");
+    // 표시 문구는 폭주 증폭 줄만(특화 툴팁 전체가 아님, 계산 검증 #981 P3).
+    assertThat(result.toggles())
+        .filteredOn(t -> t.key().equals("폭주 상태 가정(특화 증폭)"))
+        .extracting(CritSpeedCalculation.ToggleState::text)
+        .containsExactly("폭주 효과가 63.01% 증폭됩니다.");
   }
 
   @Test
@@ -87,7 +92,8 @@ class CritBerserkerFrenzyTest {
         null,
         List.of(
             new CharacterProfile.Stat("치명", "576", List.of("치명타 적중률이 20.61% 증가합니다.")),
-            new CharacterProfile.Stat("특화", "1694", List.of(specTooltip)),
+            new CharacterProfile.Stat(
+                "특화", "1694", List.of("아이덴티티 게이지 획득량이 증가합니다.", specTooltip)),
             new CharacterProfile.Stat(
                 "신속", "77", List.of("공격 속도가 1.32% 증가합니다.", "이동 속도가 1.32% 증가합니다."))));
   }

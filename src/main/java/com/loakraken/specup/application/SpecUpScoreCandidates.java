@@ -81,20 +81,11 @@ final class SpecUpScoreCandidates {
     var item = equipment(loadout, "어빌리티 스톤");
     var planned = new ArrayList<SpecUpService.Planned>();
     for (var target : STONE_TARGETS) {
-      Map<String, Integer> best = null;
-      Double bestDelta = null;
-      for (var order :
-          List.of(new int[] {target[2], target[3]}, new int[] {target[3], target[2]})) {
-        var levels = new LinkedHashMap<String, Integer>();
-        levels.put(names.get(0), order[0]);
-        levels.put(names.get(1), order[1]);
-        var delta = scorer.delta(context, new SpecUpKrakenScore.Stone(levels));
-        if (delta != null && (bestDelta == null || delta > bestDelta)) {
-          best = levels;
-          bestDelta = delta;
-        }
-      }
-      if (best == null || SpecUpKrakenScore.round2(bestDelta).signum() <= 0) continue;
+      var oriented = orientation(scorer, context, names, target);
+      if (oriented == null) continue;
+      var best = oriented.levels();
+      double bestDelta = oriented.delta();
+      if (SpecUpKrakenScore.round2(bestDelta).signum() <= 0) continue;
       var label = target[0] + "" + target[1] + "돌";
       planned.add(
           SpecUpService.Planned.scored(
@@ -109,6 +100,48 @@ final class SpecUpScoreCandidates {
               new SpecUpKrakenScore.Stone(best)));
     }
     return planned;
+  }
+
+  /** 스톤 목표 조합의 배치 하나: 각인 이름 → 레벨, 그 배치의 Δ점수(반올림 전). */
+  record Oriented(Map<String, Integer> levels, double delta) {}
+
+  /**
+   * 목표 조합의 두 배치(어느 각인에 높은 레벨) 가운데 목록이 보이는 배치: 점수가 더 오르는 쪽, 같으면 앞 배치(점수 입력 스톤 줄 순서대로 높은 레벨 먼저). 둘 다
+   * 계산할 수 없으면 null. 추천 순서·목표 경로도 이 배치만 쓴다(PM 총괄 11-15: 같은 점수에 다른 전투력인 뒤집은 배치는 비교 기준에 없음).
+   */
+  static Oriented orientation(
+      SpecUpKrakenScore scorer,
+      SpecUpKrakenScore.Context context,
+      List<String> names,
+      int[] target) {
+    Map<String, Integer> best = null;
+    Double bestDelta = null;
+    for (var order : List.of(new int[] {target[2], target[3]}, new int[] {target[3], target[2]})) {
+      var levels = new LinkedHashMap<String, Integer>();
+      levels.put(names.get(0), order[0]);
+      levels.put(names.get(1), order[1]);
+      var delta = scorer.delta(context, new SpecUpKrakenScore.Stone(levels));
+      if (delta != null && (bestDelta == null || delta > bestDelta)) {
+        best = levels;
+        bestDelta = delta;
+      }
+    }
+    return best == null ? null : new Oriented(best, bestDelta);
+  }
+
+  /** 목록 스톤 줄과 같은 배치(목표 조합마다 하나). 점수를 낼 수 없거나 스톤 줄을 읽지 못하면 null. */
+  static List<Map<String, Integer>> stoneOrientations(
+      SpecUpKrakenScore scorer, SpecUpKrakenScore.Context context) {
+    if (context == null || !context.available()) return null;
+    var current = SpecUpKrakenScore.stoneLevels(context.input());
+    if (current == null) return null;
+    var names = List.copyOf(current.keySet());
+    var result = new ArrayList<Map<String, Integer>>();
+    for (var target : STONE_TARGETS) {
+      var oriented = orientation(scorer, context, names, target);
+      if (oriented != null) result.add(oriented.levels());
+    }
+    return List.copyOf(result);
   }
 
   private static SpecUpCost karmaCost(int current, int next) {

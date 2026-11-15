@@ -141,6 +141,11 @@ public class SpecUpService {
     return environment.getProperty("spec-up.support-order.enabled", Boolean.class, false);
   }
 
+  /** 목록 스톤 줄과 같은 배치(목표 조합마다 하나). 점수를 낼 수 없으면 null(추천 순서는 앞 배치만). */
+  java.util.List<Map<String, Integer>> stoneOrientations(CharacterResult snapshot) {
+    return SpecUpScoreCandidates.stoneOrientations(kraken, kraken.context(snapshot));
+  }
+
   /** 크라켄 점수 문맥(목록과 같음). */
   SpecUpKrakenScore.Context krakenContext(CharacterResult snapshot) {
     return kraken.context(snapshot);

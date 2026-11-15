@@ -47,7 +47,7 @@ public class SpecUpGoalService {
    * v3: 목표 경로도 추천 순서와 같은 단계 종류(어빌리티 스톤 목표 조합, 완갑 스위치)를 고른다(계산 검증 11-09: 스톤으로만 닿는 목표가 '더 올릴 수
    * 없음'이었다).
    */
-  public static final String RULE_VERSION = "spec-up-goal-v4";
+  public static final String RULE_VERSION = "spec-up-goal-v5";
 
   static final int MAX_STEPS = 30;
   static final Duration TIME_LIMIT = Duration.ofSeconds(2);
@@ -133,15 +133,20 @@ public class SpecUpGoalService {
   }
 
   // v2: 완갑(팔 보호구) 재련 단계를 고른다. v3: 어빌리티 스톤 목표 조합(각인 둘을 한 단계에), 단계 changes.
-  public static final String PATH_RULE_VERSION = "spec-up-path-v4";
+  public static final String PATH_RULE_VERSION = "spec-up-path-v5";
   static final int PATH_MAX_STEPS = 30;
   static final int SOLVE_MAX_CONCURRENT = 2;
   static final Duration PATH_RETRY_AFTER = Duration.ofSeconds(2);
   private static final Map<String, String> PATH_STOP_TEXT =
       Map.of(
-          NO_CANDIDATE, "시세가 있는 항목 가운데 전투력이 오르는 것을 모두 골랐어요.",
-          STEP_LIMIT, "정한 단계 수까지 보여 드려요.",
-          TIME_LIMITED, "계산 시간이 길어 여기까지 고른 단계만 보여 드려요.");
+          NO_CANDIDATE,
+          "시세가 있는 항목 가운데 전투력이 오르는 것을 모두 골랐어요.",
+          NO_CANDIDATE + ":KRAKEN",
+          "시세가 있는 항목 가운데 크라켄 점수가 오르는 것을 모두 골랐어요.",
+          STEP_LIMIT,
+          "정한 단계 수까지 보여 드려요.",
+          TIME_LIMITED,
+          "계산 시간이 길어 여기까지 고른 단계만 보여 드려요.");
 
   /** 순서에서 뺀 항목(지금 상태에서 시세를 몰라 고를 수 없는 다음 단계 중 전투력이 오르는 것). 추측 비용을 넣지 않는다. */
   public record Excluded(
@@ -398,7 +403,10 @@ public class SpecUpGoalService {
         pick.name(),
         limit,
         chain.stop(),
-        PATH_STOP_TEXT.get(chain.stop()),
+        // KRAKEN은 점수가 오르는 단계를 고르므로 그 문장(코드 리뷰 #967 P3).
+        pick == Pick.KRAKEN && PATH_STOP_TEXT.containsKey(chain.stop() + ":KRAKEN")
+            ? PATH_STOP_TEXT.get(chain.stop() + ":KRAKEN")
+            : PATH_STOP_TEXT.get(chain.stop()),
         chain.cumulative(),
         PATH_RULE_VERSION,
         CombatPowerSimulationService.RULE_VERSION,
@@ -423,7 +431,8 @@ public class SpecUpGoalService {
     var result = new ArrayList<Excluded>();
     for (var option :
         options(
-            State.of(snapshot.details().loadout(), armGuard, true),
+            State.of(snapshot.details().loadout(), armGuard, true)
+                .withStoneOrientations(specUp.stoneOrientations(snapshot)),
             gems,
             refinePrices,
             pricesAt,
@@ -700,7 +709,9 @@ public class SpecUpGoalService {
     var appliedEdits = new HashMap<String, SpecUpKrakenScore.Edit>();
     Double scoreNow = kraken == null ? null : kraken.before();
     // 추천 순서와 목표 경로 모두 어빌리티 스톤 목표 조합도 고른다(목표 경로 v3).
-    var state = State.of(snapshot.details().loadout(), armGuard, true);
+    var state =
+        State.of(snapshot.details().loadout(), armGuard, true)
+            .withStoneOrientations(specUp.stoneOrientations(snapshot));
     // 칸마다 그 칸의 마지막 단계 변경(스톤은 각인 둘이라 여러 개).
     var applied = new LinkedHashMap<String, List<Change>>();
     var current = before;
@@ -1300,8 +1311,8 @@ public class SpecUpGoalService {
   }
 
   /**
-   * 어빌리티 스톤 목표 조합(목록 스톤 줄과 같은 목표·id·비용): 조합마다 두 배치(어느 각인에 높은 레벨). 한 단계에 각인 둘(STONE_ENGRAVING 둘)을
-   * 바꾼다. 비용은 새 스톤 기대 비용 전부(스톤은 이어 올리지 않고 새로 깎는다). 지금과 같은 레벨 조합은 뺀다.
+   * 어빌리티 스톤 목표 조합(목록 스톤 줄과 같은 목표·id·비용): 조합마다 목록과 같은 배치 하나(어느 각인에 높은 레벨). 한 단계에 각인
+   * 둘(STONE_ENGRAVING 둘)을 바꾼다. 비용은 새 스톤 기대 비용 전부(스톤은 이어 올리지 않고 새로 깎는다). 지금과 같은 레벨 조합은 뺀다.
    */
   static List<Option> stoneOptions(Stone stone) {
     var names = List.copyOf(stone.levels().keySet());
@@ -1311,8 +1322,16 @@ public class SpecUpGoalService {
       var label = target[0] + "" + target[1] + "돌";
       var gold = com.loakraken.specup.domain.SpecUpCostRules.stoneGold(label);
       var cost = gold == null ? SpecUpCost.STONE_COST_UNCONFIRMED : SpecUpCost.stone(gold);
-      for (var order :
-          List.of(new int[] {target[2], target[3]}, new int[] {target[3], target[2]})) {
+      // 목록과 같은 배치 하나만(PM 총괄 11-15: 뒤집은 배치는 같은 점수에 다른 전투력이라 비교 기준에 없는 숫자가 된다). 목록 배치를 모르면 앞 배치.
+      var first = new LinkedHashMap<String, Integer>();
+      first.put(names.get(0), target[2]);
+      first.put(names.get(1), target[3]);
+      var flipped = new LinkedHashMap<String, Integer>();
+      flipped.put(names.get(0), target[3]);
+      flipped.put(names.get(1), target[2]);
+      var chosen =
+          stone.orientations() != null && stone.orientations().contains(flipped) ? flipped : first;
+      for (var order : List.of(new int[] {chosen.get(names.get(0)), chosen.get(names.get(1))})) {
         var levels = new LinkedHashMap<String, Integer>();
         levels.put(names.get(0), order[0]);
         levels.put(names.get(1), order[1]);
@@ -1510,7 +1529,15 @@ public class SpecUpGoalService {
   }
 
   /** 어빌리티 스톤: 각인 이름 → 레벨(스톤 줄 순서), 표시용 장비. */
-  record Stone(CharacterLoadout.Equipment item, Map<String, Integer> levels) {}
+  record Stone(
+      CharacterLoadout.Equipment item,
+      Map<String, Integer> levels,
+      List<Map<String, Integer>> orientations) {
+    /** orientations = 목록 스톤 줄과 같은 배치(목표 조합마다 하나, null이면 앞 배치). */
+    Stone(CharacterLoadout.Equipment item, Map<String, Integer> levels) {
+      this(item, levels, null);
+    }
+  }
 
   record GemSlot(
       int slot,
@@ -1537,6 +1564,19 @@ public class SpecUpGoalService {
       Map<String, Engraving> engravings,
       Item armGuard,
       Stone stone) {
+    /** 스톤 배치를 목록과 같게(목표 조합마다 하나). 스톤이 없거나 배치를 모르면 그대로. */
+    State withStoneOrientations(List<Map<String, Integer>> orientations) {
+      if (stone == null || orientations == null) return this;
+      return new State(
+          gems,
+          refines,
+          advanced,
+          quality,
+          engravings,
+          armGuard,
+          new Stone(stone.item(), stone.levels(), orientations));
+    }
+
     /** 완갑(팔 보호구)·어빌리티 스톤은 넣지 않는 상태(목표 경로). */
     static State of(CharacterLoadout loadout) {
       return of(loadout, false, false);
@@ -1704,7 +1744,7 @@ public class SpecUpGoalService {
         case STONE_ENGRAVING -> {
           var levels = new LinkedHashMap<>(stone.levels());
           for (var each : option.changes()) levels.put(each.name(), each.level());
-          stone = new Stone(stone.item(), levels);
+          stone = new Stone(stone.item(), levels, stone.orientations());
         }
         default -> {}
       }

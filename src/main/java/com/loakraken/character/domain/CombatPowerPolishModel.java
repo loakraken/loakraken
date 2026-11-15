@@ -40,7 +40,8 @@ public final class CombatPowerPolishModel {
 
   /** 연마 줄 하나의 몫. factor는 독립 배수, weaponFlat·weaponPct는 W 항에 더할 무기 공격력 고정값·비율(0.018 = 1.8%)이다. */
   public record Line(BigDecimal factor, BigDecimal weaponFlat, BigDecimal weaponPct) {
-    static final Line NEUTRAL = new Line(BigDecimal.ONE, BigDecimal.ZERO, BigDecimal.ZERO);
+    /** 전투력 몫이 없는 줄(딜러 전투력에 0인 옵션, 스펙업 연마 후보의 모르는 셋째 줄). */
+    public static final Line NEUTRAL = new Line(BigDecimal.ONE, BigDecimal.ZERO, BigDecimal.ZERO);
   }
 
   /** 공식 툴팁 줄(이름, "+2.60%"·"+390")의 몫. 확인하지 않은 옵션이나 읽지 못한 수치는 null. */

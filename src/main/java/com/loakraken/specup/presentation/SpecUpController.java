@@ -3,6 +3,7 @@ package com.loakraken.specup.presentation;
 import com.loakraken.character.application.CombatPowerSimulationService;
 import com.loakraken.common.api.ApiResponse;
 import com.loakraken.common.api.NullableResponse;
+import com.loakraken.common.api.OptionalResponse;
 import com.loakraken.common.api.ResponseContracts;
 import com.loakraken.common.api.SuccessCode;
 import com.loakraken.specup.application.SpecUpGoalService;
@@ -608,8 +609,21 @@ public class SpecUpController {
       @NullableResponse Integer refine,
       @NullableResponse Integer quality,
       @NullableResponse String name,
-      @Schema(description = "팔 보호구 등급(ARM_GUARD만, 영웅·전설·유물·고대). 그 밖에는 null") @NullableResponse
-          String grade) {
+      @Schema(
+              description =
+                  "팔 보호구 등급(ARM_GUARD, 영웅·전설·유물·고대) 또는 연마 등급(POLISH, LOW·MID·HIGH, option NONE이면 null). 그 밖에는 null")
+          @NullableResponse
+          String grade,
+      @Schema(description = "연마 효과 줄 번호(POLISH만, 0부터). 그 밖에는 null. 배포 순서 때문에 계약에서는 아직 선택 필드")
+          @NullableResponse
+          @OptionalResponse
+          Integer line,
+      @Schema(
+              description =
+                  "연마 옵션(POLISH만, 시뮬레이터 요청 option과 같은 값: % 옵션은 끝에 \" %\", 점수 옵션이 없는 줄은 \"NONE\"). 그 밖에는 null. 배포 순서 때문에 계약에서는 아직 선택 필드")
+          @NullableResponse
+          @OptionalResponse
+          String option) {
     static ChangeResponse from(CombatPowerSimulationService.Change change) {
       return change == null
           ? null
@@ -621,7 +635,9 @@ public class SpecUpController {
               change.refine(),
               change.quality(),
               change.name(),
-              change.grade());
+              change.grade(),
+              change.line(),
+              change.option());
     }
   }
 

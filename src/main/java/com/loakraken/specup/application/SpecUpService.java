@@ -125,6 +125,74 @@ public class SpecUpService {
   }
 
   /**
+   * 추천 순서·목표 경로의 연마 단계(spec-up.polish-path.enabled, 기본 끔, 목록 연마 전투력 스위치와 따로). 켜면 딜러 연마 교체 줄을 같은
+   * 목표·id·비용으로 단계 후보에 넣는다. 요청마다 읽는다.
+   */
+  boolean polishPathEnabled() {
+    return environment.getProperty("spec-up.polish-path.enabled", Boolean.class, false);
+  }
+
+  /**
+   * 추천 순서·목표 경로의 연마 단계 후보 하나. slot은 장신구 칸(POLISH:장비 순번, 같은 칸은 뒤 단계가 앞 매물을 바꿈), changes는 공개 시뮬레이터
+   * 변경(줄마다 POLISH, 빠진 줄은 option NONE)이라 다시 재면 같은 값이다.
+   */
+  record PolishStep(
+      String slot,
+      String id,
+      String target,
+      String from,
+      String to,
+      String icon,
+      String grade,
+      SpecUpCost cost,
+      List<Change> changes) {}
+
+  /**
+   * 연마 단계 후보(스위치가 꺼졌거나, 딜러가 아니거나, 크라켄 점수 입력이 없으면 빈 목록). 비용은 목록과 같은 식이고 캐시된 연마 시세 칸만 쓴다(경로는 시세 칸을
+   * 채우지 않음). 변경을 만들 수 없는 줄(점수 입력·툴팁이 다름, 수치표에 없음)은 뺀다.
+   */
+  List<PolishStep> polishSteps(CharacterResult snapshot) {
+    if (!polishPathEnabled() || CombatPowerSimulationService.roleReason(snapshot) != null)
+      return List.of();
+    var context = kraken.context(snapshot);
+    if (!context.available() || context.support()) return List.of();
+    var loadout = snapshot.details().loadout();
+    var rows = SpecUpScoreCandidates.polish(context.input(), loadout, polishValues);
+    if (rows == null) return List.of();
+    var fill = new MarketAuctionService.PolishFill(false);
+    var pricesAt = new Instant[1];
+    var steps = new ArrayList<PolishStep>();
+    for (var row : rows) {
+      if (!(row.kraken() instanceof SpecUpKrakenScore.Polish polish) || polish.index() == null)
+        continue;
+      List<Change> changes;
+      try {
+        changes =
+            simulator.polishSwapChanges(snapshot, polish.index(), polish.current(), polish.lines());
+      } catch (RuntimeException exception) {
+        log.warn(
+            "event=spec_up_polish_step_skipped id={} error={}",
+            row.id(),
+            exception.getClass().getSimpleName());
+        continue;
+      }
+      if (changes == null || changes.isEmpty()) continue;
+      steps.add(
+          new PolishStep(
+              "POLISH:" + polish.index(),
+              row.id(),
+              row.target(),
+              row.from(),
+              row.to(),
+              row.icon(),
+              row.grade(),
+              polishCost(loadout, context, row, fill, pricesAt),
+              changes));
+    }
+    return List.copyOf(steps);
+  }
+
+  /**
    * 스톤 줄의 시뮬레이터 변경(각인마다 STONE_ENGRAVING, 목표 레벨). 장착한 스톤의 각인 줄에 없는 이름이 있으면 null(시뮬레이터는 없는 각인을 오류로
    * 돌려주므로 그 줄은 점수만 남긴다).
    */

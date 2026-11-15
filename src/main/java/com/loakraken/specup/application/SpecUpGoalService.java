@@ -190,6 +190,7 @@ public class SpecUpGoalService {
             : profile.combatPower().setScale(2, RoundingMode.HALF_UP);
     var gems = gemPrices();
     var refinePrices = materials.cached();
+    var polish = specUp.polishSteps(snapshot);
     var key =
         String.join(
             ":",
@@ -205,7 +206,8 @@ public class SpecUpGoalService {
             PATH_RULE_VERSION,
             CombatPowerSimulationService.RULE_VERSION,
             String.valueOf(specUp.costRuleVersions()),
-            specUp.armGuardEnabled() ? "ag" : "-");
+            specUp.armGuardEnabled() ? "ag" : "-",
+            polishSignature(polish));
     var cached = store.findPath(key);
     if (cached.isPresent()) {
       pathOutcome("cache_hit");
@@ -225,7 +227,7 @@ public class SpecUpGoalService {
           }
           try {
             long started = nanoTime.getAsLong();
-            var result = computePath(snapshot, before, pick, limit, gems, refinePrices);
+            var result = computePath(snapshot, before, pick, limit, gems, refinePrices, polish);
             long elapsed = nanoTime.getAsLong() - started;
             pathOutcome("computed");
             Timer.builder("loakraken.spec_up.path_compute")
@@ -255,7 +257,8 @@ public class SpecUpGoalService {
       Pick pick,
       int limit,
       Map<String, MarketAuctionService.GemCell> gems,
-      Optional<RefiningMaterialPriceService.Prices> refinePrices) {
+      Optional<RefiningMaterialPriceService.Prices> refinePrices,
+      List<SpecUpService.PolishStep> polish) {
     var profile = snapshot.details().profile();
     var roleReason = CombatPowerSimulationService.roleReason(snapshot);
     if (roleReason != null || before == null) {
@@ -283,8 +286,9 @@ public class SpecUpGoalService {
     }
     // 추천 순서는 완갑(팔 보호구) 재련도 고른다(목록 완갑 스위치를 따름). 목표 경로는 그대로(완갑 없음).
     boolean armGuard = specUp.armGuardEnabled();
-    var chain = chain(snapshot, before, null, pick, true, limit, armGuard, gems, refinePrices);
-    var unpriced = unpricedAtStart(snapshot, before, armGuard, gems, refinePrices);
+    var chain =
+        chain(snapshot, before, null, pick, true, limit, armGuard, gems, refinePrices, polish);
+    var unpriced = unpricedAtStart(snapshot, before, armGuard, gems, refinePrices, polish);
     return new Path(
         profile.characterName(),
         profile.serverName(),
@@ -310,12 +314,17 @@ public class SpecUpGoalService {
       BigDecimal before,
       boolean armGuard,
       Map<String, MarketAuctionService.GemCell> gems,
-      Optional<RefiningMaterialPriceService.Prices> refinePrices) {
+      Optional<RefiningMaterialPriceService.Prices> refinePrices,
+      List<SpecUpService.PolishStep> polish) {
     var pricesAt = new Instant[1];
     var result = new ArrayList<Excluded>();
     for (var option :
         options(
-            State.of(snapshot.details().loadout(), armGuard, true), gems, refinePrices, pricesAt)) {
+            State.of(snapshot.details().loadout(), armGuard, true),
+            gems,
+            refinePrices,
+            pricesAt,
+            polish)) {
       if (option.cost() != null && option.cost().amount() != null) continue;
       var simulated = simulator.simulate(snapshot, option.changes());
       if (simulated.unsupportedCount() > 0 || simulated.after() == null) continue;
@@ -391,6 +400,7 @@ public class SpecUpGoalService {
       throw new BusinessException(SpecUpErrorCode.SPEC_UP_GOAL_OUT_OF_RANGE);
     var gems = gemPrices();
     var refinePrices = materials.cached();
+    var polish = specUp.polishSteps(snapshot);
     var key =
         String.join(
             ":",
@@ -408,7 +418,8 @@ public class SpecUpGoalService {
             RULE_VERSION,
             CombatPowerSimulationService.RULE_VERSION,
             String.valueOf(specUp.costRuleVersions()),
-            specUp.armGuardEnabled() ? "ag" : "-");
+            specUp.armGuardEnabled() ? "ag" : "-",
+            polishSignature(polish));
     var cached = store.find(key);
     if (cached.isPresent()) {
       goalOutcome("cache_hit");
@@ -425,7 +436,7 @@ public class SpecUpGoalService {
           try {
             // 계산 시간 측정은 시간 상한 판정에 쓰는 시계(nanoTime)와 따로 잰다(상한 판정을 건드리지 않게).
             long started = System.nanoTime();
-            var result = compute(snapshot, before, goal, gems, refinePrices);
+            var result = compute(snapshot, before, goal, gems, refinePrices, polish);
             goalOutcome("computed");
             // 추천 순서처럼 계산 시간(p95·p99)을 남긴다. stop은 멈춘 이유 코드(작은 고정 집합).
             Timer.builder("loakraken.spec_up.goal_compute")
@@ -447,7 +458,8 @@ public class SpecUpGoalService {
       BigDecimal before,
       BigDecimal target,
       Map<String, MarketAuctionService.GemCell> gems,
-      Optional<RefiningMaterialPriceService.Prices> refinePrices) {
+      Optional<RefiningMaterialPriceService.Prices> refinePrices,
+      List<SpecUpService.PolishStep> polish) {
     var roleReason = CombatPowerSimulationService.roleReason(snapshot);
     if (roleReason != null || before == null) {
       var reason =
@@ -470,7 +482,8 @@ public class SpecUpGoalService {
             MAX_STEPS,
             specUp.armGuardEnabled(),
             gems,
-            refinePrices);
+            refinePrices,
+            polish);
     return result(
         snapshot,
         before,
@@ -512,7 +525,8 @@ public class SpecUpGoalService {
       int maxSteps,
       boolean armGuard,
       Map<String, MarketAuctionService.GemCell> gems,
-      Optional<RefiningMaterialPriceService.Prices> refinePrices) {
+      Optional<RefiningMaterialPriceService.Prices> refinePrices,
+      List<SpecUpService.PolishStep> polish) {
     var pricesAt = new Instant[1];
     var steps = new ArrayList<Step>();
     // 추천 순서와 목표 경로 모두 어빌리티 스톤 목표 조합도 고른다(목표 경로 v3).
@@ -545,7 +559,7 @@ public class SpecUpGoalService {
       Option best = null;
       boolean bestFree = false;
       Long bestMarginal = null;
-      for (var option : options(state, gems, refinePrices, pricesAt)) {
+      for (var option : options(state, gems, refinePrices, pricesAt, polish)) {
         // 고르는 효율은 이 단계에 더 드는 비용(보석은 누적 차이)으로: 같은 칸을 이어서 올릴 때 이미 낸 비용을 다시 세지 않는다.
         var marginal = marginal(option, gemTotals);
         if (pricedOnly && marginal == null) continue;
@@ -660,9 +674,30 @@ public class SpecUpGoalService {
     return paid == null ? null : amount - paid;
   }
 
-  /** 칸마다 마지막 단계 비용만 합계에 세는 단계: 보석 레벨(누적 비용)과 어빌리티 스톤(새로 깎는 스톤, PM 총괄 11-09). */
+  /**
+   * 칸마다 마지막 단계 비용만 합계에 세는 단계: 보석 레벨(누적 비용), 어빌리티 스톤(새로 깎는 스톤, PM 총괄 11-09), 연마(같은 장신구 칸은 새 매물로 바꾸므로
+   * 마지막 매물 비용만).
+   */
   static boolean slotCost(Option option) {
-    return option.change().kind() == Kind.GEM_LEVEL || "ABILITY_STONE".equals(option.kind());
+    return option.change().kind() == Kind.GEM_LEVEL
+        || "ABILITY_STONE".equals(option.kind())
+        || "POLISH".equals(option.kind());
+  }
+
+  /** 연마 단계 후보가 캐시 키에 주는 값: 스위치가 꺼졌거나 후보가 없으면 "-", 있으면 id·비용·관측 시각의 해시(연마 시세가 바뀌면 다시 계산). */
+  static String polishSignature(List<SpecUpService.PolishStep> polish) {
+    if (polish.isEmpty()) return "-";
+    var parts = new ArrayList<String>();
+    for (var step : polish)
+      parts.add(
+          step.id()
+              + "="
+              + (step.cost() == null ? "" : step.cost().amount())
+              + "@"
+              + (step.cost() == null || step.cost().priceObservedAt() == null
+                  ? ""
+                  : step.cost().priceObservedAt().toEpochMilli()));
+    return "pp" + Integer.toHexString(String.join(",", parts).hashCode());
   }
 
   /** 더 드는 비용이 0 이하로 확인된 단계(거꾸로 시세의 보석 단계 등). 효율은 '-'(null)이지만 경로에는 먼저 넣는다. */
@@ -710,8 +745,36 @@ public class SpecUpGoalService {
       State state,
       Map<String, MarketAuctionService.GemCell> gems,
       Optional<RefiningMaterialPriceService.Prices> refinePrices,
-      Instant[] pricesAt) {
+      Instant[] pricesAt,
+      List<SpecUpService.PolishStep> polish) {
     var result = new ArrayList<Option>();
+    // 연마 단계(spec-up.polish-path.enabled): 목록 연마 교체 줄과 같은 목표·id·비용. 같은 장신구 칸의 다른 매물을 고르면 앞 매물을
+    // 바꾼다(칸마다 마지막
+    // 변경만, 다시 잴 때도 같음).
+    for (var step : polish) {
+      if (step.changes().isEmpty()) continue;
+      if (step.cost() != null && step.cost().priceObservedAt() != null)
+        pricesAt[0] =
+            pricesAt[0] == null || step.cost().priceObservedAt().isBefore(pricesAt[0])
+                ? step.cost().priceObservedAt()
+                : pricesAt[0];
+      result.add(
+          new Option(
+              step.slot(),
+              step.id(),
+              step.target(),
+              step.from(),
+              step.to(),
+              step.icon(),
+              step.grade(),
+              null,
+              step.changes().getFirst(),
+              step.cost(),
+              null,
+              null,
+              null,
+              step.changes().subList(1, step.changes().size())));
+    }
     for (var gem : state.gems().values()) {
       if (gem.level() >= 10) continue;
       int next = gem.level() + 1;

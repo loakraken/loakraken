@@ -193,10 +193,12 @@ public class CombatPowerController {
       @Schema(description = "품질(EQUIPMENT_QUALITY)") Integer quality,
       @Schema(
               description =
-                  "연마 옵션 이름(POLISH, options의 polishValues.options[].option). 같은 부위에 같은 이름의 %·고정값이 둘 다 있으면(귀걸이 공격력·무기 공격력) % 쪽은 끝에 \" %\"를 붙인다(예: \"공격력 %\").")
+                  "연마 옵션 이름(POLISH, options의 polishValues.options[].option). 같은 부위에 같은 이름의 %·고정값이 둘 다 있으면(귀걸이 공격력·무기 공격력) % 쪽은 끝에 \" %\"를 붙인다(예: \"공격력 %\"). \"NONE\"은 점수 옵션이 없는 줄(전투력 몫 0, grade 없음): 스펙업 추천 순서의 연마 단계가 사는 장신구에서 빠지는 줄(지금 고정값 줄)을 나타낸다.")
           @Size(max = 32)
           String option,
-      @Schema(description = "LOW·MID·HIGH(POLISH·BRACELET_EFFECT), 코어 등급(ARK_GRID_CORE)")
+      @Schema(
+              description =
+                  "LOW·MID·HIGH(POLISH·BRACELET_EFFECT, POLISH option NONE이면 없음), 코어 등급(ARK_GRID_CORE)")
           @Size(max = 8)
           String grade,
       @Schema(description = "팔찌 효과·각인·스톤 각인 이름") @Size(max = 32) String name,

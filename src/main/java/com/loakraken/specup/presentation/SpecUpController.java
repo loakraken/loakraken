@@ -475,7 +475,7 @@ public class SpecUpController {
       @Schema(description = "같은 캐릭터·같은 후보면 늘 같은 값(목록 키)", example = "GEM_LEVEL:3:8") String id,
       @Schema(
               description =
-                  "후보 종류(문자열, 값이 늘 수 있음). 시뮬레이터 kind와 같다. POLISH(장신구 연마 교체)·ABILITY_STONE(어빌리티 스톤)·KARMA_LEVEL(깨달음 카르마)은 크라켄 점수를 낼 수 있으면 후보마다 한 줄(change null·전투력 UNSUPPORTED·deltaKrakenScore 있음)이고, 그럴 수 없으면 종류마다 한 줄 UNSUPPORTED 알림. 다만 연마 교체 줄 전투력 스위치가 켜지면 딜러 POLISH 줄은 Δ크라켄 점수와 같은 목표 장신구로 전투력도 낸다(status OK, change는 그대로 null)",
+                  "후보 종류(문자열, 값이 늘 수 있음). 시뮬레이터 kind와 같다. POLISH(장신구 연마 교체)·ABILITY_STONE(어빌리티 스톤)·KARMA_LEVEL(깨달음 카르마)은 크라켄 점수를 낼 수 있으면 후보마다 한 줄(change null·전투력 UNSUPPORTED·deltaKrakenScore 있음)이고, 그럴 수 없으면 종류마다 한 줄 UNSUPPORTED 알림. 다만 연마 교체 줄 전투력 스위치가 켜지면 딜러 POLISH 줄은 Δ크라켄 점수와 같은 목표 장신구로, 스톤 줄 전투력 스위치가 켜지면 ABILITY_STONE 줄은 추천 순서와 같은 변경(STONE_ENGRAVING 둘)으로 전투력도 낸다(status OK, change는 그대로 null)",
               example = "GEM_LEVEL")
           String kind,
       @Schema(description = "화면에 그대로 쓰는 대상 이름", example = "블레이드 버스트 · 7레벨 겁화") String target,

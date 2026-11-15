@@ -205,6 +205,10 @@ class SpecUpKrakenIntegrationTest {
     var stone = find(candidates, "ABILITY_STONE:2:3");
     assertThat(stone.path("deltaKrakenScore").decimalValue()).isEqualByComparingTo("0.91");
     assertThat(stone.path("to").asText()).isEqualTo("97돌 아드레날린 Lv.2 · 원한 Lv.3");
+    // 스톤 줄 전투력 스위치(spec-up.stone-cp.enabled)가 꺼져 있으면 점수만(전투력 UNSUPPORTED·SCORE_ONLY).
+    assertThat(stone.path("status").asText()).isEqualTo("UNSUPPORTED");
+    assertThat(stone.path("reasonCode").asText()).isEqualTo("SCORE_ONLY");
+    assertThat(stone.path("change").isNull()).isTrue();
     // B1 비용(비교 기준 B 원본 식): 스톤 = 1 ÷ 목표 조합 확률 키트 × 50골드, 10만 골드당은 B 화면 값과 같다(같은 시각 레퍼런스 표).
     assertThat(stone.at("/cost/code").asText()).isEqualTo("STONE_EXPECTED_KITS");
     assertThat(stone.at("/cost/amount").asLong()).isEqualTo(36_765L); // 735.29개 × 50

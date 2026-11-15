@@ -100,7 +100,8 @@ public class SpecUpService {
 
   /**
    * 점수 입력 줄 전투력 실패 수(loakraken.spec_up.row_cp_failed{kind, error}). 스위치를 켠 뒤 줄이 조용히 점수만으로 떨어지는지 보는
-   * 값이다. kind는 POLISH·ABILITY_STONE, error는 예외 클래스 이름이라 값이 몇 개뿐이다.
+   * 값이다. kind는 POLISH·ABILITY_STONE(목록 줄)·POLISH_STEP(추천 순서 연마 단계가 빠짐), error는 예외 클래스 이름 또는
+   * unmappable이라 값이 몇 개뿐이다.
    */
   private final io.micrometer.core.instrument.MeterRegistry meters;
 
@@ -170,13 +171,22 @@ public class SpecUpService {
         changes =
             simulator.polishSwapChanges(snapshot, polish.index(), polish.current(), polish.lines());
       } catch (RuntimeException exception) {
-        log.warn(
-            "event=spec_up_polish_step_skipped id={} error={}",
-            row.id(),
-            exception.getClass().getSimpleName());
+        var error = exception.getClass().getSimpleName();
+        log.warn("event=spec_up_polish_step_skipped id={} error={}", row.id(), error);
+        meters
+            .counter("loakraken.spec_up.row_cp_failed", "kind", "POLISH_STEP", "error", error)
+            .increment();
         continue;
       }
-      if (changes == null || changes.isEmpty()) continue;
+      if (changes == null) {
+        // 점수 입력 줄과 툴팁 줄이 다르거나 목표 줄이 수치표에 없음: 단계에서 빠지는 것을 셈한다(스위치를 켠 뒤 조용히 빠지는지).
+        meters
+            .counter(
+                "loakraken.spec_up.row_cp_failed", "kind", "POLISH_STEP", "error", "unmappable")
+            .increment();
+        continue;
+      }
+      if (changes.isEmpty()) continue;
       steps.add(
           new PolishStep(
               "POLISH:" + polish.index(),

@@ -452,7 +452,54 @@ public class SpecUpService {
       BigDecimal krakenScore,
       String krakenRuleVersion,
       boolean cooldownGemsIncluded,
-      String krakenSortUnavailableReason) {}
+      String krakenSortUnavailableReason,
+      boolean supportOrderAvailable,
+      String krakenScoreRole) {
+    /** supportOrderAvailable 없이(시험 등). */
+    public Guide(
+        String characterName,
+        String serverName,
+        String className,
+        BigDecimal combatPower,
+        String ruleVersion,
+        String simulatorRuleVersion,
+        Instant fetchedAt,
+        Instant pricesAt,
+        String sort,
+        int limit,
+        int total,
+        List<Candidate> candidates,
+        BigDecimal krakenScore,
+        String krakenRuleVersion,
+        boolean cooldownGemsIncluded,
+        String krakenSortUnavailableReason) {
+      this(
+          characterName,
+          serverName,
+          className,
+          combatPower,
+          ruleVersion,
+          simulatorRuleVersion,
+          fetchedAt,
+          pricesAt,
+          sort,
+          limit,
+          total,
+          candidates,
+          krakenScore,
+          krakenRuleVersion,
+          cooldownGemsIncluded,
+          krakenSortUnavailableReason,
+          false,
+          null);
+    }
+  }
+
+  /** 크라켄 점수에 쓴 점수식(DEALER·SUPPORT). 점수를 낼 수 없으면 null. */
+  static String krakenScoreRole(SpecUpKrakenScore.Context context) {
+    if (context == null || !context.available()) return null;
+    return context.support() ? "SUPPORT" : "DEALER";
+  }
 
   boolean enabled() {
     return enabled;
@@ -571,7 +618,10 @@ public class SpecUpService {
         krakenContext.shown(),
         krakenContext.available() ? SpecUpKrakenScore.RULE_VERSION : null,
         cooldownGemsIncluded,
-        krakenContext.unavailable());
+        krakenContext.unavailable(),
+        // 추천 순서 sort=KRAKEN을 이 캐릭터에 쓸 수 있는지(스위치 + 점수 문맥, 프론트·PM 11-15: 웹은 이 값으로 버튼을 보인다).
+        supportOrderEnabled() && krakenContext.available(),
+        krakenScoreRole(krakenContext));
   }
 
   /**

@@ -181,7 +181,79 @@ public class SpecUpGoalService {
       List<Excluded> unpriced,
       BigDecimal krakenScore,
       BigDecimal finalKrakenScore,
-      String krakenSortUnavailableReason) {
+      String krakenSortUnavailableReason,
+      Boolean supportOrderAvailable,
+      String krakenScoreRole) {
+    /** supportOrderAvailable 없이(경로를 만드는 곳에서 따로 채운다). */
+    Path(
+        String characterName,
+        String serverName,
+        String className,
+        BigDecimal combatPower,
+        BigDecimal finalCombatPower,
+        String pick,
+        int limit,
+        String stopReasonCode,
+        String stopReason,
+        Long totalCost,
+        String ruleVersion,
+        String simulatorRuleVersion,
+        Instant fetchedAt,
+        Instant pricesAt,
+        List<Step> steps,
+        List<Excluded> unpriced,
+        BigDecimal krakenScore,
+        BigDecimal finalKrakenScore,
+        String krakenSortUnavailableReason) {
+      this(
+          characterName,
+          serverName,
+          className,
+          combatPower,
+          finalCombatPower,
+          pick,
+          limit,
+          stopReasonCode,
+          stopReason,
+          totalCost,
+          ruleVersion,
+          simulatorRuleVersion,
+          fetchedAt,
+          pricesAt,
+          steps,
+          unpriced,
+          krakenScore,
+          finalKrakenScore,
+          krakenSortUnavailableReason,
+          null,
+          null);
+    }
+
+    Path withSupportOrderAvailable(boolean available, String role) {
+      return new Path(
+          characterName,
+          serverName,
+          className,
+          combatPower,
+          finalCombatPower,
+          pick,
+          limit,
+          stopReasonCode,
+          stopReason,
+          totalCost,
+          ruleVersion,
+          simulatorRuleVersion,
+          fetchedAt,
+          pricesAt,
+          steps,
+          unpriced,
+          krakenScore,
+          finalKrakenScore,
+          krakenSortUnavailableReason,
+          available,
+          role);
+    }
+
     /** KRAKEN이 아닌 경로(점수 필드 없음). */
     Path(
         String characterName,
@@ -238,6 +310,14 @@ public class SpecUpGoalService {
     var pick = resolved.pick();
     var krakenContext = resolved.context();
     var krakenUnavailable = resolved.unavailable();
+    // 웹이 KRAKEN 버튼을 보일지(스위치 + 점수 문맥). 캐시와 따로 돌려줄 때마다 채운다(스위치를 바꿔도 캐시가 옛 값을 주지 않게).
+    // 스위치가 켜졌을 때만 점수 문맥을 본다(꺼져 있으면 점수 계산 없음). 점수식(DEALER·SUPPORT)도 그때만.
+    var orderContext =
+        !specUp.supportOrderEnabled()
+            ? null
+            : krakenContext != null ? krakenContext : specUp.krakenContext(snapshot);
+    boolean supportOrderAvailable = orderContext != null && orderContext.available();
+    String krakenScoreRole = SpecUpService.krakenScoreRole(orderContext);
     var profile = snapshot.details().profile();
     var before =
         profile.combatPower() == null
@@ -269,54 +349,57 @@ public class SpecUpGoalService {
     var cached = store.findPath(key);
     if (cached.isPresent()) {
       pathOutcome("cache_hit");
-      return cached.get();
+      return cached.get().withSupportOrderAvailable(supportOrderAvailable, krakenScoreRole);
     }
-    return single(
-        "path:" + key,
-        () -> {
-          if (!solves.tryAcquire()) {
-            pathOutcome("busy");
-            log.warn(
-                "event=spec_up_path_busy pick={} limit={} slots={}",
-                pick,
-                limit,
-                SOLVE_MAX_CONCURRENT);
-            throw new BusinessException(SpecUpErrorCode.SPEC_UP_BUSY, PATH_RETRY_AFTER);
-          }
-          try {
-            long started = nanoTime.getAsLong();
-            var result =
-                computePath(
-                    snapshot,
-                    before,
-                    pick,
-                    limit,
-                    gems,
-                    refinePrices,
-                    polish,
-                    krakenContext,
-                    krakenUnavailable);
-            long elapsed = nanoTime.getAsLong() - started;
-            pathOutcome("computed");
-            Timer.builder("loakraken.spec_up.path_compute")
-                .tag("pick", pick.name())
-                .tag("stop", result.stopReasonCode())
-                .publishPercentiles(0.5, 0.95, 0.99)
-                .register(meters)
-                .record(Duration.ofNanos(elapsed));
-            if (TIME_LIMITED.equals(result.stopReasonCode()))
-              log.warn(
-                  "event=spec_up_path_time_limit pick={} limit={} steps={} elapsedMs={}",
-                  pick,
-                  limit,
-                  result.steps().size(),
-                  elapsed / 1_000_000);
-            else store.savePath(key, result, CACHE_TTL);
-            return result;
-          } finally {
-            solves.release();
-          }
-        });
+    var computed =
+        single(
+                "path:" + key,
+                () -> {
+                  if (!solves.tryAcquire()) {
+                    pathOutcome("busy");
+                    log.warn(
+                        "event=spec_up_path_busy pick={} limit={} slots={}",
+                        pick,
+                        limit,
+                        SOLVE_MAX_CONCURRENT);
+                    throw new BusinessException(SpecUpErrorCode.SPEC_UP_BUSY, PATH_RETRY_AFTER);
+                  }
+                  try {
+                    long started = nanoTime.getAsLong();
+                    var result =
+                        computePath(
+                            snapshot,
+                            before,
+                            pick,
+                            limit,
+                            gems,
+                            refinePrices,
+                            polish,
+                            krakenContext,
+                            krakenUnavailable);
+                    long elapsed = nanoTime.getAsLong() - started;
+                    pathOutcome("computed");
+                    Timer.builder("loakraken.spec_up.path_compute")
+                        .tag("pick", pick.name())
+                        .tag("stop", result.stopReasonCode())
+                        .publishPercentiles(0.5, 0.95, 0.99)
+                        .register(meters)
+                        .record(Duration.ofNanos(elapsed));
+                    if (TIME_LIMITED.equals(result.stopReasonCode()))
+                      log.warn(
+                          "event=spec_up_path_time_limit pick={} limit={} steps={} elapsedMs={}",
+                          pick,
+                          limit,
+                          result.steps().size(),
+                          elapsed / 1_000_000);
+                    else store.savePath(key, result, CACHE_TTL);
+                    return result;
+                  } finally {
+                    solves.release();
+                  }
+                })
+            .withSupportOrderAvailable(supportOrderAvailable, krakenScoreRole);
+    return computed;
   }
 
   /** KRAKEN 요청을 실제 기준으로: 쓸 수 있으면 KRAKEN과 점수 문맥, 아니면 EFFICIENCY와 그 이유. */

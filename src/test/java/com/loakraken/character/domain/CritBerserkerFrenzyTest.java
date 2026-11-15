@@ -92,8 +92,7 @@ class CritBerserkerFrenzyTest {
         null,
         List.of(
             new CharacterProfile.Stat("치명", "576", List.of("치명타 적중률이 20.61% 증가합니다.")),
-            new CharacterProfile.Stat(
-                "특화", "1694", List.of("아이덴티티 게이지 획득량이 증가합니다.", specTooltip)),
+            new CharacterProfile.Stat("특화", "1694", List.of("아이덴티티 게이지 획득량이 증가합니다.", specTooltip)),
             new CharacterProfile.Stat(
                 "신속", "77", List.of("공격 속도가 1.32% 증가합니다.", "이동 속도가 1.32% 증가합니다."))));
   }

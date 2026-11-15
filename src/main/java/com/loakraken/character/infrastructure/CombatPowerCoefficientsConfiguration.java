@@ -20,6 +20,7 @@ class CombatPowerCoefficientsConfiguration {
   static final String REFINE_RESOURCE = "combat-power/refine-coefficients.json";
   static final String BRACELET_RESOURCE = "combat-power/bracelet-coefficients.json";
   static final String ARK_GRID_RESOURCE = "combat-power/ark-grid-coefficients.json";
+  static final String ARK_PASSIVE_RESOURCE = "combat-power/ark-passive-coefficients.json";
   static final String KRAKEN_SCORE_TIERS_RESOURCE = "kraken-score/tiers.json";
   static final String KRAKEN_SCORE_TABLES_RESOURCE = "kraken-score/reference-tables.json";
 
@@ -65,6 +66,16 @@ class CombatPowerCoefficientsConfiguration {
       throws IOException {
     try (var input = new ClassPathResource(ARK_GRID_RESOURCE).getInputStream()) {
       return mapper.readValue(input, CombatPowerArkGridModel.Coefficients.class);
+    }
+  }
+
+  /** 아크 패시브 진화·깨달음 포인트 계수(PM 총괄 11-15 19:12). 근거는 리소스 source에 있다. */
+  @Bean
+  com.loakraken.character.domain.CombatPowerArkPassiveModel.Coefficients
+      combatPowerArkPassiveCoefficients(JsonMapper mapper) throws IOException {
+    try (var input = new ClassPathResource(ARK_PASSIVE_RESOURCE).getInputStream()) {
+      return mapper.readValue(
+          input, com.loakraken.character.domain.CombatPowerArkPassiveModel.Coefficients.class);
     }
   }
 

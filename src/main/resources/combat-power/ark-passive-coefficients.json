@@ -1,0 +1,8 @@
+{
+  "ruleVersion": "combat-power-ark-passive-v1",
+  "source": "PM 총괄 결정 2026-11-15 19:12(계산 검증 기록 '전투력 시뮬레이터 남은 4종 기준 정리' Decisions). 진화: 140포인트 전투력 75%는 공식 공지 13307(2025-12-10, 4티어 추가·진화 포인트 상향)과 공개 분석 글(2025-12-11, 진화 전투력 40% → 75%) 두 곳, 1티어 40포인트는 전투력 0은 공개 분석 글(2025-06-30)과 비교 기준 한 곳 — 그 사이 0.75%/포인트 직선은 비교 기준 한 곳만이라 모델값으로 표시한다. 깨달음: 100포인트 이하 0.7%/포인트는 비교 기준 두 곳이 같다. 100 초과는 같은 캐릭터의 공식 전투력 쌍으로 확인하기 전까지 계산하지 않는다. 도약은 팔찌 계수(bracelet-coefficients.json leapPerPoint).",
+  "evolutionFreePoints": 40,
+  "evolutionPerPoint": 0.0075,
+  "enlightenmentPerPoint": 0.007,
+  "enlightenmentMaxPoints": 100
+}

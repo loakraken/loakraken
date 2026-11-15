@@ -15,7 +15,7 @@ import java.util.regex.Pattern;
  * 스탯 계산에만 쓴다. 뭉툭한 가시·음속 돌파는 장착 노드의 공식 문구에서 수치를 읽고, 미장착이면 2026-10-05 공식 Lv.2 문구를 기준값으로 쓴다.
  */
 public final class CritSpeedCalculation {
-  public static final String RULE_VERSION = "crit-speed-v10";
+  public static final String RULE_VERSION = "crit-speed-v11";
 
   /**
    * 치명타 피해 앞(같은 문장)에 오면 조건부로 보고 합산하지 않는 말. 비교 기준 2곳은 "폭주 중"·"마력 해방 중"(각성 상태)은 넣고 "사신화 상태에서"· "페르소나
@@ -1231,6 +1231,8 @@ public final class CritSpeedCalculation {
       var matcher = toggle.pattern().matcher(text);
       value = matcher.find() ? new BigDecimal(matcher.group(1)) : null;
     }
+    if (value != null && toggle.multiplier() != 1)
+      value = value.multiply(BigDecimal.valueOf(toggle.multiplier()));
     if (value == null || !toggle.incremental()) return value;
     var baseValue = rateValue(base, text);
     return baseValue == null ? null : value.subtract(baseValue);

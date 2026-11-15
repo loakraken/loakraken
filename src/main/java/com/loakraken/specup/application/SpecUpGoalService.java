@@ -173,16 +173,66 @@ public class SpecUpGoalService {
       Instant fetchedAt,
       Instant pricesAt,
       List<Step> steps,
-      List<Excluded> unpriced) {}
+      List<Excluded> unpriced,
+      BigDecimal krakenScore,
+      BigDecimal finalKrakenScore,
+      String krakenSortUnavailableReason) {
+    /** KRAKEN이 아닌 경로(점수 필드 없음). */
+    Path(
+        String characterName,
+        String serverName,
+        String className,
+        BigDecimal combatPower,
+        BigDecimal finalCombatPower,
+        String pick,
+        int limit,
+        String stopReasonCode,
+        String stopReason,
+        Long totalCost,
+        String ruleVersion,
+        String simulatorRuleVersion,
+        Instant fetchedAt,
+        Instant pricesAt,
+        List<Step> steps,
+        List<Excluded> unpriced) {
+      this(
+          characterName,
+          serverName,
+          className,
+          combatPower,
+          finalCombatPower,
+          pick,
+          limit,
+          stopReasonCode,
+          stopReason,
+          totalCost,
+          ruleVersion,
+          simulatorRuleVersion,
+          fetchedAt,
+          pricesAt,
+          steps,
+          unpriced,
+          null,
+          null,
+          null);
+    }
+  }
 
   /**
    * 추천 순서(스펙업 순서 시안 '나'): 지금 상태에서 pick 기준으로 가장 앞의 다음 한 단계를 적용하고 다시 재기를 limit 단계까지(목표 없음). 시세(더 드는
    * 비용)를 모르는 단계는 고르지 않고 unpriced로 따로 준다. 목표 경로와 같은 단계·비용·시뮬레이터를 쓴다. 같은 캐릭터 수집 시각·시세·기준·단계 수는 10분
    * 캐시, 같은 키는 한 번만 계산, 캐시에 없는 계산은 동시에 SOLVE_MAX_CONCURRENT개까지(넘으면 바로 429).
    */
-  public Path path(String characterName, Pick pick, int limit) {
+  public Path path(String characterName, Pick requested, int limit) {
     if (!specUp.enabled()) throw new BusinessException(SpecUpErrorCode.SPEC_UP_DISABLED);
     var snapshot = simulator.snapshot(characterName);
+    // KRAKEN(PM 총괄 11-15 (d)): 스위치가 꺼졌거나 점수를 낼 수 없으면 EFFICIENCY로 되돌리고 그 이유를 준다(목록
+    // krakenSortUnavailableReason과
+    // 같은 값). 응답 sort는 실제로 쓴 기준이라 KRAKEN은 KRAKEN을 요청한 경로에만 나온다.
+    var resolved = resolveKraken(snapshot, requested);
+    var pick = resolved.pick();
+    var krakenContext = resolved.context();
+    var krakenUnavailable = resolved.unavailable();
     var profile = snapshot.details().profile();
     var before =
         profile.combatPower() == null
@@ -208,7 +258,9 @@ public class SpecUpGoalService {
                 CombatPowerSimulationService.RULE_VERSION,
                 String.valueOf(specUp.costRuleVersions()),
                 specUp.armGuardEnabled() ? "ag" : "-")
-            + polishSignature(polish);
+            + polishSignature(polish)
+            + (pick == Pick.KRAKEN ? ":k" + SpecUpKrakenScore.RULE_VERSION : "")
+            + (krakenUnavailable == null ? "" : ":ku" + krakenUnavailable);
     var cached = store.findPath(key);
     if (cached.isPresent()) {
       pathOutcome("cache_hit");
@@ -228,7 +280,17 @@ public class SpecUpGoalService {
           }
           try {
             long started = nanoTime.getAsLong();
-            var result = computePath(snapshot, before, pick, limit, gems, refinePrices, polish);
+            var result =
+                computePath(
+                    snapshot,
+                    before,
+                    pick,
+                    limit,
+                    gems,
+                    refinePrices,
+                    polish,
+                    krakenContext,
+                    krakenUnavailable);
             long elapsed = nanoTime.getAsLong() - started;
             pathOutcome("computed");
             Timer.builder("loakraken.spec_up.path_compute")
@@ -252,6 +314,17 @@ public class SpecUpGoalService {
         });
   }
 
+  /** KRAKEN 요청을 실제 기준으로: 쓸 수 있으면 KRAKEN과 점수 문맥, 아니면 EFFICIENCY와 그 이유. */
+  private record KrakenPick(Pick pick, SpecUpKrakenScore.Context context, String unavailable) {}
+
+  private KrakenPick resolveKraken(CharacterResult snapshot, Pick requested) {
+    if (requested != Pick.KRAKEN) return new KrakenPick(requested, null, null);
+    if (!specUp.supportOrderEnabled()) return new KrakenPick(Pick.EFFICIENCY, null, "DISABLED");
+    var context = specUp.krakenContext(snapshot);
+    if (!context.available()) return new KrakenPick(Pick.EFFICIENCY, null, context.unavailable());
+    return new KrakenPick(Pick.KRAKEN, context, null);
+  }
+
   private Path computePath(
       CharacterResult snapshot,
       BigDecimal before,
@@ -259,10 +332,17 @@ public class SpecUpGoalService {
       int limit,
       Map<String, MarketAuctionService.GemCell> gems,
       Optional<RefiningMaterialPriceService.Prices> refinePrices,
-      List<SpecUpService.PolishStep> polish) {
+      List<SpecUpService.PolishStep> polish,
+      SpecUpKrakenScore.Context krakenContext,
+      String krakenUnavailable) {
+    var krakenBefore = krakenContext == null ? null : krakenContext.shown();
     var profile = snapshot.details().profile();
     var roleReason = CombatPowerSimulationService.roleReason(snapshot);
-    if (roleReason != null || before == null) {
+    // 서포터 KRAKEN(PM 총괄 11-15 (d) (a)): 서포터 전투력 모델이 없어 점수만으로 고르고 단계 전투력은 null이다. 그 밖(서포터
+    // EFFICIENCY·DELTA
+    // 포함)은 지금과 같다.
+    boolean scoreOnly = roleReason != null && krakenContext != null && krakenContext.support();
+    if (!scoreOnly && (roleReason != null || before == null)) {
       var reason =
           roleReason != null
               ? CombatPowerReasons.classify(roleReason)
@@ -283,19 +363,38 @@ public class SpecUpGoalService {
           snapshot.fetchedAt(),
           null,
           List.of(),
-          List.of());
+          List.of(),
+          krakenBefore,
+          krakenBefore,
+          krakenUnavailable);
     }
     // 추천 순서는 완갑(팔 보호구) 재련도 고른다(목록 완갑 스위치를 따름). 목표 경로는 그대로(완갑 없음).
     boolean armGuard = specUp.armGuardEnabled();
     var chain =
-        chain(snapshot, before, null, pick, true, limit, armGuard, gems, refinePrices, polish);
-    var unpriced = unpricedAtStart(snapshot, before, armGuard, gems, refinePrices, polish);
+        chain(
+            snapshot,
+            before,
+            null,
+            pick,
+            true,
+            limit,
+            armGuard,
+            gems,
+            refinePrices,
+            polish,
+            krakenContext,
+            scoreOnly);
+    // 점수만 고르는 서포터 경로는 전투력이 오르는 것을 잴 수 없어 unpriced를 비운다.
+    var unpriced =
+        scoreOnly
+            ? List.<Excluded>of()
+            : unpricedAtStart(snapshot, before, armGuard, gems, refinePrices, polish);
     return new Path(
         profile.characterName(),
         profile.serverName(),
         profile.className(),
         before,
-        chain.last(),
+        scoreOnly ? null : chain.last(),
         pick.name(),
         limit,
         chain.stop(),
@@ -306,7 +405,10 @@ public class SpecUpGoalService {
         snapshot.fetchedAt(),
         chain.pricesAt(),
         chain.steps(),
-        unpriced);
+        unpriced,
+        krakenBefore,
+        chain.krakenLast() == null ? krakenBefore : SpecUpKrakenScore.round2(chain.krakenLast()),
+        krakenUnavailable);
   }
 
   /** 지금 상태에서 비용을 몰라 순서에서 뺀 다음 단계 중 전투력이 오르는 것. Δ 큰 순, 같으면 id. */
@@ -370,7 +472,52 @@ public class SpecUpGoalService {
       Long cumulativeCost,
       BigDecimal combatPowerPer10kGold,
       Long extraCost,
-      List<Change> changes) {}
+      List<Change> changes,
+      BigDecimal deltaKrakenScore,
+      BigDecimal krakenScoreAfter,
+      BigDecimal krakenScorePer100kGold) {
+    /** 점수 필드 없는 단계(KRAKEN이 아닌 순서·목표 경로). */
+    Step(
+        int order,
+        String candidateId,
+        String kind,
+        String target,
+        String from,
+        String to,
+        String icon,
+        String grade,
+        String skillName,
+        Change change,
+        BigDecimal deltaCombatPower,
+        BigDecimal combatPowerAfter,
+        SpecUpCost cost,
+        Long cumulativeCost,
+        BigDecimal combatPowerPer10kGold,
+        Long extraCost,
+        List<Change> changes) {
+      this(
+          order,
+          candidateId,
+          kind,
+          target,
+          from,
+          to,
+          icon,
+          grade,
+          skillName,
+          change,
+          deltaCombatPower,
+          combatPowerAfter,
+          cost,
+          cumulativeCost,
+          combatPowerPer10kGold,
+          extraCost,
+          changes,
+          null,
+          null,
+          null);
+    }
+  }
 
   public record Goal(
       String characterName,
@@ -488,7 +635,9 @@ public class SpecUpGoalService {
             specUp.armGuardEnabled(),
             gems,
             refinePrices,
-            polish);
+            polish,
+            null,
+            false);
     return result(
         snapshot,
         before,
@@ -502,10 +651,15 @@ public class SpecUpGoalService {
         chain.steps());
   }
 
-  /** 다음 단계를 고르는 기준. EFFICIENCY: 더 드는 비용 1만 골드당 전투력(목표 경로와 같음). DELTA: 전투력 증가가 큰 순(같으면 효율·id). */
+  /**
+   * 다음 단계를 고르는 기준. EFFICIENCY: 더 드는 비용 1만 골드당 전투력(목표 경로와 같음). DELTA: 전투력 증가가 큰 순(같으면 효율·id).
+   * KRAKEN: 크라켄 점수(서포터는 서포터 점수식)가 오르는 단계만, 더 드는 비용이 0 이하인 단계가 먼저(Δ점수 큰 순), 그다음 10만 골드당 Δ점수 큰 순(같으면
+   * Δ점수·id). spec-up.support-order.enabled가 꺼졌거나 점수를 낼 수 없으면 EFFICIENCY로 되돌린다.
+   */
   public enum Pick {
     EFFICIENCY,
-    DELTA
+    DELTA,
+    KRAKEN
   }
 
   /** 한 번 이어 고른 결과. last = 마지막 단계 뒤 전투력(단계가 없으면 처음 전투력). */
@@ -515,7 +669,8 @@ public class SpecUpGoalService {
       Long cumulative,
       int unpriced,
       BigDecimal last,
-      Instant pricesAt) {}
+      Instant pricesAt,
+      Double krakenLast) {}
 
   /**
    * 지금 상태에서 다음 한 단계를 고르고 적용한 뒤 다시 모든 칸의 다음 단계를 시뮬레이터로 재기를 되풀이한다(사슬). target이 있으면 닿을 때 멈추고,
@@ -531,9 +686,19 @@ public class SpecUpGoalService {
       boolean armGuard,
       Map<String, MarketAuctionService.GemCell> gems,
       Optional<RefiningMaterialPriceService.Prices> refinePrices,
-      List<SpecUpService.PolishStep> polish) {
+      List<SpecUpService.PolishStep> polish,
+      SpecUpKrakenScore.Context kraken,
+      boolean scoreOnly) {
     var pricesAt = new Instant[1];
     var steps = new ArrayList<Step>();
+    // KRAKEN(spec-up.support-order.enabled): 단계마다 크라켄 점수로 고른다. 점수는 처음 입력에 칸마다 마지막 단계 변경(연마는 점수 입력
+    // 편집)을
+    // 적용해 다시 잰다. 작열(쿨) 보석 칸은 목록 KRAKEN 기본처럼 뺀다(PM 총괄 11-15 (d) C).
+    var loadout = snapshot.details().loadout();
+    var krakenExcluded =
+        kraken == null ? java.util.Set.<String>of() : SpecUpService.cooldownGemSlots(loadout);
+    var appliedEdits = new HashMap<String, SpecUpKrakenScore.Edit>();
+    Double scoreNow = kraken == null ? null : kraken.before();
     // 추천 순서와 목표 경로 모두 어빌리티 스톤 목표 조합도 고른다(목표 경로 v3).
     var state = State.of(snapshot.details().loadout(), armGuard, true);
     // 칸마다 그 칸의 마지막 단계 변경(스톤은 각인 둘이라 여러 개).
@@ -568,8 +733,10 @@ public class SpecUpGoalService {
       Option best = null;
       boolean bestFree = false;
       Long bestMarginal = null;
+      Double bestScore = null;
       for (var listed : options(state, gems, refinePrices, pricesAt, polish)) {
         var option = listed;
+        if (krakenExcluded.contains(option.slot())) continue;
         var polishStep = polishById.get(option.id());
         // '상·상 뒤' 셋째 줄 후보는 이 장신구의 지금 매물이 상·상(HH)일 때만(비교 기준은 지금 상태에서 후보를 만든다).
         if (polishStep != null
@@ -588,21 +755,44 @@ public class SpecUpGoalService {
         if (pricedOnly && marginal == null) continue;
         var trial = new LinkedHashMap<>(applied);
         trial.put(option.slot(), option.changes());
-        var simulated = simulator.simulate(snapshot, flatten(trial));
-        // 지금까지 적용한 단계는 모두 계산된 것이므로, 계산하지 못한 변경이 있으면 이 후보다.
-        if (simulated.unsupportedCount() > 0 || simulated.after() == null) continue;
-        var delta = simulated.after().subtract(current);
-        if (delta.signum() <= 0) continue;
+        BigDecimal delta = null;
+        BigDecimal after = null;
+        if (!scoreOnly) {
+          var simulated = simulator.simulate(snapshot, flatten(trial));
+          // 지금까지 적용한 단계는 모두 계산된 것이므로, 계산하지 못한 변경이 있으면 이 후보다.
+          if (simulated.unsupportedCount() > 0 || simulated.after() == null) continue;
+          after = simulated.after();
+          delta = after.subtract(current);
+        }
+        Double score = null;
+        if (kraken != null) {
+          // KRAKEN은 점수가 오르는 단계만(전투력은 계산된 값을 그대로 보인다).
+          var trialEdits = new HashMap<>(appliedEdits);
+          if (polishStep != null && polishStep.kraken() != null)
+            trialEdits.put(option.slot(), polishStep.kraken());
+          else trialEdits.remove(option.slot());
+          score = specUp.chainedKrakenScore(kraken, loadout, trial, trialEdits);
+          if (score == null || score - scoreNow <= 0) continue;
+        } else if (delta.signum() <= 0) continue;
         // 고르기는 반올림하지 않은 비율로(소수 둘째 자리에서 같아져 id 순으로 갈리지 않게, 계산 검증 11-01). 화면 값은 단계를 만들 때 따로 반올림한다.
-        var scored = option.scored(delta, simulated.after(), rank(delta, marginal));
+        var scored = option.scored(delta, after, delta == null ? null : rank(delta, marginal));
         boolean free = free(marginal);
         if (best == null
-            || (pick == Pick.DELTA
-                ? BY_DELTA.compare(scored, best) < 0
-                : preferred(scored, free, best, bestFree))) {
+            || (kraken != null
+                ? krakenPreferred(
+                    score - scoreNow,
+                    marginal,
+                    scored.id(),
+                    bestScore - scoreNow,
+                    bestMarginal,
+                    best.id())
+                : pick == Pick.DELTA
+                    ? BY_DELTA.compare(scored, best) < 0
+                    : preferred(scored, free, best, bestFree))) {
           best = scored;
           bestFree = free;
           bestMarginal = marginal;
+          bestScore = score;
         }
       }
       if (best == null) {
@@ -611,8 +801,24 @@ public class SpecUpGoalService {
       }
       applied.put(best.slot(), best.changes());
       if (polishById.containsKey(best.id())) polishChosen.put(best.slot(), best.id());
+      BigDecimal deltaScore = null;
+      BigDecimal scoreAfter = null;
+      BigDecimal scorePer100k = null;
+      if (kraken != null) {
+        var chosen = polishById.get(best.id());
+        if (chosen != null && chosen.kraken() != null)
+          appliedEdits.put(best.slot(), chosen.kraken());
+        else appliedEdits.remove(best.slot());
+        double raw = bestScore - scoreNow;
+        // 목록 deltaKrakenScore와 같은 표시: 반올림 전 차를 소수 둘째 자리로.
+        deltaScore = SpecUpKrakenScore.round2(raw);
+        scoreAfter = SpecUpKrakenScore.round2(bestScore);
+        if (bestMarginal != null && bestMarginal > 0)
+          scorePer100k = SpecUpKrakenScore.roundEfficiency(raw * 100_000d / bestMarginal);
+        scoreNow = bestScore;
+      }
       state = state.after(best);
-      current = best.after();
+      if (!scoreOnly) current = best.after();
       var amount = best.cost() == null ? null : best.cost().amount();
       if (amount == null) unpriced++;
       if (slotCost(best)) gemTotals.put(best.slot(), amount);
@@ -635,11 +841,33 @@ public class SpecUpGoalService {
               best.after(),
               best.cost(),
               cumulative,
-              SpecUpCost.efficiency(best.delta(), bestMarginal),
+              best.delta() == null ? null : SpecUpCost.efficiency(best.delta(), bestMarginal),
               bestMarginal,
-              best.changes()));
+              best.changes(),
+              deltaScore,
+              scoreAfter,
+              scorePer100k));
     }
-    return new Chain(List.copyOf(steps), stop, cumulative, unpriced, current, pricesAt[0]);
+    return new Chain(
+        List.copyOf(steps), stop, cumulative, unpriced, current, pricesAt[0], scoreNow);
+  }
+
+  /**
+   * KRAKEN 고르기(PM 총괄 11-15 (d)): 더 드는 비용이 0 이하인 단계가 먼저(Δ점수 큰 순), 그다음 10만 골드당 Δ점수(반올림 전) 큰 순, 같으면
+   * Δ점수·id. 경로는 '먼저 할 일' 순서라 EFFICIENCY 경로처럼 공짜 단계를 앞에 둔다.
+   */
+  static boolean krakenPreferred(
+      double delta, Long marginal, String id, double bestDelta, Long bestMarginal, String bestId) {
+    boolean free = free(marginal);
+    boolean bestFree = free(bestMarginal);
+    if (free != bestFree) return free;
+    if (!free) {
+      double rate = delta / marginal;
+      double bestRate = bestDelta / bestMarginal;
+      if (rate != bestRate) return rate > bestRate;
+    }
+    if (delta != bestDelta) return delta > bestDelta;
+    return id.compareTo(bestId) < 0;
   }
 
   /**

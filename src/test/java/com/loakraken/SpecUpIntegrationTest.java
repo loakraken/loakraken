@@ -911,6 +911,22 @@ class SpecUpIntegrationTest {
     assertThat(one.path("sort").asText()).isEqualTo("DELTA");
     assertThat(one.path("steps").size()).isEqualTo(1);
     assertThat(one.path("stopReasonCode").asText()).isEqualTo("STEP_LIMIT");
+    assertThat(absent(one.path("krakenSortUnavailableReason"))).isTrue();
+    // sort=KRAKEN(PM 총괄 11-15 (d)): 스위치(spec-up.support-order.enabled)가 꺼져 있으면 EFFICIENCY로 되돌리고 이유를
+    // 준다(응답 sort에
+    // KRAKEN 없음).
+    var kraken =
+        mapper
+            .readTree(
+                get("/api/v1/characters/spec-up/path?sort=KRAKEN&limit=1&characterName="
+                        + encode("스펙순서"))
+                    .body())
+            .path("data");
+    assertThat(kraken.path("sort").asText()).isEqualTo("EFFICIENCY");
+    assertThat(kraken.path("krakenSortUnavailableReason").asText()).isEqualTo("DISABLED");
+    assertThat(absent(kraken.path("krakenScore"))).isTrue();
+    for (var step : kraken.path("steps"))
+      assertThat(absent(step.path("deltaKrakenScore"))).isTrue();
 
     for (var query : List.of("sort=GOLD", "limit=0", "limit=31", "limit=abc"))
       assertThat(
@@ -1439,6 +1455,10 @@ class SpecUpIntegrationTest {
                 .GET()
                 .build(),
             HttpResponse.BodyHandlers.ofString());
+  }
+
+  private static boolean absent(JsonNode node) {
+    return node.isNull() || node.isMissingNode();
   }
 
   private static String encode(String value) {

@@ -167,6 +167,7 @@ public class SpecUpController {
       description =
           "목표 없이, 지금 상태에서 항목마다 다음 한 단계를 만들고 sort 기준으로 가장 앞의 단계를 적용한 뒤 다시 재기를 limit 단계까지 되풀이한 순서입니다. "
               + "sort=EFFICIENCY(기본): 이 단계에 더 드는 비용 1만 골드당 전투력이 큰 순(더 드는 비용이 0 이하인 단계가 먼저, 같으면 Δ·id). sort=DELTA: 전투력 증가가 큰 순(같으면 효율·id). "
+              + "sort=KRAKEN(spec-up.support-order.enabled, 기본 끔): 크라켄 점수(서포터는 서포터 점수식)가 오르는 단계만, 더 드는 비용이 0 이하인 단계가 먼저(Δ점수 큰 순), 그다음 10만 골드당 Δ점수 큰 순(같으면 Δ점수·id). 작열(쿨) 보석은 빼고, 단계에 deltaKrakenScore·krakenScoreAfter·krakenScorePer100kGold를 준다. 쓸 수 없으면 EFFICIENCY로 되돌리고 krakenSortUnavailableReason을 준다. "
               + "시세(더 드는 비용)를 모르는 단계는 순서에 넣지 않고 unpriced에 지금 상태 기준으로 따로 줍니다(비용을 추측하지 않음). "
               + "단계·비용·전투력은 목표 경로(/spec-up/goal)와 같은 규칙입니다(steps[].change를 차례로 시뮬레이터에 넣은 값과 같음, 보석 칸은 누적 비용, cumulativeCost는 그 단계까지 합계). "
               + "딜러가 아니거나 공식 전투력이 없으면 200, 빈 steps, stopReasonCode에 스펙업 가이드와 같은 이유 코드를 줍니다. "
@@ -201,7 +202,7 @@ public class SpecUpController {
           String characterName,
       @Parameter(description = "고르는 기준: EFFICIENCY(기본) 또는 DELTA")
           @RequestParam(required = false)
-          @Pattern(regexp = "EFFICIENCY|DELTA")
+          @Pattern(regexp = "EFFICIENCY|DELTA|KRAKEN")
           String sort,
       @Parameter(description = "단계 수(1~30, 기본 30)")
           @RequestParam(required = false)
@@ -301,8 +302,14 @@ public class SpecUpController {
       @Schema(description = "공식 등급 문자열") @NullableResponse String grade,
       @Schema(description = "보석이 붙은 스킬 이름(보석 단계만)") @NullableResponse String skillName,
       @Schema(description = "전투력 시뮬레이터 요청의 changes[] 하나와 같은 모양") ChangeResponse change,
-      @Schema(description = "이 단계로 늘어난 전투력(소수 둘째 자리)") BigDecimal deltaCombatPower,
-      @Schema(description = "이 단계까지 적용한 전투력(시뮬레이터)") BigDecimal combatPowerAfter,
+      @Schema(
+              description =
+                  "이 단계로 늘어난 전투력(소수 둘째 자리). 서포터 추천 순서 sort=KRAKEN에서만 null(서포터 전투력 모델이 없어 점수로만 고름)")
+          @NullableResponse
+          BigDecimal deltaCombatPower,
+      @Schema(description = "이 단계까지 적용한 전투력(시뮬레이터). 서포터 추천 순서 sort=KRAKEN에서만 null")
+          @NullableResponse
+          BigDecimal combatPowerAfter,
       @Schema(description = "이 단계 비용(골드). 보석 단계는 지금에서 그 레벨까지의 누적 비용(음수 없음)") CostResponse cost,
       @Schema(
               description =
@@ -322,7 +329,23 @@ public class SpecUpController {
       @Schema(
               description =
                   "이 단계의 시뮬레이터 변경 전부(전투력 시뮬레이터 요청의 changes[]와 같은 모양). 대부분 하나(= change)이고, 어빌리티 스톤은 각인 둘. 다시 잴 때는 단계마다 이 목록을 넣고 같은 칸(candidateId의 마지막 ':' 앞)은 마지막 단계의 목록만 남긴다. 장신구 연마(POLISH) 단계는 그 장신구의 처음 상태와 다른 줄마다 POLISH 하나(빠지는 줄은 option NONE, 이름 있는 옵션이 먼저)에, 같은 장신구의 앞 단계가 바꾼 줄 가운데 이 단계가 바꾸지 않는 줄을 처음 값으로 되돌리는 POLISH를 더한 목록이다. 그래서 칸마다 마지막 목록만 남기든, 모든 단계를 차례로 이어 줄마다 뒤의 변경이 이기게 하든 단계 전투력과 같다")
-          List<ChangeResponse> changes) {
+          List<ChangeResponse> changes,
+      @Schema(
+              description =
+                  "추천 순서 sort=KRAKEN만: 이 단계 Δ크라켄 점수(서포터는 서포터 점수식, 반올림 전 차를 소수 둘째 자리로). 그 밖에는 null. 배포 순서 때문에 계약에서는 선택 필드")
+          @NullableResponse
+          @OptionalResponse
+          BigDecimal deltaKrakenScore,
+      @Schema(description = "추천 순서 sort=KRAKEN만: 이 단계까지 적용한 크라켄 점수(소수 둘째 자리). 그 밖에는 null")
+          @NullableResponse
+          @OptionalResponse
+          BigDecimal krakenScoreAfter,
+      @Schema(
+              description =
+                  "추천 순서 sort=KRAKEN만: 10만 골드당 Δ크라켄 점수(소수 둘째 자리) = Δ점수 × 100,000 ÷ 이 단계에 더 드는 비용. 더 드는 비용이 0 이하이거나 KRAKEN이 아니면 null")
+          @NullableResponse
+          @OptionalResponse
+          BigDecimal krakenScorePer100kGold) {
     static SpecUpGoalStepResponse from(SpecUpGoalService.Step step) {
       return new SpecUpGoalStepResponse(
           step.order(),
@@ -342,7 +365,10 @@ public class SpecUpController {
           step.combatPowerPer10kGold(),
           step.extraCost(),
           (step.changes() == null ? List.of(step.change()) : step.changes())
-              .stream().map(ChangeResponse::from).toList());
+              .stream().map(ChangeResponse::from).toList(),
+          step.deltaKrakenScore(),
+          step.krakenScoreAfter(),
+          step.krakenScorePer100kGold());
     }
   }
 
@@ -354,7 +380,11 @@ public class SpecUpController {
           BigDecimal combatPower,
       @Schema(description = "마지막 단계까지 적용한 전투력(단계가 없으면 지금 전투력)") @NullableResponse
           BigDecimal finalCombatPower,
-      @Schema(description = "쓴 기준(EFFICIENCY·DELTA)", example = "EFFICIENCY") String sort,
+      @Schema(
+              description =
+                  "쓴 기준(EFFICIENCY·DELTA·KRAKEN). KRAKEN은 sort=KRAKEN을 요청했고 쓸 수 있을 때만 나온다(쓸 수 없으면 EFFICIENCY와 krakenSortUnavailableReason)",
+              example = "EFFICIENCY")
+          String sort,
       @Schema(description = "요청한 단계 수") int limit,
       @Schema(
               description =
@@ -370,7 +400,21 @@ public class SpecUpController {
       @Schema(description = "비용에 쓴 시세 칸 가운데 가장 오래된 관측 시각") @NullableResponse Instant pricesAt,
       @Schema(description = "고른 순서(시세가 있는 단계만)") List<SpecUpGoalStepResponse> steps,
       @Schema(description = "시세를 몰라 순서에서 뺀 항목(지금 상태 기준, 전투력이 오르는 것만, Δ 큰 순). 비용을 추측하지 않음")
-          List<SpecUpPathExcludedResponse> unpriced) {
+          List<SpecUpPathExcludedResponse> unpriced,
+      @Schema(description = "sort=KRAKEN만: 지금 크라켄 점수(소수 둘째 자리). 그 밖에는 null. 배포 순서 때문에 계약에서는 선택 필드")
+          @NullableResponse
+          @OptionalResponse
+          BigDecimal krakenScore,
+      @Schema(description = "sort=KRAKEN만: 마지막 단계까지 적용한 크라켄 점수(단계가 없으면 지금 점수). 그 밖에는 null")
+          @NullableResponse
+          @OptionalResponse
+          BigDecimal finalKrakenScore,
+      @Schema(
+              description =
+                  "sort=KRAKEN을 요청했지만 쓸 수 없어 EFFICIENCY로 되돌린 이유(스펙업 가이드 krakenSortUnavailableReason과 같은 값, DISABLED 등). 그 밖에는 null")
+          @NullableResponse
+          @OptionalResponse
+          String krakenSortUnavailableReason) {
     static SpecUpPathResponse from(SpecUpGoalService.Path path) {
       return new SpecUpPathResponse(
           path.characterName(),
@@ -402,7 +446,10 @@ public class SpecUpController {
                           excluded.skillName(),
                           excluded.deltaCombatPower(),
                           CostResponse.from(excluded.cost())))
-              .toList());
+              .toList(),
+          path.krakenScore(),
+          path.finalKrakenScore(),
+          path.krakenSortUnavailableReason());
     }
   }
 

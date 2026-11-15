@@ -146,6 +146,55 @@ public class SpecUpKrakenScore {
     return rescore(context, copy, applied);
   }
 
+  /**
+   * 추천 순서(sort=KRAKEN)의 점수(반올림 전): 처음 점수 입력에 칸마다 그 칸의 마지막 단계 변경을 모두 적용한 점수. 점수 입력 편집은 처음 장비 기준(목표
+   * 값으로 바꿈)이라 단계를 이어 붙이지 않고 매번 처음 입력에서 다시 적용한다(시뮬레이터 flatten(applied)와 같은 뜻). edits는 연마 교체 칸의 점수 입력
+   * 편집(그 칸의 POLISH 변경 대신). 하나라도 적용할 수 없거나 점수를 낼 수 없으면 null.
+   */
+  Double chainedScore(
+      Context context,
+      CharacterLoadout loadout,
+      Map<String, List<Change>> slots,
+      Map<String, Edit> edits) {
+    if (context == null || !context.available() || slots == null) return null;
+    var copy = (ObjectNode) context.input().deepCopy();
+    for (var entry : slots.entrySet()) {
+      var edit = edits == null ? null : edits.get(entry.getKey());
+      var stone = new LinkedHashMap<String, Integer>();
+      for (var change : entry.getValue()) {
+        if (change == null || change.kind() == null) return null;
+        boolean applied =
+            switch (change.kind()) {
+              case GEM_LEVEL -> gem(copy, loadout, change.slot(), change.level());
+              case ENGRAVING_LEVEL -> engraving(copy, change.name(), change.level());
+              case EQUIPMENT_QUALITY -> quality(copy, change.quality());
+              case EQUIPMENT_REFINE -> refine(copy, loadout, change.index(), change.refine());
+              case ARM_GUARD -> armGuard(copy, loadout, change.level(), change.grade());
+              case STONE_ENGRAVING -> {
+                if (change.name() == null || change.level() == null) yield false;
+                stone.put(change.name(), change.level());
+                yield true;
+              }
+              case POLISH -> edit instanceof Polish;
+              default -> false;
+            };
+        if (!applied) return null;
+      }
+      if (!stone.isEmpty() && !stone(copy, stone)) return null;
+      if (edit != null) {
+        boolean applied =
+            switch (edit) {
+              case Karma karma -> karma(copy, karma.level());
+              case Stone levels -> stone(copy, levels.levels());
+              case Polish polish -> polish(copy, polish.slot(), polish.option());
+            };
+        if (!applied) return null;
+      }
+    }
+    double score = score(copy, context.support());
+    return usable(score) ? score : null;
+  }
+
   private Double rescore(Context context, ObjectNode copy, boolean applied) {
     if (!applied) return null;
     double after = score(copy, context.support());

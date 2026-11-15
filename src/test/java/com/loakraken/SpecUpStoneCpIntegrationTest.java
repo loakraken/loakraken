@@ -135,7 +135,6 @@ class SpecUpStoneCpIntegrationTest {
         ((tools.jackson.databind.node.ObjectNode) effect)
             .put("Description", "보스 등급 이상 몬스터에게 주는 피해가 21.75% 증가한다.");
     }
-    // 공식 전투력은 비교 기준 B 표본 시각(10-12) 값. 연마 줄은 줄마다 독립 배수라 Δ는 이 값과 바꾼 줄로만 정해진다.
     var profile =
         new CharacterProfile(
             NAME,

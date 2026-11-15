@@ -965,7 +965,7 @@ public class SpecUpGoalService {
   static final java.util.Set<String> STONE_PENALTIES =
       java.util.Set.of("공격력 감소", "방어력 감소", "공격속도 감소", "이동속도 감소");
 
-  private static Change stoneChange(String name, int level) {
+  static Change stoneChange(String name, int level) {
     return new Change(
         Kind.STONE_ENGRAVING,
         null,

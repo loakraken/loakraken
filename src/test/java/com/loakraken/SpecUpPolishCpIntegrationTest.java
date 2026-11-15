@@ -120,6 +120,39 @@ class SpecUpPolishCpIntegrationTest {
     }
   }
 
+  @Test
+  void 점수_입력_줄이_툴팁_줄과_다르면_그_장신구는_전투력_없이_점수만_낸다() throws Exception {
+    // 합성(코드 리뷰 #945 P3): 귀걸이 1의 점수 입력 둘째 줄만 다른 값으로. 줄 짝은 순서로 맞추므로 틀린 Δ 대신 계산하지 않아야 한다.
+    when(auctions.cachedGems()).thenReturn(List.of());
+    search(
+        tooltip -> tooltip,
+        input ->
+            ((tools.jackson.databind.node.ArrayNode) input.at("/armory/accessory/earing1/option"))
+                .set(1, "공격력 +195"));
+    var candidates = guide("&sort=DELTA&limit=200").path("candidates");
+    int earring = 0;
+    for (var candidate : candidates) {
+      var id = candidate.path("id").asText();
+      if (id.startsWith("POLISH:7:")) {
+        earring++;
+        assertThat(candidate.path("status").asText()).as(id).isEqualTo("UNSUPPORTED");
+        assertThat(candidate.path("reasonCode").asText()).as(id).isEqualTo("SCORE_ONLY");
+      } else if (id.startsWith("POLISH:") && "OK".equals(candidate.path("status").asText()))
+        assertThat(candidate.path("deltaCombatPower").isNull()).as(id).isFalse();
+    }
+    assertThat(earring).isPositive();
+    // 다른 부위 연마 줄은 그대로 계산된다.
+    assertThat(
+            candidates
+                .valueStream()
+                .filter(
+                    c ->
+                        c.path("id").asText().startsWith("POLISH:")
+                            && "OK".equals(c.path("status").asText()))
+                .count())
+        .isPositive();
+  }
+
   private static JsonNode find(JsonNode candidates, String id) {
     for (var candidate : candidates) if (id.equals(candidate.path("id").asText())) return candidate;
     throw new AssertionError(id + " 후보가 없습니다");
@@ -136,8 +169,15 @@ class SpecUpPolishCpIntegrationTest {
     search(tooltip -> tooltip);
   }
 
-  /** earring은 귀걸이 1(장비 순번 7) 툴팁을 바꾸는 함수(합성 장신구). */
   private void search(java.util.function.UnaryOperator<String> earring) throws Exception {
+    search(earring, input -> {});
+  }
+
+  /** earring은 귀걸이 1(장비 순번 7) 툴팁을 바꾸는 함수(합성 장신구), input은 점수 입력만 바꾸는 함수(툴팁과 점수 입력이 갈라진 경우를 만든다). */
+  private void search(
+      java.util.function.UnaryOperator<String> earring,
+      java.util.function.Consumer<tools.jackson.databind.node.ObjectNode> input)
+      throws Exception {
     var raw =
         (tools.jackson.databind.node.ObjectNode)
             mapper
@@ -163,9 +203,16 @@ class SpecUpPolishCpIntegrationTest {
             List.of());
     var details = CharacterTestFixture.details(profile, ArmoryRawFixtures.loadout(raw), List.of());
     when(detailsPort.fetch(anyString()))
-        .thenReturn(new FetchedCharacter(details, "{}", "[]", KrakenScoreInputMapper.from(raw)));
+        .thenReturn(new FetchedCharacter(details, "{}", "[]", scoreInput(raw, input)));
     assertThat(get("/api/v1/characters/search?characterName=" + encode(NAME)).statusCode())
         .isEqualTo(200);
+  }
+
+  private static tools.jackson.databind.node.ObjectNode scoreInput(
+      JsonNode raw, java.util.function.Consumer<tools.jackson.databind.node.ObjectNode> change) {
+    var input = KrakenScoreInputMapper.from(raw);
+    change.accept(input);
+    return input;
   }
 
   private HttpResponse<String> get(String pathAndQuery) throws Exception {

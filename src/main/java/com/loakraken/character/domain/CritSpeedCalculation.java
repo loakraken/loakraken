@@ -502,13 +502,13 @@ public final class CritSpeedCalculation {
     for (var source : sources)
       if (source.kind() == Kind.ASSUMED
           && source.axis() == Axis.CRIT
-          && CritEffectTable.CATEGORY_LIMITED_BUFFS.containsKey(source.name()))
+          && CritEffectTable.categoryLimit(source.name()) != null)
         skillBonuses.add(
             new NodeBonus(
                 source.name(),
                 Axis.CRIT,
                 CritEffectTable.Target.CATEGORY,
-                CritEffectTable.CATEGORY_LIMITED_BUFFS.get(source.name()),
+                CritEffectTable.categoryLimit(source.name()),
                 source.value(),
                 source.text()));
     // 분류 한정 노드 토글(서머너 고대의 힘 → 일반 스킬, 환수사 깨어난 잠재력 → 둔갑 스킬)도 스킬별로는 그 분류에만(계산 검증 #979).
@@ -531,7 +531,7 @@ public final class CritSpeedCalculation {
                     source.kind() == Kind.ASSUMED
                         && source.axis() == Axis.CRIT
                         && source.classState()
-                        && !CritEffectTable.CATEGORY_LIMITED_BUFFS.containsKey(source.name()))
+                        && CritEffectTable.categoryLimit(source.name()) == null)
             .map(Source::value)
             .reduce(BigDecimal.ZERO, BigDecimal::add);
 

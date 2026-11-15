@@ -25,6 +25,8 @@ class CombatPowerArkPassiveModelTest {
     assertThat(CombatPowerArkPassiveModel.evolution(c, 40)).isEqualByComparingTo("1");
     assertThat(CombatPowerArkPassiveModel.evolution(c, 41)).isEqualByComparingTo("1.0075");
     assertThat(CombatPowerArkPassiveModel.evolution(c, 140)).isEqualByComparingTo("1.75");
+    assertThat(c.evolutionMaxPoints()).isEqualTo(140);
+    assertThat(c.enlightenmentLimitPoints()).isEqualTo(101);
   }
 
   @Test

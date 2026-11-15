@@ -938,6 +938,7 @@ public class CombatPowerSimulationService {
     for (var passive : state.passives().values()) {
       var now = passiveFactor(passive.tree(), passive.current());
       var next = passiveFactor(passive.tree(), passive.next());
+      // 계획 단계에서 계산할 수 없는 트리·값(깨달음 100 초과 등)은 이미 걸러 효과가 없으므로 여기 오지 않는다(지키는 줄).
       if (now == null || next == null) return null;
       ratio = ratio.multiply(next.divide(now, MATH), MATH);
     }
@@ -1275,6 +1276,13 @@ public class CombatPowerSimulationService {
                     .findFirst()
                     .orElse(null);
         if (point == null) throw notFound("아크 패시브 " + change.tree());
+        // 진화 포인트 최대 140(공식 공지 13307, 계수 리소스 evolutionMaxPoints): 넘으면 웹을 거치지 않은 요청도 400(코드 리뷰 #965
+        // P2).
+        if (EVOLUTION.equals(point.name()))
+          range("points", change.points(), 0, arkPassiveCoefficients.evolutionMaxPoints());
+        // 깨달음 포인트 최대 101(계수 리소스 enlightenmentLimitPoints): 넘으면 400, 100 초과는 계산하지 않음(아래).
+        if (ENLIGHTENMENT.equals(point.name()))
+          range("points", change.points(), 0, arkPassiveCoefficients.enlightenmentLimitPoints());
         var target = "아크 패시브 " + point.name();
         var from = str(point.value());
         var to = str(change.points());

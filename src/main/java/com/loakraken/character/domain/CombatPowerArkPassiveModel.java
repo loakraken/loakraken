@@ -13,16 +13,19 @@ public final class CombatPowerArkPassiveModel {
   private CombatPowerArkPassiveModel() {}
 
   /**
-   * evolutionFreePoints = 전투력이 없는 진화 1티어 포인트, evolutionPerPoint = 그 위 포인트당 배수,
-   * enlightenmentPerPoint = 깨달음 포인트당 배수, enlightenmentMaxPoints = 확인한 깨달음 포인트 상한(넘으면 계산하지 않음).
+   * evolutionMaxPoints = 진화 포인트 최대(넘으면 요청 오류), evolutionFreePoints = 전투력이 없는 진화 1티어 포인트,
+   * evolutionPerPoint = 그 위 포인트당 배수, enlightenmentPerPoint = 깨달음 포인트당 배수, enlightenmentLimitPoints
+   * = 깨달음 포인트 최대(넘으면 요청 오류), enlightenmentMaxPoints = 확인한 깨달음 포인트 상한(넘으면 계산하지 않음).
    */
   public record Coefficients(
       String ruleVersion,
       String source,
+      int evolutionMaxPoints,
       int evolutionFreePoints,
       BigDecimal evolutionPerPoint,
       BigDecimal enlightenmentPerPoint,
-      int enlightenmentMaxPoints) {}
+      int enlightenmentMaxPoints,
+      int enlightenmentLimitPoints) {}
 
   /** 진화 포인트 P의 배수: 1 + c × max(P − 무료 포인트, 0). */
   public static BigDecimal evolution(Coefficients coefficients, int points) {

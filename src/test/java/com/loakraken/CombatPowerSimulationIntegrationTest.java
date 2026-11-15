@@ -584,6 +584,18 @@ class CombatPowerSimulationIntegrationTest {
     // 1티어 40포인트까지는 전투력이 없다: 140 → 40 = × 1 / 1.75.
     assertThat(one("시뮬진화", "진화", 40).path("after").decimalValue()).isEqualByComparingTo("1911.57");
     assertThat(one("시뮬진화", "진화", 30).path("after").decimalValue()).isEqualByComparingTo("1911.57");
+    // 진화 포인트 최대 140(공식 공지 13307): 140은 계산(배수 1), 141은 웹을 거치지 않아도 400(코드 리뷰 #965 P2).
+    assertThat(one("시뮬진화", "진화", 140).path("after").decimalValue()).isEqualByComparingTo("3345.24");
+    var over =
+        simulate("시뮬진화", "[{\"kind\": \"ARK_PASSIVE_POINT\", \"tree\": \"진화\", \"points\": 141}]");
+    assertThat(over.statusCode()).isEqualTo(400);
+    assertThat(over.body()).contains("INVALID_REQUEST", "points", "0~140");
+    // 깨달음 최대 101: 102는 400, 100은 계산, 101은 계산하지 않음(아래).
+    var overEnlightenment =
+        simulate("시뮬진화", "[{\"kind\": \"ARK_PASSIVE_POINT\", \"tree\": \"깨달음\", \"points\": 102}]");
+    assertThat(overEnlightenment.statusCode()).isEqualTo(400);
+    assertThat(overEnlightenment.body()).contains("INVALID_REQUEST", "points", "0~101");
+    assertThat(one("시뮬진화", "깨달음", 100).at("/contributions/0/status").asText()).isEqualTo("OK");
     // 깨달음 100 → 90: 3,345.24 × 1.63 / 1.70 = 3,207.49.
     var enlightenment = one("시뮬진화", "깨달음", 90);
     assertThat(enlightenment.at("/contributions/0/status").asText()).isEqualTo("OK");

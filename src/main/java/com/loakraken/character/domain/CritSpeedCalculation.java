@@ -15,7 +15,7 @@ import java.util.regex.Pattern;
  * 스탯 계산에만 쓴다. 뭉툭한 가시·음속 돌파는 장착 노드의 공식 문구에서 수치를 읽고, 미장착이면 2026-10-05 공식 Lv.2 문구를 기준값으로 쓴다.
  */
 public final class CritSpeedCalculation {
-  public static final String RULE_VERSION = "crit-speed-v11";
+  public static final String RULE_VERSION = "crit-speed-v12";
 
   /**
    * 치명타 피해 앞(같은 문장)에 오면 조건부로 보고 합산하지 않는 말. 비교 기준 2곳은 "폭주 중"·"마력 해방 중"(각성 상태)은 넣고 "사신화 상태에서"· "페르소나
@@ -491,6 +491,7 @@ public final class CritSpeedCalculation {
     gridCoreSources(loadout, input, sources, toggles, unclassified, conditionalRate);
     braceletToggles(loadout, input, sources, toggles, conditionalRate, conditional);
     classBuffSources(profile, loadout, input, sources, toggles);
+    berserkerFrenzy(profile, loadout, input, sources, toggles, limitations);
     classSpeedSources(profile, input, sources, toggles);
     assumedSpeedSynergies(loadout, input, sources, toggles);
     tripodSpeedSources(loadout, input, sources, toggles, speedNotes);
@@ -1704,6 +1705,66 @@ public final class CritSpeedCalculation {
       }
     }
   }
+
+  static final String BERSERKER_FRENZY = "폭주 상태 가정(특화 증폭)";
+
+  private static final Pattern FRENZY_AMPLIFY =
+      Pattern.compile("폭주 효과가\\s*([0-9]+(?:\\.[0-9]+)?)%\\s*증폭");
+
+  /**
+   * 버서커 폭주(표 고치기 A, PM 총괄 11-16 D1): 기본 치명타 적중률 30(공식 공지)에 특화 툴팁의 '폭주 효과가 X% 증폭됩니다'를 곱한다(공식 툴팁 값
+   * 기준). 관문: 직업 버서커, 특화 툴팁에 그 줄이 있음, 깨달음 '광기' 노드가 없음(광기 표본 확인 전까지 광기면 더하지 않음). 기본 켬 토글.
+   */
+  private static void berserkerFrenzy(
+      CharacterProfile profile,
+      CharacterLoadout loadout,
+      Assumptions input,
+      List<Source> sources,
+      List<ToggleState> toggles,
+      List<String> limitations) {
+    if (!"버서커".equals(profile.className())) return;
+    BigDecimal amplify = null;
+    String text = null;
+    for (var stat : profile.stats()) {
+      if (stat == null || !"특화".equals(stat.type())) continue;
+      // 표시 문구는 특화 툴팁 전체가 아니라 폭주 증폭 줄만(계산 검증 #981 P3).
+      for (var line : stat.tooltip()) {
+        if (line == null) continue;
+        var matcher = FRENZY_AMPLIFY.matcher(line);
+        if (matcher.find()) {
+          amplify = new BigDecimal(matcher.group(1));
+          text = line.strip();
+        }
+      }
+    }
+    if (amplify == null) return;
+    if (loadout.arkPassive() != null)
+      for (var effect : loadout.arkPassive().effects())
+        if (effect != null
+            && effect.description() != null
+            && nodeName(effect.description())
+                .replaceFirst("\\s+Lv\\.\\d+$", "")
+                .strip()
+                .equals("광기")) {
+          limitations.add("광기 버서커의 폭주 치명타 적중률은 확인 전이라 더하지 않았습니다.");
+          return;
+        }
+    var value =
+        FRENZY_BASE_CRIT.multiply(
+            BigDecimal.ONE.add(amplify.divide(BigDecimal.valueOf(100))),
+            java.math.MathContext.DECIMAL64);
+    boolean on = input.on(BERSERKER_FRENZY, true);
+    toggles.add(
+        new ToggleState(
+            BERSERKER_FRENZY, BERSERKER_FRENZY, Axis.CRIT, true, on, scale(value), text));
+    if (on)
+      sources.add(
+          new Source(
+              Kind.ASSUMED, Category.ASSUMPTION, Axis.CRIT, BERSERKER_FRENZY, scale(value), text));
+  }
+
+  /** 버서커 폭주 기본 치명타 적중률(공식 공지 13116, 공식 툴팁 값 기준). */
+  static final BigDecimal FRENZY_BASE_CRIT = new BigDecimal("30");
 
   /** 노드 문구에 없는 직업 버프(정답표 1절 "일치 포함"). 트라이포드 문구가 있으면 그 값을, 없으면 표 값을 쓴다. */
   private static void classBuffSources(

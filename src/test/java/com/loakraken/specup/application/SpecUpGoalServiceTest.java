@@ -730,6 +730,165 @@ class SpecUpGoalServiceTest {
     assertThat(meters.counter("loakraken.spec_up.path", "outcome", "busy").count()).isEqualTo(1);
   }
 
+  /**
+   * 클라이언트당 계산 자리 1개(보안 11-16 강화 (a)): 한 클라이언트가 계산 중이면 그 클라이언트의 다른 계산(추천 순서·목표 경로)은 기다리지 않고 429
+   * SPEC_UP_BUSY(outcome=client_busy)이고, 다른 클라이언트는 남은 자리로 계산한다. 계산이 끝나면 그 클라이언트도 다시 계산한다.
+   */
+  @Test
+  void 한_클라이언트는_계산_자리를_하나만_쓴다() throws Exception {
+    var entered = new java.util.concurrent.CountDownLatch(1);
+    var release = new java.util.concurrent.CountDownLatch(1);
+    var holding = java.util.concurrent.ConcurrentHashMap.<String>newKeySet();
+    LongSupplier clock =
+        () -> {
+          var name = Thread.currentThread().getName();
+          if (name.equals("client-a-path") && holding.add(name)) {
+            entered.countDown();
+            try {
+              if (!release.await(10, java.util.concurrent.TimeUnit.SECONDS))
+                throw new AssertionError("계산 자리 놓아주기 대기 시간 초과");
+            } catch (InterruptedException exception) {
+              Thread.currentThread().interrupt();
+              throw new AssertionError("계산 자리 놓아주기 대기 중 중단", exception);
+            }
+          }
+          return System.nanoTime();
+        };
+    var current = new ThreadLocal<String>();
+    var service = service(clock, current::get);
+    var errors = new java.util.concurrent.ConcurrentLinkedQueue<Throwable>();
+    var first =
+        new Thread(
+            () -> {
+              current.set("client-a");
+              try {
+                service.path("목표테스트", SpecUpGoalService.Pick.EFFICIENCY, 3);
+              } catch (Throwable error) {
+                errors.add(error);
+              }
+            },
+            "client-a-path");
+    first.start();
+    try {
+      assertThat(entered.await(10, java.util.concurrent.TimeUnit.SECONDS))
+          .as("클라이언트 a의 추천 순서 계산이 자리를 잡음")
+          .isTrue();
+      current.set("client-a");
+      for (org.assertj.core.api.ThrowableAssert.ThrowingCallable again :
+          List.<org.assertj.core.api.ThrowableAssert.ThrowingCallable>of(
+              () -> service.goal("목표테스트", new BigDecimal("6000")),
+              () -> service.path("목표테스트", SpecUpGoalService.Pick.EFFICIENCY, 5)))
+        org.assertj.core.api.Assertions.assertThatThrownBy(again)
+            .isInstanceOf(com.loakraken.common.api.BusinessException.class)
+            .satisfies(
+                e ->
+                    assertThat(((com.loakraken.common.api.BusinessException) e).errorCode())
+                        .isEqualTo(SpecUpErrorCode.SPEC_UP_BUSY));
+      assertThat(meters.counter("loakraken.spec_up.goal", "outcome", "client_busy").count())
+          .isEqualTo(1);
+      assertThat(meters.counter("loakraken.spec_up.path", "outcome", "client_busy").count())
+          .isEqualTo(1);
+      // 다른 클라이언트는 남은 자리로 계산한다.
+      current.set("client-b");
+      service.goal("목표테스트", new BigDecimal("6000"));
+      assertThat(meters.counter("loakraken.spec_up.goal", "outcome", "computed").count())
+          .isEqualTo(1);
+    } finally {
+      release.countDown();
+      first.join(10_000);
+      current.remove();
+    }
+    assertThat(first.isAlive()).isFalse();
+    assertThat(errors).isEmpty();
+    // 끝나면 클라이언트 a도 다시 계산한다(자리를 돌려줌).
+    current.set("client-a");
+    service.path("목표테스트", SpecUpGoalService.Pick.EFFICIENCY, 5);
+    assertThat(meters.counter("loakraken.spec_up.path", "outcome", "computed").count())
+        .isEqualTo(2);
+    current.remove();
+  }
+
+  /**
+   * 동시 요청 8개(같은 클라이언트, 서로 다른 계산): 자리를 잡는 것은 정확히 하나이고 나머지 7개는 기다리지 않고 client_busy다. 자리를 잡은 계산은 나머지가
+   * 모두 거절될 때까지 붙잡아 둔다(겹침을 강제).
+   */
+  @Test
+  void 같은_클라이언트의_동시_요청_8개_중_자리는_하나만_잡는다() throws Exception {
+    var entered = new java.util.concurrent.CountDownLatch(1);
+    var release = new java.util.concurrent.CountDownLatch(1);
+    var holding = java.util.concurrent.ConcurrentHashMap.<String>newKeySet();
+    LongSupplier clock =
+        () -> {
+          var name = Thread.currentThread().getName();
+          if (name.startsWith("burst-") && holding.add("held")) {
+            entered.countDown();
+            try {
+              if (!release.await(10, java.util.concurrent.TimeUnit.SECONDS))
+                throw new AssertionError("계산 자리 놓아주기 대기 시간 초과");
+            } catch (InterruptedException exception) {
+              Thread.currentThread().interrupt();
+              throw new AssertionError("계산 자리 놓아주기 대기 중 중단", exception);
+            }
+          }
+          return System.nanoTime();
+        };
+    var service = service(clock, () -> "client-z");
+    var errors = new java.util.concurrent.ConcurrentLinkedQueue<Throwable>();
+    var threads = new java.util.ArrayList<Thread>();
+    for (int limit = 3; limit <= 10; limit++) {
+      int l = limit;
+      threads.add(
+          new Thread(
+              () -> {
+                try {
+                  service.path("목표테스트", SpecUpGoalService.Pick.EFFICIENCY, l);
+                } catch (Throwable error) {
+                  errors.add(error);
+                }
+              },
+              "burst-" + limit));
+    }
+    threads.forEach(Thread::start);
+    try {
+      assertThat(entered.await(10, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+      long deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(10);
+      while (errors.size() < 7 && System.nanoTime() < deadline) Thread.onSpinWait();
+    } finally {
+      release.countDown();
+      for (var thread : threads) thread.join(10_000);
+    }
+    assertThat(errors)
+        .hasSize(7)
+        .allSatisfy(
+            e ->
+                assertThat(((com.loakraken.common.api.BusinessException) e).errorCode())
+                    .isEqualTo(SpecUpErrorCode.SPEC_UP_BUSY));
+    assertThat(meters.counter("loakraken.spec_up.path", "outcome", "client_busy").count())
+        .isEqualTo(7);
+    assertThat(meters.counter("loakraken.spec_up.path", "outcome", "computed").count())
+        .isEqualTo(1);
+  }
+
+  /** 전체 자리가 차서 거절된 클라이언트는 자리를 쥔 것으로 남지 않는다(자리가 비면 바로 계산, client_busy 아님). */
+  @Test
+  void 전체_자리가_차서_거절된_클라이언트는_자리를_쥔_것으로_남지_않는다() throws Exception {
+    var service = service(System::nanoTime, () -> "client-c");
+    var field = SpecUpGoalService.class.getDeclaredField("solves");
+    field.setAccessible(true);
+    var slots = (java.util.concurrent.Semaphore) field.get(service);
+    slots.acquire(2);
+    org.assertj.core.api.Assertions.assertThatThrownBy(
+            () -> service.goal("목표테스트", new BigDecimal("6000")))
+        .isInstanceOf(com.loakraken.common.api.BusinessException.class);
+    assertThat(meters.counter("loakraken.spec_up.goal", "outcome", "busy").count()).isEqualTo(1);
+    slots.release(2);
+    service.goal("목표테스트", new BigDecimal("6000"));
+    assertThat(meters.counter("loakraken.spec_up.goal", "outcome", "computed").count())
+        .isEqualTo(1);
+    assertThat(meters.counter("loakraken.spec_up.goal", "outcome", "client_busy").count()).isZero();
+    assertThat(slots.availablePermits()).isEqualTo(2);
+  }
+
   /** 겁화 1~10레벨 칸(값은 레벨 × 1,000골드), 같은 관측 시각. */
   private static List<MarketAuctionService.GemCell> gemCells(Instant at, boolean stale) {
     var cells = new java.util.ArrayList<MarketAuctionService.GemCell>();
@@ -749,6 +908,11 @@ class SpecUpGoalServiceTest {
   private final RelicBookPriceService books = mock(RelicBookPriceService.class);
 
   private SpecUpGoalService service(LongSupplier nanoTime) {
+    return service(nanoTime, () -> null);
+  }
+
+  private SpecUpGoalService service(
+      LongSupplier nanoTime, java.util.function.Supplier<String> client) {
     when(specUp.enabled()).thenReturn(true);
     when(auctions.cachedGems()).thenReturn(List.of());
     when(materials.cached()).thenReturn(Optional.empty());
@@ -805,7 +969,7 @@ class SpecUpGoalServiceTest {
                   List.of());
             });
     return new SpecUpGoalService(
-        specUp, simulator, auctions, books, materials, store, meters, nanoTime);
+        specUp, simulator, auctions, books, materials, store, meters, nanoTime, client);
   }
 
   private static final class MemoryStore implements SpecUpGoalStorePort {

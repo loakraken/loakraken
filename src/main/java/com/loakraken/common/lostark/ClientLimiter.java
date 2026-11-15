@@ -250,6 +250,14 @@ public class ClientLimiter {
   }
 
   /**
+   * 지금 스레드가 처리 중인 요청의 클라이언트 키(주소 해시, 검색봇은 'bot:' 접두). 요청 밖(백그라운드·테스트)이면 null. 클라이언트별 몫을 따로 세는 기능(예:
+   * 스펙업 계산 자리 클라이언트당 1개)이 쓴다. 주소 원문은 담지 않는다.
+   */
+  public static String currentClient() {
+    return CLIENT.get();
+  }
+
+  /**
    * 지금 스레드의 요청이 공식 호출을 하나 더 해도 되는지 센다. 클라이언트가 없으면(백그라운드) 세지 않는다. 검색봇 표시 요청은 OFFICIAL 대신 더 작은 주소별
    * BOT_ADDRESS_OFFICIAL과 모든 봇이 함께 쓰는 BOT_OFFICIAL 상한을 센다(한 주소가 전체 상한을 다 쓰지 못하게).
    */

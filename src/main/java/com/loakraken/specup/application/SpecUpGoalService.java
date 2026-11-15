@@ -79,6 +79,15 @@ public class SpecUpGoalService {
    */
   private final java.util.concurrent.Semaphore solves;
 
+  /**
+   * 계산 자리를 쥔 클라이언트 키(보안 11-16 강화 (a)): 한 클라이언트는 자리를 하나만 쥔다(둘 다 차지해 다른 사용자를 막지 못하게). 이미 쥐고 있으면 기다리지
+   * 않고 429 SPEC_UP_BUSY. 같은 계산에 합류(single)하는 요청은 자리를 쓰지 않는다. 클라이언트 키가 없는 요청(유입 제한 꺼짐·내부 호출)은 전체 자리만
+   * 센다.
+   */
+  private final java.util.Set<String> seatHolders = ConcurrentHashMap.newKeySet();
+
+  private final java.util.function.Supplier<String> client;
+
   private final ConcurrentHashMap<String, CompletableFuture<Object>> flights =
       new ConcurrentHashMap<>();
 
@@ -103,6 +112,29 @@ public class SpecUpGoalService {
       SpecUpGoalStorePort store,
       MeterRegistry meters,
       LongSupplier nanoTime) {
+    this(
+        specUp,
+        simulator,
+        auctions,
+        books,
+        materials,
+        store,
+        meters,
+        nanoTime,
+        com.loakraken.common.lostark.ClientLimiter::currentClient);
+  }
+
+  SpecUpGoalService(
+      SpecUpService specUp,
+      CombatPowerSimulationService simulator,
+      MarketAuctionService auctions,
+      RelicBookPriceService books,
+      RefiningMaterialPriceService materials,
+      SpecUpGoalStorePort store,
+      MeterRegistry meters,
+      LongSupplier nanoTime,
+      java.util.function.Supplier<String> client) {
+    this.client = client;
     this.specUp = specUp;
     this.simulator = simulator;
     this.auctions = auctions;
@@ -117,9 +149,9 @@ public class SpecUpGoalService {
   private static final Logger log = LoggerFactory.getLogger(SpecUpGoalService.class);
 
   /**
-   * 추천 순서 운영 지표. loakraken.spec_up.path{outcome=cache_hit|computed|busy}: 캐시 적중·계산·자리 부족(429) 비율.
-   * loakraken.spec_up.path_compute{pick, stop}: 캐시에 없을 때 계산 시간(p95·p99), stop은 멈춘 이유 코드(작은 고정 집합).
-   * 캐릭터 이름은 태그·로그에 넣지 않는다.
+   * 추천 순서 운영 지표. loakraken.spec_up.path{outcome=cache_hit|computed|busy|client_busy}: 캐시 적중·계산·자리
+   * 부족(429)·클라이언트가 이미 자리를 쥠(429) 비율. loakraken.spec_up.path_compute{pick, stop}: 캐시에 없을 때 계산
+   * 시간(p95·p99), stop은 멈춘 이유 코드(작은 고정 집합). 캐릭터 이름은 태그·로그에 넣지 않는다.
    */
   private final MeterRegistry meters;
 
@@ -127,7 +159,34 @@ public class SpecUpGoalService {
     meters.counter("loakraken.spec_up.path", "outcome", outcome).increment();
   }
 
-  /** 목표 경로 운영 지표 loakraken.spec_up.goal{outcome=cache_hit|computed|busy}. */
+  /** 자리를 못 받은 이유(지표 outcome 값). */
+  private enum SeatRefusal {
+    /** 그 클라이언트가 이미 자리를 쥐고 있다. */
+    CLIENT_BUSY("client_busy"),
+    /** 전체 자리가 모두 찼다. */
+    FULL("busy");
+
+    final String outcome;
+
+    SeatRefusal(String outcome) {
+      this.outcome = outcome;
+    }
+  }
+
+  /** 계산 자리를 받는다. 받으면 null, 못 받으면 이유. holder가 null이면(클라이언트 키 없음) 전체 자리만 센다. */
+  private SeatRefusal takeSeat(String holder) {
+    if (holder != null && !seatHolders.add(holder)) return SeatRefusal.CLIENT_BUSY;
+    if (solves.tryAcquire()) return null;
+    if (holder != null) seatHolders.remove(holder);
+    return SeatRefusal.FULL;
+  }
+
+  private void releaseSeat(String holder) {
+    solves.release();
+    if (holder != null) seatHolders.remove(holder);
+  }
+
+  /** 목표 경로 운영 지표 loakraken.spec_up.goal{outcome=cache_hit|computed|busy|client_busy}. */
   private void goalOutcome(String outcome) {
     meters.counter("loakraken.spec_up.goal", "outcome", outcome).increment();
   }
@@ -355,10 +414,13 @@ public class SpecUpGoalService {
         single(
                 "path:" + key,
                 () -> {
-                  if (!solves.tryAcquire()) {
-                    pathOutcome("busy");
+                  var holder = client.get();
+                  var refusal = takeSeat(holder);
+                  if (refusal != null) {
+                    pathOutcome(refusal.outcome);
                     log.warn(
-                        "event=spec_up_path_busy pick={} limit={} slots={}",
+                        "event=spec_up_path_busy reason={} pick={} limit={} slots={}",
+                        refusal.outcome,
                         pick,
                         limit,
                         SOLVE_MAX_CONCURRENT);
@@ -395,7 +457,7 @@ public class SpecUpGoalService {
                     else store.savePath(key, result, CACHE_TTL);
                     return result;
                   } finally {
-                    solves.release();
+                    releaseSeat(holder);
                   }
                 })
             .withSupportOrderAvailable(supportOrderAvailable, krakenScoreRole);
@@ -672,9 +734,14 @@ public class SpecUpGoalService {
     return single(
         key,
         () -> {
-          if (!solves.tryAcquire()) {
-            goalOutcome("busy");
-            log.warn("event=spec_up_goal_busy slots={}", SOLVE_MAX_CONCURRENT);
+          var holder = client.get();
+          var refusal = takeSeat(holder);
+          if (refusal != null) {
+            goalOutcome(refusal.outcome);
+            log.warn(
+                "event=spec_up_goal_busy reason={} slots={}",
+                refusal.outcome,
+                SOLVE_MAX_CONCURRENT);
             throw new BusinessException(SpecUpErrorCode.SPEC_UP_BUSY, PATH_RETRY_AFTER);
           }
           try {
@@ -692,7 +759,7 @@ public class SpecUpGoalService {
             if (!TIME_LIMITED.equals(result.stopReasonCode())) store.save(key, result, CACHE_TTL);
             return result;
           } finally {
-            solves.release();
+            releaseSeat(holder);
           }
         });
   }

@@ -5,6 +5,8 @@
 @org.springframework.modulith.ApplicationModule(
     allowedDependencies = {
       "common::api",
+      // 계산 자리 클라이언트당 1개(보안 11-16 강화 (a)): 요청의 클라이언트 키만 읽는다.
+      "common::lostark",
       "character::application",
       "character::domain",
       "market::application",

@@ -136,7 +136,8 @@ public class SpecUpController {
         content = @Content(schema = @Schema(ref = "#/components/schemas/ErrorResponse"))),
     @io.swagger.v3.oas.annotations.responses.ApiResponse(
         responseCode = "429",
-        description = "SPEC_UP_BUSY: 목표 경로 계산 자리가 모두 차 있음(기다리지 않음, Retry-After 초 뒤 다시)",
+        description =
+            "SPEC_UP_BUSY: 목표 경로 계산 자리가 모두 차 있거나 이 클라이언트가 이미 계산 중(클라이언트당 1개, 기다리지 않음, Retry-After 초 뒤 다시)",
         content = @Content(schema = @Schema(ref = "#/components/schemas/ErrorResponse"))),
     @io.swagger.v3.oas.annotations.responses.ApiResponse(
         responseCode = "503",
@@ -187,7 +188,8 @@ public class SpecUpController {
         content = @Content(schema = @Schema(ref = "#/components/schemas/ErrorResponse"))),
     @io.swagger.v3.oas.annotations.responses.ApiResponse(
         responseCode = "429",
-        description = "SPEC_UP_BUSY: 추천 순서 계산 자리가 모두 차 있음(기다리지 않음, Retry-After 초 뒤 다시)",
+        description =
+            "SPEC_UP_BUSY: 추천 순서 계산 자리가 모두 차 있거나 이 클라이언트가 이미 계산 중(클라이언트당 1개, 기다리지 않음, Retry-After 초 뒤 다시)",
         content = @Content(schema = @Schema(ref = "#/components/schemas/ErrorResponse"))),
     @io.swagger.v3.oas.annotations.responses.ApiResponse(
         responseCode = "503",

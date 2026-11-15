@@ -88,6 +88,12 @@ class SpecUpPathKrakenIntegrationTest {
     search();
     var kraken = path("KRAKEN");
     assertThat(kraken.path("sort").asText()).isEqualTo("KRAKEN");
+    // 스위치가 켜졌고 점수를 낼 수 있으면 목록·추천 순서(어느 기준이든) 모두 true(웹은 이 값으로 KRAKEN 버튼을 보인다).
+    assertThat(kraken.path("supportOrderAvailable").asBoolean(false)).isTrue();
+    var list = get("/api/v1/characters/spec-up?characterName=" + encode(NAME));
+    assertThat(list.statusCode()).isEqualTo(200);
+    assertThat(mapper.readTree(list.body()).at("/data/supportOrderAvailable").asBoolean(false))
+        .isTrue();
     assertThat(absent(kraken.path("krakenSortUnavailableReason"))).isTrue();
     var start = kraken.path("krakenScore").decimalValue();
     assertThat(start).isNotNull();
@@ -115,6 +121,7 @@ class SpecUpPathKrakenIntegrationTest {
       for (var sort : List.of("EFFICIENCY", "DELTA")) {
         var other = path(sort);
         assertThat(other.path("sort").asText()).as(sort + " " + round).isEqualTo(sort);
+        assertThat(other.path("supportOrderAvailable").asBoolean(false)).as(sort).isTrue();
         assertThat(absent(other.path("krakenScore"))).as(sort).isTrue();
         assertThat(absent(other.path("finalKrakenScore"))).as(sort).isTrue();
         assertThat(absent(other.path("krakenSortUnavailableReason"))).as(sort).isTrue();

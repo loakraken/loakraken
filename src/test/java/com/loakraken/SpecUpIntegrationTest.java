@@ -87,6 +87,8 @@ class SpecUpIntegrationTest {
     assertThat(data.path("simulatorRuleVersion").asText()).isEqualTo("combat-power-sim-v8");
     assertThat(data.path("combatPower").decimalValue()).isEqualByComparingTo("3000.00");
     assertThat(data.path("sort").asText()).isEqualTo("EFFICIENCY");
+    // 추천 순서 KRAKEN 스위치(spec-up.support-order.enabled)가 꺼져 있으면 false.
+    assertThat(data.path("supportOrderAvailable").asBoolean(true)).isFalse();
     // 보석은 단계별 후보(8→9, 8→10)가 각각 나오고, 빈 칸 10개는 가장 앞 빈 칸(1번) 하나로 6~10레벨, 무기 품질(90 → 100)도 계산한다.
     assertThat(data.path("total").asInt()).isEqualTo(8);
     var candidates = data.path("candidates");
@@ -924,6 +926,8 @@ class SpecUpIntegrationTest {
             .path("data");
     assertThat(kraken.path("sort").asText()).isEqualTo("EFFICIENCY");
     assertThat(kraken.path("krakenSortUnavailableReason").asText()).isEqualTo("DISABLED");
+    assertThat(kraken.path("supportOrderAvailable").asBoolean(true)).isFalse();
+    assertThat(one.path("supportOrderAvailable").asBoolean(true)).isFalse();
     assertThat(absent(kraken.path("krakenScore"))).isTrue();
     for (var step : kraken.path("steps"))
       assertThat(absent(step.path("deltaKrakenScore"))).isTrue();

@@ -414,7 +414,12 @@ public class SpecUpController {
                   "sort=KRAKEN을 요청했지만 쓸 수 없어 EFFICIENCY로 되돌린 이유(스펙업 가이드 krakenSortUnavailableReason과 같은 값, DISABLED 등). 그 밖에는 null")
           @NullableResponse
           @OptionalResponse
-          String krakenSortUnavailableReason) {
+          String krakenSortUnavailableReason,
+      @Schema(
+              description =
+                  "추천 순서(/spec-up/path) sort=KRAKEN을 이 캐릭터에 쓸 수 있는지: 스위치 spec-up.support-order.enabled가 켜졌고 크라켄 점수를 낼 수 있으면 true. 웹은 이 값으로 KRAKEN 순서 버튼을 보인다(시험 요청으로 알아보지 않음). 배포 순서 때문에 계약에서는 선택 필드")
+          @OptionalResponse
+          Boolean supportOrderAvailable) {
     static SpecUpPathResponse from(SpecUpGoalService.Path path) {
       return new SpecUpPathResponse(
           path.characterName(),
@@ -449,7 +454,8 @@ public class SpecUpController {
               .toList(),
           path.krakenScore(),
           path.finalKrakenScore(),
-          path.krakenSortUnavailableReason());
+          path.krakenSortUnavailableReason(),
+          path.supportOrderAvailable());
     }
   }
 
@@ -497,7 +503,12 @@ public class SpecUpController {
                   "Δ크라켄 점수를 낼 수 없는 이유(문자열, 값이 늘 수 있음): DISABLED·INPUT_PENDING·ROLE_UNKNOWN·SCORE_UNAVAILABLE(예전 SUPPORTER_PENDING은 더 내지 않음 — 서포터는 서포터 점수식으로 Δ를 낸다). 이때 KRAKEN도 효율 순. 낼 수 있으면 null",
               example = "INPUT_PENDING")
           @NullableResponse
-          String krakenSortUnavailableReason) {
+          String krakenSortUnavailableReason,
+      @Schema(
+              description =
+                  "추천 순서(/spec-up/path) sort=KRAKEN을 이 캐릭터에 쓸 수 있는지: 스위치 spec-up.support-order.enabled가 켜졌고 크라켄 점수를 낼 수 있으면 true. 웹은 이 값으로 KRAKEN 순서 버튼을 보인다(시험 요청으로 알아보지 않음). 배포 순서 때문에 계약에서는 선택 필드")
+          @OptionalResponse
+          Boolean supportOrderAvailable) {
     static SpecUpResponse from(SpecUpService.Guide guide) {
       return new SpecUpResponse(
           guide.characterName(),
@@ -515,7 +526,8 @@ public class SpecUpController {
           guide.krakenScore(),
           guide.krakenRuleVersion(),
           guide.cooldownGemsIncluded(),
-          guide.krakenSortUnavailableReason());
+          guide.krakenSortUnavailableReason(),
+          guide.supportOrderAvailable());
     }
   }
 

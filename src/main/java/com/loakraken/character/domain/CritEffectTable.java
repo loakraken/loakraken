@@ -52,8 +52,10 @@ public final class CritEffectTable {
           new NodeRule("그림자 맹수", Decision.SKILL, Decision.EXCLUDE),
           new NodeRule("영혼친화력", Decision.INCLUDE, null),
           new NodeRule("어둠의 장송곡", null, Decision.EXCLUDE),
-          new NodeRule("점화의 불씨", Decision.INCLUDE, null),
-          new NodeRule("발화", null, Decision.INCLUDE),
+          // "마력 해방 중 치명타 적중률이 30.0% 증가한다." · "마력 해방 중 … 치명타 피해가 55.0% 증가한다." 비교 기준은 합계·주력기·스킬별 어디에도
+          // 더하지 않는다(계산 검증 11-16) → 마력 해방 상태 토글, 기본 끔(PM 총괄 11-16 치적·공속 표 C).
+          new NodeRule("점화의 불씨", Decision.TOGGLE, null),
+          new NodeRule("발화", null, Decision.TOGGLE),
           new NodeRule("혼돈 강화", Decision.TOGGLE, null),
           new NodeRule("잠식 제어", Decision.INCLUDE, null),
           new NodeRule("날카로운 해머", Decision.SKILL, null),
@@ -280,6 +282,23 @@ public final class CritEffectTable {
               false,
               // "단, 두 효과는 동시에 적용되지 않는다." → 치명타 적중률 쪽("단련")을 켜면 이 토글은 꺼진다
               "단련"),
+          // "마력 해방 중 치명타 적중률이 30.0% 증가한다." 기본 끔(비교 기준은 보이는 수치에 더하지 않음, 계산 검증 11-16).
+          new Toggle(
+              "점화의 불씨",
+              "마력 해방 상태 가정",
+              false,
+              Pattern.compile("마력 해방 중 치명타 적중률이\\s*([0-9]+(?:\\.[0-9]+)?)%"),
+              false),
+          // "마력 해방 중 무력화 피해량이 20.0% 증가하고, 치명타 피해가 55.0% 증가한다." 기본 끔(점화의 불씨와 같은 상태).
+          new Toggle(
+              "발화",
+              "발화 치명타 피해",
+              CritSpeedCalculation.Axis.CRIT_DAMAGE,
+              "마력 해방 상태 가정(치명타 피해)",
+              false,
+              Pattern.compile("치명타 피해가\\s*([0-9]+(?:\\.[0-9]+)?)%"),
+              false,
+              null),
           // "샷건 스탠스로 변경 시 치명타 적중률이 10.0% … 9초동안"
           new Toggle("피스메이커 - 샷건", "샷건 스탠스 변경 후 9초 가정", false, null, false),
           // "일반 스킬의 치명타 적중률이 0.8% 증가하며, 방어 태세 중에는 1.6% 증가한다."

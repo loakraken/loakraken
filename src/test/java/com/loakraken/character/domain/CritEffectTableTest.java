@@ -274,6 +274,51 @@ class CritEffectTableTest {
     assertThat(on.crit().totalRate()).isEqualByComparingTo("2.5");
   }
 
+  /**
+   * 소서리스 마력 해방(PM 총괄 11-16 치적·공속 표 C): 점화의 불씨·발화는 비교 기준이 보이는 수치(합계·주력기·스킬별)에 더하지 않아 기본 끔 토글이고, 켜면
+   * 치명타 적중률 30·치명타 피해 55를 더한다.
+   */
+  @Test
+  void 소서리스_마력_해방_효과는_기본_끔이고_켜면_더한다() {
+    var nodes =
+        List.of(
+            node("깨달음 1티어 점화의 불씨 Lv.3", "마력 해방 중 치명타 적중률이 30.0% 증가한다."),
+            node("깨달음 2티어 발화 Lv.3", "마력 해방 중 무력화 피해량이 20.0% 증가하고, 치명타 피해가 55.0% 증가한다."));
+    var off = calculate("소서리스", nodes, List.of(), null, Assumptions.NONE);
+    assertThat(values(off, Axis.CRIT, Category.ARK_PASSIVE)).isEmpty();
+    assertThat(values(off, Axis.CRIT, Category.ASSUMPTION)).isEmpty();
+    assertThat(values(off, Axis.CRIT_DAMAGE, Category.ARK_PASSIVE)).isEmpty();
+    assertThat(values(off, Axis.CRIT_DAMAGE, Category.ASSUMPTION)).isEmpty();
+    assertThat(off.toggles())
+        .extracting(
+            t -> t.key() + "=" + t.value().stripTrailingZeros().toPlainString() + "/" + t.on())
+        .containsExactlyInAnyOrder("점화의 불씨=30/false", "발화 치명타 피해=55/false");
+    var on =
+        calculate(
+            "소서리스",
+            nodes,
+            List.of(),
+            null,
+            new Assumptions(
+                false,
+                false,
+                0,
+                null,
+                null,
+                null,
+                null,
+                null,
+                true,
+                java.util.Map.of("점화의 불씨", true, "발화 치명타 피해", true)));
+    assertThat(values(on, Axis.CRIT, Category.ASSUMPTION))
+        .containsExactly("마력 해방 상태 가정(점화의 불씨 Lv.3)=30");
+    assertThat(values(on, Axis.CRIT_DAMAGE, Category.ASSUMPTION))
+        .containsExactly("마력 해방 상태 가정(치명타 피해)(발화 Lv.3)=55");
+    // 켜면 합계에 30이 더해진다(표본 프로필의 치명 스탯 몫은 그대로).
+    assertThat(on.crit().totalRate())
+        .isEqualByComparingTo(off.crit().totalRate().add(new BigDecimal("30")));
+  }
+
   @Test
   void 상황_조건_효과는_기본_끔이고_요청_토글로_켠다() {
     var nodes =

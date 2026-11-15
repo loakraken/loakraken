@@ -134,6 +134,43 @@ public class SpecUpService {
   }
 
   /**
+   * 추천 순서 sort=KRAKEN(spec-up.support-order.enabled, 기본 끔): 단계마다 크라켄 점수(서포터는 서포터 점수식)로 고른다. 요청마다
+   * 읽는다. 끄면 KRAKEN 요청은 EFFICIENCY로 되돌리고 그 이유를 준다.
+   */
+  boolean supportOrderEnabled() {
+    return environment.getProperty("spec-up.support-order.enabled", Boolean.class, false);
+  }
+
+  /** 크라켄 점수 문맥(목록과 같음). */
+  SpecUpKrakenScore.Context krakenContext(CharacterResult snapshot) {
+    return kraken.context(snapshot);
+  }
+
+  /** 추천 순서 KRAKEN의 점수: 처음 입력에 칸마다 마지막 단계 변경을 적용한 점수(SpecUpKrakenScore.chainedScore). */
+  Double chainedKrakenScore(
+      SpecUpKrakenScore.Context context,
+      CharacterLoadout loadout,
+      Map<String, List<Change>> slots,
+      Map<String, SpecUpKrakenScore.Edit> edits) {
+    return kraken.chainedScore(context, loadout, slots, edits);
+  }
+
+  /** 작열(쿨) 보석 칸의 추천 순서 칸 이름(GEM_LEVEL:slot). 목록 KRAKEN 기본과 같이 KRAKEN 순서에서 뺀다(PM 총괄 11-15 (d) C). */
+  static java.util.Set<String> cooldownGemSlots(CharacterLoadout loadout) {
+    var result = new java.util.HashSet<String>();
+    if (loadout.gems() == null) return result;
+    var effects = gemEffects(loadout);
+    for (var gem : loadout.gems().items()) {
+      if (gem == null || gem.slot() == null || gem.name() == null) continue;
+      var matcher = GEM.matcher(gem.name());
+      String kind = matcher.find() ? matcher.group(2) : null;
+      if ("COOLDOWN".equals(gemType(kind, effects.get(gem.slot()))))
+        result.add("GEM_LEVEL:" + gem.slot());
+    }
+    return result;
+  }
+
+  /**
    * 추천 순서·목표 경로의 연마 단계 후보 하나. slot은 장신구 칸(POLISH:장비 순번, 같은 칸은 뒤 단계가 앞 매물을 바꿈), changes는 처음 장신구와 다른
    * 줄의 공개 시뮬레이터 변경(줄마다 POLISH, 빠진 줄은 option NONE), full은 같은 줄까지 줄마다 하나(같은 장신구의 앞 단계가 바꾼 줄을 되돌릴 때
    * 씀).
@@ -149,7 +186,24 @@ public class SpecUpService {
       SpecUpCost cost,
       List<Change> changes,
       List<Change> full,
-      boolean afterTop) {
+      boolean afterTop,
+      SpecUpKrakenScore.Edit kraken) {
+    /** kraken = 이 매물의 점수 입력 편집(추천 순서 sort=KRAKEN의 점수, 없으면 null). */
+    PolishStep(
+        String slot,
+        String id,
+        String target,
+        String from,
+        String to,
+        String icon,
+        String grade,
+        SpecUpCost cost,
+        List<Change> changes,
+        List<Change> full,
+        boolean afterTop) {
+      this(slot, id, target, from, to, icon, grade, cost, changes, full, afterTop, null);
+    }
+
     PolishStep(
         String slot,
         String id,
@@ -236,7 +290,8 @@ public class SpecUpService {
               polishCost(loadout, context, row, fill, pricesAt, topIds.contains(row.id())),
               changes,
               full,
-              topIds.contains(row.id())));
+              topIds.contains(row.id()),
+              polish));
     }
     return List.copyOf(steps);
   }

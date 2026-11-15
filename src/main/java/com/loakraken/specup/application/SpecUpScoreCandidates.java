@@ -135,6 +135,21 @@ final class SpecUpScoreCandidates {
    */
   static List<SpecUpService.Planned> polish(
       JsonNode input, CharacterLoadout loadout, CombatPowerPolishValues values) {
+    return polish(input, loadout, values, false);
+  }
+
+  /**
+   * 추천 순서 전용 '상·상 뒤' 후보: 처음에 두 주옵션이 모두 상이 아닌 장신구가 경로에서 상·상(HH) 매물로 바뀐 뒤 비교 기준이 내는 셋째 줄 고정값 후보(공격력·
+   * 무기 공격력 상, 그때 고정값 줄이 없으므로 상만). 처음 상태에서는 고를 수 없어(목록에 없음) 경로가 그 장신구의 HH 단계를 고른 뒤에만 쓴다(PM 총괄 11-15,
+   * 스위치를 켜기 전 필수).
+   */
+  static List<SpecUpService.Planned> polishAfterTop(
+      JsonNode input, CharacterLoadout loadout, CombatPowerPolishValues values) {
+    return polish(input, loadout, values, true);
+  }
+
+  private static List<SpecUpService.Planned> polish(
+      JsonNode input, CharacterLoadout loadout, CombatPowerPolishValues values, boolean afterTop) {
     var planned = new ArrayList<SpecUpService.Planned>();
     boolean any = false;
     int earing = 0;
@@ -148,7 +163,7 @@ final class SpecUpScoreCandidates {
             case "귀걸이" -> "earing" + ++earing;
             default -> "ring" + ++ring;
           };
-      var rows = slotRows(input, item, index, slot, values);
+      var rows = slotRows(input, item, index, slot, values, afterTop);
       if (rows == null) continue;
       any = true;
       planned.addAll(rows);
@@ -161,7 +176,8 @@ final class SpecUpScoreCandidates {
       CharacterLoadout.Equipment item,
       int index,
       String slot,
-      CombatPowerPolishValues values) {
+      CombatPowerPolishValues values,
+      boolean afterTop) {
     var option = input.path("armory").path("accessory").path(slot).path("option");
     if (!option.isArray() || option.size() != 3) return null;
     // 시뮬레이터와 같은 규칙: 수치표(1680 고대)와 같은 장신구만(거래 제한 아이템 레벨 줄, 없으면 모든 연마 값이 표의 값). 점수에 안 쓰이는 줄만 있는
@@ -199,6 +215,29 @@ final class SpecUpScoreCandidates {
     for (int i = 0; i < lines.size(); i++)
       if (i == position[0] || i == position[1] || flats.contains(i)) scoring.add(lines.get(i));
     var rows = new ArrayList<SpecUpService.Planned>();
+    if (afterTop) {
+      // 상·상이 된 뒤의 셋째 줄 고정값 상(처음부터 상·상인 장신구는 목록·경로의 셋째 줄 후보가 이미 있음).
+      if (grade[0] == 2 && grade[1] == 2) return rows;
+      var top = new int[] {2, 2};
+      for (var name : FLAT_OPTIONS) {
+        var next = target(values, part, mains, position, top);
+        var text = text(values, part, name, false, 2);
+        if (next == null || text == null) continue;
+        next.add(text);
+        rows.add(
+            row(
+                item,
+                index,
+                slot,
+                scoring,
+                next,
+                lines,
+                swapLines(values, part, mains, lines, position, flats, top, text),
+                "HH" + ("무기 공격력".equals(name) ? "W" : "A") + "H",
+                values));
+      }
+      return rows;
+    }
     for (int a = grade[0]; a <= 2; a++)
       for (int b = grade[1]; b <= 2; b++) {
         if (a == grade[0] && b == grade[1]) continue;

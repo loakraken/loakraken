@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.loakraken.character.domain.CharacterLoadout;
@@ -73,6 +75,48 @@ class SpecUpPolishCostTest {
     assertThat(SpecUpPolishCost.tradeable(earring(List.of("거래 제한 아이템 레벨 1680")))).isTrue();
     assertThat(SpecUpPolishCost.tradeable(earring(List.of("거래 불가")))).isFalse();
     assertThat(SpecUpPolishCost.tradeable(earring(List.of()))).isNull();
+  }
+
+  @Test
+  void 상상_뒤_셋째_줄_후보는_목표_시세_키에_고정값을_남기고_지금_키는_처음_장신구대로다() throws Exception {
+    // 처음 무공% 중 · 공격력 +80 · 공% 하(상 둘이 아님) → 상·상 뒤 셋째 줄 공격력 +390. 비교 기준은 상·상 상태에서 후보를 만들어 고정값을 키에
+    // 남긴다(코드
+    // 리뷰 #957 P1).
+    var auctions = mock(MarketAuctionService.class);
+    var withFlat =
+        List.of(
+            new PolishLine("무기 공격력", true, "+3.00%"),
+            new PolishLine("공격력", true, "+1.55%"),
+            new PolishLine("공격력", false, "+390"));
+    var current =
+        List.of(new PolishLine("무기 공격력", true, "+1.80%"), new PolishLine("공격력", true, "+0.40%"));
+    when(auctions.polishPrice(eq("귀걸이"), eq(withFlat), any()))
+        .thenReturn(new PolishPrice(PolishStatus.OK, 90_000L, AT));
+    when(auctions.polishPrice(eq("귀걸이"), eq(current), any()))
+        .thenReturn(new PolishPrice(PolishStatus.OK, 200L, AT));
+    var cost =
+        SpecUpPolishCost.cost(
+            auctions,
+            new MarketAuctionService.PolishFill(false),
+            false,
+            false,
+            earring(List.of("거래 제한 아이템 레벨 1680")),
+            List.of("무기 공격력 +1.80%", "공격력 +80", "공격력 +0.40%"),
+            List.of("무기 공격력 +3.00%", "공격력 +1.55%", "공격력 +390"),
+            values(),
+            new Instant[1],
+            true);
+    assertThat(cost.status()).isEqualTo("OK");
+    assertThat(cost.amount()).isEqualTo(89_800L);
+    // 고정값을 남기지 않으면(처음 장신구 기준) 목표 키에 셋째 줄이 없다.
+    verify(auctions, never())
+        .polishPrice(
+            eq("귀걸이"),
+            eq(
+                List.of(
+                    new PolishLine("무기 공격력", true, "+3.00%"),
+                    new PolishLine("공격력", true, "+1.55%"))),
+            any());
   }
 
   @Test

@@ -181,6 +181,8 @@ public class SpecUpGoalService {
     return SeatRefusal.FULL;
   }
 
+  // 거절 로그의 client는 유입 제한 거절 로그와 같은 짧은 키(HMAC 앞 6자리, 주소 원문 아님): 한 키가 client_busy를 몰아 내는지(공유 프록시·남용)
+  // 본다.
   private void releaseSeat(String holder) {
     solves.release();
     if (holder != null) seatHolders.remove(holder);
@@ -419,8 +421,9 @@ public class SpecUpGoalService {
                   if (refusal != null) {
                     pathOutcome(refusal.outcome);
                     log.warn(
-                        "event=spec_up_path_busy reason={} pick={} limit={} slots={}",
+                        "event=spec_up_path_busy reason={} client={} pick={} limit={} slots={}",
                         refusal.outcome,
+                        com.loakraken.common.lostark.ClientLimiter.shortKey(holder),
                         pick,
                         limit,
                         SOLVE_MAX_CONCURRENT);
@@ -739,8 +742,9 @@ public class SpecUpGoalService {
           if (refusal != null) {
             goalOutcome(refusal.outcome);
             log.warn(
-                "event=spec_up_goal_busy reason={} slots={}",
+                "event=spec_up_goal_busy reason={} client={} slots={}",
                 refusal.outcome,
+                com.loakraken.common.lostark.ClientLimiter.shortKey(holder),
                 SOLVE_MAX_CONCURRENT);
             throw new BusinessException(SpecUpErrorCode.SPEC_UP_BUSY, PATH_RETRY_AFTER);
           }

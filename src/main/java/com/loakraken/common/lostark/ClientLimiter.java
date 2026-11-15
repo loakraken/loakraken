@@ -184,7 +184,7 @@ public class ClientLimiter {
   }
 
   /** 로그용 클라이언트 표시: HMAC 키 앞 6자리(봇은 'bot:' + 앞 6자리, 봇 전체 상한은 'bot-all'). */
-  static String shortKey(String clientKey) {
+  public static String shortKey(String clientKey) {
     if (clientKey == null) return "-";
     if (BOT_ALL.equals(clientKey)) return "bot-all";
     if (SHARED.equals(clientKey)) return "shared";

@@ -808,6 +808,67 @@ class SpecUpGoalServiceTest {
     current.remove();
   }
 
+  /**
+   * 동시 요청 8개(같은 클라이언트, 서로 다른 계산): 자리를 잡는 것은 정확히 하나이고 나머지 7개는 기다리지 않고 client_busy다. 자리를 잡은 계산은 나머지가
+   * 모두 거절될 때까지 붙잡아 둔다(겹침을 강제).
+   */
+  @Test
+  void 같은_클라이언트의_동시_요청_8개_중_자리는_하나만_잡는다() throws Exception {
+    var entered = new java.util.concurrent.CountDownLatch(1);
+    var release = new java.util.concurrent.CountDownLatch(1);
+    var holding = java.util.concurrent.ConcurrentHashMap.<String>newKeySet();
+    LongSupplier clock =
+        () -> {
+          var name = Thread.currentThread().getName();
+          if (name.startsWith("burst-") && holding.add("held")) {
+            entered.countDown();
+            try {
+              if (!release.await(10, java.util.concurrent.TimeUnit.SECONDS))
+                throw new AssertionError("계산 자리 놓아주기 대기 시간 초과");
+            } catch (InterruptedException exception) {
+              Thread.currentThread().interrupt();
+              throw new AssertionError("계산 자리 놓아주기 대기 중 중단", exception);
+            }
+          }
+          return System.nanoTime();
+        };
+    var service = service(clock, () -> "client-z");
+    var errors = new java.util.concurrent.ConcurrentLinkedQueue<Throwable>();
+    var threads = new java.util.ArrayList<Thread>();
+    for (int limit = 3; limit <= 10; limit++) {
+      int l = limit;
+      threads.add(
+          new Thread(
+              () -> {
+                try {
+                  service.path("목표테스트", SpecUpGoalService.Pick.EFFICIENCY, l);
+                } catch (Throwable error) {
+                  errors.add(error);
+                }
+              },
+              "burst-" + limit));
+    }
+    threads.forEach(Thread::start);
+    try {
+      assertThat(entered.await(10, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+      long deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(10);
+      while (errors.size() < 7 && System.nanoTime() < deadline) Thread.onSpinWait();
+    } finally {
+      release.countDown();
+      for (var thread : threads) thread.join(10_000);
+    }
+    assertThat(errors)
+        .hasSize(7)
+        .allSatisfy(
+            e ->
+                assertThat(((com.loakraken.common.api.BusinessException) e).errorCode())
+                    .isEqualTo(SpecUpErrorCode.SPEC_UP_BUSY));
+    assertThat(meters.counter("loakraken.spec_up.path", "outcome", "client_busy").count())
+        .isEqualTo(7);
+    assertThat(meters.counter("loakraken.spec_up.path", "outcome", "computed").count())
+        .isEqualTo(1);
+  }
+
   /** 전체 자리가 차서 거절된 클라이언트는 자리를 쥔 것으로 남지 않는다(자리가 비면 바로 계산, client_busy 아님). */
   @Test
   void 전체_자리가_차서_거절된_클라이언트는_자리를_쥔_것으로_남지_않는다() throws Exception {

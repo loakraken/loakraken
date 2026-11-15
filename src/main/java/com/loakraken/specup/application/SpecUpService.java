@@ -106,6 +106,47 @@ public class SpecUpService {
     return environment.getProperty("spec-up.polish-cp.enabled", Boolean.class, false);
   }
 
+  /**
+   * 어빌리티 스톤 줄의 Δ전투력(spec-up.stone-cp.enabled, 기본 끔). 켜면 스톤 줄에 추천 순서(목표 경로)와 같은 변경(STONE_ENGRAVING
+   * 둘, 목표 레벨)으로 Δ전투력을 낸다. 꺼져 있으면 지금처럼 점수만 낸다. 요청마다 읽는다.
+   */
+  boolean stoneCpEnabled() {
+    return environment.getProperty("spec-up.stone-cp.enabled", Boolean.class, false);
+  }
+
+  /**
+   * 스톤 줄의 시뮬레이터 변경(각인마다 STONE_ENGRAVING, 목표 레벨). 장착한 스톤의 각인 줄에 없는 이름이 있으면 null(시뮬레이터는 없는 각인을 오류로
+   * 돌려주므로 그 줄은 점수만 남긴다).
+   */
+  static List<Change> stoneChanges(CharacterLoadout loadout, Map<String, Integer> levels) {
+    var names = new java.util.HashSet<String>();
+    for (var item : loadout.equipment())
+      if (item != null && item.detail() != null)
+        for (var line : item.detail().stoneEngravings())
+          if (line != null && line.name() != null) names.add(line.name());
+    var changes = new ArrayList<Change>();
+    for (var entry : levels.entrySet()) {
+      if (!names.contains(entry.getKey())) return null;
+      changes.add(
+          new Change(
+              Kind.STONE_ENGRAVING,
+              null,
+              null,
+              null,
+              entry.getValue(),
+              null,
+              null,
+              null,
+              null,
+              entry.getKey(),
+              null,
+              null,
+              null,
+              null));
+    }
+    return changes.isEmpty() ? null : changes;
+  }
+
   /** 완갑 target 단계의 등급(목록 줄과 같은 규칙). 정할 수 없으면 null. */
   String armGuardGrade(String current, int target) {
     return kraken.armGuardGrade(current, target);
@@ -428,6 +469,12 @@ public class SpecUpService {
         && polishCpEnabled()) {
       var swap = simulator.simulatePolishSwap(snapshot, polish.index(), polish.lines());
       if (swap != null) return evaluated(plan, swap);
+    }
+    if (plan.change() == null
+        && plan.kraken() instanceof SpecUpKrakenScore.Stone stone
+        && stoneCpEnabled()) {
+      var changes = stoneChanges(snapshot.details().loadout(), stone.levels());
+      if (changes != null) return evaluated(plan, simulator.simulate(snapshot, changes));
     }
     if (plan.change() == null)
       return plan.candidate(

@@ -497,13 +497,27 @@ public final class CritSpeedCalculation {
     assumptionSources(input, critStat, sources);
     agilitySources(agility, sources);
     // 직업 상태 가정(정답표 표의 피냄새·직업 버프)은 스킬별 치적 기본에도 넣는다.
+    // 분류 한정 직업 버프(창술사 연가공법 → 난무 스킬)는 모든 스킬 기본이 아니라 그 분류 스킬에만 더한다(계산 검증 11-16).
+    for (var source : sources)
+      if (source.kind() == Kind.ASSUMED
+          && source.axis() == Axis.CRIT
+          && CritEffectTable.CATEGORY_LIMITED_BUFFS.containsKey(source.name()))
+        skillBonuses.add(
+            new NodeBonus(
+                source.name(),
+                Axis.CRIT,
+                CritEffectTable.Target.CATEGORY,
+                CritEffectTable.CATEGORY_LIMITED_BUFFS.get(source.name()),
+                source.value(),
+                source.text()));
     var classStateCrit =
         sources.stream()
             .filter(
                 source ->
                     source.kind() == Kind.ASSUMED
                         && source.axis() == Axis.CRIT
-                        && source.classState())
+                        && source.classState()
+                        && !CritEffectTable.CATEGORY_LIMITED_BUFFS.containsKey(source.name()))
             .map(Source::value)
             .reduce(BigDecimal.ZERO, BigDecimal::add);
 
@@ -1717,6 +1731,13 @@ public final class CritSpeedCalculation {
       }
       if (value == null) continue;
       boolean on = input.on(buff.label(), buff.defaultOn());
+      if (on
+          && buff.exclusiveWith() != null
+          && toggles.stream().anyMatch(t -> t.on() && t.key().equals(buff.exclusiveWith()))) {
+        // 같은 효과의 노드 토글을 켰으면 그쪽만 센다(겹쳐 두 번 더하지 않음).
+        on = false;
+        text = text + " (" + buff.exclusiveWith() + " 토글과 같은 효과라 그쪽만 셈)";
+      }
       toggles.add(
           new ToggleState(
               buff.label(), buff.label(), Axis.CRIT, buff.defaultOn(), on, scale(value), text));

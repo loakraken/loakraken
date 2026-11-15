@@ -388,7 +388,20 @@ public final class CritEffectTable {
       String tripod,
       BigDecimal value,
       String basis,
-      boolean defaultOn) {}
+      boolean defaultOn,
+      String exclusiveWith) {
+    /** exclusiveWith = 같은 효과라 동시에 세지 않는 노드 토글 key(그 토글을 켜면 이 가정은 끈다). */
+    public ClassBuff(
+        String label,
+        String className,
+        String skill,
+        String tripod,
+        BigDecimal value,
+        String basis,
+        boolean defaultOn) {
+      this(label, className, skill, tripod, value, basis, defaultOn, null);
+    }
+  }
 
   public static final List<ClassBuff> CLASS_BUFFS =
       List.of(
@@ -449,7 +462,9 @@ public final class CritEffectTable {
               null,
               new BigDecimal("20"),
               "청룡진 연가공법 6초(스킬 버프 가정, 비교 기준이 합계에 넣어 기본 켬)",
-              true),
+              true,
+              // 연가비기 토글(연가공법 16초)과 같은 연가공법 +20이라 함께 세지 않는다(코드 리뷰 #979 P2).
+              "연가비기"),
           // 아르카나 스트림 오브 엣지 '다크니스 엣지' "적중 시 마다 … 치명타 적중률이 3.0초간 5.5% 씩 최대 27.6% 까지 증가한다."
           new ClassBuff(
               "다크니스 엣지 최대 중첩 가정",
@@ -638,7 +653,18 @@ public final class CritEffectTable {
   public static final java.util.Set<String> MAIN_SKILL_LIMITED =
       java.util.Set.of(
           // 블래스터 포격 강화 빌드의 주력 피해는 포격 스킬(계산 검증 11-09 확인: '포격 출력 강화' Lv.3 = 포격 강화 빌드 노드)
-          "포격 출력 강화");
+          "포격 출력 강화",
+          // 표 고치기 A(계산 검증 11-16): 비교 기준 주력기에 들어가는 노드(디스트로이어 해방·서머너 일반·고대의 정령·환수사 둔갑이 주력).
+          "날카로운 해머",
+          "고대의 힘",
+          "깨어난 잠재력");
+
+  /**
+   * 합계에는 넣고 스킬별로는 그 분류(공식 스킬 Tooltip 제목)의 스킬에만 붙는 직업 버프 가정 → 분류. 비교 기준과 같음(계산 검증 11-16: 창술사 연가공법은
+   * '[난무 스킬]'에만, '[집중 스킬]'에는 없음).
+   */
+  public static final Map<String, String> CATEGORY_LIMITED_BUFFS =
+      Map.of("청룡진 연가공법 유지 가정", "난무 스킬");
 
   /**
    * 그 빌드의 주력 스킬이 전투 스킬 목록(스킬별 치명타 적중률) 밖인 토글 key. 이 토글이 있으면(켬·끔 무관) 주력 스킬 치명타 적중률은 목록 스킬이 아니라 시트 쪽

@@ -470,6 +470,9 @@ class CritEffectTableTest {
     assertThat(result.crit().totalRate())
         .isEqualByComparingTo(off.crit().totalRate().add(new BigDecimal("18")));
     assertThat(values(off, Axis.CRIT_DAMAGE, Category.ASSUMPTION)).isEmpty();
+    // 비교 기준 주력기에도 들어간다(계산 검증 11-16: 디스트로이어 주력 99.22).
+    assertThat(result.crit().mainSkillRate())
+        .isEqualByComparingTo(off.crit().mainSkillRate().add(new BigDecimal("18")));
   }
 
   private static CharacterLoadout.Skill categorized(String name, String category) {
@@ -544,12 +547,52 @@ class CritEffectTableTest {
   void 비교_기준이_합계에_넣는_자기_시너지는_원문에_있을_때만_기본_켬으로_더한다() {
     var lance = calculate("창술사", List.of(), List.of(skill("청룡진")), null, Assumptions.NONE);
     assertThat(values(lance, Axis.CRIT, Category.ASSUMPTION)).containsExactly("청룡진 연가공법 유지 가정=20");
+    // 연가공법은 합계에 넣고 스킬별로는 '[난무 스킬]'에만(비교 기준 창술사: 집중 스킬 119.22 그대로, 난무 스킬 +20, 계산 검증 11-16).
+    var lanceSkills =
+        List.of(
+            skill("청룡진"),
+            categorized("반월섬", "난무 스킬"),
+            categorized("적룡포", "집중 스킬"),
+            categorized("유성강천", "집중 스킬"));
+    var lanceOn = calculate("창술사", List.of(), lanceSkills, null, Assumptions.NONE);
+    var lanceOff = calculate("창술사", List.of(), lanceSkills, null, toggle("청룡진 연가공법 유지 가정", false));
+    assertThat(lanceOn.crit().totalRate())
+        .isEqualByComparingTo(lanceOff.crit().totalRate().add(new BigDecimal("20")));
+    assertThat(skill(lanceOn, "반월섬").total())
+        .isEqualByComparingTo(skill(lanceOff, "반월섬").total().add(new BigDecimal("20")));
+    assertThat(skill(lanceOn, "적룡포").total()).isEqualByComparingTo(skill(lanceOff, "적룡포").total());
+    // 주력(가장 많은 스킬 값)은 집중 스킬 쪽이라 그대로.
+    assertThat(lanceOn.crit().mainSkillRate())
+        .isEqualByComparingTo(lanceOff.crit().mainSkillRate());
     assertThat(
             values(
                 calculate("창술사", List.of(), List.of(), null, Assumptions.NONE),
                 Axis.CRIT,
                 Category.ASSUMPTION))
         .isEmpty();
+    // 연가비기 토글(같은 연가공법 +20)을 켜면 청룡진 가정은 꺼져 두 번 세지 않는다(코드 리뷰 #979 P2).
+    var both =
+        calculate(
+            "창술사",
+            List.of(
+                node(
+                    "깨달음 4티어 연가비기 Lv.3",
+                    "연가비기 사용 시 연가공법을 발동시켜 16.0초 동안 치명타 적중률이 20.0% 증가하며, 적중 시 최대 마나의 15.0%를 즉시 회복한다.")),
+            List.of(skill("청룡진")),
+            null,
+            new Assumptions(
+                false,
+                false,
+                0,
+                null,
+                null,
+                null,
+                null,
+                null,
+                true,
+                java.util.Map.of("연가비기", true)));
+    assertThat(values(both, Axis.CRIT, Category.ASSUMPTION))
+        .containsExactly("연가공법 16초 유지 가정(연가비기 Lv.3)=20");
     var arcana =
         calculate(
             "아르카나", List.of(), List.of(skill("스트림 오브 엣지", "다크니스 엣지")), null, Assumptions.NONE);
@@ -567,15 +610,22 @@ class CritEffectTableTest {
             Assumptions.NONE);
     assertThat(values(summoner, Axis.CRIT, Category.ASSUMPTION))
         .containsExactlyInAnyOrder("고대의 힘(일반·고대의 정령 스킬)(고대의 힘 Lv.3)=16", "빛의 성장 버프 상시 유지 가정=11.8");
+    var spiritNodes = List.of(node("깨달음 2티어 깨어난 잠재력 Lv.3", "둔갑 스킬 치명타 적중률이 30.0% 증가한다."));
     var spirit =
         calculate(
-            "환수사",
-            List.of(node("깨달음 2티어 깨어난 잠재력 Lv.3", "둔갑 스킬 치명타 적중률이 30.0% 증가한다.")),
-            List.of(),
-            null,
-            Assumptions.NONE);
+            "환수사", spiritNodes, List.of(categorized("여우 둔갑", "둔갑 스킬")), null, Assumptions.NONE);
     assertThat(values(spirit, Axis.CRIT, Category.ASSUMPTION))
         .containsExactly("깨어난 잠재력(둔갑 스킬)(깨어난 잠재력 Lv.3)=30");
+    // 비교 기준 주력기(둔갑)에도 들어간다(환수사 주력 82.01, 계산 검증 11-16).
+    var spiritOff =
+        calculate(
+            "환수사",
+            spiritNodes,
+            List.of(categorized("여우 둔갑", "둔갑 스킬")),
+            null,
+            toggle("깨어난 잠재력", false));
+    assertThat(spirit.crit().mainSkillRate())
+        .isEqualByComparingTo(spiritOff.crit().mainSkillRate().add(new BigDecimal("30")));
   }
 
   @Test
@@ -1144,6 +1194,11 @@ class CritEffectTableTest {
         null,
         List.of(),
         CharacterLoadout.AttackType.NONE);
+  }
+
+  private static Assumptions toggle(String key, boolean on) {
+    return new Assumptions(
+        false, false, 0, null, null, null, null, null, true, java.util.Map.of(key, on));
   }
 
   private static List<String> values(

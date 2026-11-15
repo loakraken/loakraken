@@ -993,6 +993,27 @@ class CritEffectTableTest {
     assertThat(lineBreak.speed().attack().total()).isEqualByComparingTo("9.32");
   }
 
+  @Test
+  void 자신_및_파티원_문장의_적_대상_공이속_묶음과_띄어쓰기_없는_다음_문장은_파티로_읽지_않는다() {
+    // (1) 같은 문장 안 '적의 공격 속도와 이동 속도가 각각 n% 감소'는 다른 대상이다.
+    var enemy =
+        CritSpeedCalculation.partyTripodSpeeds(
+            "자신 및 파티원의 방어력이 10.0% 증가하고, 적의 공격 속도와 이동 속도가 각각 10.0% 감소한다.");
+    assertThat(enemy.found()).isFalse();
+    var enemyBoth =
+        CritSpeedCalculation.partyTripodSpeeds(
+            "자신 및 파티원의 방어력이 10.0% 증가하고, 적의 공격 및 이동 속도가 10.0% 감소한다.");
+    assertThat(enemyBoth.found()).isFalse();
+    // (2) 마침표 뒤에 띄어쓰기 없이 이어진 다음 문장(태그를 지운 원문)은 다른 문장이다.
+    var joined =
+        CritSpeedCalculation.partyTripodSpeeds("자신 및 파티원의 방어력이 10.0% 증가한다.공격 속도가 8.0% 증가한다.");
+    assertThat(joined.found()).isFalse();
+    // 소수점(8.0)·거리(24.0m)는 문장 끝이 아니다.
+    var decimal =
+        CritSpeedCalculation.partyTripodSpeeds("8.0초간 24.0m 내 자신 및 파티원의 공격속도가 8.0% 증가한다.");
+    assertThat(decimal.attack()).isEqualByComparingTo("8.0");
+  }
+
   private static CritSpeedCalculation.Result party(String effect) {
     return calculate(
         "발키리", List.of(), List.of(tripodSkill("숭고한 도약", "축복", effect)), null, Assumptions.NONE);

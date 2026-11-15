@@ -401,6 +401,19 @@ public class CombatPowerSimulationService {
 
   /** 이미 읽은 캐릭터로 시뮬레이션한다(공식 호출 없음). */
   public Result simulate(CharacterResult result, List<Change> changes) {
+    return simulate(result, models(result), changes);
+  }
+
+  /**
+   * 한 캐릭터 캐시의 계산 모델(보석·재련·팔찌). 캐릭터 캐시에서만 만들고 바꾸지 않으므로, 같은 캐시로 후보 여럿을 잴 때(스펙업 목록) 요청마다 한 번 만들어 나눠
+   * 쓴다.
+   */
+  public record Models(
+      CombatPowerGemModel.Model gem,
+      CombatPowerRefineModel.Model refine,
+      CombatPowerBraceletModel.Model bracelet) {}
+
+  public Models models(CharacterResult result) {
     var loadout = result.details().loadout();
     var gemModel = CombatPowerGemModel.of(gemCoefficients, loadout);
     var refineModel =
@@ -412,10 +425,137 @@ public class CombatPowerSimulationService {
     var braceletModel =
         CombatPowerBraceletModel.of(
             braceletCoefficients, loadout, result.details().profile().stats());
+    return new Models(gemModel, refineModel, braceletModel);
+  }
+
+  /** models는 같은 result로 만든 것이어야 한다(models(result)). */
+  public Result simulate(CharacterResult result, Models models, List<Change> changes) {
+    var loadout = result.details().loadout();
     // 같은 대상은 뒤의 변경이 이긴다. 순서는 처음 나온 자리를 지킨다.
     var merged = new LinkedHashMap<String, Planned>();
     for (var change : changes)
-      merged.put(key(change), describe(loadout, gemModel, refineModel, braceletModel, change));
+      merged.put(
+          key(change), describe(loadout, models.gem(), models.refine(), models.bracelet(), change));
+    return compute(result, models.gem(), models.refine(), models.bracelet(), merged.values());
+  }
+
+  /**
+   * 스펙업 연마 후보의 장신구 바꾸기(공개 시뮬레이터 요청에는 없는 내부 계산). 장비 순번 index의 연마 줄을 lines(줄 순서, 툴팁 꼴 '이름 +값')로 바꾼다.
+   * null 줄은 빠진 줄로 보고 전투력 몫 0(Δ크라켄 점수와 같은 목표 장신구: 지금 고정값 공격력·무기 공격력 줄이 빠진 매물, 규칙은
+   * SpecUpScoreCandidates.swapLines). 지금 줄과 같은 줄은 바꾸지 않는다. 줄마다 POLISH 한 줄 교체와 같은 규칙(수치표 1680 고대만,
+   * 확인하지 않은 계수는 계산하지 않음, 무기 공격력 줄은 재련 모델 W 항)이다. 줄 수가 지금과 다르거나, 목표를 만든 지금 줄(expected, 점수 입력)이 툴팁 줄과
+   * 줄마다 같지 않으면 계산하지 않는다(null). models는 같은 result로 만든 것(models(result)).
+   */
+  public Result simulatePolishSwap(
+      CharacterResult result, Models models, int index, List<String> expected, List<String> lines) {
+    var changes = polishSwapChanges(result, index, expected, lines);
+    return changes == null ? null : simulate(result, models, changes);
+  }
+
+  /** POLISH 변경의 option: 점수 옵션이 없는 줄(전투력 몫 0). */
+  public static final String POLISH_NONE = "NONE";
+
+  static final String POLISH_NONE_TEXT = "점수 옵션 없는 줄";
+
+  /**
+   * 장신구 바꾸기(simulatePolishSwap과 같은 목표)를 공개 시뮬레이터 변경으로: 바뀌는 줄마다 POLISH(index, line, option, grade)
+   * 하나, 빠진 줄은 option NONE. 이 목록을 시뮬레이터에 넣은 값이 simulatePolishSwap과 같다(스펙업 추천 순서 단계를 다시 잴 때 같은 값).
+   * 바뀌는 줄이 먼저(이름 있는 옵션 → NONE). 점수 입력 줄이 툴팁 줄과 다르거나, 목표 줄이 연마 수치표에 없으면 null.
+   */
+  public List<Change> polishSwapChanges(
+      CharacterResult result, int index, List<String> expected, List<String> lines) {
+    return polishSwapChanges(result, index, expected, lines, false);
+  }
+
+  /**
+   * allLines면 지금과 같은 줄도 변경으로 낸다(줄마다 하나, 장신구 전체를 다시 정함). 스펙업 추천 순서는 단계 changes를 차례로 이어 다시 재므로(같은 줄은
+   * 뒤의 변경이 이김), 같은 장신구의 앞 단계가 바꾼 줄을 이 단계가 원래 값으로 되돌릴 때도 그 줄을 내야 한다(계산 검증 11-15 #951 HOLD).
+   */
+  public List<Change> polishSwapChanges(
+      CharacterResult result,
+      int index,
+      List<String> expected,
+      List<String> lines,
+      boolean allLines) {
+    var loadout = result.details().loadout();
+    if (index < 0 || index >= loadout.equipment().size()) return null;
+    var item = loadout.equipment().get(index);
+    if (item == null || item.detail() == null || lines == null || expected == null) return null;
+    var current = item.detail().polishEffects();
+    if (current.size() != lines.size() || current.size() != expected.size()) return null;
+    // 줄 짝은 순서로 맞추므로, 목표 줄을 만든 지금 줄(점수 입력)이 툴팁 줄과 줄마다 같아야 한다. 하나라도 다르면(두 원문 파서가 갈라짐) 틀린 Δ 대신 계산하지
+    // 않는다(코드 리뷰 #945 P3).
+    for (int line = 0; line < current.size(); line++) {
+      var now = current.get(line);
+      if (now == null || expected.get(line) == null) return null;
+      if (!sameLine(expected.get(line), now.name() + " " + now.value())) return null;
+    }
+    var named = new ArrayList<Change>();
+    var none = new ArrayList<Change>();
+    for (int line = 0; line < lines.size(); line++) {
+      var now = current.get(line);
+      var next = lines.get(line);
+      if (!allLines && next != null && sameLine(next, now.name() + " " + now.value())) continue;
+      if (next == null) {
+        none.add(polishChange(index, line, POLISH_NONE, null));
+        continue;
+      }
+      var target = polishTarget(item.type(), next);
+      if (target == null) return null;
+      named.add(polishChange(index, line, target[0], target[1]));
+    }
+    named.addAll(none);
+    return List.copyOf(named);
+  }
+
+  private static Change polishChange(int index, int line, String option, String grade) {
+    return new Change(
+        Kind.POLISH,
+        null,
+        index,
+        line,
+        null,
+        null,
+        null,
+        option,
+        grade,
+        null,
+        null,
+        null,
+        null,
+        null);
+  }
+
+  /** 툴팁 꼴 줄('이름 +값')의 POLISH option(% 옵션은 끝에 " %")과 등급(LOW·MID·HIGH). 수치표에 없으면 null. */
+  private String[] polishTarget(String part, String text) {
+    int split = text.lastIndexOf(" +");
+    if (split <= 0) return null;
+    var name = text.substring(0, split);
+    var value = text.substring(split + 1);
+    boolean percent = value.endsWith("%");
+    for (var row : polishValues.options())
+      if (row.option().equals(name) && row.percent() == percent && row.parts().contains(part)) {
+        String grade =
+            value.equals(row.low())
+                ? "LOW"
+                : value.equals(row.mid()) ? "MID" : value.equals(row.high()) ? "HIGH" : null;
+        return grade == null ? null : new String[] {percent ? name + " %" : name, grade};
+      }
+    return null;
+  }
+
+  /** 같은 줄인지(빈칸·천 단위 쉼표 차이는 무시: 점수 입력 줄과 툴팁 줄의 표기 차이). */
+  private static boolean sameLine(String a, String b) {
+    return a.replaceAll("[\\s,]", "").equals(b.replaceAll("[\\s,]", ""));
+  }
+
+  private Result compute(
+      CharacterResult result,
+      CombatPowerGemModel.Model gemModel,
+      CombatPowerRefineModel.Model refineModel,
+      CombatPowerBraceletModel.Model braceletModel,
+      java.util.Collection<Planned> merged) {
+    var loadout = result.details().loadout();
     var official = result.details().profile().combatPower();
     // 반올림은 서버에서 끝낸다(PM-프론트 18:31 (g)): 전투력 소수 둘째 자리, deltaPercent 소수 셋째 자리.
     var before = official == null ? null : official.setScale(2, RoundingMode.HALF_UP);
@@ -427,7 +567,7 @@ public class CombatPowerSimulationService {
     var contributions = new ArrayList<Contribution>();
     int unsupported = 0;
     var roleReason = roleReason(result);
-    for (var planned : merged.values()) {
+    for (var planned : merged) {
       String reason = roleReason != null ? roleReason : planned.reason();
       if (roleReason == null) {
         var hold = heldReason(loadout, braceletModel, planned);
@@ -972,22 +1112,29 @@ public class CombatPowerSimulationService {
             || change.line() < 0
             || change.line() >= item.detail().polishEffects().size())
           throw notFound("연마 효과 index " + change.index() + " line " + change.line());
-        text("option", change.option());
-        grade(change.grade());
+        // NONE: 점수 옵션이 없는 줄(전투력 몫 0). 스펙업 연마 단계가 사는 장신구의 빠진 줄(지금 고정값 줄)을 나타낸다(PM 총괄 11-15 (c) A안).
+        boolean none = POLISH_NONE.equals(change.option());
+        if (!none) {
+          text("option", change.option());
+          grade(change.grade());
+        }
         var current = item.detail().polishEffects().get(change.line());
         // 수치표는 한 아이템 레벨·등급(지금 1680 고대) 값이다. 다른 장신구(예: 1540)는 같은 등급도 값이 달라 계산하지 않는다(코드 리뷰 10-25).
         boolean tableFits = polishTableFits(polishValues, item);
         var value =
-            tableFits
+            tableFits && !none
                 ? polishValue(polishValues, item.type(), change.option(), change.grade(), current)
                 : null;
-        var option = optionName(change.option());
+        var option = none ? null : optionName(change.option());
         var from = CombatPowerPolishModel.line(current.name(), current.value());
-        var to = value == null ? null : CombatPowerPolishModel.line(option, value);
+        var to =
+            none
+                ? CombatPowerPolishModel.Line.NEUTRAL
+                : value == null ? null : CombatPowerPolishModel.line(option, value);
         String reason =
             !tableFits
                 ? POLISH_TABLE_MISMATCH
-                : value == null
+                : !none && value == null
                     ? "이 부위·연마 옵션·등급의 수치를 확인하지 않아 계산하지 않았습니다."
                     : from == null
                         ? "지금 연마 줄("
@@ -1000,7 +1147,9 @@ public class CombatPowerSimulationService {
             change,
             item.name() + " 연마 " + (change.line() + 1),
             current.name() + " " + current.value(),
-            value == null ? change.option() + " " + change.grade() : option + " " + value,
+            none
+                ? POLISH_NONE_TEXT
+                : value == null ? change.option() + " " + change.grade() : option + " " + value,
             reason == null ? new PolishEffect(key(change), from, to) : null,
             POLISH_BASIS,
             // 무기 공격력 줄은 재련 모델의 W 항을 쓰므로 그 모델을 만들 수 있어야 한다. 무공 줄 비율은 비교 기준 B 시뮬레이터 교체 값과

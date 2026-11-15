@@ -3,6 +3,7 @@ package com.loakraken.specup.presentation;
 import com.loakraken.character.application.CombatPowerSimulationService;
 import com.loakraken.common.api.ApiResponse;
 import com.loakraken.common.api.NullableResponse;
+import com.loakraken.common.api.OptionalResponse;
 import com.loakraken.common.api.ResponseContracts;
 import com.loakraken.common.api.SuccessCode;
 import com.loakraken.specup.application.SpecUpGoalService;
@@ -118,7 +119,7 @@ public class SpecUpController {
               + "보석 단계의 cost는 지금에서 그 레벨까지의 누적 비용(스펙업 목록의 같은 목표 후보 비용과 같은 식, 음수 없음)이고, 같은 칸을 이어서 올리면 cumulativeCost·totalCost에는 그 칸의 마지막 단계 누적만 들어갑니다(단계 비용을 더하지 않음). 단계마다 따로 구해 그 레벨 시세가 없으면 그 단계만 비용을 모릅니다. "
               + "딜러가 아니거나 공식 전투력이 없으면 200, 빈 steps, stopReasonCode에 스펙업 가이드와 같은 이유 코드를 줍니다. "
               + "최대 30단계, 계산 시간 상한이 있습니다. 같은 캐릭터 수집 시각·시세 시각·목표는 10분 동안 캐시합니다(시간 상한으로 멈춘 결과는 캐시하지 않음). "
-              + "요청이 많으면 429 CLIENT_RATE_LIMITED와 Retry-After(초)를 줍니다. 503은 저장소 장애이고 Retry-After가 없으니 잠시 뒤 다시 요청합니다. "
+              + "요청이 많으면 429 CLIENT_RATE_LIMITED와 Retry-After(초)를, 계산이 몰리면 기다리지 않고 429 SPEC_UP_BUSY와 Retry-After(초)를 줍니다. 503은 저장소 장애이고 Retry-After가 없으니 잠시 뒤 다시 요청합니다. "
               + "stopReasonCode·kind·cost.code는 문자열이며 값이 늘 수 있습니다.")
   @ApiResponses({
     @io.swagger.v3.oas.annotations.responses.ApiResponse(
@@ -132,6 +133,10 @@ public class SpecUpController {
     @io.swagger.v3.oas.annotations.responses.ApiResponse(
         responseCode = "404",
         description = "SPEC_UP_DISABLED: 기능이 꺼져 있음 · CHARACTER_NOT_CACHED: 캐릭터를 먼저 검색해야 함",
+        content = @Content(schema = @Schema(ref = "#/components/schemas/ErrorResponse"))),
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(
+        responseCode = "429",
+        description = "SPEC_UP_BUSY: 목표 경로 계산 자리가 모두 차 있음(기다리지 않음, Retry-After 초 뒤 다시)",
         content = @Content(schema = @Schema(ref = "#/components/schemas/ErrorResponse"))),
     @io.swagger.v3.oas.annotations.responses.ApiResponse(
         responseCode = "503",
@@ -316,7 +321,7 @@ public class SpecUpController {
           Long extraCost,
       @Schema(
               description =
-                  "이 단계의 시뮬레이터 변경 전부(전투력 시뮬레이터 요청의 changes[]와 같은 모양). 대부분 하나(= change)이고, 어빌리티 스톤은 각인 둘. 다시 잴 때는 단계마다 이 목록을 넣고 같은 칸(candidateId의 마지막 ':' 앞)은 마지막 단계의 목록만 남긴다")
+                  "이 단계의 시뮬레이터 변경 전부(전투력 시뮬레이터 요청의 changes[]와 같은 모양). 대부분 하나(= change)이고, 어빌리티 스톤은 각인 둘. 다시 잴 때는 단계마다 이 목록을 넣고 같은 칸(candidateId의 마지막 ':' 앞)은 마지막 단계의 목록만 남긴다. 장신구 연마(POLISH) 단계는 그 장신구의 처음 상태와 다른 줄마다 POLISH 하나(빠지는 줄은 option NONE, 이름 있는 옵션이 먼저)에, 같은 장신구의 앞 단계가 바꾼 줄 가운데 이 단계가 바꾸지 않는 줄을 처음 값으로 되돌리는 POLISH를 더한 목록이다. 그래서 칸마다 마지막 목록만 남기든, 모든 단계를 차례로 이어 줄마다 뒤의 변경이 이기게 하든 단계 전투력과 같다")
           List<ChangeResponse> changes) {
     static SpecUpGoalStepResponse from(SpecUpGoalService.Step step) {
       return new SpecUpGoalStepResponse(
@@ -471,7 +476,7 @@ public class SpecUpController {
       @Schema(description = "같은 캐릭터·같은 후보면 늘 같은 값(목록 키)", example = "GEM_LEVEL:3:8") String id,
       @Schema(
               description =
-                  "후보 종류(문자열, 값이 늘 수 있음). 시뮬레이터 kind와 같다. POLISH(장신구 연마 교체)·ABILITY_STONE(어빌리티 스톤)·KARMA_LEVEL(깨달음 카르마)은 크라켄 점수를 낼 수 있으면 후보마다 한 줄(change null·전투력 UNSUPPORTED·deltaKrakenScore 있음)이고, 그럴 수 없으면 종류마다 한 줄 UNSUPPORTED 알림",
+                  "후보 종류(문자열, 값이 늘 수 있음). 시뮬레이터 kind와 같다. POLISH(장신구 연마 교체)·ABILITY_STONE(어빌리티 스톤)·KARMA_LEVEL(깨달음 카르마)은 크라켄 점수를 낼 수 있으면 후보마다 한 줄(change null·전투력 UNSUPPORTED·deltaKrakenScore 있음)이고, 그럴 수 없으면 종류마다 한 줄 UNSUPPORTED 알림. 다만 연마 교체 줄 전투력 스위치가 켜지면 딜러 POLISH 줄은 Δ크라켄 점수와 같은 목표 장신구로, 스톤 줄 전투력 스위치가 켜지면 ABILITY_STONE 줄은 추천 순서와 같은 변경(STONE_ENGRAVING 둘)으로 전투력도 낸다(status OK, change는 그대로 null)",
               example = "GEM_LEVEL")
           String kind,
       @Schema(description = "화면에 그대로 쓰는 대상 이름", example = "블레이드 버스트 · 7레벨 겁화") String target,
@@ -604,8 +609,21 @@ public class SpecUpController {
       @NullableResponse Integer refine,
       @NullableResponse Integer quality,
       @NullableResponse String name,
-      @Schema(description = "팔 보호구 등급(ARM_GUARD만, 영웅·전설·유물·고대). 그 밖에는 null") @NullableResponse
-          String grade) {
+      @Schema(
+              description =
+                  "팔 보호구 등급(ARM_GUARD, 영웅·전설·유물·고대) 또는 연마 등급(POLISH, LOW·MID·HIGH, option NONE이면 null). 그 밖에는 null")
+          @NullableResponse
+          String grade,
+      @Schema(description = "연마 효과 줄 번호(POLISH만, 0부터). 그 밖에는 null. 배포 순서 때문에 계약에서는 아직 선택 필드")
+          @NullableResponse
+          @OptionalResponse
+          Integer line,
+      @Schema(
+              description =
+                  "연마 옵션(POLISH만, 시뮬레이터 요청 option과 같은 값: % 옵션은 끝에 \" %\", 점수 옵션이 없는 줄은 \"NONE\"). 그 밖에는 null. 배포 순서 때문에 계약에서는 아직 선택 필드")
+          @NullableResponse
+          @OptionalResponse
+          String option) {
     static ChangeResponse from(CombatPowerSimulationService.Change change) {
       return change == null
           ? null
@@ -617,7 +635,9 @@ public class SpecUpController {
               change.refine(),
               change.quality(),
               change.name(),
-              change.grade());
+              change.grade(),
+              change.line(),
+              change.option());
     }
   }
 

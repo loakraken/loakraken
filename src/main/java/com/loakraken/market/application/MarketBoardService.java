@@ -72,12 +72,27 @@ public class MarketBoardService {
    */
   public MarketBoard board(
       MarketTab tab, Integer tier, MarketBoardRules.Sort sort, int page, String query) {
+    return board(tab, tier, sort, page, query, null);
+  }
+
+  /**
+   * grade(공식 아이템 등급 이름)가 있으면 query처럼 탭 전체 스캔에서 그 등급만 남긴 뒤 정렬·페이지를 적용한다(공식 추가 호출 없음). query와 함께 쓰면 둘
+   * 다 맞는 품목만 남는다.
+   */
+  public MarketBoard board(
+      MarketTab tab,
+      Integer tier,
+      MarketBoardRules.Sort sort,
+      int page,
+      String query,
+      String grade) {
     Integer effectiveTier = tier == null ? tab.defaultTier() : tier;
-    if (query != null) {
+    if (query != null || grade != null) {
       var scan = scan(tab, effectiveTier);
       var matched =
           scan.items().stream()
-              .filter(item -> MarketBoardRules.nameMatches(item.name(), query))
+              .filter(item -> query == null || MarketBoardRules.nameMatches(item.name(), query))
+              .filter(item -> grade == null || grade.equals(item.grade()))
               .toList();
       var volumes =
           sort == MarketBoardRules.Sort.VOLUME
@@ -269,7 +284,8 @@ public class MarketBoardService {
   }
 
   /**
-   * 거래량 채우기 돌림 탭 전용: 탭 기본 티어·기본 정렬의 page번째 페이지(공식 검색 1회, 캐시 없음). 보드 스캔의 10페이지 상한과 상관없이 끝까지 받을 수 있다.
+   * 거래량 채우기 돌림 탭 전용: 탭 기본 티어·기본 정렬의 page번째 페이지. 일반 검색과 같은 시세 검색 캐시를 거치므로 캐시에 있으면 공식 호출이 없다(그래도 채우기
+   * 작업은 1번으로 미리 센다). 보드 스캔의 10페이지 상한과 상관없이 끝까지 받을 수 있다.
    */
   public MarketPage volumePage(MarketTab tab, int page) {
     return markets

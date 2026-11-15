@@ -216,6 +216,16 @@ spec-up:
   # 팔 보호구(완갑) 재련 줄: 기본 켬. 끄면 목록과 줄 상세에서 완갑 줄을 뺀다(되돌리기 없이 숨김).
   arm-guard:
     enabled: ${SPEC_UP_ARM_GUARD_ENABLED:true}
+  # 연마 교체 줄의 Δ전투력: 기본 끔. 켜면 딜러 연마 교체 줄(1680 고대)에 Δ크라켄 점수와 같은 목표 장신구로 Δ전투력을 낸다(계산 검증 판정 뒤 켬).
+  polish-cp:
+    enabled: ${SPEC_UP_POLISH_CP_ENABLED:false}
+  # 어빌리티 스톤 줄의 Δ전투력: 기본 끔. 켜면 스톤 줄에 추천 순서와 같은 변경(스톤 각인 둘)으로 Δ전투력을 낸다(계산 검증 판정 뒤 켬).
+  stone-cp:
+    enabled: ${SPEC_UP_STONE_CP_ENABLED:false}
+  # 추천 순서·목표 경로의 연마 단계: 기본 끔. 켜면 딜러 연마 교체 줄을 단계 후보로 넣는다(빠진 줄은 시뮬레이터 POLISH option NONE). 웹이 NONE을
+  # 표시·다시 재기까지 처리한 뒤, 계산 검증 판정 뒤 켬.
+  polish-path:
+    enabled: ${SPEC_UP_POLISH_PATH_ENABLED:false}
 
 # 재련 계획 숨결 OPTIMAL(#754): 화면이 붙을 때(v0.3.4)까지 꺼짐. 꺼져 있으면 breath=OPTIMAL은 400. 캐시에 없는 단계 풀이는 동시에
 # max-concurrent-solves개까지(넘으면 바로 429).

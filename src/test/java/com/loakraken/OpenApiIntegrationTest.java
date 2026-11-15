@@ -73,6 +73,36 @@ class OpenApiIntegrationTest {
                 .asText())
         .isEqualTo("null");
     assertThat(document.at("/components/schemas/GemsResponse/type").asText()).isEqualTo("object");
+    // 단순 이름이 같은 두 레코드는 스키마를 따로 둔다: 캐릭터 보석 레벨별 개수(level, count)와 통계 아이템 레벨 구간(from, to, count).
+    assertThat(
+            document.at("/components/schemas/CharacterLevelCountResponse/properties").has("level"))
+        .isTrue();
+    assertThat(document.at("/components/schemas/LevelCountResponse/properties").has("from"))
+        .isTrue();
+    // 필수 규칙도 각자 스키마에(이름이 같은 다른 레코드의 규칙이 덮지 않게). 생성 문서는 required를 이름순으로 낸다.
+    assertThat(
+            document
+                .at("/components/schemas/CharacterLevelCountResponse/required")
+                .valueStream()
+                .map(n -> n.asText())
+                .toList())
+        .containsExactlyInAnyOrder("level", "count");
+    assertThat(
+            document
+                .at("/components/schemas/LevelCountResponse/required")
+                .valueStream()
+                .map(n -> n.asText())
+                .toList())
+        .containsExactlyInAnyOrder("from", "to", "count");
+    // 경매장 칸 기간: 저장이 없으면 recordedSince는 null(계약에 null 허용), 나머지는 필수.
+    assertThat(
+            document
+                .at(
+                    "/components/schemas/AuctionCellHistoryResponse/properties/recordedSince/anyOf/1/type")
+                .asText())
+        .isEqualTo("null");
+    assertThat(document.at("/components/schemas/AuctionCellHistoryResponse/required").toString())
+        .contains("ruleVersion", "range", "recordedSince", "storedDays", "days");
     // 보석별 기본 공격력 %(#543): 두 필드 모두 required이고 null을 허용하며, 근거 값은 enum이 아닌 문자열이다(값이 늘 수 있음).
     assertThat(document.at("/components/schemas/GemResponse/required").toString())
         .contains("baseAttackPct", "baseAttackPctSource");
@@ -140,7 +170,12 @@ class OpenApiIntegrationTest {
     // 아바타별 성향(다음 릴리스): 응답은 늘 보내지만(없으면 빈 목록) api 배포 전까지 계약에서는 선택 필드다(배포 순서 규칙).
     assertThat(document.at("/components/schemas/AvatarResponse/required").toString())
         .contains("effects")
-        .doesNotContain("tendencies");
+        .doesNotContain("tendencies", "overlay");
+    // 덧입기 표시(다음 릴리스): true/false/null(모름). api 배포 전까지 선택 필드, enum 아님.
+    var overlay = document.at("/components/schemas/AvatarResponse/properties/overlay");
+    assertThat(overlay.at("/anyOf").valueStream().map(n -> n.at("/type").asText()).toList())
+        .containsExactlyInAnyOrder("boolean", "null");
+    assertThat(overlay.toString()).doesNotContain("\"enum\"");
     assertThat(
             document.at("/components/schemas/AvatarResponse/properties/tendencies/type").asText())
         .isEqualTo("array");

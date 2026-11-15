@@ -118,6 +118,21 @@ class MarketBoardIntegrationTest {
                 .body());
     assertThat(initials.at("/data/totalItems").asInt()).isEqualTo(13);
     assertThat(initials.at("/data/items/0/itemId").asLong()).isEqualTo(13L);
+    // 등급 거르기: 같은 스캔 캐시(공식 추가 호출 0), 응답에 등급을 돌려줌. 없으면 null.
+    var relic =
+        mapper.readTree(
+            get("/api/v1/markets/board?tab=ENGRAVING_BOOK&grade="
+                    + java.net.URLEncoder.encode("유물", java.nio.charset.StandardCharsets.UTF_8))
+                .body());
+    assertThat(relic.at("/data/grade").asText()).isEqualTo("유물");
+    assertThat(relic.at("/data/totalItems").asInt()).isZero();
+    var common =
+        mapper.readTree(
+            get("/api/v1/markets/board?tab=ENGRAVING_BOOK&grade="
+                    + java.net.URLEncoder.encode("일반", java.nio.charset.StandardCharsets.UTF_8))
+                .body());
+    assertThat(common.at("/data/totalItems").asInt()).isEqualTo(13);
+    assertThat(named.at("/data/grade").isNull()).isTrue();
     verify(prices, times(2)).fetch(any(), any());
     ApiContractFixture.write("market-board.json", response.body());
   }
@@ -314,7 +329,9 @@ class MarketBoardIntegrationTest {
         "tab=REFINING&tier=5",
         "tab=REFINING&q=aaaaaaaaaaaaaaaaaaaaa",
         "tab=REFINING&q=a%3Cb",
-        "tab=REFINING&q=%25"
+        "tab=REFINING&q=%25",
+        "tab=REFINING&grade=%EC%A0%84%EC%84%A4x",
+        "tab=REFINING&grade=RELIC"
       })
   void 잘못된_보드_조건은_조회_전에_400이다(String query) throws Exception {
     var response = get("/api/v1/markets/board?" + query);

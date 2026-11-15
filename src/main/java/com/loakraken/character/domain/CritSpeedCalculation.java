@@ -1492,7 +1492,7 @@ public final class CritSpeedCalculation {
   }
 
   /** 문장 끝(마침표 뒤 공백). 8.0·24.0m 같은 숫자 안의 점은 뒤에 공백이 없어 나누지 않는다. */
-  private static final Pattern SENTENCE_END = Pattern.compile("(?<=\\.)\\s+");
+  private static final Pattern SENTENCE_END = Pattern.compile("(?<=\\.)\\s+|(?<=\\.)(?=[가-힣])");
 
   /** 한 문장 안의 "자신 및 (범위 안의) 파티원의 ". 이 뒤가 자신과 파티원이 함께 받는 효과다. */
   private static final Pattern PARTY_SUBJECT = Pattern.compile("자신 및.{0,30}?파티원의\\s*");
@@ -1537,6 +1537,11 @@ public final class CritSpeedCalculation {
       var eachSpans = new ArrayList<int[]>();
       var each = PARTY_EACH.matcher(clause);
       while (each.find()) {
+        // '적의 공격 속도와 이동 속도가 각각 n%'처럼 다른 대상의 묶음은 자기 속도가 아니다.
+        if (otherTarget(clause, each.start())) {
+          eachSpans.add(new int[] {each.start(), each.end()});
+          continue;
+        }
         var direction = each.group(3);
         var a = signed(each.group(1), direction);
         var m = each.group(2) == null ? a : signed(each.group(2), direction);
@@ -1547,6 +1552,10 @@ public final class CritSpeedCalculation {
       var both = BOTH_SPEED.matcher(clause);
       while (both.find()) {
         if (inside(eachSpans, both.start())) continue;
+        if (otherTarget(clause, both.start())) {
+          eachSpans.add(new int[] {both.start(), both.end()});
+          continue;
+        }
         var value = signed(both.group(1), both.group(2));
         found.add(
             new Source(Kind.ASSUMED, Category.ASSUMPTION, Axis.ATTACK_SPEED, "", value, clause));
@@ -1567,6 +1576,12 @@ public final class CritSpeedCalculation {
         else move = move == null ? source.value() : move.add(source.value());
     }
     return new PartySpeeds(attack, move, rest.toString().strip());
+  }
+
+  /** 문구의 start 앞이 '…의 '(자신의 제외)로 끝나면 다른 대상 한정이다(speed()와 같은 규칙). */
+  private static boolean otherTarget(String text, int start) {
+    var before = text.substring(0, start).stripTrailing();
+    return before.endsWith("의") && !before.endsWith("자신의");
   }
 
   /** 레벨 2 이상 스킬의 선택 트라이포드 공이속을 트라이포드 표로 판정한다. */

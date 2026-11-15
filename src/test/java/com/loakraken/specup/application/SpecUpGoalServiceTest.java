@@ -64,6 +64,52 @@ class SpecUpGoalServiceTest {
     assertThat(store.saved).isEmpty();
   }
 
+  /**
+   * 연마 단계 스위치가 꺼져 있으면(연마 후보 없음) 목표 경로·추천 순서 캐시 키는 연마 단계를 넣기 전(develop)과 글자까지 같다. 배포 뒤 기존 캐시를 그대로
+   * 쓴다(코드 리뷰 #951 P2: 키 끝에 '-'가 붙어 배포 뒤 캐시가 한꺼번에 비었다).
+   */
+  @Test
+  void 연마_단계_스위치가_꺼지면_캐시_키는_연마_단계_전과_같다() {
+    var service = service(System::nanoTime);
+    service.goal("목표테스트", new BigDecimal("3002"));
+    service.path("목표테스트", SpecUpGoalService.Pick.EFFICIENCY, 5);
+    var fetched = String.valueOf(Instant.parse("2026-10-12T00:00:00Z").toEpochMilli());
+    // 서버·이름·목표·수집 시각·보석 시세 시각·이전 시세 칸·재련 시세 시각·각인서 시세 시각·규칙 버전 셋·완갑 스위치.
+    assertThat(store.saved.keySet())
+        .containsExactly(
+            String.join(
+                ":",
+                "목표서버",
+                "목표테스트",
+                "3002.00",
+                fetched,
+                "0",
+                "0",
+                "0",
+                "0",
+                SpecUpGoalService.RULE_VERSION,
+                CombatPowerSimulationService.RULE_VERSION,
+                "null",
+                "-"));
+    assertThat(store.paths.keySet())
+        .containsExactly(
+            String.join(
+                ":",
+                "목표서버",
+                "목표테스트",
+                "EFFICIENCY",
+                "5",
+                fetched,
+                "0",
+                "0",
+                "0",
+                "0",
+                SpecUpGoalService.PATH_RULE_VERSION,
+                CombatPowerSimulationService.RULE_VERSION,
+                "null",
+                "-"));
+  }
+
   @Test
   void 각인서_시세_시각이_바뀌면_캐시_키가_달라져_다시_계산하고_그대로면_캐시를_쓴다() {
     var service = service(System::nanoTime);
@@ -482,7 +528,7 @@ class SpecUpGoalServiceTest {
   @Test
   void 추천_순서_계산_자리가_차_있으면_바로_SPEC_UP_BUSY다() throws Exception {
     var service = service(System::nanoTime);
-    var field = SpecUpGoalService.class.getDeclaredField("pathSolves");
+    var field = SpecUpGoalService.class.getDeclaredField("solves");
     field.setAccessible(true);
     var slots = (java.util.concurrent.Semaphore) field.get(service);
     slots.acquire(slots.availablePermits());
@@ -493,6 +539,135 @@ class SpecUpGoalServiceTest {
             e ->
                 assertThat(((com.loakraken.common.api.BusinessException) e).errorCode())
                     .isEqualTo(SpecUpErrorCode.SPEC_UP_BUSY));
+    assertThat(meters.counter("loakraken.spec_up.path", "outcome", "busy").count()).isEqualTo(1);
+  }
+
+  /** 목표 경로 계산도 자리(2)가 모두 차 있으면 기다리지 않고 429 SPEC_UP_BUSY. 끝난 계산은 자리를 돌려준다(보안 점검 11-13). */
+  @Test
+  void 목표_경로_계산_자리가_차_있으면_바로_SPEC_UP_BUSY이고_끝나면_자리를_돌려준다() throws Exception {
+    var service = service(System::nanoTime);
+    var field = SpecUpGoalService.class.getDeclaredField("solves");
+    field.setAccessible(true);
+    var slots = (java.util.concurrent.Semaphore) field.get(service);
+    int permits = slots.availablePermits();
+    assertThat(permits).isEqualTo(2);
+    slots.acquire(permits);
+    org.assertj.core.api.Assertions.assertThatThrownBy(
+            () -> service.goal("목표테스트", new BigDecimal("6000")))
+        .isInstanceOf(com.loakraken.common.api.BusinessException.class)
+        .satisfies(
+            e ->
+                assertThat(((com.loakraken.common.api.BusinessException) e).errorCode())
+                    .isEqualTo(SpecUpErrorCode.SPEC_UP_BUSY));
+    assertThat(meters.counter("loakraken.spec_up.goal", "outcome", "busy").count()).isEqualTo(1);
+
+    slots.release(permits);
+    service.goal("목표테스트", new BigDecimal("6000"));
+    assertThat(slots.availablePermits()).isEqualTo(2);
+    assertThat(meters.counter("loakraken.spec_up.goal", "outcome", "computed").count())
+        .isEqualTo(1);
+  }
+
+  /** 추천 순서와 목표 경로는 계산 자리 2개를 함께 쓴다(운영 4GB, PM 11-13): 추천 순서가 둘 다 쓰면 목표 경로도 바로 SPEC_UP_BUSY. */
+  @Test
+  void 추천_순서와_목표_경로는_계산_자리_2개를_함께_쓴다() throws Exception {
+    var service = service(System::nanoTime);
+    var field = SpecUpGoalService.class.getDeclaredField("solves");
+    field.setAccessible(true);
+    var slots = (java.util.concurrent.Semaphore) field.get(service);
+    assertThat(slots.availablePermits()).isEqualTo(2);
+    slots.acquire(2);
+    org.assertj.core.api.Assertions.assertThatThrownBy(
+            () -> service.goal("목표테스트", new BigDecimal("6000")))
+        .isInstanceOf(com.loakraken.common.api.BusinessException.class)
+        .satisfies(
+            e ->
+                assertThat(((com.loakraken.common.api.BusinessException) e).errorCode())
+                    .isEqualTo(SpecUpErrorCode.SPEC_UP_BUSY));
+    slots.release(2);
+  }
+
+  /**
+   * 실제 경합: 추천 순서 계산 둘이 자리 2개를 잡고 있으면(계산 중) 세 번째 호출은 추천 순서든 목표 경로든 바로 429 SPEC_UP_BUSY. 계산이 끝나면 목표
+   * 경로가 자리를 잡아 계산한다.
+   */
+  @Test
+  void 추천_순서_계산_둘이_자리를_쓰는_동안_세_번째_호출은_종류와_상관없이_바로_SPEC_UP_BUSY다() throws Exception {
+    var entered = new java.util.concurrent.CountDownLatch(2);
+    var release = new java.util.concurrent.CountDownLatch(1);
+    var holding = java.util.concurrent.ConcurrentHashMap.<String>newKeySet();
+    LongSupplier clock =
+        () -> {
+          var name = Thread.currentThread().getName();
+          // 계산 자리 안에서 처음 읽는 시각: 추천 순서 계산 스레드는 여기서 놓아줄 때까지 기다린다.
+          if (name.startsWith("seat-path-") && holding.add(name)) {
+            entered.countDown();
+            try {
+              // 놓아주지 못하고 시간이 다 되면 그냥 계산을 이어가지 않고 실패로 남긴다(조용히 통과하지 않게).
+              if (!release.await(10, java.util.concurrent.TimeUnit.SECONDS))
+                throw new AssertionError("계산 자리 놓아주기 대기 시간 초과");
+            } catch (InterruptedException exception) {
+              Thread.currentThread().interrupt();
+              throw new AssertionError("계산 자리 놓아주기 대기 중 중단", exception);
+            }
+          }
+          return System.nanoTime();
+        };
+    var service = service(clock);
+    var errors = new java.util.concurrent.ConcurrentLinkedQueue<Throwable>();
+    var first =
+        new Thread(
+            () -> {
+              try {
+                service.path("목표테스트", SpecUpGoalService.Pick.EFFICIENCY, 3);
+              } catch (Throwable error) {
+                errors.add(error);
+              }
+            },
+            "seat-path-1");
+    var second =
+        new Thread(
+            () -> {
+              try {
+                service.path("목표테스트", SpecUpGoalService.Pick.EFFICIENCY, 4);
+              } catch (Throwable error) {
+                errors.add(error);
+              }
+            },
+            "seat-path-2");
+    first.start();
+    second.start();
+    try {
+      assertThat(entered.await(10, java.util.concurrent.TimeUnit.SECONDS))
+          .as("추천 순서 계산 둘이 자리를 잡음")
+          .isTrue();
+
+      for (org.assertj.core.api.ThrowableAssert.ThrowingCallable third :
+          List.<org.assertj.core.api.ThrowableAssert.ThrowingCallable>of(
+              () -> service.goal("목표테스트", new BigDecimal("6000")),
+              () -> service.path("목표테스트", SpecUpGoalService.Pick.EFFICIENCY, 5)))
+        org.assertj.core.api.Assertions.assertThatThrownBy(third)
+            .isInstanceOf(com.loakraken.common.api.BusinessException.class)
+            .satisfies(
+                e ->
+                    assertThat(((com.loakraken.common.api.BusinessException) e).errorCode())
+                        .isEqualTo(SpecUpErrorCode.SPEC_UP_BUSY));
+    } finally {
+      release.countDown();
+      first.join(10_000);
+      second.join(10_000);
+    }
+    assertThat(first.isAlive()).as("추천 순서 계산 1이 끝남").isFalse();
+    assertThat(second.isAlive()).as("추천 순서 계산 2가 끝남").isFalse();
+    assertThat(errors).isEmpty();
+    // 자리가 비면 목표 경로가 계산한다. 계산 시간은 추천 순서처럼 타이머(p95·p99)로 남는다.
+    service.goal("목표테스트", new BigDecimal("6000"));
+    assertThat(meters.counter("loakraken.spec_up.goal", "outcome", "computed").count())
+        .isEqualTo(1);
+    var goalTimer = meters.find("loakraken.spec_up.goal_compute").timer();
+    assertThat(goalTimer).as("목표 경로 계산 시간 타이머").isNotNull();
+    assertThat(goalTimer.count()).isEqualTo(1);
+    assertThat(meters.counter("loakraken.spec_up.goal", "outcome", "busy").count()).isEqualTo(1);
     assertThat(meters.counter("loakraken.spec_up.path", "outcome", "busy").count()).isEqualTo(1);
   }
 

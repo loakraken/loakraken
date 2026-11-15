@@ -29,9 +29,10 @@ public final class ResponseContracts {
         || !recordType.isRecord()
         || !recordType.getPackageName().equals(packageName)
         || !visited.add(recordType)) return;
-    var schema = schemas.get(recordType.getSimpleName());
-    if (schema == null)
-      throw new IllegalStateException("응답 스키마를 찾을 수 없습니다: " + recordType.getSimpleName());
+    // 스키마 이름은 @Schema(name)이 있으면 그것, 없으면 단순 이름(springdoc과 같은 규칙). 단순 이름이 같은 다른 레코드의 스키마에 규칙을 쓰지 않게.
+    var name = schemaName(recordType);
+    var schema = schemas.get(name);
+    if (schema == null) throw new IllegalStateException("응답 스키마를 찾을 수 없습니다: " + name);
     var required = new ArrayList<String>();
     for (var component : recordType.getRecordComponents()) {
       if (!component.isAnnotationPresent(OptionalResponse.class)) required.add(component.getName());
@@ -54,6 +55,14 @@ public final class ResponseContracts {
     }
     // 직렬화 정책상 응답 record의 필드는 null이어도 생략하지 않는다.
     schema.setRequired(required);
+  }
+
+  /** springdoc이 쓰는 스키마 이름: @Schema(name)이 비어 있지 않으면 그 값, 아니면 단순 이름. */
+  static String schemaName(Class<?> type) {
+    var annotation = type.getAnnotation(io.swagger.v3.oas.annotations.media.Schema.class);
+    return annotation != null && !annotation.name().isBlank()
+        ? annotation.name()
+        : type.getSimpleName();
   }
 
   /** 이미 anyOf에 type:null이 있는(감싼) 스키마인가. */

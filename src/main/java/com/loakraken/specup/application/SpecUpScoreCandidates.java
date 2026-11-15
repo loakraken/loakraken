@@ -135,6 +135,21 @@ final class SpecUpScoreCandidates {
    */
   static List<SpecUpService.Planned> polish(
       JsonNode input, CharacterLoadout loadout, CombatPowerPolishValues values) {
+    return polish(input, loadout, values, false);
+  }
+
+  /**
+   * 추천 순서 전용 '상·상 뒤' 후보: 처음에 두 주옵션이 모두 상이 아닌 장신구가 경로에서 상·상(HH) 매물로 바뀐 뒤 비교 기준이 내는 셋째 줄 고정값 후보(공격력·
+   * 무기 공격력 상, 그때 고정값 줄이 없으므로 상만). 처음 상태에서는 고를 수 없어(목록에 없음) 경로가 그 장신구의 HH 단계를 고른 뒤에만 쓴다(PM 총괄 11-15,
+   * 스위치를 켜기 전 필수).
+   */
+  static List<SpecUpService.Planned> polishAfterTop(
+      JsonNode input, CharacterLoadout loadout, CombatPowerPolishValues values) {
+    return polish(input, loadout, values, true);
+  }
+
+  private static List<SpecUpService.Planned> polish(
+      JsonNode input, CharacterLoadout loadout, CombatPowerPolishValues values, boolean afterTop) {
     var planned = new ArrayList<SpecUpService.Planned>();
     boolean any = false;
     int earing = 0;
@@ -148,7 +163,7 @@ final class SpecUpScoreCandidates {
             case "귀걸이" -> "earing" + ++earing;
             default -> "ring" + ++ring;
           };
-      var rows = slotRows(input, item, index, slot, values);
+      var rows = slotRows(input, item, index, slot, values, afterTop);
       if (rows == null) continue;
       any = true;
       planned.addAll(rows);
@@ -161,7 +176,8 @@ final class SpecUpScoreCandidates {
       CharacterLoadout.Equipment item,
       int index,
       String slot,
-      CombatPowerPolishValues values) {
+      CombatPowerPolishValues values,
+      boolean afterTop) {
     var option = input.path("armory").path("accessory").path(slot).path("option");
     if (!option.isArray() || option.size() != 3) return null;
     // 시뮬레이터와 같은 규칙: 수치표(1680 고대)와 같은 장신구만(거래 제한 아이템 레벨 줄, 없으면 모든 연마 값이 표의 값). 점수에 안 쓰이는 줄만 있는
@@ -199,12 +215,37 @@ final class SpecUpScoreCandidates {
     for (int i = 0; i < lines.size(); i++)
       if (i == position[0] || i == position[1] || flats.contains(i)) scoring.add(lines.get(i));
     var rows = new ArrayList<SpecUpService.Planned>();
+    if (afterTop) {
+      // 상·상이 된 뒤의 셋째 줄 고정값 상(처음부터 상·상인 장신구는 목록·경로의 셋째 줄 후보가 이미 있음).
+      if (grade[0] == 2 && grade[1] == 2) return rows;
+      var top = new int[] {2, 2};
+      for (var name : FLAT_OPTIONS) {
+        var next = target(values, part, mains, position, top);
+        var text = text(values, part, name, false, 2);
+        if (next == null || text == null) continue;
+        next.add(text);
+        rows.add(
+            row(
+                item,
+                index,
+                slot,
+                scoring,
+                next,
+                lines,
+                swapLines(values, part, mains, lines, position, flats, top, text),
+                "HH" + ("무기 공격력".equals(name) ? "W" : "A") + "H",
+                values));
+      }
+      return rows;
+    }
     for (int a = grade[0]; a <= 2; a++)
       for (int b = grade[1]; b <= 2; b++) {
         if (a == grade[0] && b == grade[1]) continue;
         var next = target(values, part, mains, position, new int[] {a, b});
         if (next == null) continue;
-        rows.add(row(item, index, slot, scoring, next, code(a) + "" + code(b), values));
+        var swap = swapLines(values, part, mains, lines, position, flats, new int[] {a, b}, null);
+        rows.add(
+            row(item, index, slot, scoring, next, lines, swap, code(a) + "" + code(b), values));
       }
     if (grade[0] == 2 && grade[1] == 2)
       for (var name : FLAT_OPTIONS)
@@ -221,6 +262,8 @@ final class SpecUpScoreCandidates {
                   slot,
                   scoring,
                   next,
+                  lines,
+                  swapLines(values, part, mains, lines, position, flats, grade, text),
                   "HH" + ("무기 공격력".equals(name) ? "W" : "A") + code(g),
                   values));
         }
@@ -256,6 +299,8 @@ final class SpecUpScoreCandidates {
       String slot,
       List<String> before,
       List<String> after,
+      List<String> current,
+      List<String> swap,
       String code,
       CombatPowerPolishValues values) {
     return SpecUpService.Planned.scored(
@@ -267,7 +312,40 @@ final class SpecUpScoreCandidates {
         item.icon(),
         item.grade(),
         SpecUpCost.POLISH_COST_UNCONFIRMED,
-        new SpecUpKrakenScore.Polish(slot, List.copyOf(after)));
+        new SpecUpKrakenScore.Polish(slot, List.copyOf(after), index, List.copyOf(current), swap));
+  }
+
+  /**
+   * 전투력 계산용 목표 줄(지금 줄 순서): Δ크라켄 점수와 같은 목표 장신구다(비교 기준 B 스펙업 후보 규칙, 계산 검증 11-15). 주옵션은 목표 등급, 지금 고정값
+   * 공격력·무기 공격력 줄은 빠진다(null = 전투력 몫 0). 다만 두 주옵션이 모두 상인 장신구(셋째 줄 고정값 후보)는 고정값 줄을 그 후보 값으로 둔다. 주옵션도
+   * 고정값도 아닌 줄(딜러 전투력 0인 옵션)은 그대로 둔다. 새로 붙는 주옵션은 빠지는 고정값 줄 자리부터, 없으면 그 밖 줄에 놓는다. 줄 자리는 전투력에 영향이
+   * 없다(줄마다 독립 배수).
+   */
+  static List<String> swapLines(
+      CombatPowerPolishValues values,
+      String part,
+      List<String> mains,
+      List<String> current,
+      int[] position,
+      List<Integer> flats,
+      int[] grades,
+      String flatText) {
+    var swap = new ArrayList<String>(current);
+    for (int i : flats) swap.set(i, null);
+    var free = new ArrayList<Integer>(flats);
+    for (int i = 0; i < current.size(); i++)
+      if (i != position[0] && i != position[1] && !flats.contains(i)) free.add(i);
+    if (flatText != null) {
+      int at = flats.isEmpty() ? free.getFirst() : flats.getFirst();
+      free.remove(Integer.valueOf(at));
+      swap.set(at, flatText);
+    }
+    for (int k = 0; k < 2; k++) {
+      if (grades[k] < 0) continue;
+      int at = position[k] >= 0 ? position[k] : free.removeFirst();
+      swap.set(at, text(values, part, mains.get(k), true, grades[k]));
+    }
+    return java.util.Collections.unmodifiableList(swap);
   }
 
   private static String shown(CombatPowerPolishValues values, String part, List<String> lines) {

@@ -209,6 +209,26 @@ class LostArkCharacterClientTest {
     var oldCache =
         mapper.readValue(cacheJson.replaceAll(",\"skillType\":\\d+", ""), CharacterResult.class);
     assertThat(oldCache.details().loadout().skills()).allMatch(s -> s.skillType() == null);
+    // 덧입기 표시 줄: 읽은 툴팁에 줄이 없으면 false, 툴팁을 읽지 못하면 null(모름). 응답 overlay도 같은 값.
+    var avatarsJson = mapper.readTree(response).at("/avatars");
+    assertThat(avatarsJson.at("/0/overlay").isBoolean()).isTrue();
+    assertThat(avatarsJson.at("/0/overlay").booleanValue()).isFalse();
+    assertThat(avatarsJson.at("/1/overlay").isNull()).isTrue();
+    // 표시 줄 필드가 생기기 전 캐시(최대 5분)는 effectsDisabled 없이 읽혀 null → 계산은 예전 규칙, 응답 overlay도 null.
+    var beforeMarker =
+        mapper.readValue(
+            cacheJson.replaceAll(",\"effectsDisabled\":(true|false|null)", ""),
+            CharacterResult.class);
+    assertThat(cacheJson).contains("\"effectsDisabled\":false");
+    assertThat(beforeMarker.details().loadout().avatars())
+        .isNotEmpty()
+        .allMatch(a -> a.effectsDisabled() == null);
+    assertThat(
+            mapper
+                .readTree(mapper.writeValueAsString(CharacterResponse.from(beforeMarker)))
+                .at("/avatars/0/overlay")
+                .isNull())
+        .isTrue();
     assertThat(response)
         .contains(
             "테스트 무기",

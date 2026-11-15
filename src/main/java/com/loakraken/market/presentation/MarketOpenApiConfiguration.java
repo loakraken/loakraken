@@ -25,7 +25,8 @@ class MarketOpenApiConfiguration {
               AuctionResponses.AuctionGemBoardResponse.class,
               AuctionResponses.AuctionAccessoryBoardResponse.class,
               AuctionResponses.AuctionListingsResponse.class,
-              AuctionResponses.AuctionGemSkillsResponse.class))
+              AuctionResponses.AuctionGemSkillsResponse.class,
+              AuctionResponses.AuctionCellHistoryResponse.class))
         ResponseContracts.apply(type, document.getComponents().getSchemas());
     };
   }

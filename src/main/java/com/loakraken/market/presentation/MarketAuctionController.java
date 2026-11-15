@@ -33,11 +33,14 @@ public class MarketAuctionController {
   private final MarketAuctionService auctions;
   private final GemSkillFilterService gemSkills;
   private final io.micrometer.core.instrument.MeterRegistry meters;
+  private final com.loakraken.market.application.MarketHistoryRangeService ranges;
 
   public MarketAuctionController(
       MarketAuctionService auctions,
       GemSkillFilterService gemSkills,
-      io.micrometer.core.instrument.MeterRegistry meters) {
+      io.micrometer.core.instrument.MeterRegistry meters,
+      com.loakraken.market.application.MarketHistoryRangeService ranges) {
+    this.ranges = ranges;
     this.auctions = auctions;
     this.gemSkills = gemSkills;
     this.meters = meters;
@@ -129,6 +132,63 @@ public class MarketAuctionController {
         MarketSuccessCode.AUCTION_ACCESSORIES_SUCCESS,
         AuctionResponses.AuctionAccessoryBoardResponse.from(
             g, r, q, auctions.accessories(g, r, q)));
+  }
+
+  @GetMapping("/gems/history")
+  @Operation(
+      summary = "T4 보석 칸 기간 시세",
+      description =
+          "보석 시세 표 칸 하나(kind·level)의 일별 마지막 관측 최저가(LOAKraken 관측, 공식 일평균 아님). 공식 호출 없음. range는 7d·14d(기본)·30d·90d·365d이고 응답 range로 돌려줍니다. "
+              + "최신순, 저장 없는 날은 행 없음, 오늘은 partial=true. recordedSince는 처음 저장한 날, storedDays는 기간 안 저장 일수입니다. 저장소 장애는 503 MARKET_CACHE_UNAVAILABLE.")
+  @StandardErrors
+  public ApiResponse<AuctionResponses.AuctionCellHistoryResponse> gemHistory(
+      @Parameter(description = "겁화 또는 작열") @RequestParam @Pattern(regexp = "겁화|작열") String kind,
+      @Parameter(description = "1~10") @RequestParam @Min(1) @Max(10) int level,
+      @Parameter(description = "기간: 7d, 14d(기본), 30d, 90d, 365d")
+          @RequestParam(required = false)
+          @Pattern(regexp = com.loakraken.market.domain.MarketHistoryRange.PATTERN)
+          String range) {
+    return ApiResponse.of(
+        MarketSuccessCode.AUCTION_GEMS_SUCCESS,
+        AuctionResponses.AuctionCellHistoryResponse.from(
+            ranges.gemHistory(
+                kind, level, com.loakraken.market.domain.MarketHistoryRange.parse(range))));
+  }
+
+  @GetMapping("/accessories/history")
+  @Operation(
+      summary = "T4 장신구 칸 기간 시세",
+      description =
+          "장신구 시세 표 칸 하나의 일별 마지막 관측 최저가(LOAKraken 관측, 공식 일평균 아님). 공식 호출 없음. 칸은 표 조회와 같은 grade·role·minQuality와 표의 slot·levels(옵션 순서대로 LOW·MID·HIGH)로 지정하고, 표에 없는 조합은 400 INVALID_AUCTION_LEVELS. "
+              + "range는 7d·14d(기본)·30d·90d·365d. 최신순, 저장 없는 날은 행 없음, 오늘은 partial=true. 저장소 장애는 503 MARKET_CACHE_UNAVAILABLE.")
+  @StandardErrors
+  public ApiResponse<AuctionResponses.AuctionCellHistoryResponse> accessoryHistory(
+      @Parameter(description = "ANCIENT(고대, 기본) 또는 RELIC(유물)") @RequestParam(required = false)
+          AuctionCatalog.Grade grade,
+      @Parameter(description = "DEALER(기본) 또는 SUPPORT") @RequestParam(required = false)
+          AuctionCatalog.Role role,
+      @Parameter(description = "최소 품질 0~90(10 단위, 기본 70, 0이면 무관)")
+          @RequestParam(required = false)
+          @Min(0)
+          @Max(90)
+          Integer minQuality,
+      @Parameter(description = "NECKLACE, EARRING, RING") @RequestParam AuctionCatalog.Slot slot,
+      @Parameter(description = "옵션 순서대로 LOW·MID·HIGH를 쉼표로") @RequestParam @Size(min = 1, max = 2)
+          List<AuctionCatalog.Level> levels,
+      @Parameter(description = "기간: 7d, 14d(기본), 30d, 90d, 365d")
+          @RequestParam(required = false)
+          @Pattern(regexp = com.loakraken.market.domain.MarketHistoryRange.PATTERN)
+          String range) {
+    return ApiResponse.of(
+        MarketSuccessCode.AUCTION_ACCESSORIES_SUCCESS,
+        AuctionResponses.AuctionCellHistoryResponse.from(
+            ranges.accessoryHistory(
+                grade == null ? AuctionCatalog.Grade.ANCIENT : grade,
+                role == null ? AuctionCatalog.Role.DEALER : role,
+                quality(minQuality),
+                slot,
+                levels,
+                com.loakraken.market.domain.MarketHistoryRange.parse(range))));
   }
 
   @GetMapping("/accessories/listings")

@@ -59,16 +59,19 @@ public class MarketController {
   private final MaterialQuoteService quotes;
   private final MaterialUnitPriceService unitPrices;
   private final MarketBoardService board;
+  private final com.loakraken.market.application.MarketHistoryRangeService ranges;
 
   public MarketController(
       MarketQueryService service,
       MaterialQuoteService quotes,
       MaterialUnitPriceService unitPrices,
-      MarketBoardService board) {
+      MarketBoardService board,
+      com.loakraken.market.application.MarketHistoryRangeService ranges) {
     this.service = service;
     this.quotes = quotes;
     this.unitPrices = unitPrices;
     this.board = board;
+    this.ranges = ranges;
   }
 
   @GetMapping("/items")
@@ -111,7 +114,8 @@ public class MarketController {
               + "rise·fall은 공식 정렬에 없어 탭 전체(최대 10페이지)를 순차 스캔하고 3분 캐시합니다. 동시 요청은 합칩니다. "
               + "changeWeek·spark7은 상품 이력 캐시가 있을 때만 채웁니다(추가 외부 호출 없음). "
               + "q(이름 검색)를 주면 rise·fall과 같은 탭 전체 스캔(같은 캐시·합치기)에서 이름 또는 초성 포함으로 거른 뒤 정렬·페이지를 적용합니다. "
-              + "이때 totalItems는 찾은 품목 수이고, 10페이지를 넘는 탭이면 complete=false(일부 품목에서만 찾음)입니다. q가 규칙 밖이면 400 INVALID_REQUEST.")
+              + "이때 totalItems는 찾은 품목 수이고, 10페이지를 넘는 탭이면 complete=false(일부 품목에서만 찾음)입니다. q가 규칙 밖이면 400 INVALID_REQUEST. "
+              + "grade(공식 아이템 등급)를 주면 같은 탭 전체 스캔에서 그 등급만 남긴 뒤 정렬·페이지를 적용하고(q와 함께 쓸 수 있음), 응답 grade로 돌려줍니다. 등급 이름 밖이면 400 INVALID_REQUEST.")
   public ApiResponse<MarketBoardResponse> board(
       @Valid @ModelAttribute @ParameterObject MarketBoardRequest request) {
     return ApiResponse.of(
@@ -122,7 +126,9 @@ public class MarketController {
                 request.tier(),
                 request.toSort(),
                 request.pageOrDefault(),
-                request.query())));
+                request.query(),
+                request.grade()),
+            request.grade()));
   }
 
   @PostMapping(value = "/items/prices", consumes = MediaType.APPLICATION_JSON_VALUE)
@@ -145,19 +151,30 @@ public class MarketController {
 
   @GetMapping("/items/{itemId}/history")
   @Operation(
-      summary = "상품 14일 시세 이력",
+      summary = "상품 시세 이력(기간)",
       description =
-          "공식 거래소 상품 상세의 최근 14일 일별 평균가·거래량입니다. 오늘(한국 날짜) 값은 진행 중인 부분 집계라 partial=true이며 요약에서 제외합니다. "
+          "공식 거래소 상품 상세의 일별 평균가·거래량입니다. range(7d·14d·30d·90d·365d, 생략 시 14d = 공식 최근 14일)로 기간을 고르고, 응답 range로 적용한 기간을 돌려줍니다. "
+              + "30d 이상은 LOAKraken이 저장한 완료일을 더하며(같은 날짜는 공식 값, 새 공식 호출 없음) 변형마다 recordedSince(처음 저장한 날)·storedDays(기간 안 저장 일수)를 줍니다. 저장이 없는 날은 행이 없습니다. "
+              + "오늘(한국 날짜) 값은 진행 중인 부분 집계라 partial=true이며 요약에서 제외합니다. "
               + "기본 캐시 10분, 같은 상품 동시 요청 병합, 캐릭터·거래소 공유 호출 예산을 사용합니다. 공식 API가 모르는 상품은 404 MARKET_ITEM_NOT_FOUND입니다.")
   @io.swagger.v3.oas.annotations.responses.ApiResponse(
       responseCode = "404",
       description = "MARKET_ITEM_NOT_FOUND",
       content = @Content(schema = @Schema(ref = "#/components/schemas/ErrorResponse")))
   public ApiResponse<MarketItemHistoryResponse> itemHistory(
-      @PathVariable @Positive @Max(999_999_999) long itemId) {
+      @PathVariable @Positive @Max(999_999_999) long itemId,
+      @io.swagger.v3.oas.annotations.Parameter(
+              description = "기간: 7d, 14d(기본), 30d, 90d, 365d",
+              example = "30d")
+          @RequestParam(required = false)
+          @jakarta.validation.constraints.Pattern(
+              regexp = com.loakraken.market.domain.MarketHistoryRange.PATTERN)
+          String range) {
     return ApiResponse.of(
         MarketSuccessCode.MARKET_ITEM_HISTORY_SUCCESS,
-        MarketItemHistoryResponse.from(service.itemHistory(itemId)));
+        MarketItemHistoryResponse.from(
+            ranges.itemHistory(
+                itemId, com.loakraken.market.domain.MarketHistoryRange.parse(range))));
   }
 
   @GetMapping("/options")

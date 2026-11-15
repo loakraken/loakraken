@@ -37,6 +37,8 @@ import org.springframework.stereotype.Service;
  */
 @Service
 public class SpecUpService {
+  private static final org.slf4j.Logger log =
+      org.slf4j.LoggerFactory.getLogger(SpecUpService.class);
   public static final String RULE_VERSION = "spec-up-v1";
   static final Pattern GEM = Pattern.compile("(\\d+)레벨 (\\S+)의 보석");
   static final Set<String> WEAPON_ARMOR = Set.of("무기", "투구", "상의", "하의", "장갑", "어깨");
@@ -78,7 +80,8 @@ public class SpecUpService {
       @Value("${spec-up.enabled:false}") boolean enabled,
       // 연마 시세 칸을 요청에서 채우는가(PM 총괄 10-25: 기본 꺼짐 — 꺼져 있으면 캐시된 칸만 쓰고 없으면 비용 미확정).
       @Value("${spec-up.polish-price-fill.enabled:false}") boolean polishPriceFill,
-      org.springframework.core.env.Environment environment) {
+      org.springframework.core.env.Environment environment,
+      io.micrometer.core.instrument.MeterRegistry meters) {
     this.simulator = simulator;
     this.auctions = auctions;
     this.books = books;
@@ -92,10 +95,169 @@ public class SpecUpService {
     this.polishPriceFill = polishPriceFill;
     this.enabled = enabled;
     this.environment = environment;
+    this.meters = meters;
   }
+
+  /**
+   * 점수 입력 줄 전투력 실패 수(loakraken.spec_up.row_cp_failed{kind, error}). 스위치를 켠 뒤 줄이 조용히 점수만으로 떨어지는지 보는
+   * 값이다. kind는 POLISH·ABILITY_STONE(목록 줄)·POLISH_STEP(추천 순서 연마 단계가 빠짐), error는 예외 클래스 이름 또는
+   * unmappable이라 값이 몇 개뿐이다.
+   */
+  private final io.micrometer.core.instrument.MeterRegistry meters;
 
   boolean armGuardEnabled() {
     return environment.getProperty("spec-up.arm-guard.enabled", Boolean.class, true);
+  }
+
+  /**
+   * 연마 교체 줄의 Δ전투력(spec-up.polish-cp.enabled, 기본 끔). 켜면 딜러 연마 교체 줄(연마 수치표 1680 고대 장신구)에 Δ크라켄 점수와 같은
+   * 목표 장신구로 Δ전투력을 낸다(점수 옵션만 아는 매물, 나머지 줄은 전투력 몫 0). 꺼져 있으면 지금처럼 점수만 낸다. 요청마다 읽는다.
+   */
+  boolean polishCpEnabled() {
+    return environment.getProperty("spec-up.polish-cp.enabled", Boolean.class, false);
+  }
+
+  /**
+   * 어빌리티 스톤 줄의 Δ전투력(spec-up.stone-cp.enabled, 기본 끔). 켜면 스톤 줄에 추천 순서(목표 경로)와 같은 변경(STONE_ENGRAVING
+   * 둘, 목표 레벨)으로 Δ전투력을 낸다. 꺼져 있으면 지금처럼 점수만 낸다. 요청마다 읽는다.
+   */
+  boolean stoneCpEnabled() {
+    return environment.getProperty("spec-up.stone-cp.enabled", Boolean.class, false);
+  }
+
+  /**
+   * 추천 순서·목표 경로의 연마 단계(spec-up.polish-path.enabled, 기본 끔, 목록 연마 전투력 스위치와 따로). 켜면 딜러 연마 교체 줄을 같은
+   * 목표·id·비용으로 단계 후보에 넣는다. 요청마다 읽는다.
+   */
+  boolean polishPathEnabled() {
+    return environment.getProperty("spec-up.polish-path.enabled", Boolean.class, false);
+  }
+
+  /**
+   * 추천 순서·목표 경로의 연마 단계 후보 하나. slot은 장신구 칸(POLISH:장비 순번, 같은 칸은 뒤 단계가 앞 매물을 바꿈), changes는 처음 장신구와 다른
+   * 줄의 공개 시뮬레이터 변경(줄마다 POLISH, 빠진 줄은 option NONE), full은 같은 줄까지 줄마다 하나(같은 장신구의 앞 단계가 바꾼 줄을 되돌릴 때
+   * 씀).
+   */
+  record PolishStep(
+      String slot,
+      String id,
+      String target,
+      String from,
+      String to,
+      String icon,
+      String grade,
+      SpecUpCost cost,
+      List<Change> changes,
+      List<Change> full,
+      boolean afterTop) {
+    PolishStep(
+        String slot,
+        String id,
+        String target,
+        String from,
+        String to,
+        String icon,
+        String grade,
+        SpecUpCost cost,
+        List<Change> changes,
+        List<Change> full) {
+      this(slot, id, target, from, to, icon, grade, cost, changes, full, false);
+    }
+
+    /** 줄 번호 line의 목표 변경(full: 지금과 같은 줄까지 줄마다 하나). 없으면 null. */
+    Change lineChange(int line) {
+      for (var change : full) if (change.line() != null && change.line() == line) return change;
+      return null;
+    }
+  }
+
+  /**
+   * 연마 단계 후보(스위치가 꺼졌거나, 딜러가 아니거나, 크라켄 점수 입력이 없으면 빈 목록). 비용은 목록과 같은 식이고 캐시된 연마 시세 칸만 쓴다(경로는 시세 칸을
+   * 채우지 않음). 변경을 만들 수 없는 줄(점수 입력·툴팁이 다름, 수치표에 없음)은 뺀다.
+   */
+  List<PolishStep> polishSteps(CharacterResult snapshot) {
+    if (!polishPathEnabled() || CombatPowerSimulationService.roleReason(snapshot) != null)
+      return List.of();
+    var context = kraken.context(snapshot);
+    if (!context.available() || context.support()) return List.of();
+    var loadout = snapshot.details().loadout();
+    var rows = SpecUpScoreCandidates.polish(context.input(), loadout, polishValues);
+    if (rows == null) return List.of();
+    // 경로가 장신구를 상·상으로 바꾼 뒤에만 쓰는 셋째 줄 고정값 후보(afterTop).
+    var afterTop = SpecUpScoreCandidates.polishAfterTop(context.input(), loadout, polishValues);
+    var topIds = new java.util.HashSet<String>();
+    if (afterTop != null) {
+      rows = new ArrayList<>(rows);
+      for (var row : afterTop) {
+        topIds.add(row.id());
+        rows.add(row);
+      }
+    }
+    var fill = new MarketAuctionService.PolishFill(false);
+    var pricesAt = new Instant[1];
+    var steps = new ArrayList<PolishStep>();
+    for (var row : rows) {
+      if (!(row.kraken() instanceof SpecUpKrakenScore.Polish polish) || polish.index() == null)
+        continue;
+      List<Change> changes;
+      List<Change> full;
+      try {
+        changes =
+            simulator.polishSwapChanges(snapshot, polish.index(), polish.current(), polish.lines());
+        full =
+            simulator.polishSwapChanges(
+                snapshot, polish.index(), polish.current(), polish.lines(), true);
+      } catch (RuntimeException exception) {
+        var error = exception.getClass().getSimpleName();
+        log.warn("event=spec_up_polish_step_skipped id={} error={}", row.id(), error);
+        meters
+            .counter("loakraken.spec_up.row_cp_failed", "kind", "POLISH_STEP", "error", error)
+            .increment();
+        continue;
+      }
+      if (changes == null || full == null) {
+        // 점수 입력 줄과 툴팁 줄이 다르거나 목표 줄이 수치표에 없음: 단계에서 빠지는 것을 셈한다(스위치를 켠 뒤 조용히 빠지는지).
+        meters
+            .counter(
+                "loakraken.spec_up.row_cp_failed", "kind", "POLISH_STEP", "error", "unmappable")
+            .increment();
+        continue;
+      }
+      if (changes.isEmpty()) continue;
+      steps.add(
+          new PolishStep(
+              "POLISH:" + polish.index(),
+              row.id(),
+              row.target(),
+              row.from(),
+              row.to(),
+              row.icon(),
+              row.grade(),
+              polishCost(loadout, context, row, fill, pricesAt, topIds.contains(row.id())),
+              changes,
+              full,
+              topIds.contains(row.id())));
+    }
+    return List.copyOf(steps);
+  }
+
+  /**
+   * 스톤 줄의 시뮬레이터 변경(각인마다 STONE_ENGRAVING, 목표 레벨). 장착한 스톤의 각인 줄에 없는 이름이 있으면 null(시뮬레이터는 없는 각인을 오류로
+   * 돌려주므로 그 줄은 점수만 남긴다).
+   */
+  static List<Change> stoneChanges(CharacterLoadout loadout, Map<String, Integer> levels) {
+    var names = new java.util.HashSet<String>();
+    for (var item : loadout.equipment())
+      if (item != null && item.detail() != null)
+        for (var line : item.detail().stoneEngravings())
+          if (line != null && line.name() != null) names.add(line.name());
+    var changes = new ArrayList<Change>();
+    for (var entry : levels.entrySet()) {
+      if (!names.contains(entry.getKey())) return null;
+      // 추천 순서의 스톤 단계와 같은 변경(코드 리뷰 #947 P3).
+      changes.add(SpecUpGoalService.stoneChange(entry.getKey(), entry.getValue()));
+    }
+    return changes.isEmpty() ? null : changes;
   }
 
   /** 완갑 target 단계의 등급(목록 줄과 같은 규칙). 정할 수 없으면 null. */
@@ -301,6 +463,8 @@ public class SpecUpService {
     var unsupported = new ArrayList<Candidate>();
     // 딜러가 아니면 모든 후보를 역할 이유로 UNSUPPORTED(PM-백엔드 P0 10-11 20:23).
     var roleReason = CombatPowerSimulationService.roleReason(snapshot);
+    // 점수 입력 줄(연마 교체·스톤)의 계산 모델(보석·재련·팔찌)은 같은 캐시라 요청마다 한 번만 만든다(코드 리뷰 #945 P3: 줄마다 다시 만들었다).
+    var models = new Models(snapshot);
     for (var plan : planned) {
       if (!cooldownGemsIncluded && "COOLDOWN".equals(plan.gemType())) continue;
       var candidate =
@@ -313,7 +477,7 @@ public class SpecUpService {
                   null,
                   CombatPowerReasons.classify(roleReason),
                   null)
-              : evaluate(snapshot, plan);
+              : evaluate(snapshot, models, plan);
       var raw = krakenDelta(krakenContext, loadout, plan);
       candidate =
           candidate.withKraken(
@@ -412,7 +576,36 @@ public class SpecUpService {
         candidate.deltaCombatPower(), candidate.cost() == null ? null : candidate.cost().amount());
   }
 
-  private Candidate evaluate(CharacterResult snapshot, Planned plan) {
+  /** 요청 하나에서 나눠 쓰는 시뮬레이터 계산 모델(처음 쓸 때 만든다). */
+  private final class Models {
+    private final CharacterResult snapshot;
+    private CombatPowerSimulationService.Models value;
+
+    Models(CharacterResult snapshot) {
+      this.snapshot = snapshot;
+    }
+
+    CombatPowerSimulationService.Models get() {
+      if (value == null) value = simulator.models(snapshot);
+      return value;
+    }
+  }
+
+  private Candidate evaluate(CharacterResult snapshot, Models models, Planned plan) {
+    // 점수 입력에서 만든 줄(연마 교체·스톤)의 전투력: 한 줄이 실패해도 목록 전체가 실패하지 않게 그 줄만 점수만 남긴다(PM 총괄 11-15 14:14, 스위치를
+    // 켜기 전 필수).
+    if (plan.change() == null && plan.kraken() != null)
+      try {
+        var scored = scoreRowCombatPower(snapshot, models, plan);
+        if (scored != null) return scored;
+      } catch (RuntimeException exception) {
+        var error = exception.getClass().getSimpleName();
+        log.warn(
+            "event=spec_up_row_cp_failed id={} kind={} error={}", plan.id(), plan.kind(), error);
+        meters
+            .counter("loakraken.spec_up.row_cp_failed", "kind", plan.kind(), "error", error)
+            .increment();
+      }
     if (plan.change() == null)
       return plan.candidate(
           "UNSUPPORTED",
@@ -424,8 +617,39 @@ public class SpecUpService {
               ? CombatPowerReasons.SCORE_ONLY
               : CombatPowerReasons.MODEL_UNCONFIRMED,
           null);
-    var result = simulator.simulate(snapshot, List.of(plan.change()));
-    var contribution = result.contributions().getFirst();
+    return evaluated(plan, simulator.simulate(snapshot, List.of(plan.change())));
+  }
+
+  /** 연마 교체·스톤 줄의 전투력(스위치가 켜졌고 계산할 수 있을 때). 그렇지 않으면 null(점수만). */
+  private Candidate scoreRowCombatPower(CharacterResult snapshot, Models models, Planned plan) {
+    if (plan.kraken() instanceof SpecUpKrakenScore.Polish polish
+        && polish.index() != null
+        && polish.lines() != null
+        && polishCpEnabled()) {
+      var swap =
+          simulator.simulatePolishSwap(
+              snapshot, models.get(), polish.index(), polish.current(), polish.lines());
+      return swap == null ? null : evaluated(plan, swap);
+    }
+    if (plan.kraken() instanceof SpecUpKrakenScore.Stone stone && stoneCpEnabled()) {
+      var changes = stoneChanges(snapshot.details().loadout(), stone.levels());
+      return changes == null
+          ? null
+          : evaluated(plan, simulator.simulate(snapshot, models.get(), changes));
+    }
+    return null;
+  }
+
+  /** 시뮬레이터 결과 → 후보. 바꾼 줄 가운데 하나라도 계산할 수 없으면 그 이유로 UNSUPPORTED(연마 교체는 줄 여럿, 그 밖은 변경 하나). */
+  private Candidate evaluated(Planned plan, CombatPowerSimulationService.Result result) {
+    var contribution =
+        result.contributions().stream()
+            .filter(item -> item.status() != CombatPowerSimulationService.Status.OK)
+            .findFirst()
+            .orElse(result.contributions().isEmpty() ? null : result.contributions().getFirst());
+    if (contribution == null)
+      return plan.candidate(
+          "UNSUPPORTED", null, null, null, null, CombatPowerReasons.SCORE_ONLY, null);
     if (contribution.status() != CombatPowerSimulationService.Status.OK) {
       var reason = CombatPowerReasons.classify(contribution.basis());
       return plan.candidate(
@@ -437,7 +661,7 @@ public class SpecUpService {
           reason,
           reason.text().equals(contribution.basis()) ? null : contribution.basis());
     }
-    var delta = contribution.delta();
+    var delta = result.delta();
     var percent =
         result.before() == null || result.before().signum() == 0
             ? null
@@ -1291,6 +1515,17 @@ public class SpecUpService {
       Planned row,
       MarketAuctionService.PolishFill fill,
       Instant[] pricesAt) {
+    return polishCost(loadout, context, row, fill, pricesAt, false);
+  }
+
+  /** afterTop: '상·상 뒤' 셋째 줄 후보(목표 시세 키에 고정값을 남김, SpecUpPolishCost.cost의 targetKeepFlat). */
+  private SpecUpCost polishCost(
+      CharacterLoadout loadout,
+      SpecUpKrakenScore.Context context,
+      Planned row,
+      MarketAuctionService.PolishFill fill,
+      Instant[] pricesAt,
+      boolean afterTop) {
     if (!(row.kraken() instanceof SpecUpKrakenScore.Polish polish)) return row.cost();
     int index = Integer.parseInt(row.id().split(":")[1]);
     var item = loadout.equipment().get(index);
@@ -1311,7 +1546,8 @@ public class SpecUpService {
         current,
         polish.option(),
         polishValues,
-        pricesAt);
+        pricesAt,
+        afterTop);
   }
 
   private static Change change(

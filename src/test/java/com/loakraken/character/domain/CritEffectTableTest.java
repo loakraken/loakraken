@@ -605,11 +605,21 @@ class CritEffectTableTest {
         calculate(
             "서머너",
             List.of(node("깨달음 3티어 고대의 힘 Lv.3", "일반 및 고대의 정령 스킬의 치명타 적중률이 16.0% 증가한다.")),
-            List.of(skill("슈르디", "빛의 성장")),
+            List.of(skill("슈르디", "빛의 성장"), categorized("마력의 질주", "일반 스킬")),
             null,
             Assumptions.NONE);
     assertThat(values(summoner, Axis.CRIT, Category.ASSUMPTION))
         .containsExactlyInAnyOrder("고대의 힘(일반·고대의 정령 스킬)(고대의 힘 Lv.3)=16", "빛의 성장 버프 상시 유지 가정=11.8");
+    // 고대의 힘은 스킬별로 일반 스킬에 더한다(비교 기준 서머너 스킬 92.41, 계산 검증 #979).
+    var summonerOff =
+        calculate(
+            "서머너",
+            List.of(node("깨달음 3티어 고대의 힘 Lv.3", "일반 및 고대의 정령 스킬의 치명타 적중률이 16.0% 증가한다.")),
+            List.of(skill("슈르디", "빛의 성장"), categorized("마력의 질주", "일반 스킬")),
+            null,
+            toggle("고대의 힘", false));
+    assertThat(skill(summoner, "마력의 질주").total())
+        .isEqualByComparingTo(skill(summonerOff, "마력의 질주").total().add(new BigDecimal("16")));
     var spiritNodes = List.of(node("깨달음 2티어 깨어난 잠재력 Lv.3", "둔갑 스킬 치명타 적중률이 30.0% 증가한다."));
     var spirit =
         calculate(
@@ -626,6 +636,9 @@ class CritEffectTableTest {
             toggle("깨어난 잠재력", false));
     assertThat(spirit.crit().mainSkillRate())
         .isEqualByComparingTo(spiritOff.crit().mainSkillRate().add(new BigDecimal("30")));
+    // 스킬별로는 둔갑 스킬에 더한다(비교 기준 곰·둔갑 스킬 82.01, 계산 검증 #979).
+    assertThat(skill(spirit, "여우 둔갑").total())
+        .isEqualByComparingTo(skill(spiritOff, "여우 둔갑").total().add(new BigDecimal("30")));
   }
 
   @Test

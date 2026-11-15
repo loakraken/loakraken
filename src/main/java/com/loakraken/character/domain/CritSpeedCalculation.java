@@ -510,6 +510,19 @@ public final class CritSpeedCalculation {
                 CritEffectTable.CATEGORY_LIMITED_BUFFS.get(source.name()),
                 source.value(),
                 source.text()));
+    // 분류 한정 노드 토글(서머너 고대의 힘 → 일반 스킬, 환수사 깨어난 잠재력 → 둔갑 스킬)도 스킬별로는 그 분류에만(계산 검증 #979).
+    for (var toggle : toggles)
+      if (toggle.on()
+          && toggle.axis() == Axis.CRIT
+          && CritEffectTable.CATEGORY_LIMITED_TOGGLES.containsKey(toggle.key()))
+        skillBonuses.add(
+            new NodeBonus(
+                toggle.label(),
+                Axis.CRIT,
+                CritEffectTable.Target.CATEGORY,
+                CritEffectTable.CATEGORY_LIMITED_TOGGLES.get(toggle.key()),
+                toggle.value(),
+                toggle.text()));
     var classStateCrit =
         sources.stream()
             .filter(
@@ -2103,9 +2116,24 @@ public final class CritSpeedCalculation {
               .reduce(BigDecimal.ZERO, BigDecimal::add);
       return new MainSkill(scale(sheet.subtract(notMain)), null);
     }
+    // 분류 한정 노드 토글은 아래 extra(켠 가정)로 주력에 한 번 더하므로, 스킬별 값에서 빼고 가장 많은 값을 고른다(두 번 세지 않음).
+    var categoryToggleLabels =
+        toggles.stream()
+            .filter(t -> CritEffectTable.CATEGORY_LIMITED_TOGGLES.containsKey(t.key()))
+            .map(ToggleState::label)
+            .collect(java.util.stream.Collectors.toSet());
     var counts = new java.util.TreeMap<BigDecimal, Integer>();
     for (var skill : skills)
-      if (skill.total() != null) counts.merge(skill.total(), 1, Integer::sum);
+      if (skill.total() != null) {
+        var categoryPart =
+            skill.nodes() == null
+                ? BigDecimal.ZERO
+                : skill.nodes().stream()
+                    .filter(node -> categoryToggleLabels.contains(node.name()))
+                    .map(SkillTripod::value)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+        counts.merge(skill.total().subtract(categoryPart), 1, Integer::sum);
+      }
     if (counts.isEmpty()) return null;
     BigDecimal mode = null;
     int best = 0;

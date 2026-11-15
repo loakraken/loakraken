@@ -362,6 +362,10 @@ public class CombatPowerSimulationService {
 
   private static final String LEAP_UNREAD = "도약 포인트 합을 읽지 못해 계산하지 않았습니다.";
   private static final String LEAP = "도약";
+
+  /** 도약 포인트 최대(고대 장비 18 + 전투 레벨 총합 40 + 랭크 총합 12, 공식 가이드 아크 패시브 2026-06-24). */
+  static final int LEAP_MAX = 70;
+
   private static final String LEAP_BASIS =
       "도약 포인트 합의 전투력 배수(1 + 0.002 × 포인트)를 바꾼 비율을 공식 전투력에 곱했습니다.";
   private static final String EVOLUTION_ENLIGHTENMENT_REASON =
@@ -1269,6 +1273,10 @@ public class CombatPowerSimulationService {
                     .findFirst()
                     .orElse(null);
         if (point == null) throw notFound("아크 패시브 " + change.tree());
+        // 도약은 고대 장비 +18·전투 레벨 총합 +40·랭크 총합 +12 = 최대 70(공식 가이드 아크 패시브, 최근수정일 2026-06-24). 웹을 거치지 않은
+        // 요청도
+        // 막는다(코드 리뷰 web #1706 P2).
+        if (LEAP.equals(point.name())) range("points", change.points(), 0, LEAP_MAX);
         var target = "아크 패시브 " + point.name();
         var from = str(point.value());
         var to = str(change.points());

@@ -102,7 +102,7 @@ public class SpecUpService {
   /**
    * 점수 입력 줄 전투력 실패 수(loakraken.spec_up.row_cp_failed{kind, error}). 스위치를 켠 뒤 줄이 조용히 점수만으로 떨어지는지 보는
    * 값이다. kind는 POLISH·ABILITY_STONE(목록 줄)·POLISH_STEP(추천 순서 연마 단계가 빠짐), error는 예외 클래스 이름,
-   * line_mismatch(점수 입력 줄과 툴팁 줄이 다름) 또는 unmappable이라 값이 몇 개뿐이다.
+   * line_mismatch(점수 입력 줄과 툴팁 줄이 다름), level_mismatch(카르마 레벨이 다름) 또는 unmappable이라 값이 몇 개뿐이다.
    */
   private final io.micrometer.core.instrument.MeterRegistry meters;
 
@@ -793,7 +793,7 @@ public class SpecUpService {
       // 점수 입력의 지금 레벨과 툴팁(아크 패시브 설명)의 레벨이 다르면 두 원문 파서가 갈라진 것: 틀린 Δ 대신 점수만.
       var tooltip = CombatPowerRefineModel.karmaLevel(snapshot.details().loadout());
       if (tooltip == null || !(tooltip + "레벨").equals(plan.from())) {
-        rowRejected(plan, CombatPowerSimulationService.POLISH_REJECT_LINE_MISMATCH);
+        rowRejected(plan, KARMA_REJECT_LEVEL_MISMATCH);
         return null;
       }
       return evaluated(
@@ -810,6 +810,9 @@ public class SpecUpService {
    * 스위치가 켜졌는데 계산하지 못해 점수만 남는 줄(예외 아님): 연마 교체는 점수 입력 줄이 툴팁 줄과 다르면 line_mismatch, 그 밖은 unmappable. 같은
    * row_cp_failed 수에 센다(코드 리뷰 #949 P3, PM 총괄 11-15 14:44 스위치를 켜기 전 필수).
    */
+  /** 카르마 줄: 점수 입력의 지금 레벨과 툴팁 레벨이 다름(지표 error 값, 코드 리뷰 #1004 P3: 연마의 line_mismatch와 나눔). */
+  static final String KARMA_REJECT_LEVEL_MISMATCH = "level_mismatch";
+
   private void rowRejected(Planned plan, String error) {
     log.warn("event=spec_up_row_cp_failed id={} kind={} error={}", plan.id(), plan.kind(), error);
     meters

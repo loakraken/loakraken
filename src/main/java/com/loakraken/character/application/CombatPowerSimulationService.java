@@ -1353,7 +1353,7 @@ public class CombatPowerSimulationService {
             throw invalid("karmaLevel은 tree 깨달음에만 쓸 수 있습니다.");
           if (change.points() != null || change.level() != null)
             throw invalid("karmaLevel은 points·level과 함께 쓸 수 없습니다.");
-          yield karma(loadout, refineModel, change, change.karmaLevel());
+          yield karma(loadout, refineModel, change, change.karmaLevel(), karmaCpEnabled);
         }
         range("points", change.points(), 0, 999);
         var point =
@@ -1606,6 +1606,16 @@ public class CombatPowerSimulationService {
       "깨달음 카르마 레벨마다 무기 공격력 +0.1%(전투력 W 항 안, 세 곳 일치)를 바꾼 비율을 공식 전투력에 곱했습니다.";
   private static final String KARMA_UNREAD = "깨달음 카르마 레벨을 읽지 못해 계산하지 않았습니다.";
 
+  private static final String KARMA_OFF = "깨달음 카르마 레벨 전투력 계산은 아직 켜지 않아 계산하지 않았습니다.";
+
+  /** 깨달음 카르마 레벨 계산 스위치(spec-up.karma-cp.enabled, 기본 꺼짐). 스펙업 줄·단계와 /simulate가 같은 스위치를 본다. */
+  private volatile boolean karmaCpEnabled;
+
+  @org.springframework.beans.factory.annotation.Value("${spec-up.karma-cp.enabled:false}")
+  void setKarmaCpEnabled(boolean enabled) {
+    this.karmaCpEnabled = enabled;
+  }
+
   /**
    * 깨달음 카르마 레벨 바꾸기: ARK_PASSIVE_POINT(tree 깨달음)에 karmaLevel을 넣는다(points·level 없음). 새 kind를 만들지 않아
    * 응답의 kind 값이 늘지 않고, 깨달음 포인트(points)와 헷갈리지 않게 자기 필드를 쓴다(PM 총괄 11-19).
@@ -1641,11 +1651,15 @@ public class CombatPowerSimulationService {
       CharacterLoadout loadout,
       CombatPowerRefineModel.Model refineModel,
       Change change,
-      Integer level) {
+      Integer level,
+      boolean enabled) {
     range("karmaLevel", level, 0, KARMA_MAX_LEVEL);
-    var current = CombatPowerRefineModel.karmaLevel(loadout);
     var target = "깨달음 카르마";
     var to = String.valueOf(level);
+    // 스위치(spec-up.karma-cp.enabled)가 꺼져 있으면 시뮬레이터에 바로 넣어도 계산하지 않는다(검증 전 값이 나가지 않게, 코드 리뷰 #1004 P2).
+    if (!enabled) return new Planned(change, target, null, to, null, null, KARMA_OFF);
+    // 아크 패시브가 없으면 카르마 레벨을 읽은 것이 아니다(0으로 보고 +3%를 내지 않게, 코드 리뷰 #1004 P3).
+    var current = loadout.arkPassive() == null ? null : CombatPowerRefineModel.karmaLevel(loadout);
     if (current == null) return new Planned(change, target, null, to, null, null, KARMA_UNREAD);
     var from = String.valueOf(current);
     if (refineModel.unsupportedReason() != null)

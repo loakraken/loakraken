@@ -58,6 +58,7 @@ class SpecUpKarmaCpIntegrationTest {
   @Autowired StringRedisTemplate redis;
   @MockitoBean CharacterDetailsPort detailsPort;
   @MockitoBean MarketAuctionService auctions;
+  @Autowired com.loakraken.character.application.CombatPowerSimulationService simulator;
 
   private final JsonMapper mapper = new JsonMapper();
 
@@ -194,6 +195,48 @@ class SpecUpKarmaCpIntegrationTest {
         .isEqualByComparingTo(BigDecimal.ZERO);
   }
 
+  /**
+   * 스위치가 꺼져 있으면 /simulate에 카르마 변경을 바로 넣어도 계산하지 않는다(코드 리뷰 #1004 P2): 200, partial, 그 변경은
+   * UNSUPPORTED이고 Δ 0. 검사(400)는 스위치와 상관없이 그대로.
+   */
+  @Test
+  void 스위치가_꺼져_있으면_시뮬레이터도_카르마를_계산하지_않는다() throws Exception {
+    when(auctions.cachedGems()).thenReturn(List.of());
+    search(DEALER, "l01", "블레이드", "4052.77");
+    org.springframework.test.util.ReflectionTestUtils.setField(simulator, "karmaCpEnabled", false);
+    try {
+      var off =
+          simulate(
+              DEALER, "[{\"kind\": \"ARK_PASSIVE_POINT\", \"tree\": \"깨달음\", \"karmaLevel\": 30}]");
+      assertThat(off.statusCode()).as(off.body()).isEqualTo(200);
+      var data = mapper.readTree(off.body()).path("data");
+      assertThat(data.path("partial").asBoolean()).as(off.body()).isTrue();
+      assertThat(data.path("delta").decimalValue()).isEqualByComparingTo(BigDecimal.ZERO);
+      assertThat(data.path("contributions").get(0).path("status").asText())
+          .isEqualTo("UNSUPPORTED");
+      var bad =
+          simulate(
+              DEALER, "[{\"kind\": \"ARK_PASSIVE_POINT\", \"tree\": \"깨달음\", \"karmaLevel\": 31}]");
+      assertThat(bad.statusCode()).as(bad.body()).isEqualTo(400);
+    } finally {
+      org.springframework.test.util.ReflectionTestUtils.setField(simulator, "karmaCpEnabled", true);
+    }
+  }
+
+  /** 아크 패시브가 없는 캐릭터는 카르마 레벨을 읽은 것이 아니다(코드 리뷰 #1004 P3): 0으로 보고 30까지 +3%를 내지 않고 UNSUPPORTED. */
+  @Test
+  void 아크_패시브가_없으면_카르마를_계산하지_않는다() throws Exception {
+    when(auctions.cachedGems()).thenReturn(List.of());
+    search(DEALER, "l01", "블레이드", "4052.77", true);
+    var none =
+        simulate(
+            DEALER, "[{\"kind\": \"ARK_PASSIVE_POINT\", \"tree\": \"깨달음\", \"karmaLevel\": 30}]");
+    assertThat(none.statusCode()).as(none.body()).isEqualTo(200);
+    var data = mapper.readTree(none.body()).path("data");
+    assertThat(data.path("delta").decimalValue()).isEqualByComparingTo(BigDecimal.ZERO);
+    assertThat(data.path("contributions").get(0).path("status").asText()).isEqualTo("UNSUPPORTED");
+  }
+
   private static JsonNode find(JsonNode candidates, String id) {
     for (var candidate : candidates) if (id.equals(candidate.path("id").asText())) return candidate;
     throw new AssertionError(id + " 후보가 없습니다");
@@ -221,12 +264,19 @@ class SpecUpKarmaCpIntegrationTest {
 
   private void search(String name, String fixture, String className, String combatPower)
       throws Exception {
+    search(name, fixture, className, combatPower, false);
+  }
+
+  private void search(
+      String name, String fixture, String className, String combatPower, boolean noArkPassive)
+      throws Exception {
     var raw =
         mapper
             .readTree(
                 new ClassPathResource("kraken-score/" + fixture + ".json")
                     .getContentAsString(StandardCharsets.UTF_8))
             .path("raw");
+    if (noArkPassive) ((tools.jackson.databind.node.ObjectNode) raw).remove("ArkPassive");
     var profile =
         new CharacterProfile(
             name,

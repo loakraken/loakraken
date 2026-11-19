@@ -307,20 +307,26 @@ public class MarketAuctionService {
                     .findLastCell(query.key())
                     .map(AuctionCell::observedAt)
                     .orElse(Instant.EPOCH)));
-    int refreshed = 0;
-    for (var query : queries) {
-      if (refreshed >= count) break;
-      if (!allow.getAsBoolean()) return new GemWarm(refreshed, "capped");
-      try {
-        var cell = toCell(call.apply(() -> search.search(query)));
-        remember(query.key(), cell);
-        refreshed++;
-      } catch (BusinessException exception) {
-        log.debug("보석 시세 칸 예열 실패. 코드={}", exception.errorCode().code());
-        return new GemWarm(refreshed, "failed");
+    // 사용자 표 채우기와 같은 잠금(#997 리뷰 뒤속, 장신구 예열과 같음): 같은 칸을 같은 순간 두 번 받지 않게. 사용자 채우기 중이면 이번 틱은 넘긴다.
+    if (!fillLock.tryLock()) return new GemWarm(0, "busy");
+    try {
+      int refreshed = 0;
+      for (var query : queries) {
+        if (refreshed >= count) break;
+        if (!allow.getAsBoolean()) return new GemWarm(refreshed, "capped");
+        try {
+          var cell = toCell(call.apply(() -> search.search(query)));
+          remember(query.key(), cell);
+          refreshed++;
+        } catch (BusinessException exception) {
+          log.debug("보석 시세 칸 예열 실패. 코드={}", exception.errorCode().code());
+          return new GemWarm(refreshed, "failed");
+        }
       }
+      return new GemWarm(refreshed, refreshed > 0 ? "refreshed" : "idle");
+    } finally {
+      fillLock.unlock();
     }
-    return new GemWarm(refreshed, refreshed > 0 ? "refreshed" : "idle");
   }
 
   /** 보석 시세 표 20칸의 키(마지막 값을 남기는 칸). */

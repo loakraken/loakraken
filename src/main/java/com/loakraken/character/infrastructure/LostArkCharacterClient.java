@@ -177,6 +177,23 @@ class LostArkCharacterClient implements CharacterDetailsPort {
 
   private record Payload<T>(T value, String json) {}
 
+  /**
+   * 공식 캐릭터 응답 본문 상한(#995 리뷰 뒤속, 거래소 응답과 같은 방식): 전체 필터 armory 원본은 실측 100 KB 안팎이라 넉넉히 4 MiB. 넘으면 끝까지
+   * 읽지 않고 LOST_ARK_API_ERROR(본문 전체를 문자열로 버퍼링하지 않음).
+   */
+  static final int MAX_BODY_BYTES = 4 * 1024 * 1024;
+
+  static String readCapped(java.io.InputStream body, Endpoint endpoint) throws java.io.IOException {
+    if (body == null) return null;
+    var bytes = body.readNBytes(MAX_BODY_BYTES + 1);
+    if (bytes.length > MAX_BODY_BYTES) {
+      log.warn(
+          "event=character_body_too_large endpoint={} limitBytes={}", endpoint, MAX_BODY_BYTES);
+      throw new CharacterException(CharacterErrorCode.LOST_ARK_API_ERROR);
+    }
+    return new String(bytes, java.nio.charset.StandardCharsets.UTF_8);
+  }
+
   private <T> Payload<T> request(
       Endpoint endpoint,
       String path,
@@ -235,7 +252,7 @@ class LostArkCharacterClient implements CharacterDetailsPort {
                 }
                 if (status != 200)
                   throw new CharacterException(CharacterErrorCode.LOST_ARK_API_ERROR);
-                String json = response.bodyTo(String.class);
+                String json = readCapped(response.getBody(), endpoint);
                 if (json == null || json.isBlank())
                   throw new CharacterException(CharacterErrorCode.LOST_ARK_API_ERROR);
                 var payload = new Payload<>(mapper.readValue(json, responseType), json);

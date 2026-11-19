@@ -575,9 +575,9 @@ public class SpecUpService {
     var models = new Models(snapshot);
     for (var plan : planned) {
       if (!cooldownGemsIncluded && "COOLDOWN".equals(plan.gemType())) continue;
-      // 99·109·1010돌은 EFFICIENCY·KRAKEN 정렬 목록에만(DELTA는 비용을 보지 않아 맨 위에 오고 추천 순서 DELTA와도 맞춘다, PM 총괄
-      // 11-19). 줄 상세는
-      // 어느 정렬 목록의 id든 찾는다.
+      // 99·109·1010돌은 EFFICIENCY·KRAKEN 정렬 목록에만(PM 총괄 11-19).
+      // DELTA는 비용을 보지 않아 맨 위에 오고, 추천 순서 DELTA와도 맞춘다.
+      // 줄 상세는 어느 정렬 목록의 id든 찾는다.
       if (sort == Sort.DELTA && !allRefineStages && SpecUpScoreCandidates.extremeStone(plan.id()))
         continue;
       var candidate =

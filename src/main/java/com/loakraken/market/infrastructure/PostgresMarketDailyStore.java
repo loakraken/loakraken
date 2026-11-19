@@ -141,12 +141,20 @@ class PostgresMarketDailyStore implements MarketDailyStore {
     return new StoredRange(days, first);
   }
 
-  /** NUMERIC(16, 4)에 맞게 소수 넷째 자리로 반올림한다. 음수·null·정수 12자리 초과는 null(건너뜀). */
-  private static BigDecimal price(BigDecimal value) {
+  /**
+   * NUMERIC(16, 4)에 맞게 소수 넷째 자리로 반올림한다. 음수·null·정수 12자리 초과는 null(건너뜀). 자리 수와 scale은 반올림 전에 압축된 값으로
+   * 먼저 잰다(보안 11-16 (b): 1e100000000 같은 값을 setScale로 펼치지 않게). 반올림으로 자리가 늘 수 있어 반올림 뒤에도 한 번 더 잰다.
+   */
+  static BigDecimal price(BigDecimal value) {
     if (value == null || value.signum() < 0) return null;
+    if (value.scale() < -INTEGER_DIGITS || value.scale() > MAX_INPUT_SCALE) return null;
+    if (value.precision() - value.scale() > INTEGER_DIGITS) return null;
     var scaled = value.setScale(4, RoundingMode.HALF_UP);
     return scaled.precision() - scaled.scale() > INTEGER_DIGITS ? null : scaled;
   }
+
+  /** 반올림 전에 받는 가격 scale 상한(그보다 잘게 쪼갠 값은 상위 응답 고장으로 보고 건너뜀). */
+  static final int MAX_INPUT_SCALE = 18;
 
   private void skip(long itemId, String reason, LocalDate today) {
     metrics.dailyRecord("skipped_" + reason);

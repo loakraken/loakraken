@@ -68,6 +68,17 @@ public class MarketMetrics {
     registry.counter("loakraken.market.daily_record", "event", event).increment();
   }
 
+  /**
+   * 공식 거래소 품목 상세에서 상한 밖이라 버린 값 수(보안 11-16 (b)): reason = variants(변형 수 초과)·rows(줄 수
+   * 초과)·price(음수·scale·정수 자리)·date(지난 30일 밖)·trade_count(음수). 고정 집합. 0이 아니면 상위 응답이 고장 났거나 바뀐 것이다.
+   */
+  public void upstreamValue(String reason, int count) {
+    if (count > 0)
+      registry
+          .counter("loakraken.market.upstream_value_dropped", "reason", reason)
+          .increment(count);
+  }
+
   /** 거래소 일별 시세 저장에서 실제로 넣거나 바꾼 행 수(같은 값 다시 받기는 0). '쌓이고 있나'에 답한다. */
   public void dailyRows(int rows) {
     if (rows > 0) registry.counter("loakraken.market.daily_record.rows").increment(rows);

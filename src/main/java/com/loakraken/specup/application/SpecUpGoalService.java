@@ -194,7 +194,8 @@ public class SpecUpGoalService {
   }
 
   // v2: 완갑(팔 보호구) 재련 단계를 고른다. v3: 어빌리티 스톤 목표 조합(각인 둘을 한 단계에), 단계 changes.
-  public static final String PATH_RULE_VERSION = "spec-up-path-v6";
+  // v7: EFFICIENCY·KRAKEN이 99·109·1010돌을 고른다(PM 총괄 11-19).
+  public static final String PATH_RULE_VERSION = "spec-up-path-v7";
   static final int PATH_MAX_STEPS = 30;
   static final int SOLVE_MAX_CONCURRENT = 2;
   static final Duration PATH_RETRY_AFTER = Duration.ofSeconds(2);
@@ -938,6 +939,9 @@ public class SpecUpGoalService {
       for (var listed : options(state, gems, refinePrices, pricesAt, polish)) {
         var option = listed;
         if (krakenExcluded.contains(option.slot())) continue;
+        // 99·109·1010돌은 추천 순서 EFFICIENCY·KRAKEN에서만(비용당 이득으로 맨 뒤). DELTA·목표 경로는 뺀다(핫픽스 v0.3.9.2, PM
+        // 총괄 11-19).
+        if (!baseline && SpecUpScoreCandidates.extremeStone(option.id())) continue;
         var polishStep = polishById.get(option.id());
         // '상·상 뒤' 셋째 줄 후보는 이 장신구의 지금 매물이 상·상(HH)일 때만(비교 기준은 지금 상태에서 후보를 만든다).
         if (polishStep != null
@@ -1185,8 +1189,8 @@ public class SpecUpGoalService {
   }
 
   /**
-   * 스톤 id(ABILITY_STONE:각인1 레벨:각인2 레벨)의 목표 순서(SpecUpScoreCandidates.STONE_TARGETS, 97 → 106 → 107).
-   * 모르면 맨 뒤.
+   * 스톤 id(ABILITY_STONE:각인1 레벨:각인2 레벨)의 목표 순서(SpecUpScoreCandidates.STONE_TARGETS, 97 → 106 → 107 →
+   * 99 → 109 → 1010). 모르면 맨 뒤.
    */
   private static int stoneTargetRank(String[] parts) {
     if (parts.length < 3) return Integer.MAX_VALUE;

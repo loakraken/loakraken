@@ -99,8 +99,9 @@ class SpecUpStoneCpIntegrationTest {
       // 비용(기대 키트 × 50골드)이 있으니 1만 골드당 전투력도 있다.
       assertThat(candidate.path("combatPowerPer10kGold").isNull()).as(id).isFalse();
     }
-    // 97·106·107돌 가운데 점수가 오르는 조합(레퍼런스: 2:3, 1:4, 2:4).
-    assertThat(stones).isEqualTo(3);
+    // 97·106·107·99·109·1010돌 가운데 점수가 오르는 조합(97·106·107은 레퍼런스: 2:3, 1:4, 2:4, PM 총괄 11-19로
+    // 99·109·1010돌도).
+    assertThat(stones).isEqualTo(6);
     assertThat(find(candidates, "ABILITY_STONE:2:3").path("deltaCombatPower").decimalValue())
         .isPositive();
   }

@@ -222,13 +222,20 @@ class SpecUpKrakenIntegrationTest {
             assertThat(find(candidates, id).path("krakenScorePer100kGold").decimalValue())
                 .as(id)
                 .isEqualByComparingTo(per100k));
-    // 핫픽스 v0.3.9.2: 99·109·1010돌은 후보로 내지 않는다(다시 넣을지는 (e) 뒤 PM 판단). 남은 스톤 비용은 107돌 약 282만이 가장 크다.
+    // 99·109·1010돌도 목록에 낸다(PM 총괄 11-19, 비교 기준과 같음). 비용은 공식 확률 공개 표(50 ÷ P).
+    int extreme = 0;
     for (var candidate : candidates) {
       var id = candidate.path("id").asText();
       if (!id.startsWith("ABILITY_STONE:")) continue;
-      assertThat(id).isNotIn("ABILITY_STONE:3:3", "ABILITY_STONE:3:4", "ABILITY_STONE:4:4");
-      assertThat(candidate.at("/cost/amount").asLong()).as(id).isLessThanOrEqualTo(3_000_000L);
+      var label = candidate.path("to").asText().split(" ")[0];
+      assertThat(candidate.at("/cost/amount").asLong())
+          .as(id)
+          .isEqualTo(Math.round(com.loakraken.specup.domain.SpecUpCostRules.stoneGold(label)));
+      if (java.util.Set.of(
+              "ABILITY_STONE:3:3", "ABILITY_STONE:3:4", "ABILITY_STONE:4:3", "ABILITY_STONE:4:4")
+          .contains(id)) extreme++;
     }
+    assertThat(extreme).isEqualTo(3);
     var karma = find(candidates, "KARMA_LEVEL:30");
     assertThat(karma.path("deltaKrakenScore").decimalValue()).isEqualByComparingTo("1.84");
     // 카르마 29 → 30: 기대 시도 × 900 = 41.32만, 10만 골드당 0.44(B 화면 값).

@@ -68,6 +68,28 @@ class AccessoryCellWarmupTest {
         .isEqualTo(Instant.parse("2026-11-16T09:00:00Z").getEpochSecond());
   }
 
+  /** 이어진 두 틱이 같은 칸을 다시 받으면(마지막 값 저장 실패) 경고 지표를 센다(보안 11-16 #985 메모). 다른 칸이면 세지 않는다. */
+  @Test
+  void 같은_칸을_이어서_다시_받으면_반복_지표를_센다() {
+    when(lease.hold(eq(MarketHistoryWarmup.LEASE), any())).thenReturn(true);
+    var job = warmup(true, "key");
+    when(auctions.warmAccessories(anyInt(), any(), any(), any()))
+        .thenReturn(new MarketAuctionService.GemWarm(1, "refreshed", "ACC:a"))
+        .thenReturn(new MarketAuctionService.GemWarm(1, "refreshed", "ACC:b"))
+        .thenReturn(new MarketAuctionService.GemWarm(1, "refreshed", "ACC:b"));
+    job.warmAccessoryCells();
+    job.warmAccessoryCells();
+    Assertions.assertThat(registry.find("loakraken.market.warmup_repeat").counter()).isNull();
+    job.warmAccessoryCells();
+    Assertions.assertThat(
+            registry
+                .get("loakraken.market.warmup_repeat")
+                .tag("target", "accessories")
+                .counter()
+                .count())
+        .isEqualTo(1.0);
+  }
+
   @Test
   void 꺼져_있거나_키가_없거나_임대가_없으면_부르지_않는다() {
     when(lease.hold(any(), any())).thenReturn(true);

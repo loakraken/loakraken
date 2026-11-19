@@ -30,6 +30,12 @@ class AccessoryCellWarmup {
   private final Clock clock;
   private final AtomicLong lastSuccess = new AtomicLong();
 
+  /** 앞 틱에서 다시 받은 칸 키. 이어진 두 틱이 같은 칸을 받으면 마지막 값 저장이 실패하고 있다는 뜻이다(보안 11-16 #985 메모). */
+  private volatile String previousKey;
+
+  private static final org.slf4j.Logger log =
+      org.slf4j.LoggerFactory.getLogger(AccessoryCellWarmup.class);
+
   AccessoryCellWarmup(
       MarketAuctionService auctions,
       MarketHistoryWarmup warmup,
@@ -76,5 +82,12 @@ class AccessoryCellWarmup {
         .counter("loakraken.market.warmup", "outcome", result.outcome(), "target", "accessories")
         .increment();
     if (result.refreshed() > 0) lastSuccess.set(clock.instant().getEpochSecond());
+    var key = result.lastKey();
+    if (key != null && key.equals(previousKey)) {
+      // 같은 칸을 이어서 다시 받음: 마지막 값을 남기지 못해 늘 가장 오래된 칸으로 보인다(하루 최대 1,440회까지 같은 칸).
+      registry.counter("loakraken.market.warmup_repeat", "target", "accessories").increment();
+      log.warn("event=market_accessory_warmup_repeat key={}", key);
+    }
+    if (key != null) previousKey = key;
   }
 }

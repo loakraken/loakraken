@@ -487,6 +487,48 @@ class MarketAuctionServiceTest {
     assertThat(capped.outcome()).isEqualTo("capped");
   }
 
+  /** 사용자 표 채우기와 같은 잠금(보안 11-16 #985 메모): 다른 스레드가 채우는 중이면 이번 틱은 공식 호출 없이 busy. 받은 칸 키를 돌려준다. */
+  @Test
+  void 장신구_칸_예열은_표_채우기_잠금을_같이_쓰고_받은_칸_키를_돌려준다() throws Exception {
+    var field = MarketAuctionService.class.getDeclaredField("fillLock");
+    field.setAccessible(true);
+    var lock = (java.util.concurrent.locks.ReentrantLock) field.get(service);
+    var held = new java.util.concurrent.CountDownLatch(1);
+    var release = new java.util.concurrent.CountDownLatch(1);
+    var holder =
+        new Thread(
+            () -> {
+              lock.lock();
+              try {
+                held.countDown();
+                release.await(10, java.util.concurrent.TimeUnit.SECONDS);
+              } catch (InterruptedException exception) {
+                Thread.currentThread().interrupt();
+              } finally {
+                lock.unlock();
+              }
+            });
+    holder.start();
+    try {
+      assertThat(held.await(10, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+      int before = port.searches;
+      var busy =
+          service.warmAccessories(
+              1, java.time.Duration.ofMinutes(60), () -> true, search -> search.get());
+      assertThat(busy.outcome()).isEqualTo("busy");
+      assertThat(port.searches).isEqualTo(before);
+    } finally {
+      release.countDown();
+      holder.join(10_000);
+    }
+    var one =
+        service.warmAccessories(
+            1, java.time.Duration.ofMinutes(60), () -> true, search -> search.get());
+    assertThat(one.outcome()).isEqualTo("refreshed");
+    assertThat(one.lastKey()).isNotNull();
+    assertThat(port.last).containsKey(one.lastKey());
+  }
+
   private final class FakeAuctions implements AuctionPort, AuctionSearchPort {
     int searches;
     final Map<String, AuctionCell> cells = new HashMap<>();

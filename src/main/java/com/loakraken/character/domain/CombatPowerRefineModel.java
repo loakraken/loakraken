@@ -602,7 +602,7 @@ public final class CombatPowerRefineModel {
   }
 
   /** 깨달음 아크 패시브 포인트 설명("6랭크 29레벨")의 레벨. 아크 패시브가 없으면 0. */
-  private static Integer karmaLevel(CharacterLoadout loadout) {
+  public static Integer karmaLevel(CharacterLoadout loadout) {
     if (loadout.arkPassive() == null) return 0;
     for (var point : loadout.arkPassive().points()) {
       if (point == null || !"깨달음".equals(point.name())) continue;

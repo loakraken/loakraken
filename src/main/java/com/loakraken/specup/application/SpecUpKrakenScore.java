@@ -184,6 +184,10 @@ public class SpecUpKrakenScore {
                 yield true;
               }
               case POLISH -> edit instanceof Polish;
+              case ARK_PASSIVE_POINT ->
+                  com.loakraken.character.application.CombatPowerSimulationService.karmaChange(
+                          change)
+                      && karma(copy, change.karmaLevel());
               default -> false;
             };
         if (!applied) return null;

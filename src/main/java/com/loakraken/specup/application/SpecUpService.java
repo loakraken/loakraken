@@ -8,6 +8,7 @@ import com.loakraken.character.domain.CharacterLoadout;
 import com.loakraken.character.domain.CombatPowerGemModel;
 import com.loakraken.character.domain.CombatPowerPolishValues;
 import com.loakraken.character.domain.CombatPowerReasons;
+import com.loakraken.character.domain.CombatPowerRefineModel;
 import com.loakraken.common.api.BusinessException;
 import com.loakraken.market.application.MarketAuctionService;
 import com.loakraken.market.application.RefiningMaterialPriceService;
@@ -126,6 +127,14 @@ public class SpecUpService {
   }
 
   /**
+   * 깨달음 카르마 줄의 Δ전투력(spec-up.karma-cp.enabled, 기본 끔, PM 총괄 11-15 (f)). 켜면 딜러 카르마 줄에 레벨마다 무기 공격력
+   * +0.1%(W 항)로 전투력을 낸다. 서포터는 비교 기준과 식이 달라 점수만.
+   */
+  boolean karmaCpEnabled() {
+    return environment.getProperty("spec-up.karma-cp.enabled", Boolean.class, false);
+  }
+
+  /**
    * 추천 순서·목표 경로의 연마 단계(spec-up.polish-path.enabled, 기본 끔, 목록 연마 전투력 스위치와 따로). 켜면 딜러 연마 교체 줄을 같은
    * 목표·id·비용으로 단계 후보에 넣는다. 요청마다 읽는다.
    */
@@ -145,6 +154,24 @@ public class SpecUpService {
   java.util.List<Map<String, Integer>> stoneOrientations(CharacterResult snapshot) {
     // 비교 기준은 점수 표시와 상관없이 늘 점수로 배치를 고른다(PM 총괄 11-15): 표시 스위치가 꺼져도 안에서 점수를 잰다.
     return SpecUpScoreCandidates.stoneOrientations(kraken, kraken.internalContext(snapshot));
+  }
+
+  /**
+   * 추천 순서·목표 경로 카르마 단계의 시작 레벨(spec-up.karma-cp.enabled): 툴팁(아크 패시브 설명) 레벨, 점수 입력이 있으면 그 레벨과 같을 때만(두
+   * 원문 파서가 갈라지면 단계를 내지 않음). 스위치가 꺼졌거나 읽지 못하면 null.
+   */
+  Integer karmaPathLevel(CharacterResult snapshot) {
+    if (!karmaCpEnabled()) return null;
+    var loadout = snapshot.details().loadout();
+    if (loadout.arkPassive() == null) return null;
+    var level = CombatPowerRefineModel.karmaLevel(loadout);
+    if (level == null) return null;
+    var context = kraken.internalContext(snapshot);
+    if (context != null && context.input() != null) {
+      var input = context.input().path("arkPassive").path("enlightenment").path("karmalevel");
+      if (input.isNumber() && input.asInt() != level) return null;
+    }
+    return level;
   }
 
   /** 크라켄 점수 문맥(목록과 같음). */
@@ -758,6 +785,23 @@ public class SpecUpService {
         return evaluated(plan, simulator.simulate(snapshot, models.get(), changes));
       rowRejected(plan, CombatPowerSimulationService.POLISH_REJECT_UNMAPPABLE);
       return null;
+    }
+    // 카르마: 딜러만(서포터 전투력은 비교 기준과 식이 달라 점수만, PM 총괄 11-15).
+    if (plan.kraken() instanceof SpecUpKrakenScore.Karma karma
+        && karmaCpEnabled()
+        && CombatPowerSimulationService.roleReason(snapshot) == null) {
+      // 점수 입력의 지금 레벨과 툴팁(아크 패시브 설명)의 레벨이 다르면 두 원문 파서가 갈라진 것: 틀린 Δ 대신 점수만.
+      var tooltip = CombatPowerRefineModel.karmaLevel(snapshot.details().loadout());
+      if (tooltip == null || !(tooltip + "레벨").equals(plan.from())) {
+        rowRejected(plan, CombatPowerSimulationService.POLISH_REJECT_LINE_MISMATCH);
+        return null;
+      }
+      return evaluated(
+          plan,
+          simulator.simulate(
+              snapshot,
+              models.get(),
+              List.of(CombatPowerSimulationService.karmaLevelChange(karma.level()))));
     }
     return null;
   }

@@ -35,6 +35,8 @@ class SpecUpGoalServiceTest {
   {
     // 실제 서비스는 점수 입력을 읽을 수 없을 때 null(앞 배치)이다. 목은 빈 목록(점수가 오르는 조합 없음)을 돌려주므로 null로 둔다.
     when(specUp.stoneOrientations(org.mockito.ArgumentMatchers.any())).thenReturn(null);
+    // 카르마 단계 스위치 꺼짐(Mockito 기본 0이면 0레벨에서 카르마 단계가 생긴다).
+    when(specUp.karmaPathLevel(org.mockito.ArgumentMatchers.any())).thenReturn(null);
   }
 
   private final MemoryStore store = new MemoryStore();

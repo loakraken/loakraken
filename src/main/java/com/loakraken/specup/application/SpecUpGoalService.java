@@ -422,6 +422,7 @@ public class SpecUpGoalService {
                 String.valueOf(specUp.costRuleVersions()),
                 specUp.armGuardEnabled() ? "ag" : "-")
             + polishSignature(polish)
+            + karmaSignature()
             + (pick == Pick.KRAKEN ? ":k" + SpecUpKrakenScore.RULE_VERSION : "")
             + (krakenUnavailable == null ? "" : ":ku" + krakenUnavailable);
     var cached = store.findPath(key);
@@ -600,7 +601,8 @@ public class SpecUpGoalService {
     for (var option :
         options(
             State.of(snapshot.details().loadout(), armGuard, true)
-                .withStoneOrientations(specUp.stoneOrientations(snapshot)),
+                .withStoneOrientations(specUp.stoneOrientations(snapshot))
+                .withKarma(specUp.karmaPathLevel(snapshot)),
             gems,
             refinePrices,
             pricesAt,
@@ -748,7 +750,8 @@ public class SpecUpGoalService {
                 CombatPowerSimulationService.RULE_VERSION,
                 String.valueOf(specUp.costRuleVersions()),
                 specUp.armGuardEnabled() ? "ag" : "-")
-            + polishSignature(polish);
+            + polishSignature(polish)
+            + karmaSignature();
     var cached = store.find(key);
     if (cached.isPresent()) {
       goalOutcome("cache_hit");
@@ -885,7 +888,8 @@ public class SpecUpGoalService {
     // 추천 순서와 목표 경로 모두 어빌리티 스톤 목표 조합도 고른다(목표 경로 v3).
     var state =
         State.of(snapshot.details().loadout(), armGuard, true)
-            .withStoneOrientations(specUp.stoneOrientations(snapshot));
+            .withStoneOrientations(specUp.stoneOrientations(snapshot))
+            .withKarma(specUp.karmaPathLevel(snapshot));
     // 칸마다 그 칸의 마지막 단계 변경(스톤은 각인 둘이라 여러 개).
     var applied = new LinkedHashMap<String, List<Change>>();
     var current = before;
@@ -1135,7 +1139,7 @@ public class SpecUpGoalService {
    * 같은 비율·Δ·비용일 때의 후보 종류 순서(PM 총괄 11-19 (D), 비교 기준의 후보 순서): 보석 → 재련·상급 재련·품질 → 장신구(연마) → 스톤 → 각인.
    */
   static final List<String> CANDIDATE_KINDS =
-      List.of("GEM_LEVEL", "REFINE", "POLISH", "ABILITY_STONE", "ENGRAVING_LEVEL");
+      List.of("GEM_LEVEL", "REFINE", "POLISH", "ABILITY_STONE", "ENGRAVING_LEVEL", "KARMA_LEVEL");
 
   /** 재련 묶음(비교 기준은 재련·상급 재련·품질을 한 종류로 칸 번호 순, 코드 리뷰 #993 P3). 같은 칸이면 이 순서. */
   static final List<String> REFINE_KINDS =
@@ -1661,6 +1665,42 @@ public class SpecUpGoalService {
               null));
     }
     if (state.stone() != null) result.addAll(stoneOptions(state.stone()));
+    if (state.karma() != null) result.addAll(karmaOptions(state.karma()));
+    return result;
+  }
+
+  /** 카르마 단계 스위치가 켜지면 캐시 키 끝에 ":kc"(꺼져 있으면 키가 그대로라 배포 뒤 캐시가 한꺼번에 비지 않음). */
+  private String karmaSignature() {
+    return specUp.karmaCpEnabled() ? ":kc" : "";
+  }
+
+  /** 깨달음 카르마 최대 레벨(SpecUpScoreCandidates와 같음). */
+  static final int KARMA_MAX = 30;
+
+  /**
+   * 깨달음 카르마 단계(목록 카르마 줄과 같은 id·대상·비용): 지금 레벨 → 다음 레벨 … 30 가운데 하나(비교 기준처럼 한 번에 여러 레벨도 고른다). 비용은 지금
+   * 레벨에서 그 레벨까지의 기대 골드(SpecUpCostRules.karmaGold, 거래 불가라 단계마다 그대로 낸다).
+   */
+  static List<Option> karmaOptions(int current) {
+    var result = new ArrayList<Option>();
+    for (int next = current + 1; next <= KARMA_MAX; next++) {
+      var gold = com.loakraken.specup.domain.SpecUpCostRules.karmaGold(current, next);
+      result.add(
+          new Option(
+              "KARMA_LEVEL",
+              "KARMA_LEVEL:" + next,
+              "깨달음 카르마",
+              current + "레벨",
+              next + "레벨",
+              null,
+              null,
+              null,
+              CombatPowerSimulationService.karmaLevelChange(next),
+              gold == null ? SpecUpCost.KARMA_COST_UNCONFIRMED : SpecUpCost.karma(gold),
+              null,
+              null,
+              null));
+    }
     return result;
   }
 
@@ -1893,6 +1933,8 @@ public class SpecUpGoalService {
 
     /** 단계 종류: 변경이 하나면 그 kind, 여럿이면(어빌리티 스톤) 후보 id의 종류(목록과 같음). */
     String kind() {
+      // 카르마 단계는 시뮬레이터 변경(ARK_PASSIVE_POINT 깨달음 level)과 달리 목록과 같은 종류 KARMA_LEVEL.
+      if (id != null && id.startsWith("KARMA_LEVEL:")) return "KARMA_LEVEL";
       if (more == null || more.isEmpty()) return change.kind().name();
       int colon = id.indexOf(':');
       return colon < 0 ? id : id.substring(0, colon);
@@ -1934,7 +1976,8 @@ public class SpecUpGoalService {
       Item quality,
       Map<String, Engraving> engravings,
       Item armGuard,
-      Stone stone) {
+      Stone stone,
+      Integer karma) {
     /** 스톤 배치를 목록과 같게(목표 조합마다 하나). 스톤이 없거나 배치를 모르면 그대로. */
     State withStoneOrientations(List<Map<String, Integer>> orientations) {
       if (stone == null || orientations == null) return this;
@@ -1945,7 +1988,17 @@ public class SpecUpGoalService {
           quality,
           engravings,
           armGuard,
-          new Stone(stone.item(), stone.levels(), orientations));
+          new Stone(stone.item(), stone.levels(), orientations),
+          karma);
+    }
+
+    /**
+     * 깨달음 카르마 단계(spec-up.karma-cp.enabled): 지금 레벨에서 다음 레벨 … 30까지 한 단계에 하나(목록 카르마 줄과 같은 id·비용).
+     * null이거나 30이면 넣지 않는다.
+     */
+    State withKarma(Integer level) {
+      var next = level == null || level >= KARMA_MAX ? null : level;
+      return new State(gems, refines, advanced, quality, engravings, armGuard, stone, next);
     }
 
     /** 완갑(팔 보호구)·어빌리티 스톤은 넣지 않는 상태(목표 경로). */
@@ -2051,7 +2104,7 @@ public class SpecUpGoalService {
           if (levels.size() == 2) stoneState = new Stone(item, levels);
         }
       }
-      return new State(gems, refines, advanced, quality, engravings, guard, stoneState);
+      return new State(gems, refines, advanced, quality, engravings, guard, stoneState, null);
     }
 
     /** option 단계를 적용한 다음 상태. 끝 단계에 닿은 칸은 뺀다. */
@@ -2063,6 +2116,7 @@ public class SpecUpGoalService {
       var engravings = new LinkedHashMap<>(this.engravings);
       var armGuard = this.armGuard;
       var stone = this.stone;
+      var karma = this.karma;
       var change = option.change();
       switch (change.kind()) {
         case GEM_LEVEL -> {
@@ -2117,9 +2171,13 @@ public class SpecUpGoalService {
           for (var each : option.changes()) levels.put(each.name(), each.level());
           stone = new Stone(stone.item(), levels, stone.orientations());
         }
+        case ARK_PASSIVE_POINT -> {
+          if (CombatPowerSimulationService.karmaChange(change))
+            karma = change.karmaLevel() >= KARMA_MAX ? null : change.karmaLevel();
+        }
         default -> {}
       }
-      return new State(gems, refines, advanced, quality, engravings, armGuard, stone);
+      return new State(gems, refines, advanced, quality, engravings, armGuard, stone, karma);
     }
   }
 }

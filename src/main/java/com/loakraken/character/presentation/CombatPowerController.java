@@ -205,11 +205,28 @@ public class CombatPowerController {
       @Schema(description = "아크 패시브 트리(진화·깨달음·도약)") @Size(max = 8) String tree,
       @Schema(description = "아크 패시브 포인트(0~999, 도약은 0~70)") Integer points,
       @Schema(description = "아크 그리드 slot index") Integer slotIndex,
-      @Schema(description = "아크 그리드 코어 포인트") Integer point) {
+      @Schema(description = "아크 그리드 코어 포인트") Integer point,
+      @Schema(
+              description =
+                  "깨달음 카르마 레벨(0~30, ARK_PASSIVE_POINT tree 깨달음만, points·level과 함께 쓰지 않음). 딜러만 계산한다(무기 공격력 레벨당 +0.1%)")
+          Integer karmaLevel) {
     CombatPowerSimulationService.Change toChange() {
       return new CombatPowerSimulationService.Change(
-          kind, slot, index, line, level, refine, quality, option, grade, name, tree, points,
-          slotIndex, point);
+          kind,
+          slot,
+          index,
+          line,
+          level,
+          refine,
+          quality,
+          option,
+          grade,
+          name,
+          tree,
+          points,
+          slotIndex,
+          point,
+          karmaLevel);
     }
   }
 

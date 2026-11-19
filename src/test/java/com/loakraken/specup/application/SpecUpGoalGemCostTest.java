@@ -118,20 +118,62 @@ class SpecUpGoalGemCostTest {
     assertThat(SpecUpGoalService.marginal(refine, totals)).isEqualTo(300_000);
   }
 
+  /**
+   * 추천 순서·목표 경로 고르기(PM 총괄 11-19, 10-18 '공짜 먼저' 대체, 비교 기준과 같음): 효율 있는 단계가 먼저이고, 더 드는 비용이 0 이하이거나 모르는
+   * 단계는 그 뒤(Δ 큰 순, 비용 낮은 순, 모름은 가장 뒤).
+   */
   @Test
-  void 더_드는_비용이_0_이하인_단계를_효율_있는_단계보다_먼저_고른다() {
+  void 효율_있는_단계가_먼저이고_공짜와_비용_모름은_그_뒤다() {
     var free = scored(option("GEM_LEVEL:0", SpecUpCost.gem(390_000, 400_000L, false)), "24", null);
     var priced =
         scored(option("GEM_LEVEL:1", SpecUpCost.gem(1_000_000, 400_000L, false)), "24", "0.40");
-    assertThat(SpecUpGoalService.free(0L)).isTrue();
-    assertThat(SpecUpGoalService.free(-50_000L)).isTrue();
-    assertThat(SpecUpGoalService.free(null)).isFalse();
-    assertThat(SpecUpGoalService.preferred(free, true, priced, false)).isTrue();
-    assertThat(SpecUpGoalService.preferred(priced, false, free, true)).isFalse();
-    // 0 단계끼리는 Δ 큰 순.
+    assertThat(SpecUpGoalService.rated(0L)).isFalse();
+    assertThat(SpecUpGoalService.rated(-50_000L)).isFalse();
+    assertThat(SpecUpGoalService.rated(null)).isFalse();
+    assertThat(SpecUpGoalService.rated(1L)).isTrue();
+    assertThat(SpecUpGoalService.baselinePreferred(priced, 600_000L, free, 0L)).isTrue();
+    assertThat(SpecUpGoalService.baselinePreferred(free, 0L, priced, 600_000L)).isFalse();
+    // 비율 없는 것끼리는 Δ 큰 순.
     var bigger =
         scored(option("GEM_LEVEL:2", SpecUpCost.gem(390_000, 400_000L, false)), "48", null);
-    assertThat(SpecUpGoalService.preferred(bigger, true, free, true)).isTrue();
+    assertThat(SpecUpGoalService.baselinePreferred(bigger, null, free, 0L)).isTrue();
+    // Δ도 같으면 비용 낮은 순: 공짜가 비용 모름보다 먼저.
+    var unknown = scored(option("GEM_LEVEL:3", SpecUpCost.PRICE_PENDING), "24", null);
+    assertThat(SpecUpGoalService.baselinePreferred(free, 0L, unknown, null)).isTrue();
+    assertThat(SpecUpGoalService.baselinePreferred(unknown, null, free, 0L)).isFalse();
+  }
+
+  /**
+   * 추천 순서·목표 경로 단계 비용(PM 총괄 11-19, 비교 기준과 같음): 귀속 보석·빈 칸은 단계마다 새 레벨 가격 전부, 거래 가능한 보석은 앞 단계와의 차이(0
+   * 미만은 0).
+   */
+  @Test
+  void 귀속_보석은_단계마다_새_레벨_가격_전부이고_거래_가능하면_차이다() {
+    var paid = new java.util.HashMap<String, Long>();
+    paid.put("GEM_LEVEL:0", 300_000L);
+    // 귀속: 지금까지 낸 값과 상관없이 새 레벨 가격 전부.
+    assertThat(
+            SpecUpGoalService.paidCost(
+                option("GEM_LEVEL:0", SpecUpCost.gem(900_000, null, true)), paid))
+        .isEqualTo(900_000L);
+    // 빈 칸(지금 보석 없음): 전부.
+    assertThat(
+            SpecUpGoalService.paidCost(
+                option("GEM_LEVEL:0", SpecUpCost.gem(900_000, null, false)), paid))
+        .isEqualTo(900_000L);
+    // 거래 가능: 누적 비용 − 앞 단계 누적 = 새 가격 − 앞 가격.
+    assertThat(
+            SpecUpGoalService.paidCost(
+                option("GEM_LEVEL:0", SpecUpCost.gem(1_000_000, 400_000L, false)), paid))
+        .isEqualTo(300_000L);
+    // 거래 가능인데 앞 단계보다 싸면 0.
+    assertThat(
+            SpecUpGoalService.paidCost(
+                option("GEM_LEVEL:0", SpecUpCost.gem(500_000, 400_000L, false)), paid))
+        .isZero();
+    // 시세를 모르면 모름.
+    assertThat(SpecUpGoalService.paidCost(option("GEM_LEVEL:0", SpecUpCost.PRICE_PENDING), paid))
+        .isNull();
   }
 
   /** 소수 둘째 자리에서 같아지는 효율(0.6476 · 0.6517 → 둘 다 0.65)도 반올림 전 값으로 가른다. Δ가 같아도 id 순으로 가지 않는다. */
@@ -151,7 +193,7 @@ class SpecUpGoalGemCostTest {
             .scored(delta, java.math.BigDecimal.valueOf(3000), high);
     // id만 보면 "GEM_LEVEL:10:10" < "GEM_LEVEL:5:10"이지만 반올림 전 효율이 큰 b가 앞선다.
     assertThat(SpecUpGoalService.ORDER.compare(b, a)).isNegative();
-    assertThat(SpecUpGoalService.preferred(b, false, a, false)).isTrue();
+    assertThat(SpecUpGoalService.baselinePreferred(b, 590_003L, a, 593_698L)).isTrue();
     assertThat(SpecUpGoalService.rank(delta, 0L)).isNull();
     assertThat(SpecUpGoalService.rank(delta, null)).isNull();
   }

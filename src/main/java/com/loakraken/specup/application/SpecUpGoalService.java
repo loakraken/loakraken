@@ -47,7 +47,7 @@ public class SpecUpGoalService {
    * v3: 목표 경로도 추천 순서와 같은 단계 종류(어빌리티 스톤 목표 조합, 완갑 스위치)를 고른다(계산 검증 11-09: 스톤으로만 닿는 목표가 '더 올릴 수
    * 없음'이었다).
    */
-  public static final String RULE_VERSION = "spec-up-goal-v5";
+  public static final String RULE_VERSION = "spec-up-goal-v6";
 
   static final int MAX_STEPS = 30;
   static final Duration TIME_LIMIT = Duration.ofSeconds(2);
@@ -194,7 +194,7 @@ public class SpecUpGoalService {
   }
 
   // v2: 완갑(팔 보호구) 재련 단계를 고른다. v3: 어빌리티 스톤 목표 조합(각인 둘을 한 단계에), 단계 changes.
-  public static final String PATH_RULE_VERSION = "spec-up-path-v5";
+  public static final String PATH_RULE_VERSION = "spec-up-path-v6";
   static final int PATH_MAX_STEPS = 30;
   static final int SOLVE_MAX_CONCURRENT = 2;
   static final Duration PATH_RETRY_AFTER = Duration.ofSeconds(2);
@@ -529,7 +529,10 @@ public class SpecUpGoalService {
             before,
             null,
             pick,
-            true,
+            // KRAKEN·EFFICIENCY(PM 총괄 11-19 (B)): 비용을 모르는 단계도 고른다(비율이 없어 비용 있는 단계 뒤, 비용은 모름으로 보인다).
+            // DELTA는
+            // 그대로.
+            pick == Pick.DELTA,
             limit,
             armGuard,
             gems,
@@ -537,9 +540,10 @@ public class SpecUpGoalService {
             polish,
             krakenContext,
             scoreOnly);
-    // 점수만 고르는 서포터 경로는 전투력이 오르는 것을 잴 수 없어 unpriced를 비운다.
+    // 점수만 고르는 서포터 경로는 전투력이 오르는 것을 잴 수 없어 unpriced를 비운다. KRAKEN·EFFICIENCY는 비용을 모르는 단계도 고르므로(PM 총괄
+    // 11-19 (B)) '비용을 몰라 빠진 후보'가 없다(DELTA만 남는다).
     var unpriced =
-        scoreOnly
+        scoreOnly || pick != Pick.DELTA
             ? List.<Excluded>of()
             : unpricedAtStart(snapshot, before, armGuard, gems, refinePrices, polish);
     return new Path(
@@ -880,6 +884,12 @@ public class SpecUpGoalService {
     var polishChosen = new HashMap<String, String>();
     long others = 0;
     boolean othersUnknown = false;
+    // 추천 순서 KRAKEN·EFFICIENCY와 목표 경로(EFFICIENCY 규칙으로 고름)(PM 총괄 11-19, 비교 기준과 같음, 10-18 '공짜 먼저' 대체):
+    // 고르기는
+    // 비율 있는 단계 먼저(공짜·비용 모름은 뒤), 합계는 단계마다 낸 비용(paidCost)의 합. 모르는 비용이 하나라도 있으면 합계도 모름. DELTA만 그대로.
+    boolean baseline = pick != Pick.DELTA;
+    long paidSum = 0;
+    boolean paidUnknown = false;
     long started = nanoTime.getAsLong();
     String stop;
     while (true) {
@@ -896,7 +906,6 @@ public class SpecUpGoalService {
         break;
       }
       Option best = null;
-      boolean bestFree = false;
       Long bestMarginal = null;
       Double bestScore = null;
       for (var listed : options(state, gems, refinePrices, pricesAt, polish)) {
@@ -915,8 +924,10 @@ public class SpecUpGoalService {
           option = withPolishResets(option, polishStep, applied.get(option.slot()));
           if (option == null) continue;
         }
-        // 고르는 효율은 이 단계에 더 드는 비용(보석은 누적 차이)으로: 같은 칸을 이어서 올릴 때 이미 낸 비용을 다시 세지 않는다.
-        var marginal = marginal(option, gemTotals);
+        // 고르는 효율의 비용: KRAKEN·EFFICIENCY·목표 경로는 비교 기준처럼 단계마다 낸 비용(스톤·귀속은 전부, 거래 가능은 차이, PM 총괄
+        // 11-19),
+        // DELTA는 더 드는 비용(보석은 누적 차이) 그대로.
+        var marginal = baseline ? paidCost(option, gemTotals) : marginal(option, gemTotals);
         if (pricedOnly && marginal == null) continue;
         var trial = new LinkedHashMap<>(applied);
         trial.put(option.slot(), option.changes());
@@ -941,7 +952,6 @@ public class SpecUpGoalService {
         } else if (delta.signum() <= 0) continue;
         // 고르기는 반올림하지 않은 비율로(소수 둘째 자리에서 같아져 id 순으로 갈리지 않게, 계산 검증 11-01). 화면 값은 단계를 만들 때 따로 반올림한다.
         var scored = option.scored(delta, after, delta == null ? null : rank(delta, marginal));
-        boolean free = free(marginal);
         if (best == null
             || (kraken != null
                 ? krakenPreferred(
@@ -953,9 +963,8 @@ public class SpecUpGoalService {
                     best.id())
                 : pick == Pick.DELTA
                     ? BY_DELTA.compare(scored, best) < 0
-                    : preferred(scored, free, best, bestFree))) {
+                    : baselinePreferred(scored, marginal, best, bestMarginal))) {
           best = scored;
-          bestFree = free;
           bestMarginal = marginal;
           bestScore = score;
         }
@@ -989,7 +998,10 @@ public class SpecUpGoalService {
       if (slotCost(best)) gemTotals.put(best.slot(), amount);
       else if (amount == null) othersUnknown = true;
       else others += amount;
-      cumulative = total(others, othersUnknown, gemTotals);
+      if (bestMarginal == null) paidUnknown = true;
+      else paidSum += bestMarginal;
+      cumulative =
+          baseline ? (paidUnknown ? null : paidSum) : total(others, othersUnknown, gemTotals);
       steps.add(
           new Step(
               steps.size() + 1,
@@ -1018,21 +1030,55 @@ public class SpecUpGoalService {
   }
 
   /**
-   * KRAKEN 고르기(PM 총괄 11-15 (d)): 더 드는 비용이 0 이하인 단계가 먼저(Δ점수 큰 순), 그다음 10만 골드당 Δ점수(반올림 전) 큰 순, 같으면
-   * Δ점수·id. 경로는 '먼저 할 일' 순서라 EFFICIENCY 경로처럼 공짜 단계를 앞에 둔다.
+   * KRAKEN 고르기(PM 총괄 11-19, 비교 기준의 고르기 규칙과 같음): (1) 비율(Δ점수 ÷ 더 드는 비용)이 있는 단계가 먼저, 비율 큰 순. 더 드는 비용이
+   * 0 이하이거나 모르면 비율이 없어 비용 있는 단계 뒤(공짜 단계를 먼저 두지 않음). (2) 같으면 Δ점수 큰 순, (3) 그다음 더 드는 비용 낮은 순(모르는 비용은
+   * 가장 큼), (4) id 순.
    */
   static boolean krakenPreferred(
       double delta, Long marginal, String id, double bestDelta, Long bestMarginal, String bestId) {
-    boolean free = free(marginal);
-    boolean bestFree = free(bestMarginal);
-    if (free != bestFree) return free;
-    if (!free) {
+    boolean rated = rated(marginal);
+    boolean bestRated = rated(bestMarginal);
+    if (rated != bestRated) return rated;
+    if (rated) {
       double rate = delta / marginal;
       double bestRate = bestDelta / bestMarginal;
       if (rate != bestRate) return rate > bestRate;
     }
     if (delta != bestDelta) return delta > bestDelta;
+    if (!java.util.Objects.equals(marginal, bestMarginal)) {
+      if (marginal == null) return false;
+      if (bestMarginal == null) return true;
+      return marginal < bestMarginal;
+    }
     return id.compareTo(bestId) < 0;
+  }
+
+  /**
+   * EFFICIENCY 추천 순서 고르기(PM 총괄 11-19, 10-18 '공짜 먼저' 대체, 비교 기준과 같음): krakenPreferred와 같은 규칙을 전투력 Δ로.
+   * 비율(효율)이 있는 단계 먼저(효율 큰 순), Δ 큰 순, 단계 비용 낮은 순(모름은 가장 큼), id 순.
+   */
+  static boolean baselinePreferred(
+      Option candidate, Long marginal, Option best, Long bestMarginal) {
+    boolean rated = rated(marginal);
+    boolean bestRated = rated(bestMarginal);
+    if (rated != bestRated) return rated;
+    if (rated) {
+      int byRate = candidate.efficiency().compareTo(best.efficiency());
+      if (byRate != 0) return byRate > 0;
+    }
+    int byDelta = candidate.delta().compareTo(best.delta());
+    if (byDelta != 0) return byDelta > 0;
+    if (!java.util.Objects.equals(marginal, bestMarginal)) {
+      if (marginal == null) return false;
+      if (bestMarginal == null) return true;
+      return marginal < bestMarginal;
+    }
+    return candidate.id().compareTo(best.id()) < 0;
+  }
+
+  /** 비율(Δ ÷ 더 드는 비용)을 낼 수 있는 비용인가: 알고 0보다 크다. */
+  static boolean rated(Long marginal) {
+    return marginal != null && marginal > 0;
   }
 
   /**
@@ -1144,6 +1190,24 @@ public class SpecUpGoalService {
    * 이 단계에 더 드는 비용: 보석은 지금 누적 − 그 칸에서 이미 낸 누적(처음 단계는 0), 어빌리티 스톤은 이 스톤 비용 − 앞 스톤 단계 비용(처음은 0), 그 밖은
    * 단계 비용. 모르면 null.
    */
+  /** 단계마다 그 비용 전부를 내는 비용 코드: 귀속(또는 빈 칸) 보석, 거래할 수 없는 장신구(새로 사서 바꾼다, 비교 기준과 같음). */
+  static final java.util.Set<String> FULL_EACH_STEP =
+      java.util.Set.of("GEM_BUY_BOUND", "GEM_BUY", "POLISH_BUY");
+
+  /**
+   * 추천 순서(KRAKEN·EFFICIENCY)의 단계 비용(PM 총괄 11-19, 비교 기준과 같음): 어빌리티 스톤은 앞 스톤과 상관없이 그 스톤 비용 전부(C), 귀속
+   * 보석·거래할 수 없는 장신구는 단계마다 새 가격 전부, 거래할 수 있는 보석·장신구는 새 가격 − 앞 단계 가격(0 미만은 0). 그 밖은 단계 비용. 모르면 null.
+   * 고르는 비율과 경로 합계(단계 비용의 합)에 함께 쓴다.
+   */
+  static Long paidCost(Option option, Map<String, Long> gemTotals) {
+    var amount = option.cost() == null ? null : option.cost().amount();
+    if (amount == null) return null;
+    if ("ABILITY_STONE".equals(option.kind()) || !slotCost(option)) return amount;
+    if (FULL_EACH_STEP.contains(option.cost().code())) return amount;
+    var difference = marginal(option, gemTotals);
+    return difference == null ? null : Math.max(0, difference);
+  }
+
   static Long marginal(Option option, Map<String, Long> gemTotals) {
     var amount = option.cost() == null ? null : option.cost().amount();
     if (amount == null || !slotCost(option)) return amount;
@@ -1179,24 +1243,6 @@ public class SpecUpGoalService {
                   ? ""
                   : step.cost().priceObservedAt().toEpochMilli()));
     return ":pp" + Integer.toHexString(String.join(",", parts).hashCode());
-  }
-
-  /** 더 드는 비용이 0 이하로 확인된 단계(거꾸로 시세의 보석 단계 등). 효율은 '-'(null)이지만 경로에는 먼저 넣는다. */
-  static boolean free(Long marginal) {
-    return marginal != null && marginal <= 0;
-  }
-
-  /**
-   * 다음 단계 고르기: 목표 경로는 '가장 싸게 목표까지 가는 계획'이라 더 드는 비용이 0 이하인 단계를 맨 앞에(Δ 큰 순) 넣어 단계 상한에 밀려 빠지지 않게 하고, 그
-   * 밖은 ORDER(효율 높은 순, 효율 없음은 뒤, 같으면 Δ·id). 목록 정렬(효율 없는 줄은 뒤)과는 다르다(PM 판정 10-18).
-   */
-  static boolean preferred(Option candidate, boolean candidateFree, Option best, boolean bestFree) {
-    if (candidateFree != bestFree) return candidateFree;
-    if (candidateFree) {
-      int byDelta = best.delta().compareTo(candidate.delta());
-      return byDelta != 0 ? byDelta < 0 : candidate.id().compareTo(best.id()) < 0;
-    }
-    return ORDER.compare(candidate, best) < 0;
   }
 
   /** 경로 합계(보석 칸마다 마지막 누적 + 그 밖 합). 모르는 값이 있으면 null. */

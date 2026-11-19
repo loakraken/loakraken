@@ -806,13 +806,13 @@ public class SpecUpService {
     return null;
   }
 
+  /** 카르마 줄: 점수 입력의 지금 레벨과 툴팁 레벨이 다름(지표 error 값, 코드 리뷰 #1004 P3: 연마의 line_mismatch와 나눔). */
+  static final String KARMA_REJECT_LEVEL_MISMATCH = "level_mismatch";
+
   /**
    * 스위치가 켜졌는데 계산하지 못해 점수만 남는 줄(예외 아님): 연마 교체는 점수 입력 줄이 툴팁 줄과 다르면 line_mismatch, 그 밖은 unmappable. 같은
    * row_cp_failed 수에 센다(코드 리뷰 #949 P3, PM 총괄 11-15 14:44 스위치를 켜기 전 필수).
    */
-  /** 카르마 줄: 점수 입력의 지금 레벨과 툴팁 레벨이 다름(지표 error 값, 코드 리뷰 #1004 P3: 연마의 line_mismatch와 나눔). */
-  static final String KARMA_REJECT_LEVEL_MISMATCH = "level_mismatch";
-
   private void rowRejected(Planned plan, String error) {
     log.warn("event=spec_up_row_cp_failed id={} kind={} error={}", plan.id(), plan.kind(), error);
     meters

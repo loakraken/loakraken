@@ -852,6 +852,79 @@ class SpecUpGoalServiceTest {
   }
 
   /**
+   * 검색봇 표시(User-Agent로 붙는 'bot:' 접두)는 같은 주소에 두 번째 자리를 주지 않는다(보안 11-20 (b)): 주소 키로 자리를 잡은 동안 같은 주소의
+   * 봇 키는 client_busy이고, 끝나면 봇 키로 계산한 뒤 돌려준 자리를 주소 키가 다시 쓴다.
+   */
+  @Test
+  void 검색봇_표시로_같은_주소가_두_번째_계산_자리를_받지_못한다() throws Exception {
+    var entered = new java.util.concurrent.CountDownLatch(1);
+    var release = new java.util.concurrent.CountDownLatch(1);
+    var holding = java.util.concurrent.ConcurrentHashMap.<String>newKeySet();
+    LongSupplier clock =
+        () -> {
+          var name = Thread.currentThread().getName();
+          if (name.equals("address-path") && holding.add(name)) {
+            entered.countDown();
+            try {
+              if (!release.await(10, java.util.concurrent.TimeUnit.SECONDS))
+                throw new AssertionError("계산 자리 놓아주기 대기 시간 초과");
+            } catch (InterruptedException exception) {
+              Thread.currentThread().interrupt();
+              throw new AssertionError("계산 자리 놓아주기 대기 중 중단", exception);
+            }
+          }
+          return System.nanoTime();
+        };
+    var current = new ThreadLocal<String>();
+    var service = service(clock, current::get);
+    var errors = new java.util.concurrent.ConcurrentLinkedQueue<Throwable>();
+    var first =
+        new Thread(
+            () -> {
+              current.set("a1b2c3d4");
+              try {
+                service.path("목표테스트", SpecUpGoalService.Pick.EFFICIENCY, 3);
+              } catch (Throwable error) {
+                errors.add(error);
+              }
+            },
+            "address-path");
+    first.start();
+    try {
+      assertThat(entered.await(10, java.util.concurrent.TimeUnit.SECONDS))
+          .as("주소 키의 추천 순서 계산이 자리를 잡음")
+          .isTrue();
+      current.set("bot:a1b2c3d4");
+      org.assertj.core.api.Assertions.assertThatThrownBy(
+              () -> service.goal("목표테스트", new BigDecimal("6000")))
+          .isInstanceOf(com.loakraken.common.api.BusinessException.class)
+          .satisfies(
+              e ->
+                  assertThat(((com.loakraken.common.api.BusinessException) e).errorCode())
+                      .isEqualTo(SpecUpErrorCode.SPEC_UP_BUSY));
+      assertThat(meters.counter("loakraken.spec_up.goal", "outcome", "client_busy").count())
+          .isEqualTo(1);
+      assertThat(meters.counter("loakraken.spec_up.goal", "outcome", "computed").count()).isZero();
+    } finally {
+      release.countDown();
+      first.join(10_000);
+      current.remove();
+    }
+    assertThat(first.isAlive()).isFalse();
+    assertThat(errors).isEmpty();
+    current.set("bot:a1b2c3d4");
+    service.goal("목표테스트", new BigDecimal("6000"));
+    assertThat(meters.counter("loakraken.spec_up.goal", "outcome", "computed").count())
+        .isEqualTo(1);
+    // 봇 키로 잡은 자리도 주소 키 하나로 돌려준다.
+    current.set("a1b2c3d4");
+    service.path("목표테스트", SpecUpGoalService.Pick.EFFICIENCY, 5);
+    assertThat(meters.counter("loakraken.spec_up.path", "outcome", "computed").count())
+        .isEqualTo(2);
+    current.remove();
+  }
+
+  /**
    * 동시 요청 8개(같은 클라이언트, 서로 다른 계산): 자리를 잡는 것은 정확히 하나이고 나머지 7개는 기다리지 않고 client_busy다. 자리를 잡은 계산은 나머지가
    * 모두 거절될 때까지 붙잡아 둔다(겹침을 강제).
    */

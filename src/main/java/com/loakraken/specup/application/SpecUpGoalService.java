@@ -173,11 +173,15 @@ public class SpecUpGoalService {
     }
   }
 
-  /** 계산 자리를 받는다. 받으면 null, 못 받으면 이유. holder가 null이면(클라이언트 키 없음) 전체 자리만 센다. */
+  /**
+   * 계산 자리를 받는다. 받으면 null, 못 받으면 이유. holder가 null이면(클라이언트 키 없음) 전체 자리만 센다. 자리는 주소 키로 센다: 검색봇
+   * 표시('bot:' 접두)는 User-Agent만 바꿔 붙일 수 있어 같은 주소의 두 번째 자리가 되지 않게 뗀다.
+   */
   private SeatRefusal takeSeat(String holder) {
-    if (holder != null && !seatHolders.add(holder)) return SeatRefusal.CLIENT_BUSY;
+    var seat = com.loakraken.common.lostark.ClientLimiter.addressKey(holder);
+    if (seat != null && !seatHolders.add(seat)) return SeatRefusal.CLIENT_BUSY;
     if (solves.tryAcquire()) return null;
-    if (holder != null) seatHolders.remove(holder);
+    if (seat != null) seatHolders.remove(seat);
     return SeatRefusal.FULL;
   }
 
@@ -185,7 +189,8 @@ public class SpecUpGoalService {
   // 본다.
   private void releaseSeat(String holder) {
     solves.release();
-    if (holder != null) seatHolders.remove(holder);
+    var seat = com.loakraken.common.lostark.ClientLimiter.addressKey(holder);
+    if (seat != null) seatHolders.remove(seat);
   }
 
   /** 목표 경로 운영 지표 loakraken.spec_up.goal{outcome=cache_hit|computed|busy|client_busy}. */

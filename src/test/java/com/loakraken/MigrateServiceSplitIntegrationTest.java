@@ -242,7 +242,7 @@ class MigrateServiceSplitIntegrationTest {
     assertThat(api).doesNotContainKey("command").doesNotContainKey("entrypoint");
     assertThat(environment(api))
         .doesNotContainKeys("SPRING_APPLICATION_JSON", "JDK_JAVA_OPTIONS", "_JAVA_OPTIONS");
-    // JVM 옵션은 메모리 옵션만: 기본값과 스택 예시 값에 시스템 속성(-D, 환경 변수보다 앞선다)이 없다.
+    // JVM 옵션은 메모리 옵션과 Base64 완화 플래그만: 기본값과 스택 예시 값에 시스템 속성(-D, 환경 변수보다 앞선다)이 없다.
     var jvmOptions = String.valueOf(environment(api).getOrDefault("JAVA_TOOL_OPTIONS", ""));
     assertThat(jvmOptions).doesNotContain("-D").doesNotContainIgnoringCase("spring");
     for (var example : stackExamples())

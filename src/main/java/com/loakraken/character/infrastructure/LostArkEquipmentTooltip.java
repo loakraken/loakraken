@@ -34,6 +34,8 @@ final class LostArkEquipmentTooltip {
 
   static CharacterLoadout.EquipmentDetail parse(String name, String tooltip) {
     if (tooltip == null || tooltip.isBlank()) return null;
+    // 아이콘·글자색 패턴은 닫는 '>' 없는 긴 줄에서 길이의 제곱으로 느려진다: 상한을 넘는 툴팁은 읽지 않는다.
+    if (!com.loakraken.character.domain.OfficialTextLimit.fits(tooltip)) return null;
     JsonNode root;
     try {
       root = MAPPER.readTree(tooltip);

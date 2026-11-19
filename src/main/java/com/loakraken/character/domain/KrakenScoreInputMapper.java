@@ -32,7 +32,6 @@ import tools.jackson.databind.node.ObjectNode;
 public final class KrakenScoreInputMapper {
   private static final JsonMapper MAPPER = JsonMapper.builder().build();
   private static final JsonNodeFactory F = JsonNodeFactory.instance;
-  private static final Pattern TAG = Pattern.compile("<[^>]*>");
   private static final Pattern BR = Pattern.compile("<br\\s*/?>", Pattern.CASE_INSENSITIVE);
   private static final Pattern GRAY = Pattern.compile("#686660", Pattern.CASE_INSENSITIVE);
   private static final Pattern NUMBER = Pattern.compile("-?\\d+(\\.\\d+)?");
@@ -466,6 +465,7 @@ public final class KrakenScoreInputMapper {
   private static JsonNode tooltip(JsonNode node) {
     if (node == null || node.isMissingNode() || node.isNull()) return F.objectNode();
     if (!node.isString()) return node;
+    if (!OfficialTextLimit.fits(node.asString())) return F.objectNode();
     try {
       return MAPPER.readTree(node.asString());
     } catch (JacksonException exception) {
@@ -481,8 +481,23 @@ public final class KrakenScoreInputMapper {
     }
   }
 
+  /**
+   * 태그('<'부터 다음 '>'까지)를 뗀다. 결과는 패턴 {@code <[^>]*>}의 replaceAll과 같지만 한 번만 훑는다: '<' 뒤에 '>'가 없으면 그 뒤로는
+   * 맞는 태그가 없으므로 나머지를 그대로 붙이고 끝낸다(패턴은 그 '<'마다 끝까지 다시 훑어 길이의 제곱). 상한을 넘는 칸은 읽지 않는다.
+   */
   static String strip(String html) {
-    return TAG.matcher(html == null ? "" : html).replaceAll("");
+    if (html == null || !OfficialTextLimit.fits(html)) return "";
+    var out = new StringBuilder(html.length());
+    int from = 0;
+    while (from < html.length()) {
+      int open = html.indexOf('<', from);
+      if (open < 0) break;
+      int close = html.indexOf('>', open + 1);
+      if (close < 0) break;
+      out.append(html, from, open);
+      from = close + 1;
+    }
+    return out.append(html, from, html.length()).toString();
   }
 
   private static Double firstNumber(JsonNode node) {

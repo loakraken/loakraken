@@ -275,6 +275,15 @@ public class ClientLimiter {
     return BOT_PREFIX + clientKey(normalizedAddress);
   }
 
+  /**
+   * 클라이언트 키에서 검색봇 표시를 뗀 주소 키(null은 null). 검색봇 표시는 User-Agent로 정해져 같은 주소가 두 키를 가질 수 있으므로, 주소당 하나여야
+   * 하는 몫(예: 스펙업 계산 자리)은 이 키로 센다.
+   */
+  public static String addressKey(String clientKey) {
+    if (clientKey == null || !bot(clientKey)) return clientKey;
+    return clientKey.substring(BOT_PREFIX.length());
+  }
+
   static boolean bot(String client) {
     return client.startsWith(BOT_PREFIX);
   }

@@ -37,6 +37,42 @@ class SpecUpPathKrakenRankTest {
     assertThat(SpecUpGoalService.krakenPreferred(1.0, null, "a", 1.0, null, "b")).isTrue();
   }
 
+  /**
+   * 마지막 동점(같은 비율·Δ·비용)은 id 문자열이 아니라 비교 기준의 후보 순서(PM 총괄 11-19 (D)): 보석 → 재련·상급 재련·품질 → 장신구(연마) → 스톤
+   * → 각인, 같은 종류는 칸 번호를 숫자로, 스톤은 목표 97 → 106 → 107.
+   */
+  @Test
+  void 동점은_후보_순서로_가른다() {
+    // 칸 번호는 숫자로: POLISH:9가 POLISH:10보다 먼저(문자열이면 거꾸로).
+    assertThat(SpecUpGoalService.candidateOrder("POLISH:9:HH", "POLISH:10:HH")).isNegative();
+    assertThat(SpecUpGoalService.candidateOrder("GEM_LEVEL:2:9", "GEM_LEVEL:10:9")).isNegative();
+    // 스톤은 97(레벨 2·3) → 106(1·4) → 107(2·4), 배치 방향과 상관없이.
+    assertThat(SpecUpGoalService.candidateOrder("ABILITY_STONE:2:3", "ABILITY_STONE:1:4"))
+        .isNegative();
+    assertThat(SpecUpGoalService.candidateOrder("ABILITY_STONE:4:1", "ABILITY_STONE:4:2"))
+        .isNegative();
+    assertThat(SpecUpGoalService.candidateOrder("ABILITY_STONE:3:2", "ABILITY_STONE:2:3"))
+        .isNotZero();
+    // 종류 순: 보석 → 재련 → 상급 재련 → 품질 → 연마 → 스톤 → 각인.
+    var ordered =
+        List.of(
+            "GEM_LEVEL:9:10",
+            "EQUIPMENT_REFINE:0:20",
+            "EQUIPMENT_ADVANCED_REFINE:0:30",
+            "EQUIPMENT_QUALITY:0:100",
+            "POLISH:6:HH",
+            "ABILITY_STONE:2:3",
+            "ENGRAVING_LEVEL:원한:4");
+    for (int k = 0; k + 1 < ordered.size(); k++)
+      assertThat(SpecUpGoalService.candidateOrder(ordered.get(k), ordered.get(k + 1)))
+          .as(ordered.get(k) + " < " + ordered.get(k + 1))
+          .isNegative();
+    // 고르기에서도: 같은 비율·Δ·비용이면 POLISH:9가 먼저(KRAKEN).
+    assertThat(
+            SpecUpGoalService.krakenPreferred(1.0, 100L, "POLISH:9:HH", 1.0, 100L, "POLISH:10:HH"))
+        .isTrue();
+  }
+
   @Test
   void 작열_보석_칸은_효과_문구나_이름으로_찾는다() {
     var gems =

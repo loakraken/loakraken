@@ -1034,7 +1034,7 @@ public class SpecUpGoalService {
   /**
    * KRAKEN 고르기(PM 총괄 11-19, 비교 기준의 고르기 규칙과 같음): (1) 비율(Δ점수 ÷ 더 드는 비용)이 있는 단계가 먼저, 비율 큰 순. 더 드는 비용이
    * 0 이하이거나 모르면 비율이 없어 비용 있는 단계 뒤(공짜 단계를 먼저 두지 않음). (2) 같으면 Δ점수 큰 순, (3) 그다음 더 드는 비용 낮은 순(모르는 비용은
-   * 가장 큼), (4) id 순.
+   * 가장 큼), (4) 후보 순서(candidateOrder, 비교 기준과 같음).
    */
   static boolean krakenPreferred(
       double delta, Long marginal, String id, double bestDelta, Long bestMarginal, String bestId) {
@@ -1052,12 +1052,12 @@ public class SpecUpGoalService {
       if (bestMarginal == null) return true;
       return marginal < bestMarginal;
     }
-    return id.compareTo(bestId) < 0;
+    return candidateOrder(id, bestId) < 0;
   }
 
   /**
    * EFFICIENCY 추천 순서 고르기(PM 총괄 11-19, 10-18 '공짜 먼저' 대체, 비교 기준과 같음): krakenPreferred와 같은 규칙을 전투력 Δ로.
-   * 비율(효율)이 있는 단계 먼저(효율 큰 순), Δ 큰 순, 단계 비용 낮은 순(모름은 가장 큼), id 순.
+   * 비율(효율)이 있는 단계 먼저(효율 큰 순), Δ 큰 순, 단계 비용 낮은 순(모름은 가장 큼), 후보 순서(candidateOrder).
    */
   static boolean baselinePreferred(
       Option candidate, Long marginal, Option best, Long bestMarginal) {
@@ -1075,7 +1075,72 @@ public class SpecUpGoalService {
       if (bestMarginal == null) return true;
       return marginal < bestMarginal;
     }
-    return candidate.id().compareTo(best.id()) < 0;
+    return candidateOrder(candidate.id(), best.id()) < 0;
+  }
+
+  /**
+   * 같은 비율·Δ·비용일 때의 후보 종류 순서(PM 총괄 11-19 (D), 비교 기준의 후보 순서): 보석 → 재련·상급 재련·품질 → 장신구(연마) → 스톤 → 각인.
+   */
+  static final List<String> CANDIDATE_KINDS =
+      List.of(
+          "GEM_LEVEL",
+          "EQUIPMENT_REFINE",
+          "EQUIPMENT_ADVANCED_REFINE",
+          "EQUIPMENT_QUALITY",
+          "POLISH",
+          "ABILITY_STONE",
+          "ENGRAVING_LEVEL");
+
+  /**
+   * 마지막 동점 가르기(PM 총괄 11-19 (D)): id 문자열 대신 비교 기준의 후보 순서. 종류 순(CANDIDATE_KINDS, 모르는 종류는 뒤), 같은 종류는 칸
+   * 번호를 숫자로(POLISH:9가 POLISH:10보다 먼저), 스톤은 목표 97 → 106 → 107 순, 그래도 같으면 id. 음수면 a가 먼저.
+   */
+  static int candidateOrder(String a, String b) {
+    var pa = a.split(":");
+    var pb = b.split(":");
+    int ka = kindRank(pa[0]);
+    int kb = kindRank(pb[0]);
+    if (ka != kb) return Integer.compare(ka, kb);
+    if ("ABILITY_STONE".equals(pa[0])) {
+      int byTarget = Integer.compare(stoneTargetRank(pa), stoneTargetRank(pb));
+      if (byTarget != 0) return byTarget;
+    } else if (pa.length > 1 && pb.length > 1) {
+      var sa = slotNumber(pa[1]);
+      var sb = slotNumber(pb[1]);
+      if (sa != null && sb != null && !sa.equals(sb)) return Integer.compare(sa, sb);
+    }
+    return a.compareTo(b);
+  }
+
+  private static int kindRank(String kind) {
+    int rank = CANDIDATE_KINDS.indexOf(kind);
+    return rank < 0 ? CANDIDATE_KINDS.size() : rank;
+  }
+
+  private static Integer slotNumber(String token) {
+    try {
+      return Integer.valueOf(token);
+    } catch (NumberFormatException exception) {
+      return null;
+    }
+  }
+
+  /**
+   * 스톤 id(ABILITY_STONE:각인1 레벨:각인2 레벨)의 목표 순서(SpecUpScoreCandidates.STONE_TARGETS, 97 → 106 → 107).
+   * 모르면 맨 뒤.
+   */
+  private static int stoneTargetRank(String[] parts) {
+    if (parts.length < 3) return Integer.MAX_VALUE;
+    var x = slotNumber(parts[1]);
+    var y = slotNumber(parts[2]);
+    if (x == null || y == null) return Integer.MAX_VALUE;
+    var targets = SpecUpScoreCandidates.STONE_TARGETS;
+    for (int k = 0; k < targets.size(); k++) {
+      int lo = Math.min(targets.get(k)[2], targets.get(k)[3]);
+      int hi = Math.max(targets.get(k)[2], targets.get(k)[3]);
+      if (Math.min(x, y) == lo && Math.max(x, y) == hi) return k;
+    }
+    return Integer.MAX_VALUE;
   }
 
   /** 비율(Δ ÷ 더 드는 비용)을 낼 수 있는 비용인가: 알고 0보다 크다. */

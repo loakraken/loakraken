@@ -29,33 +29,10 @@ record LostArkMarketItemResponse(
   /** 받는 날짜 범위: 오늘(KST) − 이만큼 일 ~ 오늘(공식은 지난 14일). 밖의 날짜는 버린다. */
   static final int MAX_DAYS_BACK = 30;
 
-  /** 가격의 정수 자리 상한(저장 칸 NUMERIC(16, 4)와 같음). */
-  static final int MAX_INTEGER_DIGITS = 12;
-
-  /** 가격 scale 범위(지수 표기 1e100000000 같은 값이 계산·직렬화에서 크게 펼쳐지지 않게, 보안 11-16 (b)). */
-  static final int MIN_SCALE = -12;
-
-  static final int MAX_SCALE = 8;
-
-  /**
-   * 가격이 받을 만한 값인가: 음수가 아니고, scale이 [MIN_SCALE, MAX_SCALE], 정수 자리가 MAX_INTEGER_DIGITS 이하. 값을 펼치지 않고
-   * 잰다.
-   */
-  static boolean plausiblePrice(BigDecimal price) {
-    if (price == null || price.signum() < 0) return false;
-    int scale = price.scale();
-    if (scale < MIN_SCALE || scale > MAX_SCALE) return false;
-    return price.precision() - scale <= MAX_INTEGER_DIGITS;
-  }
-
-  static MarketItemHistory toDomain(long itemId, LostArkMarketItemResponse[] items) {
-    return toDomain(itemId, items, null, new int[5]);
-  }
-
   /**
    * 공식 거래소 품목 상세를 도메인으로(보안 11-16 (b): 고장 났거나 적대적인 상위 응답만 막는 상한). today가 있으면 날짜를 [today −
-   * MAX_DAYS_BACK, today]로 거른다. 변형은 MAX_VARIANTS, 변형마다 줄은 MAX_ROWS까지. 가격이 plausiblePrice가 아니거나 거래량이
-   * 음수인 줄은 버린다. dropped[0..4] = 변형·줄 수·가격·날짜·거래량으로 버린 개수.
+   * MAX_DAYS_BACK, today]로 거른다. 변형은 MAX_VARIANTS, 변형마다 줄은 MAX_ROWS까지. 가격이
+   * MarketPriceBounds.plausible이 아니거나 거래량이 음수인 줄은 버린다. dropped[0..4] = 변형·줄 수·가격·날짜·거래량으로 버린 개수.
    */
   static MarketItemHistory toDomain(
       long itemId, LostArkMarketItemResponse[] items, LocalDate today, int[] dropped) {
@@ -76,7 +53,7 @@ record LostArkMarketItemResponse(
             dropped[3]++;
             continue;
           }
-          if (!plausiblePrice(stat.averagePrice())) {
+          if (!MarketPriceBounds.plausible(stat.averagePrice())) {
             dropped[2]++;
             continue;
           }

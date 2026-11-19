@@ -90,6 +90,46 @@ class AccessoryCellWarmupTest {
         .isEqualTo(1.0);
   }
 
+  /** 반복 지표는 매번 세고, 경고 로그는 이어짐의 첫 반복에만(#997 리뷰 뒤속). 다른 칸이 끼면 다음 이어짐에서 다시 한 번. */
+  @Test
+  void 같은_칸_반복의_경고는_이어짐마다_한_번만_남긴다() {
+    when(lease.hold(eq(MarketHistoryWarmup.LEASE), any())).thenReturn(true);
+    var job = warmup(true, "key");
+    when(auctions.warmAccessories(anyInt(), any(), any(), any()))
+        .thenReturn(new MarketAuctionService.GemWarm(1, "refreshed", "ACC:a"))
+        .thenReturn(new MarketAuctionService.GemWarm(1, "refreshed", "ACC:b"))
+        .thenReturn(new MarketAuctionService.GemWarm(1, "refreshed", "ACC:b"))
+        .thenReturn(new MarketAuctionService.GemWarm(1, "refreshed", "ACC:b"))
+        .thenReturn(new MarketAuctionService.GemWarm(1, "refreshed", "ACC:b"))
+        .thenReturn(new MarketAuctionService.GemWarm(1, "refreshed", "ACC:c"))
+        .thenReturn(new MarketAuctionService.GemWarm(1, "refreshed", "ACC:c"));
+    var logger =
+        (ch.qos.logback.classic.Logger)
+            org.slf4j.LoggerFactory.getLogger(AccessoryCellWarmup.class);
+    var appender =
+        new ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent>();
+    appender.start();
+    logger.addAppender(appender);
+    try {
+      for (int k = 0; k < 7; k++) job.warmAccessoryCells();
+    } finally {
+      logger.detachAppender(appender);
+    }
+    Assertions.assertThat(
+            registry
+                .get("loakraken.market.warmup_repeat")
+                .tag("target", "accessories")
+                .counter()
+                .count())
+        .isEqualTo(4.0);
+    Assertions.assertThat(appender.list)
+        .filteredOn(e -> e.getFormattedMessage().startsWith("event=market_accessory_warmup_repeat"))
+        .extracting(ch.qos.logback.classic.spi.ILoggingEvent::getFormattedMessage)
+        .containsExactly(
+            "event=market_accessory_warmup_repeat key=ACC:b",
+            "event=market_accessory_warmup_repeat key=ACC:c");
+  }
+
   @Test
   void 꺼져_있거나_키가_없거나_임대가_없으면_부르지_않는다() {
     when(lease.hold(any(), any())).thenReturn(true);

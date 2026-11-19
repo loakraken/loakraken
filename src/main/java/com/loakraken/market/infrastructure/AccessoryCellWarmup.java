@@ -33,6 +33,9 @@ class AccessoryCellWarmup {
   /** 앞 틱에서 다시 받은 칸 키. 이어진 두 틱이 같은 칸을 받으면 마지막 값 저장이 실패하고 있다는 뜻이다(보안 11-16 #985 메모). */
   private volatile String previousKey;
 
+  /** 지금 같은 칸 반복이 이어지는 중인가(경고는 이어짐마다 한 번). */
+  private volatile boolean repeating;
+
   private static final org.slf4j.Logger log =
       org.slf4j.LoggerFactory.getLogger(AccessoryCellWarmup.class);
 
@@ -85,9 +88,11 @@ class AccessoryCellWarmup {
     var key = result.lastKey();
     if (key != null && key.equals(previousKey)) {
       // 같은 칸을 이어서 다시 받음: 마지막 값을 남기지 못해 늘 가장 오래된 칸으로 보인다(하루 최대 1,440회까지 같은 칸).
+      // 지표는 매번 세고, 경고 로그는 이어짐의 첫 반복에만 남긴다(#997 리뷰 뒤속: 하루 1,440줄이 되지 않게).
       registry.counter("loakraken.market.warmup_repeat", "target", "accessories").increment();
-      log.warn("event=market_accessory_warmup_repeat key={}", key);
-    }
+      if (!repeating) log.warn("event=market_accessory_warmup_repeat key={}", key);
+      repeating = true;
+    } else if (key != null) repeating = false;
     if (key != null) previousKey = key;
   }
 }

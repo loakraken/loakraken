@@ -210,6 +210,14 @@ class LostArkMarketClientTest {
     assertError(client("test", Duration.ofSeconds(2)), LostArkErrorCode.LOST_ARK_API_ERROR);
   }
 
+  /** 검색 가격도 품목 상세와 같은 상한(#995 리뷰 뒤속): 지수 표기로 큰 값·정수 13자리·잘게 쪼갠 scale이면 응답 전체가 오류. */
+  @ParameterizedTest
+  @ValueSource(strings = {"1e100000000", "1234567890123", "0.000000001"})
+  void 검색_가격이_상한_밖이면_실패한다(String price) {
+    body = body.replace("\"YDayAvgPrice\":12.34", "\"YDayAvgPrice\":" + price);
+    assertError(client("test", Duration.ofSeconds(2)), LostArkErrorCode.LOST_ARK_API_ERROR);
+  }
+
   @ParameterizedTest
   @ValueSource(ints = {400, 401, 404, 500, 503})
   void 외부_실패는_일관된_오류로_변환한다(int responseStatus) {

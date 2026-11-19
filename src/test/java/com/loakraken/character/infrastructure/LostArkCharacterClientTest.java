@@ -531,6 +531,23 @@ class LostArkCharacterClientTest {
     assertThat(authorization).isEqualTo("Bearer user.key.marker");
   }
 
+  /**
+   * 공식 캐릭터 응답 본문은 4 MiB까지(#995 리뷰 뒤속, 거래소와 같은 방식). 정상 본문을 공백으로 늘려 딱 상한이면 읽고, 한 바이트 넘으면 끝까지 읽지 않고
+   * LOST_ARK_API_ERROR.
+   */
+  @Test
+  void 본문이_상한을_넘으면_오류고_딱_상한이면_읽는다() {
+    int cap = 4 * 1024 * 1024;
+    var normal = body;
+    int pad = cap - normal.getBytes(StandardCharsets.UTF_8).length;
+    body = normal.substring(0, 1) + " ".repeat(pad) + normal.substring(1);
+    assertThat(body.getBytes(StandardCharsets.UTF_8)).hasSize(cap);
+    assertThat(client("test", Duration.ofSeconds(2)).fetch("모험가").details().profile().itemLevel())
+        .isEqualByComparingTo("1700.50");
+    body = normal.substring(0, 1) + " ".repeat(pad + 1) + normal.substring(1);
+    assertError(client("test", Duration.ofSeconds(2)), CharacterErrorCode.LOST_ARK_API_ERROR);
+  }
+
   private LostArkCharacterClient client(String key, Duration timeout) {
     return client(key, timeout, null);
   }

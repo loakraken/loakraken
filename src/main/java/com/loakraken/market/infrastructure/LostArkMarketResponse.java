@@ -70,8 +70,9 @@ record LostArkMarketResponse(
           id, name, grade, icon, bundleCount, tradeRemainCount, yDayAvgPrice, recentPrice, minimum);
     }
 
+    /** 음수·지수 표기로 큰 값·정수 자리 12 넘는 값이면 응답 전체를 공식 오류로 본다(#995 리뷰 뒤속, 품목 상세와 같은 상한). */
     private void checkPrice(BigDecimal price) {
-      if (price != null && price.signum() < 0) throw invalid();
+      if (price != null && !MarketPriceBounds.plausible(price)) throw invalid();
     }
   }
 }

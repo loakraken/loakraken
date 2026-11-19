@@ -451,11 +451,11 @@ class SpecUpGoalServiceTest {
             .as(pick + " " + step.candidateId())
             .isNotIn(
                 "ABILITY_STONE:3:3", "ABILITY_STONE:3:4", "ABILITY_STONE:4:3", "ABILITY_STONE:4:4");
-        // 107돌 기대 비용 약 131만이 가장 큰 스톤 비용이다.
+        // 107돌 기대 비용 약 282만이 가장 큰 스톤 비용이다(공식 확률 공개 표, PM 총괄 11-19 (e)).
         if (step.cost() != null && step.cost().amount() != null)
           assertThat(step.cost().amount())
               .as(pick + " " + step.candidateId())
-              .isLessThanOrEqualTo(2_000_000L);
+              .isLessThanOrEqualTo(3_000_000L);
         if (step.cumulativeCost() != null)
           assertThat(step.cumulativeCost()).as(pick + " 누적").isLessThan(100_000_000L);
       }

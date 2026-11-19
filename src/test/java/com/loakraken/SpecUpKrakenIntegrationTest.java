@@ -209,26 +209,25 @@ class SpecUpKrakenIntegrationTest {
     assertThat(stone.path("status").asText()).isEqualTo("UNSUPPORTED");
     assertThat(stone.path("reasonCode").asText()).isEqualTo("SCORE_ONLY");
     assertThat(stone.path("change").isNull()).isTrue();
-    // B1 비용(비교 기준 B 원본 식): 스톤 = 1 ÷ 목표 조합 확률 키트 × 50골드, 10만 골드당은 B 화면 값과 같다(같은 시각 레퍼런스 표).
+    // 스톤 비용(PM 총괄 11-19 (e)): 1 ÷ 공식 확률 공개(자동 세공 10회 표) 목표 조합 확률 키트 × 50골드.
     assertThat(stone.at("/cost/code").asText()).isEqualTo("STONE_EXPECTED_KITS");
-    assertThat(stone.at("/cost/amount").asLong()).isEqualTo(36_765L); // 735.29개 × 50
+    assertThat(stone.at("/cost/amount").asLong()).isEqualTo(83_994L); // 50 ÷ 5.9528e-4
     var stones =
         Map.of(
-            "ABILITY_STONE:2:3", "2.47",
-            "ABILITY_STONE:1:4", "2.47",
-            "ABILITY_STONE:2:4", "1.94");
+            "ABILITY_STONE:2:3", "1.08",
+            "ABILITY_STONE:1:4", "0.21",
+            "ABILITY_STONE:2:4", "0.90");
     stones.forEach(
         (id, per100k) ->
             assertThat(find(candidates, id).path("krakenScorePer100kGold").decimalValue())
                 .as(id)
                 .isEqualByComparingTo(per100k));
-    // 핫픽스 v0.3.9.2: 99·109·1010돌(기대 비용 약 1,543만·3.6억·314억)은 후보로 내지 않는다. 남은 스톤 비용은 107돌 약 131만이 가장
-    // 크다.
+    // 핫픽스 v0.3.9.2: 99·109·1010돌은 후보로 내지 않는다(다시 넣을지는 (e) 뒤 PM 판단). 남은 스톤 비용은 107돌 약 282만이 가장 크다.
     for (var candidate : candidates) {
       var id = candidate.path("id").asText();
       if (!id.startsWith("ABILITY_STONE:")) continue;
       assertThat(id).isNotIn("ABILITY_STONE:3:3", "ABILITY_STONE:3:4", "ABILITY_STONE:4:4");
-      assertThat(candidate.at("/cost/amount").asLong()).as(id).isLessThanOrEqualTo(2_000_000L);
+      assertThat(candidate.at("/cost/amount").asLong()).as(id).isLessThanOrEqualTo(3_000_000L);
     }
     var karma = find(candidates, "KARMA_LEVEL:30");
     assertThat(karma.path("deltaKrakenScore").decimalValue()).isEqualByComparingTo("1.84");

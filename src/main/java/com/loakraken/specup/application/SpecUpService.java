@@ -39,7 +39,7 @@ import org.springframework.stereotype.Service;
 public class SpecUpService {
   private static final org.slf4j.Logger log =
       org.slf4j.LoggerFactory.getLogger(SpecUpService.class);
-  public static final String RULE_VERSION = "spec-up-v1";
+  public static final String RULE_VERSION = "spec-up-v2";
   static final Pattern GEM = Pattern.compile("(\\d+)레벨 (\\S+)의 보석");
   static final Set<String> WEAPON_ARMOR = Set.of("무기", "투구", "상의", "하의", "장갑", "어깨");
   private static final BigDecimal HUNDRED = BigDecimal.valueOf(100);

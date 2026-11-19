@@ -78,6 +78,26 @@ class LostArkMarketHttpClient {
         + pageNo;
   }
 
+  /**
+   * 공식 거래소 응답 본문 상한(보안 11-16 (b)): 정상 응답은 수십 KB라 넉넉히 2 MiB. 넘으면 끝까지 읽지 않고 LOST_ARK_API_ERROR(본문 전체를
+   * 문자열로 버퍼링하지 않음).
+   */
+  static final int MAX_BODY_BYTES = 2 * 1024 * 1024;
+
+  private static final org.slf4j.Logger bodyLog =
+      org.slf4j.LoggerFactory.getLogger(LostArkMarketHttpClient.class);
+
+  static String readCapped(java.io.InputStream body, Endpoint endpoint) throws java.io.IOException {
+    if (body == null) return null;
+    var bytes = body.readNBytes(MAX_BODY_BYTES + 1);
+    if (bytes.length > MAX_BODY_BYTES) {
+      bodyLog.warn(
+          "event=market_body_too_large endpoint={} limitBytes={}", endpoint, MAX_BODY_BYTES);
+      throw new BusinessException(LostArkErrorCode.LOST_ARK_API_ERROR);
+    }
+    return new String(bytes, java.nio.charset.StandardCharsets.UTF_8);
+  }
+
   private static final java.util.regex.Pattern CONTROL =
       java.util.regex.Pattern.compile("[\\p{Cntrl}\\p{Zl}\\p{Zp}]");
 
@@ -131,7 +151,7 @@ class LostArkMarketHttpClient {
                 }
                 if (status == 404) outcome.set(ApiOutcome.NOT_FOUND);
                 if (status != 200) throw error(LostArkErrorCode.LOST_ARK_API_ERROR);
-                String json = response.bodyTo(String.class);
+                String json = readCapped(response.getBody(), endpoint);
                 if (json == null || json.isBlank())
                   throw error(LostArkErrorCode.LOST_ARK_API_ERROR);
                 var value = mapper.readValue(json, responseType);

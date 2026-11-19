@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.*;
 import com.loakraken.common.api.BusinessException;
 import com.loakraken.common.lostark.*;
 import com.loakraken.market.application.*;
+import com.loakraken.market.domain.MarketItemHistory;
 import com.sun.net.httpserver.HttpServer;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.net.InetSocketAddress;
@@ -127,7 +128,7 @@ class LostArkMarketClientTest {
          {"Name":"검증 재료","TradeRemainCount":2,"BundleCount":1,"Stats":null}]
         """;
     var history =
-        new LostArkMarketItemClient(httpClient("test-token", Duration.ofSeconds(2)))
+        itemClient(httpClient("test-token", Duration.ofSeconds(2)))
             .fetchHistory(66102006)
             .orElseThrow();
     assertThat(path).isEqualTo("/markets/items/66102006");
@@ -152,9 +153,7 @@ class LostArkMarketClientTest {
   @Test
   void 공식_API가_null을_돌려주면_상품_없음으로_처리한다() {
     body = "null";
-    assertThat(
-            new LostArkMarketItemClient(httpClient("test", Duration.ofSeconds(2))).fetchHistory(1))
-        .isEmpty();
+    assertThat(itemClient(httpClient("test", Duration.ofSeconds(2))).fetchHistory(1)).isEmpty();
     assertThat(
             registry
                 .get("loakraken.lostark.requests")
@@ -335,7 +334,7 @@ class LostArkMarketClientTest {
       var http = httpClient("test-token", Duration.ofSeconds(2));
       new LostArkMarketClient(http).fetch(MarketSource.ACTIVE_LISTING, search);
       body = "[]";
-      new LostArkMarketItemClient(http).fetchHistory(66102006L);
+      itemClient(http).fetchHistory(66102006L);
       body = "{\"Categories\":[],\"ItemGrades\":[],\"ItemTiers\":[],\"Classes\":[]}";
       new LostArkMarketOptionsClient(http).fetchOptions();
 
@@ -371,6 +370,111 @@ class LostArkMarketClientTest {
         .isEqualTo("category=50000 item=- page=1");
     assertThat(LostArkMarketHttpClient.target(50000, "들꽃 ", 2))
         .isEqualTo("category=50000 item=\"들꽃\" page=2");
+  }
+
+  /** 거래소 품목 상세 클라이언트. 날짜 범위는 표본 날짜(2026-10-05~06) 다음 날 KST 기준. */
+  private LostArkMarketItemClient itemClient(LostArkMarketHttpClient http) {
+    return new LostArkMarketItemClient(
+        http,
+        Clock.fixed(java.time.Instant.parse("2026-10-07T03:00:00Z"), java.time.ZoneOffset.UTC),
+        new MarketMetrics(registry));
+  }
+
+  /**
+   * 고장 났거나 적대적인 상위 응답(보안 11-16 (b)): 지수 표기 가격(1e100000000)·음수·정수 13자리·잘게 쪼갠 scale, 30일 밖 날짜, 음수
+   * 거래량은 버리고, 정상 줄만 남긴다. 버린 수는 이유별 지표로 센다. 큰 지수 값도 펼치지 않아 바로 끝난다.
+   */
+  @Test
+  @Timeout(5)
+  void 상품_상세의_상한_밖_값은_버리고_이유별로_센다() {
+    body =
+        """
+        [{"Name":"검증 재료","TradeRemainCount":null,"BundleCount":1,"Stats":[
+          {"Date":"2026-10-06","AvgPrice":175.5,"TradeCount":10},
+          {"Date":"2026-10-05","AvgPrice":1e100000000,"TradeCount":1},
+          {"Date":"2026-10-04","AvgPrice":-5,"TradeCount":1},
+          {"Date":"2026-10-03","AvgPrice":1234567890123,"TradeCount":1},
+          {"Date":"2026-10-02","AvgPrice":1.000000001,"TradeCount":1},
+          {"Date":"2025-01-01","AvgPrice":100,"TradeCount":1},
+          {"Date":"2026-10-08","AvgPrice":100,"TradeCount":1},
+          {"Date":"2026-10-01","AvgPrice":100,"TradeCount":-1}]}]
+        """;
+    var history =
+        itemClient(httpClient("test-token", Duration.ofSeconds(2))).fetchHistory(7).orElseThrow();
+    assertThat(history.variants().getFirst().days())
+        .extracting(MarketItemHistory.DailyStat::date)
+        .containsExactly(java.time.LocalDate.parse("2026-10-06"));
+    assertThat(
+            registry
+                .get("loakraken.market.upstream_value_dropped")
+                .tag("reason", "price")
+                .counter()
+                .count())
+        .isEqualTo(4);
+    assertThat(
+            registry
+                .get("loakraken.market.upstream_value_dropped")
+                .tag("reason", "date")
+                .counter()
+                .count())
+        .isEqualTo(2);
+    assertThat(
+            registry
+                .get("loakraken.market.upstream_value_dropped")
+                .tag("reason", "trade_count")
+                .counter()
+                .count())
+        .isEqualTo(1);
+  }
+
+  /** 변형은 32개, 변형마다 줄은 40개까지(넘는 것은 버림). */
+  @Test
+  void 상품_상세의_변형과_줄_수에_상한이_있다() {
+    var json = new StringBuilder("[");
+    for (int v = 0; v < 35; v++) {
+      if (v > 0) json.append(',');
+      json.append("{\"Name\":\"검증 재료\",\"TradeRemainCount\":")
+          .append(v)
+          .append(",\"BundleCount\":1,\"Stats\":[");
+      int rows = v == 0 ? 45 : 1;
+      for (int r = 0; r < rows; r++) {
+        if (r > 0) json.append(',');
+        json.append("{\"Date\":\"2026-10-06\",\"AvgPrice\":10,\"TradeCount\":1}");
+      }
+      json.append("]}");
+    }
+    body = json.append(']').toString();
+    var history =
+        itemClient(httpClient("test-token", Duration.ofSeconds(2))).fetchHistory(7).orElseThrow();
+    assertThat(history.variants()).hasSize(LostArkMarketItemResponse.MAX_VARIANTS);
+    assertThat(history.variants().getFirst().days()).hasSize(LostArkMarketItemResponse.MAX_ROWS);
+    assertThat(
+            registry
+                .get("loakraken.market.upstream_value_dropped")
+                .tag("reason", "variants")
+                .counter()
+                .count())
+        .isEqualTo(3);
+    assertThat(
+            registry
+                .get("loakraken.market.upstream_value_dropped")
+                .tag("reason", "rows")
+                .counter()
+                .count())
+        .isEqualTo(5);
+  }
+
+  /** 공식 거래소 응답 본문은 2 MiB까지(보안 11-16 (b)). 넘으면 끝까지 읽지 않고 LOST_ARK_API_ERROR. */
+  @Test
+  void 상품_상세_본문이_상한을_넘으면_오류다() {
+    body = "[" + " ".repeat(LostArkMarketHttpClient.MAX_BODY_BYTES) + "]";
+    assertThatThrownBy(
+            () -> itemClient(httpClient("test-token", Duration.ofSeconds(2))).fetchHistory(7))
+        .isInstanceOf(BusinessException.class)
+        .satisfies(
+            e ->
+                assertThat(((BusinessException) e).errorCode())
+                    .isEqualTo(LostArkErrorCode.LOST_ARK_API_ERROR));
   }
 
   private LostArkMarketHttpClient httpClient(String key, Duration timeout) {

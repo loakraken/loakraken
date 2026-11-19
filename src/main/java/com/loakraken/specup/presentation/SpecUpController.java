@@ -86,7 +86,9 @@ public class SpecUpController {
           @Size(min = 1, max = 16)
           @Pattern(regexp = "\\s*[\\p{L}\\p{N}]+\\s*")
           String characterName,
-      @Parameter(description = "EFFICIENCY(기본, 1만 골드당 전투력), DELTA(Δ전투력) 또는 KRAKEN(10만 골드당 Δ크라켄 점수)")
+      @Parameter(
+              description =
+                  "EFFICIENCY(기본, 1만 골드당 전투력), DELTA(Δ전투력) 또는 KRAKEN(10만 골드당 Δ크라켄 점수). DELTA 목록에는 어빌리티 스톤 99·109·1010돌 줄이 없다")
           @RequestParam(required = false)
           @Pattern(regexp = "EFFICIENCY|DELTA|KRAKEN")
           String sort,
@@ -170,6 +172,7 @@ public class SpecUpController {
               + "sort=EFFICIENCY(기본): 단계 비용 1만 골드당 전투력이 큰 순. 단계 비용이 0 이하이거나 모르는 단계는 비율이 없어 그 뒤(Δ 큰 순), 같으면 Δ·단계 비용 낮은 순·후보 순서. sort=DELTA: 전투력 증가가 큰 순(같으면 효율·id). "
               + "sort=KRAKEN(spec-up.support-order.enabled, 기본 끔): 크라켄 점수(서포터는 서포터 점수식)가 오르는 단계만, 10만 골드당 Δ점수 큰 순, 비율 없는 단계(비용 0 이하·모름)는 그 뒤, 같으면 Δ점수·단계 비용 낮은 순·후보 순서. 작열(쿨) 보석은 빼고, 단계에 deltaKrakenScore·krakenScoreAfter·krakenScorePer100kGold를 준다. 쓸 수 없으면 EFFICIENCY로 되돌리고 krakenSortUnavailableReason을 준다. "
               + "단계 비용(extraCost, EFFICIENCY·KRAKEN): 어빌리티 스톤·귀속 보석·거래할 수 없는 장신구는 단계마다 새 가격 전부, 거래 가능한 보석·장신구는 앞 단계와의 차이(0 미만은 0). 합계(cumulativeCost·totalCost)는 단계 비용의 합이고, 비용을 모르는 단계가 있으면 null이며 knownCostTotal·unknownCostSteps로 아는 합과 모르는 단계 수를 준다. "
+              + "어빌리티 스톤 99·109·1010돌(두 각인 Lv.3 이상)은 어느 sort에서도 단계로 고르지 않습니다(목록 EFFICIENCY·KRAKEN 정렬에만 있음). "
               + "DELTA는 시세(더 드는 비용)를 모르는 단계를 순서에 넣지 않고 unpriced에 지금 상태 기준으로 따로 줍니다(EFFICIENCY·KRAKEN은 비용 모름 단계도 이으므로 unpriced가 비어 있음). "
               + "단계·비용·전투력은 목표 경로(/spec-up/goal)와 같은 규칙입니다(steps[].change를 차례로 시뮬레이터에 넣은 값과 같음, 보석 칸은 누적 비용, cumulativeCost는 그 단계까지 합계). "
               + "딜러가 아니거나 공식 전투력이 없으면 200, 빈 steps, stopReasonCode에 스펙업 가이드와 같은 이유 코드를 줍니다. "

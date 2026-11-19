@@ -83,7 +83,7 @@ class SpecUpIntegrationTest {
     ApiContractFixture.write("character-spec-up.json", response.body());
     SiteNames.assertAbsent(response.body());
     var data = mapper.readTree(response.body()).path("data");
-    assertThat(data.path("ruleVersion").asText()).isEqualTo("spec-up-v2");
+    assertThat(data.path("ruleVersion").asText()).isEqualTo("spec-up-v3");
     assertThat(data.path("simulatorRuleVersion").asText()).isEqualTo("combat-power-sim-v8");
     assertThat(data.path("combatPower").decimalValue()).isEqualByComparingTo("3000.00");
     assertThat(data.path("sort").asText()).isEqualTo("EFFICIENCY");

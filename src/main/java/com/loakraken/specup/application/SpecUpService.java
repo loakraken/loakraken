@@ -39,7 +39,7 @@ import org.springframework.stereotype.Service;
 public class SpecUpService {
   private static final org.slf4j.Logger log =
       org.slf4j.LoggerFactory.getLogger(SpecUpService.class);
-  public static final String RULE_VERSION = "spec-up-v2";
+  public static final String RULE_VERSION = "spec-up-v3";
   static final Pattern GEM = Pattern.compile("(\\d+)레벨 (\\S+)의 보석");
   static final Set<String> WEAPON_ARMOR = Set.of("무기", "투구", "상의", "하의", "장갑", "어깨");
   private static final BigDecimal HUNDRED = BigDecimal.valueOf(100);
@@ -575,6 +575,11 @@ public class SpecUpService {
     var models = new Models(snapshot);
     for (var plan : planned) {
       if (!cooldownGemsIncluded && "COOLDOWN".equals(plan.gemType())) continue;
+      // 99·109·1010돌은 EFFICIENCY·KRAKEN 정렬 목록에만(DELTA는 비용을 보지 않아 맨 위에 오고 추천 순서 DELTA와도 맞춘다, PM 총괄
+      // 11-19). 줄 상세는
+      // 어느 정렬 목록의 id든 찾는다.
+      if (sort == Sort.DELTA && !allRefineStages && SpecUpScoreCandidates.extremeStone(plan.id()))
+        continue;
       var candidate =
           roleReason != null
               ? plan.candidate(

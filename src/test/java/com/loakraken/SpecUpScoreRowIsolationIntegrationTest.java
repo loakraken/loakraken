@@ -96,10 +96,12 @@ class SpecUpScoreRowIsolationIntegrationTest {
     var candidates = guide("&sort=DELTA&limit=200").path("candidates");
     int failed = 0;
     int computed = 0;
+    int stones = 0;
     for (var candidate : candidates) {
       var id = candidate.path("id").asText();
       if (id.startsWith("POLISH:7:") || id.startsWith("ABILITY_STONE:")) {
         failed++;
+        if (id.startsWith("ABILITY_STONE:")) stones++;
         assertThat(candidate.path("status").asText()).as(id).isEqualTo("UNSUPPORTED");
         assertThat(candidate.path("reasonCode").asText()).as(id).isEqualTo("SCORE_ONLY");
         // Δ크라켄 점수는 그대로.
@@ -118,8 +120,10 @@ class SpecUpScoreRowIsolationIntegrationTest {
                 .tag("error", "IllegalStateException")
                 .counter()
                 .count())
-        .isEqualTo(3.0);
-    assertThat(count("POLISH", "IllegalStateException")).isEqualTo(failed - 3);
+        .isEqualTo((double) stones);
+    // DELTA 목록의 스톤 줄은 97·106·107돌 가운데 점수가 오르는 것(99·109·1010돌은 EFFICIENCY·KRAKEN 목록에만, PM 총괄 11-19).
+    assertThat(stones).isGreaterThanOrEqualTo(3);
+    assertThat(count("POLISH", "IllegalStateException")).isEqualTo(failed - stones);
   }
 
   @Test

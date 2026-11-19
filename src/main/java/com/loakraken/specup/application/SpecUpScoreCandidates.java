@@ -38,13 +38,38 @@ final class SpecUpScoreCandidates {
   private static final String GRADE_CODES = "LMH";
 
   /**
-   * 어빌리티 스톤 목표(세공 성공 수 조합 → 각인 레벨): 9·7 = Lv.3·Lv.2, 10·6 = Lv.4·Lv.1, 10·7 = Lv.4·Lv.2. 두 각인 중 어느
-   * 쪽에 높은 레벨이 붙을지는 점수가 더 오르는 쪽(비교 기준 B와 같음). 99·109·1010돌은 넣지 않는다(핫픽스 v0.3.9.2, PM 총괄 11-09): 기대
-   * 비용(키트 50골드 ÷ 성공 확률)이 99돌 약 1,543만, 109돌 약 3.6억, 1010돌 약 314억 골드라 현실적인 목표가 아니고, 추천 순서 전투력 우선이 Δ만
-   * 보고 1010돌을 첫 단계로 골라 누적 비용이 314억이 됐다. 목록·추천 순서(두 정렬)·목표 경로 모두 이 목록을 쓴다.
+   * 어빌리티 스톤 목표(세공 성공 수 조합 → 각인 레벨): 9·7 = Lv.3·Lv.2, 10·6 = Lv.4·Lv.1, 10·7 = Lv.4·Lv.2, 9·9 =
+   * Lv.3·Lv.3, 10·9 = Lv.4·Lv.3, 10·10 = Lv.4·Lv.4. 두 각인 중 어느 쪽에 높은 레벨이 붙을지는 점수가 더 오르는 쪽(비교 기준 B와
+   * 같음). 비용은 공식 확률 공개 표(#999): 97돌 약 8.4만, 106돌 약 44만, 107돌 약 282만, 99돌 약 1,723만, 109돌 약 7.4억,
+   * 1010돌 약 334억 골드.
+   *
+   * <p>99·109·1010돌(두 각인 모두 Lv.3 이상)은 목록 EFFICIENCY·KRAKEN 정렬에만 낸다(비교 기준 목록과 같음, PM 총괄 11-19). 목록
+   * DELTA 정렬과 추천 순서(세 기준)·목표 경로에서는 뺀다: DELTA는 비용을 보지 않아 1010돌을 맨 위·첫 단계로 고르고(핫픽스 v0.3.9.2), 추천 순서는
+   * 닿는 경로마다 셋을 모두 골라 합계가 약 341억 골드가 된다.
    */
   static final List<int[]> STONE_TARGETS =
-      List.of(new int[] {9, 7, 3, 2}, new int[] {10, 6, 4, 1}, new int[] {10, 7, 4, 2});
+      List.of(
+          new int[] {9, 7, 3, 2},
+          new int[] {10, 6, 4, 1},
+          new int[] {10, 7, 4, 2},
+          new int[] {9, 9, 3, 3},
+          new int[] {10, 9, 4, 3},
+          new int[] {10, 10, 4, 4});
+
+  /**
+   * 99·109·1010돌 같은 비현실적 목표인가: 두 각인 레벨이 모두 3 이상(스톤 id 'ABILITY_STONE:a:b'). 목록 DELTA·추천 순서·목표 경로에서
+   * 뺀다.
+   */
+  static boolean extremeStone(String id) {
+    if (id == null || !id.startsWith("ABILITY_STONE:")) return false;
+    var parts = id.split(":");
+    if (parts.length < 3) return false;
+    try {
+      return Integer.parseInt(parts[1]) >= 3 && Integer.parseInt(parts[2]) >= 3;
+    } catch (NumberFormatException exception) {
+      return false;
+    }
+  }
 
   /** 깨달음 카르마 지금 레벨 + 1 … 30. 입력에 레벨이 없으면 null. */
   static List<SpecUpService.Planned> karma(JsonNode input) {

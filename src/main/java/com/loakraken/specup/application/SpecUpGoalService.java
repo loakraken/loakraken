@@ -938,6 +938,10 @@ public class SpecUpGoalService {
       for (var listed : options(state, gems, refinePrices, pricesAt, polish)) {
         var option = listed;
         if (krakenExcluded.contains(option.slot())) continue;
+        // 99·109·1010돌은 목록에만(EFFICIENCY·KRAKEN 정렬). 추천 순서(세 기준)와 목표 경로는 뺀다: 닿는 경로마다 셋을 모두 골라 합계가 약
+        // 341억이 되고
+        // 아무도 사지 않는 1010돌이 합계를 덮는다(PM 총괄 11-19, 비교 기준 경로와 다른 점).
+        if (SpecUpScoreCandidates.extremeStone(option.id())) continue;
         var polishStep = polishById.get(option.id());
         // '상·상 뒤' 셋째 줄 후보는 이 장신구의 지금 매물이 상·상(HH)일 때만(비교 기준은 지금 상태에서 후보를 만든다).
         if (polishStep != null
@@ -1185,8 +1189,8 @@ public class SpecUpGoalService {
   }
 
   /**
-   * 스톤 id(ABILITY_STONE:각인1 레벨:각인2 레벨)의 목표 순서(SpecUpScoreCandidates.STONE_TARGETS, 97 → 106 → 107).
-   * 모르면 맨 뒤.
+   * 스톤 id(ABILITY_STONE:각인1 레벨:각인2 레벨)의 목표 순서(SpecUpScoreCandidates.STONE_TARGETS, 97 → 106 → 107 →
+   * 99 → 109 → 1010). 모르면 맨 뒤.
    */
   private static int stoneTargetRank(String[] parts) {
     if (parts.length < 3) return Integer.MAX_VALUE;

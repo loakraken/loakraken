@@ -167,9 +167,10 @@ public class SpecUpController {
       summary = "스펙업 추천 순서(이어 고르기, 공식 호출 없음)",
       description =
           "목표 없이, 지금 상태에서 항목마다 다음 한 단계를 만들고 sort 기준으로 가장 앞의 단계를 적용한 뒤 다시 재기를 limit 단계까지 되풀이한 순서입니다. "
-              + "sort=EFFICIENCY(기본): 이 단계에 더 드는 비용 1만 골드당 전투력이 큰 순(더 드는 비용이 0 이하인 단계가 먼저, 같으면 Δ·id). sort=DELTA: 전투력 증가가 큰 순(같으면 효율·id). "
-              + "sort=KRAKEN(spec-up.support-order.enabled, 기본 끔): 크라켄 점수(서포터는 서포터 점수식)가 오르는 단계만, 더 드는 비용이 0 이하인 단계가 먼저(Δ점수 큰 순), 그다음 10만 골드당 Δ점수 큰 순(같으면 Δ점수·id). 작열(쿨) 보석은 빼고, 단계에 deltaKrakenScore·krakenScoreAfter·krakenScorePer100kGold를 준다. 쓸 수 없으면 EFFICIENCY로 되돌리고 krakenSortUnavailableReason을 준다. "
-              + "시세(더 드는 비용)를 모르는 단계는 순서에 넣지 않고 unpriced에 지금 상태 기준으로 따로 줍니다(비용을 추측하지 않음). "
+              + "sort=EFFICIENCY(기본): 단계 비용 1만 골드당 전투력이 큰 순. 단계 비용이 0 이하이거나 모르는 단계는 비율이 없어 그 뒤(Δ 큰 순), 같으면 Δ·단계 비용 낮은 순·후보 순서. sort=DELTA: 전투력 증가가 큰 순(같으면 효율·id). "
+              + "sort=KRAKEN(spec-up.support-order.enabled, 기본 끔): 크라켄 점수(서포터는 서포터 점수식)가 오르는 단계만, 10만 골드당 Δ점수 큰 순, 비율 없는 단계(비용 0 이하·모름)는 그 뒤, 같으면 Δ점수·단계 비용 낮은 순·후보 순서. 작열(쿨) 보석은 빼고, 단계에 deltaKrakenScore·krakenScoreAfter·krakenScorePer100kGold를 준다. 쓸 수 없으면 EFFICIENCY로 되돌리고 krakenSortUnavailableReason을 준다. "
+              + "단계 비용(extraCost, EFFICIENCY·KRAKEN): 어빌리티 스톤·귀속 보석·거래할 수 없는 장신구는 단계마다 새 가격 전부, 거래 가능한 보석·장신구는 앞 단계와의 차이(0 미만은 0). 합계(cumulativeCost·totalCost)는 단계 비용의 합이고, 비용을 모르는 단계가 있으면 null이며 knownCostTotal·unknownCostSteps로 아는 합과 모르는 단계 수를 준다. "
+              + "DELTA는 시세(더 드는 비용)를 모르는 단계를 순서에 넣지 않고 unpriced에 지금 상태 기준으로 따로 줍니다(EFFICIENCY·KRAKEN은 비용 모름 단계도 이으므로 unpriced가 비어 있음). "
               + "단계·비용·전투력은 목표 경로(/spec-up/goal)와 같은 규칙입니다(steps[].change를 차례로 시뮬레이터에 넣은 값과 같음, 보석 칸은 누적 비용, cumulativeCost는 그 단계까지 합계). "
               + "딜러가 아니거나 공식 전투력이 없으면 200, 빈 steps, stopReasonCode에 스펙업 가이드와 같은 이유 코드를 줍니다. "
               + "계산 시간 상한이 있고, 같은 캐릭터 수집 시각·시세·sort·limit은 10분 캐시합니다. 계산이 몰리면 기다리지 않고 429 SPEC_UP_BUSY와 Retry-After(초)를 줍니다. "
@@ -403,8 +404,11 @@ public class SpecUpController {
       @Schema(description = "전투력을 낸 시뮬레이터 규칙") String simulatorRuleVersion,
       @Schema(description = "캐릭터 캐시 수집 시각") @NullableResponse Instant fetchedAt,
       @Schema(description = "비용에 쓴 시세 칸 가운데 가장 오래된 관측 시각") @NullableResponse Instant pricesAt,
-      @Schema(description = "고른 순서(시세가 있는 단계만)") List<SpecUpGoalStepResponse> steps,
-      @Schema(description = "시세를 몰라 순서에서 뺀 항목(지금 상태 기준, 전투력이 오르는 것만, Δ 큰 순). 비용을 추측하지 않음")
+      @Schema(description = "고른 순서(DELTA는 시세가 있는 단계만, EFFICIENCY·KRAKEN은 비용 모름 단계도 뒤에)")
+          List<SpecUpGoalStepResponse> steps,
+      @Schema(
+              description =
+                  "DELTA만: 시세를 몰라 순서에서 뺀 항목(지금 상태 기준, 전투력이 오르는 것만, Δ 큰 순). 비용을 추측하지 않음. EFFICIENCY·KRAKEN은 빈 목록")
           List<SpecUpPathExcludedResponse> unpriced,
       @Schema(description = "sort=KRAKEN만: 지금 크라켄 점수(소수 둘째 자리). 그 밖에는 null. 배포 순서 때문에 계약에서는 선택 필드")
           @NullableResponse
@@ -430,7 +434,17 @@ public class SpecUpController {
                   "크라켄 점수에 쓴 점수식(문자열, 값이 늘 수 있음): DEALER(딜러 점수)·SUPPORT(서포터 점수식, 웹 표기 '서포터 점수'). supportOrderAvailable이 true일 때만 있고 그 밖에는 null. 배포 순서 때문에 계약에서는 선택 필드")
           @NullableResponse
           @OptionalResponse
-          String krakenScoreRole) {
+          String krakenScoreRole,
+      @Schema(
+              description =
+                  "비용을 아는 단계의 단계 비용(extraCost) 합(골드). 비용을 모르는 단계가 있어 totalCost가 null일 때 'X G + 비용 모름 N단계'로 보인다(unknownCostSteps와 함께). 단계가 없으면 0. 배포 순서 때문에 계약에서는 선택 필드")
+          @OptionalResponse
+          Long knownCostTotal,
+      @Schema(
+              description =
+                  "단계 비용(extraCost)을 모르는 단계 수. 0이면 totalCost = knownCostTotal. 배포 순서 때문에 계약에서는 선택 필드")
+          @OptionalResponse
+          Integer unknownCostSteps) {
     static SpecUpPathResponse from(SpecUpGoalService.Path path) {
       return new SpecUpPathResponse(
           path.characterName(),
@@ -467,7 +481,9 @@ public class SpecUpController {
           path.finalKrakenScore(),
           path.krakenSortUnavailableReason(),
           path.supportOrderAvailable(),
-          path.krakenScoreRole());
+          path.krakenScoreRole(),
+          path.knownCostTotal(),
+          path.unknownCostSteps());
     }
   }
 

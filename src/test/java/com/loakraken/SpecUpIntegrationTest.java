@@ -906,6 +906,9 @@ class SpecUpIntegrationTest {
     assertThat(data.path("finalCombatPower").decimalValue())
         .isEqualByComparingTo(steps.get(steps.size() - 1).path("combatPowerAfter").decimalValue());
     assertThat(data.path("unpriced").size()).isZero();
+    // 아는 단계 비용의 합과 모르는 단계 수(PM 총괄 11-19, 웹 'X G + 비용 모름 N단계').
+    assertThat(data.path("knownCostTotal").asLong()).isEqualTo(2_600_000);
+    assertThat(data.path("unknownCostSteps").asInt()).isEqualTo(steps.size() - 2);
 
     var one =
         mapper

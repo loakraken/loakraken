@@ -290,6 +290,23 @@ public class SpecUpGoalService {
           null);
     }
 
+    /**
+     * 비용을 아는 단계의 단계 비용(extraCost) 합(PM 총괄 11-19). 비용 모름 단계를 이으면 totalCost는 모름(null)이라, 웹은 이 값과
+     * unknownCostSteps로 'X G + 비용 모름 N단계'를 보인다. 단계가 없으면 0.
+     */
+    public long knownCostTotal() {
+      long sum = 0;
+      for (var step : steps) if (step.extraCost() != null) sum += step.extraCost();
+      return sum;
+    }
+
+    /** 단계 비용(extraCost)을 모르는 단계 수(PM 총괄 11-19). DELTA는 비용 모름 단계를 고르지 않아 늘 0. */
+    public int unknownCostSteps() {
+      int count = 0;
+      for (var step : steps) if (step.extraCost() == null) count++;
+      return count;
+    }
+
     Path withSupportOrderAvailable(boolean available, String role) {
       return new Path(
           characterName,

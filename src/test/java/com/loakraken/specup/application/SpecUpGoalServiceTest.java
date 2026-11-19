@@ -283,6 +283,9 @@ class SpecUpGoalServiceTest {
         .extracting(SpecUpGoalService.Step::extraCost)
         .containsExactly(150_000L, 160_000L, 170_000L);
     assertThat(path.totalCost()).isEqualTo(480_000L);
+    // 비용을 모두 알면 아는 합 = 합계, 모르는 단계 0(PM 총괄 11-19).
+    assertThat(path.knownCostTotal()).isEqualTo(480_000L);
+    assertThat(path.unknownCostSteps()).isZero();
     assertThat(path.ruleVersion()).isEqualTo("spec-up-path-v6");
 
     when(specUp.armGuardEnabled()).thenReturn(false);
@@ -291,6 +294,9 @@ class SpecUpGoalServiceTest {
     assertThat(off.steps()).noneMatch(step -> step.kind().equals("ARM_GUARD"));
     assertThat(off.steps()).allMatch(step -> step.extraCost() == null);
     assertThat(off.totalCost()).isNull();
+    // 합계는 모름이어도 아는 합(0)과 모르는 단계 수는 준다(웹 'X G + 비용 모름 N단계').
+    assertThat(off.knownCostTotal()).isZero();
+    assertThat(off.unknownCostSteps()).isEqualTo(off.steps().size());
     // EFFICIENCY는 비용을 모르는 단계도 고르므로 '비용을 몰라 빠진 후보'가 없다(DELTA만 남음).
     assertThat(off.unpriced()).isEmpty();
     var delta = service.path("목표테스트", SpecUpGoalService.Pick.DELTA, 3);

@@ -67,6 +67,25 @@ class SpecUpPathKrakenRankTest {
       assertThat(SpecUpGoalService.candidateOrder(ordered.get(k), ordered.get(k + 1)))
           .as(ordered.get(k) + " < " + ordered.get(k + 1))
           .isNegative();
+    // 재련·상급 재련·품질은 한 묶음이라 칸 번호가 먼저(코드 리뷰 #993 P3): 0번 무기 품질이 3번 재련보다 먼저.
+    assertThat(SpecUpGoalService.candidateOrder("EQUIPMENT_QUALITY:0:100", "EQUIPMENT_REFINE:3:20"))
+        .isNegative();
+    // 각인은 캐릭터 각인 목록 순서(계산 검증 11-19 P3): 목록에서 앞선 각인이 먼저, 이름 문자열 순이 아님.
+    var engravings = java.util.Map.of("돌격대장", 1, "기습의 대가", 2);
+    assertThat(
+            SpecUpGoalService.candidateOrder(
+                "ENGRAVING_LEVEL:돌격대장:1", "ENGRAVING_LEVEL:기습의 대가:1", engravings))
+        .isNegative();
+    assertThat(
+            SpecUpGoalService.krakenPreferred(
+                25.71,
+                1_000L,
+                "ENGRAVING_LEVEL:기습의 대가:1",
+                25.71,
+                1_000L,
+                "ENGRAVING_LEVEL:돌격대장:1",
+                engravings))
+        .isFalse();
     // 고르기에서도: 같은 비율·Δ·비용이면 POLISH:9가 먼저(KRAKEN).
     assertThat(
             SpecUpGoalService.krakenPreferred(1.0, 100L, "POLISH:9:HH", 1.0, 100L, "POLISH:10:HH"))

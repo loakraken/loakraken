@@ -164,31 +164,43 @@ class SpecUpGoalGemCostTest {
    * 추천 순서 단계 비용(PM 총괄 11-19, 비교 기준과 같음): 귀속 보석·빈 칸은 단계마다 새 레벨 가격 전부, 거래 가능한 보석은 앞 단계와의 차이(0 미만은 0).
    */
   @Test
-  void 귀속_보석은_단계마다_새_레벨_가격_전부이고_거래_가능하면_차이다() {
-    var paid = new java.util.HashMap<String, Long>();
-    paid.put("GEM_LEVEL:0", 300_000L);
-    // 귀속: 지금까지 낸 값과 상관없이 새 레벨 가격 전부.
+  void 귀속_보석은_단계마다_새_레벨_가격_전부이고_거래_가능하면_앞_단계_품목과의_차이다() {
+    var held = new java.util.HashMap<String, Long>();
+    // 귀속: 앞 단계와 상관없이 새 레벨 가격 전부.
+    held.put("GEM_LEVEL:0", 80_000L);
     assertThat(
             SpecUpGoalService.paidCost(
-                option("GEM_LEVEL:0", SpecUpCost.gem(900_000, null, true)), paid))
+                option("GEM_LEVEL:0", SpecUpCost.gem(900_000, null, true)), held))
         .isEqualTo(900_000L);
     // 빈 칸(지금 보석 없음): 전부.
     assertThat(
             SpecUpGoalService.paidCost(
-                option("GEM_LEVEL:0", SpecUpCost.gem(900_000, null, false)), paid))
+                option("GEM_LEVEL:0", SpecUpCost.gem(900_000, null, false)), held))
         .isEqualTo(900_000L);
-    // 거래 가능: 누적 비용 − 앞 단계 누적 = 새 가격 − 앞 가격.
+    // 거래 가능, 그 칸의 첫 단계: 처음 보석과의 차이(목록 비용 그대로). Lv7 100 → Lv8 80이면 0.
+    var first = new java.util.HashMap<String, Long>();
     assertThat(
             SpecUpGoalService.paidCost(
-                option("GEM_LEVEL:0", SpecUpCost.gem(1_000_000, 400_000L, false)), paid))
-        .isEqualTo(300_000L);
-    // 거래 가능인데 앞 단계보다 싸면 0.
-    assertThat(
-            SpecUpGoalService.paidCost(
-                option("GEM_LEVEL:0", SpecUpCost.gem(500_000, 400_000L, false)), paid))
+                option("GEM_LEVEL:0", SpecUpCost.gem(80_000, 100_000L, false)), first))
         .isZero();
-    // 시세를 모르면 모름.
-    assertThat(SpecUpGoalService.paidCost(option("GEM_LEVEL:0", SpecUpCost.PRICE_PENDING), paid))
+    // 이어 바꾸는 단계: 새 가격 − 앞 단계에서 산 보석 가격(계산 검증 11-19 예: Lv8 80 → Lv9 150 = 70, 처음 보석과의 차이 50이 아님).
+    assertThat(
+            SpecUpGoalService.paidCost(
+                option("GEM_LEVEL:0", SpecUpCost.gem(150_000, 100_000L, false)), held))
+        .isEqualTo(70_000L);
+    // 앞 단계 보석보다 싸면 0.
+    held.put("GEM_LEVEL:0", 200_000L);
+    assertThat(
+            SpecUpGoalService.paidCost(
+                option("GEM_LEVEL:0", SpecUpCost.gem(150_000, 100_000L, false)), held))
+        .isZero();
+    // 앞 단계 가격을 모르면 모름, 시세를 모르면 모름.
+    held.put("GEM_LEVEL:0", null);
+    assertThat(
+            SpecUpGoalService.paidCost(
+                option("GEM_LEVEL:0", SpecUpCost.gem(150_000, 100_000L, false)), held))
+        .isNull();
+    assertThat(SpecUpGoalService.paidCost(option("GEM_LEVEL:0", SpecUpCost.PRICE_PENDING), first))
         .isNull();
   }
 

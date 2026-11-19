@@ -478,11 +478,11 @@ class SpecUpGoalServiceTest {
   }
 
   /**
-   * 스톤 단계가 이어질 때(PM 총괄 11-19, 비교 기준과 같음): 추천 순서 EFFICIENCY·KRAKEN과 목표 경로는 스톤마다 새 스톤을 통째로 사므로 더 드는
-   * 비용이 그 스톤 비용 전부이고, 합계는 단계마다 낸 비용(더 드는 비용)의 합이다. DELTA만 예전 규칙(칸마다 마지막 단계 비용, 뒤 스톤은 차이).
+   * 스톤 단계가 이어질 때(PM 총괄 11-19, 비교 기준과 같음): 추천 순서 EFFICIENCY·KRAKEN은 스톤마다 새 스톤을 통째로 사므로 더 드는 비용이 그 스톤
+   * 비용 전부이고, 합계는 단계마다 낸 비용(더 드는 비용)의 합이다. DELTA와 목표 경로는 예전 규칙(칸마다 마지막 단계 비용, 뒤 스톤은 차이).
    */
   @Test
-  void 스톤_단계가_이어지면_DELTA만_마지막_스톤이고_그_밖은_스톤마다_전부_더한다() {
+  void 스톤_단계가_이어지면_추천_순서는_스톤마다_전부_더하고_DELTA와_목표_경로는_마지막_스톤만_센다() {
     equipment = List.of(stoneItem(1, 1));
     var service = service(System::nanoTime);
     var runs = new java.util.LinkedHashMap<String, List<SpecUpGoalService.Step>>();
@@ -491,7 +491,7 @@ class SpecUpGoalServiceTest {
     runs.put("GOAL", service.goal("목표테스트", new BigDecimal("6000")).steps());
     int multiStone = 0;
     for (var run : runs.entrySet()) {
-      boolean baseline = !"DELTA".equals(run.getKey());
+      boolean baseline = !"DELTA".equals(run.getKey()) && !"GOAL".equals(run.getKey());
       var slots = new java.util.LinkedHashMap<String, Long>();
       long others = 0;
       Long paid = 0L;

@@ -119,8 +119,8 @@ class SpecUpGoalGemCostTest {
   }
 
   /**
-   * 추천 순서·목표 경로 고르기(PM 총괄 11-19, 10-18 '공짜 먼저' 대체, 비교 기준과 같음): 효율 있는 단계가 먼저이고, 더 드는 비용이 0 이하이거나 모르는
-   * 단계는 그 뒤(Δ 큰 순, 비용 낮은 순, 모름은 가장 뒤).
+   * 추천 순서 고르기(PM 총괄 11-19, 추천 순서의 10-18 '공짜 먼저' 대체, 비교 기준과 같음): 효율 있는 단계가 먼저이고, 더 드는 비용이 0 이하이거나
+   * 모르는 단계는 그 뒤(Δ 큰 순, 비용 낮은 순, 모름은 가장 뒤). 목표 경로는 자기 규칙(아래).
    */
   @Test
   void 효율_있는_단계가_먼저이고_공짜와_비용_모름은_그_뒤다() {
@@ -143,9 +143,25 @@ class SpecUpGoalGemCostTest {
     assertThat(SpecUpGoalService.baselinePreferred(unknown, null, free, 0L)).isFalse();
   }
 
+  /** 목표 경로는 자기 규칙(PM 판정 10-18, 11-19 유지): 더 드는 비용이 0 이하인 단계를 효율 있는 단계보다 먼저(가장 싸게 목표까지). */
+  @Test
+  void 목표_경로는_더_드는_비용이_0_이하인_단계를_효율_있는_단계보다_먼저_고른다() {
+    var free = scored(option("GEM_LEVEL:0", SpecUpCost.gem(390_000, 400_000L, false)), "24", null);
+    var priced =
+        scored(option("GEM_LEVEL:1", SpecUpCost.gem(1_000_000, 400_000L, false)), "24", "0.40");
+    assertThat(SpecUpGoalService.free(0L)).isTrue();
+    assertThat(SpecUpGoalService.free(-50_000L)).isTrue();
+    assertThat(SpecUpGoalService.free(null)).isFalse();
+    assertThat(SpecUpGoalService.preferred(free, true, priced, false)).isTrue();
+    assertThat(SpecUpGoalService.preferred(priced, false, free, true)).isFalse();
+    // 0 단계끼리는 Δ 큰 순.
+    var bigger =
+        scored(option("GEM_LEVEL:2", SpecUpCost.gem(390_000, 400_000L, false)), "48", null);
+    assertThat(SpecUpGoalService.preferred(bigger, true, free, true)).isTrue();
+  }
+
   /**
-   * 추천 순서·목표 경로 단계 비용(PM 총괄 11-19, 비교 기준과 같음): 귀속 보석·빈 칸은 단계마다 새 레벨 가격 전부, 거래 가능한 보석은 앞 단계와의 차이(0
-   * 미만은 0).
+   * 추천 순서 단계 비용(PM 총괄 11-19, 비교 기준과 같음): 귀속 보석·빈 칸은 단계마다 새 레벨 가격 전부, 거래 가능한 보석은 앞 단계와의 차이(0 미만은 0).
    */
   @Test
   void 귀속_보석은_단계마다_새_레벨_가격_전부이고_거래_가능하면_차이다() {

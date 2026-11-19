@@ -136,10 +136,23 @@ class SpecUpPolishPathIntegrationTest {
     for (var step : steps) {
       var id = step.path("candidateId").asText();
       ids.add(id);
-      assertThat(step.path("kind").asText()).as(id).isEqualTo("POLISH");
       var changes = new ArrayList<JsonNode>();
       step.path("changes").forEach(changes::add);
       assertThat(changes).as(id).isNotEmpty();
+      if (!"POLISH".equals(step.path("kind").asText())) {
+        // EFFICIENCY는 비용을 모르는 단계도 비용 있는 단계 뒤에 잇는다(PM 총괄 11-19 (B)). 연마가 아닌 단계는 비용 모름이어야 하고, 이어 넣은
+        // 값만
+        // 확인한다.
+        assertThat("EFFICIENCY").as(id).isEqualTo(sort);
+        assertThat(step.path("extraCost").isNull()).as(id + " 비용 모름 단계").isTrue();
+        all.addAll(changes);
+        var simulated = simulate(mapper.writeValueAsString(all));
+        assertThat(simulated.statusCode()).as(simulated.body()).isEqualTo(200);
+        assertThat(mapper.readTree(simulated.body()).at("/data/after").decimalValue())
+            .as(id)
+            .isEqualByComparingTo(step.path("combatPowerAfter").decimalValue());
+        continue;
+      }
       // change는 changes의 첫째(이름 있는 옵션이 먼저).
       assertThat(step.path("change")).as(id).isEqualTo(changes.getFirst());
       for (var change : changes) {

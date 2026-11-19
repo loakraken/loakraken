@@ -1462,6 +1462,37 @@ class CritEffectTableTest {
     return new CharacterLoadout.ArkGrid(List.of(slot), List.of());
   }
 
+  /**
+   * 화면에 보이는 표 문구(토글 이름·근거)에는 내부 표현(비교 기준·표 고치기·계산 검증·정답표·캡처)과 날짜를 넣지 않는다(PM 총괄 11-16 04:33). 출처는 코드
+   * 주석에 둔다.
+   */
+  @Test
+  void 화면에_보이는_표_문구에는_내부_표현과_날짜가_없다() {
+    var texts = new java.util.ArrayList<String>();
+    CritEffectTable.SKILL_BONUSES.forEach(b -> texts.add(b.basis()));
+    CritEffectTable.TOGGLES.forEach(t -> texts.add(t.label()));
+    CritEffectTable.CLASS_BUFFS.forEach(
+        b -> texts.addAll(java.util.Arrays.asList(b.label(), b.basis())));
+    CritEffectTable.CLASS_CORES.forEach(c -> texts.add(c.label()));
+    CritEffectTable.BRACELET_TOGGLES.forEach(b -> texts.add(b.label()));
+    CritEffectTable.SPEED
+        .values()
+        .forEach(r -> texts.addAll(java.util.Arrays.asList(r.label(), r.basis())));
+    CritEffectTable.TRIPOD_SPEEDS.forEach(
+        r -> texts.addAll(java.util.Arrays.asList(r.label(), r.basis())));
+    CritEffectTable.CLASS_SPEED_BUFFS.forEach(
+        b -> texts.addAll(java.util.Arrays.asList(b.label(), b.basis())));
+    CritEffectTable.CORE_SPEEDS.forEach(c -> texts.add(c.label()));
+    CritEffectTable.ASSUMED_SPEED_SYNERGIES.forEach(
+        r -> texts.addAll(java.util.Arrays.asList(r.label(), r.basis())));
+    var banned =
+        java.util.regex.Pattern.compile(
+            "비교 기준|표 고치기|계산 검증|정답표|캡처|PM 총괄|코드 리뷰|\\d{4}-\\d{2}-\\d{2}|(?<![0-9.])\\d{1,2}-\\d{1,2}(?![0-9])");
+    assertThat(
+            texts.stream().filter(java.util.Objects::nonNull).filter(t -> banned.matcher(t).find()))
+        .isEmpty();
+  }
+
   private static CritSpeedCalculation.Result party(String effect) {
     return calculate(
         "발키리", List.of(), List.of(tripodSkill("숭고한 도약", "축복", effect)), null, Assumptions.NONE);

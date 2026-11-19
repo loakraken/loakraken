@@ -222,7 +222,7 @@ class SpecUpKrakenIntegrationTest {
             assertThat(find(candidates, id).path("krakenScorePer100kGold").decimalValue())
                 .as(id)
                 .isEqualByComparingTo(per100k));
-    // 99·109·1010돌도 목록에 낸다(PM 총괄 11-19, 비교 기준과 같음). 비용은 공식 확률 공개 표(50 ÷ P).
+    // 99·109·1010돌도 EFFICIENCY·KRAKEN 목록에 낸다(PM 총괄 11-19, 비교 기준과 같음). 비용은 공식 확률 공개 표(50 ÷ P).
     int extreme = 0;
     for (var candidate : candidates) {
       var id = candidate.path("id").asText();
@@ -236,6 +236,16 @@ class SpecUpKrakenIntegrationTest {
           .contains(id)) extreme++;
     }
     assertThat(extreme).isEqualTo(3);
+    // DELTA 목록에는 내지 않는다(추천 순서 DELTA와 같음, PM 총괄 11-19). 줄 상세는 그대로 찾는다.
+    var extremeLabels = java.util.Set.of("99돌", "109돌", "1010돌");
+    for (var candidate : guide("&sort=DELTA&limit=200").path("candidates"))
+      assertThat(extremeLabels)
+          .as(candidate.path("id").asText())
+          .doesNotContain(candidate.path("to").asText().split(" ")[0]);
+    int efficiencyExtreme = 0;
+    for (var candidate : guide("&sort=EFFICIENCY&limit=200").path("candidates"))
+      if (extremeLabels.contains(candidate.path("to").asText().split(" ")[0])) efficiencyExtreme++;
+    assertThat(efficiencyExtreme).isEqualTo(3);
     var karma = find(candidates, "KARMA_LEVEL:30");
     assertThat(karma.path("deltaKrakenScore").decimalValue()).isEqualByComparingTo("1.84");
     // 카르마 29 → 30: 기대 시도 × 900 = 41.32만, 10만 골드당 0.44(B 화면 값).

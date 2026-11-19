@@ -43,9 +43,9 @@ final class SpecUpScoreCandidates {
    * 같음). 비용은 공식 확률 공개 표(#999): 97돌 약 8.4만, 106돌 약 44만, 107돌 약 282만, 99돌 약 1,723만, 109돌 약 7.4억,
    * 1010돌 약 334억 골드.
    *
-   * <p>99·109·1010돌(EXTREME, 두 각인 모두 Lv.3 이상)은 목록과 추천 순서 EFFICIENCY·KRAKEN에 넣고(비용당 이득으로 고르므로 저절로 맨
-   * 뒤, PM 총괄 11-19), 추천 순서 DELTA와 목표 경로에서는 뺀다(핫픽스 v0.3.9.2 이유: DELTA는 비용을 보지 않아 1010돌을 첫 단계로 고르고,
-   * 목표 경로는 '가장 싸게 목표까지'라 현실적이지 않은 목표다).
+   * <p>99·109·1010돌(두 각인 모두 Lv.3 이상)은 목록 EFFICIENCY·KRAKEN 정렬에만 낸다(비교 기준 목록과 같음, PM 총괄 11-19). 목록
+   * DELTA 정렬과 추천 순서(세 기준)·목표 경로에서는 뺀다: DELTA는 비용을 보지 않아 1010돌을 맨 위·첫 단계로 고르고(핫픽스 v0.3.9.2), 추천 순서는
+   * 닿는 경로마다 셋을 모두 골라 합계가 약 341억 골드가 된다.
    */
   static final List<int[]> STONE_TARGETS =
       List.of(
@@ -56,7 +56,10 @@ final class SpecUpScoreCandidates {
           new int[] {10, 9, 4, 3},
           new int[] {10, 10, 4, 4});
 
-  /** 99·109·1010돌 같은 비현실적 목표인가: 두 각인 레벨이 모두 3 이상(스톤 id 'ABILITY_STONE:a:b'). DELTA·목표 경로에서 뺀다. */
+  /**
+   * 99·109·1010돌 같은 비현실적 목표인가: 두 각인 레벨이 모두 3 이상(스톤 id 'ABILITY_STONE:a:b'). 목록 DELTA·추천 순서·목표 경로에서
+   * 뺀다.
+   */
   static boolean extremeStone(String id) {
     if (id == null || !id.startsWith("ABILITY_STONE:")) return false;
     var parts = id.split(":");

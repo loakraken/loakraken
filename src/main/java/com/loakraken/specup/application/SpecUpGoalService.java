@@ -194,8 +194,7 @@ public class SpecUpGoalService {
   }
 
   // v2: 완갑(팔 보호구) 재련 단계를 고른다. v3: 어빌리티 스톤 목표 조합(각인 둘을 한 단계에), 단계 changes.
-  // v7: EFFICIENCY·KRAKEN이 99·109·1010돌을 고른다(PM 총괄 11-19).
-  public static final String PATH_RULE_VERSION = "spec-up-path-v7";
+  public static final String PATH_RULE_VERSION = "spec-up-path-v6";
   static final int PATH_MAX_STEPS = 30;
   static final int SOLVE_MAX_CONCURRENT = 2;
   static final Duration PATH_RETRY_AFTER = Duration.ofSeconds(2);
@@ -939,9 +938,10 @@ public class SpecUpGoalService {
       for (var listed : options(state, gems, refinePrices, pricesAt, polish)) {
         var option = listed;
         if (krakenExcluded.contains(option.slot())) continue;
-        // 99·109·1010돌은 추천 순서 EFFICIENCY·KRAKEN에서만(비용당 이득으로 맨 뒤). DELTA·목표 경로는 뺀다(핫픽스 v0.3.9.2, PM
-        // 총괄 11-19).
-        if (!baseline && SpecUpScoreCandidates.extremeStone(option.id())) continue;
+        // 99·109·1010돌은 목록에만(EFFICIENCY·KRAKEN 정렬). 추천 순서(세 기준)와 목표 경로는 뺀다: 닿는 경로마다 셋을 모두 골라 합계가 약
+        // 341억이 되고
+        // 아무도 사지 않는 1010돌이 합계를 덮는다(PM 총괄 11-19, 비교 기준 경로와 다른 점).
+        if (SpecUpScoreCandidates.extremeStone(option.id())) continue;
         var polishStep = polishById.get(option.id());
         // '상·상 뒤' 셋째 줄 후보는 이 장신구의 지금 매물이 상·상(HH)일 때만(비교 기준은 지금 상태에서 후보를 만든다).
         if (polishStep != null

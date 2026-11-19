@@ -121,7 +121,7 @@ class SpecUpScoreRowIsolationIntegrationTest {
                 .counter()
                 .count())
         .isEqualTo((double) stones);
-    // 스톤 줄은 97·106·107·99·109·1010돌(PM 총괄 11-19) 가운데 점수가 오르는 것.
+    // DELTA 목록의 스톤 줄은 97·106·107돌 가운데 점수가 오르는 것(99·109·1010돌은 EFFICIENCY·KRAKEN 목록에만, PM 총괄 11-19).
     assertThat(stones).isGreaterThanOrEqualTo(3);
     assertThat(count("POLISH", "IllegalStateException")).isEqualTo(failed - stones);
   }

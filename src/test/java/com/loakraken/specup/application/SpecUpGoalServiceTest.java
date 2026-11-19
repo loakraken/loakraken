@@ -286,7 +286,7 @@ class SpecUpGoalServiceTest {
     // 비용을 모두 알면 아는 합 = 합계, 모르는 단계 0(PM 총괄 11-19).
     assertThat(path.knownCostTotal()).isEqualTo(480_000L);
     assertThat(path.unknownCostSteps()).isZero();
-    assertThat(path.ruleVersion()).isEqualTo("spec-up-path-v7");
+    assertThat(path.ruleVersion()).isEqualTo("spec-up-path-v6");
 
     when(specUp.armGuardEnabled()).thenReturn(false);
     var off = service.path("목표테스트", SpecUpGoalService.Pick.EFFICIENCY, 3);
@@ -454,12 +454,12 @@ class SpecUpGoalServiceTest {
   }
 
   /**
-   * 핫픽스 v0.3.9.2(PM 총괄 11-09, 11-19 유지): 전투력 우선(DELTA)은 Δ만 보고 고르므로 99·109·1010돌(기대 비용 약
-   * 1,723만·7.4억·334억)을 고르면 첫 단계부터 누적 비용이 비현실적이 된다. DELTA와 목표 경로는 이 셋을 빼고, 추천 순서 EFFICIENCY·KRAKEN은
-   * 넣지만 비용당 이득으로 고르므로 다른 단계보다 앞에 오지 않는다.
+   * 핫픽스 v0.3.9.2(PM 총괄 11-09, 11-19 유지·넓힘): 99·109·1010돌(기대 비용 약 1,723만·7.4억·334억)은 목록에만 내고 추천 순서(세
+   * 기준)와 목표 경로는 고르지 않는다. DELTA는 Δ만 보고 1010돌을 첫 단계로 고르고, EFFICIENCY·KRAKEN은 닿는 경로마다 셋을 모두 골라 합계가 약
+   * 341억이 된다.
    */
   @Test
-  void 전투력_우선_추천_순서와_목표_경로는_비현실적인_스톤을_고르지_않는다() {
+  void 추천_순서와_목표_경로는_비현실적인_스톤을_고르지_않는다() {
     equipment = List.of(stoneItem(1, 1));
     var service = service(System::nanoTime);
     var runs = new java.util.LinkedHashMap<String, List<SpecUpGoalService.Step>>();
@@ -468,28 +468,18 @@ class SpecUpGoalServiceTest {
     runs.put("GOAL", service.goal("목표테스트", new BigDecimal("6000")).steps());
     for (var run : runs.entrySet()) {
       assertThat(run.getValue()).as(run.getKey()).isNotEmpty();
-      boolean excluded = run.getKey().equals("DELTA") || run.getKey().equals("GOAL");
-      boolean seenExtreme = false;
       for (var step : run.getValue()) {
-        boolean extreme = SpecUpScoreCandidates.extremeStone(step.candidateId());
-        if (excluded) {
-          assertThat(extreme).as(run.getKey() + " " + step.candidateId()).isFalse();
-          // 107돌 기대 비용 약 282만이 가장 큰 스톤 비용이다(공식 확률 공개 표, PM 총괄 11-19 (e)).
-          if (step.cost() != null && step.cost().amount() != null)
-            assertThat(step.cost().amount())
-                .as(run.getKey() + " " + step.candidateId())
-                .isLessThanOrEqualTo(3_000_000L);
-          if (step.cumulativeCost() != null)
-            assertThat(step.cumulativeCost()).as(run.getKey() + " 누적").isLessThan(100_000_000L);
-        } else if (extreme) seenExtreme = true;
-        else if (seenExtreme)
-          // 비현실적 스톤 뒤에는 비율 없는 단계(공짜·비용 모름, 규칙 B)만 온다: 비용 있는 단계 가운데 비용당 이득이 가장 작아 맨 뒤.
-          assertThat(step.extraCost() == null || step.extraCost() <= 0)
-              .as(run.getKey() + " " + step.candidateId() + " 앞에 비현실적 스톤")
-              .isTrue();
+        assertThat(SpecUpScoreCandidates.extremeStone(step.candidateId()))
+            .as(run.getKey() + " " + step.candidateId())
+            .isFalse();
+        // 107돌 기대 비용 약 282만이 가장 큰 스톤 비용이다(공식 확률 공개 표, PM 총괄 11-19 (e)).
+        if (step.cost() != null && step.cost().amount() != null)
+          assertThat(step.cost().amount())
+              .as(run.getKey() + " " + step.candidateId())
+              .isLessThanOrEqualTo(3_000_000L);
+        if (step.cumulativeCost() != null)
+          assertThat(step.cumulativeCost()).as(run.getKey() + " 누적").isLessThan(100_000_000L);
       }
-      // EFFICIENCY·KRAKEN은 99·109·1010돌을 넣는다(PM 총괄 11-19).
-      if (!excluded) assertThat(seenExtreme).as(run.getKey() + " 99·109·1010돌").isTrue();
     }
   }
 

@@ -29,6 +29,7 @@ COPY --from=build /workspace/extracted/application/ ./
 
 USER 10001:10001
 # 컨테이너 메모리 상한의 75%를 힙으로 쓰고, 메모리 부족 시 바로 종료해 compose가 재시작하게 한다.
-ENV JAVA_TOOL_OPTIONS="-XX:MaxRAMPercentage=75 -XX:+ExitOnOutOfMemoryError"
+# Base64 디코드 내장 최적화(intrinsic)를 끈다: CVE-2026-114938(x86-64 AVX-512 VBMI CPU에서 신뢰하지 않는 Base64 입력의 힙 쓰기). 고친 JDK 이미지로 올리면 뺀다.
+ENV JAVA_TOOL_OPTIONS="-XX:MaxRAMPercentage=75 -XX:+ExitOnOutOfMemoryError -XX:-UseBASE64Intrinsics"
 EXPOSE 8080
 ENTRYPOINT ["java", "org.springframework.boot.loader.launch.JarLauncher"]

@@ -2,6 +2,7 @@ package com.loakraken.specup.domain;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.within;
+import static org.assertj.core.api.Assertions.withinPercentage;
 
 import org.junit.jupiter.api.Test;
 
@@ -29,13 +30,17 @@ class SpecUpCostRulesTest {
 
   @Test
   void 스톤_기대_골드는_키트_수_곱하기_50이다() {
-    // B: 97돌·106돌 735.29개, 107돌 2.62만개, 99돌 30.86만개, 109돌 729.93만개, 1010돌 6.29억개.
-    assertThat(SpecUpCostRules.stoneGold("97돌") / 50).isCloseTo(735.29, within(0.01));
-    assertThat(SpecUpCostRules.stoneGold("106돌")).isEqualTo(SpecUpCostRules.stoneGold("97돌"));
-    assertThat(SpecUpCostRules.stoneGold("107돌") / 50).isCloseTo(26_246.72, within(0.01));
-    assertThat(SpecUpCostRules.stoneGold("99돌") / 50).isCloseTo(308_641.98, within(0.01));
-    assertThat(SpecUpCostRules.stoneGold("109돌") / 50).isCloseTo(7_299_270.07, within(0.01));
-    assertThat(SpecUpCostRules.stoneGold("1010돌") / 50).isCloseTo(628_930_817.61, within(0.01));
+    // 공식 확률 공개 '어빌리티 스톤 자동 세공' 10회 표(고정 방향) 기대 골드 = 50 ÷ P(계산 검증 11-19 (e), 상대 오차 1e-6 이내).
+    assertThat(SpecUpCostRules.stoneGold("97돌")).isCloseTo(83_994.47, withinPercentage(0.0001));
+    assertThat(SpecUpCostRules.stoneGold("106돌")).isCloseTo(440_526.63, withinPercentage(0.0001));
+    assertThat(SpecUpCostRules.stoneGold("107돌")).isCloseTo(2_823_086.10, withinPercentage(0.0001));
+    assertThat(SpecUpCostRules.stoneGold("99돌")).isCloseTo(17_228_592.70, withinPercentage(0.0001));
+    assertThat(SpecUpCostRules.stoneGold("109돌"))
+        .isCloseTo(740_341_683.12, withinPercentage(0.0001));
+    assertThat(SpecUpCostRules.stoneGold("1010돌"))
+        .isCloseTo(33_370_484_148.06, withinPercentage(0.0001));
+    // 106돌은 97돌과 다르다(비교 기준 표의 같은 값은 입력 실수로 보임).
+    assertThat(SpecUpCostRules.stoneGold("106돌")).isNotEqualTo(SpecUpCostRules.stoneGold("97돌"));
     assertThat(SpecUpCostRules.stoneGold("88돌")).isNull();
   }
 

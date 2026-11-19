@@ -103,7 +103,7 @@ final class SpecUpPolishCost {
     }
     if (observed != null && (pricesAt[0] == null || observed.isBefore(pricesAt[0])))
       pricesAt[0] = observed;
-    return SpecUpCost.polish(amount, tradeable);
+    return SpecUpCost.polish(amount, tradeable).withItemPrice(targetPrice.minBuyPrice());
   }
 
   private static SpecUpCost missing(PolishPrice price, boolean fillEnabled) {

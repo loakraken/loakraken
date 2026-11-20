@@ -7,9 +7,7 @@ import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
-/**
- * 추천 순서 레벨 점프(계산 검증 11-20 22:21, 비교 기준과 같음): 칸마다 목표 단계들과 여러 단계를 한 번에 올리는 비용(단계 비용의 합).
- */
+/** 추천 순서 레벨 점프(계산 검증 11-20 22:21, 비교 기준과 같음): 칸마다 목표 단계들과 여러 단계를 한 번에 올리는 비용(단계 비용의 합). */
 class SpecUpPathJumpTest {
   @Test
   void 점프면_끝까지_모든_레벨이고_아니면_다음_한_단계다() {
@@ -44,8 +42,7 @@ class SpecUpPathJumpTest {
     // 한 단계면 그 비용 그대로(점프 전과 같은 값).
     assertThat(SpecUpGoalService.rangeCost(List.of(one))).isSameAs(one);
     // 모르는 단계가 있으면 그 단계의 비용(모름)을 준다.
-    assertThat(
-            SpecUpGoalService.rangeCost(List.of(one, SpecUpCost.REFINE_PRICE_PENDING, two)))
+    assertThat(SpecUpGoalService.rangeCost(List.of(one, SpecUpCost.REFINE_PRICE_PENDING, two)))
         .isSameAs(SpecUpCost.REFINE_PRICE_PENDING);
     // 각인: 한 레벨 비용을 레벨 수만큼(각인서 5권 × 레벨 수, 같은 code).
     var book = SpecUpCost.engravingBooks(2_000);

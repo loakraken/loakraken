@@ -166,8 +166,9 @@ class SpecUpGoalServiceTest {
   void 추천_순서는_시세가_있는_단계만_limit까지_이어_고르고_다시_재도_같다() {
     var service = service(System::nanoTime);
     when(auctions.cachedGems()).thenReturn(gemCells(Instant.parse("2026-10-31T12:00:00Z"), false));
-    var path = service.path("목표테스트", SpecUpGoalService.Pick.EFFICIENCY, 5);
-    assertThat(path.steps()).hasSize(5);
+    // 레벨 점프로 보석 4칸이 한 단계씩 10레벨이 되어 4단계 뒤에는 후보가 없다: limit 3으로 STEP_LIMIT을 본다.
+    var path = service.path("목표테스트", SpecUpGoalService.Pick.EFFICIENCY, 3);
+    assertThat(path.steps()).hasSize(3);
     assertThat(path.stopReasonCode()).isEqualTo("STEP_LIMIT");
     assertThat(path.unpriced()).isEmpty();
     // 같은 칸(candidateId에서 마지막 ':목표' 앞)은 마지막 단계의 change만 남긴다(서비스가 그 칸을 바꿔 끼우는 것과 같음).
@@ -193,7 +194,7 @@ class SpecUpGoalServiceTest {
     // 같은 입력이면 같은 순서(캐시를 비워도)
     store.saved.clear();
     store.paths.clear();
-    var again = service.path("목표테스트", SpecUpGoalService.Pick.EFFICIENCY, 5);
+    var again = service.path("목표테스트", SpecUpGoalService.Pick.EFFICIENCY, 3);
     assertThat(again.steps().stream().map(SpecUpGoalService.Step::candidateId).toList())
         .isEqualTo(path.steps().stream().map(SpecUpGoalService.Step::candidateId).toList());
     assertThat(meters.counter("loakraken.spec_up.path", "outcome", "computed").count())
@@ -270,9 +271,7 @@ class SpecUpGoalServiceTest {
                     .isEqualTo(Integer.parseInt(step.from().replace("레벨", "")) + 1));
   }
 
-  /**
-   * 비용을 모르는 단계끼리는 Δ가 큰 순이라 가장 큰 점프를 먼저 고른다(비교 기준 10-18 꼬리: 완갑 16 → 25). 완갑 비용을 모르고 보석 시세도 없다.
-   */
+  /** 비용을 모르는 단계끼리는 Δ가 큰 순이라 가장 큰 점프를 먼저 고른다(비교 기준 10-18 꼬리: 완갑 16 → 25). 완갑 비용을 모르고 보석 시세도 없다. */
   @Test
   void 비용을_모르면_가장_큰_점프를_먼저_고른다() {
     equipment = List.of(armGuard(14));

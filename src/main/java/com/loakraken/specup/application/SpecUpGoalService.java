@@ -1454,8 +1454,8 @@ public class SpecUpGoalService {
   }
 
   /**
-   * 여러 단계를 한 번에 올리는 비용 = 단계 비용의 합(기대 비용은 더해진다, 계산 검증 11-20 22:21). 한 단계면 그 비용 그대로. 모르는 단계가 하나라도
-   * 있으면 그 단계의 비용(모름)을 준다. 시세 관측 시각은 가장 이른 것, 이전 시세(stale)는 하나라도 있으면 true.
+   * 여러 단계를 한 번에 올리는 비용 = 단계 비용의 합(기대 비용은 더해진다, 계산 검증 11-20 22:21). 한 단계면 그 비용 그대로. 모르는 단계가 하나라도 있으면
+   * 그 단계의 비용(모름)을 준다. 시세 관측 시각은 가장 이른 것, 이전 시세(stale)는 하나라도 있으면 true.
    */
   static SpecUpCost rangeCost(List<SpecUpCost> stages) {
     if (stages.size() == 1) return stages.getFirst();
@@ -1526,39 +1526,39 @@ public class SpecUpGoalService {
     }
     for (var gem : state.gems().values())
       for (int next : targets(gem.level(), 10, jumps)) {
-      String label = gem.level() + "레벨 " + (gem.kind() == null ? "보석" : gem.kind());
-      String target =
-          gem.skill() == null ? "보석 " + gem.slot() + "번 · " + label : gem.skill() + " · " + label;
-      result.add(
-          new Option(
-              "GEM_LEVEL:" + gem.slot(),
-              "GEM_LEVEL:" + gem.slot() + ":" + next,
-              target,
-              gem.level() + "레벨",
-              next + "레벨",
-              gem.icon(),
-              gem.grade(),
-              gem.skill(),
-              new Change(
-                  Kind.GEM_LEVEL,
-                  gem.slot(),
-                  null,
-                  null,
-                  next,
-                  null,
-                  null,
-                  null,
-                  null,
-                  null,
-                  null,
-                  null,
-                  null,
-                  null),
-              gemCost(gems, pricesAt, gem, next),
-              null,
-              null,
-              null));
-    }
+        String label = gem.level() + "레벨 " + (gem.kind() == null ? "보석" : gem.kind());
+        String target =
+            gem.skill() == null ? "보석 " + gem.slot() + "번 · " + label : gem.skill() + " · " + label;
+        result.add(
+            new Option(
+                "GEM_LEVEL:" + gem.slot(),
+                "GEM_LEVEL:" + gem.slot() + ":" + next,
+                target,
+                gem.level() + "레벨",
+                next + "레벨",
+                gem.icon(),
+                gem.grade(),
+                gem.skill(),
+                new Change(
+                    Kind.GEM_LEVEL,
+                    gem.slot(),
+                    null,
+                    null,
+                    next,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null),
+                gemCost(gems, pricesAt, gem, next),
+                null,
+                null,
+                null));
+      }
     for (var item : state.refines().values()) {
       // 단계 비용은 칸마다 한 번만 재고(재련 계획), 점프는 그 합.
       var stages = new ArrayList<SpecUpCost>();
@@ -1568,65 +1568,26 @@ public class SpecUpGoalService {
             from >= 10 && from < 25
                 ? specUp.refineCost(item.equipment(), from, refinePrices, pricesAt)
                 : SpecUpCost.REFINE_COST_UNCONFIRMED);
-      result.add(
-          new Option(
-              "EQUIPMENT_REFINE:" + item.index(),
-              "EQUIPMENT_REFINE:" + item.index() + ":" + next,
-              item.equipment().name(),
-              "+" + item.refine(),
-              "+" + next,
-              item.equipment().icon(),
-              item.equipment().grade(),
-              null,
-              new Change(
-                  Kind.EQUIPMENT_REFINE,
-                  null,
-                  item.index(),
-                  null,
-                  null,
-                  next,
-                  null,
-                  null,
-                  null,
-                  null,
-                  null,
-                  null,
-                  null,
-                  null),
-              rangeCost(stages),
-              null,
-              null,
-              null));
-      }
-    }
-    if (state.armGuard() != null) {
-      var item = state.armGuard();
-      var stages = new ArrayList<SpecUpCost>();
-      for (int next : targets(item.refine(), 25, jumps)) {
-      stages.add(specUp.armGuardStepCost(next - 1, refinePrices, pricesAt));
-      // 등급은 목록 완갑 줄과 같이 처음 등급에서 목표 단계로 정한다(시뮬레이터 ARM_GUARD는 목표 단계·등급을 그대로 받는다).
-      var grade = specUp.armGuardGrade(item.equipment().grade(), next);
-      if (grade != null)
         result.add(
             new Option(
                 "EQUIPMENT_REFINE:" + item.index(),
                 "EQUIPMENT_REFINE:" + item.index() + ":" + next,
                 item.equipment().name(),
                 "+" + item.refine(),
-                "+" + next + (grade.equals(item.equipment().grade()) ? "" : " " + grade),
+                "+" + next,
                 item.equipment().icon(),
                 item.equipment().grade(),
                 null,
                 new Change(
-                    Kind.ARM_GUARD,
+                    Kind.EQUIPMENT_REFINE,
                     null,
+                    item.index(),
                     null,
                     null,
                     next,
                     null,
                     null,
                     null,
-                    grade,
                     null,
                     null,
                     null,
@@ -1638,38 +1599,77 @@ public class SpecUpGoalService {
                 null));
       }
     }
+    if (state.armGuard() != null) {
+      var item = state.armGuard();
+      var stages = new ArrayList<SpecUpCost>();
+      for (int next : targets(item.refine(), 25, jumps)) {
+        stages.add(specUp.armGuardStepCost(next - 1, refinePrices, pricesAt));
+        // 등급은 목록 완갑 줄과 같이 처음 등급에서 목표 단계로 정한다(시뮬레이터 ARM_GUARD는 목표 단계·등급을 그대로 받는다).
+        var grade = specUp.armGuardGrade(item.equipment().grade(), next);
+        if (grade != null)
+          result.add(
+              new Option(
+                  "EQUIPMENT_REFINE:" + item.index(),
+                  "EQUIPMENT_REFINE:" + item.index() + ":" + next,
+                  item.equipment().name(),
+                  "+" + item.refine(),
+                  "+" + next + (grade.equals(item.equipment().grade()) ? "" : " " + grade),
+                  item.equipment().icon(),
+                  item.equipment().grade(),
+                  null,
+                  new Change(
+                      Kind.ARM_GUARD,
+                      null,
+                      null,
+                      null,
+                      next,
+                      null,
+                      null,
+                      null,
+                      grade,
+                      null,
+                      null,
+                      null,
+                      null,
+                      null),
+                  rangeCost(stages),
+                  null,
+                  null,
+                  null));
+      }
+    }
     for (var item : state.advanced().values())
       for (int next : advancedTargets(item.refine(), jumps)) {
-      result.add(
-          new Option(
-              "EQUIPMENT_ADVANCED_REFINE:" + item.index(),
-              "EQUIPMENT_ADVANCED_REFINE:" + item.index() + ":" + next,
-              item.equipment().name(),
-              "상급 재련 " + item.refine() + "단계",
-              "상급 재련 " + next + "단계",
-              item.equipment().icon(),
-              item.equipment().grade(),
-              null,
-              new Change(
-                  Kind.EQUIPMENT_ADVANCED_REFINE,
-                  null,
-                  item.index(),
-                  null,
-                  next,
-                  null,
-                  null,
-                  null,
-                  null,
-                  null,
-                  null,
-                  null,
-                  null,
-                  null),
-              SpecUpCost.REFINE_COST_UNCONFIRMED,
-              null,
-              null,
-              null));
-    }
+        result.add(
+            new Option(
+                "EQUIPMENT_ADVANCED_REFINE:" + item.index(),
+                "EQUIPMENT_ADVANCED_REFINE:" + item.index() + ":" + next,
+                item.equipment().name(),
+                "상급 재련 " + item.refine() + "단계",
+                "상급 재련 " + next + "단계",
+                item.equipment().icon(),
+                item.equipment().grade(),
+                null,
+                new Change(
+                    Kind.EQUIPMENT_ADVANCED_REFINE,
+                    null,
+                    item.index(),
+                    null,
+                    next,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null),
+                SpecUpCost.REFINE_COST_UNCONFIRMED,
+                null,
+                null,
+                null));
+      }
     if (state.quality() != null) {
       var weapon = state.quality();
       int next = Math.min(100, (weapon.refine() / 10 + 1) * 10);
@@ -1710,37 +1710,37 @@ public class SpecUpGoalService {
       var stages = new ArrayList<SpecUpCost>();
       for (int next :
           targets(engraving.level(), SpecUpService.engravingMaxLevel(engraving.grade()), jumps)) {
-      stages.add(perLevel);
-      result.add(
-          new Option(
-              "ENGRAVING_LEVEL:" + engraving.name(),
-              "ENGRAVING_LEVEL:" + engraving.name() + ":" + next,
-              engraving.name() + " 각인",
-              engraving.level() + "레벨",
-              next + "레벨",
-              // 추천 순서 줄도 스펙업 후보와 같은 유물 각인서 공식 아이콘(시세 캐시, 공식 호출 없음).
-              books.icon(engraving.name()).orElse(null),
-              engraving.grade(),
-              null,
-              new Change(
-                  Kind.ENGRAVING_LEVEL,
-                  null,
-                  null,
-                  null,
-                  next,
-                  null,
-                  null,
-                  null,
-                  null,
-                  engraving.name(),
-                  null,
-                  null,
-                  null,
-                  null),
-              rangeCost(stages),
-              null,
-              null,
-              null));
+        stages.add(perLevel);
+        result.add(
+            new Option(
+                "ENGRAVING_LEVEL:" + engraving.name(),
+                "ENGRAVING_LEVEL:" + engraving.name() + ":" + next,
+                engraving.name() + " 각인",
+                engraving.level() + "레벨",
+                next + "레벨",
+                // 추천 순서 줄도 스펙업 후보와 같은 유물 각인서 공식 아이콘(시세 캐시, 공식 호출 없음).
+                books.icon(engraving.name()).orElse(null),
+                engraving.grade(),
+                null,
+                new Change(
+                    Kind.ENGRAVING_LEVEL,
+                    null,
+                    null,
+                    null,
+                    next,
+                    null,
+                    null,
+                    null,
+                    null,
+                    engraving.name(),
+                    null,
+                    null,
+                    null,
+                    null),
+                rangeCost(stages),
+                null,
+                null,
+                null));
       }
     }
     if (state.stone() != null) result.addAll(stoneOptions(state.stone()));

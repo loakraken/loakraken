@@ -428,7 +428,46 @@ public class SpecUpService {
        * KRAKEN 정렬 키: 반올림 전 10만 골드당(raw ÷ 비용 × 10만). 비교 기준 B 원본도 반올림 전 값으로 정렬하고 표시만 둘째 자리다(계산 검증
        * 11-01). 응답에는 내지 않는다(화면 값은 krakenScorePer100kGold).
        */
-      Double krakenRank) {
+      Double krakenRank,
+      /** 점수를 낼 수 있는 캐릭터인데 이 줄의 Δ크라켄 점수를 매기지 않은 이유(코드·문장, PM 총괄 11-21). 그 밖에는 null. */
+      String krakenScoreReasonCode,
+      String krakenScoreReason) {
+    /** 빈 보석 칸 줄: 새 보석을 넣을 스킬이 정해지지 않아 점수 모델이 Δ를 내지 않는다(전투력은 칸과 상관없는 기본 공격력이라 낸다). */
+    static final String EMPTY_GEM_SLOT = "KRAKEN_SCORE_EMPTY_GEM_SLOT";
+
+    static final String EMPTY_GEM_SLOT_TEXT = "빈 보석 칸은 넣을 스킬이 정해지지 않아 크라켄 점수를 매기지 않아요.";
+
+    Candidate withKrakenReason(String code, String text) {
+      return new Candidate(
+          id,
+          kind,
+          target,
+          from,
+          to,
+          icon,
+          grade,
+          skillName,
+          suggestedTo,
+          change,
+          status,
+          deltaCombatPower,
+          deltaPercent,
+          cost,
+          combatPowerPer10kGold,
+          reasonCode,
+          reason,
+          reasonDetail,
+          emptySlot,
+          baseAttackPctFrom,
+          baseAttackPctTo,
+          deltaKrakenScore,
+          krakenScorePer100kGold,
+          gemType,
+          krakenRank,
+          code,
+          text);
+    }
+
     /**
      * Δ크라켄 점수와 10만 골드당 점수를 붙인다. 10만 골드당은 같은 Δ에서 만든다(정렬 키 = 보이는 값). 전투력 계산이 UNSUPPORTED라 비용이 비었어도
      * Δ크라켄 점수가 있으면 계획한 비용(planned)을 준다 — 그래야 KRAKEN 정렬에서 비용으로 나눌 수 있다.
@@ -483,7 +522,9 @@ public class SpecUpService {
           delta,
           per100k,
           gemType,
-          rank);
+          rank,
+          krakenScoreReasonCode,
+          krakenScoreReason);
     }
   }
 
@@ -645,6 +686,10 @@ public class SpecUpService {
       candidate =
           candidate.withKraken(
               raw == null ? null : SpecUpKrakenScore.round2(raw), raw, plan.cost());
+      // 점수를 낼 수 있는 캐릭터의 빈 보석 칸 줄은 점수를 매기지 않은 이유를 준다(PM 총괄 11-21 (a)).
+      if (raw == null && krakenContext.available() && Boolean.TRUE.equals(plan.emptySlot()))
+        candidate =
+            candidate.withKrakenReason(Candidate.EMPTY_GEM_SLOT, Candidate.EMPTY_GEM_SLOT_TEXT);
       // KRAKEN은 Δ크라켄 점수가 있으면 전투력 계산과 상관없이 순위에 넣는다.
       boolean ranked =
           "OK".equals(candidate.status())
@@ -1930,6 +1975,8 @@ public class SpecUpService {
           null,
           null,
           gemType,
+          null,
+          null,
           null);
     }
   }

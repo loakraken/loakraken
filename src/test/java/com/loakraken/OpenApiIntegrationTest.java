@@ -327,6 +327,18 @@ class OpenApiIntegrationTest {
                   .asText())
           .as(field)
           .isEqualTo("null");
+    // 줄마다 점수를 매기지 않은 이유(PM 총괄 11-21 (a)): nullable 선택 필드 둘(배포 전까지 required 아님).
+    for (var field : List.of("krakenScoreReasonCode", "krakenScoreReason")) {
+      assertThat(document.at("/components/schemas/CandidateResponse/required").toString())
+          .as(field)
+          .doesNotContain(field);
+      assertThat(
+              document
+                  .at("/components/schemas/CandidateResponse/properties/" + field + "/anyOf/1/type")
+                  .asText())
+          .as(field)
+          .isEqualTo("null");
+    }
     assertThat(document.at("/components/schemas/SpecUpResponse/required").toString())
         .contains("cooldownGemsIncluded");
     // 스펙업 목표 경로(L31): 새 경로, 모든 필드 required, 값이 없을 수 있는 필드만 nullable.

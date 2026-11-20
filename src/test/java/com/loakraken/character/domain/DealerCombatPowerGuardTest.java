@@ -1,5 +1,6 @@
 package com.loakraken.character.domain;
 
+import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -13,6 +14,111 @@ import tools.jackson.databind.node.ObjectNode;
 /** 코드 리뷰 #1031 P2: 입력이 빠지면 일부만 계산한 값이 아니라 null, 표가 틀리면 조용한 ×1이 아니라 읽을 때 실패. */
 class DealerCombatPowerGuardTest {
   private static final JsonMapper MAPPER = JsonMapper.builder().build();
+
+  /**
+   * PM 총괄 11-21(#1036 후속): 원문에 줄이 없어 null인 카르마·돌 보너스는 ×1로 계산하고, 줄이 있는데 읽지 못하면 매퍼가 unparsed에 넣어 전투력이
+   * null이다. 기준 딜러 원문(l01)을 글자만 바꿔 원문 → 매퍼 → 전투력으로 본다.
+   */
+  @Test
+  void 줄이_없으면_계산하고_있는데_읽지_못하면_null이다() throws Exception {
+    var engine = DealerCombatPowerPinTest.engineTables();
+    var tables = DealerCombatPowerPinTest.cpTables();
+    var text = new ClassPathResource("kraken-score/l01.json").getContentAsString(UTF_8);
+    var built = DealerCombatPower.of(input(text), engine, tables);
+    assertThat(built).isNotNull();
+    assertThat(input(text).has("unparsed")).isFalse();
+    // 깨달음 카르마: 설명이 비면(카르마를 열지 않음) 줄이 없는 것 → 계산(카르마 ×1이라 값만 다름).
+    var noKarma = once(text, "\"Description\":\"6랭크 29레벨\"", "\"Description\":\"\"");
+    var noKarmaInput = input(noKarma);
+    assertThat(noKarmaInput.at("/arkPassive/enlightenment/karmalevel").isNull()).isTrue();
+    assertThat(noKarmaInput.has("unparsed")).isFalse();
+    assertThat(DealerCombatPower.of(noKarmaInput, engine, tables)).isNotNull();
+    // 공식 '미개방'(카르마를 열지 않음, 랭크 0·레벨 0)도 줄이 없는 것과 같다: 진화·도약을 미개방으로(실제 원문에 있는 꼴, 계산 검증 11-21).
+    var closed =
+        input(
+            once(
+                once(text, "\"Description\":\"6랭크 21레벨\"", "\"Description\":\"미개방\""),
+                "\"Description\":\"6랭크 27레벨\"",
+                "\"Description\":\"미개방\""));
+    assertThat(closed.at("/arkPassive/evolution/karmaRank").isNull()).isTrue();
+    assertThat(closed.at("/arkPassive/leap/karmalevel").isNull()).isTrue();
+    assertThat(closed.has("unparsed")).as(closed.path("unparsed").toString()).isFalse();
+    assertThat(DealerCombatPower.of(closed, engine, tables)).isNotNull();
+    // 설명이 있는데 'N랭크 N레벨'이 아니면 읽지 못한 것 → null(×1로 낮추지 않음).
+    var badKarma = input(once(text, "\"Description\":\"6랭크 29레벨\"", "\"Description\":\"6랭크 29\""));
+    assertThat(badKarma.at("/arkPassive/enlightenment/karmalevel").isNull()).isTrue();
+    assertThat(badKarma.path("unparsed").toString()).contains("arkPassive.enlightenment.karma");
+    assertThat(DealerCombatPower.of(badKarma, engine, tables)).isNull();
+    // 돌 레벨 보너스 줄이 있는데 수치를 읽지 못하면 null.
+    var badStone = input(once(text, "기본 공격력 +1.50%", "기본 공격력 +?%"));
+    assertThat(badStone.at("/armory/abilityStone/attackbonus").isNull()).isTrue();
+    assertThat(badStone.path("unparsed").toString()).contains("abilityStone.attackbonus");
+    assertThat(DealerCombatPower.of(badStone, engine, tables)).isNull();
+  }
+
+  /**
+   * 코드 리뷰 #1040 P2·P3, PM 총괄 11-21: 카르마는 태그를 떼고 읽어 태그가 낀 설명('6랭크 <b>21</b>레벨')도 같은 값이다. 그래도 읽지
+   * 못하면(같은 파싱 결과가 null) 트리마다 표시·전투력 null. 길이 상한을 넘어 빈 값이 된 설명·돌 툴팁도 원문에 줄이 있으면 표시된다.
+   */
+  @Test
+  void 태그가_낀_카르마는_읽고_읽지_못한_트리와_상한을_넘은_칸은_표시한다() throws Exception {
+    var engine = DealerCombatPowerPinTest.engineTables();
+    var tables = DealerCombatPowerPinTest.cpTables();
+    var text = new ClassPathResource("kraken-score/l01.json").getContentAsString(UTF_8);
+    var built = DealerCombatPower.of(input(text), engine, tables);
+    for (var tree :
+        java.util.Map.of(
+                "evolution", "6랭크 21레벨",
+                "enlightenment", "6랭크 29레벨",
+                "leap", "6랭크 27레벨")
+            .entrySet()) {
+      var key = tree.getKey();
+      var level = Integer.parseInt(tree.getValue().replace("6랭크 ", "").replace("레벨", ""));
+      var from = "\"Description\":\"" + tree.getValue() + "\"";
+      var tagged = input(once(text, from, "\"Description\":\"6랭크 <b>" + level + "</b>레벨\""));
+      assertThat(tagged.at("/arkPassive/" + key + "/karmaRank").asInt()).as(key).isEqualTo(6);
+      assertThat(tagged.at("/arkPassive/" + key + "/karmalevel").asInt()).as(key).isEqualTo(level);
+      assertThat(tagged.has("unparsed")).as(key).isFalse();
+      assertThat(DealerCombatPower.of(tagged, engine, tables)).as(key).isEqualByComparingTo(built);
+      // 태그를 떼도 레벨이 아니면 읽지 못한 것.
+      var unreadable = input(once(text, from, "\"Description\":\"6랭크 <b>?</b>레벨\""));
+      assertThat(unreadable.at("/arkPassive/" + key + "/karmaRank").isNull()).as(key).isTrue();
+      assertThat(unreadable.path("unparsed").toString())
+          .as(key)
+          .contains("arkPassive." + key + ".karma");
+      assertThat(DealerCombatPower.of(unreadable, engine, tables)).as(key).isNull();
+    }
+    // 상한을 넘은 카르마 설명: 읽지 않아 null이지만 원문에 줄이 있으므로 표시.
+    var longKarma =
+        input(
+            once(
+                text,
+                "\"Description\":\"6랭크 29레벨\"",
+                "\"Description\":\"6랭크 29레벨" + "가".repeat(OfficialTextLimit.MAX_CHARS) + "\""));
+    assertThat(longKarma.at("/arkPassive/enlightenment/karmalevel").isNull()).isTrue();
+    assertThat(longKarma.path("unparsed").toString()).contains("arkPassive.enlightenment.karma");
+    assertThat(DealerCombatPower.of(longKarma, engine, tables)).isNull();
+    var padding = "가".repeat(OfficialTextLimit.MAX_CHARS + 1);
+    var longStone = input(once(text, "기본 공격력 +1.50%", "기본 공격력 +1.50%" + padding));
+    assertThat(longStone.at("/armory/abilityStone/attackbonus").isNull()).isTrue();
+    assertThat(longStone.path("unparsed").toString()).contains("abilityStone.attackbonus");
+    assertThat(DealerCombatPower.of(longStone, engine, tables)).isNull();
+  }
+
+  private static JsonNode input(String fileText) throws Exception {
+    var raw = (ObjectNode) MAPPER.readTree(fileText).path("raw");
+    // 이 표본 원문에는 전투 레벨이 없다(장비로 지은 전투력에 필요).
+    ((ObjectNode) raw.path("ArmoryProfile")).put("CharacterLevel", 70);
+    return KrakenScoreInputMapper.from(raw);
+  }
+
+  /** 꼭 한 번 나오는 글자를 바꾼다(표본이 바뀌면 여기서 실패). */
+  private static String once(String text, String from, String to) {
+    int first = text.indexOf(from);
+    assertThat(first).as(from).isNotNegative();
+    assertThat(text.indexOf(from, first + 1)).as(from + " 한 번").isNegative();
+    return text.replace(from, to);
+  }
 
   @Test
   void 입력이_빠지면_낮은_값이_아니라_null이다() throws Exception {

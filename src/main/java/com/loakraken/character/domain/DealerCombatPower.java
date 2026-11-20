@@ -162,6 +162,8 @@ public final class DealerCombatPower {
    * 주스탯·아바타·아크 패시브 세 포인트·각인·보석·아크 그리드·펫 값이 수(또는 배열)여야 한다.
    */
   static boolean complete(JsonNode e) {
+    // 원문에 줄이 있는데 읽지 못한 칸(카르마·돌 보너스)은 ×1로 두지 않는다(PM 총괄 11-21). 없는 줄의 null만 ×1.
+    if (!e.path("unparsed").isEmpty()) return false;
     if (!e.path("profile").path("level").isNumber()) return false;
     var stats = e.path("stats");
     for (var key : List.of("critical", "haste", "special"))
@@ -182,8 +184,8 @@ public final class DealerCombatPower {
       if (!slot.getKey().equals("bangle") && !item.path("stat").isNumber()) return false;
     }
     // 돌 공격력 보너스(abilityStone.attackbonus)와 카르마 셋(진화 랭크·도약·깨달음 레벨)은 여기서 요구하지 않는다. 보너스 줄이 없는 돌·카르마를
-    // 열지 않은 캐릭터는 실제로 null이고(핀 39개 중 5개: p01·p03·p04·p06·p24) 비교 기준 식도 ×1로 둔다. 읽지 못해 빠진 경우는 그 항만큼
-    // 공식과 어긋나 문의 r이 0.10%를 넘으면 닫고, 넘지 않으면 차이도 0.10% 안이다(코드 리뷰 #1036 P2-1).
+    // 열지 않은 캐릭터는 실제로 null이고(핀 39개 중 5개: p01·p03·p04·p06·p24) 비교 기준 식도 ×1로 둔다. 줄이 있는데 읽지 못한
+    // 경우는 매퍼가 unparsed에 넣어 위에서 null이 된다(PM 총괄 11-21, 코드 리뷰 #1036 P2-1).
     var orb = e.path("armory").path("orb");
     if (orb.isObject() && !orb.path("trinity").isNumber()) return false;
     if (!e.path("avatar").path("avatarStats").isNumber()) return false;

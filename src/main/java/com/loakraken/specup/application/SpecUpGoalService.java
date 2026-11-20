@@ -251,7 +251,9 @@ public class SpecUpGoalService {
       Boolean supportOrderAvailable,
       String krakenScoreRole,
       Integer combatPowerStopOrder,
-      String combatPowerStopReasonCode) {
+      String combatPowerStopReasonCode,
+      Boolean polishStepsConsidered,
+      Boolean karmaStepsConsidered) {
     /**
      * 딜러 KRAKEN 경로에서 전투력을 비우기 시작한 단계(order)와 그 이유 코드(PM 총괄 11-21 (e)): 방어구 재련·상급 재련·완갑 단계는 점수로 고르지만
      * 시뮬레이터가 전투력을 내지 않으므로, 그 단계부터 단계와 경로 끝 전투력을 비운다.
@@ -284,7 +286,9 @@ public class SpecUpGoalService {
           supportOrderAvailable,
           krakenScoreRole,
           order,
-          reason == null ? ARMOR_REFINE_CP_UNCONFIRMED : reason);
+          reason == null ? ARMOR_REFINE_CP_UNCONFIRMED : reason,
+          polishStepsConsidered,
+          karmaStepsConsidered);
     }
 
     /** supportOrderAvailable 없이(경로를 만드는 곳에서 따로 채운다). */
@@ -331,6 +335,8 @@ public class SpecUpGoalService {
           null,
           null,
           null,
+          null,
+          null,
           null);
     }
 
@@ -349,6 +355,39 @@ public class SpecUpGoalService {
       int count = 0;
       for (var step : steps) if (step.extraCost() == null) count++;
       return count;
+    }
+
+    /**
+     * 이 답이 연마·카르마 단계를 후보로 봤는지(프론트 11-21). 스위치·역할·실제 기준(sort)으로 정해지고, 캐시와 따로 돌려줄 때마다 채운다(스위치를 바꿔도
+     * 캐시가 옛 값을 주지 않게).
+     */
+    Path withConsidered(boolean polish, boolean karma) {
+      return new Path(
+          characterName,
+          serverName,
+          className,
+          combatPower,
+          finalCombatPower,
+          pick,
+          limit,
+          stopReasonCode,
+          stopReason,
+          totalCost,
+          ruleVersion,
+          simulatorRuleVersion,
+          fetchedAt,
+          pricesAt,
+          steps,
+          unpriced,
+          krakenScore,
+          finalKrakenScore,
+          krakenSortUnavailableReason,
+          supportOrderAvailable,
+          krakenScoreRole,
+          combatPowerStopOrder,
+          combatPowerStopReasonCode,
+          polish,
+          karma);
     }
 
     Path withSupportOrderAvailable(boolean available, String role) {
@@ -375,7 +414,9 @@ public class SpecUpGoalService {
           available,
           role,
           combatPowerStopOrder,
-          combatPowerStopReasonCode);
+          combatPowerStopReasonCode,
+          polishStepsConsidered,
+          karmaStepsConsidered);
     }
 
     /** KRAKEN이 아닌 경로(점수 필드 없음). */
@@ -472,10 +513,15 @@ public class SpecUpGoalService {
             + (simulator.armorGateEnabled() ? ":acg" : "")
             + (pick == Pick.KRAKEN ? ":k" + SpecUpKrakenScore.RULE_VERSION : "")
             + (krakenUnavailable == null ? "" : ":ku" + krakenUnavailable);
+    boolean polishConsidered = specUp.polishPathApplies(snapshot);
+    boolean karmaConsidered = specUp.karmaPathApplies(snapshot, pick == Pick.KRAKEN);
     var cached = store.findPath(key);
     if (cached.isPresent()) {
       pathOutcome("cache_hit");
-      return cached.get().withSupportOrderAvailable(supportOrderAvailable, krakenScoreRole);
+      return cached
+          .get()
+          .withSupportOrderAvailable(supportOrderAvailable, krakenScoreRole)
+          .withConsidered(polishConsidered, karmaConsidered);
     }
     var computed =
         single(
@@ -528,7 +574,8 @@ public class SpecUpGoalService {
                     releaseSeat(holder);
                   }
                 })
-            .withSupportOrderAvailable(supportOrderAvailable, krakenScoreRole);
+            .withSupportOrderAvailable(supportOrderAvailable, krakenScoreRole)
+            .withConsidered(polishConsidered, karmaConsidered);
     return computed;
   }
 
@@ -765,7 +812,32 @@ public class SpecUpGoalService {
       String simulatorRuleVersion,
       Instant fetchedAt,
       Instant pricesAt,
-      List<Step> steps) {}
+      List<Step> steps,
+      Boolean polishStepsConsidered,
+      Boolean karmaStepsConsidered) {
+    /** 이 답이 연마·카르마 단계를 후보로 봤는지(경로와 같은 뜻, 캐시와 따로 채운다). */
+    Goal withConsidered(boolean polish, boolean karma) {
+      return new Goal(
+          characterName,
+          serverName,
+          className,
+          combatPower,
+          targetCombatPower,
+          finalCombatPower,
+          reached,
+          stopReasonCode,
+          stopReason,
+          totalCost,
+          unpricedSteps,
+          ruleVersion,
+          simulatorRuleVersion,
+          fetchedAt,
+          pricesAt,
+          steps,
+          polish,
+          karma);
+    }
+  }
 
   public Goal goal(String characterName, BigDecimal target) {
     if (!specUp.enabled()) throw new BusinessException(SpecUpErrorCode.SPEC_UP_DISABLED);
@@ -804,43 +876,48 @@ public class SpecUpGoalService {
             + polishSignature(polish)
             + karmaSignature()
             + (simulator.armorGateEnabled() ? ":acg" : "");
+    // 목표 경로는 전투력으로 고르므로 카르마는 딜러만(KRAKEN 순서가 아님).
+    boolean polishConsidered = specUp.polishPathApplies(snapshot);
+    boolean karmaConsidered = specUp.karmaPathApplies(snapshot, false);
     var cached = store.find(key);
     if (cached.isPresent()) {
       goalOutcome("cache_hit");
-      return cached.get();
+      return cached.get().withConsidered(polishConsidered, karmaConsidered);
     }
     return single(
-        key,
-        () -> {
-          var holder = client.get();
-          var refusal = takeSeat(holder);
-          if (refusal != null) {
-            goalOutcome(refusal.outcome);
-            log.warn(
-                "event=spec_up_goal_busy reason={} client={} slots={}",
-                refusal.outcome,
-                com.loakraken.common.lostark.ClientLimiter.shortKey(holder),
-                SOLVE_MAX_CONCURRENT);
-            throw new BusinessException(SpecUpErrorCode.SPEC_UP_BUSY, PATH_RETRY_AFTER);
-          }
-          try {
-            // 계산 시간 측정은 시간 상한 판정에 쓰는 시계(nanoTime)와 따로 잰다(상한 판정을 건드리지 않게).
-            long started = System.nanoTime();
-            var result = compute(snapshot, before, goal, gems, refinePrices, polish);
-            goalOutcome("computed");
-            // 추천 순서처럼 계산 시간(p95·p99)을 남긴다. stop은 멈춘 이유 코드(작은 고정 집합).
-            Timer.builder("loakraken.spec_up.goal_compute")
-                .tag("stop", result.stopReasonCode())
-                .publishPercentiles(0.5, 0.95, 0.99)
-                .register(meters)
-                .record(Duration.ofNanos(System.nanoTime() - started));
-            // 시간 상한으로 멈춘 부분 결과는 캐시하지 않는다(PM-프론트 L31 ③).
-            if (!TIME_LIMITED.equals(result.stopReasonCode())) store.save(key, result, CACHE_TTL);
-            return result;
-          } finally {
-            releaseSeat(holder);
-          }
-        });
+            key,
+            () -> {
+              var holder = client.get();
+              var refusal = takeSeat(holder);
+              if (refusal != null) {
+                goalOutcome(refusal.outcome);
+                log.warn(
+                    "event=spec_up_goal_busy reason={} client={} slots={}",
+                    refusal.outcome,
+                    com.loakraken.common.lostark.ClientLimiter.shortKey(holder),
+                    SOLVE_MAX_CONCURRENT);
+                throw new BusinessException(SpecUpErrorCode.SPEC_UP_BUSY, PATH_RETRY_AFTER);
+              }
+              try {
+                // 계산 시간 측정은 시간 상한 판정에 쓰는 시계(nanoTime)와 따로 잰다(상한 판정을 건드리지 않게).
+                long started = System.nanoTime();
+                var result = compute(snapshot, before, goal, gems, refinePrices, polish);
+                goalOutcome("computed");
+                // 추천 순서처럼 계산 시간(p95·p99)을 남긴다. stop은 멈춘 이유 코드(작은 고정 집합).
+                Timer.builder("loakraken.spec_up.goal_compute")
+                    .tag("stop", result.stopReasonCode())
+                    .publishPercentiles(0.5, 0.95, 0.99)
+                    .register(meters)
+                    .record(Duration.ofNanos(System.nanoTime() - started));
+                // 시간 상한으로 멈춘 부분 결과는 캐시하지 않는다(PM-프론트 L31 ③).
+                if (!TIME_LIMITED.equals(result.stopReasonCode()))
+                  store.save(key, result, CACHE_TTL);
+                return result;
+              } finally {
+                releaseSeat(holder);
+              }
+            })
+        .withConsidered(polishConsidered, karmaConsidered);
   }
 
   private Goal compute(
@@ -1465,7 +1542,9 @@ public class SpecUpGoalService {
         simulator.ruleVersion(),
         snapshot.fetchedAt(),
         pricesAt,
-        List.copyOf(steps));
+        List.copyOf(steps),
+        null,
+        null);
   }
 
   /** 단계마다 그 비용 전부를 내는 비용 코드: 귀속(또는 빈 칸) 보석, 거래할 수 없는 장신구(새로 사서 바꾼다, 비교 기준과 같음). */

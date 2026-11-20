@@ -53,6 +53,7 @@ class SpecUpKarmaCpIntegrationTest {
   private static final String SERVER = "카르마전투력서버";
   private static final String DEALER = "카르마딜러";
   private static final String SUPPORTER = "카르마서폿";
+  private static final String MAXED = "카르마만렙";
   @LocalServerPort int port;
   @Autowired JdbcClient jdbc;
   @Autowired StringRedisTemplate redis;
@@ -157,6 +158,96 @@ class SpecUpKarmaCpIntegrationTest {
         assertThat(step.path("deltaCombatPower").isNull()).isTrue();
       }
     assertThat(found).as(steps.toString()).isTrue();
+  }
+
+  /**
+   * 답이 카르마·연마 단계를 후보로 봤는지(프론트 11-21, PM 총괄 v0.3.15): 카르마 스위치 켬, 연마 스위치 꺼짐. 딜러는 모든 순서와 목표 경로에서 카르마
+   * true, 서포터는 KRAKEN 순서에서만 true. 고른 카르마 단계가 없어도(limit=1) true. 연마는 스위치가 꺼져 있어 늘 false.
+   */
+  @Test
+  void 카르마_스위치가_켜지면_딜러와_서포터_KRAKEN_답이_카르마를_본다고_알린다() throws Exception {
+    when(auctions.cachedGems()).thenReturn(List.of());
+    search(DEALER, "l01", "블레이드", "4052.77");
+    search(SUPPORTER, "l04", "도화가", "3000.00");
+    for (var sort : List.of("EFFICIENCY", "DELTA", "KRAKEN")) {
+      var dealer = path(DEALER, sort);
+      assertThat(dealer.path("karmaStepsConsidered").isBoolean()).as(sort).isTrue();
+      assertThat(dealer.path("karmaStepsConsidered").asBoolean()).as(sort).isTrue();
+      assertThat(dealer.path("polishStepsConsidered").isBoolean()).as(sort).isTrue();
+      assertThat(dealer.path("polishStepsConsidered").asBoolean()).as(sort).isFalse();
+      // 같은 키의 두 번째 답(캐시)도 값을 채운다.
+      var again = path(DEALER, sort);
+      assertThat(again.path("karmaStepsConsidered").asBoolean()).as(sort + " 캐시").isTrue();
+      assertThat(again.path("polishStepsConsidered").isBoolean()).as(sort + " 캐시").isTrue();
+    }
+    // 고른 카르마 단계가 없어도 본 것은 본 것(웹 '켰지만 고르지 않음' 표본).
+    // 카르마 30레벨 딜러: 고를 카르마 단계가 없어도 답은 카르마를 봤다(웹 '켰지만 고르지 않음' 표본).
+    var raw =
+        (tools.jackson.databind.node.ObjectNode)
+            mapper
+                .readTree(
+                    new ClassPathResource("kraken-score/l01.json")
+                        .getContentAsString(StandardCharsets.UTF_8))
+                .path("raw");
+    int edited = 0;
+    for (var point : raw.path("ArkPassive").path("Points"))
+      if ("깨달음".equals(point.path("Name").asText())) {
+        var description = point.path("Description").asText();
+        assertThat(description).contains("29레벨");
+        ((tools.jackson.databind.node.ObjectNode) point)
+            .put("Description", description.replace("29레벨", "30레벨"));
+        edited++;
+      }
+    assertThat(edited).isEqualTo(1);
+    search(MAXED, raw, "블레이드", "4052.77");
+    var maxed = get(pathUri(MAXED, "EFFICIENCY", 30));
+    assertThat(maxed.statusCode()).as(maxed.body()).isEqualTo(200);
+    var maxedData = mapper.readTree(maxed.body()).path("data");
+    assertThat(maxedData.path("karmaStepsConsidered").asBoolean()).isTrue();
+    assertThat(maxedData.path("steps").size()).isPositive();
+    for (var step : maxedData.path("steps"))
+      assertThat(step.path("kind").asText()).isNotEqualTo("KARMA_LEVEL");
+    ApiContractFixture.write("spec-up-path-karma-considered-no-step.json", maxed.body());
+    var supporterKraken = path(SUPPORTER, "KRAKEN");
+    assertThat(supporterKraken.path("sort").asText()).isEqualTo("KRAKEN");
+    assertThat(supporterKraken.path("karmaStepsConsidered").asBoolean()).isTrue();
+    var supporterEfficiency = path(SUPPORTER, "EFFICIENCY");
+    assertThat(supporterEfficiency.path("karmaStepsConsidered").isBoolean()).isTrue();
+    assertThat(supporterEfficiency.path("karmaStepsConsidered").asBoolean()).isFalse();
+    // 목표 경로는 전투력으로 고르므로 딜러만.
+    var goal = get(goalUri(DEALER, "4100"));
+    assertThat(goal.statusCode()).as(goal.body()).isEqualTo(200);
+    var goalData = mapper.readTree(goal.body()).path("data");
+    assertThat(goalData.path("karmaStepsConsidered").asBoolean()).isTrue();
+    assertThat(goalData.path("polishStepsConsidered").isBoolean()).isTrue();
+    assertThat(goalData.path("polishStepsConsidered").asBoolean()).isFalse();
+    var goalAgain = mapper.readTree(get(goalUri(DEALER, "4100")).body()).path("data");
+    assertThat(goalAgain.path("karmaStepsConsidered").asBoolean()).as("목표 캐시").isTrue();
+    var supporterGoal = get(goalUri(SUPPORTER, "3100"));
+    assertThat(supporterGoal.statusCode()).as(supporterGoal.body()).isEqualTo(200);
+    assertThat(
+            mapper
+                .readTree(supporterGoal.body())
+                .path("data")
+                .path("karmaStepsConsidered")
+                .asBoolean())
+        .isFalse();
+  }
+
+  private static String pathUri(String name, String sort, int limit) {
+    return "/api/v1/characters/spec-up/path?characterName="
+        + encode(name)
+        + "&sort="
+        + sort
+        + "&limit="
+        + limit;
+  }
+
+  private static String goalUri(String name, String target) {
+    return "/api/v1/characters/spec-up/goal?characterName="
+        + encode(name)
+        + "&targetCombatPower="
+        + target;
   }
 
   @Test
@@ -277,6 +368,11 @@ class SpecUpKarmaCpIntegrationTest {
                     .getContentAsString(StandardCharsets.UTF_8))
             .path("raw");
     if (noArkPassive) ((tools.jackson.databind.node.ObjectNode) raw).remove("ArkPassive");
+    search(name, raw, className, combatPower);
+  }
+
+  private void search(String name, JsonNode raw, String className, String combatPower)
+      throws Exception {
     var profile =
         new CharacterProfile(
             name,

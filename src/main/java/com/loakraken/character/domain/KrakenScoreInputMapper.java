@@ -36,6 +36,10 @@ public final class KrakenScoreInputMapper {
   private static final Pattern GRAY = Pattern.compile("#686660", Pattern.CASE_INSENSITIVE);
   private static final Pattern NUMBER = Pattern.compile("-?\\d+(\\.\\d+)?");
   private static final Pattern KARMA = Pattern.compile("(\\d+)랭크\\s*(\\d+)레벨");
+
+  /** 카르마를 아직 열지 않은 포인트의 공식 설명. */
+  private static final String KARMA_CLOSED = "미개방";
+
   private static final Pattern NODE = Pattern.compile("(\\d+)티어\\s+(.+?)\\s+Lv\\.(\\d+)");
   private static final Pattern GEM_POINT = Pattern.compile("(?:질서|혼돈) 포인트 : (\\d+)");
   private static final Pattern GEM_EFFECT = Pattern.compile("\\[([^\\]]+)\\] Lv\\.(\\d+)");
@@ -153,7 +157,7 @@ public final class KrakenScoreInputMapper {
     out.set("engraving", engraving(raw));
     out.set("arkGrid", arkGrid(raw));
     // 원문에 줄이 있는데 읽지 못한 칸(PM 총괄 11-21, #1036): 없어서 null인 칸(×1)과 구별한다. 있을 때만 넣어 지금 입력은 그대로.
-    var unparsed = unparsed(raw);
+    var unparsed = unparsed(raw, out);
     if (!unparsed.isEmpty()) {
       var list = out.putArray("unparsed");
       unparsed.forEach(list::add);
@@ -162,24 +166,35 @@ public final class KrakenScoreInputMapper {
   }
 
   /**
-   * 원문에 그 줄이 있는데 읽지 못한 칸 경로. 카르마는 아크 패시브 포인트 설명이 비어 있지 않은데 'N랭크 N레벨'이 아니면, 돌 보너스는 툴팁에 '레벨 보너스'가 있는데
-   * 기본 공격력 %를 읽지 못하면. 설명이 비었거나 줄이 없으면(카르마를 열지 않음·보너스 없는 돌) 여기에 넣지 않는다(null = ×1).
+   * 원문에 그 줄이 있는데 읽은 값이 비어 있는 칸 경로. 값을 채운 파싱 결과(out)를 보고 정한다(코드 리뷰 #1040 P2: 따로 다시 읽으면 태그가 있는 설명처럼
+   * 둘이 갈라질 수 있다). '있음'은 길이 상한 전 원문 글로 본다(코드 리뷰 #1040 P3: 상한에 걸려 빈 값이 된 칸도 읽지 못한 것).
+   *
+   * <ul>
+   *   <li>카르마: 포인트 설명이 비어 있지 않고 '미개방'(카르마를 열지 않음, 랭크 0·레벨 0, 비교 기준 ×1)도 아닌데 랭크·레벨이 null.
+   *   <li>돌 보너스: 어빌리티 스톤 툴팁 원문에 '레벨 보너스'가 있는데 보너스가 null.
+   * </ul>
+   *
+   * 설명이 비었거나 '미개방'이거나 줄이 없으면 넣지 않는다(null = ×1).
    */
-  static List<String> unparsed(JsonNode raw) {
+  static List<String> unparsed(JsonNode raw, JsonNode out) {
     var result = new ArrayList<String>();
     for (var p : raw.path("ArkPassive").path("Points")) {
       var key = ARK_PASSIVE.get(p.path("Name").asString(""));
       if (key == null) continue;
-      var description = strip(p.path("Description").asString("")).strip();
-      if (!description.isEmpty() && !KARMA.matcher(description).find())
+      var description = p.path("Description").asString("").strip();
+      if (description.isEmpty() || KARMA_CLOSED.equals(description)) continue;
+      var parsed = out.path("arkPassive").path(key);
+      if (!parsed.path("karmaRank").isNumber() || !parsed.path("karmalevel").isNumber())
         result.add("arkPassive." + key + ".karma");
     }
-    for (var item : raw.path("ArmoryEquipment")) {
-      if (!"어빌리티 스톤".equals(item.path("Type").asString(""))) continue;
-      var text = strip(write(tooltip(item.path("Tooltip"))));
-      if (text.contains("레벨 보너스") && !STONE_BONUS.matcher(text).find())
-        result.add("abilityStone.attackbonus");
-    }
+    var stone = out.path("armory").path("abilityStone");
+    if (stone.isObject() && !stone.path("attackbonus").isNumber())
+      for (var item : raw.path("ArmoryEquipment")) {
+        if (!"어빌리티 스톤".equals(item.path("Type").asString(""))) continue;
+        var tooltip = item.path("Tooltip");
+        var text = tooltip.isString() ? tooltip.asString("") : tooltip.toString();
+        if (text.contains("레벨 보너스")) result.add("abilityStone.attackbonus");
+      }
     return result;
   }
 
@@ -222,7 +237,8 @@ public final class KrakenScoreInputMapper {
     for (var p : raw.path("ArkPassive").path("Points")) {
       var key = ARK_PASSIVE.get(p.path("Name").asString(""));
       if (key == null) continue;
-      var m = KARMA.matcher(p.path("Description").asString(""));
+      // 태그를 떼고 읽는다('6랭크 <b>21</b>레벨'도 21, PM 총괄 11-21). 그래도 읽지 못하면 null이고 unparsed에 남는다.
+      var m = KARMA.matcher(strip(p.path("Description").asString("")));
       boolean found = m.find();
       var group = out.putObject(key);
       group.set("points", p.path("Value").isMissingNode() ? F.nullNode() : p.get("Value"));

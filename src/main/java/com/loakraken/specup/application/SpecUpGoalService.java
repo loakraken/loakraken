@@ -199,7 +199,7 @@ public class SpecUpGoalService {
   }
 
   // v2: 완갑(팔 보호구) 재련 단계를 고른다. v3: 어빌리티 스톤 목표 조합(각인 둘을 한 단계에), 단계 changes.
-  public static final String PATH_RULE_VERSION = "spec-up-path-v6";
+  public static final String PATH_RULE_VERSION = "spec-up-path-v7";
   static final int PATH_MAX_STEPS = 30;
   static final int SOLVE_MAX_CONCURRENT = 2;
   static final Duration PATH_RETRY_AFTER = Duration.ofSeconds(2);
@@ -611,7 +611,8 @@ public class SpecUpGoalService {
             gems,
             refinePrices,
             pricesAt,
-            polish)) {
+            polish,
+            false)) {
       if (option.cost() != null && option.cost().amount() != null) continue;
       // '상·상 뒤' 후보는 처음 상태에서 고를 수 없다.
       if (afterTop(polish, option.id())) continue;
@@ -944,7 +945,8 @@ public class SpecUpGoalService {
       Option best = null;
       Long bestMarginal = null;
       Double bestScore = null;
-      for (var listed : options(state, gems, refinePrices, pricesAt, polish)) {
+      // 레벨 점프는 추천 순서 KRAKEN·EFFICIENCY만(비교 기준 경로와 같음). DELTA·목표 경로는 다음 한 단계.
+      for (var listed : options(state, gems, refinePrices, pricesAt, polish, baseline)) {
         var option = listed;
         if (krakenExcluded.contains(option.slot())) continue;
         // 99·109·1010돌은 목록에만(EFFICIENCY·KRAKEN 정렬). 추천 순서(세 기준)와 목표 경로는 뺀다.
@@ -1430,13 +1432,70 @@ public class SpecUpGoalService {
           .thenComparing(Option::delta, Comparator.nullsLast(Comparator.reverseOrder()))
           .thenComparing(Option::id);
 
-  /** 지금 상태에서 칸마다 다음 한 단계. */
+  /**
+   * 한 칸의 목표 단계들. jumps면 다음 단계부터 끝(max)까지 하나하나가 후보(레벨 점프, 비교 기준과 같음: 계산 검증 11-20 22:21), 아니면 다음 한
+   * 단계만.
+   */
+  static List<Integer> targets(int current, int max, boolean jumps) {
+    if (current >= max) return List.of();
+    if (!jumps) return List.of(current + 1);
+    var result = new ArrayList<Integer>();
+    for (int target = current + 1; target <= max; target++) result.add(target);
+    return result;
+  }
+
+  /** 상급 재련 목표: jumps면 10의 배수만(다음 10단계 … 40, +1 후보 없음, 비교 기준과 같음), 아니면 다음 한 단계. */
+  static List<Integer> advancedTargets(int current, boolean jumps) {
+    if (current >= 40) return List.of();
+    if (!jumps) return List.of(current + 1);
+    var result = new ArrayList<Integer>();
+    for (int target = (current / 10 + 1) * 10; target <= 40; target += 10) result.add(target);
+    return result;
+  }
+
+  /**
+   * 여러 단계를 한 번에 올리는 비용 = 단계 비용의 합(기대 비용은 더해진다, 계산 검증 11-20 22:21). 한 단계면 그 비용 그대로. 모르는 단계가 하나라도
+   * 있으면 그 단계의 비용(모름)을 준다. 시세 관측 시각은 가장 이른 것, 이전 시세(stale)는 하나라도 있으면 true.
+   */
+  static SpecUpCost rangeCost(List<SpecUpCost> stages) {
+    if (stages.size() == 1) return stages.getFirst();
+    long amount = 0;
+    double exact = 0;
+    Instant observedAt = null;
+    Boolean stale = null;
+    for (var stage : stages) {
+      if (stage == null || stage.amount() == null) return stage;
+      amount += stage.amount();
+      exact += stage.exact() == null ? stage.amount() : stage.exact();
+      if (stage.priceObservedAt() != null
+          && (observedAt == null || stage.priceObservedAt().isBefore(observedAt)))
+        observedAt = stage.priceObservedAt();
+      if (stage.stale() != null) stale = Boolean.TRUE.equals(stale) || stage.stale();
+    }
+    var first = stages.getFirst();
+    return new SpecUpCost(
+        first.unit(),
+        amount,
+        first.status(),
+        first.code(),
+        first.basis(),
+        exact,
+        observedAt,
+        stale,
+        null);
+  }
+
+  /**
+   * 지금 상태에서 칸마다 다음 단계들. jumps(추천 순서 KRAKEN·EFFICIENCY)면 보석·재련·완갑·각인은 끝까지의 모든 레벨, 상급 재련은 10의 배수가
+   * 후보다(레벨 점프). DELTA·목표 경로는 다음 한 단계(PM 총괄 판단 전 기본).
+   */
   private List<Option> options(
       State state,
       Map<String, MarketAuctionService.GemCell> gems,
       Optional<RefiningMaterialPriceService.Prices> refinePrices,
       Instant[] pricesAt,
-      List<SpecUpService.PolishStep> polish) {
+      List<SpecUpService.PolishStep> polish,
+      boolean jumps) {
     var result = new ArrayList<Option>();
     // 연마 단계(spec-up.polish-path.enabled): 목록 연마 교체 줄과 같은 목표·id·비용. 같은 장신구 칸의 다른 매물을 고르면 앞 매물을
     // 바꾼다(칸마다 마지막
@@ -1465,9 +1524,8 @@ public class SpecUpGoalService {
               null,
               step.changes().subList(1, step.changes().size())));
     }
-    for (var gem : state.gems().values()) {
-      if (gem.level() >= 10) continue;
-      int next = gem.level() + 1;
+    for (var gem : state.gems().values())
+      for (int next : targets(gem.level(), 10, jumps)) {
       String label = gem.level() + "레벨 " + (gem.kind() == null ? "보석" : gem.kind());
       String target =
           gem.skill() == null ? "보석 " + gem.slot() + "번 · " + label : gem.skill() + " · " + label;
@@ -1502,7 +1560,14 @@ public class SpecUpGoalService {
               null));
     }
     for (var item : state.refines().values()) {
-      int next = item.refine() + 1;
+      // 단계 비용은 칸마다 한 번만 재고(재련 계획), 점프는 그 합.
+      var stages = new ArrayList<SpecUpCost>();
+      for (int next : targets(item.refine(), 25, jumps)) {
+        int from = next - 1;
+        stages.add(
+            from >= 10 && from < 25
+                ? specUp.refineCost(item.equipment(), from, refinePrices, pricesAt)
+                : SpecUpCost.REFINE_COST_UNCONFIRMED);
       result.add(
           new Option(
               "EQUIPMENT_REFINE:" + item.index(),
@@ -1528,16 +1593,17 @@ public class SpecUpGoalService {
                   null,
                   null,
                   null),
-              item.refine() >= 10 && item.refine() < 25
-                  ? specUp.refineCost(item.equipment(), item.refine(), refinePrices, pricesAt)
-                  : SpecUpCost.REFINE_COST_UNCONFIRMED,
+              rangeCost(stages),
               null,
               null,
               null));
+      }
     }
     if (state.armGuard() != null) {
       var item = state.armGuard();
-      int next = item.refine() + 1;
+      var stages = new ArrayList<SpecUpCost>();
+      for (int next : targets(item.refine(), 25, jumps)) {
+      stages.add(specUp.armGuardStepCost(next - 1, refinePrices, pricesAt));
       // 등급은 목록 완갑 줄과 같이 처음 등급에서 목표 단계로 정한다(시뮬레이터 ARM_GUARD는 목표 단계·등급을 그대로 받는다).
       var grade = specUp.armGuardGrade(item.equipment().grade(), next);
       if (grade != null)
@@ -1566,13 +1632,14 @@ public class SpecUpGoalService {
                     null,
                     null,
                     null),
-                specUp.armGuardStepCost(item.refine(), refinePrices, pricesAt),
+                rangeCost(stages),
                 null,
                 null,
                 null));
+      }
     }
-    for (var item : state.advanced().values()) {
-      int next = item.refine() + 1;
+    for (var item : state.advanced().values())
+      for (int next : advancedTargets(item.refine(), jumps)) {
       result.add(
           new Option(
               "EQUIPMENT_ADVANCED_REFINE:" + item.index(),
@@ -1637,7 +1704,13 @@ public class SpecUpGoalService {
               null));
     }
     for (var engraving : state.engravings().values()) {
-      int next = engraving.level() + 1;
+      // 한 레벨 비용(각인서 5권)을 올리는 레벨 수만큼 더한다(비교 기준: 각인서 × (목표 − 지금) × 5).
+      var perLevel =
+          SpecUpService.bookCost(engraving.name(), engraving.grade(), books::price, pricesAt);
+      var stages = new ArrayList<SpecUpCost>();
+      for (int next :
+          targets(engraving.level(), SpecUpService.engravingMaxLevel(engraving.grade()), jumps)) {
+      stages.add(perLevel);
       result.add(
           new Option(
               "ENGRAVING_LEVEL:" + engraving.name(),
@@ -1664,10 +1737,11 @@ public class SpecUpGoalService {
                   null,
                   null,
                   null),
-              SpecUpService.bookCost(engraving.name(), engraving.grade(), books::price, pricesAt),
+              rangeCost(stages),
               null,
               null,
               null));
+      }
     }
     if (state.stone() != null) result.addAll(stoneOptions(state.stone()));
     if (state.karma() != null) result.addAll(karmaOptions(state.karma()));

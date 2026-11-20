@@ -880,7 +880,7 @@ class SpecUpIntegrationTest {
     ApiContractFixture.write("character-spec-up-path.json", response.body());
     SiteNames.assertAbsent(response.body());
     var data = mapper.readTree(response.body()).path("data");
-    assertThat(data.path("ruleVersion").asText()).isEqualTo("spec-up-path-v6");
+    assertThat(data.path("ruleVersion").asText()).isEqualTo("spec-up-path-v7");
     assertThat(data.path("sort").asText()).isEqualTo("EFFICIENCY");
     assertThat(data.path("limit").asInt()).isEqualTo(30);
     var steps = data.path("steps");

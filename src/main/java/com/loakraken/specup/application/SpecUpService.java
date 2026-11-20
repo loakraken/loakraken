@@ -641,7 +641,7 @@ public class SpecUpService {
             ? null
             : profile.combatPower().setScale(2, RoundingMode.HALF_UP),
         RULE_VERSION,
-        CombatPowerSimulationService.RULE_VERSION,
+        simulator.ruleVersion(),
         snapshot.fetchedAt(),
         pricesAt[0],
         sort.name(),

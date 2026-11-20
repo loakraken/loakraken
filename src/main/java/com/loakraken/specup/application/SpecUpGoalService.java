@@ -259,7 +259,7 @@ public class SpecUpGoalService {
     public static final String ARMOR_REFINE_CP_UNCONFIRMED = "ARMOR_REFINE_CP_UNCONFIRMED";
 
     /** 전투력을 비우기 시작한 단계(없으면 그대로). */
-    Path withCombatPowerStop(Integer order) {
+    Path withCombatPowerStop(Integer order, String reason) {
       if (order == null) return this;
       return new Path(
           characterName,
@@ -284,7 +284,7 @@ public class SpecUpGoalService {
           supportOrderAvailable,
           krakenScoreRole,
           order,
-          ARMOR_REFINE_CP_UNCONFIRMED);
+          reason == null ? ARMOR_REFINE_CP_UNCONFIRMED : reason);
     }
 
     /** supportOrderAvailable 없이(경로를 만드는 곳에서 따로 채운다). */
@@ -464,11 +464,12 @@ public class SpecUpGoalService {
                 String.valueOf(refinePrices.map(p -> p.observedAt().toEpochMilli()).orElse(0L)),
                 String.valueOf(books.observedAt().map(Instant::toEpochMilli).orElse(0L)),
                 PATH_RULE_VERSION,
-                CombatPowerSimulationService.RULE_VERSION,
+                simulator.ruleVersion(),
                 String.valueOf(specUp.costRuleVersions()),
                 specUp.armGuardEnabled() ? "ag" : "-")
             + polishSignature(polish)
             + karmaSignature()
+            + (simulator.armorGateEnabled() ? ":acg" : "")
             + (pick == Pick.KRAKEN ? ":k" + SpecUpKrakenScore.RULE_VERSION : "")
             + (krakenUnavailable == null ? "" : ":ku" + krakenUnavailable);
     var cached = store.findPath(key);
@@ -576,7 +577,7 @@ public class SpecUpGoalService {
           reason.text(),
           null,
           PATH_RULE_VERSION,
-          CombatPowerSimulationService.RULE_VERSION,
+          simulator.ruleVersion(),
           snapshot.fetchedAt(),
           null,
           List.of(),
@@ -624,7 +625,7 @@ public class SpecUpGoalService {
                 : PATH_STOP_TEXT.get(chain.stop()),
             chain.cumulative(),
             PATH_RULE_VERSION,
-            CombatPowerSimulationService.RULE_VERSION,
+            simulator.ruleVersion(),
             snapshot.fetchedAt(),
             chain.pricesAt(),
             chain.steps(),
@@ -634,7 +635,7 @@ public class SpecUpGoalService {
                 ? krakenBefore
                 : SpecUpKrakenScore.round2(chain.krakenLast()),
             krakenUnavailable)
-        .withCombatPowerStop(chain.cpStopOrder());
+        .withCombatPowerStop(chain.cpStopOrder(), chain.cpStopReason());
   }
 
   /** 지금 상태에서 비용을 몰라 순서에서 뺀 다음 단계 중 전투력이 오르는 것. Δ 큰 순, 같으면 id. */
@@ -797,11 +798,12 @@ public class SpecUpGoalService {
                 // 각인서 시세가 바뀌면 각인 비용이 달라지므로 다시 계산한다(시세가 그대로면 캐시 그대로).
                 String.valueOf(books.observedAt().map(Instant::toEpochMilli).orElse(0L)),
                 RULE_VERSION,
-                CombatPowerSimulationService.RULE_VERSION,
+                simulator.ruleVersion(),
                 String.valueOf(specUp.costRuleVersions()),
                 specUp.armGuardEnabled() ? "ag" : "-")
             + polishSignature(polish)
-            + karmaSignature();
+            + karmaSignature()
+            + (simulator.armorGateEnabled() ? ":acg" : "");
     var cached = store.find(key);
     if (cached.isPresent()) {
       goalOutcome("cache_hit");
@@ -907,7 +909,8 @@ public class SpecUpGoalService {
       BigDecimal last,
       Instant pricesAt,
       Double krakenLast,
-      Integer cpStopOrder) {}
+      Integer cpStopOrder,
+      String cpStopReason) {}
 
   /**
    * 지금 상태에서 다음 한 단계를 고르고 적용한 뒤 다시 모든 칸의 다음 단계를 시뮬레이터로 재기를 되풀이한다(사슬). target이 있으면 닿을 때 멈추고,
@@ -979,6 +982,7 @@ public class SpecUpGoalService {
     // KRAKEN에서 전투력을 비우고 고른 방어구 단계의 칸(PM 총괄 11-21 (e)). 하나라도 있으면 그 뒤 단계와 경로 끝 전투력은 비운다.
     var cpNullSlots = new java.util.LinkedHashSet<String>();
     Integer cpStopOrder = null;
+    String cpStopReason = null;
     String stop;
     while (true) {
       if (target != null && current.compareTo(target) >= 0) {
@@ -1097,8 +1101,7 @@ public class SpecUpGoalService {
           // 방어구 재련·상급 재련·완갑은 시뮬레이터가 전투력을 내지 않는다(UNSUPPORTED, 주 스탯 경로 확인 전). KRAKEN 추천 순서는 이 단계를
           // 점수로 고르고 전투력은 비운다(PM 총괄 11-21 (e), 비교 기준 점수 모드와 같음). 그 뒤 단계의 전투력도 비운다(방어구 몫이 빠진 값을
           // 보이지 않음, (i)).
-          if (target == null
-              && CombatPowerSimulationService.armorClosed(loadout, top.option().change())) {
+          if (target == null && simulator.armorClosed(snapshot, top.option().change())) {
             bestCpNull = true;
           } else {
             // 시뮬레이터에는 전투력을 비운 단계를 넣지 않는다(넣으면 그 뒤 후보가 모두 계산 못 함이 된다). 여기서는 계산 못 하는 후보를 빼는 데만 쓴다.
@@ -1106,8 +1109,14 @@ public class SpecUpGoalService {
             for (var slot : cpNullSlots) trial.remove(slot);
             trial.put(top.option().slot(), top.option().changes());
             var simulated = simulator.simulate(snapshot, flatten(trial));
-            if (simulated.unsupportedCount() > 0 || simulated.after() == null) continue;
-            if (cpNullSlots.isEmpty()) {
+            if (simulated.unsupportedCount() > 0 || simulated.after() == null) {
+              // 문이 열렸어도 방어구 단계를 모델이 계산하지 못하면(단계표 밖 등) 문 전처럼 전투력을 비우고 남긴다(코드 리뷰 #1036 P2-3: 빼면 점수로
+              // 고른 단계가 사라진다). 그 밖의 계산 못 함은 지금처럼 뺀다.
+              if (target == null
+                  && com.loakraken.character.application.CombatPowerSimulationService.armorClosed(
+                      snapshot.details().loadout(), top.option().change())) bestCpNull = true;
+              else continue;
+            } else if (cpNullSlots.isEmpty()) {
               after = simulated.after();
               delta = after.subtract(current);
             }
@@ -1124,7 +1133,11 @@ public class SpecUpGoalService {
       }
       applied.put(best.slot(), best.changes());
       if (bestCpNull) {
-        if (cpStopOrder == null) cpStopOrder = steps.size() + 1;
+        if (cpStopOrder == null) {
+          cpStopOrder = steps.size() + 1;
+          // 이유는 문 상태를 따른다(코드 리뷰 #1036 P2-4: 시뮬레이터 이유와 같게).
+          cpStopReason = simulator.armorStopReason(snapshot);
+        }
         cpNullSlots.add(best.slot());
       }
       if (polishById.containsKey(best.id())) polishChosen.put(best.slot(), best.id());
@@ -1188,7 +1201,8 @@ public class SpecUpGoalService {
         cpNullSlots.isEmpty() ? current : null,
         pricesAt[0],
         scoreNow,
-        cpStopOrder);
+        cpStopOrder,
+        cpStopReason);
   }
 
   /**
@@ -1423,7 +1437,7 @@ public class SpecUpGoalService {
           .thenComparing(Option::efficiency, Comparator.nullsLast(Comparator.reverseOrder()))
           .thenComparing(Option::id);
 
-  private static Goal result(
+  private Goal result(
       CharacterResult snapshot,
       BigDecimal before,
       BigDecimal target,
@@ -1448,7 +1462,7 @@ public class SpecUpGoalService {
         totalCost,
         unpriced,
         RULE_VERSION,
-        CombatPowerSimulationService.RULE_VERSION,
+        simulator.ruleVersion(),
         snapshot.fetchedAt(),
         pricesAt,
         List.copyOf(steps));

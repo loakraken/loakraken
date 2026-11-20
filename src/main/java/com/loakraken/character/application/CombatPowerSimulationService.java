@@ -95,6 +95,13 @@ public class CombatPowerSimulationService {
   private final com.loakraken.character.domain.CombatPowerArkPassiveModel.Coefficients
       arkPassiveCoefficients;
 
+  /** 방어구 재련·상급 재련·완갑 전투력 문(spec-up.armor-cp-gate.enabled, 기본 꺼짐). */
+  private final ArmorCpGate armorGate;
+
+  /** 문 밖(|r| > 0.10%)일 때의 이유(코드 ARMOR_CP_RESIDUAL_HIGH, 웹 문구와 같은 해요체, PM-프론트 11-21). */
+  static final String ARMOR_CP_RESIDUAL_HIGH =
+      com.loakraken.character.domain.CombatPowerReasons.ARMOR_CP_RESIDUAL_HIGH.text();
+
   public CombatPowerSimulationService(
       CharacterCache cache,
       CharacterPublicSummaryPort stored,
@@ -104,8 +111,9 @@ public class CombatPowerSimulationService {
       CombatPowerRefineModel.Coefficients refineCoefficients,
       CombatPowerBraceletModel.Coefficients braceletCoefficients,
       CombatPowerArkGridModel.Coefficients arkGridCoefficients,
-      com.loakraken.character.domain.CombatPowerArkPassiveModel.Coefficients
-          arkPassiveCoefficients) {
+      com.loakraken.character.domain.CombatPowerArkPassiveModel.Coefficients arkPassiveCoefficients,
+      ArmorCpGate armorGate) {
+    this.armorGate = armorGate;
     this.cache = cache;
     this.stored = stored;
     this.gemCoefficients = gemCoefficients;
@@ -646,6 +654,14 @@ public class CombatPowerSimulationService {
       String reason = roleReason != null ? roleReason : planned.reason();
       if (roleReason == null) {
         var hold = heldReason(loadout, braceletModel, planned);
+        // 방어구 재련·상급 재련·완갑: 문이 열린 스냅샷이면 계산하고, r이 크면 그 이유로 닫는다(스위치가 꺼져 있으면 지금처럼).
+        if (hold != null && armorClosed(loadout, planned.change()))
+          hold =
+              switch (armorGate.state(result)) {
+                case OPEN -> null;
+                case RESIDUAL_HIGH -> ARMOR_CP_RESIDUAL_HIGH;
+                case DISABLED, UNAVAILABLE -> hold;
+              };
         if (hold != null) reason = hold;
       }
       if (planned.effect() != null && reason == null) {
@@ -1473,6 +1489,35 @@ public class CombatPowerSimulationService {
     return item != null && !"무기".equals(item.type());
   }
 
+  /**
+   * 이 스냅샷에서 이 변경의 전투력을 아직 내지 않는지(방어구 재련·상급 재련·완갑이고 문이 열리지 않음). 스펙업 추천 순서 KRAKEN이 전투력을 비울 단계를 고를 때
+   * 쓴다(문이 열리면 전투력을 그대로 잰다).
+   */
+  public boolean armorClosed(CharacterResult snapshot, Change change) {
+    if (!armorClosed(snapshot.details().loadout(), change)) return false;
+    return armorGate.state(snapshot) != ArmorCpGate.State.OPEN;
+  }
+
+  /** 방어구 전투력 문 스위치가 켜졌는지(캐시 키·규칙 버전에 쓴다). */
+  public boolean armorGateEnabled() {
+    return armorGate.enabled();
+  }
+
+  /**
+   * 응답에 쓰는 규칙 버전: 방어구 전투력 문 스위치가 켜지면 '-acg'를 붙인다(같은 버전에 다른 값이 나오지 않게, 코드 리뷰 #1036 P2-5). 꺼져 있으면 지금과
+   * 같다. 웹은 이 값을 비교하지 않는다(PM-프론트 11-21).
+   */
+  public String ruleVersion() {
+    return armorGate.enabled() ? RULE_VERSION + "-acg" : RULE_VERSION;
+  }
+
+  /** 스펙업 추천 순서가 방어구 단계에서 전투력을 비울 때의 이유 코드: 문 밖이면 ARMOR_CP_RESIDUAL_HIGH, 그 밖은 계산식 확인 전. */
+  public String armorStopReason(CharacterResult snapshot) {
+    return armorGate.state(snapshot) == ArmorCpGate.State.RESIDUAL_HIGH
+        ? com.loakraken.character.domain.CombatPowerReasons.ARMOR_CP_RESIDUAL_HIGH.code()
+        : "ARMOR_REFINE_CP_UNCONFIRMED";
+  }
+
   /** 확인 전이라 계산하지 않는 변경의 이유(방어구 재련·상급 재련, 팔 보호구, 팔찌 힘·민첩·지능 줄). 그 밖이면 null. */
   private static String heldReason(
       CharacterLoadout loadout, CombatPowerBraceletModel.Model braceletModel, Planned planned) {
@@ -1788,7 +1833,7 @@ public class CombatPowerSimulationService {
 
   public Options options() {
     return new Options(
-        RULE_VERSION,
+        ruleVersion(),
         false,
         List.of(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10),
         10,

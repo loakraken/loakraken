@@ -95,7 +95,8 @@ public class CombatPowerController {
     return ApiResponse.of(
         CharacterSuccessCode.CHARACTER_COMBAT_POWER_SIMULATE_SUCCESS,
         CombatPowerSimulationResponse.from(
-            simulator.simulate(request.characterName(), request.toChanges())));
+            simulator.simulate(request.characterName(), request.toChanges()),
+            simulator.ruleVersion()));
   }
 
   @GetMapping(
@@ -123,7 +124,8 @@ public class CombatPowerController {
           String characterName) {
     return ApiResponse.of(
         CharacterSuccessCode.CHARACTER_COMBAT_POWER_CONTRIBUTIONS_SUCCESS,
-        CombatPowerContributionsResponse.from(simulator.contributions(characterName)));
+        CombatPowerContributionsResponse.from(
+            simulator.contributions(characterName), simulator.ruleVersion()));
   }
 
   public record CombatPowerContributionsResponse(
@@ -132,12 +134,13 @@ public class CombatPowerController {
       @Schema(description = "공식 전투력(소수 둘째 자리)") @NullableResponse BigDecimal combatPower,
       String ruleVersion,
       List<ContributionItemResponse> items) {
-    static CombatPowerContributionsResponse from(CombatPowerSimulationService.Contributions value) {
+    static CombatPowerContributionsResponse from(
+        CombatPowerSimulationService.Contributions value, String ruleVersion) {
       return new CombatPowerContributionsResponse(
           value.characterName(),
           value.fetchedAt(),
           value.combatPower(),
-          CombatPowerSimulationService.RULE_VERSION,
+          ruleVersion,
           value.items().stream()
               .map(
                   item ->
@@ -245,9 +248,10 @@ public class CombatPowerController {
       List<ContributionResponse> contributions,
       int unsupportedCount,
       List<String> assumptions) {
-    static CombatPowerSimulationResponse from(CombatPowerSimulationService.Result result) {
+    static CombatPowerSimulationResponse from(
+        CombatPowerSimulationService.Result result, String ruleVersion) {
       return new CombatPowerSimulationResponse(
-          CombatPowerSimulationService.RULE_VERSION,
+          ruleVersion,
           result.characterName(),
           result.fetchedAt(),
           result.before(),

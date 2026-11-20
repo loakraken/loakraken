@@ -26,28 +26,186 @@ public final class DealerCombatPower {
 
   private DealerCombatPower() {}
 
-  /** 리소스 combat-power-tables.json의 tables. */
+  /**
+   * 리소스 combat-power-tables.json의 tables. 읽을 때 표마다 모양과 값(유한한 수)을 확인하고, 틀리면 바로 실패한다(빈 칸이 조용히 ×1이 되지
+   * 않게, 코드 리뷰 #1031 P2). 받은 노드는 복사해 두고 밖에는 복사본만 준다.
+   */
   public record Tables(JsonNode tables) {
     public Tables {
       Objects.requireNonNull(tables, "tables");
-      for (var key :
-          List.of(
-              "level",
-              "weapon_quality",
-              "ability_attack",
-              "gem",
-              "esther_weapon",
-              "card_set",
-              "arkgrid_core",
-              "orb",
-              "petDamage"))
-        if (tables.path(key).isMissingNode())
-          throw new IllegalArgumentException("딜러 전투력 표가 없습니다: " + key);
+      tables = tables.deepCopy();
+      validate(tables);
+    }
+
+    @Override
+    public JsonNode tables() {
+      return tables.deepCopy();
+    }
+
+    /**
+     * 리소스 문서(source·tables·sha256)에서 읽는다. tables의 정규 해시가 문서의 sha256과 다르면 실패한다(칸 하나가 빠지거나 바뀌어도, 코드
+     * 리뷰 #1036 P2-2: 모양 확인만으로는 있는 칸만 본다).
+     */
+    public static Tables load(JsonNode document) {
+      var table = document.path("tables");
+      var expected = document.path("sha256").asString("");
+      var actual = hash(table);
+      if (!actual.equals(expected))
+        throw new IllegalArgumentException("딜러 전투력 표 해시가 다릅니다(표가 바뀌었거나 빠진 칸이 있음): " + actual);
+      return new Tables(table);
+    }
+
+    /** 정규 해시: 키를 정렬하고 수는 소수 꼴(BigDecimal 끝자리 0 뗌)로 쓴 글의 SHA-256(16진수). */
+    public static String hash(JsonNode node) {
+      var text = new StringBuilder();
+      canonical(node, text);
+      try {
+        var digest =
+            java.security.MessageDigest.getInstance("SHA-256")
+                .digest(text.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        return java.util.HexFormat.of().formatHex(digest);
+      } catch (java.security.NoSuchAlgorithmException exception) {
+        throw new IllegalStateException(exception);
+      }
+    }
+
+    private static void canonical(JsonNode node, StringBuilder out) {
+      if (node.isObject()) {
+        var keys = new java.util.TreeSet<String>();
+        for (var entry : node.properties()) keys.add(entry.getKey());
+        out.append('{');
+        for (var key : keys) {
+          out.append('"').append(key).append("\":");
+          canonical(node.path(key), out);
+          out.append(',');
+        }
+        out.append('}');
+      } else if (node.isArray()) {
+        out.append('[');
+        for (var item : node) {
+          canonical(item, out);
+          out.append(',');
+        }
+        out.append(']');
+      } else if (node.isNumber()) {
+        out.append(BigDecimal.valueOf(node.asDouble()).stripTrailingZeros().toPlainString());
+      } else if (node.isString()) {
+        out.append('"').append(node.asString()).append('"');
+      } else out.append(node.toString());
     }
 
     JsonNode get(String key) {
       return tables.path(key);
     }
+
+    private static void validate(JsonNode t) {
+      // 레벨 55~70, 무기 품질 0~100, 보석 3·4표 0~10은 칸이 모두 있어야 한다.
+      numbers(t, "level", 55, 70);
+      numbers(t, "weapon_quality", 0, 100);
+      var gem = object(t, "gem");
+      for (var kind : List.of("3", "4")) numbers(gem, kind, 0, 10);
+      // 이름 → 단계 → 수 표.
+      for (var family : List.of("ability_attack", "esther_weapon"))
+        for (var row : object(t, family).properties())
+          numbers(row.getValue(), family + "." + row.getKey());
+      var core = object(t, "arkgrid_core");
+      for (var grade : List.of("유물", "고대"))
+        for (var row : object(core, grade).properties())
+          numbers(row.getValue(), "arkgrid_core." + grade + "." + row.getKey());
+      numbers(object(t, "card_set"), "card_set");
+      numbers(object(t, "petDamage"), "petDamage");
+      for (var row : object(t, "orb").properties()) {
+        var v = row.getValue();
+        if (!v.isArray() || v.size() != 2 || !finite(v.get(0)) || !finite(v.get(1)))
+          throw new IllegalArgumentException(
+              "딜러 전투력 표 orb." + row.getKey() + "이 [base, perTenMillion]이 아닙니다");
+      }
+    }
+
+    private static JsonNode object(JsonNode parent, String key) {
+      var v = parent.path(key);
+      if (!v.isObject() || v.isEmpty())
+        throw new IllegalArgumentException("딜러 전투력 표가 없거나 비었습니다: " + key);
+      return v;
+    }
+
+    /** key 표의 from~to 칸이 모두 유한한 수. */
+    private static void numbers(JsonNode parent, String key, int from, int to) {
+      var row = object(parent, key);
+      for (int i = from; i <= to; i++)
+        if (!finite(row.path(Integer.toString(i))))
+          throw new IllegalArgumentException("딜러 전투력 표 " + key + "." + i + "이 수가 아닙니다");
+      numbers(row, key);
+    }
+
+    /** 표의 모든 값이 유한한 수. */
+    private static void numbers(JsonNode row, String name) {
+      if (!row.isObject() || row.isEmpty())
+        throw new IllegalArgumentException("딜러 전투력 표가 없거나 비었습니다: " + name);
+      for (var entry : row.properties())
+        if (!finite(entry.getValue()))
+          throw new IllegalArgumentException(
+              "딜러 전투력 표 " + name + "." + entry.getKey() + "이 수가 아닙니다");
+    }
+
+    private static boolean finite(JsonNode v) {
+      return v != null && v.isNumber() && Double.isFinite(v.asDouble());
+    }
+  }
+
+  /** 방어구 5부위(점수 입력 키). */
+  private static final List<String> ARMOR =
+      List.of("helmet", "armor", "pants", "gloves", "shoulder");
+
+  /**
+   * 계산에 필요한 입력이 모두 있는지(코드 리뷰 #1031 P2: 빠진 칸이 0으로 들어가 낮은 값이 나오지 않게). 레벨·스탯·무기·방어구 5부위·있는 장신구의
+   * 주스탯·아바타·아크 패시브 세 포인트·각인·보석·아크 그리드·펫 값이 수(또는 배열)여야 한다.
+   */
+  static boolean complete(JsonNode e) {
+    if (!e.path("profile").path("level").isNumber()) return false;
+    var stats = e.path("stats");
+    for (var key : List.of("critical", "haste", "special"))
+      if (!stats.path(key).isNumber()) return false;
+    var equipment = e.path("armory").path("equipment");
+    if (!equipment.path("weapon").path("stat").isNumber()) return false;
+    if (!equipment.path("weapon").path("quality").isNumber()) return false;
+    for (var part : ARMOR) if (!equipment.path(part).path("stat").isNumber()) return false;
+    if (!equipment.path("weapon").path("grade").isString()) return false;
+    var vambrace = equipment.path("vambrace");
+    // 완갑은 주스탯·무기 공격력·기본 공격력·기본 공격력 %가 모두 공격력 항에 들어간다(코드 리뷰 #1036 P2-1).
+    if (vambrace.isObject())
+      for (var key : List.of("stat", "weaponAtkFlat", "baseAtkFlat", "baseAtkPercent"))
+        if (!vambrace.path(key).isNumber()) return false;
+    for (var slot : e.path("armory").path("accessory").properties()) {
+      var item = slot.getValue();
+      if (!item.path("option").isArray()) return false;
+      if (!slot.getKey().equals("bangle") && !item.path("stat").isNumber()) return false;
+    }
+    // 돌 공격력 보너스(abilityStone.attackbonus)와 카르마 셋(진화 랭크·도약·깨달음 레벨)은 여기서 요구하지 않는다. 보너스 줄이 없는 돌·카르마를
+    // 열지 않은 캐릭터는 실제로 null이고(핀 39개 중 5개: p01·p03·p04·p06·p24) 비교 기준 식도 ×1로 둔다. 읽지 못해 빠진 경우는 그 항만큼
+    // 공식과 어긋나 문의 r이 0.10%를 넘으면 닫고, 넘지 않으면 차이도 0.10% 안이다(코드 리뷰 #1036 P2-1).
+    var orb = e.path("armory").path("orb");
+    if (orb.isObject() && !orb.path("trinity").isNumber()) return false;
+    if (!e.path("avatar").path("avatarStats").isNumber()) return false;
+    for (var tree : List.of("evolution", "enlightenment", "leap"))
+      if (!e.path("arkPassive").path(tree).path("points").isNumber()) return false;
+    if (!e.path("engraving").isArray()) return false;
+    for (var row : e.path("engraving"))
+      if (!row.path("name").isString() || !row.path("level").isNumber()) return false;
+    if (!e.path("gem").path("gems").isArray() || !e.path("gem").path("attackBonus").isNumber())
+      return false;
+    for (var gem : e.path("gem").path("gems"))
+      if (!gem.path("level").isNumber() || !gem.path("attackBonus").isNumber()) return false;
+    var grid = e.path("arkGrid");
+    if (!grid.path("core").isArray() || !grid.path("gemEffects").isArray()) return false;
+    for (var core : grid.path("core"))
+      if (!core.path("name").isString()
+          || !core.path("grade").isString()
+          || !core.path("point").isNumber()) return false;
+    for (var effect : grid.path("gemEffects"))
+      if (!effect.path("name").isString() || !effect.path("level").isNumber()) return false;
+    var base = e.path("baseEffect");
+    return base.path("petStat").isNumber() && base.path("petDamage").isNumber();
   }
 
   /**
@@ -56,7 +214,8 @@ public final class DealerCombatPower {
    */
   public static BigDecimal of(JsonNode input, KrakenScoreEngine.Tables engine, Tables tables) {
     if (input.path("profile").path("supportCheck").asBoolean(false)) return null;
-    if (!input.path("profile").path("level").isNumber()) return null;
+    // 입력이 하나라도 빠지면 일부만 계산한 값을 내지 않는다(null).
+    if (!complete(input)) return null;
     var e = input.deepCopy();
     ((ObjectNode) e.path("stats")).put("powerIndex_combat", OFFSET);
     double a = KrakenScoreEngine.attack(e, engine).baseCombat();

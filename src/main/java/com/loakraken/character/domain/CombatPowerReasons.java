@@ -43,9 +43,19 @@ public final class CombatPowerReasons {
   public static final Reason ENGRAVING_LEVEL_UNCONFIRMED =
       new Reason("ENGRAVING_LEVEL_UNCONFIRMED", "이 레벨 조합의 각인 수치를 아직 확인하지 않아 계산하지 않았습니다.");
 
+  /**
+   * 방어구 재련·상급 재련·완갑 전투력 문 밖(spec-up.armor-cp-gate.enabled가 켜져 있고 공식 전투력이 장비로 지은 전투력에서 0.10%보다 벗어남).
+   * 스위치가 꺼져 있으면 나오지 않는다.
+   */
+  public static final Reason ARMOR_CP_RESIDUAL_HIGH =
+      new Reason(
+          "ARMOR_CP_RESIDUAL_HIGH",
+          "장비로 계산한 전투력이 공식 전투력과 맞지 않아 방어구 재련 · 상급 재련 · 완갑 전투력은 계산하지 않았어요.");
+
   /** 시뮬레이터 이유 문장 → 코드. 모르는 문장은 MODEL_UNCONFIRMED로 둔다(계산하지 않았다는 뜻은 같음). */
   public static Reason classify(String simulatorReason) {
     if (simulatorReason == null) return MODEL_UNCONFIRMED;
+    if (simulatorReason.equals(ARMOR_CP_RESIDUAL_HIGH.text())) return ARMOR_CP_RESIDUAL_HIGH;
     if (simulatorReason.contains("서포터 전투력 계산식")) return SUPPORTER_MODEL_PENDING;
     if (simulatorReason.contains("딜러·서포터를 판정하지 못해")) return ROLE_UNKNOWN;
     if (simulatorReason.contains("공식 전투력이 없어")) return NO_OFFICIAL_COMBAT_POWER;

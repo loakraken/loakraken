@@ -112,7 +112,9 @@ class ArmorCpGateIntegrationTest {
         .doesNotContain("%");
     ApiContractFixture.write("armor-cp-gate-closed-simulate.json", closed.body());
     var closedList =
-        get("/api/v1/characters/spec-up?characterName=" + URLEncoder.encode("방어구문닫힘", StandardCharsets.UTF_8));
+        get(
+            "/api/v1/characters/spec-up?characterName="
+                + URLEncoder.encode("방어구문닫힘", StandardCharsets.UTF_8));
     assertThat(closedList.statusCode()).as(closedList.body()).isEqualTo(200);
     ApiContractFixture.write("armor-cp-gate-closed-spec-up.json", closedList.body());
   }
@@ -120,7 +122,9 @@ class ArmorCpGateIntegrationTest {
   private HttpResponse<String> get(String pathAndQuery) throws Exception {
     return HttpClient.newHttpClient()
         .send(
-            HttpRequest.newBuilder(URI.create("http://localhost:" + port + pathAndQuery)).GET().build(),
+            HttpRequest.newBuilder(URI.create("http://localhost:" + port + pathAndQuery))
+                .GET()
+                .build(),
             HttpResponse.BodyHandlers.ofString());
   }
 

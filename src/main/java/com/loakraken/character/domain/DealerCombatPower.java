@@ -26,28 +26,111 @@ public final class DealerCombatPower {
 
   private DealerCombatPower() {}
 
-  /** 리소스 combat-power-tables.json의 tables. */
+  /**
+   * 리소스 combat-power-tables.json의 tables. 읽을 때 표마다 모양과 값(유한한 수)을 확인하고, 틀리면 바로 실패한다(빈 칸이 조용히 ×1이 되지 않게,
+   * 코드 리뷰 #1031 P2). 받은 노드는 복사해 두고 밖에는 복사본만 준다.
+   */
   public record Tables(JsonNode tables) {
     public Tables {
       Objects.requireNonNull(tables, "tables");
-      for (var key :
-          List.of(
-              "level",
-              "weapon_quality",
-              "ability_attack",
-              "gem",
-              "esther_weapon",
-              "card_set",
-              "arkgrid_core",
-              "orb",
-              "petDamage"))
-        if (tables.path(key).isMissingNode())
-          throw new IllegalArgumentException("딜러 전투력 표가 없습니다: " + key);
+      tables = tables.deepCopy();
+      validate(tables);
+    }
+
+    @Override
+    public JsonNode tables() {
+      return tables.deepCopy();
     }
 
     JsonNode get(String key) {
       return tables.path(key);
     }
+
+    private static void validate(JsonNode t) {
+      // 레벨 55~70, 무기 품질 0~100, 보석 3·4표 0~10은 칸이 모두 있어야 한다.
+      numbers(t, "level", 55, 70);
+      numbers(t, "weapon_quality", 0, 100);
+      var gem = object(t, "gem");
+      for (var kind : List.of("3", "4")) numbers(gem, kind, 0, 10);
+      // 이름 → 단계 → 수 표.
+      for (var family : List.of("ability_attack", "esther_weapon"))
+        for (var row : object(t, family).properties()) numbers(row.getValue(), family + "." + row.getKey());
+      var core = object(t, "arkgrid_core");
+      for (var grade : List.of("유물", "고대"))
+        for (var row : object(core, grade).properties())
+          numbers(row.getValue(), "arkgrid_core." + grade + "." + row.getKey());
+      numbers(object(t, "card_set"), "card_set");
+      numbers(object(t, "petDamage"), "petDamage");
+      for (var row : object(t, "orb").properties()) {
+        var v = row.getValue();
+        if (!v.isArray() || v.size() != 2 || !finite(v.get(0)) || !finite(v.get(1)))
+          throw new IllegalArgumentException("딜러 전투력 표 orb." + row.getKey() + "이 [base, perTenMillion]이 아닙니다");
+      }
+    }
+
+    private static JsonNode object(JsonNode parent, String key) {
+      var v = parent.path(key);
+      if (!v.isObject() || v.isEmpty())
+        throw new IllegalArgumentException("딜러 전투력 표가 없거나 비었습니다: " + key);
+      return v;
+    }
+
+    /** key 표의 from~to 칸이 모두 유한한 수. */
+    private static void numbers(JsonNode parent, String key, int from, int to) {
+      var row = object(parent, key);
+      for (int i = from; i <= to; i++)
+        if (!finite(row.path(Integer.toString(i))))
+          throw new IllegalArgumentException("딜러 전투력 표 " + key + "." + i + "이 수가 아닙니다");
+      numbers(row, key);
+    }
+
+    /** 표의 모든 값이 유한한 수. */
+    private static void numbers(JsonNode row, String name) {
+      if (!row.isObject() || row.isEmpty())
+        throw new IllegalArgumentException("딜러 전투력 표가 없거나 비었습니다: " + name);
+      for (var entry : row.properties())
+        if (!finite(entry.getValue()))
+          throw new IllegalArgumentException(
+              "딜러 전투력 표 " + name + "." + entry.getKey() + "이 수가 아닙니다");
+    }
+
+    private static boolean finite(JsonNode v) {
+      return v != null && v.isNumber() && Double.isFinite(v.asDouble());
+    }
+  }
+
+  /** 방어구 5부위(점수 입력 키). */
+  private static final List<String> ARMOR = List.of("helmet", "armor", "pants", "gloves", "shoulder");
+
+  /**
+   * 계산에 필요한 입력이 모두 있는지(코드 리뷰 #1031 P2: 빠진 칸이 0으로 들어가 낮은 값이 나오지 않게). 레벨·스탯·무기·방어구 5부위·있는 장신구의
+   * 주스탯·아바타·아크 패시브 세 포인트·각인·보석·아크 그리드·펫 값이 수(또는 배열)여야 한다.
+   */
+  static boolean complete(JsonNode e) {
+    if (!e.path("profile").path("level").isNumber()) return false;
+    var stats = e.path("stats");
+    for (var key : List.of("critical", "haste", "special"))
+      if (!stats.path(key).isNumber()) return false;
+    var equipment = e.path("armory").path("equipment");
+    if (!equipment.path("weapon").path("stat").isNumber()) return false;
+    if (!equipment.path("weapon").path("quality").isNumber()) return false;
+    for (var part : ARMOR) if (!equipment.path(part).path("stat").isNumber()) return false;
+    var vambrace = equipment.path("vambrace");
+    if (vambrace.isObject() && !vambrace.path("stat").isNumber()) return false;
+    for (var slot : e.path("armory").path("accessory").properties())
+      if (!slot.getKey().equals("bangle") && !slot.getValue().path("stat").isNumber()) return false;
+    if (!e.path("avatar").path("avatarStats").isNumber()) return false;
+    for (var tree : List.of("evolution", "enlightenment", "leap"))
+      if (!e.path("arkPassive").path(tree).path("points").isNumber()) return false;
+    if (!e.path("engraving").isArray()) return false;
+    for (var row : e.path("engraving"))
+      if (!row.path("name").isString() || !row.path("level").isNumber()) return false;
+    if (!e.path("gem").path("gems").isArray()) return false;
+    for (var gem : e.path("gem").path("gems")) if (!gem.path("level").isNumber()) return false;
+    if (!e.path("arkGrid").path("core").isArray() || !e.path("arkGrid").path("gemEffects").isArray())
+      return false;
+    var base = e.path("baseEffect");
+    return base.path("petStat").isNumber() && base.path("petDamage").isNumber();
   }
 
   /**
@@ -56,7 +139,8 @@ public final class DealerCombatPower {
    */
   public static BigDecimal of(JsonNode input, KrakenScoreEngine.Tables engine, Tables tables) {
     if (input.path("profile").path("supportCheck").asBoolean(false)) return null;
-    if (!input.path("profile").path("level").isNumber()) return null;
+    // 입력이 하나라도 빠지면 일부만 계산한 값을 내지 않는다(null).
+    if (!complete(input)) return null;
     var e = input.deepCopy();
     ((ObjectNode) e.path("stats")).put("powerIndex_combat", OFFSET);
     double a = KrakenScoreEngine.attack(e, engine).baseCombat();

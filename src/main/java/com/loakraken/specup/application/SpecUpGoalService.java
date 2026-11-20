@@ -868,6 +868,9 @@ public class SpecUpGoalService {
    * 지금 상태에서 다음 한 단계를 고르고 적용한 뒤 다시 모든 칸의 다음 단계를 시뮬레이터로 재기를 되풀이한다(사슬). target이 있으면 닿을 때 멈추고,
    * pricedOnly면 비용(더 드는 비용)을 모르는 단계는 고르지 않는다. 같은 입력이면 같은 사슬이다(같으면 id 순).
    */
+  /** KRAKEN 한 라운드 후보(점수로 고른 뒤 전투력을 잰다). */
+  private record KrakenCandidate(Option option, Long marginal, double score) {}
+
   private Chain chain(
       CharacterResult snapshot,
       BigDecimal before,
@@ -946,7 +949,15 @@ public class SpecUpGoalService {
       Long bestMarginal = null;
       Double bestScore = null;
       // 레벨 점프는 추천 순서 KRAKEN·EFFICIENCY만(비교 기준 경로와 같음). DELTA·목표 경로는 다음 한 단계.
-      for (var listed : options(state, gems, refinePrices, pricesAt, polish, baseline)) {
+      var round = options(state, gems, refinePrices, pricesAt, polish, baseline);
+      // 비용 모름 점프 줄이기(계산 검증 11-21, 계산 시간): 비용 모름 줄은 비율이 없어 오름폭 순이고 오름폭은 목표가 높을수록 크므로,
+      // 한 칸에서 비용을 모르는 목표는 가장 높은 것만 잰다. 비용을 아는 목표는 모두 잰다.
+      var topUnknown =
+          baseline
+              ? topUnknownTargets(round, option -> paidCost(option, held))
+              : Map.<String, Integer>of();
+      var krakenRound = new ArrayList<KrakenCandidate>();
+      for (var listed : round) {
         var option = listed;
         if (krakenExcluded.contains(option.slot())) continue;
         // 99·109·1010돌은 목록에만(EFFICIENCY·KRAKEN 정렬). 추천 순서(세 기준)와 목표 경로는 뺀다.
@@ -970,11 +981,13 @@ public class SpecUpGoalService {
         // (스톤·귀속은 전부, 거래 가능은 앞 단계 품목과의 차이). DELTA와 목표 경로는 더 드는 비용(보석은 누적 차이) 그대로.
         var marginal = baseline ? paidCost(option, held) : marginal(option, gemTotals);
         if (pricedOnly && marginal == null) continue;
+        if (marginal == null && belowTopUnknown(option, topUnknown)) continue;
         var trial = new LinkedHashMap<>(applied);
         trial.put(option.slot(), option.changes());
         BigDecimal delta = null;
         BigDecimal after = null;
-        if (!scoreOnly) {
+        // KRAKEN 고르기는 점수·비용·id만 쓰므로 전투력은 고른 뒤에 잰다(아래, 계산 시간, 고르는 결과는 같음).
+        if (!scoreOnly && kraken == null) {
           var simulated = simulator.simulate(snapshot, flatten(trial));
           // 지금까지 적용한 단계는 모두 계산된 것이므로, 계산하지 못한 변경이 있으면 이 후보다.
           if (simulated.unsupportedCount() > 0 || simulated.after() == null) continue;
@@ -990,6 +1003,8 @@ public class SpecUpGoalService {
           else trialEdits.remove(option.slot());
           score = specUp.chainedKrakenScore(kraken, loadout, trial, trialEdits);
           if (score == null || score - scoreNow <= 0) continue;
+          krakenRound.add(new KrakenCandidate(option, marginal, score));
+          continue;
         } else if (delta.signum() <= 0) continue;
         // 고르기는 반올림하지 않은 비율로(소수 둘째 자리에서 같아져 id 순으로 갈리지 않게, 계산 검증 11-01). 화면 값은 단계를 만들 때 따로 반올림한다.
         var scored = option.scored(delta, after, delta == null ? null : rank(delta, marginal));
@@ -1012,6 +1027,35 @@ public class SpecUpGoalService {
           bestMarginal = marginal;
           bestScore = score;
         }
+      }
+      // KRAKEN: 점수로 가장 앞선 후보부터 전투력을 재고, 시뮬레이터가 계산하지 못하는 후보는 빼고 다음으로(전에는 모든 후보를 재고 계산 못 한
+      // 후보를 뺀 뒤 골랐다: 고르기 순서가 같으므로 결과도 같다).
+      while (kraken != null && best == null && !krakenRound.isEmpty()) {
+        var top = krakenRound.getFirst();
+        for (var each : krakenRound)
+          if (krakenPreferred(
+              each.score() - scoreNow,
+              each.marginal(),
+              each.option().id(),
+              top.score() - scoreNow,
+              top.marginal(),
+              top.option().id(),
+              engravingOrder)) top = each;
+        krakenRound.remove(top);
+        BigDecimal delta = null;
+        BigDecimal after = null;
+        if (!scoreOnly) {
+          var trial = new LinkedHashMap<>(applied);
+          trial.put(top.option().slot(), top.option().changes());
+          var simulated = simulator.simulate(snapshot, flatten(trial));
+          if (simulated.unsupportedCount() > 0 || simulated.after() == null) continue;
+          after = simulated.after();
+          delta = after.subtract(current);
+        }
+        best =
+            top.option().scored(delta, after, delta == null ? null : rank(delta, top.marginal()));
+        bestMarginal = top.marginal();
+        bestScore = top.score();
       }
       if (best == null) {
         stop = NO_CANDIDATE;
@@ -1183,7 +1227,19 @@ public class SpecUpGoalService {
       if (REFINE_KINDS.contains(pa[0]) && !pa[0].equals(pb[0]))
         return Integer.compare(REFINE_KINDS.indexOf(pa[0]), REFINE_KINDS.indexOf(pb[0]));
     }
+    // 같은 칸의 목표끼리는 낮은 목표가 먼저(비교 기준 후보 순서, 계산 검증 11-21 P3: 문자열로는 ':10'이 ':9' 앞).
+    var ta = sameSlotTarget(pa, pb);
+    if (ta != null) return ta;
     return a.compareTo(b);
+  }
+
+  /** a·b가 마지막 토큰(목표)만 다른 같은 칸이고 목표가 숫자면 목표 오름차순 비교값, 아니면 null. */
+  private static Integer sameSlotTarget(String[] pa, String[] pb) {
+    if (pa.length != pb.length || pa.length < 2) return null;
+    for (int i = 0; i < pa.length - 1; i++) if (!pa[i].equals(pb[i])) return null;
+    var x = slotNumber(pa[pa.length - 1]);
+    var y = slotNumber(pb[pb.length - 1]);
+    return x == null || y == null || x.equals(y) ? null : Integer.compare(x, y);
   }
 
   private static int kindRank(String kind) {
@@ -1442,6 +1498,37 @@ public class SpecUpGoalService {
     var result = new ArrayList<Integer>();
     for (int target = current + 1; target <= max; target++) result.add(target);
     return result;
+  }
+
+  /** 레벨 점프가 있는 종류(후보 id 마지막 토큰이 목표 레벨). */
+  static final java.util.Set<String> JUMP_KINDS =
+      java.util.Set.of(
+          "GEM_LEVEL", "EQUIPMENT_REFINE", "EQUIPMENT_ADVANCED_REFINE", "ENGRAVING_LEVEL");
+
+  /** 칸마다 비용을 모르는 점프 목표 가운데 가장 높은 목표(레벨 점프 종류만). */
+  static Map<String, Integer> topUnknownTargets(
+      List<Option> options, java.util.function.Function<Option, Long> cost) {
+    var top = new HashMap<String, Integer>();
+    for (var option : options) {
+      var target = jumpTarget(option);
+      if (target == null || cost.apply(option) != null) continue;
+      top.merge(option.slot(), target, Math::max);
+    }
+    return top;
+  }
+
+  /** 비용을 모르는 이 점프 목표가 같은 칸의 가장 높은 비용 모름 목표보다 낮은지. */
+  static boolean belowTopUnknown(Option option, Map<String, Integer> topUnknown) {
+    var target = jumpTarget(option);
+    var top = topUnknown.get(option.slot());
+    return target != null && top != null && target < top;
+  }
+
+  private static Integer jumpTarget(Option option) {
+    var id = option.id();
+    if (id == null || !JUMP_KINDS.contains(id.substring(0, Math.max(0, id.indexOf(':')))))
+      return null;
+    return slotNumber(id.substring(id.lastIndexOf(':') + 1));
   }
 
   /** 상급 재련 목표: jumps면 10의 배수만(다음 10단계 … 40, +1 후보 없음, 비교 기준과 같음), 아니면 다음 한 단계. */

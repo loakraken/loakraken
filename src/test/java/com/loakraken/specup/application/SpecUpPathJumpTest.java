@@ -18,6 +18,66 @@ class SpecUpPathJumpTest {
     assertThat(SpecUpGoalService.targets(25, 25, false)).isEmpty();
   }
 
+  /** 계산 검증 11-21 P3: 같은 칸의 목표끼리는 낮은 목표가 먼저(문자열로는 ':10'이 ':9' 앞). */
+  @Test
+  void 같은_칸의_목표는_낮은_목표가_먼저다() {
+    assertThat(SpecUpGoalService.candidateOrder("GEM_LEVEL:0:9", "GEM_LEVEL:0:10")).isNegative();
+    assertThat(SpecUpGoalService.candidateOrder("EQUIPMENT_REFINE:3:9", "EQUIPMENT_REFINE:3:25"))
+        .isNegative();
+    assertThat(SpecUpGoalService.candidateOrder("KARMA_LEVEL:9", "KARMA_LEVEL:10")).isNegative();
+    // 칸이 다르면 칸 순서 그대로.
+    assertThat(SpecUpGoalService.candidateOrder("GEM_LEVEL:1:2", "GEM_LEVEL:0:10")).isPositive();
+  }
+
+  /**
+   * 계산 시간(계산 검증 11-21): 한 칸에서 비용을 모르는 목표는 가장 높은 것만 잰다. 비용 모름 줄은 오름폭 순이라 높은 목표가 이긴다. 비용을 아는 목표와 점프가
+   * 없는 종류는 줄이지 않는다.
+   */
+  @Test
+  void 비용_모름_점프는_칸마다_가장_높은_목표만_잰다() {
+    var known = java.util.Set.of("GEM_LEVEL:0:5", "GEM_LEVEL:0:6");
+    var options =
+        List.of(
+            option("GEM_LEVEL:0", "GEM_LEVEL:0:5"),
+            option("GEM_LEVEL:0", "GEM_LEVEL:0:6"),
+            option("GEM_LEVEL:0", "GEM_LEVEL:0:7"),
+            option("GEM_LEVEL:0", "GEM_LEVEL:0:10"),
+            option("EQUIPMENT_REFINE:2", "EQUIPMENT_REFINE:2:20"),
+            option("EQUIPMENT_REFINE:2", "EQUIPMENT_REFINE:2:25"),
+            option("KARMA_LEVEL", "KARMA_LEVEL:20"),
+            option("KARMA_LEVEL", "KARMA_LEVEL:30"));
+    var top =
+        SpecUpGoalService.topUnknownTargets(
+            options, option -> known.contains(option.id()) ? 1_000L : null);
+    assertThat(top)
+        .containsEntry("GEM_LEVEL:0", 10)
+        .containsEntry("EQUIPMENT_REFINE:2", 25)
+        .doesNotContainKey("KARMA_LEVEL");
+    assertThat(options.stream().filter(option -> SpecUpGoalService.belowTopUnknown(option, top)))
+        .extracting(SpecUpGoalService.Option::id)
+        // 비용 모름 7(10보다 낮음)·20(25보다 낮음)만 뺀다. 비용 있는 5·6은 belowTopUnknown이 참이어도 루프에서 비용이 있어 재므로
+        // 여기서는 목표 비교만 본다.
+        .contains("GEM_LEVEL:0:7", "EQUIPMENT_REFINE:2:20")
+        .doesNotContain("GEM_LEVEL:0:10", "EQUIPMENT_REFINE:2:25", "KARMA_LEVEL:20");
+  }
+
+  private static SpecUpGoalService.Option option(String slot, String id) {
+    return new SpecUpGoalService.Option(
+        slot,
+        id,
+        "대상",
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        SpecUpCost.PRICE_PENDING,
+        null,
+        null,
+        null);
+  }
+
   @Test
   void 상급_재련은_점프면_10의_배수만이다() {
     assertThat(SpecUpGoalService.advancedTargets(13, true)).containsExactly(20, 30, 40);

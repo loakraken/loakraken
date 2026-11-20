@@ -156,6 +156,9 @@ class SpecUpPathKrakenIntegrationTest {
     search();
     var weapon = weaponIndex();
     var kraken = path(NAME, "KRAKEN", 30);
+    // 웹 계약 표본(프론트 11-21): 딜러 KRAKEN 경로 data(방어구 단계부터 전투력 null, 멈춤 필드).
+    ApiContractFixture.write(
+        "spec-up-path-kraken-dealer-armor.json", mapper.writeValueAsString(kraken));
     var steps = kraken.path("steps");
     int firstArmor = -1;
     for (int i = 0; i < steps.size(); i++)

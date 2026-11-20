@@ -105,6 +105,9 @@ services:
       # 지옥·나락 열쇠 보상 도구(web #1525). on|off, 비우면 web 기본값(운영 SITE_URL이면 숨김).
       # 백엔드 짝 스위치는 없다(이미 쓰는 재료 시세 API로 값을 매긴다).
       HELL_REWARD_TOOL: "${HELL_REWARD_TOOL:-}"
+      # 시뮬레이터 깨달음 카르마 레벨 칸 · 카르마 단계(web #1815). on|off, 비우면 web 기본값(운영 SITE_URL이면 숨김, 시뮬레이터가 꺼져 있으면 늘 숨김).
+      # 백엔드 짝 SPEC_UP_KARMA_CP_ENABLED와 같이 켠다(계산 검증 판정 + PM 총괄 OK 뒤, 하나만 켜지 않는다).
+      KARMA_SIM: "${KARMA_SIM:-}"
       # 이 둘은 비우면 어디서나 꺼짐(on일 때만 켜짐): 검색엔진 색인, 시세 알림 화면.
       CHARACTER_INDEXING: "${CHARACTER_INDEXING:-}"
       PRICE_ALERTS: "${PRICE_ALERTS:-}"

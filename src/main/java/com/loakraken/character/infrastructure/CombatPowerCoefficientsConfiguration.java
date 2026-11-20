@@ -111,6 +111,17 @@ class CombatPowerCoefficientsConfiguration {
   private static volatile com.loakraken.character.domain.KrakenScoreEngine.Tables
       sharedKrakenScoreTables;
 
+  /** 장비로 지은 딜러 전투력 표(#1031): 읽을 수 없거나 표 모양·값이 틀리면 애플리케이션이 시작하지 않는다(조용한 ×1 금지, 코드 리뷰 #1031 P2). */
+  @Bean
+  com.loakraken.character.domain.DealerCombatPower.Tables dealerCombatPowerTables(JsonMapper mapper)
+      throws IOException {
+    try (var input =
+        new ClassPathResource("kraken-score/combat-power-tables.json").getInputStream()) {
+      return new com.loakraken.character.domain.DealerCombatPower.Tables(
+          mapper.readTree(input).path("tables"));
+    }
+  }
+
   /** 연마 옵션별 하·중·상 수치(#251). 근거는 리소스 source에 있다. */
   @Bean
   CombatPowerPolishValues combatPowerPolishValues(JsonMapper mapper) throws IOException {

@@ -469,6 +469,7 @@ public class SpecUpGoalService {
                 specUp.armGuardEnabled() ? "ag" : "-")
             + polishSignature(polish)
             + karmaSignature()
+            + (simulator.armorGateEnabled() ? ":acg" : "")
             + (pick == Pick.KRAKEN ? ":k" + SpecUpKrakenScore.RULE_VERSION : "")
             + (krakenUnavailable == null ? "" : ":ku" + krakenUnavailable);
     var cached = store.findPath(key);
@@ -801,7 +802,8 @@ public class SpecUpGoalService {
                 String.valueOf(specUp.costRuleVersions()),
                 specUp.armGuardEnabled() ? "ag" : "-")
             + polishSignature(polish)
-            + karmaSignature();
+            + karmaSignature()
+            + (simulator.armorGateEnabled() ? ":acg" : "");
     var cached = store.find(key);
     if (cached.isPresent()) {
       goalOutcome("cache_hit");
@@ -1097,8 +1099,7 @@ public class SpecUpGoalService {
           // 방어구 재련·상급 재련·완갑은 시뮬레이터가 전투력을 내지 않는다(UNSUPPORTED, 주 스탯 경로 확인 전). KRAKEN 추천 순서는 이 단계를
           // 점수로 고르고 전투력은 비운다(PM 총괄 11-21 (e), 비교 기준 점수 모드와 같음). 그 뒤 단계의 전투력도 비운다(방어구 몫이 빠진 값을
           // 보이지 않음, (i)).
-          if (target == null
-              && CombatPowerSimulationService.armorClosed(loadout, top.option().change())) {
+          if (target == null && simulator.armorClosed(snapshot, top.option().change())) {
             bestCpNull = true;
           } else {
             // 시뮬레이터에는 전투력을 비운 단계를 넣지 않는다(넣으면 그 뒤 후보가 모두 계산 못 함이 된다). 여기서는 계산 못 하는 후보를 빼는 데만 쓴다.

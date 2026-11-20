@@ -27,8 +27,8 @@ public final class DealerCombatPower {
   private DealerCombatPower() {}
 
   /**
-   * 리소스 combat-power-tables.json의 tables. 읽을 때 표마다 모양과 값(유한한 수)을 확인하고, 틀리면 바로 실패한다(빈 칸이 조용히 ×1이 되지 않게,
-   * 코드 리뷰 #1031 P2). 받은 노드는 복사해 두고 밖에는 복사본만 준다.
+   * 리소스 combat-power-tables.json의 tables. 읽을 때 표마다 모양과 값(유한한 수)을 확인하고, 틀리면 바로 실패한다(빈 칸이 조용히 ×1이 되지
+   * 않게, 코드 리뷰 #1031 P2). 받은 노드는 복사해 두고 밖에는 복사본만 준다.
    */
   public record Tables(JsonNode tables) {
     public Tables {
@@ -54,7 +54,8 @@ public final class DealerCombatPower {
       for (var kind : List.of("3", "4")) numbers(gem, kind, 0, 10);
       // 이름 → 단계 → 수 표.
       for (var family : List.of("ability_attack", "esther_weapon"))
-        for (var row : object(t, family).properties()) numbers(row.getValue(), family + "." + row.getKey());
+        for (var row : object(t, family).properties())
+          numbers(row.getValue(), family + "." + row.getKey());
       var core = object(t, "arkgrid_core");
       for (var grade : List.of("유물", "고대"))
         for (var row : object(core, grade).properties())
@@ -64,7 +65,8 @@ public final class DealerCombatPower {
       for (var row : object(t, "orb").properties()) {
         var v = row.getValue();
         if (!v.isArray() || v.size() != 2 || !finite(v.get(0)) || !finite(v.get(1)))
-          throw new IllegalArgumentException("딜러 전투력 표 orb." + row.getKey() + "이 [base, perTenMillion]이 아닙니다");
+          throw new IllegalArgumentException(
+              "딜러 전투력 표 orb." + row.getKey() + "이 [base, perTenMillion]이 아닙니다");
       }
     }
 
@@ -100,7 +102,8 @@ public final class DealerCombatPower {
   }
 
   /** 방어구 5부위(점수 입력 키). */
-  private static final List<String> ARMOR = List.of("helmet", "armor", "pants", "gloves", "shoulder");
+  private static final List<String> ARMOR =
+      List.of("helmet", "armor", "pants", "gloves", "shoulder");
 
   /**
    * 계산에 필요한 입력이 모두 있는지(코드 리뷰 #1031 P2: 빠진 칸이 0으로 들어가 낮은 값이 나오지 않게). 레벨·스탯·무기·방어구 5부위·있는 장신구의
@@ -127,8 +130,8 @@ public final class DealerCombatPower {
       if (!row.path("name").isString() || !row.path("level").isNumber()) return false;
     if (!e.path("gem").path("gems").isArray()) return false;
     for (var gem : e.path("gem").path("gems")) if (!gem.path("level").isNumber()) return false;
-    if (!e.path("arkGrid").path("core").isArray() || !e.path("arkGrid").path("gemEffects").isArray())
-      return false;
+    if (!e.path("arkGrid").path("core").isArray()
+        || !e.path("arkGrid").path("gemEffects").isArray()) return false;
     var base = e.path("baseEffect");
     return base.path("petStat").isNumber() && base.path("petDamage").isNumber();
   }

@@ -261,9 +261,15 @@ class OpenApiIntegrationTest {
                   .asText())
           .as(field)
           .isEqualTo("null");
-    // 아크 패시브 포인트 카르마 레벨(프론트 #1815 후속): 기존 응답에 nullable 필드 추가(웹은 배포 전까지 optional).
+    // 아크 패시브 포인트 카르마 레벨(프론트 #1815 후속): 기존 응답에 nullable 선택 필드 추가(계약에서 required가 아니어서 웹 계약 동기화가
+    // 배포 순서와 상관없이 안전, 코드 리뷰 #1023 P3).
     assertThat(document.at("/components/schemas/PassivePointResponse/required").toString())
-        .contains("karmaLevel");
+        .doesNotContain("karmaLevel");
+    assertThat(
+            document
+                .at("/components/schemas/PassivePointResponse/properties/karmaLevel")
+                .isMissingNode())
+        .isFalse();
     assertThat(
             document
                 .at("/components/schemas/PassivePointResponse/properties/karmaLevel/anyOf/1/type")

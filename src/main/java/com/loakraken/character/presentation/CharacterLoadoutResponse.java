@@ -417,9 +417,10 @@ public record CharacterLoadoutResponse(
       @NullableResponse Integer value,
       @NullableResponse String description,
       @NullableResponse
+          @OptionalResponse
           @Schema(
               description =
-                  "카르마 레벨. 공식 포인트 설명('6랭크 29레벨')의 레벨이며, 설명이 없거나 레벨이 없으면 null입니다. 깨달음 카르마는 이름이 깨달음인 항목에서 읽습니다.",
+                  "카르마 레벨. 공식 포인트 설명('6랭크 29레벨')의 레벨이며, 설명이 없거나 레벨이 없으면 null입니다. 깨달음 카르마는 이름이 깨달음인 항목에서 읽습니다. 배포 순서 때문에 계약에서는 선택 필드",
               example = "29")
           Integer karmaLevel) {
     static PassivePointResponse from(CharacterLoadout.PassivePoint value) {

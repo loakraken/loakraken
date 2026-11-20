@@ -128,6 +128,8 @@ class SpecUpDetailMismatchTest {
             null,
             null,
             "DAMAGE",
+            null,
+            null,
             null);
     return new SpecUpService.Guide(
         "캐릭터",

@@ -441,6 +441,47 @@ class SpecUpKrakenIntegrationTest {
     assertThat(p95).isLessThan(2_000);
   }
 
+  /**
+   * 빈 보석 칸 줄(PM 총괄 11-21 (a)): 전투력은 칸과 상관없는 기본 공격력이라 내지만, 크라켄 점수는 새 보석을 넣을 스킬이 정해지지 않아 매기지 않는다. 그
+   * 이유 코드·문장을 정렬과 상관없이 준다. 보석이 있는 칸 줄에는 없다. 기준 딜러 원문(l01)에서 보석 하나를 빼 빈 칸을 만든다.
+   */
+  @Test
+  void 빈_보석_칸_줄은_점수를_매기지_않은_이유를_준다() throws Exception {
+    when(auctions.cachedGems()).thenReturn(gemCells());
+    var raw =
+        (tools.jackson.databind.node.ObjectNode)
+            mapper
+                .readTree(
+                    new ClassPathResource("kraken-score/l01.json")
+                        .getContentAsString(StandardCharsets.UTF_8))
+                .path("raw");
+    var gems = (tools.jackson.databind.node.ArrayNode) raw.path("ArmoryGem").path("Gems");
+    assertThat(gems.size()).isEqualTo(11);
+    gems.remove(0);
+    search(raw, "블레이드");
+    for (var sort : List.of("KRAKEN", "EFFICIENCY")) {
+      var candidates = guide("&sort=" + sort + "&limit=200").path("candidates");
+      int empty = 0;
+      for (var candidate : candidates) {
+        if (!"GEM_LEVEL".equals(candidate.path("kind").asText())) continue;
+        if (candidate.path("emptySlot").asBoolean(false)) {
+          empty++;
+          assertThat(candidate.path("deltaKrakenScore").isNull()).as(sort).isTrue();
+          assertThat(candidate.path("krakenScoreReasonCode").asText())
+              .as(sort)
+              .isEqualTo("KRAKEN_SCORE_EMPTY_GEM_SLOT");
+          assertThat(candidate.path("krakenScoreReason").asText())
+              .isEqualTo("빈 보석 칸은 넣을 스킬이 정해지지 않아 크라켄 점수를 매기지 않아요.");
+        } else {
+          assertThat(candidate.path("krakenScoreReasonCode").isNull())
+              .as(candidate.path("id").asText())
+              .isTrue();
+        }
+      }
+      assertThat(empty).as(sort + " 빈 칸 줄").isPositive();
+    }
+  }
+
   private static boolean hasCooldown(JsonNode candidates) {
     for (var candidate : candidates)
       if ("COOLDOWN".equals(candidate.path("gemType").asText(""))) return true;
@@ -473,12 +514,16 @@ class SpecUpKrakenIntegrationTest {
   }
 
   private void search(String id, String className) throws Exception {
-    var raw =
+    search(
         mapper
             .readTree(
                 new ClassPathResource("kraken-score/" + id + ".json")
                     .getContentAsString(StandardCharsets.UTF_8))
-            .path("raw");
+            .path("raw"),
+        className);
+  }
+
+  private void search(JsonNode raw, String className) throws Exception {
     var profile =
         new CharacterProfile(
             NAME,

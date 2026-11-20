@@ -673,7 +673,21 @@ public class SpecUpController {
           BigDecimal krakenScorePer100kGold,
       @Schema(description = "보석 후보만: DAMAGE(딜) 또는 COOLDOWN(쿨, 작열), 문자열·값이 늘 수 있음. 그 밖 null")
           @NullableResponse
-          String gemType) {
+          String gemType,
+      @Schema(
+              description =
+                  "크라켄 점수를 낼 수 있는 캐릭터인데 이 줄의 deltaKrakenScore를 매기지 않은 이유 코드(문자열, 값이 늘 수 있음). 지금 값: KRAKEN_SCORE_EMPTY_GEM_SLOT(빈 보석 칸: 넣을 스킬이 정해지지 않음). 줄의 status와 상관없이 준다(전투력이 OK인 딜러 줄에도, 전투력 UNSUPPORTED인 서포터 줄에도 — 전투력 이유는 reasonCode, 점수 이유는 이 필드라 접힌 줄에 어느 이유를 보일지는 웹이 고른다). 그 밖에는 null. 배포 순서 때문에 계약에서는 선택 필드",
+              example = "KRAKEN_SCORE_EMPTY_GEM_SLOT")
+          @NullableResponse
+          @OptionalResponse
+          String krakenScoreReasonCode,
+      @Schema(
+              description =
+                  "krakenScoreReasonCode의 화면용 문장(같은 코드는 같은 문장). 코드가 null이면 null. 배포 순서 때문에 계약에서는 선택 필드",
+              example = "빈 보석 칸은 넣을 스킬이 정해지지 않아 크라켄 점수를 매기지 않아요.")
+          @NullableResponse
+          @OptionalResponse
+          String krakenScoreReason) {
     static CandidateResponse from(SpecUpService.Candidate candidate) {
       return new CandidateResponse(
           candidate.id(),
@@ -699,7 +713,9 @@ public class SpecUpController {
           candidate.baseAttackPctTo(),
           candidate.deltaKrakenScore(),
           candidate.krakenScorePer100kGold(),
-          candidate.gemType());
+          candidate.gemType(),
+          candidate.krakenScoreReasonCode(),
+          candidate.krakenScoreReason());
     }
   }
 

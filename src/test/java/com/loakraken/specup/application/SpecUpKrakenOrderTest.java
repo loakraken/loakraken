@@ -117,6 +117,8 @@ class SpecUpKrakenOrderTest {
         null,
         null,
         null,
+        null,
+        null,
         null);
   }
 
@@ -133,6 +135,8 @@ class SpecUpKrakenOrderTest {
             null,
             null,
             "UNSUPPORTED",
+            null,
+            null,
             null,
             null,
             null,

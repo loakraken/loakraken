@@ -637,6 +637,24 @@ class CritEffectTableTest {
             toggle("고대의 힘", false));
     assertThat(skill(summoner, "마력의 질주").total())
         .isEqualByComparingTo(skill(summonerOff, "마력의 질주").total().add(new BigDecimal("16")));
+    // 노드 문구('일반 및 고대의 정령 스킬')대로 [고대의 정령] 스킬에도 더한다. [소환 스킬]은 아니다(비교 기준과 다른 점,
+    // 공식 문구 우선, PM 총괄 11-19). 합계는 그대로다.
+    var ancientNodes = List.of(node("깨달음 3티어 고대의 힘 Lv.3", "일반 및 고대의 정령 스킬의 치명타 적중률이 16.0% 증가한다."));
+    var ancientSkills =
+        List.of(
+            skill("슈르디", "빛의 성장"),
+            categorized("마력의 질주", "일반 스킬"),
+            categorized("정령 스킬", "고대의 정령"),
+            categorized("소환 스킬", "소환 스킬"));
+    var ancientOn = calculate("서머너", ancientNodes, ancientSkills, null, Assumptions.NONE);
+    var ancientOff = calculate("서머너", ancientNodes, ancientSkills, null, toggle("고대의 힘", false));
+    assertThat(skill(ancientOn, "정령 스킬").total())
+        .isEqualByComparingTo(skill(ancientOff, "정령 스킬").total().add(new BigDecimal("16")));
+    assertThat(skill(ancientOn, "소환 스킬").total())
+        .isEqualByComparingTo(skill(ancientOff, "소환 스킬").total());
+    assertThat(ancientOn.crit().totalRate()).isEqualByComparingTo(summoner.crit().totalRate());
+    assertThat(ancientOn.crit().mainSkillRate())
+        .isEqualByComparingTo(summoner.crit().mainSkillRate());
     var spiritNodes = List.of(node("깨달음 2티어 깨어난 잠재력 Lv.3", "둔갑 스킬 치명타 적중률이 30.0% 증가한다."));
     var spirit =
         calculate(

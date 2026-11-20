@@ -152,7 +152,35 @@ public final class KrakenScoreInputMapper {
     out.set("arkPassive", arkPassive(raw));
     out.set("engraving", engraving(raw));
     out.set("arkGrid", arkGrid(raw));
+    // 원문에 줄이 있는데 읽지 못한 칸(PM 총괄 11-21, #1036): 없어서 null인 칸(×1)과 구별한다. 있을 때만 넣어 지금 입력은 그대로.
+    var unparsed = unparsed(raw);
+    if (!unparsed.isEmpty()) {
+      var list = out.putArray("unparsed");
+      unparsed.forEach(list::add);
+    }
     return out;
+  }
+
+  /**
+   * 원문에 그 줄이 있는데 읽지 못한 칸 경로. 카르마는 아크 패시브 포인트 설명이 비어 있지 않은데 'N랭크 N레벨'이 아니면, 돌 보너스는 툴팁에 '레벨 보너스'가 있는데
+   * 기본 공격력 %를 읽지 못하면. 설명이 비었거나 줄이 없으면(카르마를 열지 않음·보너스 없는 돌) 여기에 넣지 않는다(null = ×1).
+   */
+  static List<String> unparsed(JsonNode raw) {
+    var result = new ArrayList<String>();
+    for (var p : raw.path("ArkPassive").path("Points")) {
+      var key = ARK_PASSIVE.get(p.path("Name").asString(""));
+      if (key == null) continue;
+      var description = strip(p.path("Description").asString("")).strip();
+      if (!description.isEmpty() && !KARMA.matcher(description).find())
+        result.add("arkPassive." + key + ".karma");
+    }
+    for (var item : raw.path("ArmoryEquipment")) {
+      if (!"어빌리티 스톤".equals(item.path("Type").asString(""))) continue;
+      var text = strip(write(tooltip(item.path("Tooltip"))));
+      if (text.contains("레벨 보너스") && !STONE_BONUS.matcher(text).find())
+        result.add("abilityStone.attackbonus");
+    }
+    return result;
   }
 
   /**

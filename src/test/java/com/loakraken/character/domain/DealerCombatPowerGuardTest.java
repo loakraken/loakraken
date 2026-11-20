@@ -1,5 +1,6 @@
 package com.loakraken.character.domain;
 
+import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -13,6 +14,51 @@ import tools.jackson.databind.node.ObjectNode;
 /** 코드 리뷰 #1031 P2: 입력이 빠지면 일부만 계산한 값이 아니라 null, 표가 틀리면 조용한 ×1이 아니라 읽을 때 실패. */
 class DealerCombatPowerGuardTest {
   private static final JsonMapper MAPPER = JsonMapper.builder().build();
+
+  /**
+   * PM 총괄 11-21(#1036 후속): 원문에 줄이 없어 null인 카르마·돌 보너스는 ×1로 계산하고, 줄이 있는데 읽지 못하면 매퍼가 unparsed에 넣어 전투력이
+   * null이다. 기준 딜러 원문(l01)을 글자만 바꿔 원문 → 매퍼 → 전투력으로 본다.
+   */
+  @Test
+  void 줄이_없으면_계산하고_있는데_읽지_못하면_null이다() throws Exception {
+    var engine = DealerCombatPowerPinTest.engineTables();
+    var tables = DealerCombatPowerPinTest.cpTables();
+    var text = new ClassPathResource("kraken-score/l01.json").getContentAsString(UTF_8);
+    var built = DealerCombatPower.of(input(text), engine, tables);
+    assertThat(built).isNotNull();
+    assertThat(input(text).has("unparsed")).isFalse();
+    // 깨달음 카르마: 설명이 비면(카르마를 열지 않음) 줄이 없는 것 → 계산(카르마 ×1이라 값만 다름).
+    var noKarma = once(text, "\"Description\":\"6랭크 29레벨\"", "\"Description\":\"\"");
+    var noKarmaInput = input(noKarma);
+    assertThat(noKarmaInput.at("/arkPassive/enlightenment/karmalevel").isNull()).isTrue();
+    assertThat(noKarmaInput.has("unparsed")).isFalse();
+    assertThat(DealerCombatPower.of(noKarmaInput, engine, tables)).isNotNull();
+    // 설명이 있는데 'N랭크 N레벨'이 아니면 읽지 못한 것 → null(×1로 낮추지 않음).
+    var badKarma = input(once(text, "\"Description\":\"6랭크 29레벨\"", "\"Description\":\"6랭크 29\""));
+    assertThat(badKarma.at("/arkPassive/enlightenment/karmalevel").isNull()).isTrue();
+    assertThat(badKarma.path("unparsed").toString()).contains("arkPassive.enlightenment.karma");
+    assertThat(DealerCombatPower.of(badKarma, engine, tables)).isNull();
+    // 돌 레벨 보너스 줄이 있는데 수치를 읽지 못하면 null.
+    var badStone = input(once(text, "기본 공격력 +1.50%", "기본 공격력 +?%"));
+    assertThat(badStone.at("/armory/abilityStone/attackbonus").isNull()).isTrue();
+    assertThat(badStone.path("unparsed").toString()).contains("abilityStone.attackbonus");
+    assertThat(DealerCombatPower.of(badStone, engine, tables)).isNull();
+  }
+
+  private static JsonNode input(String fileText) throws Exception {
+    var raw = (ObjectNode) MAPPER.readTree(fileText).path("raw");
+    // 이 표본 원문에는 전투 레벨이 없다(장비로 지은 전투력에 필요).
+    ((ObjectNode) raw.path("ArmoryProfile")).put("CharacterLevel", 70);
+    return KrakenScoreInputMapper.from(raw);
+  }
+
+  /** 꼭 한 번 나오는 글자를 바꾼다(표본이 바뀌면 여기서 실패). */
+  private static String once(String text, String from, String to) {
+    int first = text.indexOf(from);
+    assertThat(first).as(from).isNotNegative();
+    assertThat(text.indexOf(from, first + 1)).as(from + " 한 번").isNegative();
+    return text.replace(from, to);
+  }
 
   @Test
   void 입력이_빠지면_낮은_값이_아니라_null이다() throws Exception {

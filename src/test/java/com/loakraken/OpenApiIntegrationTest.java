@@ -261,6 +261,14 @@ class OpenApiIntegrationTest {
                   .asText())
           .as(field)
           .isEqualTo("null");
+    // 아크 패시브 포인트 카르마 레벨(프론트 #1815 후속): 기존 응답에 nullable 필드 추가(웹은 배포 전까지 optional).
+    assertThat(document.at("/components/schemas/PassivePointResponse/required").toString())
+        .contains("karmaLevel");
+    assertThat(
+            document
+                .at("/components/schemas/PassivePointResponse/properties/karmaLevel/anyOf/1/type")
+                .asText())
+        .isEqualTo("null");
     // 에스더 무기 안쪽 필드(K32, #449 P3): 둘 다 required이고 못 읽으면 null.
     assertThat(document.at("/components/schemas/StatsEstherWeaponResponse/required").toString())
         .contains("refineLevel", "ellaStage");

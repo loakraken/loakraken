@@ -606,9 +606,15 @@ public final class CombatPowerRefineModel {
     if (loadout.arkPassive() == null) return 0;
     for (var point : loadout.arkPassive().points()) {
       if (point == null || !"깨달음".equals(point.name())) continue;
-      var matcher = point.description() == null ? null : KARMA_LEVEL.matcher(point.description());
-      return matcher != null && matcher.find() ? Integer.parseInt(matcher.group(1)) : null;
+      return karmaLevel(point.description());
     }
     return 0;
+  }
+
+  /** 아크 패시브 포인트 설명("6랭크 29레벨")의 카르마 레벨. 설명이 없거나 레벨이 없으면 null. */
+  public static Integer karmaLevel(String description) {
+    if (description == null) return null;
+    var matcher = KARMA_LEVEL.matcher(description);
+    return matcher.find() ? Integer.parseInt(matcher.group(1)) : null;
   }
 }

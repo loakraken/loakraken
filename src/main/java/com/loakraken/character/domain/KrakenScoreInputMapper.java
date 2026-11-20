@@ -52,9 +52,10 @@ public final class KrakenScoreInputMapper {
       Pattern.compile("^\\s*\\[([^\\]]+)\\]\\s*Lv\\.(\\d+)");
   // 저장된 실제 응답은 쉼표 없이 오지만, 쉼표가 붙어도 첫 묶음만 읽지 않게 쉼표까지 받아 뺀다(장비 요약 낙원력과 같은 규칙).
   private static final Pattern ORB = Pattern.compile("달성 최대 낙원력\\s*:\\s*(\\d[\\d,]*)");
-  private static final Pattern BRACELET_ICON =
+  static final Pattern BRACELET_ICON =
       Pattern.compile(
-          "<img[^>]*emoticon_tooltip_bracelet[^>]*>(?:\\s*</img>)?", Pattern.CASE_INSENSITIVE);
+          // 태그 안은 '<'·'>'를 넘지 않는다(닫는 '>' 없는 긴 줄에서 시작점마다 끝까지 다시 훑지 않게).
+          "<img[^<>]*emoticon_tooltip_bracelet[^<>]*>(?:\\s*</img>)?", Pattern.CASE_INSENSITIVE);
   private static final Pattern BRACELET_STAT = Pattern.compile("^(치명|특화|신속)\\+(\\d+)$");
   private static final Pattern GEM_BONUS = Pattern.compile("기본 공격력 (\\d+(?:\\.\\d+)?)% 증가");
   private static final Pattern AVATAR_STAT =
@@ -229,7 +230,7 @@ public final class KrakenScoreInputMapper {
       effect.set("name", copy(e.path("Name")));
       effect.set("level", copy(e.path("Level")));
       // 원본: 태그를 지운 문장에서 마지막 '+' 뒤 수.
-      var value = firstNumber(strip(e.path("Tooltip").asString("")).replaceFirst(".*\\+", ""));
+      var value = firstNumber(afterLastPlus(strip(e.path("Tooltip").asString(""))));
       effect.set("effect", value == null ? F.nullNode() : number(value));
     }
     return out;
@@ -479,6 +480,26 @@ public final class KrakenScoreInputMapper {
     } catch (JacksonException exception) {
       return "";
     }
+  }
+
+  /**
+   * 마지막 '+' 뒤 글. 결과는 {@code replaceFirst(".*\\+", "")}와 같지만 한 번만 훑는다: '.'은 줄 끝 문자를 넘지 않으므로, 첫 '+'가
+   * 있는 줄의 처음부터 그 줄의 마지막 '+'까지를 뗀다(패턴은 '+' 없는 줄에서 시작점마다 줄 끝까지 다시 훑음). '+'가 없으면 그대로.
+   */
+  static String afterLastPlus(String text) {
+    int first = text.indexOf('+');
+    if (first < 0) return text;
+    int start = first;
+    while (start > 0 && !lineEnd(text.charAt(start - 1))) start--;
+    int end = first;
+    while (end < text.length() && !lineEnd(text.charAt(end))) end++;
+    int last = text.lastIndexOf('+', end - 1);
+    return text.substring(0, start) + text.substring(last + 1);
+  }
+
+  /** java.util.regex의 '.'이 넘지 않는 줄 끝 문자(UNIX_LINES 없음). */
+  private static boolean lineEnd(char c) {
+    return c == '\n' || c == '\r' || c == '\u0085' || c == ' ' || c == ' ';
   }
 
   /**

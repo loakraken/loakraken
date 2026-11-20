@@ -62,6 +62,71 @@ class OfficialTextLimitTest {
   }
 
   @Test
+  void 상한을_넘은_칸은_수를_센다() {
+    long before = OfficialTextLimit.dropped();
+    OfficialTextLimit.fits("a".repeat(OfficialTextLimit.MAX_CHARS));
+    assertThat(OfficialTextLimit.dropped()).isEqualTo(before);
+    OfficialTextLimit.fits("a".repeat(OfficialTextLimit.MAX_CHARS + 1));
+    assertThat(OfficialTextLimit.dropped()).isGreaterThanOrEqualTo(before + 1);
+  }
+
+  @Test
+  void 마지막_더하기_뒤_글은_예전_replaceFirst와_같다() {
+    for (var sample :
+        List.of(
+            "",
+            "치명타 피해 +4.00%",
+            "공격력 +1.2% 추가 +3.5%",
+            "더하기 없음",
+            "첫 줄\n둘째 +1 셋째 +2\n넷째 +3",
+            "a\r\n+b",
+            "x y+z\u0085+w"))
+      assertThat(KrakenScoreInputMapper.afterLastPlus(sample))
+          .as(sample)
+          .isEqualTo(sample.replaceFirst(".*\\+", ""));
+    var random = new Random(20261120L);
+    var alphabet = "+a 1\n\r\u0085  가".toCharArray();
+    for (int i = 0; i < 2_000; i++) {
+      var text = new StringBuilder();
+      for (int n = random.nextInt(40); n > 0; n--)
+        text.append(alphabet[random.nextInt(alphabet.length)]);
+      var sample = text.toString();
+      assertThat(KrakenScoreInputMapper.afterLastPlus(sample))
+          .as(sample)
+          .isEqualTo(sample.replaceFirst(".*\\+", ""));
+    }
+  }
+
+  @Test
+  void 팔찌_아이콘_패턴은_꺾쇠를_넘지_않는다() {
+    var icon = "<img src='emoticon_tooltip_bracelet_locked' width='20'></img>";
+    assertThat(KrakenScoreInputMapper.BRACELET_ICON.matcher("앞" + icon + "뒤").replaceAll(""))
+        .isEqualTo("앞뒤");
+    // 닫는 '>' 전에 '<'가 오면 태그로 보지 않는다(예전 패턴은 '<'를 넘어 다음 '>'까지 한 태그로 읽었다).
+    var broken = "<img emoticon_tooltip_bracelet <b>굵게</b>";
+    assertThat(KrakenScoreInputMapper.BRACELET_ICON.matcher(broken).find()).isFalse();
+  }
+
+  @Test
+  void 저장된_실제_응답에서는_팔찌_아이콘_결과가_예전_패턴과_같다() throws Exception {
+    var old =
+        Pattern.compile(
+            "<img[^>]*emoticon_tooltip_bracelet[^>]*>(?:\\s*</img>)?", Pattern.CASE_INSENSITIVE);
+    int icons = 0;
+    try (var files =
+        java.nio.file.Files.list(java.nio.file.Path.of("src/test/resources/kraken-score"))) {
+      for (var file : files.filter(path -> path.toString().endsWith(".json")).toList()) {
+        var text = java.nio.file.Files.readString(file);
+        icons += (int) old.matcher(text).results().count();
+        assertThat(KrakenScoreInputMapper.BRACELET_ICON.matcher(text).replaceAll(""))
+            .as(file.toString())
+            .isEqualTo(old.matcher(text).replaceAll(""));
+      }
+    }
+    assertThat(icons).isGreaterThan(0);
+  }
+
+  @Test
   void 상한을_넘는_장비_툴팁은_읽지_않는다() {
     var bangle = KrakenScoreInputMapper.from(raw(bangleTooltip(0))).path("armory");
     assertThat(bangle.path("accessory").path("bangle").path("tier").asInt()).isEqualTo(4);

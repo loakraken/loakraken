@@ -219,6 +219,85 @@ class SpecUpKrakenScoreReferenceTest {
     assertThat(KrakenScoreEngine.dealerScore(input, tables())).isEqualTo(before);
   }
 
+  /**
+   * 추천 순서 KRAKEN의 상급 재련(코드 리뷰 #1029 P2): 상급 재련 단계도 점수를 내고, 같은 장비의 일반 재련 단계와 함께면 단계표 (지금) → (목표 재련,
+   * 목표 상급) Δ를 한 번에 더한다(업화 단계표는 5 × 재련 + 상급 지수라 따로 더하면 맞지 않음). 기준 캐릭터 1의 투구를 업화 이름으로 바꿔 쓴다(표본에 업화
+   * 장비가 없음).
+   */
+  @Test
+  void 상급_재련은_점수를_내고_같은_장비의_일반_재련과_함께_한_번에_더한다() throws Exception {
+    var raw = (ObjectNode) raw("l01").deepCopy();
+    int index = -1;
+    var equipment = raw.path("ArmoryEquipment");
+    for (int i = 0; i < equipment.size(); i++) {
+      var item = (ObjectNode) equipment.get(i);
+      if ("투구".equals(item.path("Type").asString(""))) {
+        item.put("Name", item.path("Name").asString("").replace("전율", "업화"));
+        index = i;
+        break;
+      }
+    }
+    assertThat(index).isNotNegative();
+    var loadout = ArmoryRawFixtures.loadout(raw);
+    var item = loadout.equipment().get(index);
+    assertThat(item.name()).contains("업화");
+    int refine = item.detail().refineLevel();
+    int advanced =
+        item.detail().advancedRefineLevel() == null ? 0 : item.detail().advancedRefineLevel();
+    int targetAdvanced = (advanced / 10 + 1) * 10;
+    var input = KrakenScoreInputMapper.from(raw);
+    var context =
+        new SpecUpKrakenScore.Context(input, KrakenScoreEngine.dealerScore(input, tables()), null);
+    var scorer = scorer();
+    var advancedOnly =
+        scorer.chainedScore(
+            context,
+            loadout,
+            java.util.Map.of(
+                "EQUIPMENT_ADVANCED_REFINE:" + index,
+                List.of(change(Kind.EQUIPMENT_ADVANCED_REFINE, index, targetAdvanced))),
+            null);
+    assertThat(advancedOnly).as("상급 재련 점수").isNotNull().isGreaterThan(context.before());
+    // 목록 상급 재련 줄(한 단계)도 같은 규칙으로 Δ점수를 낸다.
+    var listDelta =
+        scorer.delta(context, loadout, change(Kind.EQUIPMENT_ADVANCED_REFINE, index, advanced + 1));
+    assertThat(listDelta).as("목록 상급 재련 Δ").isNotNull().isPositive();
+    var slots = new LinkedHashMap<String, List<Change>>();
+    slots.put(
+        "EQUIPMENT_REFINE:" + index, List.of(change(Kind.EQUIPMENT_REFINE, index, refine + 1)));
+    slots.put(
+        "EQUIPMENT_ADVANCED_REFINE:" + index,
+        List.of(change(Kind.EQUIPMENT_ADVANCED_REFINE, index, targetAdvanced)));
+    var joint = scorer.chainedScore(context, loadout, slots, null);
+    // 기대: 부위 stat에 (재련, 상급) → (재련 + 1, 목표 상급) 단계표 Δ 한 번.
+    var expected = (ObjectNode) input.deepCopy();
+    var part =
+        (ObjectNode)
+            expected.path("armory").path("equipment").path(SpecUpKrakenScore.PARTS.get("투구"));
+    var from =
+        CombatPowerRefineModel.stat(
+            refine(), "투구", CombatPowerRefineModel.Family.UPGRADE, refine, advanced);
+    var to =
+        CombatPowerRefineModel.stat(
+            refine(), "투구", CombatPowerRefineModel.Family.UPGRADE, refine + 1, targetAdvanced);
+    part.put("stat", part.path("stat").asDouble() + to.subtract(from).doubleValue());
+    var expectedScore =
+        scorer.chainedScore(
+            new SpecUpKrakenScore.Context(expected, context.before(), null),
+            loadout,
+            java.util.Map.of(),
+            null);
+    assertThat(joint).isNotNull().isEqualTo(expectedScore);
+  }
+
+  private static Change change(Kind kind, int index, int target) {
+    return kind == Kind.EQUIPMENT_REFINE
+        ? new Change(
+            kind, null, index, null, null, target, null, null, null, null, null, null, null, null)
+        : new Change(
+            kind, null, index, null, target, null, null, null, null, null, null, null, null, null);
+  }
+
   @Test
   void 팔_보호구_목표_등급은_등급_끝을_넘을_때마다_이어서_올린다() throws Exception {
     var scorer = new SpecUpKrakenScore(tables(), refine(), true);

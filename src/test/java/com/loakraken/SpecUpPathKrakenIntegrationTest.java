@@ -190,6 +190,53 @@ class SpecUpPathKrakenIntegrationTest {
       assertThat(armorStep(step, weapon)).as(step.path("candidateId").asText()).isFalse();
   }
 
+  /**
+   * 코드 리뷰 #1029 P2: 딜러 KRAKEN은 방어구 상급 재련도 점수로 고르고 그 단계부터 전투력을 비운다. 기준 원문에는 업화 장비가 없어(전율은 상급 재련 없음)
+   * 투구 이름만 업화로 바꾼다.
+   */
+  @Test
+  void 딜러_KRAKEN은_방어구_상급_재련도_점수로_고르고_전투력을_비운다() throws Exception {
+    when(auctions.cachedGems()).thenReturn(List.of());
+    when(auctions.polishPrice(anyString(), anyList(), any()))
+        .thenReturn(
+            new MarketAuctionService.PolishPrice(
+                MarketAuctionService.PolishStatus.MISSING, null, null));
+    int[] helmet = {-1};
+    search(
+        tooltip -> tooltip,
+        input -> {},
+        raw -> {
+          var equipment = raw.path("ArmoryEquipment");
+          for (int i = 0; i < equipment.size(); i++) {
+            var item = (tools.jackson.databind.node.ObjectNode) equipment.get(i);
+            if ("투구".equals(item.path("Type").asString(""))) {
+              item.put("Name", item.path("Name").asString("").replace("전율", "업화"));
+              helmet[0] = i;
+              return;
+            }
+          }
+        });
+    assertThat(helmet[0]).isNotNegative();
+    var kraken = path(NAME, "KRAKEN", 30);
+    var advanced = new ArrayList<JsonNode>();
+    for (var step : kraken.path("steps"))
+      if (step.path("candidateId")
+          .asText()
+          .startsWith("EQUIPMENT_ADVANCED_REFINE:" + helmet[0] + ":")) advanced.add(step);
+    assertThat(advanced).as("투구 상급 재련 단계 " + ids(kraken.path("steps"))).isNotEmpty();
+    for (var step : advanced) {
+      assertThat(step.path("deltaKrakenScore").decimalValue()).isPositive();
+      assertThat(absent(step.path("combatPowerAfter"))).isTrue();
+      // 상급 재련 목표는 10의 배수(레벨 점프 #1019).
+      var target =
+          step.path("candidateId")
+              .asText()
+              .substring(step.path("candidateId").asText().lastIndexOf(':') + 1);
+      assertThat(Integer.parseInt(target) % 10).isZero();
+    }
+    assertThat(kraken.path("combatPowerStopOrder").isNumber()).isTrue();
+  }
+
   /** 방어구 재련·상급 재련·완갑 단계(무기 칸이 아닌 재련 종류). */
   private static boolean armorStep(JsonNode step, int weaponIndex) {
     var kind = step.path("kind").asText();
@@ -369,6 +416,15 @@ class SpecUpPathKrakenIntegrationTest {
       java.util.function.UnaryOperator<String> earring,
       java.util.function.Consumer<tools.jackson.databind.node.ObjectNode> input)
       throws Exception {
+    search(earring, input, raw -> {});
+  }
+
+  /** rawEdit는 원문 자체를 바꾸는 함수(예: 장비 이름). */
+  private void search(
+      java.util.function.UnaryOperator<String> earring,
+      java.util.function.Consumer<tools.jackson.databind.node.ObjectNode> input,
+      java.util.function.Consumer<tools.jackson.databind.node.ObjectNode> rawEdit)
+      throws Exception {
     var raw =
         (tools.jackson.databind.node.ObjectNode)
             mapper
@@ -376,6 +432,7 @@ class SpecUpPathKrakenIntegrationTest {
                     new ClassPathResource("kraken-score/l01.json")
                         .getContentAsString(StandardCharsets.UTF_8))
                 .path("raw");
+    rawEdit.accept(raw);
     var item = (tools.jackson.databind.node.ObjectNode) raw.path("ArmoryEquipment").get(7);
     item.put("Tooltip", earring.apply(item.path("Tooltip").asText()));
     // 합성: 이 원문의 장신구 툴팁에는 거래 줄이 잘려 있어 연마 비용을 정할 수 없다. 장신구마다 ItemTitle 뒤에 '거래 제한 아이템 레벨 1680' 줄을 넣는다.

@@ -652,9 +652,18 @@ class CritEffectTableTest {
         .isEqualByComparingTo(skill(ancientOff, "정령 스킬").total().add(new BigDecimal("16")));
     assertThat(skill(ancientOn, "소환 스킬").total())
         .isEqualByComparingTo(skill(ancientOff, "소환 스킬").total());
-    assertThat(ancientOn.crit().totalRate()).isEqualByComparingTo(summoner.crit().totalRate());
+    // 합계·주력은 같은 묶음에서 [고대의 정령] 스킬만 뺀 계산과 같다(PM 총괄 11-20 23:03 P3: 다른 묶음과 비교하지 않음).
+    var withoutSpirit =
+        calculate(
+            "서머너",
+            ancientNodes,
+            ancientSkills.stream().filter(each -> !"정령 스킬".equals(each.name())).toList(),
+            null,
+            Assumptions.NONE);
+    assertThat(withoutSpirit.skills()).noneMatch(each -> "정령 스킬".equals(each.name()));
+    assertThat(ancientOn.crit().totalRate()).isEqualByComparingTo(withoutSpirit.crit().totalRate());
     assertThat(ancientOn.crit().mainSkillRate())
-        .isEqualByComparingTo(summoner.crit().mainSkillRate());
+        .isEqualByComparingTo(withoutSpirit.crit().mainSkillRate());
     var spiritNodes = List.of(node("깨달음 2티어 깨어난 잠재력 Lv.3", "둔갑 스킬 치명타 적중률이 30.0% 증가한다."));
     var spirit =
         calculate(

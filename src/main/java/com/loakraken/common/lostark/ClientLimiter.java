@@ -184,7 +184,7 @@ public class ClientLimiter {
   }
 
   /** 로그용 클라이언트 표시: HMAC 키 앞 6자리(봇은 'bot:' + 앞 6자리, 봇 전체 상한은 'bot-all'). */
-  static String shortKey(String clientKey) {
+  public static String shortKey(String clientKey) {
     if (clientKey == null) return "-";
     if (BOT_ALL.equals(clientKey)) return "bot-all";
     if (SHARED.equals(clientKey)) return "shared";
@@ -247,6 +247,14 @@ public class ClientLimiter {
 
   void exit() {
     CLIENT.remove();
+  }
+
+  /**
+   * 지금 스레드가 처리 중인 요청의 클라이언트 키(주소 해시, 검색봇은 'bot:' 접두). 요청 밖(백그라운드·테스트)이면 null. 클라이언트별 몫을 따로 세는 기능(예:
+   * 스펙업 계산 자리 클라이언트당 1개)이 쓴다. 주소 원문은 담지 않는다.
+   */
+  public static String currentClient() {
+    return CLIENT.get();
   }
 
   /**

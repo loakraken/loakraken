@@ -31,6 +31,12 @@ class SpecUpGoalServiceTest {
   private final MarketAuctionService auctions = mock(MarketAuctionService.class);
   private final RefiningMaterialPriceService materials = mock(RefiningMaterialPriceService.class);
   private final SpecUpService specUp = mock(SpecUpService.class);
+
+  {
+    // 실제 서비스는 점수 입력을 읽을 수 없을 때 null(앞 배치)이다. 목은 빈 목록(점수가 오르는 조합 없음)을 돌려주므로 null로 둔다.
+    when(specUp.stoneOrientations(org.mockito.ArgumentMatchers.any())).thenReturn(null);
+  }
+
   private final MemoryStore store = new MemoryStore();
 
   /** 테스트 캐릭터 장비(기본 없음). service() 전에 바꾼다. */
@@ -277,18 +283,31 @@ class SpecUpGoalServiceTest {
         .extracting(SpecUpGoalService.Step::extraCost)
         .containsExactly(150_000L, 160_000L, 170_000L);
     assertThat(path.totalCost()).isEqualTo(480_000L);
-    assertThat(path.ruleVersion()).isEqualTo("spec-up-path-v4");
+    // 비용을 모두 알면 아는 합 = 합계, 모르는 단계 0(PM 총괄 11-19).
+    assertThat(path.knownCostTotal()).isEqualTo(480_000L);
+    assertThat(path.unknownCostSteps()).isZero();
+    assertThat(path.ruleVersion()).isEqualTo("spec-up-path-v6");
 
     when(specUp.armGuardEnabled()).thenReturn(false);
     var off = service.path("목표테스트", SpecUpGoalService.Pick.EFFICIENCY, 3);
-    assertThat(off.steps()).isEmpty();
-    assertThat(off.unpriced())
+    // 스위치를 끄면 완갑은 순서에 없다. 시세를 모르는 보석 단계는 고를 수 있고(PM 총괄 11-19 (B), 비용 있는 단계 뒤) 합계는 모름이다.
+    assertThat(off.steps()).noneMatch(step -> step.kind().equals("ARM_GUARD"));
+    assertThat(off.steps()).allMatch(step -> step.extraCost() == null);
+    assertThat(off.totalCost()).isNull();
+    // 합계는 모름이어도 아는 합(0)과 모르는 단계 수는 준다(웹 'X G + 비용 모름 N단계').
+    assertThat(off.knownCostTotal()).isZero();
+    assertThat(off.unknownCostSteps()).isEqualTo(off.steps().size());
+    // EFFICIENCY는 비용을 모르는 단계도 고르므로 '비용을 몰라 빠진 후보'가 없다(DELTA만 남음).
+    assertThat(off.unpriced()).isEmpty();
+    var delta = service.path("목표테스트", SpecUpGoalService.Pick.DELTA, 3);
+    assertThat(delta.steps()).isEmpty();
+    assertThat(delta.unpriced())
         .noneMatch(item -> item.candidateId().startsWith("EQUIPMENT_REFINE:0:"));
   }
 
   /**
-   * 어빌리티 스톤 목표 조합(목록 스톤 줄과 같은 목표·id·비용): 조합마다 두 배치, 한 단계에 각인 둘(STONE_ENGRAVING 둘)을 바꾼다. 두 레벨이 같은
-   * 99돌(3·3)·1010돌(4·4)은 하나, 지금과 같은 레벨 조합은 뺀다.
+   * 어빌리티 스톤 목표 조합(목록 스톤 줄과 같은 목표·id·비용): 조합마다 목록과 같은 배치 하나(목록 배치를 모르면 앞 배치), 한 단계에 각인
+   * 둘(STONE_ENGRAVING 둘)을 바꾼다. 지금과 같은 레벨 조합은 뺀다(PM 총괄 11-15: 뒤집은 배치는 고르지 않음).
    */
   @Test
   void 스톤_목표_조합은_각인_둘을_한_단계로_바꾸고_목록과_같은_id와_비용이다() {
@@ -297,12 +316,17 @@ class SpecUpGoalServiceTest {
     levels.put("아드레날린", 1);
     var options =
         SpecUpGoalService.stoneOptions(new SpecUpGoalService.Stone(stoneItem(1, 1), levels));
-    // 97·106·107 두 배치씩 = 6. 99·109·1010돌은 기대 비용이 비현실적이라 넣지 않는다(핫픽스 v0.3.9.2).
-    assertThat(options).hasSize(6);
+    // 97·106·107·99·109·1010 하나씩 = 6(앞 배치, PM 총괄 11-19). 99·109·1010돌을 고를지는 경로가 정한다(DELTA·목표 경로는
+    // 뺌).
     assertThat(options)
         .extracting(SpecUpGoalService.Option::id)
-        .contains("ABILITY_STONE:3:2", "ABILITY_STONE:2:3", "ABILITY_STONE:4:2")
-        .doesNotContain("ABILITY_STONE:3:3", "ABILITY_STONE:4:3", "ABILITY_STONE:4:4");
+        .containsExactly(
+            "ABILITY_STONE:3:2",
+            "ABILITY_STONE:4:1",
+            "ABILITY_STONE:4:2",
+            "ABILITY_STONE:3:3",
+            "ABILITY_STONE:4:3",
+            "ABILITY_STONE:4:4");
     for (var option : options) {
       assertThat(option.kind()).isEqualTo("ABILITY_STONE");
       assertThat(option.slot()).isEqualTo("ABILITY_STONE");
@@ -332,13 +356,79 @@ class SpecUpGoalServiceTest {
     assertThat(SpecUpGoalService.stoneOptions(new SpecUpGoalService.Stone(stoneItem(1, 1), sharp)))
         .hasSize(6)
         .allMatch(option -> option.changes().get(1).name().equals("예리한 둔기"));
-    // 지금이 이미 3·2면 그 배치는 빠진다.
+    // 지금이 이미 3·2면 그 배치는 빠지고 뒤집은 2·3은 내지 않는다.
     levels.put("원한", 3);
     levels.put("아드레날린", 2);
     assertThat(SpecUpGoalService.stoneOptions(new SpecUpGoalService.Stone(stoneItem(3, 2), levels)))
         .extracting(SpecUpGoalService.Option::id)
-        .doesNotContain("ABILITY_STONE:3:2")
-        .contains("ABILITY_STONE:2:3");
+        .containsExactly(
+            "ABILITY_STONE:4:1",
+            "ABILITY_STONE:4:2",
+            "ABILITY_STONE:3:3",
+            "ABILITY_STONE:4:3",
+            "ABILITY_STONE:4:4");
+  }
+
+  /**
+   * 목록이 뒤집은 배치를 보이면(높은 레벨이 둘째 각인) 추천 순서도 그 배치 하나만 낸다. 같은 점수에 다른 전투력인 반대 배치는 고르지 않는다(PM 총괄 11-15: 계산
+   * 검증 표본에서 같은 점수, 전투력 19.56 대 17.67인 두 배치를 id로 갈라 목록에 없는 배치를 골랐음).
+   */
+  @Test
+  void 스톤_배치는_목록과_같은_배치만_낸다() {
+    var levels = new java.util.LinkedHashMap<String, Integer>();
+    levels.put("원한", 1);
+    levels.put("아드레날린", 1);
+    // 목록 배치: 97돌은 아드레날린이 높게, 106·107은 원한이 높게(점수 입력의 각인 순서가 반대여도 이름으로 맞춘다).
+    var list =
+        java.util.List.<java.util.Map<String, Integer>>of(
+            java.util.Map.of("아드레날린", 3, "원한", 2),
+            java.util.Map.of("원한", 4, "아드레날린", 1),
+            java.util.Map.of("원한", 4, "아드레날린", 2));
+    var options =
+        SpecUpGoalService.stoneOptions(new SpecUpGoalService.Stone(stoneItem(1, 1), levels, list));
+    assertThat(options)
+        .extracting(SpecUpGoalService.Option::id)
+        .containsExactly("ABILITY_STONE:2:3", "ABILITY_STONE:4:1", "ABILITY_STONE:4:2");
+    // 목록에 없는 조합(점수가 오르지 않음)은 내지 않는다(비교 기준과 같음).
+    assertThat(
+            SpecUpGoalService.stoneOptions(
+                new SpecUpGoalService.Stone(
+                    stoneItem(1, 1),
+                    levels,
+                    java.util.List.<java.util.Map<String, Integer>>of(
+                        java.util.Map.of("원한", 3, "아드레날린", 2)))))
+        .extracting(SpecUpGoalService.Option::id)
+        .containsExactly("ABILITY_STONE:3:2");
+    // 점수 입력과 툴팁의 각인 이름이 갈라지면(배치가 이 스톤과 이름이 다름) 스톤 단계를 빼지 않고 앞 배치로(코드 리뷰 #975 P3).
+    assertThat(
+            SpecUpGoalService.stoneOptions(
+                new SpecUpGoalService.Stone(
+                    stoneItem(1, 1),
+                    levels,
+                    java.util.List.<java.util.Map<String, Integer>>of(
+                        java.util.Map.of("다른 각인", 3, "아드레날린", 2)))))
+        .extracting(SpecUpGoalService.Option::id)
+        .containsExactly(
+            "ABILITY_STONE:3:2",
+            "ABILITY_STONE:4:1",
+            "ABILITY_STONE:4:2",
+            "ABILITY_STONE:3:3",
+            "ABILITY_STONE:4:3",
+            "ABILITY_STONE:4:4");
+    // 점수가 오르는 조합이 하나도 없으면(빈 목록) 스톤 단계가 없다.
+    assertThat(
+            SpecUpGoalService.stoneOptions(
+                new SpecUpGoalService.Stone(stoneItem(1, 1), levels, java.util.List.of())))
+        .isEmpty();
+    // 단계를 지나도(스톤 상태가 바뀌어도) 같은 배치를 지킨다.
+    var after = new java.util.LinkedHashMap<String, Integer>();
+    after.put("원한", 2);
+    after.put("아드레날린", 3);
+    assertThat(
+            SpecUpGoalService.stoneOptions(
+                new SpecUpGoalService.Stone(stoneItem(2, 3), after, list)))
+        .extracting(SpecUpGoalService.Option::id)
+        .containsExactly("ABILITY_STONE:4:1", "ABILITY_STONE:4:2");
   }
 
   /** 추천 순서는 스톤 단계도 고르고, 단계 changes(각인 둘)를 같은 칸은 마지막만 남겨 다시 넣으면 그 단계 전투력과 같다. */
@@ -364,28 +454,31 @@ class SpecUpGoalServiceTest {
   }
 
   /**
-   * 핫픽스 v0.3.9.2(PM 총괄 11-09): 전투력 우선(DELTA)은 Δ만 보고 고르므로, 전에는 Δ가 가장 큰 1010돌(기대 비용 약 314억)을 첫 단계로 골라
-   * 뒤 단계 누적 비용이 모두 314억을 넘었다. 스톤 목표는 97·106·107돌만이라 어떤 단계·누적 비용도 현실적인 범위를 넘지 않는다.
+   * 핫픽스 v0.3.9.2(PM 총괄 11-09, 11-19 유지·넓힘): 99·109·1010돌(기대 비용 약 1,723만·7.4억·334억)은 목록에만 내고 추천 순서(세
+   * 기준)와 목표 경로는 고르지 않는다. DELTA는 Δ만 보고 1010돌을 첫 단계로 고르고, EFFICIENCY·KRAKEN은 닿는 경로마다 셋을 모두 골라 합계가 약
+   * 341억이 된다.
    */
   @Test
-  void 전투력_우선_추천_순서는_비현실적인_스톤_비용을_고르지_않는다() {
+  void 추천_순서와_목표_경로는_비현실적인_스톤을_고르지_않는다() {
     equipment = List.of(stoneItem(1, 1));
     var service = service(System::nanoTime);
-    for (var pick : SpecUpGoalService.Pick.values()) {
-      var path = service.path("목표테스트", pick, 30);
-      assertThat(path.steps()).as(pick.name()).isNotEmpty();
-      for (var step : path.steps()) {
-        assertThat(step.candidateId())
-            .as(pick + " " + step.candidateId())
-            .isNotIn(
-                "ABILITY_STONE:3:3", "ABILITY_STONE:3:4", "ABILITY_STONE:4:3", "ABILITY_STONE:4:4");
-        // 107돌 기대 비용 약 131만이 가장 큰 스톤 비용이다.
+    var runs = new java.util.LinkedHashMap<String, List<SpecUpGoalService.Step>>();
+    for (var pick : SpecUpGoalService.Pick.values())
+      runs.put(pick.name(), service.path("목표테스트", pick, 30).steps());
+    runs.put("GOAL", service.goal("목표테스트", new BigDecimal("6000")).steps());
+    for (var run : runs.entrySet()) {
+      assertThat(run.getValue()).as(run.getKey()).isNotEmpty();
+      for (var step : run.getValue()) {
+        assertThat(SpecUpScoreCandidates.extremeStone(step.candidateId()))
+            .as(run.getKey() + " " + step.candidateId())
+            .isFalse();
+        // 107돌 기대 비용 약 282만이 가장 큰 스톤 비용이다(공식 확률 공개 표, PM 총괄 11-19 (e)).
         if (step.cost() != null && step.cost().amount() != null)
           assertThat(step.cost().amount())
-              .as(pick + " " + step.candidateId())
-              .isLessThanOrEqualTo(2_000_000L);
+              .as(run.getKey() + " " + step.candidateId())
+              .isLessThanOrEqualTo(3_000_000L);
         if (step.cumulativeCost() != null)
-          assertThat(step.cumulativeCost()).as(pick + " 누적").isLessThan(100_000_000L);
+          assertThat(step.cumulativeCost()).as(run.getKey() + " 누적").isLessThan(100_000_000L);
       }
     }
   }
@@ -412,11 +505,11 @@ class SpecUpGoalServiceTest {
   }
 
   /**
-   * 스톤은 칸처럼 센다(PM 총괄 11-09): 스톤 단계가 둘 이상이면 새 스톤을 다시 깎는 것이라 합계에는 마지막 스톤 비용만 들어가고, 뒤 스톤 단계의 더 드는 비용은
-   * 그 스톤 비용 − 앞 스톤 비용이다. 보석 칸도 같은 규칙(칸마다 마지막 단계 누적 비용). 추천 순서(두 정렬)와 목표 경로 모두.
+   * 스톤 단계가 이어질 때(PM 총괄 11-19, 비교 기준과 같음): 추천 순서 EFFICIENCY·KRAKEN은 스톤마다 새 스톤을 통째로 사므로 더 드는 비용이 그 스톤
+   * 비용 전부이고, 합계는 단계마다 낸 비용(더 드는 비용)의 합이다. DELTA와 목표 경로는 예전 규칙(칸마다 마지막 단계 비용, 뒤 스톤은 차이).
    */
   @Test
-  void 스톤_단계가_이어지면_합계에는_마지막_스톤_비용만_센다() {
+  void 스톤_단계가_이어지면_추천_순서는_스톤마다_전부_더하고_DELTA와_목표_경로는_마지막_스톤만_센다() {
     equipment = List.of(stoneItem(1, 1));
     var service = service(System::nanoTime);
     var runs = new java.util.LinkedHashMap<String, List<SpecUpGoalService.Step>>();
@@ -425,8 +518,10 @@ class SpecUpGoalServiceTest {
     runs.put("GOAL", service.goal("목표테스트", new BigDecimal("6000")).steps());
     int multiStone = 0;
     for (var run : runs.entrySet()) {
+      boolean baseline = !"DELTA".equals(run.getKey()) && !"GOAL".equals(run.getKey());
       var slots = new java.util.LinkedHashMap<String, Long>();
       long others = 0;
+      Long paid = 0L;
       int stones = 0;
       for (var step : run.getValue()) {
         var amount = step.cost() == null ? null : step.cost().amount();
@@ -438,23 +533,28 @@ class SpecUpGoalServiceTest {
                     : null;
         if ("ABILITY_STONE".equals(step.kind())) {
           stones++;
-          if (amount != null && slots.containsKey(slot) && slots.get(slot) != null)
+          if (baseline)
+            assertThat(step.extraCost())
+                .as(run.getKey() + " " + step.candidateId() + " 스톤 단계 비용은 전부")
+                .isEqualTo(amount);
+          else if (amount != null && slots.containsKey(slot) && slots.get(slot) != null)
             assertThat(step.extraCost())
                 .as(run.getKey() + " " + step.candidateId() + " 더 드는 비용")
                 .isEqualTo(amount - slots.get(slot));
         }
         Long expected;
-        if (slot != null) {
-          slots.put(slot, amount);
-          expected = null;
-        } else if (amount != null) others += amount;
-        if (amount == null && slot == null) {
-          others = Long.MIN_VALUE / 2;
+        if (baseline) {
+          paid = paid == null || step.extraCost() == null ? null : paid + step.extraCost();
+          expected = paid;
+        } else {
+          if (slot != null) slots.put(slot, amount);
+          else if (amount != null) others += amount;
+          if (amount == null && slot == null) others = Long.MIN_VALUE / 2;
+          expected =
+              others < 0 || slots.containsValue(null)
+                  ? null
+                  : others + slots.values().stream().mapToLong(Long::longValue).sum();
         }
-        expected =
-            others < 0 || slots.containsValue(null)
-                ? null
-                : others + slots.values().stream().mapToLong(Long::longValue).sum();
         assertThat(step.cumulativeCost())
             .as(run.getKey() + " " + step.order() + " " + step.candidateId() + " 누적")
             .isEqualTo(expected);
@@ -671,6 +771,165 @@ class SpecUpGoalServiceTest {
     assertThat(meters.counter("loakraken.spec_up.path", "outcome", "busy").count()).isEqualTo(1);
   }
 
+  /**
+   * 클라이언트당 계산 자리 1개(보안 11-16 강화 (a)): 한 클라이언트가 계산 중이면 그 클라이언트의 다른 계산(추천 순서·목표 경로)은 기다리지 않고 429
+   * SPEC_UP_BUSY(outcome=client_busy)이고, 다른 클라이언트는 남은 자리로 계산한다. 계산이 끝나면 그 클라이언트도 다시 계산한다.
+   */
+  @Test
+  void 한_클라이언트는_계산_자리를_하나만_쓴다() throws Exception {
+    var entered = new java.util.concurrent.CountDownLatch(1);
+    var release = new java.util.concurrent.CountDownLatch(1);
+    var holding = java.util.concurrent.ConcurrentHashMap.<String>newKeySet();
+    LongSupplier clock =
+        () -> {
+          var name = Thread.currentThread().getName();
+          if (name.equals("client-a-path") && holding.add(name)) {
+            entered.countDown();
+            try {
+              if (!release.await(10, java.util.concurrent.TimeUnit.SECONDS))
+                throw new AssertionError("계산 자리 놓아주기 대기 시간 초과");
+            } catch (InterruptedException exception) {
+              Thread.currentThread().interrupt();
+              throw new AssertionError("계산 자리 놓아주기 대기 중 중단", exception);
+            }
+          }
+          return System.nanoTime();
+        };
+    var current = new ThreadLocal<String>();
+    var service = service(clock, current::get);
+    var errors = new java.util.concurrent.ConcurrentLinkedQueue<Throwable>();
+    var first =
+        new Thread(
+            () -> {
+              current.set("client-a");
+              try {
+                service.path("목표테스트", SpecUpGoalService.Pick.EFFICIENCY, 3);
+              } catch (Throwable error) {
+                errors.add(error);
+              }
+            },
+            "client-a-path");
+    first.start();
+    try {
+      assertThat(entered.await(10, java.util.concurrent.TimeUnit.SECONDS))
+          .as("클라이언트 a의 추천 순서 계산이 자리를 잡음")
+          .isTrue();
+      current.set("client-a");
+      for (org.assertj.core.api.ThrowableAssert.ThrowingCallable again :
+          List.<org.assertj.core.api.ThrowableAssert.ThrowingCallable>of(
+              () -> service.goal("목표테스트", new BigDecimal("6000")),
+              () -> service.path("목표테스트", SpecUpGoalService.Pick.EFFICIENCY, 5)))
+        org.assertj.core.api.Assertions.assertThatThrownBy(again)
+            .isInstanceOf(com.loakraken.common.api.BusinessException.class)
+            .satisfies(
+                e ->
+                    assertThat(((com.loakraken.common.api.BusinessException) e).errorCode())
+                        .isEqualTo(SpecUpErrorCode.SPEC_UP_BUSY));
+      assertThat(meters.counter("loakraken.spec_up.goal", "outcome", "client_busy").count())
+          .isEqualTo(1);
+      assertThat(meters.counter("loakraken.spec_up.path", "outcome", "client_busy").count())
+          .isEqualTo(1);
+      // 다른 클라이언트는 남은 자리로 계산한다.
+      current.set("client-b");
+      service.goal("목표테스트", new BigDecimal("6000"));
+      assertThat(meters.counter("loakraken.spec_up.goal", "outcome", "computed").count())
+          .isEqualTo(1);
+    } finally {
+      release.countDown();
+      first.join(10_000);
+      current.remove();
+    }
+    assertThat(first.isAlive()).isFalse();
+    assertThat(errors).isEmpty();
+    // 끝나면 클라이언트 a도 다시 계산한다(자리를 돌려줌).
+    current.set("client-a");
+    service.path("목표테스트", SpecUpGoalService.Pick.EFFICIENCY, 5);
+    assertThat(meters.counter("loakraken.spec_up.path", "outcome", "computed").count())
+        .isEqualTo(2);
+    current.remove();
+  }
+
+  /**
+   * 동시 요청 8개(같은 클라이언트, 서로 다른 계산): 자리를 잡는 것은 정확히 하나이고 나머지 7개는 기다리지 않고 client_busy다. 자리를 잡은 계산은 나머지가
+   * 모두 거절될 때까지 붙잡아 둔다(겹침을 강제).
+   */
+  @Test
+  void 같은_클라이언트의_동시_요청_8개_중_자리는_하나만_잡는다() throws Exception {
+    var entered = new java.util.concurrent.CountDownLatch(1);
+    var release = new java.util.concurrent.CountDownLatch(1);
+    var holding = java.util.concurrent.ConcurrentHashMap.<String>newKeySet();
+    LongSupplier clock =
+        () -> {
+          var name = Thread.currentThread().getName();
+          if (name.startsWith("burst-") && holding.add("held")) {
+            entered.countDown();
+            try {
+              if (!release.await(10, java.util.concurrent.TimeUnit.SECONDS))
+                throw new AssertionError("계산 자리 놓아주기 대기 시간 초과");
+            } catch (InterruptedException exception) {
+              Thread.currentThread().interrupt();
+              throw new AssertionError("계산 자리 놓아주기 대기 중 중단", exception);
+            }
+          }
+          return System.nanoTime();
+        };
+    var service = service(clock, () -> "client-z");
+    var errors = new java.util.concurrent.ConcurrentLinkedQueue<Throwable>();
+    var threads = new java.util.ArrayList<Thread>();
+    for (int limit = 3; limit <= 10; limit++) {
+      int l = limit;
+      threads.add(
+          new Thread(
+              () -> {
+                try {
+                  service.path("목표테스트", SpecUpGoalService.Pick.EFFICIENCY, l);
+                } catch (Throwable error) {
+                  errors.add(error);
+                }
+              },
+              "burst-" + limit));
+    }
+    threads.forEach(Thread::start);
+    try {
+      assertThat(entered.await(10, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+      long deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(10);
+      while (errors.size() < 7 && System.nanoTime() < deadline) Thread.onSpinWait();
+    } finally {
+      release.countDown();
+      for (var thread : threads) thread.join(10_000);
+    }
+    assertThat(errors)
+        .hasSize(7)
+        .allSatisfy(
+            e ->
+                assertThat(((com.loakraken.common.api.BusinessException) e).errorCode())
+                    .isEqualTo(SpecUpErrorCode.SPEC_UP_BUSY));
+    assertThat(meters.counter("loakraken.spec_up.path", "outcome", "client_busy").count())
+        .isEqualTo(7);
+    assertThat(meters.counter("loakraken.spec_up.path", "outcome", "computed").count())
+        .isEqualTo(1);
+  }
+
+  /** 전체 자리가 차서 거절된 클라이언트는 자리를 쥔 것으로 남지 않는다(자리가 비면 바로 계산, client_busy 아님). */
+  @Test
+  void 전체_자리가_차서_거절된_클라이언트는_자리를_쥔_것으로_남지_않는다() throws Exception {
+    var service = service(System::nanoTime, () -> "client-c");
+    var field = SpecUpGoalService.class.getDeclaredField("solves");
+    field.setAccessible(true);
+    var slots = (java.util.concurrent.Semaphore) field.get(service);
+    slots.acquire(2);
+    org.assertj.core.api.Assertions.assertThatThrownBy(
+            () -> service.goal("목표테스트", new BigDecimal("6000")))
+        .isInstanceOf(com.loakraken.common.api.BusinessException.class);
+    assertThat(meters.counter("loakraken.spec_up.goal", "outcome", "busy").count()).isEqualTo(1);
+    slots.release(2);
+    service.goal("목표테스트", new BigDecimal("6000"));
+    assertThat(meters.counter("loakraken.spec_up.goal", "outcome", "computed").count())
+        .isEqualTo(1);
+    assertThat(meters.counter("loakraken.spec_up.goal", "outcome", "client_busy").count()).isZero();
+    assertThat(slots.availablePermits()).isEqualTo(2);
+  }
+
   /** 겁화 1~10레벨 칸(값은 레벨 × 1,000골드), 같은 관측 시각. */
   private static List<MarketAuctionService.GemCell> gemCells(Instant at, boolean stale) {
     var cells = new java.util.ArrayList<MarketAuctionService.GemCell>();
@@ -690,6 +949,11 @@ class SpecUpGoalServiceTest {
   private final RelicBookPriceService books = mock(RelicBookPriceService.class);
 
   private SpecUpGoalService service(LongSupplier nanoTime) {
+    return service(nanoTime, () -> null);
+  }
+
+  private SpecUpGoalService service(
+      LongSupplier nanoTime, java.util.function.Supplier<String> client) {
     when(specUp.enabled()).thenReturn(true);
     when(auctions.cachedGems()).thenReturn(List.of());
     when(materials.cached()).thenReturn(Optional.empty());
@@ -746,7 +1010,7 @@ class SpecUpGoalServiceTest {
                   List.of());
             });
     return new SpecUpGoalService(
-        specUp, simulator, auctions, books, materials, store, meters, nanoTime);
+        specUp, simulator, auctions, books, materials, store, meters, nanoTime, client);
   }
 
   private static final class MemoryStore implements SpecUpGoalStorePort {

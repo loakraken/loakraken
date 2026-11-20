@@ -15,7 +15,7 @@ import java.util.regex.Pattern;
  * 스탯 계산에만 쓴다. 뭉툭한 가시·음속 돌파는 장착 노드의 공식 문구에서 수치를 읽고, 미장착이면 2026-10-05 공식 Lv.2 문구를 기준값으로 쓴다.
  */
 public final class CritSpeedCalculation {
-  public static final String RULE_VERSION = "crit-speed-v9";
+  public static final String RULE_VERSION = "crit-speed-v13";
 
   /**
    * 치명타 피해 앞(같은 문장)에 오면 조건부로 보고 합산하지 않는 말. 비교 기준 2곳은 "폭주 중"·"마력 해방 중"(각성 상태)은 넣고 "사신화 상태에서"· "페르소나
@@ -491,19 +491,47 @@ public final class CritSpeedCalculation {
     gridCoreSources(loadout, input, sources, toggles, unclassified, conditionalRate);
     braceletToggles(loadout, input, sources, toggles, conditionalRate, conditional);
     classBuffSources(profile, loadout, input, sources, toggles);
-    classSpeedSources(profile, input, sources, toggles);
+    berserkerFrenzy(profile, loadout, input, sources, toggles, limitations);
+    classSpeedSources(profile, loadout, input, sources, toggles);
     assumedSpeedSynergies(loadout, input, sources, toggles);
     tripodSpeedSources(loadout, input, sources, toggles, speedNotes);
     assumptionSources(input, critStat, sources);
     agilitySources(agility, sources);
     // 직업 상태 가정(정답표 표의 피냄새·직업 버프)은 스킬별 치적 기본에도 넣는다.
+    // 분류 한정 직업 버프(창술사 연가공법 → 난무 스킬)는 모든 스킬 기본이 아니라 그 분류 스킬에만 더한다(계산 검증 11-16).
+    for (var source : sources)
+      if (source.kind() == Kind.ASSUMED
+          && source.axis() == Axis.CRIT
+          && CritEffectTable.categoryLimit(source.name()) != null)
+        skillBonuses.add(
+            new NodeBonus(
+                source.name(),
+                Axis.CRIT,
+                CritEffectTable.Target.CATEGORY,
+                CritEffectTable.categoryLimit(source.name()),
+                source.value(),
+                source.text()));
+    // 분류 한정 노드 토글(서머너 고대의 힘 → 일반 스킬, 환수사 깨어난 잠재력 → 둔갑 스킬)도 스킬별로는 그 분류에만(계산 검증 #979).
+    for (var toggle : toggles)
+      if (toggle.on()
+          && toggle.axis() == Axis.CRIT
+          && CritEffectTable.CATEGORY_LIMITED_TOGGLES.containsKey(toggle.key()))
+        skillBonuses.add(
+            new NodeBonus(
+                toggle.label(),
+                Axis.CRIT,
+                CritEffectTable.Target.CATEGORY,
+                CritEffectTable.CATEGORY_LIMITED_TOGGLES.get(toggle.key()),
+                toggle.value(),
+                toggle.text()));
     var classStateCrit =
         sources.stream()
             .filter(
                 source ->
                     source.kind() == Kind.ASSUMED
                         && source.axis() == Axis.CRIT
-                        && source.classState())
+                        && source.classState()
+                        && CritEffectTable.categoryLimit(source.name()) == null)
             .map(Source::value)
             .reduce(BigDecimal.ZERO, BigDecimal::add);
 
@@ -1115,6 +1143,7 @@ public final class CritSpeedCalculation {
       List<Source> sources,
       List<String> notes,
       List<ToggleState> toggles) {
+    if (speeds.isEmpty()) speeds = partyNodeSpeeds(name, text);
     if (speeds.isEmpty()) return;
     var rule = CritEffectTable.speed(name);
     if (rule == null) {
@@ -1144,6 +1173,25 @@ public final class CritSpeedCalculation {
         if (!on) notes.add(name + "(" + rule.label() + ", 켜기 가능)");
       }
     }
+  }
+
+  /**
+   * 공이속 표에 있는 노드의 '자신 및 … 파티원의' 절 공이속(표 고치기 D: 호크아이 두 번째 동료 '실버호크 소환 중 자신 및 24m 범위 내에 있는 파티원의 이동속도가
+   * 8.0% 증가'). 일반 해석은 '…의 이동속도'를 다른 대상으로 보아 읽지 않는다. 표에 없는 노드는 지금처럼 읽지 않는다.
+   */
+  private static List<Source> partyNodeSpeeds(String name, String text) {
+    if (CritEffectTable.speed(name) == null) return List.of();
+    var party = partyTripodSpeeds(text);
+    var speeds = new ArrayList<Source>();
+    if (party.attack() != null)
+      speeds.add(
+          new Source(
+              Kind.OBSERVED, Category.ARK_PASSIVE, Axis.ATTACK_SPEED, name, party.attack(), text));
+    if (party.move() != null)
+      speeds.add(
+          new Source(
+              Kind.OBSERVED, Category.ARK_PASSIVE, Axis.MOVE_SPEED, name, party.move(), text));
+    return speeds;
   }
 
   /** 스킬 한정 노드: 값(공식 문구 첫 값 × 배수)을 대상 스킬에만 넘기고, 기본에서 뺀 항목으로 남긴다. */
@@ -1231,6 +1279,8 @@ public final class CritSpeedCalculation {
       var matcher = toggle.pattern().matcher(text);
       value = matcher.find() ? new BigDecimal(matcher.group(1)) : null;
     }
+    if (value != null && toggle.multiplier() != 1)
+      value = value.multiply(BigDecimal.valueOf(toggle.multiplier()));
     if (value == null || !toggle.incremental()) return value;
     var baseValue = rateValue(base, text);
     return baseValue == null ? null : value.subtract(baseValue);
@@ -1310,6 +1360,7 @@ public final class CritSpeedCalculation {
                   String.join(" ", texts)));
       }
       if (slot.name().endsWith("재빠른 공격")) commonCoreSpeed(slot, sources);
+      classCoreSpeed(slot, input, sources, toggles);
       if (CritEffectTable.COMMON_CORES.keySet().stream().noneMatch(slot.name()::endsWith))
         classCoreSources(slot, input, sources, toggles, unclassified, conditionalRate);
     }
@@ -1409,6 +1460,42 @@ public final class CritSpeedCalculation {
     return null;
   }
 
+  /**
+   * 직업 코어의 '운명' 상태 공이속(표 고치기 D, CritEffectTable.CORE_SPEEDS). 달성 구간 문구에서 읽고 기본 켬 토글(가정 출처)로 둔다. 표에
+   * 없는 직업 코어의 공이속은 더하지 않는다(비교 기준도 넣지 않음).
+   */
+  private static void classCoreSpeed(
+      CharacterLoadout.GridSlot slot,
+      Assumptions input,
+      List<Source> sources,
+      List<ToggleState> toggles) {
+    var rule = CritEffectTable.coreSpeed(slot.name());
+    if (rule == null) return;
+    for (var option : slot.core().options()) {
+      if (option == null || option.text() == null || option.threshold() > slot.point()) continue;
+      var read = namedSpeeds(rule.pattern(), option.text());
+      if (read == null) continue;
+      boolean on = input.on(rule.label(), true);
+      for (var axis : List.of(Axis.ATTACK_SPEED, Axis.MOVE_SPEED)) {
+        var value = axis == Axis.ATTACK_SPEED ? read[0] : read[1];
+        if (value == null) continue;
+        toggles.add(
+            new ToggleState(
+                rule.label(), rule.label(), axis, true, on, scale(value), option.text()));
+        if (on)
+          sources.add(
+              new Source(
+                  Kind.ASSUMED,
+                  Category.ASSUMPTION,
+                  axis,
+                  rule.label() + "(" + slot.name() + ")",
+                  value,
+                  option.text()));
+      }
+      return;
+    }
+  }
+
   /** 혼돈의 해 "재빠른 공격" 달성 구간의 공격 속도(10P 1.00 + 17P 3.00 = 4, 비교 기준 2곳 포함, 10-10). */
   private static void commonCoreSpeed(CharacterLoadout.GridSlot slot, List<Source> sources) {
     var total = BigDecimal.ZERO;
@@ -1470,25 +1557,56 @@ public final class CritSpeedCalculation {
     }
   }
 
-  /** 직업 자기 버프의 공이속(슬레이어 폭주 20). 같은 label의 치명 버프와 한 토글로 켜고 끈다. */
+  /**
+   * 직업 자기 버프의 공이속(슬레이어 폭주 20, 표 고치기 D: 리퍼 혼돈 상태·스카우터 하이퍼 싱크·배틀마스터 바람의 속삭임). 같은 key의 치명 토글과 한 토글로 켜고
+   * 끈다. 노드·스킬 관문이 있으면 장착했을 때만.
+   */
   private static void classSpeedSources(
       CharacterProfile profile,
+      CharacterLoadout loadout,
       Assumptions input,
       List<Source> sources,
       List<ToggleState> toggles) {
     for (var buff : CritEffectTable.CLASS_SPEED_BUFFS) {
       if (!buff.className().equals(profile.className())) continue;
-      boolean on = input.on(buff.label(), true);
+      if (buff.node() != null && !hasNode(loadout, buff.node())) continue;
+      if (buff.skill() != null && !hasSkill(loadout, buff.skill())) continue;
+      boolean on = input.on(buff.key(), true);
       for (var axis : List.of(Axis.ATTACK_SPEED, Axis.MOVE_SPEED)) {
         var value = axis == Axis.ATTACK_SPEED ? buff.attack() : buff.move();
-        String text = "기본 포함(계산 검증 10-10)";
         toggles.add(
-            new ToggleState(buff.label(), buff.label(), axis, true, on, scale(value), text));
+            new ToggleState(buff.key(), buff.label(), axis, true, on, scale(value), buff.basis()));
         if (on)
           sources.add(
-              new Source(Kind.ASSUMED, Category.ASSUMPTION, axis, buff.label(), value, text));
+              new Source(
+                  Kind.ASSUMED, Category.ASSUMPTION, axis, buff.label(), value, buff.basis()));
       }
     }
+  }
+
+  /** 장착한 아크 패시브 노드 이름(레벨 뺀)이 name인가. */
+  private static boolean hasNode(CharacterLoadout loadout, String name) {
+    if (loadout.arkPassive() == null) return false;
+    for (var effect : loadout.arkPassive().effects())
+      if (effect != null
+          && effect.description() != null
+          && nodeName(effect.description()).replaceFirst("\\s+Lv\\.\\d+$", "").strip().equals(name))
+        return true;
+    return false;
+  }
+
+  /** 공식 문구에서 자기 공이속을 이름 붙은 그룹(a 공격, m 이동, b 둘 다)으로 읽는다. 찾지 못하면 null. */
+  static BigDecimal[] namedSpeeds(java.util.regex.Pattern pattern, String text) {
+    if (text == null) return null;
+    var matcher = pattern.matcher(text.replaceAll("\\s+", " "));
+    if (!matcher.find()) return null;
+    var groups = pattern.namedGroups();
+    BigDecimal attack = null;
+    BigDecimal move = null;
+    if (groups.containsKey("b")) attack = move = new BigDecimal(matcher.group("b"));
+    if (groups.containsKey("a")) attack = new BigDecimal(matcher.group("a"));
+    if (groups.containsKey("m")) move = new BigDecimal(matcher.group("m"));
+    return new BigDecimal[] {attack, move};
   }
 
   /** 문장 끝(마침표 뒤 공백). 8.0·24.0m 같은 숫자 안의 점은 뒤에 공백이 없어 나누지 않는다. */
@@ -1598,11 +1716,37 @@ public final class CritSpeedCalculation {
         if (tripod == null || tripod.effect() == null) continue;
         // 자신 및 파티원 공이속(PM 총괄 11-09 규칙)은 이름 표보다 먼저 문구로 판정한다. 그 문장의 "자신 및 … 파티원의 " 뒤만 자기 속도로
         // 읽는다(partyTripodSpeeds). 같은 이름이라도 자기만 오르는 트라이포드(붕천퇴 바람의 축복)는 표를 따른다.
-        var partySpeeds = partyTripodSpeeds(tripod.effect());
-        boolean party = partySpeeds.found();
         String name = skill.name() + " - " + tripod.name();
         var speeds = new ArrayList<Source>();
-        if (party) {
+        // 표 고치기 D: 문구 패턴이 있는 행(스킬 한정)은 그 패턴으로 자기 속도만 읽는다(대상의 감소 같은 다른 문장은 읽지 않음).
+        var patterned = CritEffectTable.tripodSpeed(skill.name(), tripod.name());
+        var read =
+            patterned == null || patterned.pattern() == null
+                ? null
+                : namedSpeeds(patterned.pattern(), tripod.effect());
+        var partySpeeds =
+            read != null ? new PartySpeeds(null, null, null) : partyTripodSpeeds(tripod.effect());
+        boolean party = partySpeeds.found();
+        if (read != null) {
+          if (read[0] != null)
+            speeds.add(
+                new Source(
+                    Kind.ASSUMED,
+                    Category.ASSUMPTION,
+                    Axis.ATTACK_SPEED,
+                    tripod.name(),
+                    read[0],
+                    tripod.effect()));
+          if (read[1] != null)
+            speeds.add(
+                new Source(
+                    Kind.ASSUMED,
+                    Category.ASSUMPTION,
+                    Axis.MOVE_SPEED,
+                    tripod.name(),
+                    read[1],
+                    tripod.effect()));
+        } else if (party) {
           if (partySpeeds.attack() != null)
             speeds.add(
                 new Source(
@@ -1635,10 +1779,15 @@ public final class CritSpeedCalculation {
               .forEach(speeds::add);
         }
         if (speeds.isEmpty()) continue;
+        if (read == null && patterned != null && patterned.pattern() != null) {
+          // 문구 패턴 행인데 문구가 달라 읽지 못하면 일반 해석으로 세지 않는다(대상 감소 등을 잘못 더하지 않게).
+          notes.add(name + "(분류 중)");
+          continue;
+        }
         var rule =
             party
                 ? CritEffectTable.partyTripodSpeed(tripod.name())
-                : CritEffectTable.tripodSpeed(tripod.name());
+                : CritEffectTable.tripodSpeed(skill.name(), tripod.name());
         if (rule == null) {
           notes.add(name + "(분류 중)");
           continue;
@@ -1648,11 +1797,11 @@ public final class CritSpeedCalculation {
           case INCLUDE, CORE_STATE, SITUATIONAL -> {
             // 트라이포드는 공식 출처 분류가 없어 기본 포함도 기본 켬 토글(가정 출처)로 낸다.
             boolean core = rule.decision() != CritEffectTable.SpeedDecision.SITUATIONAL;
-            boolean on = input.on(rule.tripod(), core);
+            boolean on = input.on(rule.key(), core);
             for (var s : speeds) {
               toggles.add(
                   new ToggleState(
-                      rule.tripod(),
+                      rule.key(),
                       rule.label(),
                       s.axis(),
                       core,
@@ -1675,6 +1824,82 @@ public final class CritSpeedCalculation {
       }
     }
   }
+
+  static final String BERSERKER_FRENZY = "폭주 상태 가정(특화 증폭)";
+
+  private static final Pattern FRENZY_AMPLIFY =
+      Pattern.compile("폭주 효과가\\s*([0-9]+(?:\\.[0-9]+)?)%\\s*증폭");
+
+  /**
+   * 버서커 폭주(표 고치기 A·D, PM 총괄 11-16 D1): 기본 치명타 적중률 30과 공격·이동 속도 20(공식 공지)에 특화 툴팁의 '폭주 효과가 X% 증폭됩니다'를
+   * 곱한다(공식 툴팁 값 기준). 관문: 직업 버서커, 특화 툴팁에 그 줄이 있음, 깨달음 '광기' 노드가 없음(광기 표본 확인 전까지 광기면 더하지 않음). 기본 켬 토글.
+   */
+  private static void berserkerFrenzy(
+      CharacterProfile profile,
+      CharacterLoadout loadout,
+      Assumptions input,
+      List<Source> sources,
+      List<ToggleState> toggles,
+      List<String> limitations) {
+    if (!"버서커".equals(profile.className())) return;
+    BigDecimal amplify = null;
+    String text = null;
+    for (var stat : profile.stats()) {
+      if (stat == null || !"특화".equals(stat.type())) continue;
+      // 표시 문구는 특화 툴팁 전체가 아니라 폭주 증폭 줄만(계산 검증 #981 P3).
+      for (var line : stat.tooltip()) {
+        if (line == null) continue;
+        var matcher = FRENZY_AMPLIFY.matcher(line);
+        if (matcher.find()) {
+          amplify = new BigDecimal(matcher.group(1));
+          text = line.strip();
+        }
+      }
+    }
+    if (amplify == null) return;
+    if (loadout.arkPassive() != null)
+      for (var effect : loadout.arkPassive().effects())
+        if (effect != null
+            && effect.description() != null
+            && nodeName(effect.description())
+                .replaceFirst("\\s+Lv\\.\\d+$", "")
+                .strip()
+                .equals("광기")) {
+          limitations.add("광기 버서커의 폭주 치명타 적중률은 확인 전이라 더하지 않았습니다.");
+          return;
+        }
+    var value =
+        FRENZY_BASE_CRIT.multiply(
+            BigDecimal.ONE.add(amplify.divide(BigDecimal.valueOf(100))),
+            java.math.MathContext.DECIMAL64);
+    boolean on = input.on(BERSERKER_FRENZY, true);
+    toggles.add(
+        new ToggleState(
+            BERSERKER_FRENZY, BERSERKER_FRENZY, Axis.CRIT, true, on, scale(value), text));
+    if (on)
+      sources.add(
+          new Source(
+              Kind.ASSUMED, Category.ASSUMPTION, Axis.CRIT, BERSERKER_FRENZY, scale(value), text));
+    // 표 고치기 D(D1): 폭주 공격·이동 속도 20에 같은 특화 증폭을 곱한다. 같은 토글.
+    var speed =
+        FRENZY_BASE_SPEED.multiply(
+            BigDecimal.ONE.add(amplify.divide(BigDecimal.valueOf(100))),
+            java.math.MathContext.DECIMAL64);
+    for (var axis : List.of(Axis.ATTACK_SPEED, Axis.MOVE_SPEED)) {
+      toggles.add(
+          new ToggleState(BERSERKER_FRENZY, BERSERKER_FRENZY, axis, true, on, scale(speed), text));
+      if (on)
+        sources.add(
+            new Source(
+                Kind.ASSUMED, Category.ASSUMPTION, axis, BERSERKER_FRENZY, scale(speed), text));
+    }
+  }
+
+  /** 버서커 폭주 기본 치명타 적중률(공식 공지 13116, 공식 툴팁 값 기준). */
+  static final BigDecimal FRENZY_BASE_CRIT = new BigDecimal("30");
+
+  /** 버서커 폭주 기본 공격·이동 속도(공식 공지 13116, 특화 증폭 전). */
+  static final BigDecimal FRENZY_BASE_SPEED = new BigDecimal("20");
 
   /** 노드 문구에 없는 직업 버프(정답표 1절 "일치 포함"). 트라이포드 문구가 있으면 그 값을, 없으면 표 값을 쓴다. */
   private static void classBuffSources(
@@ -1715,6 +1940,13 @@ public final class CritSpeedCalculation {
       }
       if (value == null) continue;
       boolean on = input.on(buff.label(), buff.defaultOn());
+      if (on
+          && buff.exclusiveWith() != null
+          && toggles.stream().anyMatch(t -> t.on() && t.key().equals(buff.exclusiveWith()))) {
+        // 같은 효과의 노드 토글을 켰으면 그쪽만 센다(겹쳐 두 번 더하지 않음).
+        on = false;
+        text = text + " (" + buff.exclusiveWith() + " 토글과 같은 효과라 그쪽만 셈)";
+      }
       toggles.add(
           new ToggleState(
               buff.label(), buff.label(), Axis.CRIT, buff.defaultOn(), on, scale(value), text));
@@ -2080,9 +2312,24 @@ public final class CritSpeedCalculation {
               .reduce(BigDecimal.ZERO, BigDecimal::add);
       return new MainSkill(scale(sheet.subtract(notMain)), null);
     }
+    // 분류 한정 노드 토글은 아래 extra(켠 가정)로 주력에 한 번 더하므로, 스킬별 값에서 빼고 가장 많은 값을 고른다(두 번 세지 않음).
+    var categoryToggleLabels =
+        toggles.stream()
+            .filter(t -> CritEffectTable.CATEGORY_LIMITED_TOGGLES.containsKey(t.key()))
+            .map(ToggleState::label)
+            .collect(java.util.stream.Collectors.toSet());
     var counts = new java.util.TreeMap<BigDecimal, Integer>();
     for (var skill : skills)
-      if (skill.total() != null) counts.merge(skill.total(), 1, Integer::sum);
+      if (skill.total() != null) {
+        var categoryPart =
+            skill.nodes() == null
+                ? BigDecimal.ZERO
+                : skill.nodes().stream()
+                    .filter(node -> categoryToggleLabels.contains(node.name()))
+                    .map(SkillTripod::value)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+        counts.merge(skill.total().subtract(categoryPart), 1, Integer::sum);
+      }
     if (counts.isEmpty()) return null;
     BigDecimal mode = null;
     int best = 0;

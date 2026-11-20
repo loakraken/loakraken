@@ -27,6 +27,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 /** 전투력 시뮬레이터 A단계(#239): 캐시만 읽고 공식 호출이 없으며, 계산식 확정 전에는 모든 항목이 UNSUPPORTED다. */
@@ -96,19 +97,16 @@ class CombatPowerSimulationIntegrationTest {
     // 이어서 무기 품질 90 → 100(추가 피해 10 + 20 × (q/100)²): × 1.30/1.262 = 3139.85.
     // 기본 공격력 % = 보석 0.80 → 1.20 + 스톤 레벨 보너스 1.50 + 완갑 추가 효과 1.00.
     // 이어서 목걸이 연마 추가 피해 +1.60% → +2.60%(#325, c = x/1.3): × 1.02/(1 + 0.016/1.3) = 3163.70.
-    // 이어서 아크 그리드 질서의 해 유물 17P(7.5%) → 고대 20P(8 + 1.0 = 9%): × 1.09/1.075 = 3207.85.
-    assertThat(response.body())
-        .contains(
-            "\"before\":3000.00",
-            "\"after\":3207.85",
-            "\"delta\":207.85",
-            "\"deltaPercent\":6.928");
+    // 이어서 진화 100 → 120(1 + 0.0075 × (P − 40), 모델값): × 1.60/1.45.
+    // 이어서 아크 그리드 질서의 해 유물 17P(7.5%) → 고대 20P(8 + 1.0 = 9%): × 1.09/1.075. 합 3207.85 × 1.60/1.45 =
+    // 3539.70.
+    assertThat(response.body()).contains("\"before\":3000.00", "\"after\":3539.70");
     assertThat(data.path("modelBefore").isNull()).isTrue();
     assertThat(data.path("partial").asBoolean()).isTrue();
     // 같은 보석 slot은 뒤의 변경(10)이 이기고 자리는 처음 나온 곳을 지킨다.
     var contributions = data.path("contributions");
     assertThat(contributions.size()).isEqualTo(9);
-    assertThat(data.path("unsupportedCount").asInt()).isEqualTo(5);
+    assertThat(data.path("unsupportedCount").asInt()).isEqualTo(4);
     assertThat(contributions.at("/0/kind").asText()).isEqualTo("GEM_LEVEL");
     assertThat(contributions.at("/0/from").asText()).isEqualTo("8");
     assertThat(contributions.at("/0/to").asText()).isEqualTo("10");
@@ -123,15 +121,15 @@ class CombatPowerSimulationIntegrationTest {
     assertThat(contributions.at("/3/from").asText()).isEqualTo("추가 피해 +1.60%");
     assertThat(contributions.at("/3/to").asText()).isEqualTo("추가 피해 +2.60%");
     assertThat(contributions.at("/3/delta").decimalValue()).isEqualByComparingTo("23.85");
-    // 진화·깨달음은 비교 기준 둘의 식이 달라 확인 전까지 계산하지 않는다(도약만 계산).
+    // 진화 포인트(PM 총괄 11-15 19:12): 모델값이라 근거에 그렇게 적는다.
     assertThat(contributions.at("/7/kind").asText()).isEqualTo("ARK_PASSIVE_POINT");
-    assertThat(contributions.at("/7/basis").asText()).contains("진화·깨달음");
-    assertThat(contributions.at("/7/reasonCode").asText()).isEqualTo("MODEL_UNCONFIRMED");
+    assertThat(contributions.at("/7/status").asText()).isEqualTo("OK");
+    assertThat(contributions.at("/7/basis").asText()).contains("모델값");
     assertThat(contributions.at("/8/kind").asText()).isEqualTo("ARK_GRID_CORE");
     assertThat(contributions.at("/8/status").asText()).isEqualTo("OK");
-    assertThat(contributions.at("/8/delta").decimalValue()).isEqualByComparingTo("44.15");
+    assertThat(contributions.at("/8/delta").decimalValue()).isEqualByComparingTo("48.72");
     for (int i = 1; i < contributions.size(); i++) {
-      if (i == 2 || i == 3 || i == 8) continue;
+      if (i == 2 || i == 3 || i == 7 || i == 8) continue;
       assertThat(contributions.get(i).path("status").asText()).isEqualTo("UNSUPPORTED");
       assertThat(contributions.get(i).path("delta").isNull()).isTrue();
     }
@@ -559,6 +557,89 @@ class CombatPowerSimulationIntegrationTest {
   }
 
   @Test
+  void 진화_깨달음_포인트는_트리마다_독립_배수로_계산하고_깨달음_100_초과는_계산하지_않는다() throws Exception {
+    // PM 총괄 11-15 19:12: 진화 (1 + 0.0075·max(P − 40, 0), 모델값), 깨달음 (1 + 0.007·P, 100 이하만), 도약 (1 +
+    // 0.002·P).
+    when(detailsPort.fetch(anyString()))
+        .thenAnswer(
+            invocation -> {
+              String name = invocation.getArgument(0);
+              int enlightenment = name.endsWith("초과") ? 101 : 100;
+              return fetchedBracelet(
+                  name,
+                  List.of(
+                      new CharacterLoadout.PassivePoint("진화", 140, ""),
+                      new CharacterLoadout.PassivePoint("깨달음", enlightenment, ""),
+                      new CharacterLoadout.PassivePoint("도약", 70, "")));
+            });
+    for (var name : List.of("시뮬진화", "시뮬진화초과"))
+      assertThat(get("/api/v1/characters/search?characterName=" + encode(name)).statusCode())
+          .isEqualTo(200);
+    // 진화 140 → 120: 3,345.24 × 1.60 / 1.75 = 3,058.51.
+    var evolution = one("시뮬진화", "진화", 120);
+    assertThat(evolution.at("/contributions/0/status").asText()).isEqualTo("OK");
+    assertThat(evolution.at("/contributions/0/target").asText()).isEqualTo("아크 패시브 진화");
+    assertThat(evolution.at("/contributions/0/basis").asText()).contains("모델값");
+    assertThat(evolution.path("after").decimalValue()).isEqualByComparingTo("3058.51");
+    // 1티어 40포인트까지는 전투력이 없다: 140 → 40 = × 1 / 1.75.
+    assertThat(one("시뮬진화", "진화", 40).path("after").decimalValue()).isEqualByComparingTo("1911.57");
+    assertThat(one("시뮬진화", "진화", 30).path("after").decimalValue()).isEqualByComparingTo("1911.57");
+    // 진화 포인트 최대 140(공식 공지 13307): 140은 계산(배수 1), 141은 웹을 거치지 않아도 400(코드 리뷰 #965 P2).
+    assertThat(one("시뮬진화", "진화", 140).path("after").decimalValue()).isEqualByComparingTo("3345.24");
+    var over =
+        simulate("시뮬진화", "[{\"kind\": \"ARK_PASSIVE_POINT\", \"tree\": \"진화\", \"points\": 141}]");
+    assertThat(over.statusCode()).isEqualTo(400);
+    assertThat(over.body()).contains("INVALID_REQUEST", "points", "0~140");
+    // 깨달음 최대 101: 102는 400, 100은 계산, 101은 계산하지 않음(아래).
+    var overEnlightenment =
+        simulate("시뮬진화", "[{\"kind\": \"ARK_PASSIVE_POINT\", \"tree\": \"깨달음\", \"points\": 102}]");
+    assertThat(overEnlightenment.statusCode()).isEqualTo(400);
+    assertThat(overEnlightenment.body()).contains("INVALID_REQUEST", "points", "0~101");
+    assertThat(one("시뮬진화", "깨달음", 100).at("/contributions/0/status").asText()).isEqualTo("OK");
+    // 깨달음 100 → 90: 3,345.24 × 1.63 / 1.70 = 3,207.49.
+    var enlightenment = one("시뮬진화", "깨달음", 90);
+    assertThat(enlightenment.at("/contributions/0/status").asText()).isEqualTo("OK");
+    assertThat(enlightenment.path("after").decimalValue()).isEqualByComparingTo("3207.49");
+    // 세 트리를 한 번에: 각 배수를 곱한다. 3,345.24 × 1.60/1.75 × 1.63/1.70 × 1.12/1.14 = 2,881.12.
+    var all =
+        mapper
+            .readTree(
+                simulate(
+                        "시뮬진화",
+                        """
+                        [{"kind": "ARK_PASSIVE_POINT", "tree": "진화", "points": 120},
+                         {"kind": "ARK_PASSIVE_POINT", "tree": "깨달음", "points": 90},
+                         {"kind": "ARK_PASSIVE_POINT", "tree": "도약", "points": 60}]
+                        """)
+                    .body())
+            .path("data");
+    assertThat(all.path("contributions").size()).isEqualTo(3);
+    assertThat(all.path("partial").asBoolean()).isFalse();
+    assertThat(all.path("after").decimalValue()).isEqualByComparingTo("2881.12");
+    // 깨달음 100 초과는 바꿀 값이든 지금 값이든 계산하지 않는다(같은 캐릭터 공식 전투력 쌍으로 확인하기 전까지).
+    for (var unsupported : List.of(one("시뮬진화", "깨달음", 101), one("시뮬진화초과", "깨달음", 90))) {
+      assertThat(unsupported.at("/contributions/0/status").asText()).isEqualTo("UNSUPPORTED");
+      assertThat(unsupported.at("/contributions/0/reasonCode").asText())
+          .isEqualTo("MODEL_UNCONFIRMED");
+      assertThat(unsupported.at("/contributions/0/delta").isNull()).isTrue();
+      assertThat(unsupported.path("partial").asBoolean()).isTrue();
+    }
+  }
+
+  private JsonNode one(String name, String tree, int points) throws Exception {
+    var response =
+        simulate(
+            name,
+            "[{\"kind\": \"ARK_PASSIVE_POINT\", \"tree\": \""
+                + tree
+                + "\", \"points\": "
+                + points
+                + "}]");
+    assertThat(response.statusCode()).as(response.body()).isEqualTo(200);
+    return mapper.readTree(response.body()).path("data");
+  }
+
+  @Test
   void 도약_포인트는_독립_배수로_계산한다() throws Exception {
     // 도약 합 P의 배수 (1 + 0.002·P)(팔찌 도약과 같은 계수). 비교 기준 A·B가 같은 식이다.
     when(detailsPort.fetch(anyString()))
@@ -581,20 +662,39 @@ class CombatPowerSimulationIntegrationTest {
     assertThat(down.path("after").decimalValue()).isEqualByComparingTo("3227.86");
     assertThat(down.at("/contributions/0/delta").decimalValue()).isEqualByComparingTo("-117.38");
     assertThat(down.path("partial").asBoolean()).isFalse();
-    // 70 → 80: 3,345.24 × 1.16 / 1.14 = 3,403.93. 같은 대상은 뒤의 변경이 이긴다.
-    var up =
+    // 같은 대상은 뒤의 변경이 이긴다(10 → 50 = 70 → 50).
+    var later =
         mapper
             .readTree(
                 simulate(
                         "시뮬도약",
                         """
                         [{"kind": "ARK_PASSIVE_POINT", "tree": "도약", "points": 10},
-                         {"kind": "ARK_PASSIVE_POINT", "tree": "도약", "points": 80}]
+                         {"kind": "ARK_PASSIVE_POINT", "tree": "도약", "points": 50}]
                         """)
                     .body())
             .path("data");
-    assertThat(up.path("contributions").size()).isEqualTo(1);
-    assertThat(up.path("after").decimalValue()).isEqualByComparingTo("3403.93");
+    assertThat(later.path("contributions").size()).isEqualTo(1);
+    assertThat(later.path("after").decimalValue()).isEqualByComparingTo("3227.86");
+    // 도약 최대 70(고대 장비 18 + 전투 레벨 40 + 랭크 12, 공식 가이드 2026-06-24): 넘으면 웹을 거치지 않아도 400(코드 리뷰 web #1706
+    // P2).
+    var over =
+        simulate("시뮬도약", "[{\"kind\": \"ARK_PASSIVE_POINT\", \"tree\": \"도약\", \"points\": 71}]");
+    assertThat(over.statusCode()).isEqualTo(400);
+    assertThat(over.body()).contains("INVALID_REQUEST", "points", "0~70");
+    var overLater =
+        simulate(
+            "시뮬도약",
+            """
+            [{"kind": "ARK_PASSIVE_POINT", "tree": "도약", "points": 50},
+             {"kind": "ARK_PASSIVE_POINT", "tree": "도약", "points": 80}]
+            """);
+    assertThat(overLater.statusCode()).isEqualTo(400);
+    assertThat(
+            simulate(
+                    "시뮬도약", "[{\"kind\": \"ARK_PASSIVE_POINT\", \"tree\": \"도약\", \"points\": 70}]")
+                .statusCode())
+        .isEqualTo(200);
     // 같은 값이면 배수 1.
     var same =
         mapper
@@ -712,6 +812,11 @@ class CombatPowerSimulationIntegrationTest {
   }
 
   private FetchedCharacter fetchedBracelet(String name) {
+    return fetchedBracelet(name, List.of(new CharacterLoadout.PassivePoint("도약", 70, "")));
+  }
+
+  private FetchedCharacter fetchedBracelet(
+      String name, List<CharacterLoadout.PassivePoint> passivePoints) {
     var profile =
         new CharacterProfile(
             name,
@@ -750,9 +855,7 @@ class CombatPowerSimulationIntegrationTest {
                     new CharacterLoadout.BraceletEffect("추가 피해 +3.50%", EffectGrade.MID),
                     new CharacterLoadout.BraceletEffect(
                         "추가 피해가 2.5% 증가한다.\n악마 및 대악마 계열 피해량이 2.5% 증가한다.", EffectGrade.LOW))));
-    var arkPassive =
-        new CharacterLoadout.ArkPassive(
-            "진화", true, List.of(new CharacterLoadout.PassivePoint("도약", 70, "")), List.of());
+    var arkPassive = new CharacterLoadout.ArkPassive("진화", true, passivePoints, List.of());
     var loadout =
         new CharacterLoadout(List.of(bracelet), null, null, null, arkPassive, null, List.of());
     return new FetchedCharacter(

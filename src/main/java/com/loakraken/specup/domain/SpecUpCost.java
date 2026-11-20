@@ -15,7 +15,28 @@ public record SpecUpCost(
     String basis,
     Double exact,
     java.time.Instant priceObservedAt,
-    Boolean stale) {
+    Boolean stale,
+    Long itemPrice) {
+  /**
+   * itemPrice: 새로 사는 품목 자체의 가격(지금 품목 판매가를 빼기 전, 보석·연마만, 없으면 null). 추천 순서가 같은 칸을 이어 바꿀 때 거래 가능한 품목은
+   * '새 가격 − 앞 단계에서 산 품목 가격'으로 단계 비용을 잰다(PM 총괄 11-19, 비교 기준과 같음). 응답에는 나가지 않는다.
+   */
+  public SpecUpCost(
+      String unit,
+      Long amount,
+      String status,
+      String code,
+      String basis,
+      Double exact,
+      java.time.Instant priceObservedAt,
+      Boolean stale) {
+    this(unit, amount, status, code, basis, exact, priceObservedAt, stale, null);
+  }
+
+  public SpecUpCost withItemPrice(Long price) {
+    return new SpecUpCost(unit, amount, status, code, basis, exact, priceObservedAt, stale, price);
+  }
+
   /** exact는 반올림 전 금액(카르마·스톤 기대 골드처럼 정수가 아닌 비용). 정수 비용이면 amount와 같다. 효율은 이 값으로 나눈다. */
   public SpecUpCost(String unit, Long amount, String status, String code, String basis) {
     this(unit, amount, status, code, basis, amount == null ? null : amount.doubleValue());
@@ -31,7 +52,7 @@ public record SpecUpCost(
    * PM 총괄 10-25).
    */
   public SpecUpCost withPrice(java.time.Instant observedAt, boolean stale) {
-    return new SpecUpCost(unit, amount, status, code, basis, exact, observedAt, stale);
+    return new SpecUpCost(unit, amount, status, code, basis, exact, observedAt, stale, itemPrice);
   }
 
   /** 깨달음 카르마 레벨 기대 골드(반올림 전 값으로 효율 계산). */
@@ -52,7 +73,7 @@ public record SpecUpCost(
         Math.round(gold),
         "OK",
         "STONE_EXPECTED_KITS",
-        "목표 조합이 나올 확률로 구한 기대 돌(키트) 수에 돌 1개 50골드를 곱한 값입니다(페온 제외).",
+        "공식 확률 공개(어빌리티 스톤 자동 세공, 세공 기회 10회)로 구한 목표 조합 기대 돌(키트) 수에 돌 1개 50골드를 곱한 값입니다(페온 제외).",
         gold);
   }
 
@@ -204,6 +225,10 @@ public record SpecUpCost(
    * 부담은 줄 상세 SELL 줄의 sellFeeGold). 지금 보석이 귀속이면 팔 수 없어 빼지 않는다. 0보다 작으면 0.
    */
   public static SpecUpCost gem(long nextPrice, Long currentPrice, boolean currentBound) {
+    return gemCost(nextPrice, currentPrice, currentBound).withItemPrice(nextPrice);
+  }
+
+  private static SpecUpCost gemCost(long nextPrice, Long currentPrice, boolean currentBound) {
     if (currentBound)
       return new SpecUpCost(
           "GOLD",

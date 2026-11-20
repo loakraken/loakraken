@@ -83,10 +83,12 @@ class SpecUpIntegrationTest {
     ApiContractFixture.write("character-spec-up.json", response.body());
     SiteNames.assertAbsent(response.body());
     var data = mapper.readTree(response.body()).path("data");
-    assertThat(data.path("ruleVersion").asText()).isEqualTo("spec-up-v1");
+    assertThat(data.path("ruleVersion").asText()).isEqualTo("spec-up-v3");
     assertThat(data.path("simulatorRuleVersion").asText()).isEqualTo("combat-power-sim-v8");
     assertThat(data.path("combatPower").decimalValue()).isEqualByComparingTo("3000.00");
     assertThat(data.path("sort").asText()).isEqualTo("EFFICIENCY");
+    // 추천 순서 KRAKEN 스위치(spec-up.support-order.enabled)가 꺼져 있으면 false.
+    assertThat(data.path("supportOrderAvailable").asBoolean(true)).isFalse();
     // 보석은 단계별 후보(8→9, 8→10)가 각각 나오고, 빈 칸 10개는 가장 앞 빈 칸(1번) 하나로 6~10레벨, 무기 품질(90 → 100)도 계산한다.
     assertThat(data.path("total").asInt()).isEqualTo(8);
     var candidates = data.path("candidates");
@@ -782,7 +784,7 @@ class SpecUpIntegrationTest {
     ApiContractFixture.write("character-spec-up-goal.json", response.body());
     SiteNames.assertAbsent(response.body());
     var data = mapper.readTree(response.body()).path("data");
-    assertThat(data.path("ruleVersion").asText()).isEqualTo("spec-up-goal-v4");
+    assertThat(data.path("ruleVersion").asText()).isEqualTo("spec-up-goal-v5");
     assertThat(data.path("combatPower").decimalValue()).isEqualByComparingTo("3000.00");
     assertThat(data.path("targetCombatPower").decimalValue()).isEqualByComparingTo("3100.00");
     assertThat(data.path("stopReasonCode").asText()).isEqualTo("REACHED");
@@ -870,7 +872,7 @@ class SpecUpIntegrationTest {
   }
 
   @Test
-  void 추천_순서는_시세가_있는_보석_단계만_잇고_품질은_unpriced로_따로_준다() throws Exception {
+  void 추천_순서는_시세가_있는_보석_단계를_먼저_잇고_비용_모르는_품질은_그_뒤에_잇는다() throws Exception {
     when(auctions.cachedGems()).thenReturn(gemCells(true));
     search("스펙순서");
     var response = get("/api/v1/characters/spec-up/path?characterName=" + encode("스펙순서"));
@@ -878,28 +880,35 @@ class SpecUpIntegrationTest {
     ApiContractFixture.write("character-spec-up-path.json", response.body());
     SiteNames.assertAbsent(response.body());
     var data = mapper.readTree(response.body()).path("data");
-    assertThat(data.path("ruleVersion").asText()).isEqualTo("spec-up-path-v4");
+    assertThat(data.path("ruleVersion").asText()).isEqualTo("spec-up-path-v6");
     assertThat(data.path("sort").asText()).isEqualTo("EFFICIENCY");
     assertThat(data.path("limit").asInt()).isEqualTo(30);
     var steps = data.path("steps");
-    assertThat(steps.size()).isEqualTo(2);
+    // 비용 있는 보석 단계가 먼저(비율 큰 순), 비용을 모르는 단계(무기 품질)는 그 뒤에 잇는다(PM 총괄 11-19 (A)(B), 비교 기준과 같음).
+    assertThat(steps.size()).isGreaterThanOrEqualTo(3);
     assertThat(steps.get(0).path("candidateId").asText()).isEqualTo("GEM_LEVEL:0:9");
     assertThat(steps.get(1).path("candidateId").asText()).isEqualTo("GEM_LEVEL:0:10");
     assertThat(steps.get(1).path("cumulativeCost").asLong()).isEqualTo(2_600_000);
-    // 줄 비용(누적)과 달리 extraCost는 더 드는 비용: 600,000 + 2,000,000 = cumulativeCost.
+    // 거래 가능한 보석의 단계 비용은 앞 단계와의 차이: 600,000 + 2,000,000 = cumulativeCost(단계 비용의 합).
     assertThat(steps.get(0).path("extraCost").asLong()).isEqualTo(600_000);
     assertThat(steps.get(1).path("extraCost").asLong()).isEqualTo(2_000_000);
-    assertThat(data.path("totalCost").asLong()).isEqualTo(2_600_000);
-    assertThat(data.path("finalCombatPower").decimalValue()).isEqualByComparingTo("3048.07");
-    assertThat(data.path("stopReasonCode").asText()).isEqualTo("NO_CANDIDATE");
-    var unpriced = data.path("unpriced");
-    var ids = new java.util.ArrayList<String>();
-    for (var excluded : unpriced) ids.add(excluded.path("candidateId").asText());
-    assertThat(ids).contains("EQUIPMENT_QUALITY:0:100");
-    for (var excluded : unpriced) {
-      assertThat(excluded.at("/cost/amount").isNull()).isTrue();
-      assertThat(excluded.path("deltaCombatPower").decimalValue()).isPositive();
+    var appended = new java.util.ArrayList<String>();
+    for (int k = 2; k < steps.size(); k++) {
+      var step = steps.get(k);
+      appended.add(step.path("candidateId").asText());
+      assertThat(step.path("extraCost").isNull()).as(step.toString()).isTrue();
+      assertThat(step.path("cumulativeCost").isNull()).as(step.toString()).isTrue();
+      assertThat(step.path("deltaCombatPower").decimalValue()).isPositive();
     }
+    assertThat(appended).contains("EQUIPMENT_QUALITY:0:100");
+    // 비용을 모르는 단계를 이었으니 합계도 모름, 그리고 '비용을 몰라 빠진 후보'는 없다(DELTA만 남음).
+    assertThat(data.path("totalCost").isNull()).isTrue();
+    assertThat(data.path("finalCombatPower").decimalValue())
+        .isEqualByComparingTo(steps.get(steps.size() - 1).path("combatPowerAfter").decimalValue());
+    assertThat(data.path("unpriced").size()).isZero();
+    // 아는 단계 비용의 합과 모르는 단계 수(PM 총괄 11-19, 웹 'X G + 비용 모름 N단계').
+    assertThat(data.path("knownCostTotal").asLong()).isEqualTo(2_600_000);
+    assertThat(data.path("unknownCostSteps").asInt()).isEqualTo(steps.size() - 2);
 
     var one =
         mapper
@@ -911,6 +920,26 @@ class SpecUpIntegrationTest {
     assertThat(one.path("sort").asText()).isEqualTo("DELTA");
     assertThat(one.path("steps").size()).isEqualTo(1);
     assertThat(one.path("stopReasonCode").asText()).isEqualTo("STEP_LIMIT");
+    assertThat(absent(one.path("krakenSortUnavailableReason"))).isTrue();
+    // sort=KRAKEN(PM 총괄 11-15 (d)): 스위치(spec-up.support-order.enabled)가 꺼져 있으면 EFFICIENCY로 되돌리고 이유를
+    // 준다(응답 sort에
+    // KRAKEN 없음).
+    var kraken =
+        mapper
+            .readTree(
+                get("/api/v1/characters/spec-up/path?sort=KRAKEN&limit=1&characterName="
+                        + encode("스펙순서"))
+                    .body())
+            .path("data");
+    assertThat(kraken.path("sort").asText()).isEqualTo("EFFICIENCY");
+    assertThat(kraken.path("krakenSortUnavailableReason").asText()).isEqualTo("DISABLED");
+    assertThat(kraken.path("supportOrderAvailable").asBoolean(true)).isFalse();
+    assertThat(one.path("supportOrderAvailable").asBoolean(true)).isFalse();
+    // 추천 순서 점수식은 스위치가 켜졌을 때만(꺼져 있으면 점수 계산 없음).
+    assertThat(absent(one.path("krakenScoreRole"))).isTrue();
+    assertThat(absent(kraken.path("krakenScore"))).isTrue();
+    for (var step : kraken.path("steps"))
+      assertThat(absent(step.path("deltaKrakenScore"))).isTrue();
 
     for (var query : List.of("sort=GOLD", "limit=0", "limit=31", "limit=abc"))
       assertThat(
@@ -1439,6 +1468,10 @@ class SpecUpIntegrationTest {
                 .GET()
                 .build(),
             HttpResponse.BodyHandlers.ofString());
+  }
+
+  private static boolean absent(JsonNode node) {
+    return node.isNull() || node.isMissingNode();
   }
 
   private static String encode(String value) {

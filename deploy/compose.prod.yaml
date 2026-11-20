@@ -232,6 +232,8 @@ services:
       MARKET_WARMUP_RELIC_BOOKS_ENABLED: ${MARKET_WARMUP_RELIC_BOOKS_ENABLED:-false}
       # 보석 시세 표 칸 예열(스펙업 보석 비용, 10분마다 20칸 = 분당 공식 호출 2회).
       MARKET_WARMUP_GEMS_ENABLED: ${MARKET_WARMUP_GEMS_ENABLED:-false}
+      # 장신구 시세 표 기본 필터 24칸 예열(일별 최저가 빈 날 없애기, 1분에 최대 1칸 = 하루 최대 1,440 공식 호출, 보통 576).
+      MARKET_WARMUP_ACCESSORIES_ENABLED: ${MARKET_WARMUP_ACCESSORIES_ENABLED:-false}
       # 거래량 정렬용 거래량 채우기(분당 15·하루 800 공식 호출 상한, 리더 한 곳만). 끄면 거래량 정렬은 스캔 순서로 보이고 거래량 칸은 비어 있다.
       MARKET_VOLUME_WARMUP_ENABLED: ${MARKET_VOLUME_WARMUP_ENABLED:-false}
       API_DOCS_ENABLED: "false"
@@ -244,7 +246,8 @@ services:
       # 구조화 로그(JSON, ECS 형식). 감시 설계의 로그 원칙(운영 문서 deploy).
       LOGGING_STRUCTURED_FORMAT_CONSOLE: ecs
       # JVM 힙 = 컨테이너 한도의 65%(768m이면 약 500MB). 나머지는 메타스페이스·스레드·코드 캐시 몫(2GB 서버 기준).
-      JAVA_TOOL_OPTIONS: "${API_JAVA_OPTS:--XX:MaxRAMPercentage=65 -XX:+ExitOnOutOfMemoryError}"
+      # -XX:-UseBASE64Intrinsics는 CVE-2026-114938 완화(Dockerfile 설명). API_JAVA_OPTS를 바꿔도 빠지지 않게 치환 밖에 둔다.
+      JAVA_TOOL_OPTIONS: "-XX:-UseBASE64Intrinsics ${API_JAVA_OPTS:--XX:MaxRAMPercentage=65 -XX:+ExitOnOutOfMemoryError}"
       # 클라이언트 IP 헤더를 믿는 프록시를 web 한 곳으로 한정한다(Tomcat RemoteIpValve 정규식). 사설 대역 전체를 믿지 않는다.
       SERVER_TOMCAT_REMOTEIP_INTERNALPROXIES: ${TRUSTED_PROXY_REGEX:-172\.31\.250\.10}
     secrets:
@@ -310,7 +313,7 @@ services:
       DB_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-loakraken}
       DB_USERNAME: ${POSTGRES_USER:-loakraken}
       LOGGING_STRUCTURED_FORMAT_CONSOLE: ecs
-      JAVA_TOOL_OPTIONS: "-XX:MaxRAMPercentage=65 -XX:+ExitOnOutOfMemoryError"
+      JAVA_TOOL_OPTIONS: "-XX:MaxRAMPercentage=65 -XX:+ExitOnOutOfMemoryError -XX:-UseBASE64Intrinsics"
     secrets:
       - source: db_password
         target: DB_PASSWORD

@@ -39,7 +39,7 @@ import org.springframework.stereotype.Service;
 public class SpecUpService {
   private static final org.slf4j.Logger log =
       org.slf4j.LoggerFactory.getLogger(SpecUpService.class);
-  public static final String RULE_VERSION = "spec-up-v1";
+  public static final String RULE_VERSION = "spec-up-v3";
   static final Pattern GEM = Pattern.compile("(\\d+)레벨 (\\S+)의 보석");
   static final Set<String> WEAPON_ARMOR = Set.of("무기", "투구", "상의", "하의", "장갑", "어깨");
   private static final BigDecimal HUNDRED = BigDecimal.valueOf(100);
@@ -100,8 +100,8 @@ public class SpecUpService {
 
   /**
    * 점수 입력 줄 전투력 실패 수(loakraken.spec_up.row_cp_failed{kind, error}). 스위치를 켠 뒤 줄이 조용히 점수만으로 떨어지는지 보는
-   * 값이다. kind는 POLISH·ABILITY_STONE(목록 줄)·POLISH_STEP(추천 순서 연마 단계가 빠짐), error는 예외 클래스 이름 또는
-   * unmappable이라 값이 몇 개뿐이다.
+   * 값이다. kind는 POLISH·ABILITY_STONE(목록 줄)·POLISH_STEP(추천 순서 연마 단계가 빠짐), error는 예외 클래스 이름,
+   * line_mismatch(점수 입력 줄과 툴팁 줄이 다름) 또는 unmappable이라 값이 몇 개뿐이다.
    */
   private final io.micrometer.core.instrument.MeterRegistry meters;
 
@@ -134,6 +134,49 @@ public class SpecUpService {
   }
 
   /**
+   * 추천 순서 sort=KRAKEN(spec-up.support-order.enabled, 기본 끔): 단계마다 크라켄 점수(서포터는 서포터 점수식)로 고른다. 요청마다
+   * 읽는다. 끄면 KRAKEN 요청은 EFFICIENCY로 되돌리고 그 이유를 준다.
+   */
+  boolean supportOrderEnabled() {
+    return environment.getProperty("spec-up.support-order.enabled", Boolean.class, false);
+  }
+
+  /** 목록 스톤 줄과 같은 배치(점수가 오르는 목표 조합마다 하나). 점수 입력을 읽을 수 없으면 null(추천 순서는 앞 배치만). */
+  java.util.List<Map<String, Integer>> stoneOrientations(CharacterResult snapshot) {
+    // 비교 기준은 점수 표시와 상관없이 늘 점수로 배치를 고른다(PM 총괄 11-15): 표시 스위치가 꺼져도 안에서 점수를 잰다.
+    return SpecUpScoreCandidates.stoneOrientations(kraken, kraken.internalContext(snapshot));
+  }
+
+  /** 크라켄 점수 문맥(목록과 같음). */
+  SpecUpKrakenScore.Context krakenContext(CharacterResult snapshot) {
+    return kraken.context(snapshot);
+  }
+
+  /** 추천 순서 KRAKEN의 점수: 처음 입력에 칸마다 마지막 단계 변경을 적용한 점수(SpecUpKrakenScore.chainedScore). */
+  Double chainedKrakenScore(
+      SpecUpKrakenScore.Context context,
+      CharacterLoadout loadout,
+      Map<String, List<Change>> slots,
+      Map<String, SpecUpKrakenScore.Edit> edits) {
+    return kraken.chainedScore(context, loadout, slots, edits);
+  }
+
+  /** 작열(쿨) 보석 칸의 추천 순서 칸 이름(GEM_LEVEL:slot). 목록 KRAKEN 기본과 같이 KRAKEN 순서에서 뺀다(PM 총괄 11-15 (d) C). */
+  static java.util.Set<String> cooldownGemSlots(CharacterLoadout loadout) {
+    var result = new java.util.HashSet<String>();
+    if (loadout.gems() == null) return result;
+    var effects = gemEffects(loadout);
+    for (var gem : loadout.gems().items()) {
+      if (gem == null || gem.slot() == null || gem.name() == null) continue;
+      var matcher = GEM.matcher(gem.name());
+      String kind = matcher.find() ? matcher.group(2) : null;
+      if ("COOLDOWN".equals(gemType(kind, effects.get(gem.slot()))))
+        result.add("GEM_LEVEL:" + gem.slot());
+    }
+    return result;
+  }
+
+  /**
    * 추천 순서·목표 경로의 연마 단계 후보 하나. slot은 장신구 칸(POLISH:장비 순번, 같은 칸은 뒤 단계가 앞 매물을 바꿈), changes는 처음 장신구와 다른
    * 줄의 공개 시뮬레이터 변경(줄마다 POLISH, 빠진 줄은 option NONE), full은 같은 줄까지 줄마다 하나(같은 장신구의 앞 단계가 바꾼 줄을 되돌릴 때
    * 씀).
@@ -149,7 +192,24 @@ public class SpecUpService {
       SpecUpCost cost,
       List<Change> changes,
       List<Change> full,
-      boolean afterTop) {
+      boolean afterTop,
+      SpecUpKrakenScore.Edit kraken) {
+    /** kraken = 이 매물의 점수 입력 편집(추천 순서 sort=KRAKEN의 점수, 없으면 null). */
+    PolishStep(
+        String slot,
+        String id,
+        String target,
+        String from,
+        String to,
+        String icon,
+        String grade,
+        SpecUpCost cost,
+        List<Change> changes,
+        List<Change> full,
+        boolean afterTop) {
+      this(slot, id, target, from, to, icon, grade, cost, changes, full, afterTop, null);
+    }
+
     PolishStep(
         String slot,
         String id,
@@ -236,7 +296,8 @@ public class SpecUpService {
               polishCost(loadout, context, row, fill, pricesAt, topIds.contains(row.id())),
               changes,
               full,
-              topIds.contains(row.id())));
+              topIds.contains(row.id()),
+              polish));
     }
     return List.copyOf(steps);
   }
@@ -392,7 +453,54 @@ public class SpecUpService {
       BigDecimal krakenScore,
       String krakenRuleVersion,
       boolean cooldownGemsIncluded,
-      String krakenSortUnavailableReason) {}
+      String krakenSortUnavailableReason,
+      boolean supportOrderAvailable,
+      String krakenScoreRole) {
+    /** supportOrderAvailable 없이(시험 등). */
+    public Guide(
+        String characterName,
+        String serverName,
+        String className,
+        BigDecimal combatPower,
+        String ruleVersion,
+        String simulatorRuleVersion,
+        Instant fetchedAt,
+        Instant pricesAt,
+        String sort,
+        int limit,
+        int total,
+        List<Candidate> candidates,
+        BigDecimal krakenScore,
+        String krakenRuleVersion,
+        boolean cooldownGemsIncluded,
+        String krakenSortUnavailableReason) {
+      this(
+          characterName,
+          serverName,
+          className,
+          combatPower,
+          ruleVersion,
+          simulatorRuleVersion,
+          fetchedAt,
+          pricesAt,
+          sort,
+          limit,
+          total,
+          candidates,
+          krakenScore,
+          krakenRuleVersion,
+          cooldownGemsIncluded,
+          krakenSortUnavailableReason,
+          false,
+          null);
+    }
+  }
+
+  /** 크라켄 점수에 쓴 점수식(DEALER·SUPPORT). 점수를 낼 수 없으면 null. */
+  static String krakenScoreRole(SpecUpKrakenScore.Context context) {
+    if (context == null || !context.available()) return null;
+    return context.support() ? "SUPPORT" : "DEALER";
+  }
 
   boolean enabled() {
     return enabled;
@@ -467,6 +575,11 @@ public class SpecUpService {
     var models = new Models(snapshot);
     for (var plan : planned) {
       if (!cooldownGemsIncluded && "COOLDOWN".equals(plan.gemType())) continue;
+      // 99·109·1010돌은 EFFICIENCY·KRAKEN 정렬 목록에만(DELTA는 비용을 보지 않아 맨 위에 오고 추천 순서 DELTA와도 맞춘다, PM 총괄
+      // 11-19). 줄 상세는
+      // 어느 정렬 목록의 id든 찾는다.
+      if (sort == Sort.DELTA && !allRefineStages && SpecUpScoreCandidates.extremeStone(plan.id()))
+        continue;
       var candidate =
           roleReason != null
               ? plan.candidate(
@@ -511,7 +624,10 @@ public class SpecUpService {
         krakenContext.shown(),
         krakenContext.available() ? SpecUpKrakenScore.RULE_VERSION : null,
         cooldownGemsIncluded,
-        krakenContext.unavailable());
+        krakenContext.unavailable(),
+        // 추천 순서 sort=KRAKEN을 이 캐릭터에 쓸 수 있는지(스위치 + 점수 문맥, 프론트·PM 11-15: 웹은 이 값으로 버튼을 보인다).
+        supportOrderEnabled() && krakenContext.available(),
+        krakenScoreRole(krakenContext));
   }
 
   /**
@@ -629,15 +745,32 @@ public class SpecUpService {
       var swap =
           simulator.simulatePolishSwap(
               snapshot, models.get(), polish.index(), polish.current(), polish.lines());
-      return swap == null ? null : evaluated(plan, swap);
+      if (swap != null) return evaluated(plan, swap);
+      var reject =
+          simulator.polishSwapReject(snapshot, polish.index(), polish.current(), polish.lines());
+      rowRejected(
+          plan, reject == null ? CombatPowerSimulationService.POLISH_REJECT_UNMAPPABLE : reject);
+      return null;
     }
     if (plan.kraken() instanceof SpecUpKrakenScore.Stone stone && stoneCpEnabled()) {
       var changes = stoneChanges(snapshot.details().loadout(), stone.levels());
-      return changes == null
-          ? null
-          : evaluated(plan, simulator.simulate(snapshot, models.get(), changes));
+      if (changes != null)
+        return evaluated(plan, simulator.simulate(snapshot, models.get(), changes));
+      rowRejected(plan, CombatPowerSimulationService.POLISH_REJECT_UNMAPPABLE);
+      return null;
     }
     return null;
+  }
+
+  /**
+   * 스위치가 켜졌는데 계산하지 못해 점수만 남는 줄(예외 아님): 연마 교체는 점수 입력 줄이 툴팁 줄과 다르면 line_mismatch, 그 밖은 unmappable. 같은
+   * row_cp_failed 수에 센다(코드 리뷰 #949 P3, PM 총괄 11-15 14:44 스위치를 켜기 전 필수).
+   */
+  private void rowRejected(Planned plan, String error) {
+    log.warn("event=spec_up_row_cp_failed id={} kind={} error={}", plan.id(), plan.kind(), error);
+    meters
+        .counter("loakraken.spec_up.row_cp_failed", "kind", plan.kind(), "error", error)
+        .increment();
   }
 
   /** 시뮬레이터 결과 → 후보. 바꾼 줄 가운데 하나라도 계산할 수 없으면 그 이유로 UNSUPPORTED(연마 교체는 줄 여럿, 그 밖은 변경 하나). */

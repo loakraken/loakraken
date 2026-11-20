@@ -281,7 +281,12 @@ public class MarketAuctionService {
       AuctionCatalog.GEM_KINDS.size() * AuctionCatalog.MAX_GEM_LEVEL;
 
   /** 예열 한 번의 결과. outcome: refreshed·capped·failed·idle(지표 태그). */
-  public record GemWarm(int refreshed, String outcome) {}
+  /** lastKey: 마지막으로 다시 받은 칸 키(장신구 예열의 같은 칸 반복 감지용, 없으면 null). */
+  public record GemWarm(int refreshed, String outcome, String lastKey) {
+    public GemWarm(int refreshed, String outcome) {
+      this(refreshed, outcome, null);
+    }
+  }
 
   /**
    * 보석 시세 표 칸 예열: 마지막 관측이 오래된 칸(없는 칸이 먼저)부터 count칸을 공식 경매장에서 다시 받아 칸(3분)·마지막 값·일별 기록에 남긴다(표 채우기와 같은
@@ -329,9 +334,76 @@ public class MarketAuctionService {
     return java.util.Set.copyOf(keys);
   }
 
+  /** 장신구 예열 칸: 표 기본 필터(고대·딜러·품질 70)의 부위 × 등급 조합 전부(표·스펙업 연마 비용이 읽는 칸). */
+  public static final List<AuctionQuery> ACCESSORY_WARM_QUERIES = accessoryWarmQueries();
+
+  private static final java.util.Set<String> ACCESSORY_WARM_KEYS =
+      ACCESSORY_WARM_QUERIES.stream()
+          .map(AuctionQuery::key)
+          .collect(java.util.stream.Collectors.toUnmodifiableSet());
+
+  private static List<AuctionQuery> accessoryWarmQueries() {
+    var queries = new ArrayList<AuctionQuery>();
+    for (var slot : Slot.values()) {
+      var options = AuctionCatalog.options(Role.DEALER, slot);
+      for (var levels : AuctionCatalog.combinations(options.size()))
+        queries.add(accessoryQuery(Grade.ANCIENT, slot, options, levels, 70, 1));
+    }
+    return List.copyOf(queries);
+  }
+
+  /**
+   * 장신구 기본 필터 칸 예열(PM 총괄 11-16): 마지막 관측이 maxAge보다 오래된 칸(없는 칸이 먼저)부터 최대 max칸을 공식 경매장에서 다시 받아 칸·마지막
+   * 값·일별 기록에 남긴다(받은 값만 기록, 없는 날을 만들지 않음). allow는 예열 전체 분당 상한, call은 예열 게이트(예약분)로 공식 호출을 감싼다.
+   */
+  public GemWarm warmAccessories(
+      int max,
+      java.time.Duration maxAge,
+      java.util.function.BooleanSupplier allow,
+      java.util.function.Function<java.util.function.Supplier<AuctionPage>, AuctionPage> call) {
+    var queries = new ArrayList<>(ACCESSORY_WARM_QUERIES);
+    var last = new java.util.HashMap<String, Instant>();
+    for (var query : queries)
+      last.put(
+          query.key(),
+          auctions.findLastCell(query.key()).map(AuctionCell::observedAt).orElse(Instant.EPOCH));
+    queries.sort(java.util.Comparator.comparing((AuctionQuery query) -> last.get(query.key())));
+    var stale = clock.instant().minus(maxAge);
+    if (queries.isEmpty() || last.get(queries.getFirst().key()).isAfter(stale))
+      return new GemWarm(0, "idle");
+    // 사용자 표 채우기와 같은 잠금(보안 11-16 #985 메모): 같은 칸을 같은 순간 두 번 받지 않게. 사용자 채우기 중이면 이번 틱은 넘긴다.
+    if (!fillLock.tryLock()) return new GemWarm(0, "busy");
+    try {
+      int refreshed = 0;
+      String lastKey = null;
+      for (var query : queries) {
+        if (refreshed >= max) break;
+        // 오래된 순이라 이 칸이 아직 새로우면 나머지도 새롭다.
+        if (last.get(query.key()).isAfter(stale)) break;
+        // 잠금을 기다리는 사이 사용자 채우기가 받았으면 다시 받지 않는다.
+        var now = auctions.findLastCell(query.key()).map(AuctionCell::observedAt);
+        if (now.isPresent() && now.get().isAfter(stale)) continue;
+        if (!allow.getAsBoolean()) return new GemWarm(refreshed, "capped", lastKey);
+        try {
+          var cell = toCell(call.apply(() -> search.search(query)));
+          remember(query.key(), cell);
+          refreshed++;
+          lastKey = query.key();
+        } catch (BusinessException exception) {
+          log.debug("장신구 시세 칸 예열 실패. 코드={}", exception.errorCode().code());
+          return new GemWarm(refreshed, "failed", lastKey);
+        }
+      }
+      return new GemWarm(refreshed, refreshed > 0 ? "refreshed" : "idle", lastKey);
+    } finally {
+      fillLock.unlock();
+    }
+  }
+
   private void remember(String key, AuctionCell cell) {
     auctions.saveCell(key, cell);
-    if (GEM_KEYS.contains(key)) auctions.saveLastCell(key, cell);
+    if (GEM_KEYS.contains(key) || ACCESSORY_WARM_KEYS.contains(key))
+      auctions.saveLastCell(key, cell);
     if (cell.minBuyPrice() == null) return;
     dailyWriter.execute(() -> recordDaily(key, cell));
   }

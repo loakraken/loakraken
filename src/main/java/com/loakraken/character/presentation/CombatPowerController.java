@@ -203,7 +203,7 @@ public class CombatPowerController {
           String grade,
       @Schema(description = "팔찌 효과·각인·스톤 각인 이름") @Size(max = 32) String name,
       @Schema(description = "아크 패시브 트리(진화·깨달음·도약)") @Size(max = 8) String tree,
-      @Schema(description = "아크 패시브 포인트") Integer points,
+      @Schema(description = "아크 패시브 포인트(0~999, 도약은 0~70)") Integer points,
       @Schema(description = "아크 그리드 slot index") Integer slotIndex,
       @Schema(description = "아크 그리드 코어 포인트") Integer point) {
     CombatPowerSimulationService.Change toChange() {

@@ -52,12 +52,16 @@ public final class CritEffectTable {
           new NodeRule("그림자 맹수", Decision.SKILL, Decision.EXCLUDE),
           new NodeRule("영혼친화력", Decision.INCLUDE, null),
           new NodeRule("어둠의 장송곡", null, Decision.EXCLUDE),
-          new NodeRule("점화의 불씨", Decision.INCLUDE, null),
-          new NodeRule("발화", null, Decision.INCLUDE),
+          // "마력 해방 중 치명타 적중률이 30.0% 증가한다." · "마력 해방 중 … 치명타 피해가 55.0% 증가한다." 비교 기준은 합계·주력기·스킬별 어디에도
+          // 더하지 않는다(계산 검증 11-16) → 마력 해방 상태 토글, 기본 끔(PM 총괄 11-16 치적·공속 표 C).
+          new NodeRule("점화의 불씨", Decision.TOGGLE, null),
+          new NodeRule("발화", null, Decision.TOGGLE),
           new NodeRule("혼돈 강화", Decision.TOGGLE, null),
           new NodeRule("잠식 제어", Decision.INCLUDE, null),
-          new NodeRule("날카로운 해머", Decision.SKILL, null),
-          new NodeRule("분노의 망치", null, Decision.SKILL),
+          // 디스트로이어 해방 스킬 코어 3개 소모: 비교 기준은 합계에 넣는다(계산 검증 11-16 표 고치기 A) → 기본 켬 토글(스킬 한정 알림), 코어 3개
+          // 가정.
+          new NodeRule("날카로운 해머", Decision.TOGGLE, null),
+          new NodeRule("분노의 망치", null, Decision.TOGGLE),
           new NodeRule("영역 강화", Decision.EXCLUDE, null),
           new NodeRule("중력 수련", Decision.EXCLUDE, null),
           new NodeRule("정교함", Decision.INCLUDE, null),
@@ -88,13 +92,15 @@ public final class CritEffectTable {
           new NodeRule("마에스트로", Decision.INCLUDE, null),
           new NodeRule("격노의 악장", null, Decision.INCLUDE),
           new NodeRule("교감 강화", Decision.SKILL, null),
-          new NodeRule("고대의 힘", Decision.SKILL, null),
+          // 비교 기준은 합계에 넣는다(표 고치기 A) → 기본 켬 토글(스킬 한정 알림).
+          new NodeRule("고대의 힘", Decision.TOGGLE, null),
           new NodeRule("기민함", Decision.INCLUDE, Decision.INCLUDE),
           new NodeRule("단련", Decision.TOGGLE, Decision.TOGGLE),
           new NodeRule("피스메이커 - 샷건", Decision.TOGGLE, null),
           new NodeRule("가속 강화", Decision.INCLUDE, null),
           new NodeRule("분침 강화", Decision.INCLUDE, null),
-          new NodeRule("깨어난 잠재력", Decision.SKILL, null),
+          // 비교 기준은 합계에 넣는다(표 고치기 A) → 기본 켬 토글(둔갑 스킬 한정 알림).
+          new NodeRule("깨어난 잠재력", Decision.TOGGLE, null),
           new NodeRule("환수의 정기", null, Decision.SKILL),
           new NodeRule("깨어나는 힘", Decision.INCLUDE, null),
           new NodeRule("완전 연소", Decision.INCLUDE, null),
@@ -145,33 +151,9 @@ public final class CritEffectTable {
           // "피니쉬 스텝의 치명타 적중률이 30.0% 증가"
           new SkillBonus(
               "그림자 맹수", CritSpeedCalculation.Axis.CRIT, Target.SKILL, "피니쉬 스텝", 1, false, null),
-          // "해방 스킬 사용 중 소모한 코어 당 치명타 적중률이 6.0% 증가" — 디스트로이어 코어 최대 3개(정답표 6-1 ×3)
-          new SkillBonus(
-              "날카로운 해머",
-              CritSpeedCalculation.Axis.CRIT,
-              Target.CATEGORY,
-              "해방 스킬",
-              3,
-              false,
-              "코어 3개 소모"),
-          // "해방 스킬 사용 시 소모한 코어 당 치명타 피해가 17.0% 증가"
-          new SkillBonus(
-              "분노의 망치",
-              CritSpeedCalculation.Axis.CRIT_DAMAGE,
-              Target.CATEGORY,
-              "해방 스킬",
-              3,
-              false,
-              "코어 3개 소모"),
           // "소환 스킬의 치명타 적중률이 2.8% 증가"
           new SkillBonus(
               "교감 강화", CritSpeedCalculation.Axis.CRIT, Target.CATEGORY, "소환 스킬", 1, false, null),
-          // "일반 및 고대의 정령 스킬의 치명타 적중률이 16.0% 증가" — 고대의 정령 스킬은 전투 스킬 목록에 없다
-          new SkillBonus(
-              "고대의 힘", CritSpeedCalculation.Axis.CRIT, Target.CATEGORY, "일반 스킬", 1, false, null),
-          // "둔갑 스킬 치명타 적중률이 30.0% 증가"
-          new SkillBonus(
-              "깨어난 잠재력", CritSpeedCalculation.Axis.CRIT, Target.CATEGORY, "둔갑 스킬", 1, false, null),
           // "환수 각성 상태에서 환수 스킬의 치명타 피해량이 60.0% 증가"
           new SkillBonus(
               "환수의 정기",
@@ -229,7 +211,22 @@ public final class CritEffectTable {
       Pattern pattern,
       boolean incremental,
       String exclusiveWith,
-      boolean skillLimited) {
+      boolean skillLimited,
+      int multiplier) {
+    /** multiplier = 문구 값에 곱하는 수(디스트로이어 코어 3개 소모 가정 등). */
+    Toggle(
+        String node,
+        String key,
+        CritSpeedCalculation.Axis axis,
+        String label,
+        boolean coreState,
+        Pattern pattern,
+        boolean incremental,
+        String exclusiveWith,
+        boolean skillLimited) {
+      this(node, key, axis, label, coreState, pattern, incremental, exclusiveWith, skillLimited, 1);
+    }
+
     Toggle(String node, String label, boolean coreState, Pattern pattern, boolean incremental) {
       this(
           node,
@@ -280,6 +277,23 @@ public final class CritEffectTable {
               false,
               // "단, 두 효과는 동시에 적용되지 않는다." → 치명타 적중률 쪽("단련")을 켜면 이 토글은 꺼진다
               "단련"),
+          // "마력 해방 중 치명타 적중률이 30.0% 증가한다." 기본 끔(비교 기준은 보이는 수치에 더하지 않음, 계산 검증 11-16).
+          new Toggle(
+              "점화의 불씨",
+              "마력 해방 상태 가정",
+              false,
+              Pattern.compile("마력 해방 중 치명타 적중률이\\s*([0-9]+(?:\\.[0-9]+)?)%"),
+              false),
+          // "마력 해방 중 무력화 피해량이 20.0% 증가하고, 치명타 피해가 55.0% 증가한다." 기본 끔(점화의 불씨와 같은 상태).
+          new Toggle(
+              "발화",
+              "발화 치명타 피해",
+              CritSpeedCalculation.Axis.CRIT_DAMAGE,
+              "마력 해방 상태 가정(치명타 피해)",
+              false,
+              Pattern.compile("치명타 피해가\\s*([0-9]+(?:\\.[0-9]+)?)%"),
+              false,
+              null),
           // "샷건 스탠스로 변경 시 치명타 적중률이 10.0% … 9초동안"
           new Toggle("피스메이커 - 샷건", "샷건 스탠스 변경 후 9초 가정", false, null, false),
           // "일반 스킬의 치명타 적중률이 0.8% 증가하며, 방어 태세 중에는 1.6% 증가한다."
@@ -288,6 +302,53 @@ public final class CritEffectTable {
               "방어 태세 가정",
               false,
               Pattern.compile("방어 태세 중에는\\s*([0-9]+(?:\\.[0-9]+)?)%"),
+              true),
+          // 표 고치기 A(PM 총괄 11-16, 계산 검증 출처 표): 비교 기준이 합계에 넣는 노드. 기본 켬, 스킬 한정으로 알린다.
+          // "해방 스킬 사용 중 소모한 코어 당 치명타 적중률이 6.0% 증가한다." 코어 최대 3개(직업 가이드) 가정.
+          new Toggle(
+              "날카로운 해머",
+              "날카로운 해머",
+              CritSpeedCalculation.Axis.CRIT,
+              "해방 스킬 코어 3개 소모 가정",
+              true,
+              Pattern.compile("코어 당 치명타 적중률이\\s*([0-9]+(?:\\.[0-9]+)?)%"),
+              false,
+              null,
+              true,
+              3),
+          // "해방 스킬 사용 시 소모한 코어 당 치명타 피해가 17.0% 증가한다."
+          new Toggle(
+              "분노의 망치",
+              "분노의 망치",
+              CritSpeedCalculation.Axis.CRIT_DAMAGE,
+              "해방 스킬 코어 3개 소모 가정(치명타 피해)",
+              true,
+              Pattern.compile("코어 당 치명타 피해(?:량)?(?:이|가)?\\s*([0-9]+(?:\\.[0-9]+)?)%"),
+              false,
+              null,
+              true,
+              3),
+          // "일반 및 고대의 정령 스킬의 치명타 적중률이 16.0% 증가한다."
+          new Toggle(
+              "고대의 힘",
+              "고대의 힘",
+              CritSpeedCalculation.Axis.CRIT,
+              "고대의 힘(일반·고대의 정령 스킬)",
+              true,
+              null,
+              false,
+              null,
+              true),
+          // "둔갑 스킬 치명타 적중률이 30.0% 증가한다."
+          new Toggle(
+              "깨어난 잠재력",
+              "깨어난 잠재력",
+              CritSpeedCalculation.Axis.CRIT,
+              "깨어난 잠재력(둔갑 스킬)",
+              true,
+              null,
+              false,
+              null,
               true),
           // 직업 자기 시너지 중 스킬 한정(#5, 계산 검증 최종 합본 11-09). 합계에 넣고 skillLimited로 알린다(PM 총괄).
           // 포격 스킬은 전투 스킬 목록에 없어(아이덴티티) 스킬별 치명타 적중률에는 없고, 주력 스킬 치명타 적중률에만 더한다.
@@ -327,7 +388,20 @@ public final class CritEffectTable {
       String tripod,
       BigDecimal value,
       String basis,
-      boolean defaultOn) {}
+      boolean defaultOn,
+      String exclusiveWith) {
+    /** exclusiveWith = 같은 효과라 동시에 세지 않는 노드 토글 key(그 토글을 켜면 이 가정은 끈다). */
+    public ClassBuff(
+        String label,
+        String className,
+        String skill,
+        String tripod,
+        BigDecimal value,
+        String basis,
+        boolean defaultOn) {
+      this(label, className, skill, tripod, value, basis, defaultOn, null);
+    }
+  }
 
   public static final List<ClassBuff> CLASS_BUFFS =
       List.of(
@@ -345,8 +419,8 @@ public final class CritEffectTable {
               "용맹의 포효",
               null,
               new BigDecimal("20"),
-              "용맹의 포효 8초 버프(스킬·트라이포드 버프 가정, 기본 끔)",
-              false),
+              "용맹의 포효 8초 버프(스킬 버프 가정, 기본 켬)",
+              true),
           new ClassBuff(
               "번개의 속삭임 버프 유지 가정",
               "스트라이커",
@@ -377,8 +451,38 @@ public final class CritEffectTable {
               null,
               "빛의 성장",
               new BigDecimal("11.8"),
-              "슈르디 트라이포드 '빛의 성장'(스킬·트라이포드 버프 가정, 기본 끔)",
-              false));
+              "슈르디 트라이포드 '빛의 성장'(트라이포드 버프 가정, 기본 켬)",
+              true),
+          // 표 고치기 A(계산 검증 출처 표 11-16): 비교 기준이 합계에 넣는 스킬·트라이포드 자기 버프, 기본 켬.
+          // 창술사 청룡진 "스킬 시전 시 연가공법을 발동시켜 6초 동안 치명타 적중률이 20.0% 증가한다."
+          new ClassBuff(
+              "청룡진 연가공법 유지 가정",
+              "창술사",
+              "청룡진",
+              null,
+              new BigDecimal("20"),
+              "청룡진 연가공법 6초(스킬 버프 가정, 기본 켬)",
+              true,
+              // 연가비기 토글(연가공법 16초)과 같은 연가공법 +20이라 함께 세지 않는다(코드 리뷰 #979 P2).
+              "연가비기"),
+          // 아르카나 스트림 오브 엣지 '다크니스 엣지' "적중 시 마다 … 치명타 적중률이 3.0초간 5.5% 씩 최대 27.6% 까지 증가한다."
+          new ClassBuff(
+              "다크니스 엣지 최대 중첩 가정",
+              "아르카나",
+              null,
+              "다크니스 엣지",
+              new BigDecimal("27.6"),
+              "스트림 오브 엣지 트라이포드 '다크니스 엣지' 최대 27.6(트라이포드 버프 가정, 기본 켬)",
+              true),
+          // 소울이터 아스타로스 '데런의 족쇄' "치명타 적중률이 20.0% 증가하고 적에게 주는 피해가 100.0% 증가한다."
+          new ClassBuff(
+              "데런의 족쇄 버프 가정",
+              "소울이터",
+              null,
+              "데런의 족쇄",
+              new BigDecimal("20"),
+              "아스타로스 트라이포드 '데런의 족쇄'(트라이포드 버프 가정, 기본 켬)",
+              true));
 
   /** 공용 아크 그리드 코어. 비교 기준 2곳이 기본에 넣는다. 직업 코어의 치명 효과는 비교 기준으로 넣지 않는다. */
   public static final Map<String, CritSpeedCalculation.Axis> COMMON_CORES =
@@ -469,10 +573,19 @@ public final class CritEffectTable {
               "두 번째 동료", SpeedDecision.CORE_STATE, "실버호크 소환 가정", "실버호크 소환 중 … 이동속도가 8.0% 증가"),
           new SpeedRule(
               "아르데타인의 기술", SpeedDecision.CORE_STATE, "드론 부착 가정", "드론이 부착된 상태에서 자신의 이동속도가 10.0% 증가"),
+          // 표 고치기 D(계산 검증 출처 표 11-16): 비교 기준이 합계에 넣는 직업 상태 노드, 기본 켬.
+          // 브레이커 "수라결 : … 공격속도 및 이동속도가 15.0% 증가한다"
+          new SpeedRule(
+              "무아지경", SpeedDecision.CORE_STATE, "수라결 상태 가정", "수라결 : 공격속도 및 이동속도가 15.0% 증가"),
+          // 같은 수라결 이동 속도라 무아지경과 함께 세지 않는다(비교 기준 이동 속도 15, 30 아님).
+          new SpeedRule("수라의 길", SpeedDecision.EXCLUDE, null, "수라결 이동 속도는 무아지경과 같은 효과라 함께 세지 않음"),
+          // 가디언나이트 "초월 상태에선 피격이상에 면역이 되며 공격 속도가 15.0% 증가하고…"
+          new SpeedRule("한계 초월", SpeedDecision.CORE_STATE, "초월 상태 가정", "초월 상태에선 … 공격 속도가 15.0% 증가"),
           // 상황 조건(스킬·전환 직후 N초, 모드·스탠스)
           new SpeedRule("달의 소리", SpeedDecision.SITUATIONAL, "달의 소리 효과 가정", "기본 제외(페르소나 전환 시)"),
           new SpeedRule("피스메이커 - 핸드건", SpeedDecision.SITUATIONAL, "핸드건 스탠스 변경 후 9초 가정", "9초동안"),
-          new SpeedRule("평화주의자", SpeedDecision.SITUATIONAL, "스탠스 변경 후 12초 가정", "12.0초동안"),
+          // 표 고치기 D: 비교 기준이 합계에 넣어 기본 켬(공격 속도 16).
+          new SpeedRule("평화주의자", SpeedDecision.CORE_STATE, "스탠스 변경 후 12초 가정", "12.0초동안"),
           new SpeedRule("전술 이동", SpeedDecision.SITUATIONAL, "이동기 사용 후 8초 가정", "8.0초 동안"),
           new SpeedRule("고속 진입", SpeedDecision.SITUATIONAL, "간섭 사용 후 20초 가정", "20.0초 동안"),
           new SpeedRule("징벌의 서막", SpeedDecision.SITUATIONAL, "징벌 스킬 사용 후 5초 가정", "5.0초간"),
@@ -480,7 +593,8 @@ public final class CritEffectTable {
           new SpeedRule("폭풍의 사냥꾼", SpeedDecision.SITUATIONAL, "사냥꾼의 발걸음 5초 가정", "5.0초 동안"),
           new SpeedRule("마나 순환", SpeedDecision.SITUATIONAL, "마나 순환 효과 가정", "마력 방출 종료 시 최대 30초"),
           new SpeedRule("중력 가속", SpeedDecision.SITUATIONAL, "중력 모드 가정", "중력 가중영역 및 중력 해방 모드일 때"),
-          new SpeedRule("절정 I", SpeedDecision.SITUATIONAL, "스탠스 전환 가정", "난무·집중 스탠스 전환 시"),
+          // 표 고치기 D: 비교 기준이 집중 공격 속도 15와 난무 이동 속도 15를 모두 합계에 넣어 기본 켬.
+          new SpeedRule("절정 I", SpeedDecision.CORE_STATE, "스탠스 전환 가정", "난무·집중 스탠스 전환 시"),
           new SpeedRule(
               "깨어난 잠재력", SpeedDecision.SITUATIONAL, "여우 둔갑 가정", "여우 둔갑 : 공격 속도가 20.0% 증가"),
           new SpeedRule("핸드 거너", SpeedDecision.SITUATIONAL, "맹공 6초 가정", "'끊임없는 맹공' 사용 시 6초"),
@@ -503,10 +617,63 @@ public final class CritEffectTable {
    * 선택 트라이포드의 공이속(#198 재대조 10-10 02:10). 표에 없는 트라이포드의 공이속 문구는 더하지 않고 "분류 중"으로 남긴다. 갈림 항목(비교 기준 한 곳만
    * 포함)은 PM 총괄 23:24 기준(공식 문구가 상황 조건 → 기본 끔 토글)으로 두고 PM 판단을 기다린다.
    */
-  public record TripodSpeed(String tripod, SpeedDecision decision, String label, String basis) {}
+  public record TripodSpeed(
+      String skill,
+      String tripod,
+      SpeedDecision decision,
+      String label,
+      String basis,
+      Pattern pattern) {
+    /**
+     * skill: 그 스킬의 트라이포드에만(null이면 이름만 보고 모든 스킬). pattern: 자기 공이속만 읽는 공식 문구(이름 붙은 그룹 a = 공격, m = 이동,
+     * b = 둘 다). null이면 일반 문구 해석을 쓴다.
+     */
+    public TripodSpeed(String tripod, SpeedDecision decision, String label, String basis) {
+      this(null, tripod, decision, label, basis, null);
+    }
+
+    /** 토글 key. 스킬 한정 행은 '스킬 - 트라이포드'(같은 이름의 다른 스킬 트라이포드와 겹치지 않게). */
+    public String key() {
+      return skill == null ? tripod : skill + " - " + tripod;
+    }
+  }
+
+  private static final String SPEED_NUMBER = "([0-9]+(?:\\.[0-9]+)?)";
 
   public static final List<TripodSpeed> TRIPOD_SPEEDS =
       List.of(
+          // 표 고치기 D(계산 검증 출처 표 11-16): 비교 기준이 합계에 넣는 자기 공이속 트라이포드, 기본 켬. 공식 문구에서 자기 속도만 읽는다.
+          // 배틀마스터 바람의 속삭임 "스킬 시전 시 자신의 공격 속도가 8.0초간 12.8% 증가한다."(붕천퇴의 같은 이름 트라이포드와 다름)
+          new TripodSpeed(
+              "바람의 속삭임",
+              "바람의 축복",
+              SpeedDecision.INCLUDE,
+              "바람의 축복 8초 유지 가정",
+              "트라이포드 자기 버프 가정, 기본 켬",
+              Pattern.compile("자신의 공격 ?속도가\\s*[0-9.]+초\\s*간\\s*(?<a>" + SPEED_NUMBER + ")%\\s*증가")),
+          // 건슬링어 퀵 스텝 "스킬 시전 시 자신의 공격 속도와 이동 속도가 8.0초간 13.8% 증가하며, 공격 적중 시 적중된 대상의 공격 속도와 이동 속도가
+          // 4.0초간 5.0% 감소한다." 대상의 감소는 자기 속도가 아니다.
+          new TripodSpeed(
+              "퀵 스텝",
+              "생기 흡수",
+              SpeedDecision.INCLUDE,
+              "생기 흡수 8초 유지 가정",
+              "트라이포드 자기 버프 가정, 기본 켬",
+              Pattern.compile(
+                  "자신의 공격 ?속도와 이동 ?속도가\\s*[0-9.]+초\\s*간\\s*(?<b>" + SPEED_NUMBER + ")%\\s*증가")),
+          // 아르카나 스크래치 딜러 "… 스킬 사용 시 5.0초간 공격속도가 19.2% 증가하고, 이동속도가 30.0% 증가한다."
+          new TripodSpeed(
+              "스크래치 딜러",
+              "안전 장치",
+              SpeedDecision.INCLUDE,
+              "안전 장치 5초 유지 가정",
+              "트라이포드 자기 버프 가정, 기본 켬",
+              Pattern.compile(
+                  "공격 ?속도가\\s*(?<a>"
+                      + SPEED_NUMBER
+                      + ")%\\s*증가하고,\\s*이동 ?속도가\\s*(?<m>"
+                      + SPEED_NUMBER
+                      + ")%\\s*증가")),
           // 건슬링어 기동 타격 "구르기 이후 8.0초 동안 공격 속도와 이동 속도가 19.2% 증가한다." — 비교 기준 2곳 포함(c10)
           new TripodSpeed("날렵함", SpeedDecision.SITUATIONAL, "날렵함 8초 유지 가정", "트라이포드 버프 가정, 기본 끔"),
           // 배틀마스터 붕천퇴 "적에게 콤보 공격 적중 시 4.0초간 공격속도가 19.2% 증가하고 이동속도가 19.2% 증가한다." — 비교 기준 한 곳만(c11)
@@ -524,19 +691,100 @@ public final class CritEffectTable {
         name, SpeedDecision.INCLUDE, name + "(자신 및 파티원)", "자신 및 파티원 공이속 트라이포드, 기본 켬");
   }
 
-  static TripodSpeed tripodSpeed(String name) {
-    for (var rule : TRIPOD_SPEEDS) if (rule.tripod().equals(name)) return rule;
+  /** 트라이포드 공이속 판정. 그 스킬 한정 행이 먼저고, 없으면 이름만 같은 행. */
+  static TripodSpeed tripodSpeed(String skill, String name) {
+    for (var rule : TRIPOD_SPEEDS)
+      if (rule.skill() != null && rule.skill().equals(skill) && rule.tripod().equals(name))
+        return rule;
+    for (var rule : TRIPOD_SPEEDS)
+      if (rule.skill() == null && rule.tripod().equals(name)) return rule;
     return null;
   }
 
-  /** 노드 문구에 없는 직업 자기 버프의 공이속. label은 같은 상태의 치명 버프와 같아 한 토글로 켜고 끈다. */
+  /**
+   * 노드 문구에 없는 직업 자기 버프의 공이속. key는 같은 상태의 치명 토글과 같으면 한 토글로 켜고 끈다. 관문: 직업, node(깨달음 노드 장착, null이면
+   * 없음), skill(레벨 2 이상 스킬, null이면 없음). 기본 켬.
+   */
   public record ClassSpeedBuff(
-      String label, String className, BigDecimal attack, BigDecimal move) {}
+      String key,
+      String label,
+      String className,
+      String node,
+      String skill,
+      BigDecimal attack,
+      BigDecimal move,
+      String basis) {}
 
   public static final List<ClassSpeedBuff> CLASS_SPEED_BUFFS =
       List.of(
           // 슬레이어 폭주: 비교 기준 2곳 공이속 +20(c02 21.86/31.86 → 41.86/51.86, 계산 검증 10-10 02:10)
-          new ClassSpeedBuff("폭주 상태 가정", "슬레이어", new BigDecimal("20"), new BigDecimal("20")));
+          new ClassSpeedBuff(
+              "폭주 상태 가정",
+              "폭주 상태 가정",
+              "슬레이어",
+              null,
+              null,
+              new BigDecimal("20"),
+              new BigDecimal("20"),
+              "폭주 상태 공격·이동 속도 20%(상태 가정, 기본 켬)"),
+          // 표 고치기 D(계산 검증 출처 표 11-16). 리퍼 혼돈 상태: 피냄새 혼돈 상태 토글(치명타 적중률)과 한 토글. 출처: 공식 공지(2023-10-18)
+          // 공격 속도 10%, 이동 속도 10%.
+          new ClassSpeedBuff(
+              "피냄새",
+              "혼돈 상태 가정",
+              "리퍼",
+              "피냄새",
+              null,
+              new BigDecimal("10"),
+              new BigDecimal("10"),
+              "혼돈 상태 공격 속도 10%, 이동 속도 10%(공식 공지 값, 상태 가정, 기본 켬)"),
+          // 스카우터 하이퍼 싱크(변신 상태): 공식 가이드는 수치 없이 '속도 증가'만, 수치는 게임 내 툴팁 캡처(2025-01-15)와 비교 기준이 같음. 보이는
+          // 문구에는 날짜·내부 표현을 넣지 않는다.
+          new ClassSpeedBuff(
+              "하이퍼 싱크 상태 가정",
+              "하이퍼 싱크 상태 가정",
+              "스카우터",
+              "진화의 유산",
+              null,
+              new BigDecimal("15"),
+              new BigDecimal("30"),
+              "하이퍼 싱크 공격 속도 15%, 이동 속도 30%(상태 가정, 기본 켬)"),
+          // 배틀마스터 바람의 속삭임 "자신 및 24m 범위 안에 파티원은 … 8초 동안 이동속도가 16.0% 증가하고, 공격속도가 8.0% 증가한다."
+          new ClassSpeedBuff(
+              "바람의 속삭임 버프 유지 가정",
+              "바람의 속삭임 버프 유지 가정",
+              "배틀마스터",
+              null,
+              "바람의 속삭임",
+              new BigDecimal("8"),
+              new BigDecimal("16"),
+              "바람의 속삭임 8초 이동 속도 16%, 공격 속도 8%(스킬 버프 가정, 기본 켬)"));
+
+  /** 직업 코어의 '운명' 상태 공이속(표 고치기 D, 기본 켬). pattern의 이름 붙은 그룹 b = 공격·이동 둘 다. 달성 구간 문구에서 읽는다. */
+  public record CoreSpeed(String core, String label, Pattern pattern) {}
+
+  public static final List<CoreSpeed> CORE_SPEEDS =
+      List.of(
+          // 데모닉 질서의 해 "'운명: 서프레서' : 공격 속도와 이동 속도가 10.0% 증가하고, 일반 스킬의 피해량이 3.0% 증가한다."(30초)
+          new CoreSpeed(
+              "서프레서",
+              "운명: 서프레서 유지 가정",
+              Pattern.compile(
+                  "운명: 서프레서.{0,2}\\s*:\\s*공격 ?속도와 이동 ?속도가\\s*(?<b>" + SPEED_NUMBER + ")%\\s*증가")),
+          // 환수사 질서의 해 "'운명: 곰은 사람을 찢어' : 금술 : 찢 곰 스킬이 상시 강화되며 공격 및 이동 속도가 15.0% 증가한다."
+          new CoreSpeed(
+              "곰은 사람을 찢어",
+              "운명: 곰은 사람을 찢어 유지 가정",
+              Pattern.compile(
+                  "운명: 곰은 사람을 찢어.{0,2}\\s*:[^.]*?공격 및 이동 ?속도가\\s*(?<b>"
+                      + SPEED_NUMBER
+                      + ")%\\s*증가")));
+
+  static CoreSpeed coreSpeed(String slotName) {
+    if (slotName == null) return null;
+    for (var core : CORE_SPEEDS) if (slotName.endsWith(" : " + core.core())) return core;
+    return null;
+  }
 
   /**
    * 공식 원문 줄이 없는 직업 자기 공이속(#5). 비교 기준 효율표 값을 그 빌드의 깨달음 노드 장착을 조건으로 '가정' 토글(기본 켬, key = 노드 이름)로 넣는다.
@@ -549,7 +797,35 @@ public final class CritEffectTable {
   public static final java.util.Set<String> MAIN_SKILL_LIMITED =
       java.util.Set.of(
           // 블래스터 포격 강화 빌드의 주력 피해는 포격 스킬(계산 검증 11-09 확인: '포격 출력 강화' Lv.3 = 포격 강화 빌드 노드)
-          "포격 출력 강화");
+          "포격 출력 강화",
+          // 표 고치기 A(계산 검증 11-16): 비교 기준 주력기에 들어가는 노드(디스트로이어 해방·서머너 일반·고대의 정령·환수사 둔갑이 주력).
+          "날카로운 해머",
+          "고대의 힘",
+          "깨어난 잠재력");
+
+  /**
+   * 합계·주력 스킬에는 넣고 스킬별로는 그 분류 스킬에만 붙는 노드 토글 key → 분류(비교 기준과 같음, 계산 검증 11-16: 서머너 고대의 힘은 일반 스킬, 환수사
+   * 깨어난 잠재력은 둔갑 스킬).
+   */
+  public static final Map<String, String> CATEGORY_LIMITED_TOGGLES =
+      Map.of("고대의 힘", "일반 스킬", "깨어난 잠재력", "둔갑 스킬");
+
+  /**
+   * 합계에는 넣고 스킬별로는 그 분류(공식 스킬 Tooltip 제목)의 스킬에만 붙는 직업 버프 가정 출처 이름 → 분류. 이름이 같거나 '이름(' 으로 시작하면(노드 토글
+   * 출처는 '라벨(노드 Lv.N)') 해당한다. 비교 기준과 같음(계산 검증 11-16: 창술사 연가공법은 '[난무 스킬]'에만, '[집중 스킬]'에는 없음 —
+   * 청룡진·연가비기 모두 같은 연가공법, 코드 리뷰 #979 P2 후속).
+   */
+  public static final Map<String, String> CATEGORY_LIMITED_BUFFS =
+      Map.of("청룡진 연가공법 유지 가정", "난무 스킬", "연가공법 16초 유지 가정", "난무 스킬");
+
+  /** 출처 이름의 분류 한정(CATEGORY_LIMITED_BUFFS). 해당하지 않으면 null. */
+  public static String categoryLimit(String sourceName) {
+    if (sourceName == null) return null;
+    for (var entry : CATEGORY_LIMITED_BUFFS.entrySet())
+      if (sourceName.equals(entry.getKey()) || sourceName.startsWith(entry.getKey() + "("))
+        return entry.getValue();
+    return null;
+  }
 
   /**
    * 그 빌드의 주력 스킬이 전투 스킬 목록(스킬별 치명타 적중률) 밖인 토글 key. 이 토글이 있으면(켬·끔 무관) 주력 스킬 치명타 적중률은 목록 스킬이 아니라 시트 쪽
@@ -571,7 +847,7 @@ public final class CritEffectTable {
               "버스트 강화 자기 공이속(가정)",
               new BigDecimal("32.79"),
               new BigDecimal("22.80"),
-              "공식 원문 줄 없음. 비교 기준 효율표의 버스트 빌드 자기 공격·이동 속도(가정, 기본 켬)"));
+              "버스트 빌드 자기 공격·이동 속도(공식 문구에 수치 없음, 가정, 기본 켬)"));
 
   static AssumedSpeedSynergy assumedSpeedSynergy(String nodeName) {
     if (nodeName == null) return null;

@@ -113,6 +113,10 @@ market:
     gems:
       enabled: ${MARKET_WARMUP_GEMS_ENABLED:false}
       interval: ${MARKET_WARMUP_GEMS_INTERVAL:10m}
+    # 장신구 시세 표 기본 필터 24칸(일별 최저가 빈 날 없애기, #985). 1분 틱마다 interval보다 오래된 칸 하나(분당 공식 호출 최대 1회).
+    accessories:
+      enabled: ${MARKET_WARMUP_ACCESSORIES_ENABLED:false}
+      interval: ${MARKET_WARMUP_ACCESSORIES_INTERVAL:60m}
   # 거래량 정렬용 거래량 채우기. 하루(KST) 한 바퀴, 탭 기본 티어 스캔 품목의 상세 이력에서 완료일 거래량을 Valkey(TTL 8일)에 둔다.
   # 재련 재료 → 재련 추가 → 각인서 → 생활 → 아크 그리드 → 무기 진화 → 전투 용품 → 요리 → 아바타(돌림: 남은 몫만큼 날마다 이어 받음) 순서.
   # 이 작업만의 상한: 분당 15·하루 2,000 공식 호출(사용자 몫 40을 남기는 관문 판정은 그대로). 리더 임대로 한 인스턴스만 돈다.

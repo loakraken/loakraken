@@ -37,7 +37,10 @@ public final class KrakenScoreInputMapper {
   private static final Pattern NUMBER = Pattern.compile("-?\\d+(\\.\\d+)?");
   private static final Pattern KARMA = Pattern.compile("(\\d+)랭크\\s*(\\d+)레벨");
 
-  /** 카르마를 아직 열지 않은 포인트의 공식 설명. */
+  /**
+   * 카르마를 아직 열지 않은 포인트의 공식 설명. 출처: 공식 Open API armories 캐릭터 응답의 ArkPassive.Points[].Description,
+   * 2026-11-15 20:18 KST 수집 직업 표본 하나(계산 검증 표본 C-1115-b, 진화·도약 '미개방', 깨달음 '1랭크 1레벨').
+   */
   private static final String KARMA_CLOSED = "미개방";
 
   private static final Pattern NODE = Pattern.compile("(\\d+)티어\\s+(.+?)\\s+Lv\\.(\\d+)");

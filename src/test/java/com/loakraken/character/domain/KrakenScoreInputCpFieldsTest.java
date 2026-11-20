@@ -50,6 +50,10 @@ class KrakenScoreInputCpFieldsTest {
     assertThat(KrakenScoreInputMapper.reforge("+19 운명의 전율 검")).isEqualTo(19);
     assertThat(KrakenScoreInputMapper.reforge("운명의 전율 검")).isZero();
     assertThat(KrakenScoreInputMapper.reforge("")).isZero();
+    // 너무 긴 수는 깨진 이름으로 보고 0(정수 변환이 터지면 점수 입력 전체가 비므로, 코드 리뷰 #1027 P3). 태그는 뗀다.
+    assertThat(KrakenScoreInputMapper.reforge("+99999999999 깨진 무기")).isZero();
+    assertThat(KrakenScoreInputMapper.reforge("<FONT COLOR='#E3C7A1'>+10 테스트 무기</FONT>"))
+        .isEqualTo(10);
     var raw =
         raw(
             "{\"ArmoryEquipment\":[{\"Type\":\"무기\",\"Name\":\"+25 테스트 무기\",\"Grade\":\"고대\",\"Tooltip\":\"{}\"}]}");

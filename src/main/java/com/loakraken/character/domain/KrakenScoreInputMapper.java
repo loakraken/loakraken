@@ -92,7 +92,8 @@ public final class KrakenScoreInputMapper {
   }
 
   private static final Pattern CARD_SET = Pattern.compile("^(.+?) \\d세트 \\((\\d+)각성합계\\)$");
-  private static final Pattern REFORGE = Pattern.compile("^\\+(\\d+)");
+  // 재련 단계는 세 자리까지(더 긴 수는 깨진 이름으로 보고 0, 정수 변환이 터져 점수 입력 전체가 비지 않게, 코드 리뷰 #1027 P3).
+  private static final Pattern REFORGE = Pattern.compile("^\\+(\\d{1,3})(?!\\d)");
 
   /**
    * 카드 세트 효과 문자열: 공식 ArmoryCard.Effects 묶음마다 '… N세트 (M각성합계)' 줄 가운데 마지막 줄을 '<세트 이름> M각'으로, 묶음 순서대로 '
@@ -111,9 +112,9 @@ public final class KrakenScoreInputMapper {
     return parts.isEmpty() ? null : String.join(" + ", parts);
   }
 
-  /** 장비 이름 앞 '+N'의 재련 단계. 없으면 0. */
+  /** 장비 이름 앞 '+N'의 재련 단계(태그를 떼고, 카드 줄과 같은 길이 상한). 없거나 읽을 수 없으면 0. */
   static int reforge(String name) {
-    var matcher = REFORGE.matcher(name.strip());
+    var matcher = REFORGE.matcher(strip(name).strip());
     return matcher.find() ? Integer.parseInt(matcher.group(1)) : 0;
   }
 

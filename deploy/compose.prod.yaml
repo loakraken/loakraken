@@ -108,6 +108,9 @@ services:
       # 시뮬레이터 깨달음 카르마 레벨 칸 · 카르마 단계(web #1815). on|off, 비우면 web 기본값(운영 SITE_URL이면 숨김, 시뮬레이터가 꺼져 있으면 늘 숨김).
       # 백엔드 짝 SPEC_UP_KARMA_CP_ENABLED와 같이 켠다(계산 검증 판정 + PM 총괄 OK 뒤, 하나만 켜지 않는다).
       KARMA_SIM: "${KARMA_SIM:-}"
+      # 시뮬레이터 방어구 재련 · 상급 재련 칸(프론트2 web PR). on|off, 비우면 web 기본값(운영 SITE_URL이면 숨김).
+      # 백엔드 짝 스위치(방어구 Δ전투력 게이트, 백엔드 PR3)와 같이 켠다(계산 검증 실경로 판정 + PM 총괄 OK 뒤, 하나만 켜지 않는다).
+      ARMOR_CP_SIM: "${ARMOR_CP_SIM:-}"
       # 이 둘은 비우면 어디서나 꺼짐(on일 때만 켜짐): 검색엔진 색인, 시세 알림 화면.
       CHARACTER_INDEXING: "${CHARACTER_INDEXING:-}"
       PRICE_ALERTS: "${PRICE_ALERTS:-}"

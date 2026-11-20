@@ -15,7 +15,7 @@ import java.util.regex.Pattern;
  * 스탯 계산에만 쓴다. 뭉툭한 가시·음속 돌파는 장착 노드의 공식 문구에서 수치를 읽고, 미장착이면 2026-10-05 공식 Lv.2 문구를 기준값으로 쓴다.
  */
 public final class CritSpeedCalculation {
-  public static final String RULE_VERSION = "crit-speed-v13";
+  public static final String RULE_VERSION = "crit-speed-v14";
 
   /**
    * 치명타 피해 앞(같은 문장)에 오면 조건부로 보고 합산하지 않는 말. 비교 기준 2곳은 "폭주 중"·"마력 해방 중"(각성 상태)은 넣고 "사신화 상태에서"· "페르소나
@@ -511,19 +511,21 @@ public final class CritSpeedCalculation {
                 CritEffectTable.categoryLimit(source.name()),
                 source.value(),
                 source.text()));
-    // 분류 한정 노드 토글(서머너 고대의 힘 → 일반 스킬, 환수사 깨어난 잠재력 → 둔갑 스킬)도 스킬별로는 그 분류에만(계산 검증 #979).
+    // 분류 한정 노드 토글(서머너 고대의 힘 → 일반·고대의 정령 스킬, 환수사 깨어난 잠재력 → 둔갑 스킬)도 스킬별로는 그 분류에만(계산 검증 #979).
+    // 스킬마다 분류는 하나라 분류별로 하나씩 넣어도 한 스킬에 두 번 붙지 않는다.
     for (var toggle : toggles)
       if (toggle.on()
           && toggle.axis() == Axis.CRIT
           && CritEffectTable.CATEGORY_LIMITED_TOGGLES.containsKey(toggle.key()))
-        skillBonuses.add(
-            new NodeBonus(
-                toggle.label(),
-                Axis.CRIT,
-                CritEffectTable.Target.CATEGORY,
-                CritEffectTable.CATEGORY_LIMITED_TOGGLES.get(toggle.key()),
-                toggle.value(),
-                toggle.text()));
+        for (var category : CritEffectTable.CATEGORY_LIMITED_TOGGLES.get(toggle.key()))
+          skillBonuses.add(
+              new NodeBonus(
+                  toggle.label(),
+                  Axis.CRIT,
+                  CritEffectTable.Target.CATEGORY,
+                  category,
+                  toggle.value(),
+                  toggle.text()));
     var classStateCrit =
         sources.stream()
             .filter(

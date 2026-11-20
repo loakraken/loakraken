@@ -271,7 +271,9 @@ public class SpecUpController {
       @Schema(description = "캐릭터 캐시 수집 시각") Instant fetchedAt,
       @Schema(description = "비용에 쓴 시세 칸 가운데 가장 오래된 관측 시각(쓴 칸이 없으면 null)") @NullableResponse
           Instant pricesAt,
-      @Schema(description = "효율 순으로 목표에 닿을 때까지 고른 단계(순서대로)") List<SpecUpGoalStepResponse> steps) {
+      @Schema(description = "효율 순으로 목표에 닿을 때까지 고른 단계(순서대로)") List<SpecUpGoalStepResponse> steps,
+      @Schema(description = POLISH_CONSIDERED) @OptionalResponse Boolean polishStepsConsidered,
+      @Schema(description = KARMA_CONSIDERED_GOAL) @OptionalResponse Boolean karmaStepsConsidered) {
     static SpecUpGoalResponse from(SpecUpGoalService.Goal goal) {
       return new SpecUpGoalResponse(
           goal.characterName(),
@@ -289,7 +291,9 @@ public class SpecUpController {
           goal.simulatorRuleVersion(),
           goal.fetchedAt(),
           goal.pricesAt(),
-          goal.steps().stream().map(SpecUpGoalStepResponse::from).toList());
+          goal.steps().stream().map(SpecUpGoalStepResponse::from).toList(),
+          Boolean.TRUE.equals(goal.polishStepsConsidered()),
+          Boolean.TRUE.equals(goal.karmaStepsConsidered()));
     }
   }
 
@@ -463,7 +467,9 @@ public class SpecUpController {
               example = "ARMOR_REFINE_CP_UNCONFIRMED")
           @NullableResponse
           @OptionalResponse
-          String combatPowerStopReasonCode) {
+          String combatPowerStopReasonCode,
+      @Schema(description = POLISH_CONSIDERED) @OptionalResponse Boolean polishStepsConsidered,
+      @Schema(description = KARMA_CONSIDERED_PATH) @OptionalResponse Boolean karmaStepsConsidered) {
     static SpecUpPathResponse from(SpecUpGoalService.Path path) {
       return new SpecUpPathResponse(
           path.characterName(),
@@ -504,9 +510,18 @@ public class SpecUpController {
           path.knownCostTotal(),
           path.unknownCostSteps(),
           path.combatPowerStopOrder(),
-          path.combatPowerStopReasonCode());
+          path.combatPowerStopReasonCode(),
+          Boolean.TRUE.equals(path.polishStepsConsidered()),
+          Boolean.TRUE.equals(path.karmaStepsConsidered()));
     }
   }
+
+  static final String POLISH_CONSIDERED =
+      "이 답이 장신구 연마 단계를 후보로 봤는지: 스위치 spec-up.polish-path.enabled가 켜졌고 딜러이며 크라켄 점수 입력이 있으면 true(고른 연마 단계가 없어도). 아니면 false. 배포 순서 때문에 계약에서는 선택 필드(없으면 false로 읽는다)";
+  static final String KARMA_CONSIDERED_PATH =
+      "이 답이 깨달음 카르마 단계를 후보로 봤는지: 스위치 spec-up.karma-cp.enabled가 켜졌고 딜러이거나 실제 기준(sort)이 KRAKEN이면 true(서포터는 KRAKEN 순서에서만 카르마 단계를 고름, 고른 카르마 단계가 없어도 true). 아니면 false. 배포 순서 때문에 계약에서는 선택 필드(없으면 false로 읽는다)";
+  static final String KARMA_CONSIDERED_GOAL =
+      "이 답이 깨달음 카르마 단계를 후보로 봤는지: 스위치 spec-up.karma-cp.enabled가 켜졌고 딜러면 true(목표 경로는 전투력으로 고르므로 서포터는 false, 고른 카르마 단계가 없어도 true). 아니면 false. 배포 순서 때문에 계약에서는 선택 필드(없으면 false로 읽는다)";
 
   public record SpecUpPathExcludedResponse(
       @Schema(description = "스펙업 가이드 후보 id와 같은 형식") String candidateId,

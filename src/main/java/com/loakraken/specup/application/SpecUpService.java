@@ -258,15 +258,38 @@ public class SpecUpService {
     }
   }
 
+  /** 연마 단계를 보는 점수 문맥: 스위치 켬 + 딜러 + 크라켄 점수 입력. 아니면 null. */
+  private SpecUpKrakenScore.Context polishContext(CharacterResult snapshot) {
+    if (!polishPathEnabled() || CombatPowerSimulationService.roleReason(snapshot) != null)
+      return null;
+    var context = kraken.context(snapshot);
+    return context.available() && !context.support() ? context : null;
+  }
+
+  /**
+   * 이 답(추천 순서·목표 경로)이 연마 단계를 후보로 보는지(프론트 11-21, 응답 polishStepsConsidered). polishSteps와 같은 조건이라 고른
+   * 연마 단계가 없어도 true일 수 있다.
+   */
+  boolean polishPathApplies(CharacterResult snapshot) {
+    return polishContext(snapshot) != null;
+  }
+
+  /**
+   * 이 답이 깨달음 카르마 단계를 후보로 보는지(응답 karmaStepsConsidered): 스위치 켬 + (딜러 또는 KRAKEN 순서). 서포터는 점수로 고르는
+   * KRAKEN 순서에서만 카르마 단계를 고르고, 전투력으로 고르는 순서·목표 경로에서는 시뮬레이터가 서포터 전투력을 내지 않는다.
+   */
+  boolean karmaPathApplies(CharacterResult snapshot, boolean krakenOrder) {
+    return karmaCpEnabled()
+        && (krakenOrder || CombatPowerSimulationService.roleReason(snapshot) == null);
+  }
+
   /**
    * 연마 단계 후보(스위치가 꺼졌거나, 딜러가 아니거나, 크라켄 점수 입력이 없으면 빈 목록). 비용은 목록과 같은 식이고 캐시된 연마 시세 칸만 쓴다(경로는 시세 칸을
    * 채우지 않음). 변경을 만들 수 없는 줄(점수 입력·툴팁이 다름, 수치표에 없음)은 뺀다.
    */
   List<PolishStep> polishSteps(CharacterResult snapshot) {
-    if (!polishPathEnabled() || CombatPowerSimulationService.roleReason(snapshot) != null)
-      return List.of();
-    var context = kraken.context(snapshot);
-    if (!context.available() || context.support()) return List.of();
+    var context = polishContext(snapshot);
+    if (context == null) return List.of();
     var loadout = snapshot.details().loadout();
     var rows = SpecUpScoreCandidates.polish(context.input(), loadout, polishValues);
     if (rows == null) return List.of();

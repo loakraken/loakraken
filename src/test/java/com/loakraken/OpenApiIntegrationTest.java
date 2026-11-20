@@ -272,6 +272,19 @@ class OpenApiIntegrationTest {
                   .asText())
           .as(field)
           .isEqualTo("null");
+    // 답이 연마·카르마 단계를 봤는지(프론트 11-21, v0.3.15): 경로·목표 답에 boolean 선택 필드 둘(null 아님, 배포 전까지 required 아님).
+    for (var schema : List.of("SpecUpPathResponse", "SpecUpGoalResponse"))
+      for (var field : List.of("polishStepsConsidered", "karmaStepsConsidered")) {
+        assertThat(document.at("/components/schemas/" + schema + "/required").toString())
+            .as(schema + "." + field)
+            .doesNotContain(field);
+        assertThat(
+                document
+                    .at("/components/schemas/" + schema + "/properties/" + field + "/type")
+                    .asText())
+            .as(schema + "." + field)
+            .isEqualTo("boolean");
+      }
     // 아크 패시브 포인트 카르마 레벨(프론트 #1815 후속): 기존 응답에 nullable 선택 필드 추가(계약에서 required가 아니어서 웹 계약 동기화가
     // 배포 순서와 상관없이 안전, 코드 리뷰 #1023 P3).
     assertThat(document.at("/components/schemas/PassivePointResponse/required").toString())

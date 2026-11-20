@@ -101,6 +101,78 @@ class CritSpeedIntegrationTest {
     SiteNames.assertAbsent(response.body());
   }
 
+  /**
+   * 서머너 고대의 힘(#1015, PM 총괄 11-20 23:03 P3): 응답의 스킬별 값에서 [일반 스킬]·[고대의 정령] 스킬에는 노드 값이 붙고 [소환 스킬]에는 붙지
+   * 않는다.
+   */
+  @Test
+  void 서머너_고대의_힘은_응답에서_일반과_고대의_정령_스킬에만_붙는다() throws Exception {
+    var summoner = summoner();
+    when(detailsPort.fetchArmory(anyString())).thenReturn(summoner);
+    when(detailsPort.fetch(anyString())).thenReturn(summoner);
+    var response = post("{\"characterName\":\"%s\"}".formatted(NAME), "application/json");
+    assertThat(response.statusCode()).as(response.body()).isEqualTo(200);
+    var nodes = new java.util.HashMap<String, java.math.BigDecimal>();
+    for (var skill : mapper.readTree(response.body()).at("/data/skills"))
+      nodes.put(skill.path("name").asText(), skill.path("node").decimalValue());
+    assertThat(nodes.get("일반 스킬")).isEqualByComparingTo("16");
+    assertThat(nodes.get("정령 스킬")).isEqualByComparingTo("16");
+    assertThat(nodes.get("소환 스킬")).isEqualByComparingTo("0");
+  }
+
+  private FetchedCharacter summoner() {
+    var profile =
+        new CharacterProfile(
+            NAME,
+            "카단",
+            "서머너",
+            70,
+            new java.math.BigDecimal("1770"),
+            null,
+            null,
+            null,
+            null,
+            null,
+            List.of(new CharacterProfile.Stat("치명", "576", List.of("치명타 적중률이 20.61% 증가합니다."))));
+    var loadout =
+        new CharacterLoadout(
+            List.of(),
+            null,
+            null,
+            null,
+            new CharacterLoadout.ArkPassive(
+                "아크패시브",
+                true,
+                List.of(),
+                List.of(
+                    new CharacterLoadout.PassiveEffect(
+                        "깨달음",
+                        "깨달음 3티어 고대의 힘 Lv.3",
+                        null,
+                        "일반 및 고대의 정령 스킬의 치명타 적중률이 16.0% 증가한다."))),
+            null,
+            List.of(
+                categorized("일반 스킬", "일반 스킬"),
+                categorized("정령 스킬", "고대의 정령"),
+                categorized("소환 스킬", "소환 스킬")));
+    return new FetchedCharacter(CharacterTestFixture.details(profile, loadout, null), "{}", null);
+  }
+
+  private static CharacterLoadout.Skill categorized(String name, String category) {
+    return new CharacterLoadout.Skill(
+        name,
+        null,
+        12,
+        null,
+        null,
+        null,
+        List.of(),
+        null,
+        List.of(),
+        CharacterLoadout.AttackType.NONE,
+        category);
+  }
+
   @ParameterizedTest
   @ValueSource(
       strings = {

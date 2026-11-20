@@ -62,12 +62,17 @@ class OfficialTextLimitTest {
   }
 
   @Test
-  void 상한을_넘은_칸은_수를_센다() {
+  void 상한에_걸린_읽기는_부를_때마다_하나씩_센다() {
     long before = OfficialTextLimit.dropped();
     OfficialTextLimit.fits("a".repeat(OfficialTextLimit.MAX_CHARS));
+    OfficialTextLimit.fits(null);
     assertThat(OfficialTextLimit.dropped()).isEqualTo(before);
-    OfficialTextLimit.fits("a".repeat(OfficialTextLimit.MAX_CHARS + 1));
-    assertThat(OfficialTextLimit.dropped()).isGreaterThanOrEqualTo(before + 1);
+    var over = "a".repeat(OfficialTextLimit.MAX_CHARS + 1);
+    OfficialTextLimit.fits(over);
+    assertThat(OfficialTextLimit.dropped()).isEqualTo(before + 1);
+    // 같은 칸을 다시 읽어도 센다(칸 수가 아니라 읽기 횟수, 설명과 지표 문구가 그렇게 말한다).
+    OfficialTextLimit.fits(over);
+    assertThat(OfficialTextLimit.dropped()).isEqualTo(before + 2);
   }
 
   @Test

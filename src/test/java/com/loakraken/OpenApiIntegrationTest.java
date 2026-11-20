@@ -261,6 +261,17 @@ class OpenApiIntegrationTest {
                   .asText())
           .as(field)
           .isEqualTo("null");
+    // 딜러 KRAKEN 전투력 멈춤(PM 총괄 11-21 (e)): 경로에 nullable 필드 둘(웹은 배포 전까지 optional).
+    for (var field : List.of("combatPowerStopOrder", "combatPowerStopReasonCode"))
+      assertThat(
+              document
+                  .at(
+                      "/components/schemas/SpecUpPathResponse/properties/"
+                          + field
+                          + "/anyOf/1/type")
+                  .asText())
+          .as(field)
+          .isEqualTo("null");
     // 에스더 무기 안쪽 필드(K32, #449 P3): 둘 다 required이고 못 읽으면 null.
     assertThat(document.at("/components/schemas/StatsEstherWeaponResponse/required").toString())
         .contains("refineLevel", "ellaStage");

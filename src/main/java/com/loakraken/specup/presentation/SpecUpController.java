@@ -310,10 +310,12 @@ public class SpecUpController {
       @Schema(description = "전투력 시뮬레이터 요청의 changes[] 하나와 같은 모양") ChangeResponse change,
       @Schema(
               description =
-                  "이 단계로 늘어난 전투력(소수 둘째 자리). 서포터 추천 순서 sort=KRAKEN에서만 null(서포터 전투력 모델이 없어 점수로만 고름)")
+                  "이 단계로 늘어난 전투력(소수 둘째 자리). 서포터 추천 순서 sort=KRAKEN(서포터 전투력 모델이 없어 점수로만 고름)과, 딜러 sort=KRAKEN의 combatPowerStopOrder 단계부터(방어구 재련·상급 재련·완갑 전투력 확인 전)는 null")
           @NullableResponse
           BigDecimal deltaCombatPower,
-      @Schema(description = "이 단계까지 적용한 전투력(시뮬레이터). 서포터 추천 순서 sort=KRAKEN에서만 null")
+      @Schema(
+              description =
+                  "이 단계까지 적용한 전투력(시뮬레이터). 서포터 추천 순서 sort=KRAKEN과 딜러 sort=KRAKEN의 combatPowerStopOrder 단계부터는 null")
           @NullableResponse
           BigDecimal combatPowerAfter,
       @Schema(description = "이 단계 비용(골드). 보석 단계는 지금에서 그 레벨까지의 누적 비용(음수 없음)") CostResponse cost,
@@ -386,7 +388,7 @@ public class SpecUpController {
           BigDecimal combatPower,
       @Schema(
               description =
-                  "마지막 단계까지 적용한 전투력(단계가 없으면 지금 전투력). 지금 전투력이 없거나 서포터 추천 순서 sort=KRAKEN이면 null")
+                  "마지막 단계까지 적용한 전투력(단계가 없으면 지금 전투력). 지금 전투력이 없거나, 서포터 추천 순서 sort=KRAKEN이거나, 딜러 sort=KRAKEN에서 combatPowerStopOrder가 있으면 null")
           @NullableResponse
           BigDecimal finalCombatPower,
       @Schema(
@@ -447,7 +449,21 @@ public class SpecUpController {
               description =
                   "단계 비용(extraCost)을 모르는 단계 수. 0이면 totalCost = knownCostTotal. 배포 순서 때문에 계약에서는 선택 필드")
           @OptionalResponse
-          Integer unknownCostSteps) {
+          Integer unknownCostSteps,
+      @Schema(
+              description =
+                  "딜러 sort=KRAKEN만: 전투력을 비우기 시작한 단계 순서(order). 방어구 재련·상급 재련·완갑 단계는 점수로 고르지만 전투력을 아직 계산하지 않으므로, 그 단계부터 그 뒤 단계의 deltaCombatPower·combatPowerAfter와 finalCombatPower가 null이다(점수·비용은 그대로). 그런 단계가 없으면 null. 배포 순서 때문에 계약에서는 선택 필드",
+              example = "3")
+          @NullableResponse
+          @OptionalResponse
+          Integer combatPowerStopOrder,
+      @Schema(
+              description =
+                  "combatPowerStopOrder의 이유 코드(문자열, 값이 늘 수 있음): ARMOR_REFINE_CP_UNCONFIRMED(방어구 재련·상급 재련·완갑 전투력 계산식 확인 전). combatPowerStopOrder가 null이면 null. 배포 순서 때문에 계약에서는 선택 필드",
+              example = "ARMOR_REFINE_CP_UNCONFIRMED")
+          @NullableResponse
+          @OptionalResponse
+          String combatPowerStopReasonCode) {
     static SpecUpPathResponse from(SpecUpGoalService.Path path) {
       return new SpecUpPathResponse(
           path.characterName(),
@@ -486,7 +502,9 @@ public class SpecUpController {
           path.supportOrderAvailable(),
           path.krakenScoreRole(),
           path.knownCostTotal(),
-          path.unknownCostSteps());
+          path.unknownCostSteps(),
+          path.combatPowerStopOrder(),
+          path.combatPowerStopReasonCode());
     }
   }
 

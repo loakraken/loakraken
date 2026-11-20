@@ -1458,6 +1458,22 @@ public class CombatPowerSimulationService {
   }
 
   /** 확인 전이라 계산하지 않는 변경의 이유(방어구 재련·상급 재련, 팔 보호구, 팔찌 힘·민첩·지능 줄). 그 밖이면 null. */
+  /**
+   * 방어구 재련·상급 재련·팔 보호구처럼 전투력을 아직 계산하지 않는(UNSUPPORTED, 주 스탯 경로 확인 전) 변경인지. heldReason과 같은 규칙(팔찌 줄은
+   * 빼고). 스펙업 KRAKEN 추천 순서는 이 단계를 점수로 고르고 전투력은 비운다(PM 총괄 11-21 (e)).
+   */
+  public static boolean armorClosed(CharacterLoadout loadout, Change change) {
+    if (change == null) return false;
+    if (change.kind() == Kind.ARM_GUARD) return true;
+    if (change.kind() != Kind.EQUIPMENT_REFINE && change.kind() != Kind.EQUIPMENT_ADVANCED_REFINE)
+      return false;
+    var index = change.index();
+    if (loadout == null || index == null || index < 0 || index >= loadout.equipment().size())
+      return false;
+    var item = loadout.equipment().get(index);
+    return item != null && !"무기".equals(item.type());
+  }
+
   private static String heldReason(
       CharacterLoadout loadout, CombatPowerBraceletModel.Model braceletModel, Planned planned) {
     var change = planned.change();

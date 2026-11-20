@@ -91,6 +91,32 @@ public final class KrakenScoreInputMapper {
     return CharacterPosition.judgeDescriptions(className, descriptions);
   }
 
+  private static final Pattern CARD_SET = Pattern.compile("^(.+?) \\d세트 \\((\\d+)각성합계\\)$");
+  private static final Pattern REFORGE = Pattern.compile("^\\+(\\d+)");
+
+  /**
+   * 카드 세트 효과 문자열: 공식 ArmoryCard.Effects 묶음마다 '… N세트 (M각성합계)' 줄 가운데 마지막 줄을 '<세트 이름> M각'으로, 묶음 순서대로 '
+   * + '로 잇는다(비교 기준 계산기 입력 형식, 계산 검증 11-21). 각성합계 줄이 하나도 없으면 null.
+   */
+  static String cardSets(JsonNode raw) {
+    var parts = new java.util.ArrayList<String>();
+    for (var group : raw.path("ArmoryCard").path("Effects")) {
+      String last = null;
+      for (var item : group.path("Items")) {
+        var matcher = CARD_SET.matcher(strip(item.path("Name").asString("")).strip());
+        if (matcher.matches()) last = matcher.group(1) + " " + matcher.group(2) + "각";
+      }
+      if (last != null) parts.add(last);
+    }
+    return parts.isEmpty() ? null : String.join(" + ", parts);
+  }
+
+  /** 장비 이름 앞 '+N'의 재련 단계. 없으면 0. */
+  static int reforge(String name) {
+    var matcher = REFORGE.matcher(name.strip());
+    return matcher.find() ? Integer.parseInt(matcher.group(1)) : 0;
+  }
+
   /** 공식 armories 응답 본문(JSON 트리) → 엔진 입력. */
   public static ObjectNode from(JsonNode raw) {
     var out = F.objectNode();
@@ -102,10 +128,23 @@ public final class KrakenScoreInputMapper {
     profile.put("secondClass", secondClass);
     // 딜러·서포터는 서비스 전체와 같은 규칙(CharacterPosition: 깨달음 노드)으로 판정한다.
     profile.put("supportCheck", position(raw, className).role() == CharacterPosition.Role.SUPPORT);
+    // 전투력(절대값) 경로에 쓰는 전투 레벨(공식 ArmoryProfile.CharacterLevel). 없으면 null.
+    profile.set("level", copy(raw.path("ArmoryProfile").path("CharacterLevel")));
     out.putObject("avatar").set("avatarStats", number(avatarStats(raw)));
     out.set("skills", skills(raw));
-    // 점수·젬 효율에 쓰이지 않는 전투력 경로 값 — 엔진 기본값.
-    out.putObject("baseEffect").set("petStat", number(1));
+    // 카드 세트 효과 문자열(전투력 경로): 묶음마다 '<세트 이름> N각', ' + '로 잇는다. 없으면 null.
+    var card = cardSets(raw);
+    if (card == null) out.putNull("card");
+    else out.put("card", card);
+    // 전투력 경로 기본값(가정, 비교 기준 계산기 상수 — 공식 응답에 없는 펫·음식 효과): 펫 피해 1%, 펫 주스탯 1%, 펫 체력 효과 5,
+    // 펫 체력 순찰 2, 음식 0, 아제나 축복 있음. 딜러 전투력에는 petDamage·petStat만 움직인다(계산 검증 11-21).
+    var baseEffect = out.putObject("baseEffect");
+    baseEffect.set("petDamage", number(1));
+    baseEffect.set("petStat", number(1));
+    baseEffect.set("petHpEffect", number(5));
+    baseEffect.set("petHpPatrol", number(2));
+    baseEffect.set("dinner", number(0));
+    baseEffect.put("isAzena", true);
     out.set("gem", gem(raw));
     out.set("armory", armory);
     out.set("stats", stats(raw, braceletStats(armory)));
@@ -267,6 +306,8 @@ public final class KrakenScoreInputMapper {
         }
         var weapon = equipment.putObject("weapon");
         weapon.set("grade", grade);
+        // 재련 단계(이름 앞 '+N', 없으면 0): 전투력 경로의 에스더 무기 항에만 쓴다.
+        weapon.put("reforge", reforge(item.path("Name").asString("")));
         weapon.set("quality", copy(itemTitle(tooltip).path("qualityValue")));
         weapon.set("stat", lineValue(base, WEAPON_ATK));
       } else if ("vambrace".equals(key)) {

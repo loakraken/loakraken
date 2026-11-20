@@ -135,6 +135,10 @@ public class SpecUpKrakenScore {
           case ENGRAVING_LEVEL -> engraving(copy, change.name(), change.level());
           case EQUIPMENT_QUALITY -> quality(copy, change.quality());
           case EQUIPMENT_REFINE -> refine(copy, loadout, change.index(), change.refine());
+          // 목록 상급 재련 줄(일반 재련은 지금 그대로, 단계표 (재련, 지금 상급) → (재련, 목표 상급) Δ).
+          case EQUIPMENT_ADVANCED_REFINE ->
+              change.level() != null
+                  && refineTo(copy, loadout, change.index(), null, change.level());
           case ARM_GUARD -> armGuard(copy, loadout, change.level(), change.grade());
           default -> false;
         };
@@ -166,6 +170,32 @@ public class SpecUpKrakenScore {
       Map<String, Edit> edits) {
     if (context == null || !context.available() || slots == null) return null;
     var copy = (ObjectNode) context.input().deepCopy();
+    // 같은 장비의 일반 재련·상급 재련 변경은 모아 한 번에 적용한다(refineTo). 칸이 둘로 나뉘어 있어도 부위 stat은 하나다.
+    var refines = new LinkedHashMap<Integer, Integer[]>();
+    for (var changes : slots.values())
+      for (var change : changes)
+        if (change != null
+            && (change.kind()
+                    == com.loakraken.character.application.CombatPowerSimulationService.Kind
+                        .EQUIPMENT_REFINE
+                || change.kind()
+                    == com.loakraken.character.application.CombatPowerSimulationService.Kind
+                        .EQUIPMENT_ADVANCED_REFINE)) {
+          if (change.index() == null) return null;
+          var target = refines.computeIfAbsent(change.index(), index -> new Integer[2]);
+          if (change.kind()
+              == com.loakraken.character.application.CombatPowerSimulationService.Kind
+                  .EQUIPMENT_REFINE) {
+            if (change.refine() == null) return null;
+            target[0] = change.refine();
+          } else {
+            if (change.level() == null) return null;
+            target[1] = change.level();
+          }
+        }
+    for (var entry : refines.entrySet())
+      if (!refineTo(copy, loadout, entry.getKey(), entry.getValue()[0], entry.getValue()[1]))
+        return null;
     for (var entry : slots.entrySet()) {
       var edit = edits == null ? null : edits.get(entry.getKey());
       var stone = new LinkedHashMap<String, Integer>();
@@ -176,7 +206,8 @@ public class SpecUpKrakenScore {
               case GEM_LEVEL -> gem(copy, loadout, change.slot(), change.level());
               case ENGRAVING_LEVEL -> engraving(copy, change.name(), change.level());
               case EQUIPMENT_QUALITY -> quality(copy, change.quality());
-              case EQUIPMENT_REFINE -> refine(copy, loadout, change.index(), change.refine());
+              // 위에서 장비마다 함께 적용했다.
+              case EQUIPMENT_REFINE, EQUIPMENT_ADVANCED_REFINE -> true;
               case ARM_GUARD -> armGuard(copy, loadout, change.level(), change.grade());
               case STONE_ENGRAVING -> {
                 if (change.name() == null || change.level() == null) yield false;
@@ -342,8 +373,22 @@ public class SpecUpKrakenScore {
    * 없는 칸(상급 재련이 있는 전율 등)은 계산하지 않는다.
    */
   boolean refine(ObjectNode input, CharacterLoadout loadout, Integer index, Integer target) {
-    if (index == null || target == null || index < 0 || index >= loadout.equipment().size())
-      return false;
+    if (target == null) return false;
+    return refineTo(input, loadout, index, target, null);
+  }
+
+  /**
+   * 일반 재련·상급 재련을 함께 목표 단계로(null이면 지금 단계 그대로): 그 부위 stat에 단계표 (지금 재련, 지금 상급) → (목표 재련, 목표 상급) Δ를 한
+   * 번에 더한다. 업화 단계표는 5 × 재련 + 상급 지수의 값이라 두 변경을 따로 더하면 맞지 않는다(코드 리뷰 #1029 P2: 추천 순서 KRAKEN이 상급 재련을
+   * 고르게). 단계표가 없는 칸이면 계산하지 않는다.
+   */
+  boolean refineTo(
+      ObjectNode input,
+      CharacterLoadout loadout,
+      Integer index,
+      Integer targetRefine,
+      Integer targetAdvanced) {
+    if (index == null || index < 0 || index >= loadout.equipment().size()) return false;
     var item = loadout.equipment().get(index);
     if (item == null || item.detail() == null || item.detail().refineLevel() == null) return false;
     var key = PARTS.get(item.type());
@@ -358,7 +403,13 @@ public class SpecUpKrakenScore {
     var from =
         CombatPowerRefineModel.stat(
             refine, item.type(), family, item.detail().refineLevel(), advanced);
-    var to = CombatPowerRefineModel.stat(refine, item.type(), family, target, advanced);
+    var to =
+        CombatPowerRefineModel.stat(
+            refine,
+            item.type(),
+            family,
+            targetRefine == null ? item.detail().refineLevel() : targetRefine,
+            targetAdvanced == null ? advanced : targetAdvanced);
     var part = input.path("armory").path("equipment").path(key);
     if (from == null || to == null || !part.path("stat").isNumber()) return false;
     ((ObjectNode) part).put("stat", part.path("stat").asDouble() + to.subtract(from).doubleValue());

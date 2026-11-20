@@ -1503,6 +1503,21 @@ public class CombatPowerSimulationService {
     return armorGate.enabled();
   }
 
+  /**
+   * 응답에 쓰는 규칙 버전: 방어구 전투력 문 스위치가 켜지면 '-acg'를 붙인다(같은 버전에 다른 값이 나오지 않게, 코드 리뷰 #1036 P2-5). 꺼져 있으면 지금과
+   * 같다. 웹은 이 값을 비교하지 않는다(PM-프론트 11-21).
+   */
+  public String ruleVersion() {
+    return armorGate.enabled() ? RULE_VERSION + "-acg" : RULE_VERSION;
+  }
+
+  /** 스펙업 추천 순서가 방어구 단계에서 전투력을 비울 때의 이유 코드: 문 밖이면 ARMOR_CP_RESIDUAL_HIGH, 그 밖은 계산식 확인 전. */
+  public String armorStopReason(CharacterResult snapshot) {
+    return armorGate.state(snapshot) == ArmorCpGate.State.RESIDUAL_HIGH
+        ? com.loakraken.character.domain.CombatPowerReasons.ARMOR_CP_RESIDUAL_HIGH.code()
+        : "ARMOR_REFINE_CP_UNCONFIRMED";
+  }
+
   /** 확인 전이라 계산하지 않는 변경의 이유(방어구 재련·상급 재련, 팔 보호구, 팔찌 힘·민첩·지능 줄). 그 밖이면 null. */
   private static String heldReason(
       CharacterLoadout loadout, CombatPowerBraceletModel.Model braceletModel, Planned planned) {
@@ -1818,7 +1833,7 @@ public class CombatPowerSimulationService {
 
   public Options options() {
     return new Options(
-        RULE_VERSION,
+        ruleVersion(),
         false,
         List.of(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10),
         10,

@@ -83,7 +83,9 @@ class ArmorCpGateIntegrationTest {
     assertThat(open.statusCode()).as(open.body()).isEqualTo(200);
     var openRow = mapper.readTree(open.body()).at("/data/contributions/0");
     assertThat(openRow.path("status").asText()).as(open.body()).isEqualTo("OK");
-    assertThat(openRow.path("delta").decimalValue()).isPositive();
+    // 문 안 딜러는 재련 모델 값 그대로(비교 기준과 같은 #884 모델, 계산 검증 11-21).
+    assertThat(openRow.path("delta").decimalValue()).isEqualByComparingTo("7.48");
+    assertThat(mapper.readTree(open.body()).at("/data/ruleVersion").asText()).endsWith("-acg");
     // 웹 표본(프론트2 11-21): 스위치 켬, 문 안 딜러의 시뮬레이터·스펙업 목록·추천 순서.
     ApiContractFixture.write("armor-cp-gate-open-simulate.json", open.body());
     for (var sample :
@@ -117,6 +119,47 @@ class ArmorCpGateIntegrationTest {
                 + URLEncoder.encode("방어구문닫힘", StandardCharsets.UTF_8));
     assertThat(closedList.statusCode()).as(closedList.body()).isEqualTo(200);
     ApiContractFixture.write("armor-cp-gate-closed-spec-up.json", closedList.body());
+    // 코드 리뷰 #1036 P2-4: 문 밖 딜러의 KRAKEN 전투력 멈춤 이유는 시뮬레이터와 같은 코드.
+    var closedKraken =
+        mapper
+            .readTree(
+                get("/api/v1/characters/spec-up/path?sort=KRAKEN&limit=30&characterName="
+                        + URLEncoder.encode("방어구문닫힘", StandardCharsets.UTF_8))
+                    .body())
+            .path("data");
+    assertThat(closedKraken.path("combatPowerStopOrder").isNumber()).isTrue();
+    assertThat(closedKraken.path("combatPowerStopReasonCode").asText())
+        .isEqualTo("ARMOR_CP_RESIDUAL_HIGH");
+  }
+
+  /**
+   * 코드 리뷰 #1036 P2-3: 문이 열렸어도 재련 모델이 방어구 단계를 계산하지 못하면(여기서는 공식 기본 공격력 줄이 없음) 점수로 고른 방어구 단계를 빼지 않고 문
+   * 전처럼 그 단계부터 전투력을 비운다. 그 앞 단계는 전투력이 있고 경로 끝 전투력은 null(섞인 경로).
+   */
+  @Test
+  void 문이_열려도_모델이_못_재는_방어구_단계는_전투력을_비우고_남긴다() throws Exception {
+    var raw = raw();
+    var built = DealerCombatPower.of(KrakenScoreInputMapper.from(raw), engine, tables);
+    assertThat(built).isNotNull();
+    search("방어구문모델밖", raw, built, false);
+    var kraken =
+        mapper
+            .readTree(
+                get("/api/v1/characters/spec-up/path?sort=KRAKEN&limit=30&characterName="
+                        + URLEncoder.encode("방어구문모델밖", StandardCharsets.UTF_8))
+                    .body())
+            .path("data");
+    assertThat(kraken.path("combatPowerStopOrder").isNumber()).as(kraken.toString()).isTrue();
+    assertThat(kraken.path("combatPowerStopReasonCode").asText())
+        .isEqualTo("ARMOR_REFINE_CP_UNCONFIRMED");
+    int stop = kraken.path("combatPowerStopOrder").asInt();
+    var steps = kraken.path("steps");
+    var stopStep = steps.get(stop - 1);
+    assertThat(stopStep.path("kind").asText())
+        .isIn("EQUIPMENT_REFINE", "EQUIPMENT_ADVANCED_REFINE", "ARM_GUARD");
+    assertThat(stopStep.path("combatPowerAfter").isNull()).isTrue();
+    if (stop > 1) assertThat(steps.get(0).path("combatPowerAfter").isNumber()).isTrue();
+    assertThat(kraken.path("finalCombatPower").isNull()).isTrue();
   }
 
   private HttpResponse<String> get(String pathAndQuery) throws Exception {
@@ -154,6 +197,11 @@ class ArmorCpGateIntegrationTest {
   }
 
   private void search(String name, ObjectNode raw, BigDecimal combatPower) throws Exception {
+    search(name, raw, combatPower, true);
+  }
+
+  private void search(String name, ObjectNode raw, BigDecimal combatPower, boolean attackLine)
+      throws Exception {
     var profile =
         new CharacterProfile(
             name,
@@ -169,7 +217,11 @@ class ArmorCpGateIntegrationTest {
             // 재련 모델은 공식 기본 공격력 줄이 있는지 본다(값은 비에 쓰지 않음). 이 표본 원문의 공격력 툴팁은 비어 있어 실제 프로필처럼 넣는다.
             List.of(
                 new CharacterProfile.Stat(
-                    "공격력", "200266", List.of("공격력은 200,266입니다.", "기본 공격력은 140,000입니다."))));
+                    "공격력",
+                    "200266",
+                    attackLine
+                        ? List.of("공격력은 200,266입니다.", "기본 공격력은 140,000입니다.")
+                        : List.of("공격력은 200,266입니다."))));
     var details = CharacterTestFixture.details(profile, ArmoryRawFixtures.loadout(raw), List.of());
     when(detailsPort.fetch(anyString()))
         .thenReturn(new FetchedCharacter(details, "{}", "[]", KrakenScoreInputMapper.from(raw)));

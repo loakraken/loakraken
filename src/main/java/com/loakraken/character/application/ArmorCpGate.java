@@ -8,6 +8,8 @@ import java.math.BigDecimal;
 import java.math.MathContext;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -50,6 +52,10 @@ public class ArmorCpGate {
         }
       };
 
+  /** 지금 재는 스냅샷 → 그 결과. */
+  private final ConcurrentHashMap<String, CompletableFuture<State>> inFlight =
+      new ConcurrentHashMap<>();
+
   public ArmorCpGate(
       @Value("${spec-up.armor-cp-gate.enabled:false}") boolean enabled,
       KrakenScoreEngine.Tables engine,
@@ -58,8 +64,9 @@ public class ArmorCpGate {
     this.enabled = enabled;
     this.engine = engine;
     this.tables = tables;
-    this.openResidual = residual(registry, "open");
-    this.highResidual = residual(registry, "residual_high");
+    // 스위치가 꺼져 있으면 재지 않으므로 지표도 만들지 않는다(코드 리뷰 #1036 P3).
+    this.openResidual = enabled ? residual(registry, "open") : null;
+    this.highResidual = enabled ? residual(registry, "residual_high") : null;
   }
 
   private static DistributionSummary residual(MeterRegistry registry, String outcome) {
@@ -81,15 +88,35 @@ public class ArmorCpGate {
         snapshot.details().profile().characterName()
             + "|"
             + (snapshot.fetchedAt() == null ? "-" : snapshot.fetchedAt().toEpochMilli());
-    synchronized (recent) {
-      var known = recent.get(key);
-      if (known != null) return known;
+    var known = remembered(key);
+    if (known != null) return known;
+    // 같은 스냅샷은 한 번만 잰다: 재는 중이면 그 결과를 기다리고, 다른 스냅샷은 서로 기다리지 않는다(코드 리뷰 #1036 P3).
+    var mine = new CompletableFuture<State>();
+    var running = inFlight.putIfAbsent(key, mine);
+    if (running != null) return running.join();
+    try {
+      // 앞선 측정이 기억에 넣고 막 빠졌을 수 있다.
+      var state = remembered(key);
+      if (state == null) {
+        state = measure(snapshot);
+        synchronized (recent) {
+          recent.put(key, state);
+        }
+      }
+      mine.complete(state);
+      return state;
+    } catch (RuntimeException e) {
+      mine.completeExceptionally(e);
+      throw e;
+    } finally {
+      inFlight.remove(key, mine);
     }
-    var state = measure(snapshot);
+  }
+
+  private State remembered(String key) {
     synchronized (recent) {
-      recent.put(key, state);
+      return recent.get(key);
     }
-    return state;
   }
 
   private State measure(CharacterResult snapshot) {

@@ -1144,6 +1144,8 @@ class SpecUpGoalServiceTest {
             CharacterTestFixture.details(profile, loadout, List.of()),
             Instant.parse("2026-10-12T00:00:00Z"));
     when(simulator.snapshot("목표테스트")).thenReturn(snapshot);
+    // 방어구 문 스위치 꺼짐(기본)의 시뮬레이터 규칙 버전(#1036 이후 시뮬레이터 빈이 준다).
+    when(simulator.ruleVersion()).thenReturn(CombatPowerSimulationService.RULE_VERSION);
     // 가짜 시뮬레이터: 전투력 = 3000 + (적용한 보석 레벨 합 − 처음 레벨 합).
     when(simulator.simulate(any(CharacterResult.class), anyList()))
         .thenAnswer(

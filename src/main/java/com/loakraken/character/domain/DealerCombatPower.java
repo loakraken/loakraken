@@ -42,6 +42,58 @@ public final class DealerCombatPower {
       return tables.deepCopy();
     }
 
+    /**
+     * 리소스 문서(source·tables·sha256)에서 읽는다. tables의 정규 해시가 문서의 sha256과 다르면 실패한다(칸 하나가 빠지거나 바뀌어도, 코드
+     * 리뷰 #1036 P2-2: 모양 확인만으로는 있는 칸만 본다).
+     */
+    public static Tables load(JsonNode document) {
+      var table = document.path("tables");
+      var expected = document.path("sha256").asString("");
+      var actual = hash(table);
+      if (!actual.equals(expected))
+        throw new IllegalArgumentException("딜러 전투력 표 해시가 다릅니다(표가 바뀌었거나 빠진 칸이 있음): " + actual);
+      return new Tables(table);
+    }
+
+    /** 정규 해시: 키를 정렬하고 수는 소수 꼴(BigDecimal 끝자리 0 뗌)로 쓴 글의 SHA-256(16진수). */
+    public static String hash(JsonNode node) {
+      var text = new StringBuilder();
+      canonical(node, text);
+      try {
+        var digest =
+            java.security.MessageDigest.getInstance("SHA-256")
+                .digest(text.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        return java.util.HexFormat.of().formatHex(digest);
+      } catch (java.security.NoSuchAlgorithmException exception) {
+        throw new IllegalStateException(exception);
+      }
+    }
+
+    private static void canonical(JsonNode node, StringBuilder out) {
+      if (node.isObject()) {
+        var keys = new java.util.TreeSet<String>();
+        for (var entry : node.properties()) keys.add(entry.getKey());
+        out.append('{');
+        for (var key : keys) {
+          out.append('"').append(key).append("\":");
+          canonical(node.path(key), out);
+          out.append(',');
+        }
+        out.append('}');
+      } else if (node.isArray()) {
+        out.append('[');
+        for (var item : node) {
+          canonical(item, out);
+          out.append(',');
+        }
+        out.append(']');
+      } else if (node.isNumber()) {
+        out.append(BigDecimal.valueOf(node.asDouble()).stripTrailingZeros().toPlainString());
+      } else if (node.isString()) {
+        out.append('"').append(node.asString()).append('"');
+      } else out.append(node.toString());
+    }
+
     JsonNode get(String key) {
       return tables.path(key);
     }
@@ -118,20 +170,40 @@ public final class DealerCombatPower {
     if (!equipment.path("weapon").path("stat").isNumber()) return false;
     if (!equipment.path("weapon").path("quality").isNumber()) return false;
     for (var part : ARMOR) if (!equipment.path(part).path("stat").isNumber()) return false;
+    if (!equipment.path("weapon").path("grade").isString()) return false;
     var vambrace = equipment.path("vambrace");
-    if (vambrace.isObject() && !vambrace.path("stat").isNumber()) return false;
-    for (var slot : e.path("armory").path("accessory").properties())
-      if (!slot.getKey().equals("bangle") && !slot.getValue().path("stat").isNumber()) return false;
+    // 완갑은 주스탯·무기 공격력·기본 공격력·기본 공격력 %가 모두 공격력 항에 들어간다(코드 리뷰 #1036 P2-1).
+    if (vambrace.isObject())
+      for (var key : List.of("stat", "weaponAtkFlat", "baseAtkFlat", "baseAtkPercent"))
+        if (!vambrace.path(key).isNumber()) return false;
+    for (var slot : e.path("armory").path("accessory").properties()) {
+      var item = slot.getValue();
+      if (!item.path("option").isArray()) return false;
+      if (!slot.getKey().equals("bangle") && !item.path("stat").isNumber()) return false;
+    }
+    // 돌 공격력 보너스(abilityStone.attackbonus)와 카르마 셋(진화 랭크·도약·깨달음 레벨)은 여기서 요구하지 않는다. 보너스 줄이 없는 돌·카르마를
+    // 열지 않은 캐릭터는 실제로 null이고(핀 39개 중 5개: p01·p03·p04·p06·p24) 비교 기준 식도 ×1로 둔다. 읽지 못해 빠진 경우는 그 항만큼
+    // 공식과 어긋나 문의 r이 0.10%를 넘으면 닫고, 넘지 않으면 차이도 0.10% 안이다(코드 리뷰 #1036 P2-1).
+    var orb = e.path("armory").path("orb");
+    if (orb.isObject() && !orb.path("trinity").isNumber()) return false;
     if (!e.path("avatar").path("avatarStats").isNumber()) return false;
     for (var tree : List.of("evolution", "enlightenment", "leap"))
       if (!e.path("arkPassive").path(tree).path("points").isNumber()) return false;
     if (!e.path("engraving").isArray()) return false;
     for (var row : e.path("engraving"))
       if (!row.path("name").isString() || !row.path("level").isNumber()) return false;
-    if (!e.path("gem").path("gems").isArray()) return false;
-    for (var gem : e.path("gem").path("gems")) if (!gem.path("level").isNumber()) return false;
-    if (!e.path("arkGrid").path("core").isArray()
-        || !e.path("arkGrid").path("gemEffects").isArray()) return false;
+    if (!e.path("gem").path("gems").isArray() || !e.path("gem").path("attackBonus").isNumber())
+      return false;
+    for (var gem : e.path("gem").path("gems"))
+      if (!gem.path("level").isNumber() || !gem.path("attackBonus").isNumber()) return false;
+    var grid = e.path("arkGrid");
+    if (!grid.path("core").isArray() || !grid.path("gemEffects").isArray()) return false;
+    for (var core : grid.path("core"))
+      if (!core.path("name").isString()
+          || !core.path("grade").isString()
+          || !core.path("point").isNumber()) return false;
+    for (var effect : grid.path("gemEffects"))
+      if (!effect.path("name").isString() || !effect.path("level").isNumber()) return false;
     var base = e.path("baseEffect");
     return base.path("petStat").isNumber() && base.path("petDamage").isNumber();
   }

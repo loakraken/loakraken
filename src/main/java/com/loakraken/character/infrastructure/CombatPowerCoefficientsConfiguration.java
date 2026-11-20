@@ -117,8 +117,7 @@ class CombatPowerCoefficientsConfiguration {
       throws IOException {
     try (var input =
         new ClassPathResource("kraken-score/combat-power-tables.json").getInputStream()) {
-      return new com.loakraken.character.domain.DealerCombatPower.Tables(
-          mapper.readTree(input).path("tables"));
+      return com.loakraken.character.domain.DealerCombatPower.Tables.load(mapper.readTree(input));
     }
   }
 

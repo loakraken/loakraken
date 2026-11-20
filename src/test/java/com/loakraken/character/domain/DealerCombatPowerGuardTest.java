@@ -57,6 +57,65 @@ class DealerCombatPowerGuardTest {
         .hasMessageContaining("orb");
   }
 
+  /** 코드 리뷰 #1036 P2-2: 있는 칸만 보는 확인으로는 빠진 칸을 못 잡는다. 표 전체의 정규 해시를 리소스에 두고 읽을 때 맞춘다. */
+  @Test
+  void 표_파일의_해시가_내용과_같고_칸_하나가_빠지면_읽을_때_실패한다() throws Exception {
+    var document = read("kraken-score/combat-power-tables.json");
+    assertThat(DealerCombatPower.Tables.hash(document.path("tables")))
+        .isEqualTo(document.path("sha256").asString());
+    assertThatCode(() -> DealerCombatPower.Tables.load(document)).doesNotThrowAnyException();
+    // 각인 표 한 칸을 빼면(모양 확인은 통과) 해시가 달라 실패한다.
+    var dropped = (ObjectNode) document.deepCopy();
+    var engraving = (ObjectNode) dropped.path("tables").path("ability_attack");
+    var row = (ObjectNode) engraving.properties().iterator().next().getValue();
+    row.remove(row.properties().iterator().next().getKey());
+    assertThatCode(() -> new DealerCombatPower.Tables(dropped.path("tables")))
+        .doesNotThrowAnyException();
+    assertThatThrownBy(() -> DealerCombatPower.Tables.load(dropped))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("해시");
+  }
+
+  /** 코드 리뷰 #1036 P2-1: 완갑 기본 공격력·카르마가 빠지면 낮은 값이 아니라 null. */
+  @Test
+  void 완갑_코어_보석_효과_입력이_빠져도_null이다() throws Exception {
+    var engine = DealerCombatPowerPinTest.engineTables();
+    var tables = DealerCombatPowerPinTest.cpTables();
+    var input = pin();
+    assertThat(DealerCombatPower.of(input, engine, tables)).isNotNull();
+    var noVambraceFlat = input.deepCopy();
+    var vambrace = noVambraceFlat.path("armory").path("equipment").path("vambrace");
+    assertThat(vambrace.isObject()).as("p02에 완갑이 있다").isTrue();
+    ((ObjectNode) vambrace).putNull("baseAtkFlat");
+    assertThat(DealerCombatPower.of(noVambraceFlat, engine, tables)).isNull();
+    var noCorePoint = input.deepCopy();
+    var core = noCorePoint.path("arkGrid").path("core");
+    assertThat(core.isEmpty()).as("p02에 코어가 있다").isFalse();
+    ((ObjectNode) core.get(0)).putNull("point");
+    assertThat(DealerCombatPower.of(noCorePoint, engine, tables)).isNull();
+    var noWeaponGrade = input.deepCopy();
+    ((ObjectNode) noWeaponGrade.path("armory").path("equipment").path("weapon")).putNull("grade");
+    assertThat(DealerCombatPower.of(noWeaponGrade, engine, tables)).isNull();
+  }
+
+  /**
+   * 카르마를 열지 않은 캐릭터·보너스 줄이 없는 돌은 실제로 null이고 비교 기준 식도 ×1이다(핀 p01·p03·p04·p06·p24가 그 값으로 기준과 같다). 그래서
+   * null이어도 계산한다.
+   */
+  @Test
+  void 카르마와_돌_보너스가_없는_딜러는_계산한다() throws Exception {
+    var engine = DealerCombatPowerPinTest.engineTables();
+    var tables = DealerCombatPowerPinTest.cpTables();
+    var p01 = read("kraken-score/cp-pins/p01.json");
+    var input = p01.path("input");
+    assertThat(
+            input.path("arkPassive").path("evolution").path("karmaRank").isNull()
+                || input.path("arkPassive").path("evolution").path("karmaRank").isMissingNode())
+        .isTrue();
+    assertThat(DealerCombatPower.of(input, engine, tables))
+        .isEqualByComparingTo(p01.path("expected").decimalValue());
+  }
+
   @Test
   void 표는_밖에서_바꿀_수_없다() throws Exception {
     var engine = DealerCombatPowerPinTest.engineTables();

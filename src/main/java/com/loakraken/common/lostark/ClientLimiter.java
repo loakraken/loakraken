@@ -29,6 +29,9 @@ public class ClientLimiter {
   static final String PREFIX = "lostark:client-limit:";
   private static final ThreadLocal<String> CLIENT = new ThreadLocal<>();
 
+  /** 지금 요청이 검색봇 표시가 붙었지만 주소가 공식 크롤러로 확인되지 않은 요청인지. 클라이언트 키는 사람 키 그대로다. */
+  private static final ThreadLocal<Boolean> UNVERIFIED_MARKED = new ThreadLocal<>();
+
   /** 필터가 둔 경로 힌트('POST /api/v1/자원명/…'). 컨트롤러 경로 템플릿이 아직 없는 필터 단계 거절 로그에 쓴다. */
   private static final ThreadLocal<String> ROUTE = new ThreadLocal<>();
 
@@ -36,6 +39,7 @@ public class ClientLimiter {
   private static final String BOT_PREFIX = "bot:";
   private static final String BOT_ALL = "all";
   private static final String SHARED = "shared";
+  private static final String UNVERIFIED_ALL = "unverified-all";
 
   /** 거절 로그는 버킷·클라이언트·분마다 처음 이만큼만(지표는 전부 센다) — 한 클라이언트가 로그를 넘치게 하지 못하게. */
   static final int REJECT_LOGS_PER_WINDOW = 5;
@@ -99,7 +103,8 @@ public class ClientLimiter {
     MATERIAL_PRICES,
     GEM_FILTER,
     MATERIAL_SEARCH,
-    MATERIAL_SEARCH_ALL
+    MATERIAL_SEARCH_ALL,
+    UNVERIFIED_BOT_OFFICIAL
   }
 
   /** 판정 결과. 거절이면 retryAfterSeconds는 지금 창이 끝날 때까지 남은 초(1 이상)다. */
@@ -170,11 +175,19 @@ public class ClientLimiter {
     var bucket = bot(client) ? Bucket.BOT_ADDRESS_OFFICIAL : Bucket.OFFICIAL;
     long window = clock.millis() / WINDOW.toMillis();
     try {
-      long used = store.current(storeKey(bucket, client, window));
-      return (int) Math.max(0, properties.limit(bucket) - used);
+      int remaining = remaining(bucket, client, window);
+      // 확인되지 않은 봇 표시 요청은 사람 칸과 주소별 봇 칸을 함께 센다 — 둘 중 작은 쪽.
+      if (unverifiedMarked(client))
+        remaining = Math.min(remaining, remaining(Bucket.BOT_ADDRESS_OFFICIAL, client, window));
+      return remaining;
     } catch (ClientLimitStore.Unavailable exception) {
       return Integer.MAX_VALUE;
     }
+  }
+
+  private int remaining(Bucket bucket, String client, long window) {
+    long used = store.current(storeKey(bucket, client, window));
+    return (int) Math.max(0, properties.limit(bucket) - used);
   }
 
   /** 지금 공식 호출 창(1분 고정 창)이 끝나 클라이언트 칸이 다시 차는 시각. */
@@ -188,6 +201,7 @@ public class ClientLimiter {
     if (clientKey == null) return "-";
     if (BOT_ALL.equals(clientKey)) return "bot-all";
     if (SHARED.equals(clientKey)) return "shared";
+    if (UNVERIFIED_ALL.equals(clientKey)) return UNVERIFIED_ALL;
     if (clientKey.startsWith(BOT_PREFIX))
       return BOT_PREFIX + head(clientKey.substring(BOT_PREFIX.length()));
     return head(clientKey);
@@ -242,11 +256,26 @@ public class ClientLimiter {
 
   /** 요청을 처리하는 동안 이 스레드의 공식 호출을 clientKey에 매긴다. */
   void enter(String clientKey) {
+    enter(clientKey, false);
+  }
+
+  /**
+   * {@link #enter(String)}와 같고, unverifiedMarked면 이 요청을 검색봇 표시가 붙었지만 크롤러로 확인되지 않은 요청으로 둔다(공식 호출을 더
+   * 좁게 센다, {@link #chargeOfficial}).
+   */
+  void enter(String clientKey, boolean unverifiedMarked) {
     CLIENT.set(clientKey);
+    if (unverifiedMarked) UNVERIFIED_MARKED.set(Boolean.TRUE);
+    else UNVERIFIED_MARKED.remove();
   }
 
   void exit() {
     CLIENT.remove();
+    UNVERIFIED_MARKED.remove();
+  }
+
+  private static boolean unverifiedMarked(String client) {
+    return !bot(client) && Boolean.TRUE.equals(UNVERIFIED_MARKED.get());
   }
 
   /**
@@ -260,14 +289,28 @@ public class ClientLimiter {
   /**
    * 지금 스레드의 요청이 공식 호출을 하나 더 해도 되는지 센다. 클라이언트가 없으면(백그라운드) 세지 않는다. 검색봇 표시 요청은 OFFICIAL 대신 더 작은 주소별
    * BOT_ADDRESS_OFFICIAL과 모든 봇이 함께 쓰는 BOT_OFFICIAL 상한을 센다(한 주소가 전체 상한을 다 쓰지 못하게).
+   *
+   * <p>검색봇 표시가 붙었지만 크롤러로 확인되지 않은 요청은 그 주소의 BOT_ADDRESS_OFFICIAL과 OFFICIAL, 그런 요청이 모두 함께 쓰는
+   * UNVERIFIED_BOT_OFFICIAL 상한을 센다. 주소를 늘려도 합계가 그 상한을 넘지 못하고, 확인된 크롤러의 BOT_OFFICIAL과 따로라 흉내 낸 요청이
+   * 진짜 크롤러 몫을 쓰지 못한다. 같은 주소가 표시를 떼고 보내도 OFFICIAL을 함께 썼으므로 사람 한도를 넘지 못한다. 합계 상한은 주소별 칸을 지난 호출만 센다(한
+   * 주소의 거절이 합계를 쓰지 않게).
    */
   void chargeOfficial() {
     var client = CLIENT.get();
     if (client == null) return;
     boolean bot = bot(client);
-    if (!check(bot ? Bucket.BOT_ADDRESS_OFFICIAL : Bucket.OFFICIAL, client).allowed()
-        || (bot && !check(Bucket.BOT_OFFICIAL, BOT_ALL).allowed()))
-      throw new BusinessException(LostArkErrorCode.CLIENT_RATE_LIMITED);
+    boolean allowed;
+    if (bot)
+      allowed =
+          check(Bucket.BOT_ADDRESS_OFFICIAL, client).allowed()
+              && check(Bucket.BOT_OFFICIAL, BOT_ALL).allowed();
+    else if (unverifiedMarked(client))
+      allowed =
+          check(Bucket.BOT_ADDRESS_OFFICIAL, client).allowed()
+              && check(Bucket.OFFICIAL, client).allowed()
+              && check(Bucket.UNVERIFIED_BOT_OFFICIAL, UNVERIFIED_ALL).allowed();
+    else allowed = check(Bucket.OFFICIAL, client).allowed();
+    if (!allowed) throw new BusinessException(LostArkErrorCode.CLIENT_RATE_LIMITED);
   }
 
   /** 검색봇 표시 요청의 클라이언트 키(주소별). */

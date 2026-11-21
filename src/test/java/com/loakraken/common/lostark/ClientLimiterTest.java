@@ -373,7 +373,8 @@ class ClientLimiterTest {
 
   /**
    * 봇 표시는 웹이 User-Agent로 붙여 흉내 낼 수 있다(#458 P2 ①). 역방향 DNS로 크롤러 이름이 확인되지 않는 주소의 봇 표시 요청은 봇 칸이 아니라 그
-   * 주소의 사람 칸(GENERAL)을 쓰고, 공식 호출도 모든 봇 합계 상한이 아니라 사람 클라이언트 한도로 센다.
+   * 주소의 사람 칸(GENERAL)을 쓰고, 공식 호출은 확인된 봇의 합계 상한이 아니라 사람 클라이언트 한도로 센다(주소별 봇 한도와 따로 둔 합계 상한도 함께, 아래
+   * 테스트).
    */
   @Test
   void 크롤러로_확인되지_않은_주소의_봇_표시는_사람_칸으로_센다() throws Exception {
@@ -385,7 +386,7 @@ class ClientLimiterTest {
       assertThat(run(filter, "/api/v1/characters/search", spoofed, "1").getStatus()).isEqualTo(200);
     // 봇 칸(2)이었다면 세 번째가 이미 막혔다. 사람 칸(3)을 다 썼으므로 같은 주소의 표시 없는 요청도 막힌다.
     assertThat(run(filter, "/api/v1/characters/search", spoofed, null).getStatus()).isEqualTo(429);
-    // 그 요청 안의 공식 호출은 사람 클라이언트 한도(OFFICIAL 2)로 센다. 봇 칸이면 봇 주소별 한도(5)였다.
+    // 그 요청 안의 공식 호출은 사람 클라이언트 한도(OFFICIAL 2)와 주소별 봇 한도(5) 가운데 작은 쪽까지다.
     var request = request("/api/v1/characters/search", "203.0.113.67", "1");
     var remaining = new java.util.concurrent.atomic.AtomicInteger(-1);
     filter.doFilter(
@@ -401,18 +402,21 @@ class ClientLimiterTest {
   }
 
   /**
-   * 크롤러로 확인되지 않은 주소의 봇 표시 요청이 일으키는 공식 호출: 주소마다 봇 주소별 한도(기본 5)를 받고, 그런 요청이 모두 함께 쓰는 합계 상한(기본 20)을
-   * 넘지 못한다. 사람 한도(주소마다 20, 주소 사이 상한 없음)로 세면 주소를 늘려 공유 게이트를 다 쓸 수 있다. 확인된 크롤러의 합계 상한과는 따로 센다.
+   * 크롤러로 확인되지 않은 주소의 봇 표시 요청이 일으키는 공식 호출: 주소마다 봇 주소별 한도(기본 5)를 받고, 그런 요청이 모두 함께 쓰는 합계 상한(기본 20)을 넘지
+   * 못한다. 사람 한도(주소마다 20, 주소 사이 상한 없음)로 세면 주소를 늘려 공유 게이트를 다 쓸 수 있다. 확인된 크롤러의 합계 상한과는 따로 센다.
    */
   @Test
   void 확인되지_않은_봇_표시_요청의_공식_호출은_주소별_한도와_따로_둔_합계_상한을_받는다() throws Exception {
     var limiter = limiter(new ClientLimitProperties(true, 20, 60, 240, 120, true, 2, 6, 20, 5, 5));
     var filter = filter(limiter);
     var allowed = new java.util.ArrayList<Integer>();
-    for (int n = 0; n < 6; n++) allowed.add(officialCalls(filter, limiter, "203.0.113." + (100 + n), "1", 8));
+    for (int n = 0; n < 6; n++)
+      allowed.add(officialCalls(filter, limiter, "203.0.113." + (100 + n), "1", 8));
     // 주소마다 5회, 여섯 주소 합계 20회까지(사람 한도였다면 주소마다 8회, 합계 48회).
     assertThat(allowed).allMatch(count -> count <= 5);
     assertThat(allowed.stream().mapToInt(Integer::intValue).sum()).isEqualTo(20);
+    // 다섯 번째 주소부터는 주소별 칸이 남아 있어도 합계 상한에 막힌다.
+    assertThat(allowed).containsExactly(5, 5, 5, 5, 0, 0);
     assertThat(
             registry
                 .find("loakraken.client.limit")
@@ -424,6 +428,12 @@ class ClientLimiterTest {
     assertThat(officialCalls(filter, limiter, "66.249.66.20", "1", 6)).isEqualTo(5);
     // 같은 주소의 표시 없는 요청은 사람 한도(20)에서 표시 요청이 쓴 5회를 뺀 만큼이다.
     assertThat(officialCalls(filter, limiter, "203.0.113.100", null, 20)).isEqualTo(15);
+    // 합계 상한은 주소별 봇 한도보다 커야 한다(한 주소가 합계를 혼자 다 쓰지 못하게).
+    assertThatThrownBy(
+            () ->
+                new ClientLimitProperties(
+                    true, 20, 60, 240, 120, true, 2, 6, 20, 5, 5, 10, 3, 15, 36, 5))
+        .isInstanceOf(IllegalArgumentException.class);
   }
 
   /** 한 요청 안에서 공식 호출을 tries번 해 보고 허락된 횟수를 돌려준다. */

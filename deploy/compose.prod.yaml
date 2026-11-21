@@ -173,6 +173,8 @@ services:
       HTTP_MAX_REQUEST_BODY: ${HTTP_MAX_REQUEST_BODY:-64KB}
       # 검색봇 표시 요청 전체가 분당 일으킬 수 있는 공식 호출 수(기본 20). 캐릭터 페이지 색인을 켤 때만 낮춘다.
       CLIENT_LIMIT_BOT_OFFICIAL: ${CLIENT_LIMIT_BOT_OFFICIAL:-20}
+      # 검색봇 표시가 붙었지만 크롤러로 확인되지 않은 요청 전체가 분당 일으킬 수 있는 공식 호출 수(기본 20, 확인된 봇 합계와 따로). 봇 주소별 한도(5)보다 커야 한다.
+      CLIENT_LIMIT_UNVERIFIED_BOT_OFFICIAL: ${CLIENT_LIMIT_UNVERIFIED_BOT_OFFICIAL:-20}
       # 상점 공지 알림 배치(#640): 하루 한 번 공식 공지를 읽어 새 상점·패키지 공지를 Slack에 알린다. 기본 꺼짐.
       # 웹훅 주소는 상점 공지 전용 비밀 파일(감시 알림 웹훅과 분리)에서 보낼 때마다 읽는다.
       SHOP_NOTICE_ENABLED: ${SHOP_NOTICE_ENABLED:-false}

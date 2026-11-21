@@ -31,7 +31,9 @@ class ArmorCpGateTest {
         .isEqualTo(ArmorCpGate.State.OPEN);
     assertThat(gate.state(snapshot("문경계밖", built.multiply(new BigDecimal("1.0011")), input)))
         .isEqualTo(ArmorCpGate.State.RESIDUAL_HIGH);
-    // 공식이 낮은 쪽도 같은 |r|.
+    // 공식이 낮은 쪽도 같은 |r|: 정확히 −0.10%는 열고(코드 리뷰 #1036 계산 메모), 넘으면 닫는다.
+    assertThat(gate.state(snapshot("문경계아래안", built.multiply(new BigDecimal("0.9990")), input)))
+        .isEqualTo(ArmorCpGate.State.OPEN);
     assertThat(gate.state(snapshot("문경계아래", built.multiply(new BigDecimal("0.9989")), input)))
         .isEqualTo(ArmorCpGate.State.RESIDUAL_HIGH);
     assertThat(
@@ -40,7 +42,7 @@ class ArmorCpGateTest {
                 .tag("outcome", "open")
                 .summary()
                 .count())
-        .isEqualTo(1);
+        .isEqualTo(2);
     assertThat(
             registry
                 .get("loakraken.combat_power.residual")
@@ -56,7 +58,7 @@ class ArmorCpGateTest {
                 .tag("outcome", "open")
                 .summary()
                 .count())
-        .isEqualTo(1);
+        .isEqualTo(2);
   }
 
   @Test

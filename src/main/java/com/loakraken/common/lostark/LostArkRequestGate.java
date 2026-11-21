@@ -119,23 +119,26 @@ public class LostArkRequestGate {
     // (코드 리뷰 10-18: 게이트가 바쁠 때 공식 호출 없이 합계 상한이 바닥나지 않게).
     String bucketKey = null;
     String sharedKey = null;
+    java.util.List<String> markedKeys = java.util.List.of();
     var bucket = CHARGE_BUCKET.get();
     if (bucket != null) {
       bucketKey = clients.chargeRefundable(bucket);
-      var shared = SHARED_BUCKET.get();
-      if (shared != null) {
-        try {
-          sharedKey = clients.chargeShared(shared);
-        } catch (RuntimeException exception) {
-          clients.refund(bucketKey);
-          throw exception;
-        }
+      try {
+        var shared = SHARED_BUCKET.get();
+        if (shared != null) sharedKey = clients.chargeShared(shared);
+        // 확인되지 않은 봇 표시 요청은 이 경로에서도 주소별 봇 칸과 그런 요청 합계 상한을 함께 센다(#1065 코드 리뷰 P2).
+        markedKeys = clients.chargeUnverifiedMarked();
+      } catch (RuntimeException exception) {
+        clients.refund(sharedKey);
+        clients.refund(bucketKey);
+        throw exception;
       }
     } else if (currentReserve() == 0 || Boolean.TRUE.equals(CHARGE_CLIENT.get()))
       clients.chargeOfficial();
     try {
       enter();
     } catch (RuntimeException exception) {
+      markedKeys.forEach(clients::refund);
       clients.refund(sharedKey);
       clients.refund(bucketKey);
       throw exception;

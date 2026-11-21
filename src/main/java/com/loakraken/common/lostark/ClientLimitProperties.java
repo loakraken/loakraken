@@ -26,6 +26,9 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
  *     예산을 혼자 쓰지 못하게 한다. 넘으면 그 이름부터 지금 알 수 없음(429 아님)
  * @param materialSearchAllPerMinute 재료 시세 검색이 모든 클라이언트를 합쳐 분당 일으킬 수 있는 공식 호출 수(공유 예산 90의 40%).
  *     수집기·예열이 공유 예산을 얼마나 쓰든 재료 검색 자신의 사용만 센다
+ * @param unverifiedBotOfficialPerMinute 검색봇 표시가 붙었지만 주소가 공식 크롤러로 확인되지 않은 요청이 모두 함께 일으킬 수 있는 공식 API
+ *     호출 수(전체 상한). 확인된 크롤러의 botOfficialPerMinute와 따로 세어, 흉내 낸 요청이 진짜 크롤러 몫을 쓰지 못하게 한다. 그런 요청은 주소마다
+ *     botAddressOfficialPerMinute도 받으므로 그보다 커야 한다
  * @param exemptInternal 연결 상대(소켓)가 루프백이면 세지 않는다(같은 호스트의 점검·도구). 신뢰 프록시를 거친 요청은 X-Forwarded-For 값과
  *     관계없이 세고, 프록시가 주소 없이 보낸 요청은 프록시 주소 하나로 센다
  */
@@ -45,13 +48,52 @@ public record ClientLimitProperties(
     @DefaultValue("10") int materialPricesPerMinute,
     @DefaultValue("3") int gemFilterPerMinute,
     @DefaultValue("15") int materialSearchPerMinute,
-    @DefaultValue("36") int materialSearchAllPerMinute) {
+    @DefaultValue("36") int materialSearchAllPerMinute,
+    @DefaultValue("20") int unverifiedBotOfficialPerMinute) {
   @org.springframework.boot.context.properties.bind.ConstructorBinding
   public ClientLimitProperties {
     if (enabled && botPerMinute > generalPerMinute)
       throw new IllegalArgumentException("봇 한도는 일반 클라이언트 한도보다 클 수 없습니다.");
     if (enabled && botAddressOfficialPerMinute >= botOfficialPerMinute)
       throw new IllegalArgumentException("봇 주소별 공식 호출 한도는 모든 봇 합계 상한보다 작아야 합니다.");
+    if (enabled && botAddressOfficialPerMinute >= unverifiedBotOfficialPerMinute)
+      throw new IllegalArgumentException("봇 주소별 공식 호출 한도는 확인되지 않은 봇 표시 합계 상한보다 작아야 합니다.");
+  }
+
+  /** 확인되지 않은 봇 표시 합계 상한을 기본값(20)으로 둔다(기존 호출·테스트 호환). */
+  public ClientLimitProperties(
+      boolean enabled,
+      int officialPerMinute,
+      int statsPerMinute,
+      int generalPerMinute,
+      int botPerMinute,
+      boolean exemptInternal,
+      int rosterRefreshPerMinute,
+      int auctionSearchPerMinute,
+      int botOfficialPerMinute,
+      int botAddressOfficialPerMinute,
+      int alertSubscribePerMinute,
+      int materialPricesPerMinute,
+      int gemFilterPerMinute,
+      int materialSearchPerMinute,
+      int materialSearchAllPerMinute) {
+    this(
+        enabled,
+        officialPerMinute,
+        statsPerMinute,
+        generalPerMinute,
+        botPerMinute,
+        exemptInternal,
+        rosterRefreshPerMinute,
+        auctionSearchPerMinute,
+        botOfficialPerMinute,
+        botAddressOfficialPerMinute,
+        alertSubscribePerMinute,
+        materialPricesPerMinute,
+        gemFilterPerMinute,
+        materialSearchPerMinute,
+        materialSearchAllPerMinute,
+        20);
   }
 
   /** 재료 시세·보석 필터·재료 검색·재료 검색 전체 한도를 기본값(10·3·15·36)으로 둔다(기존 호출·테스트 호환). */
@@ -82,7 +124,8 @@ public record ClientLimitProperties(
         10,
         3,
         15,
-        36);
+        36,
+        20);
   }
 
   public int limit(ClientLimiter.Bucket bucket) {
@@ -100,6 +143,7 @@ public record ClientLimitProperties(
       case GEM_FILTER -> gemFilterPerMinute;
       case MATERIAL_SEARCH -> materialSearchPerMinute;
       case MATERIAL_SEARCH_ALL -> materialSearchAllPerMinute;
+      case UNVERIFIED_BOT_OFFICIAL -> unverifiedBotOfficialPerMinute;
     };
   }
 }

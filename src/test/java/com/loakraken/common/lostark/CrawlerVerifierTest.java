@@ -38,6 +38,11 @@ class CrawlerVerifierTest {
     resolver.name("157.55.39.1", "MSNBOT-157-55-39-1.SEARCH.MSN.COM.");
     assertThat(verifier.verified("157.55.39.1")).isTrue();
     assertThat(outcome("verified")).isEqualTo(3);
+    // 이름 조회는 결과별 시간으로 남는다(결과 남김 적중은 조회가 아님).
+    assertThat(lookups("verified")).isEqualTo(2);
+    resolver.failing = true;
+    assertThat(verifier.verified("198.51.100.20")).isFalse();
+    assertThat(lookups("error")).isEqualTo(1);
   }
 
   @Test
@@ -187,6 +192,12 @@ class CrawlerVerifierTest {
         executor,
         clock,
         registry);
+  }
+
+  private long lookups(String result) {
+    var timer =
+        registry.find("loakraken.client.limit.crawler_verify.lookup").tag("result", result).timer();
+    return timer == null ? 0 : timer.count();
   }
 
   private double outcome(String outcome) {

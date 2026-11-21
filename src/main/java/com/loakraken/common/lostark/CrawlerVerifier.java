@@ -145,11 +145,20 @@ public class CrawlerVerifier {
     executor.execute(
         () -> {
           boolean verified = false;
+          var result = "unverified";
+          long begin = System.nanoTime();
           try {
             verified = check(literal);
+            if (verified) result = "verified";
           } catch (Exception ignored) {
             // 조회 실패는 확인되지 않은 것.
+            result = "error";
           }
+          // 이름 조회(외부 의존) 시간: 확인 지연·자리 참(timeout·busy)이 늘 때 이름 서버가 느려졌는지 본다.
+          if (registry != null)
+            registry
+                .timer("loakraken.client.limit.crawler_verify.lookup", "result", result)
+                .record(System.nanoTime() - begin, TimeUnit.NANOSECONDS);
           remember(key, verified);
           future.complete(verified);
         });

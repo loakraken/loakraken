@@ -843,12 +843,6 @@ public final class CritEffectTable {
   public static final Map<String, String> CATEGORY_LIMITED_BUFFS =
       Map.of("청룡진 연가공법 유지 가정", "난무 스킬", "연가공법 16초 유지 가정", "난무 스킬");
 
-  /**
-   * 직업 버프 가정(CLASS_BUFFS)으로 모든 스킬 기본에 이미 들어가는 자기 버프 트라이포드. 그 버프가 켜져 있으면 트라이포드를 단 스킬에서 트라이포드로 또 세지
-   * 않는다(소울이터 아스타로스 '데런의 족쇄' 20%가 두 번 세져 40.61% → 60.61%, 코드 리뷰 #979 P2 재실행).
-   */
-  public static final java.util.Set<String> BUFF_TRIPODS_IN_BASE = java.util.Set.of("데런의 족쇄");
-
   /** 출처 이름의 분류 한정(CATEGORY_LIMITED_BUFFS). 해당하지 않으면 null. */
   public static String categoryLimit(String sourceName) {
     if (sourceName == null) return null;

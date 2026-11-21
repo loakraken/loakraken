@@ -15,7 +15,7 @@ import java.util.regex.Pattern;
  * 스탯 계산에만 쓴다. 뭉툭한 가시·음속 돌파는 장착 노드의 공식 문구에서 수치를 읽고, 미장착이면 2026-10-05 공식 Lv.2 문구를 기준값으로 쓴다.
  */
 public final class CritSpeedCalculation {
-  // v15: 디스트로이어 해방 스킬 노드는 해방 스킬에만, 데런의 족쇄 한 번만, 다크니스 엣지는 문구의 최대 중첩 값(코드 리뷰 #979 P2 재실행).
+  // v15: 디스트로이어 해방 스킬 노드는 해방 스킬에만, 다크니스 엣지는 문구의 최대 중첩 값(코드 리뷰 #979 P2 재실행).
   public static final String RULE_VERSION = "crit-speed-v15";
 
   /**
@@ -562,8 +562,7 @@ public final class CritSpeedCalculation {
             skillLimitations,
             skillBonuses,
             input,
-            skillToggles,
-            baseTripods(sources));
+            skillToggles);
     var mainSkill = mainSkill(skills, sources, toggles);
     // 목표는 주력 스킬 치명타 적중률(2자리)로 잰다. 스킬을 모르면 totalRate(#5, 계산 검증 11-09).
     var targetBase = mainSkill == null ? totalCrit : mainSkill.rate();
@@ -852,17 +851,6 @@ public final class CritSpeedCalculation {
     }
   }
 
-  /** 켜진 직업 버프 가정 가운데 기본에 넣은 자기 버프 트라이포드(BUFF_TRIPODS_IN_BASE). */
-  private static java.util.Set<String> baseTripods(List<Source> sources) {
-    var result = new java.util.HashSet<String>();
-    for (var buff : CritEffectTable.CLASS_BUFFS)
-      if (buff.tripod() != null
-          && CritEffectTable.BUFF_TRIPODS_IN_BASE.contains(buff.tripod())
-          && sources.stream().anyMatch(source -> buff.label().equals(source.name())))
-        result.add(buff.tripod());
-    return result;
-  }
-
   private static BigDecimal classState(List<Source> sources, Axis axis) {
     return sources.stream()
         .filter(source -> source.axis() == axis && source.classState())
@@ -924,8 +912,7 @@ public final class CritSpeedCalculation {
         limitations,
         List.of(),
         Assumptions.NONE,
-        new ArrayList<>(),
-        java.util.Set.of());
+        new ArrayList<>());
   }
 
   static List<SkillCrit> skillCrits(
@@ -937,29 +924,6 @@ public final class CritSpeedCalculation {
       List<NodeBonus> bonuses,
       Assumptions input,
       List<ToggleState> toggles) {
-    return skillCrits(
-        loadout,
-        observedCrit,
-        cap,
-        critDamage,
-        limitations,
-        bonuses,
-        input,
-        toggles,
-        java.util.Set.of());
-  }
-
-  /** baseTripods: 직업 버프 가정으로 기본에 이미 넣은 자기 버프 트라이포드 이름(트라이포드로 또 세지 않는다). */
-  static List<SkillCrit> skillCrits(
-      CharacterLoadout loadout,
-      BigDecimal observedCrit,
-      BigDecimal cap,
-      BigDecimal critDamage,
-      List<String> limitations,
-      List<NodeBonus> bonuses,
-      Assumptions input,
-      List<ToggleState> toggles,
-      java.util.Set<String> baseTripods) {
     if (loadout.skills() == null) return List.of();
     var result = new ArrayList<SkillCrit>();
     boolean missingTooltip = false;
@@ -977,7 +941,6 @@ public final class CritSpeedCalculation {
           known = false;
           continue;
         }
-        if (baseTripods.contains(tripod.name())) continue;
         var matcher = TRIPOD_CRIT.matcher(tripod.effect());
         while (matcher.find()) {
           var value = signed(matcher.group(2), matcher.group(3));

@@ -53,7 +53,7 @@ import tools.jackson.databind.json.JsonMapper;
       "alerts.push.enabled=true",
       "alerts.push.vapid-subject=mailto:ops@example.com",
       "alerts.push.max-subscriptions=3",
-      "alerts.push.sends-per-minute=2",
+      "alerts.push.sends-per-minute=10",
       "alerts.push.dispatch-interval=1h",
       "alerts.push.cleanup-interval=1h"
     })
@@ -69,6 +69,10 @@ class AlertIntegrationTest {
   private static final String ENDPOINT_2 =
       "https://updates.push.services.mozilla.com/wpush/v2/secret-2";
   private static final long ITEM = 66102006L;
+
+  /** 시험마다 다른 분에서 시작한다(분당 발송 창은 서비스 하나가 시험 사이에도 이어서 센다). */
+  private static final java.util.concurrent.atomic.AtomicLong RUNS =
+      new java.util.concurrent.atomic.AtomicLong();
 
   static {
     try {
@@ -157,7 +161,8 @@ class AlertIntegrationTest {
     transport.bodies.clear();
     transport.status = 201;
     transport.fail = false;
-    clock.now = Instant.parse("2026-10-14T00:00:10Z");
+    clock.now =
+        Instant.parse("2026-10-14T00:00:10Z").plus(Duration.ofDays(1000 * RUNS.incrementAndGet()));
   }
 
   @Test
@@ -309,23 +314,36 @@ class AlertIntegrationTest {
         .isEqualTo(200);
   }
 
+  /**
+   * 분당 발송 상한(시험 설정 10)은 가격 알림과 구독 확인 알림을 함께 센다(코덱스 보안 10-17 ③). 구독 셋의 확인 알림 3건 뒤에는 가격 알림 7건만 보내고,
+   * 나머지는 다음 분으로 미룬다. 몫이 다 찬 분의 구독은 확인 알림을 보내지 않고 다시 시도하라는 503이다.
+   */
   @Test
-  void 분당_발송_상한을_넘으면_다음_분으로_미룬다() throws Exception {
+  void 분당_발송_상한을_넘으면_다음_분으로_미루고_확인_알림도_함께_센다() throws Exception {
     observe("1300");
     for (var endpoint : List.of(ENDPOINT, ENDPOINT_2, "https://web.push.apple.com/secret-3")) {
       var sub = subscribe(endpoint);
-      data(
-          post(
-              "/api/v1/alerts/subscriptions/" + sub.path("subscriptionId").asText() + "/conditions",
-              sub.path("manageToken").asText(),
-              condition(1200)));
+      for (int threshold : new int[] {1200, 1250, 1150})
+        data(
+            post(
+                "/api/v1/alerts/subscriptions/"
+                    + sub.path("subscriptionId").asText()
+                    + "/conditions",
+                sub.path("manageToken").asText(),
+                condition(threshold)));
     }
     observe("1100");
-    assertThat(alerts.dispatch()).isEqualTo(2);
+    assertThat(alerts.dispatch()).isEqualTo(7);
     assertThat(alerts.dispatch()).isZero();
+    // 이번 분의 몫이 다 찼다: 다시 구독하면 확인 알림을 보내지 않고 503이며, 옛 구독은 그대로다.
+    var busy = postRaw("/api/v1/alerts/subscriptions", null, body(ENDPOINT, UA_PUBLIC));
+    assertThat(busy.statusCode()).isEqualTo(503);
+    assertThat(busy.body()).contains("ALERT_PUSH_UNAVAILABLE");
+    assertThat(transport.endpoints).hasSize(7);
+    assertThat(subscriptions()).isEqualTo(3);
     clock.now = clock.now.plus(Duration.ofMinutes(1));
-    assertThat(alerts.dispatch()).isEqualTo(1);
-    assertThat(transport.endpoints).hasSize(3);
+    assertThat(alerts.dispatch()).isEqualTo(2);
+    assertThat(transport.endpoints).hasSize(9);
   }
 
   @Test

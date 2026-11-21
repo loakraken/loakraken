@@ -462,8 +462,8 @@ class MarketVolumeWarmupTest {
     verify(cache)
         .saveVolumeCursor(MarketTab.AVATAR, new MarketVolumeCursor(2, today.minusDays(1), 1));
 
-    // 다음 주기: 같은 페이지를 다시 받되 이미 채운 품목은 부르지 않고 13번만 다시 받는다.
-    clock.now = clock.now.plusSeconds(60);
+    // 첫 재시도 기다림(5분) 뒤 주기: 같은 페이지를 다시 받되 이미 채운 품목은 부르지 않고 13번만 다시 받는다.
+    clock.now = clock.now.plus(java.time.Duration.ofMinutes(5));
     job.tick();
     verify(boards, times(2)).volumePage(MarketTab.AVATAR, 2);
     verify(markets, times(2)).refreshItemHistory(13L);
@@ -471,8 +471,12 @@ class MarketVolumeWarmupTest {
     verify(cache).saveVolumeCursor(MarketTab.AVATAR, new MarketVolumeCursor(3, today.minusDays(1)));
   }
 
+  /**
+   * 돌림 페이지 재시도는 세 번까지이고, 다시 받기 전에 기다린다(첫 재시도 5분, 그다음 15분, #918 P3). 기다리는 동안의 주기는 그 페이지를 받지 않고 하루 몫도
+   * 쓰지 않는다. 세 번째도 실패하면 넘기며 포기를 지표로 남긴다.
+   */
   @Test
-  void 돌림_페이지_재시도는_세_번까지이고_그래도_실패하면_넘기며_포기를_지표로_남긴다() {
+  void 돌림_페이지_재시도는_기다렸다가_세_번까지이고_그래도_실패하면_넘기며_포기를_지표로_남긴다() {
     when(cache.findVolumeCursor(MarketTab.AVATAR))
         .thenReturn(Optional.of(new MarketVolumeCursor(2, today.minusDays(1))));
     when(boards.volumePage(MarketTab.AVATAR, 2)).thenReturn(page(2, 25, 11, 12));
@@ -481,11 +485,25 @@ class MarketVolumeWarmupTest {
     when(markets.refreshItemHistory(12L)).thenThrow(new IllegalStateException("5xx"));
     var job = warmup("key", List.of(MarketTab.AVATAR), 15, 800);
 
-    for (int i = 0; i < 3; i++) {
-      job.tick();
-      clock.now = clock.now.plusSeconds(60);
-    }
+    job.tick();
+    verify(markets, times(1)).refreshItemHistory(12L);
+    // 1분 뒤 주기: 아직 5분이 안 됐으니 다시 받지 않는다.
+    clock.now = clock.now.plusSeconds(60);
+    job.tick();
+    verify(boards, times(1)).volumePage(MarketTab.AVATAR, 2);
+    verify(markets, times(1)).refreshItemHistory(12L);
+    // 첫 실패 5분 뒤: 두 번째 시도.
+    clock.now = clock.now.plusSeconds(240);
+    job.tick();
+    verify(markets, times(2)).refreshItemHistory(12L);
+    // 두 번째 실패 14분 뒤는 아직, 15분 뒤에 세 번째 시도.
+    clock.now = clock.now.plus(java.time.Duration.ofMinutes(14));
+    job.tick();
+    verify(markets, times(2)).refreshItemHistory(12L);
+    clock.now = clock.now.plus(java.time.Duration.ofMinutes(1));
+    job.tick();
 
+    verify(boards, times(3)).volumePage(MarketTab.AVATAR, 2);
     verify(markets, times(3)).refreshItemHistory(12L);
     verify(cache).saveVolumeCursor(MarketTab.AVATAR, new MarketVolumeCursor(3, today.minusDays(1)));
     assertThat(count("rotation_gave_up")).isEqualTo(1);

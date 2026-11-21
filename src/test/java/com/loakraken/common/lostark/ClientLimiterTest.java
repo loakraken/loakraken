@@ -400,6 +400,53 @@ class ClientLimiterTest {
     assertThat(run(filter, "/api/v1/characters/search", crawler, "1").getStatus()).isEqualTo(429);
   }
 
+  /**
+   * 크롤러로 확인되지 않은 주소의 봇 표시 요청이 일으키는 공식 호출: 주소마다 봇 주소별 한도(기본 5)를 받고, 그런 요청이 모두 함께 쓰는 합계 상한(기본 20)을
+   * 넘지 못한다. 사람 한도(주소마다 20, 주소 사이 상한 없음)로 세면 주소를 늘려 공유 게이트를 다 쓸 수 있다. 확인된 크롤러의 합계 상한과는 따로 센다.
+   */
+  @Test
+  void 확인되지_않은_봇_표시_요청의_공식_호출은_주소별_한도와_따로_둔_합계_상한을_받는다() throws Exception {
+    var limiter = limiter(new ClientLimitProperties(true, 20, 60, 240, 120, true, 2, 6, 20, 5, 5));
+    var filter = filter(limiter);
+    var allowed = new java.util.ArrayList<Integer>();
+    for (int n = 0; n < 6; n++) allowed.add(officialCalls(filter, limiter, "203.0.113." + (100 + n), "1", 8));
+    // 주소마다 5회, 여섯 주소 합계 20회까지(사람 한도였다면 주소마다 8회, 합계 48회).
+    assertThat(allowed).allMatch(count -> count <= 5);
+    assertThat(allowed.stream().mapToInt(Integer::intValue).sum()).isEqualTo(20);
+    assertThat(
+            registry
+                .find("loakraken.client.limit")
+                .tag("bucket", "unverified_bot_official")
+                .tag("event", "reject")
+                .counter())
+        .isNotNull();
+    // 확인된 크롤러는 그 합계를 쓰지 않는다(자기 주소별 5회).
+    assertThat(officialCalls(filter, limiter, "66.249.66.20", "1", 6)).isEqualTo(5);
+    // 같은 주소의 표시 없는 요청은 사람 한도(20)에서 표시 요청이 쓴 5회를 뺀 만큼이다.
+    assertThat(officialCalls(filter, limiter, "203.0.113.100", null, 20)).isEqualTo(15);
+  }
+
+  /** 한 요청 안에서 공식 호출을 tries번 해 보고 허락된 횟수를 돌려준다. */
+  private static int officialCalls(
+      ClientLimitFilter filter, ClientLimiter limiter, String address, String bot, int tries)
+      throws Exception {
+    var allowed = new java.util.concurrent.atomic.AtomicInteger();
+    filter.doFilter(
+        request("/api/v1/characters/search", address, bot),
+        new MockHttpServletResponse(),
+        (req, res) -> {
+          for (int i = 0; i < tries; i++) {
+            try {
+              limiter.chargeOfficial();
+              allowed.incrementAndGet();
+            } catch (BusinessException rejected) {
+              // 거절은 세지 않는다.
+            }
+          }
+        });
+    return allowed.get();
+  }
+
   @Test
   void 봇_표시_요청도_통계_경로는_그_주소의_STATS_한도를_받는다() throws Exception {
     var limiter = limiter(new ClientLimitProperties(true, 20, 60, 240, 120, true, 2, 6, 20, 5, 5));

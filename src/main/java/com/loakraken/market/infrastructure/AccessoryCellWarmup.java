@@ -93,6 +93,12 @@ class AccessoryCellWarmup {
       if (!repeating) log.warn("event=market_accessory_warmup_repeat key={}", key);
       repeating = true;
     } else if (key != null) repeating = false;
-    if (key != null) previousKey = key;
+    if (key != null) {
+      previousKey = key;
+    } else {
+      // 칸을 받지 않은 틱(쉼·호출 한도)이 끼면 이어짐이 끊긴다. 다음 틱이 같은 칸이어도 반복이 아니다(#997 코드 리뷰 P3).
+      previousKey = null;
+      repeating = false;
+    }
   }
 }

@@ -346,6 +346,32 @@ class AlertIntegrationTest {
     assertThat(transport.endpoints).hasSize(9);
   }
 
+  /** 확인 알림은 분당 창의 절반(시험 설정 10 → 5)까지만 쓴다. 나머지 절반은 가격 알림 몫으로 남는다. */
+  @Test
+  void 확인_알림은_분당_발송_상한의_절반까지만_쓴다() throws Exception {
+    observe("1300");
+    for (int i = 0; i < 5; i++) subscribe(ENDPOINT);
+    var sixth = postRaw("/api/v1/alerts/subscriptions", null, body(ENDPOINT, UA_PUBLIC));
+    assertThat(sixth.statusCode()).isEqualTo(503);
+    assertThat(sixth.body()).contains("ALERT_PUSH_UNAVAILABLE");
+    assertThat(transport.endpoints).isEmpty();
+    // 다음 분: 확인 알림 5건(구독 1 + 재구독 4)을 쓰고도 가격 알림은 남은 절반(5건)을 보낸다.
+    clock.now = clock.now.plus(Duration.ofMinutes(1));
+    var sub = subscribe(ENDPOINT_2);
+    for (int i = 0; i < 6; i++)
+      data(
+          post(
+              "/api/v1/alerts/subscriptions/" + sub.path("subscriptionId").asText() + "/conditions",
+              sub.path("manageToken").asText(),
+              condition(1200 + i)));
+    for (int i = 0; i < 4; i++) subscribe(ENDPOINT);
+    observe("1100");
+    assertThat(alerts.dispatch()).isEqualTo(5);
+    // 다음 분에는 확인 알림이 다시 된다.
+    clock.now = clock.now.plus(Duration.ofMinutes(1));
+    subscribe(ENDPOINT);
+  }
+
   @Test
   void 푸시_서비스가_구독_없음이면_즉시_지우고_실패_로그에_주소가_없다(CapturedOutput output) throws Exception {
     observe("1300");
@@ -510,6 +536,8 @@ class AlertIntegrationTest {
     transport.fail = false;
     var sub = subscribe(ENDPOINT);
     assertThat(subscriptions()).isEqualTo(1);
+    // 확인 알림은 분당 창의 절반(시험 설정 5)까지라, 이 분에 이미 5건을 썼다. 다음 분에 이어 간다.
+    clock.now = clock.now.plus(Duration.ofMinutes(1));
     // 같은 주소로 다시 구독할 때 구독 없음(410)이면 옛 구독도 지운다. 그 밖의 실패는 옛 구독을 그대로 둔다.
     transport.status = 403;
     assertThat(postRaw(path, null, body(ENDPOINT, UA_PUBLIC)).statusCode()).isEqualTo(400);

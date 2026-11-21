@@ -47,6 +47,8 @@ public class AlertService {
   private final Object sendLock = new Object();
   private long sendWindow = -1;
   private int sentInWindow;
+  // 그 가운데 확인 알림 수. 확인 알림은 창의 절반까지만 써서, 여러 주소의 구독 요청이 가격 알림 몫을 다 쓰지 못하게 한다.
+  private int confirmsInWindow;
   // 한 번 다시 보내는 중인 조건(발송은 리더 한 인스턴스에서만 돈다). 성공·실패·삭제로 끝나면 뺀다.
   private final java.util.Set<UUID> retried = java.util.concurrent.ConcurrentHashMap.newKeySet();
 
@@ -103,7 +105,7 @@ public class AlertService {
    * 분의 몫이 다 찼으면 보내지 않고 다시 시도하라는 503이다.
    */
   private void confirm(String endpoint, String p256dh, String auth) {
-    if (!reserveSend()) throw new BusinessException(AlertErrorCode.ALERT_PUSH_UNAVAILABLE);
+    if (!reserveConfirm()) throw new BusinessException(AlertErrorCode.ALERT_PUSH_UNAVAILABLE);
     switch (sender.send(endpoint, p256dh, auth, CONFIRM_PAYLOAD)) {
       case SENT -> {}
       case RETRY -> throw new BusinessException(AlertErrorCode.ALERT_PUSH_UNAVAILABLE);
@@ -223,6 +225,18 @@ public class AlertService {
     }
   }
 
+  /** 확인 알림 몫 하나를 쓴다. 창이 찼거나 확인 알림이 이미 창의 절반(최소 1)을 썼으면 false. */
+  private boolean reserveConfirm() {
+    synchronized (sendLock) {
+      roll();
+      if (sentInWindow >= properties.sendsPerMinute()
+          || confirmsInWindow >= Math.max(1, properties.sendsPerMinute() / 2)) return false;
+      sentInWindow++;
+      confirmsInWindow++;
+      return true;
+    }
+  }
+
   private int sendsLeft() {
     synchronized (sendLock) {
       roll();
@@ -235,6 +249,7 @@ public class AlertService {
     if (window != sendWindow) {
       sendWindow = window;
       sentInWindow = 0;
+      confirmsInWindow = 0;
     }
   }
 

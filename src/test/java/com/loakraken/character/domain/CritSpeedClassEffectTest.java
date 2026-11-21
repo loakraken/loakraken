@@ -7,10 +7,10 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 
 /**
- * 치명·속도 직업 효과 두 가지(코드 리뷰 #979 P2 재실행, PM 총괄 11-21. 소울이터 데런의 족쇄 두 번 셈은 비교 기준도 같아 고치지 않음, D6은 PM 총괄
- * 결정). 문구는 공식 Open API armories 캐릭터 응답(ArkPassive.Effects[] 노드 툴팁,
- * ArmorySkills[].Tripods[].Tooltip) 그대로이고, 2026-11-15 수집 직업 표본에서 옮겼다(계산 검증 11-15 직업 원문, 이름 없음). 스탯
- * 치명은 576(치명타 적중률 20.61%).
+ * 치명·속도 직업 효과 두 가지(코드 리뷰 #979 P2 재실행, PM 총괄 11-21. 소울이터 데런의 족쇄 두 번 셈은 비교 기준도 같아 고치지 않음. PM 총괄 11-21
+ * 결정: 기준 차이 항목이 아니라 열린 질문, 공식 출처나 게임 안 값이 있을 때만 정함). 문구는 공식 Open API armories 캐릭터
+ * 응답(ArkPassive.Effects[] 노드 툴팁, ArmorySkills[].Tripods[].Tooltip) 그대로이고, 2026-11-15 수집 직업 표본에서
+ * 옮겼다(계산 검증 11-15 직업 원문, 이름 없음). 스탯 치명은 576(치명타 적중률 20.61%).
  */
 class CritSpeedClassEffectTest {
   /** 2026-11-15 공식 원문: 디스트로이어 깨달음 2티어 '날카로운 해머' Lv.3 노드 효과. */

@@ -1719,8 +1719,8 @@ public class CombatPowerSimulationService {
     var to = String.valueOf(level);
     // 스위치(spec-up.karma-cp.enabled)가 꺼져 있으면 시뮬레이터에 바로 넣어도 계산하지 않는다(검증 전 값이 나가지 않게, 코드 리뷰 #1004 P2).
     if (!enabled) return new Planned(change, target, null, to, null, null, KARMA_OFF);
-    // 아크 패시브가 없으면 카르마 레벨을 읽은 것이 아니다(0으로 보고 +3%를 내지 않게, 코드 리뷰 #1004 P3).
-    var current = loadout.arkPassive() == null ? null : CombatPowerRefineModel.karmaLevel(loadout);
+    // 아크 패시브나 깨달음 포인트 줄이 없으면 카르마 레벨을 읽은 것이 아니다(0으로 보고 +3%를 내지 않게, 코드 리뷰 #1004 P3·재실행 P2).
+    var current = CombatPowerRefineModel.observedKarmaLevel(loadout);
     if (current == null) return new Planned(change, target, null, to, null, null, KARMA_UNREAD);
     var from = String.valueOf(current);
     if (refineModel.unsupportedReason() != null)

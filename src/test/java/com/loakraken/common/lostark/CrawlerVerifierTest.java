@@ -141,7 +141,25 @@ class CrawlerVerifierTest {
             failing);
     assertThat(verifier.verified("198.51.100.30")).isFalse();
     var lookup = verifier.pendingLookup("198.51.100.30");
-    assertThatThrownBy(() -> queued.getFirst().run()).isInstanceOf(IllegalStateException.class);
+    var logger =
+        (ch.qos.logback.classic.Logger) org.slf4j.LoggerFactory.getLogger(CrawlerVerifier.class);
+    var appender =
+        new ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent>();
+    appender.start();
+    logger.addAppender(appender);
+    try {
+      // 확인 스레드로 예외가 새지 않고(스레드를 죽이지 않음) 구조화된 경고 한 줄이 남는다. 주소는 없다.
+      queued.getFirst().run();
+    } finally {
+      logger.detachAppender(appender);
+    }
+    assertThat(appender.list)
+        .singleElement()
+        .satisfies(
+            event ->
+                assertThat(event.getFormattedMessage())
+                    .isEqualTo(
+                        "event=crawler_verify_post_failed exceptionType=java.lang.IllegalStateException"));
     assertThat(lookup).isDone();
     assertThat(verifier.pendingLookup("198.51.100.30")).isNull();
     // 결과는 남지 않았으므로 다음 요청은 새로 조회한다(pending에 갇히지 않음).

@@ -30,6 +30,9 @@ import java.util.concurrent.atomic.AtomicInteger;
  * </ul>
  */
 public class CrawlerVerifier {
+  private static final org.slf4j.Logger log =
+      org.slf4j.LoggerFactory.getLogger(CrawlerVerifier.class);
+
   /** 주소 → 이름, 이름 → 주소 조회. 운영은 JVM 이름 해석(시스템 리졸버), 테스트는 가짜. */
   interface Resolver {
     /** 역방향 이름. 이름이 없으면 null(또는 주소 문자열 그대로). */
@@ -174,6 +177,11 @@ public class CrawlerVerifier {
                   .timer("loakraken.client.limit.crawler_verify.lookup", "result", result)
                   .record(System.nanoTime() - begin, TimeUnit.NANOSECONDS);
             remember(key, verified);
+          } catch (RuntimeException exception) {
+            // 확인 스레드를 죽이지 않고 구조화된 경고 한 줄로 남긴다(주소·이름 없음). 이 주소는 결과가 남지 않아 다음 요청이 다시 조회한다.
+            log.warn(
+                "event=crawler_verify_post_failed exceptionType={}",
+                exception.getClass().getName());
           } finally {
             future.complete(verified);
           }

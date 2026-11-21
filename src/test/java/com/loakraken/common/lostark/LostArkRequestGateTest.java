@@ -479,6 +479,91 @@ class LostArkRequestGateTest {
         .isEqualTo(5);
   }
 
+  /**
+   * #1065 코드 리뷰 P2: 기능 버킷 경로(재료 검색)도 확인되지 않은 봇 표시 요청이면 주소별 봇 칸(5)과 그런 요청 합계 상한(20)을 받는다. 필터를 거쳐
+   * 게이트까지 간다. 사람 한도(재료 검색 주소별 15, 합계 36)만 받으면 주소마다 8번, 합계 36번까지 된다.
+   */
+  @Test
+  void 확인되지_않은_봇_표시_요청은_재료_검색에서도_주소별_한도와_합계_상한을_받는다() throws Exception {
+    var clock = new MutableClock();
+    var limiter = limiter(clock, 20, 15, 36);
+    var gate = materialGate(clock, limiter);
+    var filter = new ClientLimitFilter(limiter, unverifiedEverywhere(clock));
+    var allowed = new java.util.ArrayList<Integer>();
+    for (int n = 0; n < 6; n++)
+      allowed.add(materialCalls(filter, gate, "203.0.113." + (100 + n), "1", 8));
+    assertThat(allowed).containsExactly(5, 5, 5, 5, 0, 0);
+    // 걸린 호출은 재료 검색 합계(36)를 쓰지 않았다(20만 씀): 표시 없는 사람 클라이언트는 자기 한도 15를 다 쓴다.
+    assertThat(materialCalls(filter, gate, "203.0.113.200", null, 15)).isEqualTo(15);
+    // 같은 주소의 보통 공식 호출(표시 있음)도 같은 주소별 봇 칸(이미 5)이라 막힌다.
+    assertThat(officialCalls(filter, gate, "203.0.113.100", "1", 1)).isZero();
+  }
+
+  /** 어느 주소도 크롤러로 확인되지 않는 확인기(역방향 이름 없음). */
+  private CrawlerVerifier unverifiedEverywhere(Clock clock) {
+    var resolver =
+        new CrawlerVerifier.Resolver() {
+          @Override
+          public String reverse(java.net.InetAddress address) {
+            return null;
+          }
+
+          @Override
+          public java.util.List<java.net.InetAddress> forward(String host) {
+            return java.util.List.of();
+          }
+        };
+    return new CrawlerVerifier(
+        new CrawlerVerifyProperties(
+            java.util.List.of("crawler.example"),
+            Duration.ofMillis(300),
+            Duration.ofHours(24),
+            Duration.ofHours(1),
+            100,
+            8),
+        resolver,
+        Runnable::run,
+        clock,
+        registry);
+  }
+
+  private static int materialCalls(
+      ClientLimitFilter filter, LostArkRequestGate gate, String address, String bot, int tries)
+      throws Exception {
+    return calls(filter, address, bot, tries, () -> materialCall(gate));
+  }
+
+  private static int officialCalls(
+      ClientLimitFilter filter, LostArkRequestGate gate, String address, String bot, int tries)
+      throws Exception {
+    return calls(filter, address, bot, tries, () -> userCall(gate));
+  }
+
+  private static int calls(
+      ClientLimitFilter filter, String address, String bot, int tries, Runnable call)
+      throws Exception {
+    var request =
+        new org.springframework.mock.web.MockHttpServletRequest(
+            "POST", "/api/v1/markets/material-prices");
+    request.setRemoteAddr(address);
+    if (bot != null) request.addHeader(ClientLimitFilter.BOT_HEADER, bot);
+    var allowed = new java.util.concurrent.atomic.AtomicInteger();
+    filter.doFilter(
+        request,
+        new org.springframework.mock.web.MockHttpServletResponse(),
+        (req, res) -> {
+          for (int i = 0; i < tries; i++) {
+            try {
+              call.run();
+              allowed.incrementAndGet();
+            } catch (BusinessException rejected) {
+              // 거절은 세지 않는다.
+            }
+          }
+        });
+    return allowed.get();
+  }
+
   /** Memory 저장소 카운터 값(올렸다가 바로 내려 본다). */
   private static long peek(ClientLimitStore store, String key) {
     long value = store.increment(key, Duration.ofMinutes(1)) - 1;

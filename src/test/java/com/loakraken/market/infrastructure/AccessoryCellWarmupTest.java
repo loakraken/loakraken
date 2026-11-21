@@ -130,6 +130,35 @@ class AccessoryCellWarmupTest {
             "event=market_accessory_warmup_repeat key=ACC:c");
   }
 
+  /**
+   * 코드 리뷰 #997 재실행 P3: 받을 칸이 없는 틱(모든 칸이 주기 안)이 끼면 '이어진 두 틱'이 아니다. 칸 A를 받고 쉬다가 A가 다시 오래되어 받는 것은 정상이라
+   * 반복으로 세지 않는다(저장 실패 거짓 경고 없음).
+   */
+  @Test
+  void 쉬는_틱이_끼면_같은_칸을_다시_받아도_반복으로_세지_않는다() {
+    when(lease.hold(eq(MarketHistoryWarmup.LEASE), any())).thenReturn(true);
+    var job = warmup(true, "key");
+    when(auctions.warmAccessories(anyInt(), any(), any(), any()))
+        .thenReturn(new MarketAuctionService.GemWarm(1, "refreshed", "ACC:a"))
+        .thenReturn(new MarketAuctionService.GemWarm(0, "idle"))
+        .thenReturn(new MarketAuctionService.GemWarm(1, "refreshed", "ACC:a"));
+    var logger =
+        (ch.qos.logback.classic.Logger)
+            org.slf4j.LoggerFactory.getLogger(AccessoryCellWarmup.class);
+    var appender =
+        new ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent>();
+    appender.start();
+    logger.addAppender(appender);
+    try {
+      for (int k = 0; k < 3; k++) job.warmAccessoryCells();
+    } finally {
+      logger.detachAppender(appender);
+    }
+    Assertions.assertThat(registry.find("loakraken.market.warmup_repeat").counter()).isNull();
+    Assertions.assertThat(appender.list)
+        .noneMatch(e -> e.getFormattedMessage().startsWith("event=market_accessory_warmup_repeat"));
+  }
+
   @Test
   void 꺼져_있거나_키가_없거나_임대가_없으면_부르지_않는다() {
     when(lease.hold(any(), any())).thenReturn(true);

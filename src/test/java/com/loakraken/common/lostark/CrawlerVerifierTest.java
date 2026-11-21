@@ -101,6 +101,10 @@ class CrawlerVerifierTest {
     assertThat(queued).hasSize(1);
     assertThat(outcome("timeout")).isEqualTo(1);
     assertThat(outcome("pending")).isEqualTo(1);
+    // 합류한 요청은 진행 중인 확인에 아무것도 붙이지 않는다(코드 리뷰 #1054 P2): 1,000번 합류해도 붙은 것은 띄운 요청의 정리 하나뿐이다.
+    for (int i = 0; i < 1000; i++) verifier.verified("66.249.66.5");
+    assertThat(verifier.pendingLookup("66.249.66.5").getNumberOfDependents()).isEqualTo(1);
+    assertThat(queued).hasSize(1);
     queued.getFirst().run();
     assertThat(verifier.verified("66.249.66.5")).isTrue();
     assertThat(resolver.reverseCalls).isEqualTo(1);

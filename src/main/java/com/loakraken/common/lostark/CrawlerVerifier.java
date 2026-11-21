@@ -123,10 +123,11 @@ public class CrawlerVerifier {
     } catch (RejectedExecutionException exception) {
       return count("busy", false);
     }
-    // 끝난 확인은 대기 표에서 뺀다(computeIfAbsent 밖에서: 같은 스레드에서 바로 끝나도 재귀 갱신이 되지 않게).
+    // 합류한 요청은 아무것도 붙이지 않고 바로 사람 칸이다(합류마다 콜백을 붙이면, 한도로 거절될 요청까지 확인이 끝날 때까지 메모리를 잡는다).
+    if (!created[0]) return lookup.isDone() ? done(lookup) : count("pending", false);
+    // 끝난 확인은 대기 표에서 뺀다. 띄운 요청만 한 번 붙인다(computeIfAbsent 밖에서: 같은 스레드에서 바로 끝나도 재귀 갱신이 되지 않게).
     var started = lookup;
     lookup.whenComplete((verified, error) -> pending.remove(key, started));
-    if (!created[0] && !lookup.isDone()) return count("pending", false);
     try {
       boolean verified = lookup.get(properties.timeout().toMillis(), TimeUnit.MILLISECONDS);
       return count(verified ? "verified" : "unverified", verified);
@@ -138,6 +139,17 @@ public class CrawlerVerifier {
     } catch (ExecutionException exception) {
       return count("unverified", false);
     }
+  }
+
+  /** 이미 끝난 확인의 결과(합류한 요청이 끝난 뒤에 왔을 때). */
+  private boolean done(CompletableFuture<Boolean> lookup) {
+    var verified = Boolean.TRUE.equals(lookup.getNow(false));
+    return count(verified ? "verified" : "unverified", verified);
+  }
+
+  /** 시험용: 이 주소의 진행 중인 확인(없으면 null). */
+  CompletableFuture<Boolean> pendingLookup(String address) {
+    return pending.get(InetAddress.ofLiteral(address).getHostAddress());
   }
 
   private CompletableFuture<Boolean> start(String key, InetAddress literal) {

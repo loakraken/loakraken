@@ -465,14 +465,15 @@ public final class CritEffectTable {
               true,
               // 연가비기 토글(연가공법 16초)과 같은 연가공법 +20이라 함께 세지 않는다(코드 리뷰 #979 P2).
               "연가비기"),
-          // 아르카나 스트림 오브 엣지 '다크니스 엣지' "적중 시 마다 … 치명타 적중률이 3.0초간 5.5% 씩 최대 27.6% 까지 증가한다."
+          // 아르카나 스트림 오브 엣지 '다크니스 엣지' "적중 시 마다 … 치명타 적중률이 3.0초간 5.5% 씩 최대 27.6% 까지 증가한다."(2026-11-15
+          // 공식 원문, 최대 레벨). 값은 트라이포드 문구의 '최대 X%'를 읽고 고정값을 두지 않는다(레벨마다 다름, 코드 리뷰 #979 P2 재실행).
           new ClassBuff(
               "다크니스 엣지 최대 중첩 가정",
               "아르카나",
               null,
               "다크니스 엣지",
-              new BigDecimal("27.6"),
-              "스트림 오브 엣지 트라이포드 '다크니스 엣지' 최대 27.6(트라이포드 버프 가정, 기본 켬)",
+              null,
+              "스트림 오브 엣지 트라이포드 '다크니스 엣지' 최대 중첩(트라이포드 버프 가정, 기본 켬)",
               true),
           // 소울이터 아스타로스 '데런의 족쇄' "치명타 적중률이 20.0% 증가하고 적에게 주는 피해가 100.0% 증가한다."
           new ClassBuff(
@@ -811,7 +812,28 @@ public final class CritEffectTable {
    * 툴팁, 스킬 툴팁 분류 '[고대의 정령]'(11-15 저장 응답).
    */
   public static final Map<String, List<String>> CATEGORY_LIMITED_TOGGLES =
-      Map.of("고대의 힘", List.of("일반 스킬", "고대의 정령"), "깨어난 잠재력", List.of("둔갑 스킬"));
+      Map.of(
+          "고대의 힘",
+          List.of("일반 스킬", "고대의 정령"),
+          "깨어난 잠재력",
+          List.of("둔갑 스킬"),
+          // 디스트로이어 날카로운 해머·분노의 망치 "해방 스킬 사용 중(시) 소모한 코어 당 …"(2026-11-15 공식 원문): 합계·주력(해방 스킬)에는 넣고
+          // 스킬별로는 '[해방 스킬]'에만(집속 스킬에는 없음, 코드 리뷰 #979 P2 재실행). 치명타 피해(분노의 망치)도 같다.
+          "날카로운 해머",
+          List.of("해방 스킬"),
+          "분노의 망치",
+          List.of("해방 스킬"));
+
+  /**
+   * 분류 한정 노드 토글(CATEGORY_LIMITED_TOGGLES)의 가정 출처 이름('라벨(노드 Lv.N)')인가. 모든 스킬 기본에 넣는 직업 상태 가정이 아니다.
+   */
+  public static boolean categoryLimitedToggleSource(String sourceName) {
+    if (sourceName == null) return false;
+    for (var toggle : TOGGLES)
+      if (CATEGORY_LIMITED_TOGGLES.containsKey(toggle.key())
+          && sourceName.startsWith(toggle.label() + "(")) return true;
+    return false;
+  }
 
   /**
    * 합계에는 넣고 스킬별로는 그 분류(공식 스킬 Tooltip 제목)의 스킬에만 붙는 직업 버프 가정 출처 이름 → 분류. 이름이 같거나 '이름(' 으로 시작하면(노드 토글
@@ -820,6 +842,12 @@ public final class CritEffectTable {
    */
   public static final Map<String, String> CATEGORY_LIMITED_BUFFS =
       Map.of("청룡진 연가공법 유지 가정", "난무 스킬", "연가공법 16초 유지 가정", "난무 스킬");
+
+  /**
+   * 직업 버프 가정(CLASS_BUFFS)으로 모든 스킬 기본에 이미 들어가는 자기 버프 트라이포드. 그 버프가 켜져 있으면 트라이포드를 단 스킬에서 트라이포드로 또 세지
+   * 않는다(소울이터 아스타로스 '데런의 족쇄' 20%가 두 번 세져 40.61% → 60.61%, 코드 리뷰 #979 P2 재실행).
+   */
+  public static final java.util.Set<String> BUFF_TRIPODS_IN_BASE = java.util.Set.of("데런의 족쇄");
 
   /** 출처 이름의 분류 한정(CATEGORY_LIMITED_BUFFS). 해당하지 않으면 null. */
   public static String categoryLimit(String sourceName) {

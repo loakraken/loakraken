@@ -477,6 +477,19 @@ class CritEffectTableTest {
     // 비교 기준 주력기에도 들어간다(계산 검증 11-16: 디스트로이어 주력 99.22).
     assertThat(result.crit().mainSkillRate())
         .isEqualByComparingTo(off.crit().mainSkillRate().add(new BigDecimal("18")));
+    // 스킬별로는 '[해방 스킬]'에만(코드 리뷰 #979 P2 재실행): 풀 스윙 +18·+51, 헤비 크러쉬·분류 없는 옛 캐시는 그대로.
+    assertThat(skill(result, "풀 스윙").total())
+        .isEqualByComparingTo(skill(off, "풀 스윙").total().add(new BigDecimal("18")));
+    assertThat(skill(result, "풀 스윙").damage())
+        .isEqualByComparingTo(skill(off, "풀 스윙").damage().add(new BigDecimal("51")));
+    for (var name : List.of("헤비 크러쉬", "옛 캐시")) {
+      assertThat(skill(result, name).total())
+          .as(name)
+          .isEqualByComparingTo(skill(off, name).total());
+      assertThat(skill(result, name).damage())
+          .as(name)
+          .isEqualByComparingTo(skill(off, name).damage());
+    }
   }
 
   private static CharacterLoadout.Skill categorized(String name, String category) {
@@ -610,11 +623,40 @@ class CritEffectTableTest {
                 java.util.Map.of("연가비기", true)));
     assertThat(values(both, Axis.CRIT, Category.ASSUMPTION))
         .containsExactly("연가공법 16초 유지 가정(연가비기 Lv.3)=20");
-    var arcana =
-        calculate(
-            "아르카나", List.of(), List.of(skill("스트림 오브 엣지", "다크니스 엣지")), null, Assumptions.NONE);
+    // 다크니스 엣지는 트라이포드 문구의 '최대 X%'를 읽는다(2026-11-15 공식 원문, 최대 레벨). 문구가 없으면 고정값으로 채우지 않는다(코드 리뷰 #979 P2
+    // 재실행).
+    var arcanaSkill =
+        new CharacterLoadout.Skill(
+            "스트림 오브 엣지",
+            null,
+            12,
+            null,
+            null,
+            null,
+            List.of(
+                new CharacterLoadout.Tripod(
+                    1,
+                    1,
+                    "다크니스 엣지",
+                    null,
+                    "[암] 속성으로 변경되고, 적중 시 마다 아르카나의 치명타 적중률이 3.0초간 5.5% 씩 최대 27.6% 까지 증가한다.")),
+            null,
+            List.of(),
+            null);
+    var arcana = calculate("아르카나", List.of(), List.of(arcanaSkill), null, Assumptions.NONE);
     assertThat(values(arcana, Axis.CRIT, Category.ASSUMPTION))
         .containsExactly("다크니스 엣지 최대 중첩 가정=27.6");
+    assertThat(
+            values(
+                calculate(
+                    "아르카나",
+                    List.of(),
+                    List.of(skill("스트림 오브 엣지", "다크니스 엣지")),
+                    null,
+                    Assumptions.NONE),
+                Axis.CRIT,
+                Category.ASSUMPTION))
+        .isEmpty();
     var soul =
         calculate("소울이터", List.of(), List.of(skill("아스타로스", "데런의 족쇄")), null, Assumptions.NONE);
     assertThat(values(soul, Axis.CRIT, Category.ASSUMPTION)).containsExactly("데런의 족쇄 버프 가정=20");

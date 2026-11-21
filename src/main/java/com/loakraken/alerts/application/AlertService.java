@@ -42,8 +42,13 @@ public class AlertService {
   private final Clock clock;
   private final SecureRandom random;
   private final BiConsumer<String, String> subscriptionKeyCheck;
+  // 분당 발송 창. 가격 알림 발송(dispatch, 리더 한 곳)과 구독 확인 알림(요청 스레드)이 함께 쓴다. dispatch는 발송하는 동안 내내 잠그므로,
+  // 요청 스레드가 그 잠금을 기다리지 않게 창은 따로 잠근다.
+  private final Object sendLock = new Object();
   private long sendWindow = -1;
   private int sentInWindow;
+  // 그 가운데 확인 알림 수. 확인 알림은 창의 절반까지만 써서, 여러 주소의 구독 요청이 가격 알림 몫을 다 쓰지 못하게 한다.
+  private int confirmsInWindow;
   // 한 번 다시 보내는 중인 조건(발송은 리더 한 인스턴스에서만 돈다). 성공·실패·삭제로 끝나면 뺀다.
   private final java.util.Set<UUID> retried = java.util.concurrent.ConcurrentHashMap.newKeySet();
 
@@ -96,9 +101,11 @@ public class AlertService {
 
   /**
    * 구독 전에 확인 알림을 한 번 보낸다. 푸시 서비스가 받아야(2xx) 저장한다. 실제 브라우저 구독이 아닌 주소·키는 여기서 걸러진다. 일시 실패는 다시 시도하라는
-   * 503, 그 밖의 실패는 400이다. 구독 없음(404·410)이면 그 주소의 옛 구독도 지운다.
+   * 503, 그 밖의 실패는 400이다. 구독 없음(404·410)이면 그 주소의 옛 구독도 지운다. 확인 알림도 분당 발송 상한에 센다(코덱스 보안 10-17 ③): 이번
+   * 분의 몫이 다 찼으면 보내지 않고 다시 시도하라는 503이다.
    */
   private void confirm(String endpoint, String p256dh, String auth) {
+    if (!reserveConfirm()) throw new BusinessException(AlertErrorCode.ALERT_PUSH_UNAVAILABLE);
     switch (sender.send(endpoint, p256dh, auth, CONFIRM_PAYLOAD)) {
       case SENT -> {}
       case RETRY -> throw new BusinessException(AlertErrorCode.ALERT_PUSH_UNAVAILABLE);
@@ -168,19 +175,18 @@ public class AlertService {
     store.observe(prices, clock.instant().minus(properties.resendInterval()));
   }
 
-  /** 발송 대기 조건을 분당 상한 안에서 보낸다. 넘는 것은 다음 주기로 미룬다. */
+  /** 발송 대기 조건을 분당 상한(구독 확인 알림과 함께 셈) 안에서 보낸다. 넘는 것은 다음 주기로 미룬다. */
   public synchronized int dispatch() {
     var now = clock.instant();
-    long window = now.toEpochMilli() / MINUTE.toMillis();
-    if (window != sendWindow) {
-      sendWindow = window;
-      sentInWindow = 0;
-    }
-    int budget = properties.sendsPerMinute() - sentInWindow;
+    int budget = sendsLeft();
     if (budget <= 0) return 0;
     int sent = 0;
     for (var pending : store.claimPending(budget, now)) {
-      sentInWindow++;
+      // 가져온 뒤 확인 알림이 몫을 먼저 썼으면 보내지 않고 대기로 되돌린다(다음 주기).
+      if (!reserveSend()) {
+        store.requeue(pending.conditionId(), pending.price());
+        continue;
+      }
       var result =
           sender.send(pending.endpoint(), pending.p256dh(), pending.auth(), payload(pending));
       if (result != PushSender.Result.RETRY) retried.remove(pending.conditionId());
@@ -207,6 +213,44 @@ public class AlertService {
       }
     }
     return sent;
+  }
+
+  /** 이번 분 발송 몫 하나를 쓴다. 다 찼으면 false. */
+  private boolean reserveSend() {
+    synchronized (sendLock) {
+      roll();
+      if (sentInWindow >= properties.sendsPerMinute()) return false;
+      sentInWindow++;
+      return true;
+    }
+  }
+
+  /** 확인 알림 몫 하나를 쓴다. 창이 찼거나 확인 알림이 이미 창의 절반(최소 1)을 썼으면 false. */
+  private boolean reserveConfirm() {
+    synchronized (sendLock) {
+      roll();
+      if (sentInWindow >= properties.sendsPerMinute()
+          || confirmsInWindow >= Math.max(1, properties.sendsPerMinute() / 2)) return false;
+      sentInWindow++;
+      confirmsInWindow++;
+      return true;
+    }
+  }
+
+  private int sendsLeft() {
+    synchronized (sendLock) {
+      roll();
+      return properties.sendsPerMinute() - sentInWindow;
+    }
+  }
+
+  private void roll() {
+    long window = clock.instant().toEpochMilli() / MINUTE.toMillis();
+    if (window != sendWindow) {
+      sendWindow = window;
+      sentInWindow = 0;
+      confirmsInWindow = 0;
+    }
   }
 
   /** 오래 쓰지 않은 구독과, 조건 없이 emptyRetention(기본 24시간) 동안 쓰지 않은 구독을 지운다. */

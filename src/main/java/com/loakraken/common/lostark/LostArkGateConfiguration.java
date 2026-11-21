@@ -24,6 +24,7 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 @EnableConfigurationProperties({
   LostArkGateProperties.class,
   ClientLimitProperties.class,
+  CrawlerVerifyProperties.class,
   ByokProperties.class
 })
 class LostArkGateConfiguration {
@@ -100,12 +101,21 @@ class LostArkGateConfiguration {
     }
   }
 
+  /** 검색봇 표시 요청의 주소 확인(역방향 DNS + 정방향 확인, 결과는 주소마다 남김). */
+  @Bean
+  CrawlerVerifier crawlerVerifier(
+      CrawlerVerifyProperties crawlers,
+      Clock clock,
+      io.micrometer.core.instrument.MeterRegistry registry) {
+    return CrawlerVerifier.system(crawlers, clock, registry);
+  }
+
   @Bean
   org.springframework.boot.web.servlet.FilterRegistrationBean<ClientLimitFilter> clientLimitFilter(
-      ClientLimiter limiter) {
+      ClientLimiter limiter, CrawlerVerifier crawlers) {
     var registration =
         new org.springframework.boot.web.servlet.FilterRegistrationBean<>(
-            new ClientLimitFilter(limiter));
+            new ClientLimitFilter(limiter, crawlers));
     registration.addUrlPatterns("/api/v1/*");
     registration.setOrder(org.springframework.core.Ordered.HIGHEST_PRECEDENCE + 10);
     return registration;

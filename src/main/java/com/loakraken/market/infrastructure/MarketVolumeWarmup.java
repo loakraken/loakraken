@@ -17,6 +17,7 @@ import com.loakraken.market.domain.MarketVolume;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.ArrayDeque;
@@ -52,8 +53,11 @@ class MarketVolumeWarmup {
   static final int RESERVE = 40;
   static final ZoneId KST = ZoneId.of("Asia/Seoul");
 
-  /** 돌림 페이지 하나를 받는 최대 시도 수. 실패한 품목이 있으면 다음 주기에 다시 받고, 이 횟수를 채우면 넘긴다(rotation_gave_up). */
+  /** 돌림 페이지 하나를 받는 최대 시도 수. 실패한 품목이 있으면 기다렸다가 다시 받고, 이 횟수를 채우면 넘긴다(rotation_gave_up). */
   static final int MAX_PAGE_ATTEMPTS = 3;
+
+  /** 돌림 페이지 다시 받기 전 기다림: 첫 재시도 5분, 그다음 15분(×3). 공식 쪽 일시 장애가 이어질 때 같은 페이지를 몇 분 안에 다 써 버리지 않게. */
+  static final Duration FIRST_RETRY_DELAY = Duration.ofMinutes(5);
 
   private final MarketBoardService boards;
   private final MarketQueryService markets;
@@ -86,6 +90,9 @@ class MarketVolumeWarmup {
   // 지금 대기열의 돌림 페이지에서 공식 상세가 실패한 품목 수(한도·관문 미룸은 빼고). 0이 아니면 위치를 넘기지 않고 다음 주기에 그 페이지를 다시 받는다.
   private int rotationFailures;
   private final Set<MarketTab> rotatedToday = java.util.EnumSet.noneOf(MarketTab.class);
+  // 돌림 탭 페이지 재시도를 이 시각 전에는 하지 않는다. 리더 한 곳의 메모리에만 둔다(저장 위치 형식을 바꾸지 않음): 리더가 바뀌면 한 번 일찍 다시 받을 수 있다.
+  private final java.util.Map<MarketTab, java.time.Instant> retryNotBefore =
+      new java.util.EnumMap<>(MarketTab.class);
   private final java.util.Map<MarketTab, RotationGauges> rotationGauges =
       new java.util.EnumMap<>(MarketTab.class);
 
@@ -166,6 +173,8 @@ class MarketVolumeWarmup {
       // 리더를 (다시) 잡음: 다른 인스턴스가 그사이 돌림 위치·하루 진행을 바꿨을 수 있으니 메모리 상태를 버리고 저장소에서 다시 읽는다.
       leading = true;
       day = null;
+      // 전에 잡고 있던 페이지의 기다림은 버린다(위치는 저장소에서 다시 읽으므로 다른 페이지일 수 있음, 코드 리뷰 #1060 P3).
+      retryNotBefore.clear();
     }
     LocalDate today = LocalDate.now(clock.withZone(KST));
     if (!today.equals(day)) startDay(today);
@@ -247,6 +256,10 @@ class MarketVolumeWarmup {
       tabs.pollFirst();
       return true;
     }
+    // 실패한 페이지를 다시 받을 때는 기다림이 끝나야 한다(돌림 탭은 맨 뒤라 앞 탭을 막지 않음). 하루 몫도 쓰지 않는다.
+    var notBefore = retryNotBefore.get(tab);
+    if (cursor.attempts() > 0 && notBefore != null && clock.instant().isBefore(notBefore))
+      return false;
     if (!reserve(today, 1)) return false;
     try {
       var page = gate.withReserve(RESERVE, () -> boards.volumePage(tab, cursor.page()));
@@ -294,13 +307,16 @@ class MarketVolumeWarmup {
             new MarketVolumeCursor(done.cursor().page(), done.cursor().cycleStartedOn(), attempts);
         cursors.put(tab, retry);
         cache.saveVolumeCursor(tab, retry);
+        var delay = FIRST_RETRY_DELAY.multipliedBy((long) Math.pow(3, attempts - 1));
+        retryNotBefore.put(tab, clock.instant().plus(delay));
         metrics.volumeWarmup("rotation_retry");
         log.info(
-            "event=volume_warmup_rotation_retry tab={} page={} failures={} attempts={}",
+            "event=volume_warmup_rotation_retry tab={} page={} failures={} attempts={} delayMinutes={}",
             tab,
             retry.page(),
             rotationFailures,
-            attempts);
+            attempts,
+            delay.toMinutes());
         return false;
       }
       metrics.volumeWarmup("rotation_gave_up");
@@ -327,6 +343,7 @@ class MarketVolumeWarmup {
     } else {
       next = new MarketVolumeCursor(done.cursor().page() + 1, done.cursor().cycleStartedOn());
     }
+    retryNotBefore.remove(tab);
     cursors.put(tab, next);
     rotationGauges.get(tab).page().set(next.page());
     cache.saveVolumeCursor(tab, next);

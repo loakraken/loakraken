@@ -363,6 +363,31 @@ public class ClientLimiter {
   }
 
   /**
+   * 기능 버킷으로 세는 공식 호출(재료 검색 등, {@link LostArkRequestGate#withClientBucket})에서도 확인되지 않은 봇 표시 요청이면 그
+   * 주소의 BOT_ADDRESS_OFFICIAL과 UNVERIFIED_BOT_OFFICIAL 합계 상한을 되돌릴 수 있게 센다(#1065 코드 리뷰 P2: 이 경로가
+   * {@link #chargeOfficial}을 거치지 않음). 넘으면 센 것을 되돌리고 CLIENT_RATE_LIMITED. 되돌리기용 키를 돌려준다(세지 않았으면 빈
+   * 목록).
+   */
+  java.util.List<String> chargeUnverifiedMarked() {
+    var client = CLIENT.get();
+    if (client == null || !unverifiedMarked(client)) return java.util.List.of();
+    var keys = new java.util.ArrayList<String>(2);
+    var address =
+        countRefundable(Bucket.BOT_ADDRESS_OFFICIAL, client, LostArkErrorCode.CLIENT_RATE_LIMITED);
+    if (address != null) keys.add(address);
+    try {
+      var all =
+          countRefundable(
+              Bucket.UNVERIFIED_BOT_OFFICIAL, UNVERIFIED_ALL, LostArkErrorCode.CLIENT_RATE_LIMITED);
+      if (all != null) keys.add(all);
+    } catch (RuntimeException exception) {
+      refund(address);
+      throw exception;
+    }
+    return keys;
+  }
+
+  /**
    * {@link #chargeRefundable}·{@link #chargeShared}로 센 것을 되돌린다(공식 호출 전에 게이트가 거절했을 때). null이면 아무것도
    * 하지 않는다.
    */

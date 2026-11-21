@@ -158,8 +158,63 @@ class ArmorCpGateIntegrationTest {
     assertThat(stopStep.path("kind").asText())
         .isIn("EQUIPMENT_REFINE", "EQUIPMENT_ADVANCED_REFINE", "ARM_GUARD");
     assertThat(stopStep.path("combatPowerAfter").isNull()).isTrue();
-    if (stop > 1) assertThat(steps.get(0).path("combatPowerAfter").isNumber()).isTrue();
     assertThat(kraken.path("finalCombatPower").isNull()).isTrue();
+    // 섞인 경로를 숫자로 고정한다(코드 리뷰 #1036 계산 메모): 멈춘 단계 순서, 그 앞 마지막 단계의 전투력, 멈춘 뒤 단계는 모두 null.
+    assertThat(stop).as(kraken.toString()).isEqualTo(MIXED_STOP_ORDER);
+    assertThat(steps.get(stop - 2).path("combatPowerAfter").decimalValue())
+        .isEqualByComparingTo(MIXED_LAST_CP);
+    for (int i = stop - 1; i < steps.size(); i++) {
+      assertThat(steps.get(i).path("combatPowerAfter").isNull()).as("단계 " + (i + 1)).isTrue();
+      assertThat(steps.get(i).path("deltaCombatPower").isNull()).as("단계 " + (i + 1)).isTrue();
+    }
+  }
+
+  /**
+   * 섞인 경로 고정값(기준 딜러 원문 l01, 공식 기본 공격력 줄 없음, 문 열림, 11-21): 1단계 보석 GEM_LEVEL:0:10은 3,568.21 →
+   * 3,681.16(Δ +112.95), 2단계 완갑(EQUIPMENT_REFINE:16:25)부터 전투력이 비고 뒤 단계(3단계 보석 포함)도 null.
+   */
+  private static final int MIXED_STOP_ORDER = 2;
+
+  private static final String MIXED_LAST_CP = "3681.16";
+
+  /**
+   * #1019 비용 모름 점프 줄이기 지킴(코드 리뷰 #1019 P3): 칸마다 비용을 모르는 목표는 가장 높은 것만 재므로, 지원 여부가 목표 레벨에 따라 달라지면 가장
+   * 높은 목표가 빠질 때 그 칸 전체가 빠진다. 지금은 지원이 목표 레벨과 상관없다는 전제를 레벨 점프 종류(재련·보석)마다 시뮬레이터로 확인한다.
+   */
+  @Test
+  void 레벨_점프_목표의_지원_여부는_목표_레벨과_상관없다() throws Exception {
+    var raw = raw();
+    var built = DealerCombatPower.of(KrakenScoreInputMapper.from(raw), engine, tables);
+    search("방어구문점프", raw, built);
+    for (var type : List.of("무기", "투구", "상의")) {
+      int index = index(raw, type);
+      var statuses = new java.util.TreeSet<String>();
+      for (int target = refine(raw, index) + 1; target <= 25; target++) {
+        var response =
+            simulate(
+                "방어구문점프",
+                "[{\"kind\": \"EQUIPMENT_REFINE\", \"index\": "
+                    + index
+                    + ", \"refine\": "
+                    + target
+                    + "}]");
+        assertThat(response.statusCode()).as(response.body()).isEqualTo(200);
+        statuses.add(mapper.readTree(response.body()).at("/data/contributions/0/status").asText());
+      }
+      assertThat(statuses).as(type + " 재련").containsExactly("OK");
+    }
+    int gemLevel = raw.path("ArmoryGem").path("Gems").get(0).path("Level").asInt();
+    var gemStatuses = new java.util.TreeSet<String>();
+    int gemSlot = raw.path("ArmoryGem").path("Gems").get(0).path("Slot").asInt();
+    for (int target = gemLevel + 1; target <= 10; target++) {
+      var response =
+          simulate(
+              "방어구문점프",
+              "[{\"kind\": \"GEM_LEVEL\", \"slot\": " + gemSlot + ", \"level\": " + target + "}]");
+      assertThat(response.statusCode()).as(response.body()).isEqualTo(200);
+      gemStatuses.add(mapper.readTree(response.body()).at("/data/contributions/0/status").asText());
+    }
+    if (gemLevel < 10) assertThat(gemStatuses).as("보석").hasSize(1);
   }
 
   private HttpResponse<String> get(String pathAndQuery) throws Exception {

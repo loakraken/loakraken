@@ -611,6 +611,19 @@ public final class CombatPowerRefineModel {
     return 0;
   }
 
+  /**
+   * 카르마 변경·단계용으로 관측한 깨달음 카르마 레벨. 아크 패시브가 없거나 깨달음 포인트 줄이 없으면 관측하지 않은 것이라 null(0으로 보지 않는다, 코드 리뷰
+   * #1004 재실행 P2). 재련 모델의 W 항은 지금처럼 {@link #karmaLevel(CharacterLoadout)}(없으면 0)을 쓴다.
+   */
+  public static Integer observedKarmaLevel(CharacterLoadout loadout) {
+    if (loadout == null || loadout.arkPassive() == null) return null;
+    for (var point : loadout.arkPassive().points()) {
+      if (point == null || !"깨달음".equals(point.name())) continue;
+      return karmaLevel(point.description());
+    }
+    return null;
+  }
+
   /** 아크 패시브 포인트 설명("6랭크 29레벨")의 카르마 레벨. 설명이 없거나 레벨이 없으면 null. */
   public static Integer karmaLevel(String description) {
     if (description == null) return null;

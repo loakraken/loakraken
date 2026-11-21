@@ -54,6 +54,7 @@ class SpecUpKarmaCpIntegrationTest {
   private static final String DEALER = "카르마딜러";
   private static final String SUPPORTER = "카르마서폿";
   private static final String MAXED = "카르마만렙";
+  private static final String NO_ROW = "카르마줄없음";
   @LocalServerPort int port;
   @Autowired JdbcClient jdbc;
   @Autowired StringRedisTemplate redis;
@@ -326,6 +327,37 @@ class SpecUpKarmaCpIntegrationTest {
     var data = mapper.readTree(none.body()).path("data");
     assertThat(data.path("delta").decimalValue()).isEqualByComparingTo(BigDecimal.ZERO);
     assertThat(data.path("contributions").get(0).path("status").asText()).isEqualTo("UNSUPPORTED");
+  }
+
+  /**
+   * 아크 패시브는 있는데 깨달음 포인트 줄이 없으면(ArkPassive.Points []) 카르마 레벨을 관측한 것이 아니다(코드 리뷰 #1004 재실행 P2): 0으로 보고
+   * OK를 내지 않고 UNSUPPORTED, 추천 순서에 카르마 단계도 없다. 노드(Effects)는 그대로라 딜러 판정은 같다.
+   */
+  @Test
+  void 깨달음_포인트_줄이_없으면_카르마를_계산하지_않고_단계도_없다() throws Exception {
+    when(auctions.cachedGems()).thenReturn(List.of());
+    var raw =
+        (tools.jackson.databind.node.ObjectNode)
+            mapper
+                .readTree(
+                    new ClassPathResource("kraken-score/l01.json")
+                        .getContentAsString(StandardCharsets.UTF_8))
+                .path("raw");
+    ((tools.jackson.databind.node.ObjectNode) raw.path("ArkPassive")).putArray("Points");
+    assertThat(raw.path("ArkPassive").path("Effects").isEmpty()).isFalse();
+    search(NO_ROW, raw, "블레이드", "4052.77");
+    var none =
+        simulate(
+            NO_ROW, "[{\"kind\": \"ARK_PASSIVE_POINT\", \"tree\": \"깨달음\", \"karmaLevel\": 30}]");
+    assertThat(none.statusCode()).as(none.body()).isEqualTo(200);
+    var data = mapper.readTree(none.body()).path("data");
+    assertThat(data.path("contributions").get(0).path("status").asText())
+        .as(none.body())
+        .isEqualTo("UNSUPPORTED");
+    assertThat(data.path("delta").decimalValue()).isEqualByComparingTo(BigDecimal.ZERO);
+    for (var sort : List.of("EFFICIENCY", "KRAKEN"))
+      for (var step : path(NO_ROW, sort).path("steps"))
+        assertThat(step.path("kind").asText()).as(sort).isNotEqualTo("KARMA_LEVEL");
   }
 
   private static JsonNode find(JsonNode candidates, String id) {

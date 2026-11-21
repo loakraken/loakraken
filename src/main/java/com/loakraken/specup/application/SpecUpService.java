@@ -163,8 +163,8 @@ public class SpecUpService {
   Integer karmaPathLevel(CharacterResult snapshot) {
     if (!karmaCpEnabled()) return null;
     var loadout = snapshot.details().loadout();
-    if (loadout.arkPassive() == null) return null;
-    var level = CombatPowerRefineModel.karmaLevel(loadout);
+    // 깨달음 포인트 줄이 없으면 관측한 레벨이 아니라 단계를 내지 않는다(코드 리뷰 #1004 재실행 P2).
+    var level = CombatPowerRefineModel.observedKarmaLevel(loadout);
     if (level == null) return null;
     var context = kraken.internalContext(snapshot);
     if (context != null && context.input() != null) {
@@ -859,7 +859,7 @@ public class SpecUpService {
         && karmaCpEnabled()
         && CombatPowerSimulationService.roleReason(snapshot) == null) {
       // 점수 입력의 지금 레벨과 툴팁(아크 패시브 설명)의 레벨이 다르면 두 원문 파서가 갈라진 것: 틀린 Δ 대신 점수만.
-      var tooltip = CombatPowerRefineModel.karmaLevel(snapshot.details().loadout());
+      var tooltip = CombatPowerRefineModel.observedKarmaLevel(snapshot.details().loadout());
       if (tooltip == null || !(tooltip + "레벨").equals(plan.from())) {
         rowRejected(plan, KARMA_REJECT_LEVEL_MISMATCH);
         return null;

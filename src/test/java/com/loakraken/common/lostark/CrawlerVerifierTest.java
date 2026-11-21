@@ -110,6 +110,45 @@ class CrawlerVerifierTest {
     assertThat(resolver.reverseCalls).isEqualTo(1);
   }
 
+  /** 조회 뒤 지표·결과 남기기가 실패해도 확인은 끝나 대기 표에서 빠진다(코드 리뷰 #1054 P3). 끝나지 않으면 그 주소는 계속 pending이다. */
+  @Test
+  void 조회_뒤_처리가_실패해도_확인은_끝나고_다음_요청이_다시_조회한다() {
+    var failing = new SimpleMeterRegistry();
+    failing
+        .config()
+        .meterFilter(
+            new io.micrometer.core.instrument.config.MeterFilter() {
+              @Override
+              public io.micrometer.core.instrument.Meter.Id map(
+                  io.micrometer.core.instrument.Meter.Id id) {
+                if (id.getName().endsWith(".lookup")) throw new IllegalStateException("meter");
+                return id;
+              }
+            });
+    var queued = new ArrayList<Runnable>();
+    var verifier =
+        new CrawlerVerifier(
+            new CrawlerVerifyProperties(
+                List.of("googlebot.com"),
+                Duration.ofMillis(50),
+                Duration.ofHours(24),
+                Duration.ofHours(1),
+                100,
+                8),
+            resolver,
+            queued::add,
+            clock,
+            failing);
+    assertThat(verifier.verified("198.51.100.30")).isFalse();
+    var lookup = verifier.pendingLookup("198.51.100.30");
+    assertThatThrownBy(() -> queued.getFirst().run()).isInstanceOf(IllegalStateException.class);
+    assertThat(lookup).isDone();
+    assertThat(verifier.pendingLookup("198.51.100.30")).isNull();
+    // 결과는 남지 않았으므로 다음 요청은 새로 조회한다(pending에 갇히지 않음).
+    assertThat(verifier.verified("198.51.100.30")).isFalse();
+    assertThat(queued).hasSize(2);
+  }
+
   @Test
   void 확인_자리가_차면_조회하지_않고_확인되지_않음이다() {
     Executor full =

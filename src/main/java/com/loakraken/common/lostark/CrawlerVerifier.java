@@ -166,13 +166,17 @@ public class CrawlerVerifier {
             // 조회 실패는 확인되지 않은 것.
             result = "error";
           }
-          // 이름 조회(외부 의존) 시간: 확인 지연·자리 참(timeout·busy)이 늘 때 이름 서버가 느려졌는지 본다.
-          if (registry != null)
-            registry
-                .timer("loakraken.client.limit.crawler_verify.lookup", "result", result)
-                .record(System.nanoTime() - begin, TimeUnit.NANOSECONDS);
-          remember(key, verified);
-          future.complete(verified);
+          // 지표·결과 남기기가 실패해도 확인은 끝낸다(끝나지 않으면 대기 표에 영영 남아 같은 주소가 계속 pending, 코드 리뷰 #1054 P3).
+          try {
+            // 이름 조회(외부 의존) 시간: 확인 지연·자리 참(timeout·busy)이 늘 때 이름 서버가 느려졌는지 본다.
+            if (registry != null)
+              registry
+                  .timer("loakraken.client.limit.crawler_verify.lookup", "result", result)
+                  .record(System.nanoTime() - begin, TimeUnit.NANOSECONDS);
+            remember(key, verified);
+          } finally {
+            future.complete(verified);
+          }
         });
     return future;
   }

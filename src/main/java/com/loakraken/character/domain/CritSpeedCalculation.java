@@ -15,7 +15,8 @@ import java.util.regex.Pattern;
  * 스탯 계산에만 쓴다. 뭉툭한 가시·음속 돌파는 장착 노드의 공식 문구에서 수치를 읽고, 미장착이면 2026-10-05 공식 Lv.2 문구를 기준값으로 쓴다.
  */
 public final class CritSpeedCalculation {
-  public static final String RULE_VERSION = "crit-speed-v14";
+  // v15: 디스트로이어 해방 스킬 노드는 해방 스킬에만, 데런의 족쇄 한 번만, 다크니스 엣지는 문구의 최대 중첩 값(코드 리뷰 #979 P2 재실행).
+  public static final String RULE_VERSION = "crit-speed-v15";
 
   /**
    * 치명타 피해 앞(같은 문장)에 오면 조건부로 보고 합산하지 않는 말. 비교 기준 2곳은 "폭주 중"·"마력 해방 중"(각성 상태)은 넣고 "사신화 상태에서"· "페르소나
@@ -132,6 +133,8 @@ public final class CritSpeedCalculation {
     boolean classState() {
       return kind == Kind.ASSUMED
           && name != null
+          // 분류 한정 노드 토글(디스트로이어 해방 스킬 노드 등)은 이름에 ' 가정('이 있어도 모든 스킬 기본에 넣지 않는다(코드 리뷰 #979 P2 재실행).
+          && !CritEffectTable.categoryLimitedToggleSource(name)
           && (name.contains(" 가정(")
               || CritEffectTable.CLASS_BUFFS.stream().anyMatch(buff -> buff.label().equals(name)));
     }
@@ -513,15 +516,16 @@ public final class CritSpeedCalculation {
                 source.text()));
     // 분류 한정 노드 토글(서머너 고대의 힘 → 일반·고대의 정령 스킬, 환수사 깨어난 잠재력 → 둔갑 스킬)도 스킬별로는 그 분류에만(계산 검증 #979).
     // 스킬마다 분류는 하나라 분류별로 하나씩 넣어도 한 스킬에 두 번 붙지 않는다.
+    // 치명타 피해 토글(디스트로이어 분노의 망치 → 해방 스킬)도 같다(코드 리뷰 #979 P2 재실행).
     for (var toggle : toggles)
       if (toggle.on()
-          && toggle.axis() == Axis.CRIT
+          && (toggle.axis() == Axis.CRIT || toggle.axis() == Axis.CRIT_DAMAGE)
           && CritEffectTable.CATEGORY_LIMITED_TOGGLES.containsKey(toggle.key()))
         for (var category : CritEffectTable.CATEGORY_LIMITED_TOGGLES.get(toggle.key()))
           skillBonuses.add(
               new NodeBonus(
                   toggle.label(),
-                  Axis.CRIT,
+                  toggle.axis(),
                   CritEffectTable.Target.CATEGORY,
                   category,
                   toggle.value(),
@@ -558,7 +562,8 @@ public final class CritSpeedCalculation {
             skillLimitations,
             skillBonuses,
             input,
-            skillToggles);
+            skillToggles,
+            baseTripods(sources));
     var mainSkill = mainSkill(skills, sources, toggles);
     // 목표는 주력 스킬 치명타 적중률(2자리)로 잰다. 스킬을 모르면 totalRate(#5, 계산 검증 11-09).
     var targetBase = mainSkill == null ? totalCrit : mainSkill.rate();
@@ -847,6 +852,17 @@ public final class CritSpeedCalculation {
     }
   }
 
+  /** 켜진 직업 버프 가정 가운데 기본에 넣은 자기 버프 트라이포드(BUFF_TRIPODS_IN_BASE). */
+  private static java.util.Set<String> baseTripods(List<Source> sources) {
+    var result = new java.util.HashSet<String>();
+    for (var buff : CritEffectTable.CLASS_BUFFS)
+      if (buff.tripod() != null
+          && CritEffectTable.BUFF_TRIPODS_IN_BASE.contains(buff.tripod())
+          && sources.stream().anyMatch(source -> buff.label().equals(source.name())))
+        result.add(buff.tripod());
+    return result;
+  }
+
   private static BigDecimal classState(List<Source> sources, Axis axis) {
     return sources.stream()
         .filter(source -> source.axis() == axis && source.classState())
@@ -908,7 +924,8 @@ public final class CritSpeedCalculation {
         limitations,
         List.of(),
         Assumptions.NONE,
-        new ArrayList<>());
+        new ArrayList<>(),
+        java.util.Set.of());
   }
 
   static List<SkillCrit> skillCrits(
@@ -920,6 +937,29 @@ public final class CritSpeedCalculation {
       List<NodeBonus> bonuses,
       Assumptions input,
       List<ToggleState> toggles) {
+    return skillCrits(
+        loadout,
+        observedCrit,
+        cap,
+        critDamage,
+        limitations,
+        bonuses,
+        input,
+        toggles,
+        java.util.Set.of());
+  }
+
+  /** baseTripods: 직업 버프 가정으로 기본에 이미 넣은 자기 버프 트라이포드 이름(트라이포드로 또 세지 않는다). */
+  static List<SkillCrit> skillCrits(
+      CharacterLoadout loadout,
+      BigDecimal observedCrit,
+      BigDecimal cap,
+      BigDecimal critDamage,
+      List<String> limitations,
+      List<NodeBonus> bonuses,
+      Assumptions input,
+      List<ToggleState> toggles,
+      java.util.Set<String> baseTripods) {
     if (loadout.skills() == null) return List.of();
     var result = new ArrayList<SkillCrit>();
     boolean missingTooltip = false;
@@ -937,6 +977,7 @@ public final class CritSpeedCalculation {
           known = false;
           continue;
         }
+        if (baseTripods.contains(tripod.name())) continue;
         var matcher = TRIPOD_CRIT.matcher(tripod.effect());
         while (matcher.find()) {
           var value = signed(matcher.group(2), matcher.group(3));
@@ -1229,6 +1270,11 @@ public final class CritSpeedCalculation {
 
   private static final Pattern RATE_VALUE =
       Pattern.compile("치명타 적중률(?:이)?\\s*(?:추가로\\s*)?\\+?\\s*" + NUMBER + "%" + DIRECTION);
+
+  /** 중첩되는 치명타 적중률의 최대 값('치명타 적중률이 3.0초간 5.5% 씩 최대 27.6% 까지'). */
+  private static final Pattern STACK_MAX_RATE =
+      Pattern.compile("치명타 적중률이.{0,40}?최대\\s*([0-9]+(?:\\.[0-9]+)?)%");
+
   private static final Pattern DAMAGE_VALUE =
       Pattern.compile("치명타 피해(?:량)?(?:이|가)?\\s*(?:추가로\\s*)?\\+?\\s*" + NUMBER + "%" + DIRECTION);
   private static final Pattern AGILITY_DAMAGE =
@@ -1933,8 +1979,13 @@ public final class CritSpeedCalculation {
           value = buff.value();
           if (tripod.effect() != null) {
             var matcher = RATE_VALUE.matcher(tripod.effect());
+            var stacked = STACK_MAX_RATE.matcher(tripod.effect());
             if (matcher.find()) {
               value = signed(matcher.group(1), matcher.group(2));
+              text = tripod.effect();
+            } else if (stacked.find()) {
+              // 중첩 문구('치명타 적중률이 3.0초간 3.0% 씩 최대 15.0% 까지')는 최대 값(코드 리뷰 #979 P2 재실행).
+              value = new BigDecimal(stacked.group(1));
               text = tripod.effect();
             }
           }

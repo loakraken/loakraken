@@ -297,7 +297,7 @@ class ClientLimiterTest {
     // 기본값(STATS 60, GENERAL 240). 웹은 페이지·탭·조건을 바꿀 때마다 한 번 부른다(입력은 0.3초 뒤). 1분 안에 랭킹 30쪽 넘기기 + 캐릭터
     // 10명 보기(순위·수집품 순위 2번씩) = 통계 칸 50번 — 모두 통과하고, 그 분의 61번째 통계 요청부터 막힌다.
     var limiter = limiter(new ClientLimitProperties(true, 20, 60, 240, 120, true, 2, 6, 20, 5, 5));
-    var filter = new ClientLimitFilter(limiter);
+    var filter = filter(limiter);
     var address = "203.0.113.90";
     var tabs =
         new String[] {
@@ -324,7 +324,7 @@ class ClientLimiterTest {
   @Test
   void 필터는_주소를_세고_루프백은_세지_않는다() throws Exception {
     var limiter = limiter(new ClientLimitProperties(true, 2, 1, 3, 3, true, 2, 6, 20, 5, 5));
-    var filter = new ClientLimitFilter(limiter);
+    var filter = filter(limiter);
     for (int i = 0; i < 5; i++)
       assertThat(run(filter, "/api/v1/markets/tabs", "127.0.0.1", null).getStatus()).isEqualTo(200);
     // 사설 주소도 센다(GENERAL 3): 네 번째는 거절.
@@ -355,7 +355,7 @@ class ClientLimiterTest {
   @Test
   void 봇은_주소별로_세어_한_주소가_다른_봇_주소를_막지_않는다() throws Exception {
     var limiter = limiter(new ClientLimitProperties(true, 2, 10, 10, 2, true, 2, 6, 20, 5, 5));
-    var filter = new ClientLimitFilter(limiter);
+    var filter = filter(limiter);
     assertThat(run(filter, "/api/v1/characters/search", "66.249.66.1", "1").getStatus())
         .isEqualTo(200);
     assertThat(run(filter, "/api/v1/characters/search", "66.249.66.1", "1").getStatus())
@@ -371,10 +371,39 @@ class ClientLimiterTest {
         .isEqualTo(200);
   }
 
+  /**
+   * 봇 표시는 웹이 User-Agent로 붙여 흉내 낼 수 있다(#458 P2 ①). 역방향 DNS로 크롤러 이름이 확인되지 않는 주소의 봇 표시 요청은 봇 칸이 아니라 그
+   * 주소의 사람 칸(GENERAL)을 쓰고, 공식 호출도 모든 봇 합계 상한이 아니라 사람 클라이언트 한도로 센다.
+   */
+  @Test
+  void 크롤러로_확인되지_않은_주소의_봇_표시는_사람_칸으로_센다() throws Exception {
+    // GENERAL 3, BOT 2.
+    var limiter = limiter(new ClientLimitProperties(true, 2, 10, 3, 2, true, 2, 6, 20, 5, 5));
+    var filter = filter(limiter);
+    var spoofed = "203.0.113.66";
+    for (int i = 0; i < 3; i++)
+      assertThat(run(filter, "/api/v1/characters/search", spoofed, "1").getStatus()).isEqualTo(200);
+    // 봇 칸(2)이었다면 세 번째가 이미 막혔다. 사람 칸(3)을 다 썼으므로 같은 주소의 표시 없는 요청도 막힌다.
+    assertThat(run(filter, "/api/v1/characters/search", spoofed, null).getStatus()).isEqualTo(429);
+    // 그 요청 안의 공식 호출은 사람 클라이언트 한도(OFFICIAL 2)로 센다. 봇 칸이면 봇 주소별 한도(5)였다.
+    var request = request("/api/v1/characters/search", "203.0.113.67", "1");
+    var remaining = new java.util.concurrent.atomic.AtomicInteger(-1);
+    filter.doFilter(
+        request,
+        new MockHttpServletResponse(),
+        (req, res) -> remaining.set(limiter.remainingOfficial()));
+    assertThat(remaining).hasValue(2);
+    // 확인된 크롤러 주소는 지금처럼 봇 칸이다.
+    var crawler = "66.249.66.9";
+    assertThat(run(filter, "/api/v1/characters/search", crawler, "1").getStatus()).isEqualTo(200);
+    assertThat(run(filter, "/api/v1/characters/search", crawler, "1").getStatus()).isEqualTo(200);
+    assertThat(run(filter, "/api/v1/characters/search", crawler, "1").getStatus()).isEqualTo(429);
+  }
+
   @Test
   void 봇_표시_요청도_통계_경로는_그_주소의_STATS_한도를_받는다() throws Exception {
     var limiter = limiter(new ClientLimitProperties(true, 20, 60, 240, 120, true, 2, 6, 20, 5, 5));
-    var filter = new ClientLimitFilter(limiter);
+    var filter = filter(limiter);
     for (int i = 0; i < 60; i++)
       assertThat(run(filter, "/api/v1/rankings", "66.249.70.1", "1").getStatus()).isEqualTo(200);
     var rejected = run(filter, "/api/v1/stats/summary", "66.249.70.1", "1");
@@ -461,7 +490,7 @@ class ClientLimiterTest {
   @Test
   void 필터는_요청을_처리하는_동안만_클라이언트를_스레드에_둔다() throws Exception {
     var limiter = limiter(new ClientLimitProperties(true, 1, 10, 10, 10, true, 2, 6, 20, 5, 5));
-    var filter = new ClientLimitFilter(limiter);
+    var filter = filter(limiter);
     var request = request("/api/v1/characters/search", "203.0.113.9", null);
     var calls = new java.util.concurrent.atomic.AtomicInteger();
     filter.doFilter(
@@ -499,7 +528,7 @@ class ClientLimiterTest {
   void 신뢰_프록시를_거친_요청은_넘긴_주소가_사설이나_루프백이어도_센다() throws Exception {
     // GENERAL 1: 두 번째 요청은 429. 연결 상대는 프록시(사설), 원격 주소는 프록시가 넘긴 값.
     var limiter = limiter(new ClientLimitProperties(true, 1, 10, 1, 1, true, 2, 6, 20, 5, 5));
-    var filter = new ClientLimitFilter(limiter);
+    var filter = filter(limiter);
     for (var forwarded : new String[] {"10.0.0.1", "127.0.0.1", "172.31.250.10"}) {
       assertThat(proxied(filter, "172.31.250.10", forwarded, true).getStatus())
           .as(forwarded)
@@ -538,6 +567,40 @@ class ClientLimiterTest {
 
   private ClientLimiter limiter(ClientLimitProperties properties) {
     return new ClientLimiter(properties, new ClientLimitStore.Memory(), clock, registry, "key");
+  }
+
+  /** 66.249.x만 진짜 크롤러(역방향 crawl-….googlebot.com, 정방향 같은 주소)로 보이는 가짜 이름 해석. 그 밖의 주소는 이름이 없다. */
+  private ClientLimitFilter filter(ClientLimiter limiter) {
+    var resolver =
+        new CrawlerVerifier.Resolver() {
+          @Override
+          public String reverse(java.net.InetAddress address) {
+            var text = address.getHostAddress();
+            return text.startsWith("66.249.")
+                ? "crawl-" + text.replace('.', '-') + ".googlebot.com"
+                : null;
+          }
+
+          @Override
+          public java.util.List<java.net.InetAddress> forward(String host) {
+            var ip = host.substring("crawl-".length(), host.indexOf('.')).replace('-', '.');
+            return java.util.List.of(java.net.InetAddress.ofLiteral(ip));
+          }
+        };
+    var crawlers =
+        new CrawlerVerifier(
+            new CrawlerVerifyProperties(
+                java.util.List.of("googlebot.com"),
+                Duration.ofMillis(300),
+                Duration.ofHours(24),
+                Duration.ofHours(1),
+                100,
+                8),
+            resolver,
+            Runnable::run,
+            clock,
+            registry);
+    return new ClientLimitFilter(limiter, crawlers);
   }
 
   private static MockHttpServletResponse run(

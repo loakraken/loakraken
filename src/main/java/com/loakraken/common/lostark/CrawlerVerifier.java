@@ -30,6 +30,9 @@ import java.util.concurrent.atomic.AtomicInteger;
  * </ul>
  */
 public class CrawlerVerifier {
+  private static final org.slf4j.Logger log =
+      org.slf4j.LoggerFactory.getLogger(CrawlerVerifier.class);
+
   /** 주소 → 이름, 이름 → 주소 조회. 운영은 JVM 이름 해석(시스템 리졸버), 테스트는 가짜. */
   interface Resolver {
     /** 역방향 이름. 이름이 없으면 null(또는 주소 문자열 그대로). */
@@ -166,13 +169,22 @@ public class CrawlerVerifier {
             // 조회 실패는 확인되지 않은 것.
             result = "error";
           }
-          // 이름 조회(외부 의존) 시간: 확인 지연·자리 참(timeout·busy)이 늘 때 이름 서버가 느려졌는지 본다.
-          if (registry != null)
-            registry
-                .timer("loakraken.client.limit.crawler_verify.lookup", "result", result)
-                .record(System.nanoTime() - begin, TimeUnit.NANOSECONDS);
-          remember(key, verified);
-          future.complete(verified);
+          // 지표·결과 남기기가 실패해도 확인은 끝낸다(끝나지 않으면 대기 표에 영영 남아 같은 주소가 계속 pending, 코드 리뷰 #1054 P3).
+          try {
+            // 이름 조회(외부 의존) 시간: 확인 지연·자리 참(timeout·busy)이 늘 때 이름 서버가 느려졌는지 본다.
+            if (registry != null)
+              registry
+                  .timer("loakraken.client.limit.crawler_verify.lookup", "result", result)
+                  .record(System.nanoTime() - begin, TimeUnit.NANOSECONDS);
+            remember(key, verified);
+          } catch (RuntimeException exception) {
+            // 확인 스레드를 죽이지 않고 구조화된 경고 한 줄로 남긴다(주소·이름 없음). 이 주소는 결과가 남지 않아 다음 요청이 다시 조회한다.
+            log.warn(
+                "event=crawler_verify_post_failed exceptionType={}",
+                exception.getClass().getName());
+          } finally {
+            future.complete(verified);
+          }
         });
     return future;
   }

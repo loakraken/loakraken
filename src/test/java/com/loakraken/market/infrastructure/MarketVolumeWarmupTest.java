@@ -510,6 +510,38 @@ class MarketVolumeWarmupTest {
     assertThat(count("rotation_retry")).isEqualTo(2);
   }
 
+  /**
+   * 리더를 다시 잡으면 그사이 다른 인스턴스가 옮긴 위치를 읽으므로, 전에 잡고 있던 다른 페이지의 기다림을 버린다(코드 리뷰 #1060 P3). 다른 인스턴스가 남긴 재시도
+   * 위치(3페이지, 시도 1)는 바로 받는다.
+   */
+  @Test
+  void 리더를_다시_잡으면_전에_정한_재시도_기다림을_버린다() {
+    when(cache.findVolumeCursor(MarketTab.AVATAR))
+        .thenReturn(Optional.of(new MarketVolumeCursor(2, today.minusDays(1))));
+    when(boards.volumePage(MarketTab.AVATAR, 2)).thenReturn(page(2, 25, 11, 12));
+    when(boards.volumePage(MarketTab.AVATAR, 3)).thenReturn(page(3, 25, 21, 22));
+    when(markets.refreshItemHistory(anyLong()))
+        .thenAnswer(invocation -> Optional.of(history(invocation.getArgument(0), clock.now)));
+    when(markets.refreshItemHistory(12L)).thenThrow(new IllegalStateException("5xx"));
+    var job = warmup("key", List.of(MarketTab.AVATAR), 15, 800);
+
+    // 2페이지 실패: 5분 기다림.
+    job.tick();
+    // 리더를 잃는 사이 다른 인스턴스가 3페이지로 옮겼고 그 페이지도 한 번 실패해 다시 받을 차례다.
+    reset(lease);
+    when(lease.hold(any(), any())).thenReturn(false);
+    clock.now = clock.now.plusSeconds(60);
+    job.tick();
+    when(cache.findVolumeCursor(MarketTab.AVATAR))
+        .thenReturn(Optional.of(new MarketVolumeCursor(3, today.minusDays(1), 1)));
+    // 다시 리더(첫 실패 2분 뒤): 3페이지는 이 인스턴스가 정한 기다림이 아니므로 바로 받는다.
+    reset(lease);
+    when(lease.hold(any(), any())).thenReturn(true);
+    clock.now = clock.now.plusSeconds(60);
+    job.tick();
+    verify(boards, times(1)).volumePage(MarketTab.AVATAR, 3);
+  }
+
   private double rotation(String name) {
     var found =
         registry

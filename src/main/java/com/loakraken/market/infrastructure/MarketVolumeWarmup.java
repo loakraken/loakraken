@@ -173,6 +173,8 @@ class MarketVolumeWarmup {
       // 리더를 (다시) 잡음: 다른 인스턴스가 그사이 돌림 위치·하루 진행을 바꿨을 수 있으니 메모리 상태를 버리고 저장소에서 다시 읽는다.
       leading = true;
       day = null;
+      // 전에 잡고 있던 페이지의 기다림은 버린다(위치는 저장소에서 다시 읽으므로 다른 페이지일 수 있음, 코드 리뷰 #1060 P3).
+      retryNotBefore.clear();
     }
     LocalDate today = LocalDate.now(clock.withZone(KST));
     if (!today.equals(day)) startDay(today);

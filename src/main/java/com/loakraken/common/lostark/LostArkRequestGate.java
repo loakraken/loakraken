@@ -126,8 +126,8 @@ public class LostArkRequestGate {
       try {
         var shared = SHARED_BUCKET.get();
         if (shared != null) sharedKey = clients.chargeShared(shared);
-        // 확인되지 않은 봇 표시 요청은 이 경로에서도 주소별 봇 칸과 그런 요청 합계 상한을 함께 센다(#1065 코드 리뷰 P2).
-        markedKeys = clients.chargeUnverifiedMarked();
+        // 봇(확인된 크롤러·확인되지 않은 표시 요청)은 이 경로에서도 주소별 봇 칸과 그 합계 상한을 함께 센다(#1065 코드 리뷰 P2, v0.3.16 P3).
+        markedKeys = clients.chargeBotBuckets();
       } catch (RuntimeException exception) {
         clients.refund(sharedKey);
         clients.refund(bucketKey);

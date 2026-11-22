@@ -1172,6 +1172,50 @@ class CombatPowerSimulationIntegrationTest {
                     "시뮬젬", "[" + swap.formatted(4, 5).replace("\"index\": 1", "\"index\": 9") + "]")
                 .statusCode())
         .isEqualTo(409);
+    // 칸 번호가 빠지면 요청 오류(400, #1079 코드 리뷰 P3).
+    assertThat(
+            simulate("시뮬젬", "[" + swap.formatted(4, 5).replace("\"slotIndex\": 5, ", "") + "]")
+                .statusCode())
+        .isEqualTo(400);
+    // 같은 코어의 교체는 모두 반영한 의지력으로 본다(#1079 코드 리뷰). 젬 3(왜곡 필요 7) → 효율 5(필요 4)로 3을 비우고 젬 0(필요 3) → 효율
+    // 2(필요 6).
+    // 젬 0 교체만이면 17 − 3 + 6 = 20 > 17이라 계산하지 않지만, 둘 함께면 17로 맞는다.
+    var gem0 =
+        """
+        {"kind": "ARK_GRID_GEM", "slotIndex": 5, "index": 0, "gemType": "침식", "willEfficiency": 2,
+         "point": 4, "effects": [{"name": "추가 피해", "level": 3}, {"name": "낙인력", "level": 1}]}
+        """;
+    var gem3 =
+        """
+        {"kind": "ARK_GRID_GEM", "slotIndex": 5, "index": 3, "gemType": "왜곡", "willEfficiency": %d,
+         "point": 5, "effects": [{"name": "보스 피해", "level": 4}, {"name": "공격력", "level": 3}]}
+        """;
+    var alone = mapper.readTree(simulate("시뮬젬", "[" + gem0 + "]").body());
+    assertThat(alone.at("/data/contributions/0/reasonCode").asText())
+        .isEqualTo("ARK_GRID_WILL_SHORT");
+    var rebalanced =
+        mapper.readTree(simulate("시뮬젬", "[" + gem0 + "," + gem3.formatted(5) + "]").body());
+    assertThat(rebalanced.at("/data/contributions/0/status").asText()).isEqualTo("OK");
+    assertThat(rebalanced.at("/data/contributions/1/status").asText()).isEqualTo("OK");
+    // 합이 넘으면 그 코어의 교체는 모두 계산하지 않는다(젬 3 효율 2 = 필요 7 그대로 + 젬 0 필요 6 → 20). 젬 3 교체 줄만 보면 맞지만 같은 코어라 함께
+    // 막는다.
+    var together =
+        mapper.readTree(simulate("시뮬젬", "[" + gem0 + "," + gem3.formatted(2) + "]").body());
+    assertThat(together.at("/data/contributions/0/reasonCode").asText())
+        .isEqualTo("ARK_GRID_WILL_SHORT");
+    assertThat(together.at("/data/contributions/1/reasonCode").asText())
+        .isEqualTo("ARK_GRID_WILL_SHORT");
+    // 같은 코어의 등급·포인트 변경과 젬 교체는 함께 계산하지 않는다(그 이유 문장).
+    var mixed =
+        mapper.readTree(
+            simulate(
+                    "시뮬젬",
+                    "[{\"kind\": \"ARK_GRID_CORE\", \"slotIndex\": 5, \"grade\": \"고대\", \"point\": 20},"
+                        + swap.formatted(4, 5)
+                        + "]")
+                .body());
+    assertThat(mixed.at("/data/contributions/1/status").asText()).isEqualTo("UNSUPPORTED");
+    assertThat(mixed.at("/data/contributions/1/basis").asText()).contains("젬 교체를 함께 계산하지");
   }
 
   /** 11-15 표본과 같은 아크 그리드(이름 없음): 혼돈의 해 코어 하나와 공식 옵션 합. */
@@ -1189,11 +1233,11 @@ class CombatPowerSimulationIntegrationTest {
                 new CharacterLoadout.GemDetail(
                     "혼돈의 젬 : 왜곡",
                     "혼돈",
-                    5,
+                    16,
                     7,
                     9,
                     2,
-                    null,
+                    5,
                     List.of(
                         new CharacterLoadout.GemOption("보스 피해", 4, null, null),
                         new CharacterLoadout.GemOption("공격력", 3, null, null)))));
@@ -1235,11 +1279,12 @@ class CombatPowerSimulationIntegrationTest {
         new CharacterLoadout.GemDetail(
             "혼돈의 젬 : 침식",
             "혼돈",
-            point,
+            // 젬 포인트(총합)는 코어 포인트(혼돈 포인트)와 다르다(공식 원본: 젬 포인트 15 · 혼돈 포인트 4, #1079 P0).
+            point + 11,
             will,
             baseWill,
             efficiency,
-            null,
+            point,
             List.of(
                 new CharacterLoadout.GemOption(first, firstLevel, null, null),
                 new CharacterLoadout.GemOption(second, secondLevel, null, null))));

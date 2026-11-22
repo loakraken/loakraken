@@ -696,8 +696,11 @@ public class CombatPowerSimulationService {
     var contributions = new ArrayList<Contribution>();
     int unsupported = 0;
     var roleReason = roleReason(result);
+    var gemBlocked = arkGemBlocked(merged);
     for (var planned : merged) {
       String reason = roleReason != null ? roleReason : planned.reason();
+      if (reason == null && planned.effect() instanceof ArkGridGemEffect gem)
+        reason = gemBlocked.get(gem.core().index());
       if (roleReason == null) {
         var hold = heldReason(loadout, braceletModel, planned);
         // 방어구 재련·상급 재련·완갑: 문이 열린 스냅샷이면 계산하고, r이 크면 그 이유로 닫는다(스위치가 꺼져 있으면 지금처럼).
@@ -798,7 +801,8 @@ public class CombatPowerSimulationService {
       CharacterLoadout.GridGem old,
       int point,
       Map<String, Integer> options,
-      List<CharacterLoadout.GridEffect> officialEffects)
+      List<CharacterLoadout.GridEffect> officialEffects,
+      int required)
       implements Effect {
     String key() {
       return core.index() + ":" + old.index();
@@ -1173,7 +1177,8 @@ public class CombatPowerSimulationService {
       slots.putIfAbsent(index, swap.core());
       points.putIfAbsent(index, swap.core().point());
       if (Boolean.TRUE.equals(swap.old().active())) {
-        points.merge(index, -swap.old().detail().gemPoint(), Integer::sum);
+        // 코어 포인트는 젬의 질서·혼돈 포인트(공식 '혼돈 포인트 : 4')다. 젬 포인트(총합 '젬 포인트 : 15')가 아니다(#1079 계산 검증 P0).
+        points.merge(index, -swap.old().detail().corePoint(), Integer::sum);
         for (var option : swap.old().detail().options())
           levels.merge(option.name().strip(), -option.level(), Integer::sum);
       }
@@ -1658,6 +1663,9 @@ public class CombatPowerSimulationService {
   private Planned arkGridGem(CharacterLoadout loadout, Change change) {
     var swap = change.gem();
     if (swap == null) throw invalid("ARK_GRID_GEM에는 gemType·willEfficiency·effects가 있어야 합니다.");
+    // 빠지거나 음수인 칸 번호는 요청 오류(400)다. 없는 칸은 409(#1079 코드 리뷰 P3).
+    range("slotIndex", change.slotIndex(), 0, 99);
+    range("index", change.index(), 0, 99);
     range("point", change.point(), 1, 5);
     range("willEfficiency", swap.willEfficiency(), 1, 5);
     var pool = swap.gemType() == null ? null : GEM_TYPE_OPTIONS.get(swap.gemType());
@@ -1710,28 +1718,58 @@ public class CombatPowerSimulationService {
     var unreadable = gemUnreadable(slot, old, grid);
     if (unreadable != null)
       return new Planned(change, target, from, to, null, ARK_GRID_BASIS, unreadable);
-    int required = 0;
-    for (var gem : slot.gems())
-      if (gem != null && gem != old && Boolean.TRUE.equals(gem.active()))
-        required += gem.detail().requiredWillpower();
-    required += GEM_TYPE_BASE_WILL.get(swap.gemType()) - swap.willEfficiency();
-    if (required > slot.core().supplyWillpower())
-      return new Planned(
-          change,
-          target,
-          from,
-          to,
-          null,
-          ARK_GRID_BASIS,
-          CombatPowerReasons.ARK_GRID_WILL_SHORT.text());
+    // 의지력은 같은 요청의 그 코어 교체를 모두 반영한 뒤에 본다(compute의 arkGemBlocked, #1079 코드 리뷰).
     return new Planned(
         change,
         target,
         from,
         to,
-        new ArkGridGemEffect(slot, old, change.point(), Map.copyOf(options), grid.effects()),
+        new ArkGridGemEffect(
+            slot,
+            old,
+            change.point(),
+            Map.copyOf(options),
+            grid.effects(),
+            GEM_TYPE_BASE_WILL.get(swap.gemType()) - swap.willEfficiency()),
         ARK_GRID_BASIS,
         null);
+  }
+
+  private static final String ARK_GRID_GEM_CORE_CONFLICT =
+      "같은 코어의 등급·포인트 변경과 젬 교체를 함께 계산하지 않았습니다. 하나씩 확인해 주세요.";
+
+  /**
+   * 젬 교체를 계산하지 않을 이유(코어 index → 이유). 같은 요청의 그 코어 교체를 모두 반영한 필요 의지력 합(바꾸지 않은 활성 젬 + 새 젬)이 공급 의지력을
+   * 넘으면 ARK_GRID_WILL_SHORT(어느 젬이 꺼질지 공식 문구가 없다), 같은 코어의 ARK_GRID_CORE와 함께 오면 그 조합은 계산하지 않는다.
+   */
+  private static Map<Integer, String> arkGemBlocked(java.util.Collection<Planned> merged) {
+    var swaps = new LinkedHashMap<Integer, List<ArkGridGemEffect>>();
+    var cores = new java.util.HashSet<Integer>();
+    for (var planned : merged) {
+      if (planned.effect() instanceof ArkGridGemEffect gem)
+        swaps.computeIfAbsent(gem.core().index(), key -> new ArrayList<>()).add(gem);
+      if (planned.effect() instanceof ArkGridCoreEffect core) cores.add(core.slot());
+    }
+    var blocked = new LinkedHashMap<Integer, String>();
+    for (var entry : swaps.entrySet()) {
+      if (cores.contains(entry.getKey())) {
+        blocked.put(entry.getKey(), ARK_GRID_GEM_CORE_CONFLICT);
+        continue;
+      }
+      var core = entry.getValue().getFirst().core();
+      var replaced = new java.util.HashSet<Integer>();
+      int required = 0;
+      for (var swap : entry.getValue()) {
+        replaced.add(swap.old().index());
+        required += swap.required();
+      }
+      for (var gem : core.gems())
+        if (gem != null && !replaced.contains(gem.index()) && Boolean.TRUE.equals(gem.active()))
+          required += gem.detail().requiredWillpower();
+      if (required > core.core().supplyWillpower())
+        blocked.put(entry.getKey(), CombatPowerReasons.ARK_GRID_WILL_SHORT.text());
+    }
+    return blocked;
   }
 
   /** 젬 교체에 필요한 공식 값(활성 여부, 포인트, 필요 의지력, 옵션, 코어 공급 의지력, 옵션 합)을 읽지 못했으면 이유. */
@@ -1745,7 +1783,7 @@ public class CombatPowerSimulationService {
       if (!Boolean.TRUE.equals(gem.active())) continue;
       var detail = gem.detail();
       if (detail == null
-          || detail.gemPoint() == null
+          || detail.corePoint() == null
           || detail.requiredWillpower() == null
           || detail.options() == null) return GEM_UNREADABLE;
       for (var option : detail.options())
@@ -1768,7 +1806,7 @@ public class CombatPowerSimulationService {
                     .map(option -> option.name() + " " + option.level())
                     .toList());
     return (detail.name() == null ? "" : detail.name().replaceFirst("^.*: ", "") + " ")
-        + (detail.gemPoint() == null ? "" : detail.gemPoint() + "P ")
+        + (detail.corePoint() == null ? "" : detail.corePoint() + "P ")
         + options;
   }
 

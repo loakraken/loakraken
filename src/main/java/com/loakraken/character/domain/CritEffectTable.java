@@ -66,7 +66,8 @@ public final class CritEffectTable {
           new NodeRule("중력 수련", Decision.EXCLUDE, null),
           new NodeRule("정교함", Decision.INCLUDE, null),
           new NodeRule("전술 훈련", Decision.INCLUDE, null),
-          new NodeRule("치명적인 체술", null, Decision.SKILL),
+          // "일반 스킬의 치명타 피해량이 6.0% 증가" — 비교 기준처럼 합계에(M40 R3, PM 총괄 11-22 13:37, 전술 훈련과 같게)
+          new NodeRule("치명적인 체술", null, Decision.INCLUDE),
           new NodeRule("체술 강화", Decision.INCLUDE, null),
           new NodeRule("무상진결", Decision.INCLUDE, null),
           new NodeRule("운기행공", Decision.INCLUDE, null),
@@ -104,7 +105,8 @@ public final class CritEffectTable {
           new NodeRule("환수의 정기", null, Decision.SKILL),
           new NodeRule("깨어나는 힘", Decision.INCLUDE, null),
           new NodeRule("완전 연소", Decision.INCLUDE, null),
-          new NodeRule("할버드의 대가", null, Decision.SKILL),
+          // "일반 스킬의 치명타 피해량이 4.0% 증가" — 비교 기준처럼 합계에(M40 R3)
+          new NodeRule("할버드의 대가", null, Decision.INCLUDE),
           // 워로드 고독한 기사 빌드 자기 시너지(#5): "진격 태세 중 랜스 스킬의 치명타 피해량이 45.0% 증가한다." 스킬 한정 토글(기본 켬)
           new NodeRule("선봉장의 함성", null, Decision.TOGGLE));
 
@@ -163,24 +165,7 @@ public final class CritEffectTable {
               1,
               true,
               null),
-          // "일반 스킬의 치명타 피해량이 4.0% 증가"
-          new SkillBonus(
-              "할버드의 대가",
-              CritSpeedCalculation.Axis.CRIT_DAMAGE,
-              Target.CATEGORY,
-              "일반 스킬",
-              1,
-              false,
-              null),
-          // "일반 스킬의 치명타 피해량이 6.0% 증가"
-          new SkillBonus(
-              "치명적인 체술",
-              CritSpeedCalculation.Axis.CRIT_DAMAGE,
-              Target.CATEGORY,
-              "일반 스킬",
-              1,
-              false,
-              null),
+          // 할버드의 대가·치명적인 체술('일반 스킬의 치명타 피해량')은 M40 R3부터 합계에 넣는다(노드 표 INCLUDE).
           // "페르소나 상태일 때 급습 스킬 적중 시 적에게 주는 치명타 피해량이 3.0% 증가"
           new SkillBonus(
               "곡예사",
@@ -514,7 +499,17 @@ public final class CritEffectTable {
           // 10
           new ClassCore("샷건 오버로드", CoreDecision.WEAK_POINT, null),
           // 워로드 질서의 해 "천둥" 17P "'운명: 천둥'을 소모하면 20.0초 간 … 자신의 치명타 적중률이 6.0% 증가" — 상황 조건(PM 23:24)
-          new ClassCore("천둥", CoreDecision.SITUATIONAL, "운명: 천둥의 가호 20초 가정"));
+          new ClassCore("천둥", CoreDecision.SITUATIONAL, "운명: 천둥의 가호 20초 가정"),
+          // M40 R1(계산 검증 11-22 13:36, PM 총괄 13:37 — 비교 기준과 같게). 11-15 표본 공식 원문:
+          // 소서리스 질서의 해 "불완전 연소" 14P "'운명: 불완전 연소' : 치명타 적중률이 10.0% 증가하고, 종말의 날, …의 피해량이 125.0%
+          // 증가한다."
+          new ClassCore("불완전 연소", CoreDecision.INCLUDE, null),
+          // 배틀마스터 질서의 달 "초순환" 10P "일반 스킬의 치명타 피해량이 3.0% 증가한다."
+          new ClassCore("초순환", CoreDecision.INCLUDE, null),
+          // 배틀마스터 질서의 별 "파천격" 18~20P "일반 스킬의 치명타 피해량이 0.5% 증가한다." (14P 섬열란아는 스킬 한정이라 더하지 않음)
+          new ClassCore("파천격", CoreDecision.INCLUDE, null),
+          // 인파이터 질서의 해 "충격파" 18~20P "충격 스킬의 치명타 피해량이 0.4% 증가한다." (17P 연환파신권은 스킬 한정이라 더하지 않음)
+          new ClassCore("충격파", CoreDecision.INCLUDE, null));
 
   static ClassCore classCore(String slotName) {
     if (slotName == null) return null;
@@ -761,7 +756,9 @@ public final class CritEffectTable {
               new BigDecimal("16"),
               "바람의 속삭임 8초 이동 속도 16%, 공격 속도 8%(스킬 버프 가정, 기본 켬)"));
 
-  /** 직업 코어의 '운명' 상태 공이속(표 고치기 D, 기본 켬). pattern의 이름 붙은 그룹 b = 공격·이동 둘 다. 달성 구간 문구에서 읽는다. */
+  /**
+   * 직업 코어의 '운명' 상태 공이속(표 고치기 D, 기본 켬). pattern의 이름 붙은 그룹 b = 공격·이동 둘 다, m = 이동만. 달성 구간 문구에서 읽는다.
+   */
   public record CoreSpeed(String core, String label, Pattern pattern) {}
 
   public static final List<CoreSpeed> CORE_SPEEDS =
@@ -779,7 +776,15 @@ public final class CritEffectTable {
               Pattern.compile(
                   "운명: 곰은 사람을 찢어.{0,2}\\s*:[^.]*?공격 및 이동 ?속도가\\s*(?<b>"
                       + SPEED_NUMBER
-                      + ")%\\s*증가")));
+                      + ")%\\s*증가")),
+          // M40 R6(계산 검증 11-22, 다른 '운명' 공이속과 같게 기본 켬). 소울이터 질서의 해 "망자의 발걸음" 14P "… 10.0초 동안 '운명: 데스
+          // 스텝' 효과를
+          // 획득한다. '운명: 데스 스텝' : 이동 속도가 5.0% 증가한다." — 이동 속도만
+          new CoreSpeed(
+              "망자의 발걸음",
+              "운명: 데스 스텝 유지 가정",
+              Pattern.compile(
+                  "운명: 데스 스텝.{0,2}\\s*:\\s*이동 ?속도가\\s*(?<m>" + SPEED_NUMBER + ")%\\s*증가")));
 
   static CoreSpeed coreSpeed(String slotName) {
     if (slotName == null) return null;

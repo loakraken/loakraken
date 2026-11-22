@@ -25,8 +25,9 @@ import java.util.concurrent.atomic.AtomicInteger;
  * <ul>
  *   <li>역방향 이름이 설정한 크롤러 도메인(점 경계)으로 끝나고, 그 이름의 정방향 주소에 원래 주소가 있을 때만 확인됨.
  *   <li>결과는 주소마다 남긴다(확인됨 24시간, 아님 1시간 기본, 둘은 따로 상한). 같은 주소의 동시 확인은 하나로 합친다.
- *   <li>확인을 띄운 요청만 짧게(기본 300ms) 기다린다. 넘거나, 진행 중인 확인에 합류했거나, 확인 자리가 차면 이번 요청은 확인되지 않은 것(사람 칸)으로 본다.
- *       실패는 모두 사람 칸이다.
+ *   <li>확인을 띄운 요청만 짧게(기본 300ms) 기다린다. 넘거나, 진행 중인 확인에 합류했거나, 확인 자리가 차면 이번 요청은 확인되지 않은 것으로 본다. 실패도 모두
+ *       확인되지 않은 것이다. 확인되지 않은 표시 요청은 요청 칸을 사람 클라이언트와 같이 세고, 공식 호출은 더 좁게 센다({@link
+ *       ClientLimitFilter}).
  * </ul>
  */
 public class CrawlerVerifier {
@@ -78,7 +79,7 @@ public class CrawlerVerifier {
     this.registry = registry;
   }
 
-  /** 운영용: 확인 스레드 2개, 대기 자리 maxPending개(넘으면 거절 = 사람 칸). */
+  /** 운영용: 확인 스레드 2개, 대기 자리 maxPending개(넘으면 거절 = 확인되지 않음). */
   static CrawlerVerifier system(
       CrawlerVerifyProperties properties, Clock clock, MeterRegistry registry) {
     var threads = new AtomicInteger();
@@ -111,7 +112,7 @@ public class CrawlerVerifier {
     var now = clock.instant();
     if (fresh(verifiedUntil, key, now)) return count("verified", true);
     if (fresh(unverifiedUntil, key, now)) return count("unverified", false);
-    // 확인을 띄운 요청만 짧게 기다린다. 이미 진행 중인 확인에 합류한 요청은 기다리지 않고 사람 칸이다(이름 서버를 느리게 만든 주소가 요청
+    // 확인을 띄운 요청만 짧게 기다린다. 이미 진행 중인 확인에 합류한 요청은 기다리지 않고 확인되지 않은 것이다(이름 서버를 느리게 만든 주소가 요청
     // 스레드를 붙잡지 못하게: 동시에 기다리는 요청은 확인 자리 수를 넘지 않는다).
     var created = new boolean[1];
     CompletableFuture<Boolean> lookup;
@@ -126,7 +127,7 @@ public class CrawlerVerifier {
     } catch (RejectedExecutionException exception) {
       return count("busy", false);
     }
-    // 합류한 요청은 아무것도 붙이지 않고 바로 사람 칸이다(합류마다 콜백을 붙이면, 한도로 거절될 요청까지 확인이 끝날 때까지 메모리를 잡는다).
+    // 합류한 요청은 아무것도 붙이지 않고 바로 확인되지 않은 것이다(합류마다 콜백을 붙이면, 한도로 거절될 요청까지 확인이 끝날 때까지 메모리를 잡는다).
     if (!created[0]) return lookup.isDone() ? done(lookup) : count("pending", false);
     // 끝난 확인은 대기 표에서 뺀다. 띄운 요청만 한 번 붙인다(computeIfAbsent 밖에서: 같은 스레드에서 바로 끝나도 재귀 갱신이 되지 않게).
     var started = lookup;

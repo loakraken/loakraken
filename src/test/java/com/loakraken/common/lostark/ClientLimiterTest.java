@@ -436,6 +436,36 @@ class ClientLimiterTest {
         .isInstanceOf(IllegalArgumentException.class);
   }
 
+  /**
+   * 실제 기본 설정(@DefaultValue로 묶은 값)에서 확인되지 않은 표시 요청이 볼 수 있는 남은 공식 호출은 주소별 봇 한도(5)까지다(사람 한도 20이 아니라).
+   * 손으로 만든 설정이 아니라 설정 묶기로 만들어, 기본값이 바뀌면 이 시험이 알린다(#1071 코드 리뷰 P3).
+   */
+  @Test
+  void 기본_설정에서_확인되지_않은_표시_요청의_남은_공식_호출은_주소별_봇_한도다() throws Exception {
+    var defaults =
+        new org.springframework.boot.context.properties.bind.Binder(
+                new org.springframework.boot.context.properties.source
+                    .MapConfigurationPropertySource())
+            .bindOrCreate("lostark.client-limit", ClientLimitProperties.class);
+    assertThat(defaults.officialPerMinute()).isEqualTo(20);
+    assertThat(defaults.botAddressOfficialPerMinute()).isEqualTo(5);
+    assertThat(defaults.unverifiedBotOfficialPerMinute()).isEqualTo(20);
+    var limiter = limiter(defaults);
+    var filter = filter(limiter);
+    var remaining = new java.util.concurrent.atomic.AtomicInteger(-1);
+    filter.doFilter(
+        request("/api/v1/characters/search", "203.0.113.150", "1"),
+        new MockHttpServletResponse(),
+        (req, res) -> remaining.set(limiter.remainingOfficial()));
+    assertThat(remaining).hasValue(defaults.botAddressOfficialPerMinute());
+    // 표시 없는 같은 주소는 사람 한도 그대로.
+    filter.doFilter(
+        request("/api/v1/characters/search", "203.0.113.150", null),
+        new MockHttpServletResponse(),
+        (req, res) -> remaining.set(limiter.remainingOfficial()));
+    assertThat(remaining).hasValue(defaults.officialPerMinute());
+  }
+
   /** 한 요청 안에서 공식 호출을 tries번 해 보고 허락된 횟수를 돌려준다. */
   private static int officialCalls(
       ClientLimitFilter filter, ClientLimiter limiter, String address, String bot, int tries)

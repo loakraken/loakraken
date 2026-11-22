@@ -208,10 +208,11 @@ class AccessorySearchIntegrationTest {
         "https://cdn.example/acc_necklace.png");
   }
 
-  /** 지금 1분 창이 끝나기까지 seconds초보다 적게 남았으면 다음 창 시작 직후까지 기다린다(창 = 시각 ÷ 1분, 한도와 같은 계산). */
-  private static void awaitFreshWindow(int seconds) throws InterruptedException {
-    long remaining = 60_000 - System.currentTimeMillis() % 60_000;
-    if (remaining < seconds * 1000L) Thread.sleep(remaining + 200);
+  @Autowired ClientLimitWindow window;
+
+  /** 클라이언트 한도 창을 새 창 시작 직후로 옮긴다(기다리지 않음). seconds는 예전 호출 모양을 남긴 것으로, 새 창에는 59초가 남는다. */
+  private void awaitFreshWindow(int seconds) {
+    window.startFreshWindow();
   }
 
   private HttpResponse<String> post(String body, String clientAddress) throws Exception {

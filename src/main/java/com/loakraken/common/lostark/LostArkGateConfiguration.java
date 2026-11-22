@@ -58,18 +58,24 @@ class LostArkGateConfiguration {
     return new ValkeyGateStore(redis.template(), keyId(gate, lostArk));
   }
 
+  /** 클라이언트 한도 창 시계. 운영은 앱 시계 그대로(통합 테스트만 {@code @Primary}로 바꿔 끼운다). */
+  @Bean
+  ClientLimitClock clientLimitClock(Clock clock) {
+    return new ClientLimitClock(clock);
+  }
+
   @Bean
   ClientLimiter clientLimiter(
       GateRedis redis,
       ClientLimitProperties limits,
       LostArkProperties lostArk,
-      Clock clock,
+      ClientLimitClock clock,
       io.micrometer.core.instrument.MeterRegistry registry) {
     ClientLimitStore store =
         redis.template() == null
             ? new ClientLimitStore.Memory()
             : new ClientLimitStore.Valkey(redis.template());
-    return new ClientLimiter(limits, store, clock, registry, lostArk.apiKey());
+    return new ClientLimiter(limits, store, clock.clock(), registry, lostArk.apiKey());
   }
 
   /**

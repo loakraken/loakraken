@@ -112,7 +112,10 @@ public class TestcontainersConfiguration {
     };
   }
 
-  /** 클라이언트 한도 창 시계(컨텍스트마다 하나). 한도를 여러 요청에 걸쳐 세는 시험이 {@link ClientLimitWindow#startFreshWindow()}로 창을 고정한다. */
+  /**
+   * 클라이언트 한도 창 시계(컨텍스트마다 하나). 한도를 여러 요청에 걸쳐 세는 시험이 {@link ClientLimitWindow#startFreshWindow()}로 창을
+   * 고정한다.
+   */
   @Bean
   ClientLimitWindow clientLimitWindow(java.time.Clock clock) {
     return new ClientLimitWindow(clock);

@@ -1356,6 +1356,99 @@ class CombatPowerSimulationIntegrationTest {
     assertThat(both.at("/data/delta").decimalValue()).isEqualByComparingTo("0");
   }
 
+  /**
+   * #1079 대체 리뷰 P3-2: 교체로 의지력이 남으면 뒤 슬롯의 꺼진 젬이 켜진다(공식 가이드 '아크 그리드' 최근수정일 2026-06-24 — 코어에서 가까운 슬롯부터
+   * 차례로 공급, 모자란 슬롯부터 그 뒤는 꺼짐). 공급 17, 젬 0·1·2가 3·4·3을 쓰고 젬 3(필요 8)은 7이 남아 꺼져 있다. 젬 1을 효율 5(필요 3)로
+   * 바꾸면 8이 남아 젬 3이 켜지고(보스 피해 4·공격력 3·코어 포인트 5가 더해짐), 효율 4(필요 4)면 7이라 그대로 꺼져 있다.
+   */
+  @Test
+  void 교체로_의지력이_남으면_뒤_슬롯의_꺼진_젬이_켜진다() throws Exception {
+    when(detailsPort.fetch(anyString()))
+        .thenAnswer(
+            invocation -> {
+              var base = fetchedBracelet(invocation.getArgument(0));
+              var details = base.details();
+              var old = details.loadout();
+              var loadout =
+                  new CharacterLoadout(
+                      old.equipment(),
+                      old.engravings(),
+                      old.gems(),
+                      old.cards(),
+                      old.arkPassive(),
+                      sleepingGemGrid(),
+                      old.skills());
+              return new FetchedCharacter(
+                  CharacterTestFixture.details(details.profile(), loadout, List.of()), "{}", "[]");
+            });
+    assertThat(get("/api/v1/characters/search?characterName=" + encode("시뮬젬깨움")).statusCode())
+        .isEqualTo(200);
+    var freesWill =
+        """
+        [{"kind": "ARK_GRID_GEM", "slotIndex": 5, "index": 1, "gemType": "침식", "willEfficiency": 5,
+          "point": 5, "effects": [{"name": "추가 피해", "level": 3}, {"name": "공격력", "level": 2}]}]
+        """;
+    var keepsWill =
+        """
+        [{"kind": "ARK_GRID_GEM", "slotIndex": 5, "index": 1, "gemType": "침식", "willEfficiency": 4,
+          "point": 5, "effects": [{"name": "추가 피해", "level": 3}, {"name": "공격력", "level": 2}]}]
+        """;
+    var woke = mapper.readTree(simulate("시뮬젬깨움", freesWill).body());
+    var slept = mapper.readTree(simulate("시뮬젬깨움", keepsWill).body());
+    assertThat(woke.at("/data/contributions/0/status").asText())
+        .as(woke.toString())
+        .isEqualTo("OK");
+    assertThat(slept.at("/data/contributions/0/status").asText())
+        .as(slept.toString())
+        .isEqualTo("OK");
+    // 효율만 다르고 옵션·포인트는 같다: 젬 3이 켜지는 쪽이 더 오른다.
+    assertThat(woke.at("/data/delta").decimalValue())
+        .as(woke.toString() + " vs " + slept)
+        .isGreaterThan(slept.at("/data/delta").decimalValue());
+  }
+
+  /** 젬 3이 꺼진 아크 그리드: 공급 17, 젬 0·1·2가 3·4·3, 젬 3은 필요 8이라 꺼짐 — 공식 옵션 합·코어 포인트는 켜진 젬만. */
+  private static CharacterLoadout.ArkGrid sleepingGemGrid() {
+    var gems =
+        List.of(
+            gridGem(0, 4, 3, 8, 5, "추가 피해", 3, "낙인력", 1),
+            gridGem(1, 4, 4, 8, 4, "아군 피해 강화", 2, "낙인력", 5),
+            gridGem(2, 4, 3, 8, 5, "아군 피해 강화", 3, "낙인력", 2),
+            new CharacterLoadout.GridGem(
+                3,
+                null,
+                false,
+                "전설",
+                new CharacterLoadout.GemDetail(
+                    "혼돈의 젬 : 왜곡",
+                    "혼돈",
+                    16,
+                    8,
+                    9,
+                    1,
+                    5,
+                    List.of(
+                        new CharacterLoadout.GemOption("보스 피해", 4, null, null),
+                        new CharacterLoadout.GemOption("공격력", 3, null, null)))));
+    var core =
+        new CharacterLoadout.GridSlot(
+            5,
+            null,
+            "혼돈의 해 코어 : 현란한 공격",
+            12,
+            "고대",
+            gems,
+            new CharacterLoadout.CoreDetail("혼돈", 17, List.of(), List.of()),
+            null);
+    return new CharacterLoadout.ArkGrid(
+        List.of(core),
+        List.of(
+            new CharacterLoadout.GridEffect("추가 피해", 49, null, null),
+            new CharacterLoadout.GridEffect("낙인력", 39, null, null),
+            new CharacterLoadout.GridEffect("아군 피해 강화", 24, null, null),
+            new CharacterLoadout.GridEffect("공격력", 31, null, null)));
+  }
+
   /** 11-15 표본과 같은 아크 그리드(이름 없음): 혼돈의 해 코어 하나와 공식 옵션 합. */
   private static CharacterLoadout.ArkGrid gemSwapGrid() {
     var gems =

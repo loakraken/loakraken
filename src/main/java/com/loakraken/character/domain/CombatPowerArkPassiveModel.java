@@ -36,8 +36,8 @@ public final class CombatPowerArkPassiveModel {
   }
 
   /**
-   * 깨달음 포인트 P의 배수: 1 + c × min(P, 상한 100). 101번째 포인트는 전투력이 없다(비교 기준 식과 같고, 101인 캐릭터 25명이 이 규칙에서 공식
-   * 전투력과 0.000% — 세면 모두 −0.41% 어긋남). 요청 상한(101)을 넘으면 null.
+   * 깨달음 포인트 P의 배수: 1 + c × min(P, 상한 100). 101번째 포인트는 전투력이 없다(비교 기준 식과 같고, 101인 딜러 입력 44개(캐릭터 25명)
+   * 가운데 32개가 이 규칙에서 공식 전투력과 0.10% 안·중앙값 +0.000% — 세면 0개·모두 −0.41%). 요청 상한(101)을 넘으면 null.
    */
   public static BigDecimal enlightenment(Coefficients coefficients, int points) {
     if (points > coefficients.enlightenmentLimitPoints()) return null;

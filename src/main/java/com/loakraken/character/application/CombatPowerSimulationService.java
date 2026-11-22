@@ -454,9 +454,8 @@ public class CombatPowerSimulationService {
       "진화 포인트 합의 전투력 배수(1 + 0.0075 × (포인트 − 40), 40 이하는 1)를 바꾼 비율을 공식 전투력에 곱한 모델값입니다(40~140 사이 포인트당"
           + " 기울기는 한 곳에서만 확인).";
   private static final String ENLIGHTENMENT_BASIS =
-      "깨달음 포인트 합의 전투력 배수(1 + 0.007 × 포인트, 100까지)를 바꾼 비율을 공식 전투력에 곱했습니다. 101번째 포인트는 전투력이 없습니다(캐릭터 25명의 공식 전투력 대조).";
-  private static final String ENLIGHTENMENT_OVER_REASON =
-      "깨달음 포인트 100 초과의 전투력 계산식을 아직 확인하고 있어 계산하지 않았습니다.";
+      "깨달음 포인트 합의 전투력 배수(1 + 0.007 × 포인트, 100까지)를 바꾼 비율을 공식 전투력에 곱했습니다. 101번째 포인트는 전투력이 없습니다(캐릭터 사이 공식 전투력 대조).";
+  private static final String ENLIGHTENMENT_OVER_REASON = "깨달음 포인트가 최대(101)를 넘는 값이라 계산하지 않았습니다.";
   private static final String PASSIVE_UNREAD = "아크 패시브 포인트 합을 읽지 못해 계산하지 않았습니다.";
 
   /** 트리 포인트 합의 전투력 배수. 계산할 수 없으면(깨달음 100 초과·모르는 트리) null. */

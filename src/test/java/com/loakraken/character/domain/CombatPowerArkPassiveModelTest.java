@@ -30,11 +30,12 @@ class CombatPowerArkPassiveModelTest {
   }
 
   @Test
-  void 깨달음은_포인트당_0_7퍼센트이고_100을_넘으면_계산하지_않는다() throws Exception {
+  void 깨달음은_포인트당_0_7퍼센트이고_100을_넘는_포인트는_세지_않는다() throws Exception {
     var c = coefficients();
     assertThat(CombatPowerArkPassiveModel.enlightenment(c, 0)).isEqualByComparingTo("1");
     assertThat(CombatPowerArkPassiveModel.enlightenment(c, 100)).isEqualByComparingTo("1.70");
-    assertThat(CombatPowerArkPassiveModel.enlightenment(c, 101)).isNull();
+    // M13: 101번째 포인트는 전투력이 없다(캐릭터 25명 공식 전투력 대조, PM 총괄 11-22).
+    assertThat(CombatPowerArkPassiveModel.enlightenment(c, 101)).isEqualByComparingTo("1.70");
     assertThat(c.source()).isNotBlank();
     assertThat(c.enlightenmentPerPoint()).isEqualByComparingTo(new BigDecimal("0.007"));
   }

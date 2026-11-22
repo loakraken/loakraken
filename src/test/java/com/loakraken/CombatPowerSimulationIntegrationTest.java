@@ -557,9 +557,9 @@ class CombatPowerSimulationIntegrationTest {
   }
 
   @Test
-  void 진화_깨달음_포인트는_트리마다_독립_배수로_계산하고_깨달음_100_초과는_계산하지_않는다() throws Exception {
-    // PM 총괄 11-15 19:12: 진화 (1 + 0.0075·max(P − 40, 0), 모델값), 깨달음 (1 + 0.007·P, 100 이하만), 도약 (1 +
-    // 0.002·P).
+  void 진화_깨달음_포인트는_트리마다_독립_배수로_계산하고_깨달음_101번째_포인트는_전투력이_없다() throws Exception {
+    // PM 총괄 11-15 19:12: 진화 (1 + 0.0075·max(P − 40, 0), 모델값), 도약 (1 + 0.002·P). 깨달음은 M13(PM 총괄
+    // 11-22)부터 1 + 0.007·min(P, 100).
     when(detailsPort.fetch(anyString()))
         .thenAnswer(
             invocation -> {
@@ -590,7 +590,7 @@ class CombatPowerSimulationIntegrationTest {
         simulate("시뮬진화", "[{\"kind\": \"ARK_PASSIVE_POINT\", \"tree\": \"진화\", \"points\": 141}]");
     assertThat(over.statusCode()).isEqualTo(400);
     assertThat(over.body()).contains("INVALID_REQUEST", "points", "0~140");
-    // 깨달음 최대 101: 102는 400, 100은 계산, 101은 계산하지 않음(아래).
+    // 깨달음 최대 101: 102는 400, 100·101은 계산(101번째 포인트는 전투력 없음, 아래).
     var overEnlightenment =
         simulate("시뮬진화", "[{\"kind\": \"ARK_PASSIVE_POINT\", \"tree\": \"깨달음\", \"points\": 102}]");
     assertThat(overEnlightenment.statusCode()).isEqualTo(400);
@@ -616,14 +616,16 @@ class CombatPowerSimulationIntegrationTest {
     assertThat(all.path("contributions").size()).isEqualTo(3);
     assertThat(all.path("partial").asBoolean()).isFalse();
     assertThat(all.path("after").decimalValue()).isEqualByComparingTo("2881.12");
-    // 깨달음 100 초과는 바꿀 값이든 지금 값이든 계산하지 않는다(같은 캐릭터 공식 전투력 쌍으로 확인하기 전까지).
-    for (var unsupported : List.of(one("시뮬진화", "깨달음", 101), one("시뮬진화초과", "깨달음", 90))) {
-      assertThat(unsupported.at("/contributions/0/status").asText()).isEqualTo("UNSUPPORTED");
-      assertThat(unsupported.at("/contributions/0/reasonCode").asText())
-          .isEqualTo("MODEL_UNCONFIRMED");
-      assertThat(unsupported.at("/contributions/0/delta").isNull()).isTrue();
-      assertThat(unsupported.path("partial").asBoolean()).isTrue();
-    }
+    // M13(PM 총괄 11-22, 캐릭터 25명 공식 전투력 대조): 깨달음 101번째 포인트는 전투력이 없다 — 배수는 1 + 0.007 × min(P, 100).
+    // 100 → 101은 × 1(변화 없음), 101 → 90은 × 1.63 / 1.70(= −4.118%).
+    var toCap = one("시뮬진화", "깨달음", 101);
+    assertThat(toCap.at("/contributions/0/status").asText()).isEqualTo("OK");
+    assertThat(toCap.path("delta").decimalValue()).isEqualByComparingTo("0");
+    var fromCap = one("시뮬진화초과", "깨달음", 90);
+    assertThat(fromCap.at("/contributions/0/status").asText()).isEqualTo("OK");
+    assertThat(fromCap.path("partial").asBoolean()).isFalse();
+    assertThat(fromCap.path("deltaPercent").decimalValue()).isEqualByComparingTo("-4.118");
+    assertThat(fromCap.at("/contributions/0/basis").asText()).contains("101번째 포인트");
   }
 
   private JsonNode one(String name, String tree, int points) throws Exception {

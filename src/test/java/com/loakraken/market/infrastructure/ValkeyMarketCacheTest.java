@@ -126,6 +126,29 @@ class ValkeyMarketCacheTest {
     assertThat(count("options", "write_error")).isEqualTo(1);
   }
 
+  /**
+   * 아크 그리드 탭 스캔을 저장하면 보드 캐시(3분, 화면은 그대로 새로움)와 따로 젬 교체 순위용 '마지막 아크 그리드 스캔'도 15분 둔다 — 예열(10분마다)과 보드
+   * 방문 어느 쪽이 받아도 갱신되어 순위에 빈 때가 없다(PM 총괄 2026-11-22). 다른 탭은 젬 스냅숏을 쓰지 않는다.
+   */
+  @Test
+  void 아크_그리드_탭_스캔은_보드_3분과_따로_젬_스냅숏을_15분_둔다() {
+    cache.saveBoardScan(new MarketBoardScan(MarketTab.ARK_GRID, null, now, 0, List.of()));
+    verify(values).set(anyString(), anyString(), eq(Duration.ofMinutes(3)));
+    verify(values)
+        .set(
+            org.mockito.ArgumentMatchers.startsWith("market:v1:ark-grid-gem-snapshot"),
+            anyString(),
+            eq(Duration.ofMinutes(15)));
+    org.mockito.Mockito.clearInvocations(values);
+    cache.saveBoardScan(new MarketBoardScan(MarketTab.LIFE, null, now, 0, List.of()));
+    verify(values).set(anyString(), anyString(), eq(Duration.ofMinutes(3)));
+    verify(values, org.mockito.Mockito.never())
+        .set(
+            org.mockito.ArgumentMatchers.startsWith("market:v1:ark-grid-gem-snapshot"),
+            anyString(),
+            any(Duration.class));
+  }
+
   /** 아바타·장비 상자(천천히 바뀌는 분류)는 가격·스캔 캐시를 5분 두고, 다른 분류는 그대로 30초·3분(#11 공식 호출 예산). */
   @Test
   void 천천히_바뀌는_분류는_가격과_스캔을_길게_캐시한다() {

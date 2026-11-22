@@ -107,7 +107,7 @@ class CombatPowerGemModelTest {
             "목걸이", "테스트 목걸이", new CharacterLoadout.EffectGroup("연마 효과", List.of("기본 공격력 +0.80%"))));
     var model = CombatPowerGemModel.of(COEFFICIENTS, loadout(6, "0.45", lines));
     assertThat(model.unsupportedReason())
-        .isEqualTo("확인하지 않은 기본 공격력 % 출처(「기본 공격력 +0.80%」)가 있어 보석 변화는 계산하지 않습니다.");
+        .isEqualTo("확인하지 않은 기본 공격력 % 효과(「기본 공격력 +0.80%」)가 있어 보석 변화는 계산하지 않습니다.");
   }
 
   @Test

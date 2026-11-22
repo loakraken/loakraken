@@ -6,6 +6,13 @@ import org.junit.jupiter.api.Test;
 
 /** 거래소 판매 수수료 5%의 '1골드 미만 올림' 경계(계산 검증 P3). */
 class SpecUpCostTest {
+  /** 비용 근거 문장은 웹이 표 아래에 그대로 보인다: '출처'를 쓰지 않는다(웹 규칙 A13, 프론트2 11-22). 재련 화면의 한 곳 표시 문구와 같게. */
+  @Test
+  void 상급_재련_근거_문장에_출처가_없다() {
+    var basis = SpecUpCost.advancedRefineExpected(1_000).basis();
+    assertThat(basis).doesNotContain("출처").contains("아직 한 곳에서만 확인한 값입니다");
+  }
+
   @Test
   void 판매_수수료는_5퍼센트를_1골드_미만_올림한다() {
     assertThat(SpecUpCost.exchangeSaleFee(400_000)).isEqualTo(20_000);

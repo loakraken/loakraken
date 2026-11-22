@@ -1917,7 +1917,9 @@ public class SpecUpGoalService {
                     null,
                     null,
                     null),
-                SpecUpCost.REFINE_COST_UNCONFIRMED,
+                // 상급 재련 기대 비용(계산 검증 명세 2026-11-22): 지금 단계에서 목표까지 구간별 사슬의 합.
+                specUp.advancedRefineCost(
+                    item.equipment(), item.refine(), next, refinePrices, pricesAt),
                 null,
                 null,
                 null));

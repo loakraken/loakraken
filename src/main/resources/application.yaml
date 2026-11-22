@@ -263,6 +263,8 @@ refining:
   # 특수 재련 돌파석 가치(M42, POST /api/v1/refining/special-stone-values): 웹 화면이 붙을 때 켠다. 꺼져 있으면 404.
   special-stone:
     enabled: ${REFINING_SPECIAL_STONE_ENABLED:false}
+    # 사용자 가격이 있는 요청의 풀이 자리 수(공유 OPTIMAL 자리와 따로). 차면 429 REFINING_SOLVE_BUSY.
+    user-price-solves: ${REFINING_SPECIAL_STONE_USER_PRICE_SOLVES:1}
 
 home:
   cache:

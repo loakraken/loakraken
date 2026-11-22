@@ -14,8 +14,8 @@ import org.springframework.stereotype.Service;
 
 /**
  * 특수 재련 돌파석 1개 가치(M42, 계산 검증 'M42 특재 효율 근거 확인 2026-11-22'). 가치 = 그 단계(fromStage → +1) 일반 재련 기대
- * 비용(회차별 최적, 보장 시도에는 숨결 없음) ÷ 평균 필요량(1회 소모량 ÷ 공식 기본 확률). 일반 재련 풀이는 /plans OPTIMAL과 같은 풀이·캐시·계산 자리를
- * 쓴다(공식 호출 없음).
+ * 비용(회차별 최적, 보장 시도에는 숨결 없음) ÷ 평균 필요량(1회 소모량 ÷ 공식 기본 확률). 일반 재련 풀이는 /plans OPTIMAL과 같은 풀이를 쓰고(공식 호출
+ * 없음), 시세만 쓰는 요청은 공유 캐시·계산 자리, 사용자 가격이 있는 요청은 따로 둔 자리·캐시({@link UserPriceSolvePool})로 푼다.
  */
 @Service
 public class SpecialStoneValueService {
@@ -25,10 +25,13 @@ public class SpecialStoneValueService {
 
   private final RefiningPlanService plans;
   private final SpecialRefineRules special;
+  private final UserPriceSolvePool userPricePool;
 
-  public SpecialStoneValueService(RefiningPlanService plans, SpecialRefineRules special) {
+  public SpecialStoneValueService(
+      RefiningPlanService plans, SpecialRefineRules special, UserPriceSolvePool userPricePool) {
     this.plans = plans;
     this.special = special;
+    this.userPricePool = userPricePool;
   }
 
   public record Target(
@@ -97,14 +100,18 @@ public class SpecialStoneValueService {
     return plans.rules().track(target.grade(), target.type()).stage(target.fromStage() + 1);
   }
 
-  /** prices = 이름 → 1개 골드(사용자 가격으로 시세를 덮은 값). 요청 순서대로 한 줄씩. */
-  public List<Row> values(List<Target> targets, Map<String, BigDecimal> prices) {
+  /**
+   * prices = 이름 → 1개 골드(사용자 가격으로 시세를 덮은 값). 요청 순서대로 한 줄씩. userPriced(사용자 가격이 하나라도 있음)면 일반 재련 풀이는 따로
+   * 둔 자리·캐시({@link UserPriceSolvePool})로, 아니면 /plans OPTIMAL과 같은 공유 자리·캐시로 푼다(값은 같다).
+   */
+  public List<Row> values(
+      List<Target> targets, Map<String, BigDecimal> prices, boolean userPriced) {
     var rows = new ArrayList<Row>();
-    for (var target : targets) rows.add(row(target, prices));
+    for (var target : targets) rows.add(row(target, prices, userPriced));
     return List.copyOf(rows);
   }
 
-  private Row row(Target target, Map<String, BigDecimal> prices) {
+  private Row row(Target target, Map<String, BigDecimal> prices, boolean userPriced) {
     if (!sourced(target))
       return new Row(
           target,
@@ -147,7 +154,11 @@ public class SpecialStoneValueService {
     var options =
         new RefiningPlan.Options(
             target.fromStage(), target.fromStage() + 1, false, true, true, 0, 0, false, true);
-    var optimal = plans.optimal(target.grade(), target.type(), options, prices);
+    var optimal =
+        userPriced
+            ? plans.optimalWith(
+                target.grade(), target.type(), options, prices, userPricePool.solver())
+            : plans.optimal(target.grade(), target.type(), options, prices);
     if (optimal == null)
       return new Row(
           target,

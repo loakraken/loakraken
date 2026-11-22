@@ -557,9 +557,9 @@ class CombatPowerSimulationIntegrationTest {
   }
 
   @Test
-  void 진화_깨달음_포인트는_트리마다_독립_배수로_계산하고_깨달음_100_초과는_계산하지_않는다() throws Exception {
-    // PM 총괄 11-15 19:12: 진화 (1 + 0.0075·max(P − 40, 0), 모델값), 깨달음 (1 + 0.007·P, 100 이하만), 도약 (1 +
-    // 0.002·P).
+  void 진화_깨달음_포인트는_트리마다_독립_배수로_계산하고_깨달음_101번째_포인트는_전투력이_없다() throws Exception {
+    // PM 총괄 11-15 19:12: 진화 (1 + 0.0075·max(P − 40, 0), 모델값), 도약 (1 + 0.002·P). 깨달음은 M13(PM 총괄
+    // 11-22)부터 1 + 0.007·min(P, 100).
     when(detailsPort.fetch(anyString()))
         .thenAnswer(
             invocation -> {

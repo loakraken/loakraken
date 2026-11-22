@@ -39,6 +39,7 @@ class SpecialStoneValuesIntegrationTest {
   @Autowired ConfigurableEnvironment environment;
   @Autowired com.loakraken.market.application.MarketCache marketCache;
   @Autowired StringRedisTemplate redis;
+  @Autowired io.micrometer.core.instrument.MeterRegistry registry;
   private final JsonMapper mapper = new JsonMapper();
 
   @BeforeEach
@@ -147,6 +148,40 @@ class SpecialStoneValuesIntegrationTest {
     assertThat(rows.size()).isEqualTo(28);
     for (var row : rows)
       assertThat(row.path("status").asString()).as(row.toString()).isEqualTo("OK");
+  }
+
+  /**
+   * 사용자 가격이 있는 요청은 따로 둔 풀이 자리·캐시를 쓴다(#1099 리뷰 P2): 가격을 바꿔 가며 보내도 /plans OPTIMAL이 쓰는 공유 자리를
+   * 붙잡거나 공유 캐시(시세 기준 단계)를 밀어내지 않는다. 시세만 쓰는 요청은 그대로 공유 쪽.
+   */
+  @Test
+  void 사용자_가격_풀이는_공유_자리와_공유_캐시를_쓰지_않는다() throws Exception {
+    capturePrices(true);
+    double sharedSize = registry.get("loakraken.receipt.optimal.cache.size").gauge().value();
+    long sharedSolves = registry.get("loakraken.refining.optimal.solve").timer().count();
+    var userPriced =
+        "{\"targets\":["
+            + target("JEONYUL", "WEAPON", 19)
+            + "],\"prices\":[{\"name\":\"운명의 파괴석 결정\",\"unitPriceGold\":777}]}";
+    var first = data(request(userPriced));
+    assertThat(first.at("/rows/0/status").asString()).isEqualTo("OK");
+    assertThat(registry.get("loakraken.receipt.optimal.cache.size").gauge().value())
+        .as("공유 캐시 크기")
+        .isEqualTo(sharedSize);
+    assertThat(registry.get("loakraken.refining.optimal.solve").timer().count())
+        .as("공유 자리 풀이 수")
+        .isEqualTo(sharedSolves);
+    var privateSolves = registry.find("loakraken.refining.special_stone.user_price.solve").timer();
+    assertThat(privateSolves).as("사용자 가격 풀이 시간").isNotNull();
+    assertThat(privateSolves.count()).isEqualTo(1);
+    // 같은 요청은 따로 둔 캐시에서 답한다(다시 풀지 않음, 값 같음).
+    var again = data(request(userPriced));
+    assertThat(privateSolves.count()).isEqualTo(1);
+    assertThat(again.at("/rows/0/valuePerStoneGold").decimalValue())
+        .isEqualByComparingTo(first.at("/rows/0/valuePerStoneGold").decimalValue());
+    // 시세만 쓰는 요청은 공유 쪽(사용자 가격 풀이 수는 그대로).
+    data(request("{\"targets\":[" + target("JEONYUL", "WEAPON", 19) + "]}"));
+    assertThat(privateSolves.count()).isEqualTo(1);
   }
 
   @Test

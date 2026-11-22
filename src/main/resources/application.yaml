@@ -260,6 +260,9 @@ refining:
   # 상급 재련 기대 비용 API(POST /api/v1/refining/advanced-plans): 웹 화면이 붙을 때 켠다. 꺼져 있으면 400.
   advanced:
     enabled: ${REFINING_ADVANCED_ENABLED:false}
+  # 특수 재련 돌파석 가치(M42, POST /api/v1/refining/special-stone-values): 웹 화면이 붙을 때 켠다. 꺼져 있으면 404.
+  special-stone:
+    enabled: ${REFINING_SPECIAL_STONE_ENABLED:false}
 
 home:
   cache:

@@ -134,8 +134,11 @@ public class GemRankingService {
   /** 결과 캐시 크기(최근에 쓴 순서). 캐릭터 캐시 수집 시각·시세 관측 시각이 열쇠에 있어 둘 중 하나가 바뀌면 자연히 새 열쇠다. */
   static final int CACHE_ENTRIES = 256;
 
-  /** 순위를 매긴 모든 줄(limit 전). limit은 꺼낼 때 자른다. */
-  private record Ranked(Instant pricesObservedAt, List<Row> rows) {}
+  /** 요청 limit 상한(요청 검사 1~200과 같다). 캐시에는 이만큼만 둔다(#1097 코드 리뷰 P3: 캐릭터 하나 줄이 수백 개라 메모리 상한). */
+  static final int MAX_ROWS = 200;
+
+  /** 순위를 매긴 위쪽 줄(최대 {@link #MAX_ROWS}개)과 전체 줄 수. limit은 꺼낼 때 자른다. */
+  private record Ranked(Instant pricesObservedAt, List<Row> rows, int total) {}
 
   /** 결과 캐시 열쇠(#1095 코드 리뷰 P2): 같은 캐릭터 캐시·등급·정책·초기화·사용자 가격·젬 시세면 같은 줄이다. */
   private record CacheKey(
@@ -227,7 +230,10 @@ public class GemRankingService {
         throw new BusinessException(SpecUpErrorCode.GEM_RANKING_BUSY, RETRY_AFTER);
       try {
         cacheMisses.increment();
-        ranked = new Ranked(pricesAt, compute(query, result, gemPrice));
+        var all = compute(query, result, gemPrice);
+        ranked =
+            new Ranked(
+                pricesAt, List.copyOf(all.subList(0, Math.min(MAX_ROWS, all.size()))), all.size());
       } finally {
         seats.release();
       }
@@ -246,7 +252,7 @@ public class GemRankingService {
         null,
         null,
         ranked.pricesObservedAt(),
-        ranked.rows().size(),
+        ranked.total(),
         List.copyOf(limited),
         ASSUMPTIONS);
   }

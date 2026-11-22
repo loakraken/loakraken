@@ -213,6 +213,46 @@ class RefiningAdvancedPlanIntegrationTest {
     assertThat(request(body).statusCode()).isEqualTo(200);
   }
 
+  @Autowired io.micrometer.core.instrument.MeterRegistry meters;
+
+  private double cache(String outcome) {
+    var counter =
+        meters.find("loakraken.refining.advanced_cache").tag("outcome", outcome).counter();
+    return counter == null ? 0 : counter.count();
+  }
+
+  /**
+   * 켜기 전 조건(#1091 코드 리뷰 P2): 같은 종류·단계·시세 관측 시각이면 다시 풀지 않는다(결과 캐시). 시세가 바뀌면(관측 시각) 다시 푼다. 응답은 같다.
+   */
+  @Test
+  void 같은_요청은_결과_캐시를_쓰고_시세가_바뀌면_다시_푼다() throws Exception {
+    prices();
+    var body = "{\"grade\":\"UPHWA\",\"equipmentType\":\"ARMOR\",\"fromStage\":0,\"toStage\":40}";
+    double hits = cache("hit");
+    double misses = cache("miss");
+    var first = request(body);
+    var second = request(body);
+    assertThat(first.statusCode()).as(first.body()).isEqualTo(200);
+    assertThat(second.body()).isEqualTo(first.body());
+    assertThat(cache("miss") - misses).isEqualTo(1);
+    assertThat(cache("hit") - hits).isEqualTo(1);
+    // 새 시세 관측 시각이면 다시 푼다.
+    marketCache.saveRefiningMaterials(
+        new com.loakraken.market.application.RefiningMaterialScan(
+            OBSERVED.plusSeconds(60),
+            List.of(
+                price(1, "운명의 수호석", 100, "31"),
+                price(2, "운명의 돌파석", 1, "3"),
+                price(3, "아비도스 융화 재료", 1, "160"),
+                price(4, "운명의 파편 주머니(대)", 1, "240"),
+                price(5, "빙하의 숨결", 1, "180"),
+                price(6, "운명의 파괴석", 100, "45"),
+                price(7, "용암의 숨결", 1, "210"))),
+        java.time.Duration.ofMinutes(5));
+    assertThat(request(body).statusCode()).isEqualTo(200);
+    assertThat(cache("miss") - misses).isEqualTo(2);
+  }
+
   /** 설정을 주지 않으면 상급 재련 스위치는 꺼짐이다(운영 기본값). */
   @Test
   void 스위치_기본값은_꺼짐이다() throws Exception {

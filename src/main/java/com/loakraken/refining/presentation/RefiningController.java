@@ -26,6 +26,7 @@ class RefiningController {
   private final com.loakraken.market.application.MaterialUnitPriceService unitPrices;
   private final org.springframework.core.env.Environment environment;
   private final com.loakraken.refining.domain.AdvancedRefineRules advancedRules;
+  private final com.loakraken.refining.application.AdvancedPlanCache advancedCache;
   private final com.loakraken.refining.application.SpecialStoneValueService specialStones;
 
   RefiningController(
@@ -34,12 +35,14 @@ class RefiningController {
       com.loakraken.market.application.MaterialUnitPriceService unitPrices,
       org.springframework.core.env.Environment environment,
       com.loakraken.refining.domain.AdvancedRefineRules advancedRules,
+      com.loakraken.refining.application.AdvancedPlanCache advancedCache,
       com.loakraken.refining.application.SpecialStoneValueService specialStones) {
     this.service = service;
     this.materials = materials;
     this.unitPrices = unitPrices;
     this.environment = environment;
     this.advancedRules = advancedRules;
+    this.advancedCache = advancedCache;
     this.specialStones = specialStones;
   }
 
@@ -176,13 +179,18 @@ class RefiningController {
                     new com.loakraken.common.api.BusinessException(
                         com.loakraken.refining.application.RefiningErrorCode.REFINING_PRICE_PENDING,
                         RETRY_AFTER));
+    // 같은 종류·단계·시세 관측 시각이면 다시 풀지 않는다(#1091 코드 리뷰 P2, 켜기 전 조건).
     var result =
-        com.loakraken.refining.domain.AdvancedRefineCost.expected(
-            advancedRules,
-            request.ruleType(),
-            request.fromStage(),
-            request.toStage(),
-            name -> prices.unit(name).orElse(null));
+        advancedCache.get(
+            new com.loakraken.refining.application.AdvancedPlanCache.Key(
+                request.ruleType(), request.fromStage(), request.toStage(), prices.observedAt()),
+            () ->
+                com.loakraken.refining.domain.AdvancedRefineCost.expected(
+                    advancedRules,
+                    request.ruleType(),
+                    request.fromStage(),
+                    request.toStage(),
+                    name -> prices.unit(name).orElse(null)));
     if (result == null)
       throw new com.loakraken.common.api.BusinessException(
           com.loakraken.refining.application.RefiningErrorCode.REFINING_PRICE_PENDING, RETRY_AFTER);

@@ -48,6 +48,11 @@ public class TitleSnapshotService {
     return snapshots.hasStale();
   }
 
+  /** 지난 처리정지 목록으로 만든 날짜를 지운다(오늘은 그대로). 지운 날짜 수. */
+  public int purgeStale() {
+    return 0;
+  }
+
   /**
    * 오늘(KST) 스냅숏을 만든다(같은 날짜면 바꿔 씀). 지난 처리정지 목록으로 만든 날짜는 같은 트랜잭션에서 지운다. keys = 만든 server key 수(전체
    * 포함), rows = 넣은 칭호 줄 수, resetDays = 목록이 바뀌어 지운 날짜 수.

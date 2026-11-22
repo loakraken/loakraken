@@ -89,6 +89,20 @@ class TitleSnapshotJobTest {
         .contains("event=title_snapshot_reset reason=exclusion trigger=exclusion days=2");
   }
 
+  /** #1064 코드 리뷰 메모: 오늘이 지금 목록으로 이미 있으면 run이 바로 끝나 지난 목록 날짜가 다음 만들기까지 남았다. */
+  @Test
+  void 오늘이_지금_목록으로_있어도_지난_목록_날짜는_만들지_않고_지운다(CapturedOutput output) {
+    when(service.staleStored()).thenReturn(true);
+    when(service.builtToday()).thenReturn(true);
+    when(service.purgeStale()).thenReturn(1);
+    job().checkExclusion();
+    verify(service).purgeStale();
+    verify(service, never()).build();
+    assertThat(resets()).isEqualTo(1);
+    assertThat(output.getOut())
+        .contains("event=title_snapshot_reset reason=exclusion trigger=purge days=1");
+  }
+
   @Test
   void 남은_날짜가_없으면_만들지_않는다() {
     when(service.staleStored()).thenReturn(false);

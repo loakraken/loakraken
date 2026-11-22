@@ -20,7 +20,7 @@ import org.springframework.stereotype.Service;
 @Service
 public class SpecialStoneValueService {
   public static final String UNSOURCED = "SPECIAL_REFINE_UNSOURCED";
-  static final String UNSOURCED_REASON = "이 장비·단계의 특수 재련 1회 소모량은 아직 출처를 확인하지 않아 계산하지 않았습니다.";
+  static final String UNSOURCED_REASON = "이 장비·단계의 특수 재련 1회 소모량은 아직 확인하지 않아 계산하지 않았습니다.";
   static final String PRICE_MISSING_REASON = "재료 시세가 없어 계산하지 않았습니다. 그 재료 가격을 직접 넣으면 계산합니다.";
 
   private final RefiningPlanService plans;

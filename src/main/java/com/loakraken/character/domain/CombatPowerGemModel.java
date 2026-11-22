@@ -241,7 +241,7 @@ public final class CombatPowerGemModel {
       if (ANY_BASE_ATTACK_PCT.matcher(text).find()) unknown.add(text.strip());
     if (!unknown.isEmpty())
       return new Model(
-          slots, other, "확인하지 않은 기본 공격력 % 출처(「" + unknown.getFirst() + "」)가 있어 보석 변화는 계산하지 않습니다.");
+          slots, other, "확인하지 않은 기본 공격력 % 효과(「" + unknown.getFirst() + "」)가 있어 보석 변화는 계산하지 않습니다.");
     return new Model(slots, other, null, emptyTier);
   }
 

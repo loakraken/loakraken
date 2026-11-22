@@ -45,6 +45,7 @@ class AuctionBoardIntegrationTest {
   @MockitoBean AuctionSearchPort search;
   @Autowired com.loakraken.common.lostark.LostArkRequestGate gate;
   @Autowired io.micrometer.core.instrument.MeterRegistry meters;
+  @Autowired ClientLimitWindow window;
   private final JsonMapper mapper = new JsonMapper();
 
   @BeforeEach
@@ -434,6 +435,8 @@ class AuctionBoardIntegrationTest {
                 gate.release();
               }
             });
+    // 클라이언트 한도는 1분 고정 창이다. 21번의 호출이 한 창 안에 들어야 21번째가 걸린다(분 경계를 넘으면 새 창에서 허용) — 새 창에서 시작한다.
+    window.startFreshWindow();
     // 요청마다 최대 5칸: 품질 70 표(보이는 18칸 먼저, 표에서 뺀 중하·하중 6칸은 그 뒤)를 4번의 요청이 20회 채워 클라이언트 한도 20에 닿고,
     // 품질 90 표 요청의 첫 호출이 한도에 걸린다.
     HttpResponse<String> response = null;

@@ -31,6 +31,7 @@ class MarketSearchIntegrationTest {
   @MockitoBean MarketPricesPort prices;
   @MockitoBean MarketOptionsPort options;
   @Autowired StringRedisTemplate redis;
+  @Autowired com.loakraken.market.infrastructure.MarketCacheProperties cacheProperties;
   private final JsonMapper mapper = new JsonMapper();
 
   @BeforeEach
@@ -84,9 +85,14 @@ class MarketSearchIntegrationTest {
     verifyNoInteractions(options);
     assertThat(redis.keys("market:v1:prices:*")).hasSize(2);
     for (var key : redis.keys("market:v1:prices:*")) {
-      assertThat(redis.getExpire(key)).isBetween(1L, 30L);
+      // 만료가 있고 짧다(30초 설정)는 것만 본다. 남은 시간은 Valkey 서버 시계로 계산하는데, 시험 컨테이너(Docker VM) 시계는 JVM보다 2.5~3.9초
+      // 빠르게 흐르다 보정되어 쓴 뒤 1.5초 넘게 뒤로 가면 32초로 읽힌다(#1114 측정). 그래서 위 한도는 35초. 정확한 30초는 시계와 무관한
+      // ValkeyMarketCacheTest가 쓰는 인자(Duration.ofSeconds(30))와 아래 설정값으로 고정한다.
+      assertThat(redis.getExpire(key)).isBetween(1L, 35L);
       assertThat(key).matches("market:v1:prices:[0-9a-f]{64}");
     }
+    // 설정값 30초는 시계 없이 고정한다(위 한도를 넓혀도 31~35초 설정 회귀를 놓치지 않게).
+    assertThat(cacheProperties.pricesTtl()).isEqualTo(Duration.ofSeconds(30));
   }
 
   @Test

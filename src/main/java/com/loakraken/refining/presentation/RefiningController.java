@@ -25,16 +25,89 @@ class RefiningController {
   private final com.loakraken.market.application.RefiningMaterialPriceService materials;
   private final com.loakraken.market.application.MaterialUnitPriceService unitPrices;
   private final org.springframework.core.env.Environment environment;
+  private final com.loakraken.refining.domain.AdvancedRefineRules advancedRules;
 
   RefiningController(
       RefiningPlanService service,
       com.loakraken.market.application.RefiningMaterialPriceService materials,
       com.loakraken.market.application.MaterialUnitPriceService unitPrices,
-      org.springframework.core.env.Environment environment) {
+      org.springframework.core.env.Environment environment,
+      com.loakraken.refining.domain.AdvancedRefineRules advancedRules) {
     this.service = service;
     this.materials = materials;
     this.unitPrices = unitPrices;
     this.environment = environment;
+    this.advancedRules = advancedRules;
+  }
+
+  /** 상급 재련 API 스위치(refining.advanced.enabled, 기본 꺼짐 — 웹 화면이 붙을 때 켠다). 요청마다 읽는다. */
+  boolean advancedEnabled() {
+    return environment.getProperty("refining.advanced.enabled", Boolean.class, false);
+  }
+
+  @PostMapping(value = "/advanced-plans", consumes = MediaType.APPLICATION_JSON_VALUE)
+  @Operation(
+      summary = "티어 4 상급 재련 기대 비용",
+      description =
+          "운명의 업화 무기·방어구의 현재 상급 재련 단계부터 목표 단계(1~40)까지 10단계 구간마다 기대 턴(유료·무료·선조·강화 선조), 턴 종류별 숨결·책 선택(기대 비용이 가장 작은 조합), 기대 재료·재련 골드·실링·기대 비용을 계산합니다. "
+              + "재료 값은 서버 시세 캐시(1개 즉시 구매 최저가)만 읽습니다(공식 호출 없음). 스펙업 상급 재련 단계 비용과 같은 모델·같은 값입니다. 스위치 refining.advanced.enabled가 꺼져 있으면 400입니다.")
+  @ApiResponses({
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(
+        responseCode = "200",
+        description = "REFINING_ADVANCED_PLAN_SUCCESS"),
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(
+        responseCode = "400",
+        description =
+            "INVALID_REQUEST: 단계 범위(현재 0~39, 목표 1~40, 목표 > 현재), ARM_GUARD, 빠진 값, 스위치가 꺼져 있음. REFINING_ADVANCED_UNCONFIRMED: grade=JEONYUL(운명의 전율 상급 재련 표를 확인하기 전)",
+        content = @Content(schema = @Schema(ref = "#/components/schemas/ErrorResponse"))),
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(
+        responseCode = "409",
+        description = "REFINING_PRICE_PENDING: 기본 재료 시세가 아직 없음(Retry-After 초). 일부만 계산하지 않는다",
+        content = @Content(schema = @Schema(ref = "#/components/schemas/ErrorResponse"))),
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(
+        responseCode = "406",
+        description = "NOT_ACCEPTABLE",
+        content = @Content(schema = @Schema(ref = "#/components/schemas/ErrorResponse"))),
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(
+        responseCode = "415",
+        description = "UNSUPPORTED_MEDIA_TYPE",
+        content = @Content(schema = @Schema(ref = "#/components/schemas/ErrorResponse"))),
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(
+        responseCode = "500",
+        description = "INTERNAL_SERVER_ERROR",
+        content = @Content(schema = @Schema(ref = "#/components/schemas/ErrorResponse")))
+  })
+  public ApiResponse<AdvancedRefiningPlanResponse> advancedPlan(
+      @Valid @RequestBody AdvancedRefiningPlanRequest request) {
+    if (!advancedEnabled())
+      // 400 INVALID_REQUEST(OPTIMAL 스위치와 같은 처리)
+      throw new org.springframework.web.server.ResponseStatusException(
+          org.springframework.http.HttpStatus.BAD_REQUEST);
+    if (request.grade() != com.loakraken.refining.domain.RefiningRules.Grade.UPHWA)
+      throw new com.loakraken.common.api.BusinessException(
+          com.loakraken.refining.application.RefiningErrorCode.REFINING_ADVANCED_UNCONFIRMED);
+    // 시세 캐시만 읽는다(공식 호출 없음). 기본 재료 시세가 없으면 일부만 계산하지 않는다.
+    var prices =
+        materials
+            .cached()
+            .orElseThrow(
+                () ->
+                    new com.loakraken.common.api.BusinessException(
+                        com.loakraken.refining.application.RefiningErrorCode.REFINING_PRICE_PENDING,
+                        RETRY_AFTER));
+    var result =
+        com.loakraken.refining.domain.AdvancedRefineCost.expected(
+            advancedRules,
+            request.ruleType(),
+            request.fromStage(),
+            request.toStage(),
+            name -> prices.unit(name).orElse(null));
+    if (result == null)
+      throw new com.loakraken.common.api.BusinessException(
+          com.loakraken.refining.application.RefiningErrorCode.REFINING_PRICE_PENDING, RETRY_AFTER);
+    return ApiResponse.of(
+        RefiningSuccessCode.REFINING_ADVANCED_PLAN_SUCCESS,
+        AdvancedRefiningPlanResponse.from(advancedRules, request, result, prices.observedAt()));
   }
 
   /**

@@ -29,6 +29,12 @@ public interface TitleSnapshotPort {
       Supplier<Map<String, StatsPort.TitleEquip>> byServer,
       LocalDate keepFrom);
 
+  /**
+   * 지금 처리정지 목록 값과 다른 값으로 만든 날짜를 모두 지운다(두 표, replace와 같은 인스턴스 사이 잠금 안). 오늘이 지금 목록으로 이미 있어 다시 만들지 않을
+   * 때 쓴다. 지운 날짜 수를 준다.
+   */
+  int purgeStale();
+
   /** date·server key의 스냅숏(지금 목록 값으로 만든 것만, 한 스냅숏에서 메타·칭호 행을 읽음). 없으면 빈 값. */
   Optional<Snapshot> find(LocalDate date, String serverKey);
 

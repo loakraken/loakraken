@@ -48,9 +48,11 @@ public class TitleSnapshotService {
     return snapshots.hasStale();
   }
 
-  /** 지난 처리정지 목록으로 만든 날짜를 지운다(오늘은 그대로). 지운 날짜 수. */
+  /**
+   * 지난 처리정지 목록으로 만든 날짜를 지운다(오늘은 그대로). 오늘이 지금 목록으로 이미 있어 다시 만들지 않을 때 쓴다(#1064 코드 리뷰 메모). 지운 날짜 수.
+   */
   public int purgeStale() {
-    return 0;
+    return snapshots.purgeStale();
   }
 
   /**

@@ -101,6 +101,8 @@ class TitleSnapshotJob {
       retryFailedToday("retry");
       return;
     }
+    // 오늘이 지금 목록으로 이미 있으면 run은 바로 끝난다 — 다시 만들지 않고 지난 목록 날짜만 지운다(#1064 코드 리뷰 메모: 다음 만들기까지 남았다).
+    if (purgeIfBuiltToday()) return;
     // 지난 목록 날짜가 남아 있어도 오늘 이미 실패했으면 같은 하루 상한·지표로 다시 한다(#1064 코드 리뷰 P3: 남은 날짜가 계속 있으면 주기마다
     // 제한 없이 다시 만들었다).
     if (java.time.LocalDate.now(clock.withZone(TitleSnapshotService.KST)).equals(failedOn)) {
@@ -108,6 +110,24 @@ class TitleSnapshotJob {
       return;
     }
     run("exclusion");
+  }
+
+  /** 오늘이 지금 목록으로 있으면 지난 목록 날짜를 지우고 true. 지우기가 실패해도 true(다음 주기에 다시). 오늘이 없으면 false(다시 만들기가 지운다). */
+  private boolean purgeIfBuiltToday() {
+    try {
+      if (!snapshots.builtToday()) return false;
+      int days = snapshots.purgeStale();
+      if (days > 0) {
+        exclusionResets.increment();
+        // 캐릭터 이름·목록 값은 남기지 않는다(지운 날짜 수만).
+        log.info("event=title_snapshot_reset reason=exclusion trigger=purge days={}", days);
+      }
+    } catch (org.springframework.dao.DataAccessException exception) {
+      log.warn(
+          "event=title_snapshot_purge_failed 지난 처리정지 목록 날짜를 지우지 못했습니다. 다음 주기에 다시 합니다. 예외 유형={}",
+          exception.getClass().getSimpleName());
+    }
+    return true;
   }
 
   /** 오늘 실패한 만들기를 다시 한다(하루 최대 횟수까지). 그사이 다른 곳이 만들었으면 그만둔다. trigger는 로그용(retry·exclusion). */

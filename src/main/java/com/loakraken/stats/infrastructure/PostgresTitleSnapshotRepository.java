@@ -67,23 +67,9 @@ class PostgresTitleSnapshotRepository implements TitleSnapshotPort {
     // 집계(같은 트랜잭션에 들어오는 통계 질의)와 아래 목록 값이 한 스냅숏을 본다. 다른 인스턴스와 겹치면 쓰기에서 직렬화 오류로 되돌아가고 다음 주기에 다시 한다.
     var byServer = compute.get();
     var revision = jdbc.sql(StopListRevisionSql.REVISION).query(String.class).single();
-    jdbc.sql("SELECT 1 FROM (SELECT pg_advisory_xact_lock(:key)) l")
-        .param("key", BUILD_LOCK)
-        .query(Integer.class)
-        .single();
+    lock();
     // 처리정지 목록이 바뀌었으면 지난 목록으로 만든 날짜(그 캐릭터가 세어진 값)를 모두 지운다. 같은 트랜잭션·잠금 안이라 지운 뒤 다시 넣기까지 한 번에.
-    var stale =
-        jdbc.sql(
-                "SELECT DISTINCT snapshot_date FROM title_equip_daily_meta"
-                    + " WHERE exclusion_revision <> :revision")
-            .param("revision", revision)
-            .query(LocalDate.class)
-            .list();
-    if (!stale.isEmpty())
-      for (var table : List.of("title_equip_daily", "title_equip_daily_meta"))
-        jdbc.sql("DELETE FROM " + table + " WHERE snapshot_date IN (:dates)")
-            .param("dates", stale)
-            .update();
+    int stale = deleteOtherThan(revision);
     for (var table : List.of("title_equip_daily", "title_equip_daily_meta"))
       jdbc.sql("DELETE FROM " + table + " WHERE snapshot_date = :date OR snapshot_date < :keepFrom")
           .param("date", date)
@@ -125,6 +111,39 @@ class PostgresTitleSnapshotRepository implements TitleSnapshotPort {
           VALUES (:date, :key, :title, :equipped, :observed, :newRosters, :characters)
           """,
           rows.toArray(MapSqlParameterSource[]::new));
+    return stale;
+  }
+
+  @Override
+  @Transactional(isolation = Isolation.REPEATABLE_READ, timeout = 30)
+  public int purgeStale() {
+    var revision = jdbc.sql(StopListRevisionSql.REVISION).query(String.class).single();
+    lock();
+    return deleteOtherThan(revision);
+  }
+
+  /** 스냅숏 쓰기 잠금(트랜잭션 끝에 풀림). */
+  private void lock() {
+    jdbc.sql("SELECT 1 FROM (SELECT pg_advisory_xact_lock(:key)) l")
+        .param("key", BUILD_LOCK)
+        .query(Integer.class)
+        .single();
+  }
+
+  /** revision과 다른 처리정지 목록 값으로 만든 날짜를 두 표에서 지우고 그 날짜 수를 준다. */
+  private int deleteOtherThan(String revision) {
+    var stale =
+        jdbc.sql(
+                "SELECT DISTINCT snapshot_date FROM title_equip_daily_meta"
+                    + " WHERE exclusion_revision <> :revision")
+            .param("revision", revision)
+            .query(LocalDate.class)
+            .list();
+    if (!stale.isEmpty())
+      for (var table : List.of("title_equip_daily", "title_equip_daily_meta"))
+        jdbc.sql("DELETE FROM " + table + " WHERE snapshot_date IN (:dates)")
+            .param("dates", stale)
+            .update();
     return stale.size();
   }
 

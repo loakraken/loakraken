@@ -128,16 +128,33 @@ class SimulateKarmaInputsIntegrationTest {
     assertThat(sequence.at("/contributions/1/to").asString()).isEqualTo("5");
   }
 
+  /**
+   * 포인트 합이 범위(깨달음 0~101, 도약 0~70)를 벗어나는 랭크 변경은 400 KARMA_POINTS_OUT_OF_RANGE(웹은 코드로 문구를 고른다 —
+   * 프론트·프론트2 2026-11-22, PM 총괄 결정). 랭크 자체가 0~6 밖이면 그대로 INVALID_REQUEST.
+   */
   @Test
   void 포인트가_범위를_넘는_랭크_변경은_400이고_자르지_않는다() throws Exception {
     // 도약 70에서 4랭크로 읽히면 5랭크는 72 > 70, 깨달음 101에서 4랭크면 5랭크는 102 > 101.
     search(raw(Map.of("도약", "4랭크 27레벨", "깨달음", "4랭크 29레벨")));
-    assertThat(simulate("[" + rank("도약", 5) + "]").statusCode()).isEqualTo(400);
-    assertThat(simulate("[" + rank("깨달음", 5) + "]").statusCode()).isEqualTo(400);
+    assertKarmaPointsOutOfRange(simulate("[" + rank("도약", 5) + "]"));
+    assertKarmaPointsOutOfRange(simulate("[" + rank("깨달음", 5) + "]"));
     search(raw(Map.of()));
     // 0 아래: 깨달음 3 → 랭크 6 → 0은 −3.
-    assertThat(simulate("[" + points("깨달음", 3) + "," + rank("깨달음", 0) + "]").statusCode())
-        .isEqualTo(400);
+    assertKarmaPointsOutOfRange(simulate("[" + points("깨달음", 3) + "," + rank("깨달음", 0) + "]"));
+    // 랭크 자체가 범위 밖이면 일반 입력 오류.
+    var badRank = simulate("[{\"kind\":\"ARK_PASSIVE_POINT\",\"tree\":\"깨달음\",\"karmaRank\":7}]");
+    assertThat(badRank.statusCode()).isEqualTo(400);
+    assertThat(mapper.readTree(badRank.body()).path("code").asString())
+        .isEqualTo("INVALID_REQUEST");
+  }
+
+  private void assertKarmaPointsOutOfRange(HttpResponse<String> response) {
+    assertThat(response.statusCode()).as(response.body()).isEqualTo(400);
+    var body = mapper.readTree(response.body());
+    assertThat(body.path("code").asString())
+        .as(response.body())
+        .isEqualTo("KARMA_POINTS_OUT_OF_RANGE");
+    assertThat(body.path("message").asString()).isNotBlank();
   }
 
   @Test

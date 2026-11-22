@@ -1318,12 +1318,13 @@ public class CombatPowerSimulationService {
         if (gem == null || swapped.contains(gem.index()) || Boolean.TRUE.equals(gem.active()))
           continue;
         if (!after.contains(gem.index())) continue;
+        // 꺼진 젬은 gemUnreadable이 보지 않으므로 여기서 값을 확인한다(읽지 못하면 계산하지 않음 — 500이 아니라, #1109 대체 리뷰 P2).
         if (gem.detail().corePoint() == null) return null;
+        for (var option : gem.detail().options())
+          if (option == null || option.name() == null || option.level() == null) return null;
         points.merge(entry.getKey(), gem.detail().corePoint(), Integer::sum);
-        for (var option : gem.detail().options()) {
-          if (option == null || option.name() == null) return null;
+        for (var option : gem.detail().options())
           levels.merge(option.name().strip(), option.level(), Integer::sum);
-        }
       }
     }
     var after = new ArrayList<CharacterLoadout.GridEffect>();

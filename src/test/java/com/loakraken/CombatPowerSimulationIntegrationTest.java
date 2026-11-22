@@ -1447,6 +1447,76 @@ class CombatPowerSimulationIntegrationTest {
         .isEqualByComparingTo(b.at("/data/delta").decimalValue());
   }
 
+  /**
+   * #1109 대체 리뷰 P2: 새로 켜질 꺼진 젬의 옵션 레벨을 읽지 못하면(공식 값 없음) 500이 아니라 그 교체를 계산하지 않는다(UNSUPPORTED). 꺼진 젬은
+   * gemUnreadable이 보지 않는다.
+   */
+  @Test
+  void 새로_켜질_젬의_옵션을_읽지_못하면_계산하지_않는다() throws Exception {
+    when(detailsPort.fetch(anyString()))
+        .thenAnswer(
+            invocation -> {
+              var base = fetchedBracelet(invocation.getArgument(0));
+              var details = base.details();
+              var old = details.loadout();
+              var grid = sleepingGemGrid();
+              var core = grid.slots().getFirst();
+              var gems = new java.util.ArrayList<>(core.gems());
+              var sleeping = gems.get(3);
+              gems.set(
+                  3,
+                  new CharacterLoadout.GridGem(
+                      sleeping.index(),
+                      sleeping.icon(),
+                      sleeping.active(),
+                      sleeping.grade(),
+                      new CharacterLoadout.GemDetail(
+                          sleeping.detail().name(),
+                          sleeping.detail().gemType(),
+                          sleeping.detail().gemPoint(),
+                          sleeping.detail().requiredWillpower(),
+                          sleeping.detail().baseWillpower(),
+                          sleeping.detail().willpowerEfficiency(),
+                          sleeping.detail().corePoint(),
+                          List.of(
+                              new CharacterLoadout.GemOption("보스 피해", null, null, null),
+                              new CharacterLoadout.GemOption("공격력", 3, null, null)))));
+              var slot =
+                  new CharacterLoadout.GridSlot(
+                      core.index(),
+                      core.icon(),
+                      core.name(),
+                      core.point(),
+                      core.grade(),
+                      List.copyOf(gems),
+                      core.core(),
+                      core.lines());
+              var loadout =
+                  new CharacterLoadout(
+                      old.equipment(),
+                      old.engravings(),
+                      old.gems(),
+                      old.cards(),
+                      old.arkPassive(),
+                      new CharacterLoadout.ArkGrid(List.of(slot), grid.effects()),
+                      old.skills());
+              return new FetchedCharacter(
+                  CharacterTestFixture.details(details.profile(), loadout, List.of()), "{}", "[]");
+            });
+    assertThat(get("/api/v1/characters/search?characterName=" + encode("시뮬젬레벨없음")).statusCode())
+        .isEqualTo(200);
+    var response =
+        simulate(
+            "시뮬젬레벨없음",
+            """
+            [{"kind": "ARK_GRID_GEM", "slotIndex": 5, "index": 1, "gemType": "침식", "willEfficiency": 5,
+              "point": 5, "effects": [{"name": "추가 피해", "level": 3}, {"name": "공격력", "level": 2}]}]
+            """);
+    assertThat(response.statusCode()).as(response.body()).isEqualTo(200);
+    var body = mapper.readTree(response.body());
+    assertThat(body.at("/data/contributions/0/status").asText()).isEqualTo("UNSUPPORTED");
+  }
+
   /** 젬 3이 꺼진 아크 그리드: 공급 17, 젬 0·1·2가 3·4·3, 젬 3은 필요 8이라 꺼짐 — 공식 옵션 합·코어 포인트는 켜진 젬만. */
   private static CharacterLoadout.ArkGrid sleepingGemGrid() {
     return sleepingGemGrid(8);

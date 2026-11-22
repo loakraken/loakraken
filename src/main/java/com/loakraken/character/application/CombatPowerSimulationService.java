@@ -21,6 +21,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -137,8 +138,15 @@ public class CombatPowerSimulationService {
     STONE_ENGRAVING,
     ARK_PASSIVE_POINT,
     ARK_GRID_CORE,
-    ARM_GUARD
+    ARM_GUARD,
+    ARK_GRID_GEM
   }
+
+  /** 아크 그리드 젬 교체의 새 젬(M49 G1): 젬 종류(안정·견고·불변·침식·왜곡·붕괴), 의지력 효율, 옵션 두 줄. 포인트는 Change.point. */
+  public record GemSwap(String gemType, Integer willEfficiency, List<GemOption> effects) {}
+
+  /** 젬 옵션 한 줄(이름·레벨 1~5). */
+  public record GemOption(String name, Integer level) {}
 
   /** 바꾼 항목 하나. kind마다 쓰는 필드가 다르다(계약 문서 2절). */
   public record Change(
@@ -156,7 +164,44 @@ public class CombatPowerSimulationService {
       Integer points,
       Integer slotIndex,
       Integer point,
-      Integer karmaLevel) {
+      Integer karmaLevel,
+      GemSwap gem) {
+    /** 젬 교체가 아닌 변경(깨달음 카르마 레벨 포함). */
+    public Change(
+        Kind kind,
+        Integer slot,
+        Integer index,
+        Integer line,
+        Integer level,
+        Integer refine,
+        Integer quality,
+        String option,
+        String grade,
+        String name,
+        String tree,
+        Integer points,
+        Integer slotIndex,
+        Integer point,
+        Integer karmaLevel) {
+      this(
+          kind,
+          slot,
+          index,
+          line,
+          level,
+          refine,
+          quality,
+          option,
+          grade,
+          name,
+          tree,
+          points,
+          slotIndex,
+          point,
+          karmaLevel,
+          null);
+    }
+
     /** karmaLevel 없는 변경(깨달음 카르마 레벨 바꾸기가 아닌 모든 종류). */
     public Change(
         Kind kind,
@@ -645,13 +690,17 @@ public class CombatPowerSimulationService {
     var weaponAddDamage = CombatPowerEquipmentModel.currentWeaponAddDamage(weaponDetail(loadout));
     var state =
         new State(
-            Map.of(), null, Map.of(), Map.of(), Map.of(), null, Map.of(), Map.of(), Map.of(), null);
+            Map.of(), null, Map.of(), Map.of(), Map.of(), null, Map.of(), Map.of(), Map.of(), null,
+            Map.of());
     var running = before;
     var contributions = new ArrayList<Contribution>();
     int unsupported = 0;
     var roleReason = roleReason(result);
+    var gemBlocked = arkGemBlocked(merged);
     for (var planned : merged) {
       String reason = roleReason != null ? roleReason : planned.reason();
+      if (reason == null && planned.effect() instanceof ArkGridGemEffect gem)
+        reason = gemBlocked.get(gem.core().index());
       if (roleReason == null) {
         var hold = heldReason(loadout, braceletModel, planned);
         // 방어구 재련·상급 재련·완갑: 문이 열린 스냅샷이면 계산하고, r이 크면 그 이유로 닫는다(스위치가 꺼져 있으면 지금처럼).
@@ -743,6 +792,23 @@ public class CombatPowerSimulationService {
   private record ArkGridCoreEffect(int slot, BigDecimal nowPct, BigDecimal nextPct)
       implements Effect {}
 
+  /**
+   * 아크 그리드 젬 교체(M49 G1): 코어(공식 Slots 한 칸)의 젬 하나를 새 포인트·옵션 두 줄로 바꾼다. 같은 요청의 교체는 계산할 때 함께 다시 더한다(옵션
+   * 레벨은 이름별 합, 코어 포인트는 코어별 합).
+   */
+  private record ArkGridGemEffect(
+      CharacterLoadout.GridSlot core,
+      CharacterLoadout.GridGem old,
+      int point,
+      Map<String, Integer> options,
+      List<CharacterLoadout.GridEffect> officialEffects,
+      int required)
+      implements Effect {
+    String key() {
+      return core.index() + ":" + old.index();
+    }
+  }
+
   /** 각인 하나의 각인서·스톤 레벨. */
   private record EngravingLevels(int book, int stone) {}
 
@@ -757,9 +823,26 @@ public class CombatPowerSimulationService {
       Map<String, PolishEffect> polish,
       Map<Integer, ArkGridCoreEffect> cores,
       Map<String, PassiveEffect> passives,
-      KarmaEffect karma) {
+      KarmaEffect karma,
+      Map<String, ArkGridGemEffect> arkGems) {
     State apply(Effect effect, Map<String, CharacterLoadout.PassiveEngraving> currents) {
       return switch (effect) {
+        case ArkGridGemEffect gem -> {
+          var next = new HashMap<>(arkGems);
+          next.put(gem.key(), gem);
+          yield new State(
+              gems,
+              weaponAddDamage,
+              engravings,
+              refines,
+              bracelet,
+              armGuard,
+              polish,
+              cores,
+              passives,
+              karma,
+              Map.copyOf(next));
+        }
         case GemEffect gem -> {
           var next = new HashMap<>(gems);
           next.putAll(gem.levels());
@@ -773,7 +856,8 @@ public class CombatPowerSimulationService {
               polish,
               cores,
               passives,
-              karma);
+              karma,
+              arkGems);
         }
         case WeaponQualityEffect quality ->
             new State(
@@ -786,7 +870,8 @@ public class CombatPowerSimulationService {
                 polish,
                 cores,
                 passives,
-                karma);
+                karma,
+                arkGems);
         case RefineEffect refine -> {
           var next = new HashMap<>(refines);
           var base = refines.getOrDefault(refine.index(), refine.current());
@@ -805,7 +890,8 @@ public class CombatPowerSimulationService {
               polish,
               cores,
               passives,
-              karma);
+              karma,
+              arkGems);
         }
         case BraceletEffect line -> {
           var next = new HashMap<>(bracelet);
@@ -820,7 +906,8 @@ public class CombatPowerSimulationService {
               polish,
               cores,
               passives,
-              karma);
+              karma,
+              arkGems);
         }
         case ArmGuardEffect guard ->
             new State(
@@ -833,7 +920,8 @@ public class CombatPowerSimulationService {
                 polish,
                 cores,
                 passives,
-                karma);
+                karma,
+                arkGems);
         case NeutralEffect neutral -> this;
         case KarmaEffect next ->
             new State(
@@ -846,7 +934,8 @@ public class CombatPowerSimulationService {
                 polish,
                 cores,
                 passives,
-                next);
+                next,
+                arkGems);
         case ArkGridCoreEffect core -> {
           var next = new HashMap<>(cores);
           next.put(core.slot(), core);
@@ -860,7 +949,8 @@ public class CombatPowerSimulationService {
               polish,
               Map.copyOf(next),
               passives,
-              karma);
+              karma,
+              arkGems);
         }
         case PolishEffect line -> {
           var next = new HashMap<>(polish);
@@ -875,7 +965,8 @@ public class CombatPowerSimulationService {
               Map.copyOf(next),
               cores,
               passives,
-              karma);
+              karma,
+              arkGems);
         }
         case PassiveEffect next -> {
           var map = new HashMap<>(passives);
@@ -890,7 +981,8 @@ public class CombatPowerSimulationService {
               polish,
               cores,
               Map.copyOf(map),
-              karma);
+              karma,
+              arkGems);
         }
         case EngravingEffect engraving -> {
           var next = new HashMap<>(engravings);
@@ -917,7 +1009,8 @@ public class CombatPowerSimulationService {
               polish,
               cores,
               passives,
-              karma);
+              karma,
+              arkGems);
         }
       };
     }
@@ -1024,6 +1117,11 @@ public class CombatPowerSimulationService {
               CombatPowerEquipmentModel.weaponQualityRatio(weaponCurrent, state.weaponAddDamage()),
               MATH);
     }
+    if (!state.arkGems().isEmpty()) {
+      var gemRatio = arkGemRatio(state);
+      if (gemRatio == null) return null;
+      ratio = ratio.multiply(gemRatio, MATH);
+    }
     // 아크 그리드 코어(계산 검증 11-02): 코어 배수는 다른 항목과 독립이라 (1 + C(new)/100) / (1 + C(now)/100)를 곱한다.
     for (var core : state.cores().values())
       ratio =
@@ -1055,6 +1153,68 @@ public class CombatPowerSimulationService {
               entry.getValue().stone());
       if (before == null || after == null) return null;
       ratio = ratio.multiply(after.divide(before, MATH), MATH);
+    }
+    return ratio;
+  }
+
+  /**
+   * 아크 그리드 젬 교체 배수(M49 G1, 계산 검증 11-22). 공식 ArkGrid.Effects 레벨에서 바꾼 젬들의 옵션 레벨을 이름별로 빼고(활성 젬만) 새 옵션을
+   * 더해 젬 옵션 배수를 다시 구하고, 코어마다 공식 포인트에서 바꾼 젬의 포인트를 빼고(활성 젬만) 새 포인트를 더해 코어 배수를 다시 구한다. 두 배수는 독립이라 곱한다.
+   * 같은 요청에서 그 코어의 등급·포인트도 바꾸면(ARK_GRID_CORE) 함께 계산하지 않는다(null).
+   */
+  private BigDecimal arkGemRatio(State state) {
+    var official = state.arkGems().values().iterator().next().officialEffects();
+    var levels = new LinkedHashMap<String, Integer>();
+    for (var effect : official) {
+      if (effect == null || effect.name() == null || effect.level() == null) return null;
+      levels.merge(effect.name().strip(), effect.level(), Integer::sum);
+    }
+    var points = new LinkedHashMap<Integer, Integer>();
+    var slots = new LinkedHashMap<Integer, CharacterLoadout.GridSlot>();
+    for (var swap : state.arkGems().values()) {
+      int index = swap.core().index();
+      if (state.cores().containsKey(index)) return null;
+      slots.putIfAbsent(index, swap.core());
+      points.putIfAbsent(index, swap.core().point());
+      if (Boolean.TRUE.equals(swap.old().active())) {
+        // 코어 포인트는 젬의 질서·혼돈 포인트(공식 '혼돈 포인트 : 4')다. 젬 포인트(총합 '젬 포인트 : 15')가 아니다(#1079 계산 검증 P0).
+        points.merge(index, -swap.old().detail().corePoint(), Integer::sum);
+        for (var option : swap.old().detail().options())
+          levels.merge(option.name().strip(), -option.level(), Integer::sum);
+      }
+      points.merge(index, swap.point(), Integer::sum);
+      swap.options().forEach((name, level) -> levels.merge(name, level, Integer::sum));
+    }
+    var after = new ArrayList<CharacterLoadout.GridEffect>();
+    for (var entry : levels.entrySet()) {
+      if (entry.getValue() < 0) return null;
+      if (entry.getValue() > 0)
+        after.add(new CharacterLoadout.GridEffect(entry.getKey(), entry.getValue(), null, null));
+    }
+    var now = CombatPowerArkGridModel.gems(arkGridCoefficients, official);
+    var next = CombatPowerArkGridModel.gems(arkGridCoefficients, after);
+    if (now.ratio() == null || next.ratio() == null) return null;
+    var ratio = next.ratio().divide(now.ratio(), MATH);
+    for (var entry : slots.entrySet()) {
+      var slot = entry.getValue();
+      var moved =
+          new CharacterLoadout.GridSlot(
+              slot.index(),
+              slot.icon(),
+              slot.name(),
+              points.get(entry.getKey()),
+              slot.grade(),
+              slot.gems(),
+              slot.core(),
+              slot.lines());
+      var before = CombatPowerArkGridModel.core(arkGridCoefficients, slot);
+      var target = CombatPowerArkGridModel.core(arkGridCoefficients, moved);
+      if (before.reason() != null || target.reason() != null) return null;
+      ratio =
+          ratio.multiply(
+              CombatPowerArkGridModel.factor(target.pct())
+                  .divide(CombatPowerArkGridModel.factor(before.pct()), MATH),
+              MATH);
     }
     return ratio;
   }
@@ -1129,6 +1289,7 @@ public class CombatPowerSimulationService {
       case ARK_PASSIVE_POINT -> karmaChange(change) ? "KARMA" : "ARK_PASSIVE:" + change.tree();
       case ARK_GRID_CORE -> "ARK_GRID:" + change.slotIndex();
       case ARM_GUARD -> "ARM_GUARD";
+      case ARK_GRID_GEM -> "ARK_GRID_GEM:" + change.slotIndex() + ":" + change.index();
     };
   }
 
@@ -1470,8 +1631,186 @@ public class CombatPowerSimulationService {
             ARK_GRID_BASIS,
             reason);
       }
+      case ARK_GRID_GEM -> arkGridGem(loadout, change);
     };
   }
+
+  /**
+   * 젬 종류 → 그 종류가 가질 수 있는 옵션 4종(공식 확률 정보 '젬 가공, 젬 융합' 2025-08-20, 공지 13204). 질서 코어는 안정·견고·불변, 혼돈 코어는
+   * 침식·왜곡·붕괴.
+   */
+  static final Map<String, List<String>> GEM_TYPE_OPTIONS =
+      Map.of(
+          "안정", List.of("공격력", "추가 피해", "아군 피해 강화", "낙인력"),
+          "침식", List.of("공격력", "추가 피해", "아군 피해 강화", "낙인력"),
+          "견고", List.of("공격력", "보스 피해", "아군 피해 강화", "아군 공격 강화"),
+          "왜곡", List.of("공격력", "보스 피해", "아군 피해 강화", "아군 공격 강화"),
+          "불변", List.of("추가 피해", "보스 피해", "낙인력", "아군 공격 강화"),
+          "붕괴", List.of("추가 피해", "보스 피해", "낙인력", "아군 공격 강화"));
+
+  /** 젬 종류 → 기본 필요 의지력(공지 13204: 안정·침식 8, 견고·왜곡 9, 불변·붕괴 10). 필요 의지력 = 기본 − 의지력 효율. */
+  static final Map<String, Integer> GEM_TYPE_BASE_WILL =
+      Map.of("안정", 8, "침식", 8, "견고", 9, "왜곡", 9, "불변", 10, "붕괴", 10);
+
+  private static final List<String> ORDER_GEM_TYPES = List.of("안정", "견고", "불변");
+  private static final List<String> CHAOS_GEM_TYPES = List.of("침식", "왜곡", "붕괴");
+
+  /**
+   * 아크 그리드 젬 교체(M49 G1, 계산 검증 11-22 명세). 코어(slotIndex = 공식 Slots Index)의 젬(index = 공식 Gems Index)을
+   * 새 젬으로 바꾼다. 바꾼 뒤 그 코어의 활성 젬 필요 의지력 합이 공급 의지력을 넘으면 어느 젬이 꺼질지 공식 문구가 없어 계산하지
+   * 않는다(ARK_GRID_WILL_SHORT).
+   */
+  private Planned arkGridGem(CharacterLoadout loadout, Change change) {
+    var swap = change.gem();
+    if (swap == null) throw invalid("ARK_GRID_GEM에는 gemType·willEfficiency·effects가 있어야 합니다.");
+    // 빠지거나 음수인 칸 번호는 요청 오류(400)다. 없는 칸은 409(#1079 코드 리뷰 P3).
+    range("slotIndex", change.slotIndex(), 0, 99);
+    range("index", change.index(), 0, 99);
+    range("point", change.point(), 1, 5);
+    range("willEfficiency", swap.willEfficiency(), 1, 5);
+    var pool = swap.gemType() == null ? null : GEM_TYPE_OPTIONS.get(swap.gemType());
+    if (pool == null) throw invalid("gemType은 " + GEM_TYPE_BASE_WILL.keySet() + " 중 하나여야 합니다.");
+    if (swap.effects() == null || swap.effects().size() != 2)
+      throw invalid("effects는 옵션 두 줄이어야 합니다.");
+    var options = new LinkedHashMap<String, Integer>();
+    for (var effect : swap.effects()) {
+      if (effect == null || effect.name() == null || !pool.contains(effect.name().strip()))
+        throw invalid(swap.gemType() + " 젬의 옵션은 " + pool + " 중 하나여야 합니다.");
+      range("effects.level", effect.level(), 1, 5);
+      if (options.put(effect.name().strip(), effect.level()) != null)
+        throw invalid("effects의 두 옵션은 서로 달라야 합니다.");
+    }
+    var grid = loadout.arkGrid();
+    var slot =
+        grid == null
+            ? null
+            : grid.slots().stream()
+                .filter(item -> item != null && Objects.equals(change.slotIndex(), item.index()))
+                .findFirst()
+                .orElse(null);
+    if (slot == null) throw notFound("아크 그리드 slotIndex " + change.slotIndex());
+    var series = slot.name() == null ? "" : slot.name().strip();
+    var allowed =
+        series.startsWith("질서")
+            ? ORDER_GEM_TYPES
+            : series.startsWith("혼돈") ? CHAOS_GEM_TYPES : List.<String>of();
+    if (!allowed.contains(swap.gemType()))
+      throw invalid("이 코어(" + slot.name() + ")에는 " + allowed + " 젬만 넣을 수 있습니다.");
+    var old =
+        slot.gems() == null
+            ? null
+            : slot.gems().stream()
+                .filter(item -> item != null && Objects.equals(change.index(), item.index()))
+                .findFirst()
+                .orElse(null);
+    if (old == null)
+      throw notFound("아크 그리드 slotIndex " + change.slotIndex() + " 젬 index " + change.index());
+    var target = slot.name() + " 젬 " + change.index();
+    var from = gemText(old);
+    var to =
+        swap.gemType()
+            + " "
+            + change.point()
+            + "P "
+            + String.join(
+                " · ",
+                options.entrySet().stream().map(e -> e.getKey() + " " + e.getValue()).toList());
+    var unreadable = gemUnreadable(slot, old, grid);
+    if (unreadable != null)
+      return new Planned(change, target, from, to, null, ARK_GRID_BASIS, unreadable);
+    // 의지력은 같은 요청의 그 코어 교체를 모두 반영한 뒤에 본다(compute의 arkGemBlocked, #1079 코드 리뷰).
+    return new Planned(
+        change,
+        target,
+        from,
+        to,
+        new ArkGridGemEffect(
+            slot,
+            old,
+            change.point(),
+            Map.copyOf(options),
+            grid.effects(),
+            GEM_TYPE_BASE_WILL.get(swap.gemType()) - swap.willEfficiency()),
+        ARK_GRID_BASIS,
+        null);
+  }
+
+  private static final String ARK_GRID_GEM_CORE_CONFLICT =
+      "같은 코어의 등급·포인트 변경과 젬 교체를 함께 계산하지 않았습니다. 하나씩 확인해 주세요.";
+
+  /**
+   * 젬 교체를 계산하지 않을 이유(코어 index → 이유). 같은 요청의 그 코어 교체를 모두 반영한 필요 의지력 합(바꾸지 않은 활성 젬 + 새 젬)이 공급 의지력을
+   * 넘으면 ARK_GRID_WILL_SHORT(어느 젬이 꺼질지 공식 문구가 없다), 같은 코어의 ARK_GRID_CORE와 함께 오면 그 조합은 계산하지 않는다.
+   */
+  private static Map<Integer, String> arkGemBlocked(java.util.Collection<Planned> merged) {
+    var swaps = new LinkedHashMap<Integer, List<ArkGridGemEffect>>();
+    var cores = new java.util.HashSet<Integer>();
+    for (var planned : merged) {
+      if (planned.effect() instanceof ArkGridGemEffect gem)
+        swaps.computeIfAbsent(gem.core().index(), key -> new ArrayList<>()).add(gem);
+      if (planned.effect() instanceof ArkGridCoreEffect core) cores.add(core.slot());
+    }
+    var blocked = new LinkedHashMap<Integer, String>();
+    for (var entry : swaps.entrySet()) {
+      if (cores.contains(entry.getKey())) {
+        blocked.put(entry.getKey(), ARK_GRID_GEM_CORE_CONFLICT);
+        continue;
+      }
+      var core = entry.getValue().getFirst().core();
+      var replaced = new java.util.HashSet<Integer>();
+      int required = 0;
+      for (var swap : entry.getValue()) {
+        replaced.add(swap.old().index());
+        required += swap.required();
+      }
+      for (var gem : core.gems())
+        if (gem != null && !replaced.contains(gem.index()) && Boolean.TRUE.equals(gem.active()))
+          required += gem.detail().requiredWillpower();
+      if (required > core.core().supplyWillpower())
+        blocked.put(entry.getKey(), CombatPowerReasons.ARK_GRID_WILL_SHORT.text());
+    }
+    return blocked;
+  }
+
+  /** 젬 교체에 필요한 공식 값(활성 여부, 포인트, 필요 의지력, 옵션, 코어 공급 의지력, 옵션 합)을 읽지 못했으면 이유. */
+  private static String gemUnreadable(
+      CharacterLoadout.GridSlot slot, CharacterLoadout.GridGem old, CharacterLoadout.ArkGrid grid) {
+    if (slot.point() == null || slot.core() == null || slot.core().supplyWillpower() == null)
+      return GEM_UNREADABLE;
+    if (grid.effects() == null || grid.effects().isEmpty()) return GEM_UNREADABLE;
+    for (var gem : slot.gems()) {
+      if (gem == null || gem.active() == null) return GEM_UNREADABLE;
+      if (!Boolean.TRUE.equals(gem.active())) continue;
+      var detail = gem.detail();
+      if (detail == null
+          || detail.corePoint() == null
+          || detail.requiredWillpower() == null
+          || detail.options() == null) return GEM_UNREADABLE;
+      for (var option : detail.options())
+        if (option == null || option.name() == null || option.level() == null)
+          return GEM_UNREADABLE;
+    }
+    return null;
+  }
+
+  private static String gemText(CharacterLoadout.GridGem gem) {
+    var detail = gem.detail();
+    if (detail == null) return "젬 " + gem.index();
+    var options =
+        detail.options() == null
+            ? ""
+            : String.join(
+                " · ",
+                detail.options().stream()
+                    .filter(Objects::nonNull)
+                    .map(option -> option.name() + " " + option.level())
+                    .toList());
+    return (detail.name() == null ? "" : detail.name().replaceFirst("^.*: ", "") + " ")
+        + (detail.corePoint() == null ? "" : detail.corePoint() + "P ")
+        + options;
+  }
+
+  private static final String GEM_UNREADABLE = "젬 포인트·필요 의지력·옵션을 읽지 못해 계산하지 않았습니다.";
 
   /**
    * 방어구 재련·상급 재련·팔 보호구처럼 전투력을 아직 계산하지 않는(UNSUPPORTED, 주 스탯 경로 확인 전) 변경인지. heldReason과 같은 규칙(팔찌 줄은

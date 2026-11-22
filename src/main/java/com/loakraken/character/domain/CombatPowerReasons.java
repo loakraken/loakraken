@@ -52,10 +52,18 @@ public final class CombatPowerReasons {
           "ARMOR_CP_RESIDUAL_HIGH",
           "장비로 계산한 전투력이 공식 전투력과 맞지 않아 방어구 재련 · 상급 재련 · 완갑 전투력은 계산하지 않았어요.");
 
+  /**
+   * 아크 그리드 젬 교체 뒤 그 코어의 활성 젬 필요 의지력 합이 공급 의지력을 넘는다(M49 G1). 어느 젬이 꺼질지 공식 문구가 없어 계산하지 않고, 순위에도 넣지
+   * 않는다.
+   */
+  public static final Reason ARK_GRID_WILL_SHORT =
+      new Reason("ARK_GRID_WILL_SHORT", "젬을 바꾸면 그 코어의 의지력이 모자라 어느 젬이 꺼질지 알 수 없어 계산하지 않았어요.");
+
   /** 시뮬레이터 이유 문장 → 코드. 모르는 문장은 MODEL_UNCONFIRMED로 둔다(계산하지 않았다는 뜻은 같음). */
   public static Reason classify(String simulatorReason) {
     if (simulatorReason == null) return MODEL_UNCONFIRMED;
     if (simulatorReason.equals(ARMOR_CP_RESIDUAL_HIGH.text())) return ARMOR_CP_RESIDUAL_HIGH;
+    if (simulatorReason.equals(ARK_GRID_WILL_SHORT.text())) return ARK_GRID_WILL_SHORT;
     if (simulatorReason.contains("서포터 전투력 계산식")) return SUPPORTER_MODEL_PENDING;
     if (simulatorReason.contains("딜러·서포터를 판정하지 못해")) return ROLE_UNKNOWN;
     if (simulatorReason.contains("공식 전투력이 없어")) return NO_OFFICIAL_COMBAT_POWER;

@@ -428,6 +428,13 @@ class ClientLimiterTest {
     assertThat(officialCalls(filter, limiter, "66.249.66.20", "1", 6)).isEqualTo(5);
     // 같은 주소의 표시 없는 요청은 사람 한도(20)에서 표시 요청이 쓴 5회를 뺀 만큼이다.
     assertThat(officialCalls(filter, limiter, "203.0.113.100", null, 20)).isEqualTo(15);
+    // 기본 한도에서 확인되지 않은 표시 요청이 볼 수 있는 남은 공식 호출은 주소별 봇 한도(5)까지다(사람 한도 20이 아니라).
+    var remaining = new java.util.concurrent.atomic.AtomicInteger(-1);
+    filter.doFilter(
+        request("/api/v1/characters/search", "203.0.113.150", "1"),
+        new MockHttpServletResponse(),
+        (req, res) -> remaining.set(limiter.remainingOfficial()));
+    assertThat(remaining).hasValue(5);
     // 합계 상한은 주소별 봇 한도보다 커야 한다(한 주소가 합계를 혼자 다 쓰지 못하게).
     assertThatThrownBy(
             () ->

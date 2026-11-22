@@ -14,9 +14,10 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
  * @param rosterRefreshPerMinute 원정대 전투력 불러오기(POST /api/v1/characters/roster-combat-power/refresh)
  *     요청 수(L19)
  * @param auctionSearchPerMinute 악세 경매 검색기(N13)가 일으키는 공식 호출(페이지) 수. 캐시에 맞는 검색은 세지 않는다
- * @param botOfficialPerMinute 모든 검색봇 표시 요청이 함께 일으킬 수 있는 공식 API 호출 수(전체 상한)
+ * @param botOfficialPerMinute 크롤러로 확인된 검색봇 요청이 모두 함께 일으킬 수 있는 공식 API 호출 수(전체 상한)
  * @param botAddressOfficialPerMinute 검색봇 표시 요청 한 주소가 일으킬 수 있는 공식 API 호출 수. 한 주소가 전체 상한을 혼자 다 쓰지
- *     못하도록 botOfficialPerMinute보다 작아야 한다(사람 클라이언트의 officialPerMinute 대신 쓴다)
+ *     못하도록 botOfficialPerMinute보다 작아야 한다. 확인된 봇은 사람 클라이언트의 officialPerMinute 대신, 확인되지 않은 표시 요청은 그것과
+ *     함께 쓴다
  * @param alertSubscribePerMinute 시세 알림 구독 만들기(POST /api/v1/alerts/subscriptions) 요청 수(M33)
  * @param materialPricesPerMinute 재료 시세(POST /api/v1/markets/material-prices) 가운데 예열 캐시에 없는 이름이 있어
  *     공식 조회를 일으킨 요청 수. 그 안의 공식 조회는 officialPerMinute가 아니라 materialSearchPerMinute에 매긴다

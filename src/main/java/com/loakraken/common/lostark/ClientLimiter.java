@@ -287,8 +287,8 @@ public class ClientLimiter {
   }
 
   /**
-   * 지금 스레드의 요청이 공식 호출을 하나 더 해도 되는지 센다. 클라이언트가 없으면(백그라운드) 세지 않는다. 검색봇 표시 요청은 OFFICIAL 대신 더 작은 주소별
-   * BOT_ADDRESS_OFFICIAL과 모든 봇이 함께 쓰는 BOT_OFFICIAL 상한을 센다(한 주소가 전체 상한을 다 쓰지 못하게).
+   * 지금 스레드의 요청이 공식 호출을 하나 더 해도 되는지 센다. 클라이언트가 없으면(백그라운드) 세지 않는다. 크롤러로 확인된 검색봇 요청은 OFFICIAL 대신 더 작은
+   * 주소별 BOT_ADDRESS_OFFICIAL과 확인된 봇이 함께 쓰는 BOT_OFFICIAL 상한을 센다(한 주소가 전체 상한을 다 쓰지 못하게).
    *
    * <p>검색봇 표시가 붙었지만 크롤러로 확인되지 않은 요청은 그 주소의 BOT_ADDRESS_OFFICIAL과 OFFICIAL, 그런 요청이 모두 함께 쓰는
    * UNVERIFIED_BOT_OFFICIAL 상한을 센다. 주소를 늘려도 합계가 그 상한을 넘지 못하고, 확인된 크롤러의 BOT_OFFICIAL과 따로라 흉내 낸 요청이

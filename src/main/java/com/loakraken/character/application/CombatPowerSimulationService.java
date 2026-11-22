@@ -2381,7 +2381,12 @@ public class CombatPowerSimulationService {
         ENLIGHTENMENT.equals(tree) ? arkPassiveCoefficients.enlightenmentLimitPoints() : LEAP_MAX;
     int points = run.pointsOr(tree, point.value()) + (next - previous) * perRank;
     if (points < 0 || points > max)
-      throw invalid("카르마 랭크를 바꾼 " + tree + " 포인트 합이 0~" + max + " 밖입니다.");
+      // 400 KARMA_POINTS_OUT_OF_RANGE(웹이 코드로 문구를 고른다). 메시지는 전과 같다(트리·범위).
+      throw new BusinessException(
+          new Detailed(
+              CharacterErrorCode.KARMA_POINTS_OUT_OF_RANGE.code(),
+              CharacterErrorCode.KARMA_POINTS_OUT_OF_RANGE.httpStatus(),
+              "카르마 랭크를 바꾼 " + tree + " 포인트 합이 0~" + max + " 밖입니다."));
     run.setPoints(tree, points);
     if (!karmaCpEnabled) return new Planned(change, target, from, to, null, null, KARMA_INPUT_OFF);
     return new Planned(

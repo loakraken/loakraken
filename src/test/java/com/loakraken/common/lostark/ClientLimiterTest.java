@@ -428,19 +428,42 @@ class ClientLimiterTest {
     assertThat(officialCalls(filter, limiter, "66.249.66.20", "1", 6)).isEqualTo(5);
     // 같은 주소의 표시 없는 요청은 사람 한도(20)에서 표시 요청이 쓴 5회를 뺀 만큼이다.
     assertThat(officialCalls(filter, limiter, "203.0.113.100", null, 20)).isEqualTo(15);
-    // 기본 한도에서 확인되지 않은 표시 요청이 볼 수 있는 남은 공식 호출은 주소별 봇 한도(5)까지다(사람 한도 20이 아니라).
-    var remaining = new java.util.concurrent.atomic.AtomicInteger(-1);
-    filter.doFilter(
-        request("/api/v1/characters/search", "203.0.113.150", "1"),
-        new MockHttpServletResponse(),
-        (req, res) -> remaining.set(limiter.remainingOfficial()));
-    assertThat(remaining).hasValue(5);
     // 합계 상한은 주소별 봇 한도보다 커야 한다(한 주소가 합계를 혼자 다 쓰지 못하게).
     assertThatThrownBy(
             () ->
                 new ClientLimitProperties(
                     true, 20, 60, 240, 120, true, 2, 6, 20, 5, 5, 10, 3, 15, 36, 5))
         .isInstanceOf(IllegalArgumentException.class);
+  }
+
+  /**
+   * 실제 기본 설정(@DefaultValue로 묶은 값)에서 확인되지 않은 표시 요청이 볼 수 있는 남은 공식 호출은 주소별 봇 한도(5)까지다(사람 한도 20이 아니라).
+   * 손으로 만든 설정이 아니라 설정 묶기로 만들어, 기본값이 바뀌면 이 시험이 알린다(#1071 코드 리뷰 P3).
+   */
+  @Test
+  void 기본_설정에서_확인되지_않은_표시_요청의_남은_공식_호출은_주소별_봇_한도다() throws Exception {
+    var defaults =
+        new org.springframework.boot.context.properties.bind.Binder(
+                new org.springframework.boot.context.properties.source
+                    .MapConfigurationPropertySource())
+            .bindOrCreate("lostark.client-limit", ClientLimitProperties.class);
+    assertThat(defaults.officialPerMinute()).isEqualTo(20);
+    assertThat(defaults.botAddressOfficialPerMinute()).isEqualTo(5);
+    assertThat(defaults.unverifiedBotOfficialPerMinute()).isEqualTo(20);
+    var limiter = limiter(defaults);
+    var filter = filter(limiter);
+    var remaining = new java.util.concurrent.atomic.AtomicInteger(-1);
+    filter.doFilter(
+        request("/api/v1/characters/search", "203.0.113.150", "1"),
+        new MockHttpServletResponse(),
+        (req, res) -> remaining.set(limiter.remainingOfficial()));
+    assertThat(remaining).hasValue(defaults.botAddressOfficialPerMinute());
+    // 표시 없는 같은 주소는 사람 한도 그대로.
+    filter.doFilter(
+        request("/api/v1/characters/search", "203.0.113.150", null),
+        new MockHttpServletResponse(),
+        (req, res) -> remaining.set(limiter.remainingOfficial()));
+    assertThat(remaining).hasValue(defaults.officialPerMinute());
   }
 
   /** 한 요청 안에서 공식 호출을 tries번 해 보고 허락된 횟수를 돌려준다. */

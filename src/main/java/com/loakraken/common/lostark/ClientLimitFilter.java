@@ -20,8 +20,8 @@ import org.springframework.web.filter.OncePerRequestFilter;
  *       크롤러로 확인될 때만 봇 요청이다. 봇 요청은 봇 주소별 BOT 버킷(한도 ≤ GENERAL)을 쓰고, 통계 경로는 그 주소의 STATS도 센다. 그 공식 호출은
  *       봇 주소별 BOT_ADDRESS_OFFICIAL과 확인된 봇이 함께 쓰는 BOT_OFFICIAL 상한을 함께 센다.
  *   <li>표시가 있는데 확인되지 않으면(확인 중·실패 포함) 요청 칸은 사람 클라이언트와 같이 센다. 공식 호출은 그 주소의 BOT_ADDRESS_OFFICIAL과
- *       OFFICIAL, 그런 요청이 함께 쓰는 UNVERIFIED_BOT_OFFICIAL 상한을 함께 센다(기능 버킷 경로도 같다). 웹은 밖에서 들어온 같은 헤더를
- *       지워야 한다.
+ *       OFFICIAL, 그런 요청이 함께 쓰는 UNVERIFIED_BOT_OFFICIAL 상한을 함께 센다(기능 버킷 경로에서는 OFFICIAL 대신 기능 버킷을 쓰고,
+ *       BOT_ADDRESS_OFFICIAL과 UNVERIFIED_BOT_OFFICIAL도 함께 센다). 웹은 밖에서 들어온 같은 헤더를 지워야 한다.
  *   <li>그 밖에는 클라이언트별 GENERAL을 세고, 통계·랭킹 경로는 STATS도 센다.
  *   <li>요청을 처리하는 동안 클라이언트 키를 스레드에 두어, 공유 게이트가 공식 호출을 OFFICIAL로 매기게 한다.
  * </ul>

@@ -26,7 +26,21 @@ public final class CombatPowerArkPassiveModel {
       BigDecimal evolutionPerPoint,
       BigDecimal enlightenmentPerPoint,
       int enlightenmentMaxPoints,
-      int enlightenmentLimitPoints) {}
+      int enlightenmentLimitPoints,
+      BigDecimal evolutionKarmaPerRank,
+      BigDecimal leapKarmaPerLevel) {}
+
+  /** 진화 카르마 랭크 배수 1 + c × 랭크(모델값, 비교 기준 한 곳의 식). */
+  public static BigDecimal evolutionKarmaRank(Coefficients coefficients, int rank) {
+    return BigDecimal.ONE.add(
+        coefficients.evolutionKarmaPerRank().multiply(BigDecimal.valueOf(rank), MATH), MATH);
+  }
+
+  /** 도약 카르마 레벨 배수 1 + c × 레벨(모델값, 비교 기준 한 곳의 식). */
+  public static BigDecimal leapKarmaLevel(Coefficients coefficients, int level) {
+    return BigDecimal.ONE.add(
+        coefficients.leapKarmaPerLevel().multiply(BigDecimal.valueOf(level), MATH), MATH);
+  }
 
   /** 진화 포인트 P의 배수: 1 + c × max(P − 무료 포인트, 0). */
   public static BigDecimal evolution(Coefficients coefficients, int points) {

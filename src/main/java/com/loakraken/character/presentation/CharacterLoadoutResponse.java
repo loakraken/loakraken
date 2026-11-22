@@ -422,14 +422,22 @@ public record CharacterLoadoutResponse(
               description =
                   "카르마 레벨. 공식 포인트 설명('6랭크 29레벨')의 레벨이며, 설명이 없거나 레벨이 없으면 null입니다. 깨달음 카르마는 이름이 깨달음인 항목에서 읽습니다. 배포 순서 때문에 계약에서는 선택 필드",
               example = "29")
-          Integer karmaLevel) {
+          Integer karmaLevel,
+      @NullableResponse
+          @OptionalResponse
+          @Schema(
+              description =
+                  "카르마 랭크(0~6). 공식 포인트 설명('6랭크 29레벨')의 첫 'N랭크'이며, 설명이 없거나 랭크가 없거나 0~6 밖이면 null입니다. 배포 순서 때문에 계약에서는 선택 필드",
+              example = "6")
+          Integer karmaRank) {
     static PassivePointResponse from(CharacterLoadout.PassivePoint value) {
       if (value == null) return null;
       return new PassivePointResponse(
           value.name(),
           value.value(),
           value.description(),
-          com.loakraken.character.domain.CombatPowerRefineModel.karmaLevel(value.description()));
+          com.loakraken.character.domain.CombatPowerRefineModel.karmaLevel(value.description()),
+          com.loakraken.character.domain.CombatPowerRefineModel.karmaRank(value.description()));
     }
   }
 

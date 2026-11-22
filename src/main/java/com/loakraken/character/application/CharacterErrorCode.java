@@ -24,6 +24,11 @@ public enum CharacterErrorCode implements ErrorCode {
   CHARACTER_NOT_CACHED(HttpStatus.NOT_FOUND, "아직 확인한 기록이 없는 캐릭터입니다."),
   /** 전투력 시뮬레이터: 캐시가 바뀌어 바꿀 대상(장비 순번·보석 slot 등)이 캐릭터에 없다. 웹은 다시 불러오기를 띄운다. */
   CHANGE_TARGET_NOT_FOUND(HttpStatus.CONFLICT, "캐릭터 정보가 바뀌어 바꿀 대상을 찾지 못했습니다. 다시 불러와 주세요."),
+  /**
+   * 전투력 시뮬레이터: 카르마 랭크를 바꾸면 그 트리 포인트 합이 범위(깨달음 0~101, 도약 0~70)를 벗어난다. 자르지 않고 400. 웹은 코드로 문구를
+   * 고른다(프론트·프론트2 2026-11-22). 랭크 자체가 0~6 밖이면 INVALID_REQUEST.
+   */
+  KARMA_POINTS_OUT_OF_RANGE(HttpStatus.BAD_REQUEST, "카르마 랭크를 바꾸면 포인트 합이 범위를 벗어납니다."),
   CARD_COLLECTION_REFRESH_COOLDOWN(
       HttpStatus.TOO_MANY_REQUESTS, "원정대 기록은 10분에 한 번 채울 수 있습니다. 잠시 후 다시 시도해 주세요."),
   ROSTER_REFRESH_COOLDOWN(

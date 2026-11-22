@@ -75,7 +75,8 @@ public class CombatPowerController {
         description = "CHARACTER_COMBAT_POWER_SIMULATE_SUCCESS"),
     @io.swagger.v3.oas.annotations.responses.ApiResponse(
         responseCode = "400",
-        description = "INVALID_REQUEST: 범위 밖·모르는 kind·필수 값 없음(메시지에 필드와 허용 범위)",
+        description =
+            "INVALID_REQUEST: 범위 밖·모르는 kind·필수 값 없음(메시지에 필드와 허용 범위). KARMA_POINTS_OUT_OF_RANGE: karmaRank를 바꾸면 그 트리 포인트 합이 깨달음 0~101·도약 0~70을 벗어남(자르지 않음, 랭크 자체가 0~6 밖이면 INVALID_REQUEST)",
         content = @Content(schema = @Schema(ref = "#/components/schemas/ErrorResponse"))),
     @io.swagger.v3.oas.annotations.responses.ApiResponse(
         responseCode = "404",

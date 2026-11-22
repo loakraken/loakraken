@@ -1277,7 +1277,8 @@ public class CombatPowerSimulationService {
   /**
    * 아크 그리드 젬 교체 배수(M49 G1, 계산 검증 11-22). 공식 ArkGrid.Effects 레벨에서 바꾼 젬들의 옵션 레벨을 이름별로 빼고(활성 젬만) 새 옵션을
    * 더해 젬 옵션 배수를 다시 구하고, 코어마다 공식 포인트에서 바꾼 젬의 포인트를 빼고(활성 젬만) 새 포인트를 더해 코어 배수를 다시 구한다. 두 배수는 독립이라 곱한다.
-   * 같은 요청에서 그 코어의 등급·포인트도 바꾸면(ARK_GRID_CORE) 함께 계산하지 않는다(null).
+   * 같은 요청에서 그 코어의 등급·포인트도 바꾸면(ARK_GRID_CORE) 함께 계산하지 않는다(null). 교체로 의지력이 남아 뒤 슬롯의 꺼진 젬이 켜지면(공식 활성화
+   * 규칙이 지금 IsActive를 재현할 때만) 그 젬의 옵션·코어 포인트도 더한다.
    */
   private BigDecimal arkGemRatio(State state) {
     var official = state.arkGems().values().iterator().next().officialEffects();
@@ -1301,6 +1302,29 @@ public class CombatPowerSimulationService {
       }
       points.merge(index, swap.point(), Integer::sum);
       swap.options().forEach((name, level) -> levels.merge(name, level, Integer::sum));
+    }
+    // 교체로 의지력이 남아 뒤 슬롯의 꺼진 젬이 켜지면 그 젬의 옵션·코어 포인트를 더한다(공식 활성화 규칙이 지금 IsActive를 재현할 때만, #1079 대체 리뷰
+    // P3-2). 켜져 있던 젬이 꺼지는 경우는 arkGemBlocked가 의지력 부족으로 이미 막았다.
+    var byCore = new LinkedHashMap<Integer, List<ArkGridGemEffect>>();
+    for (var swap : state.arkGems().values())
+      byCore.computeIfAbsent(swap.core().index(), key -> new ArrayList<>()).add(swap);
+    for (var entry : byCore.entrySet()) {
+      var core = slots.get(entry.getKey());
+      var after = activeAfter(core, entry.getValue());
+      if (after == null) continue;
+      var swapped = new java.util.HashSet<Integer>();
+      for (var swap : entry.getValue()) swapped.add(swap.old().index());
+      for (var gem : core.gems()) {
+        if (gem == null || swapped.contains(gem.index()) || Boolean.TRUE.equals(gem.active()))
+          continue;
+        if (!after.contains(gem.index())) continue;
+        if (gem.detail().corePoint() == null) return null;
+        points.merge(entry.getKey(), gem.detail().corePoint(), Integer::sum);
+        for (var option : gem.detail().options()) {
+          if (option == null || option.name() == null) return null;
+          levels.merge(option.name().strip(), option.level(), Integer::sum);
+        }
+      }
     }
     var after = new ArrayList<CharacterLoadout.GridEffect>();
     for (var entry : levels.entrySet()) {
@@ -1891,18 +1915,37 @@ public class CombatPowerSimulationService {
         continue;
       }
       var core = entry.getValue().getFirst().core();
-      var replaced = new java.util.HashSet<Integer>();
-      int required = 0;
-      for (var swap : entry.getValue()) {
-        replaced.add(swap.old().index());
-        required += swap.required();
-      }
-      for (var gem : core.gems())
-        if (gem != null && !replaced.contains(gem.index()) && Boolean.TRUE.equals(gem.active()))
-          required += gem.detail().requiredWillpower();
-      if (required > core.core().supplyWillpower()) {
-        blocked.put(entry.getKey(), CombatPowerReasons.ARK_GRID_WILL_SHORT.text());
-        continue;
+      var after = activeAfter(core, entry.getValue());
+      if (after != null) {
+        // 공식 활성화 규칙(한 번 차례로 훑기)이 지금 IsActive를 재현하면: 켜져 있던 젬이나 새 젬이 하나라도 꺼지면 의지력 부족(어느 젬이 꺼지는지의
+        // 계산은 슬롯 순서 확인 전까지 하지 않는다 — PM 총괄 11-22, 범위 (a)). 뒤 슬롯 젬이 새로 켜지는 것은 arkGemRatio가 더한다.
+        boolean starved = false;
+        var swapped = new java.util.HashSet<Integer>();
+        for (var swap : entry.getValue()) swapped.add(swap.old().index());
+        for (var gem : core.gems()) {
+          if (gem == null || gem.index() == null) continue;
+          boolean wasOn = swapped.contains(gem.index()) || Boolean.TRUE.equals(gem.active());
+          if (wasOn && !after.contains(gem.index())) starved = true;
+        }
+        if (starved) {
+          blocked.put(entry.getKey(), CombatPowerReasons.ARK_GRID_WILL_SHORT.text());
+          continue;
+        }
+      } else {
+        // 규칙이 지금 상태를 재현하지 못하면(또는 값을 읽지 못하면) 전처럼 합으로만 본다.
+        var replaced = new java.util.HashSet<Integer>();
+        int required = 0;
+        for (var swap : entry.getValue()) {
+          replaced.add(swap.old().index());
+          required += swap.required();
+        }
+        for (var gem : core.gems())
+          if (gem != null && !replaced.contains(gem.index()) && Boolean.TRUE.equals(gem.active()))
+            required += gem.detail().requiredWillpower();
+        if (required > core.core().supplyWillpower()) {
+          blocked.put(entry.getKey(), CombatPowerReasons.ARK_GRID_WILL_SHORT.text());
+          continue;
+        }
       }
       // 그 코어의 교체만 담은 상태로 미리 계산해 본다. 안 되면 코어 계수의 이유(있으면) 또는 일반 이유로 코어 전체를 막는다.
       var only = new LinkedHashMap<String, ArkGridGemEffect>();
@@ -1952,6 +1995,36 @@ public class CombatPowerSimulationService {
           if (!blocked.containsKey(index)) blocked.put(index, ARK_GRID_GEM_CROSS_CORE_UNCOMPUTABLE);
     }
     return blocked;
+  }
+
+  /**
+   * 그 코어의 교체를 반영한 뒤 켜지는 젬 Index(공식 활성화 규칙, {@link
+   * com.loakraken.character.domain.ArkGridActivation}). 규칙이 지금 공식 IsActive를 그대로 재현하지 못하거나(슬롯 순서가 다를
+   * 수 있다) 공급·필요 의지력·활성 여부를 읽지 못하면 null — 그때는 젬을 새로 켜지 않는다(#1079 대체 리뷰 P3-2, PM 총괄 11-22).
+   */
+  private static java.util.Set<Integer> activeAfter(
+      CharacterLoadout.GridSlot core, List<ArkGridGemEffect> swaps) {
+    if (core.core() == null || core.core().supplyWillpower() == null) return null;
+    var byIndex = new java.util.HashMap<Integer, ArkGridGemEffect>();
+    for (var swap : swaps) byIndex.put(swap.old().index(), swap);
+    var now = new java.util.HashMap<Integer, Integer>();
+    var next = new java.util.HashMap<Integer, Integer>();
+    var official = new java.util.TreeSet<Integer>();
+    for (var gem : core.gems()) {
+      if (gem == null
+          || gem.index() == null
+          || gem.active() == null
+          || gem.detail() == null
+          || gem.detail().requiredWillpower() == null) return null;
+      now.put(gem.index(), gem.detail().requiredWillpower());
+      if (gem.active()) official.add(gem.index());
+      var swap = byIndex.get(gem.index());
+      next.put(gem.index(), swap == null ? gem.detail().requiredWillpower() : swap.required());
+    }
+    int supply = core.core().supplyWillpower();
+    if (!com.loakraken.character.domain.ArkGridActivation.active(supply, now).equals(official))
+      return null;
+    return com.loakraken.character.domain.ArkGridActivation.active(supply, next);
   }
 
   private static final String ARK_GRID_GEM_CROSS_CORE_UNCOMPUTABLE =

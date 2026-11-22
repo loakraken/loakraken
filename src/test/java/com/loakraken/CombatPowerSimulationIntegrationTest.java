@@ -1407,8 +1407,53 @@ class CombatPowerSimulationIntegrationTest {
         .isGreaterThan(slept.at("/data/delta").decimalValue());
   }
 
+  /**
+   * 규칙이 지금 IsActive를 재현하지 못하면(젬 3이 필요 7로 맞는데도 공식은 꺼짐 — 슬롯 순서가 다를 수 있다) 젬을 새로 켜지 않는다: 효율 5·4가 같은
+   * 값이다(전과 같음).
+   */
+  @Test
+  void 활성화_규칙이_지금_상태를_재현하지_못하면_젬을_새로_켜지_않는다() throws Exception {
+    when(detailsPort.fetch(anyString()))
+        .thenAnswer(
+            invocation -> {
+              var base = fetchedBracelet(invocation.getArgument(0));
+              var details = base.details();
+              var old = details.loadout();
+              var grid = sleepingGemGrid(7);
+              var loadout =
+                  new CharacterLoadout(
+                      old.equipment(),
+                      old.engravings(),
+                      old.gems(),
+                      old.cards(),
+                      old.arkPassive(),
+                      grid,
+                      old.skills());
+              return new FetchedCharacter(
+                  CharacterTestFixture.details(details.profile(), loadout, List.of()), "{}", "[]");
+            });
+    assertThat(get("/api/v1/characters/search?characterName=" + encode("시뮬젬어긋남")).statusCode())
+        .isEqualTo(200);
+    var five =
+        """
+        [{"kind": "ARK_GRID_GEM", "slotIndex": 5, "index": 1, "gemType": "침식", "willEfficiency": 5,
+          "point": 5, "effects": [{"name": "추가 피해", "level": 3}, {"name": "공격력", "level": 2}]}]
+        """;
+    var four = five.replace("\"willEfficiency\": 5", "\"willEfficiency\": 4");
+    var a = mapper.readTree(simulate("시뮬젬어긋남", five).body());
+    var b = mapper.readTree(simulate("시뮬젬어긋남", four).body());
+    assertThat(a.at("/data/contributions/0/status").asText()).as(a.toString()).isEqualTo("OK");
+    assertThat(a.at("/data/delta").decimalValue())
+        .isEqualByComparingTo(b.at("/data/delta").decimalValue());
+  }
+
   /** 젬 3이 꺼진 아크 그리드: 공급 17, 젬 0·1·2가 3·4·3, 젬 3은 필요 8이라 꺼짐 — 공식 옵션 합·코어 포인트는 켜진 젬만. */
   private static CharacterLoadout.ArkGrid sleepingGemGrid() {
+    return sleepingGemGrid(8);
+  }
+
+  /** gem3Need: 젬 3의 필요 의지력(8이면 규칙대로 꺼짐, 7이면 규칙으로는 켜져야 하는데 공식은 꺼짐 — 어긋난 상태). */
+  private static CharacterLoadout.ArkGrid sleepingGemGrid(int gem3Need) {
     var gems =
         List.of(
             gridGem(0, 4, 3, 8, 5, "추가 피해", 3, "낙인력", 1),
@@ -1423,9 +1468,9 @@ class CombatPowerSimulationIntegrationTest {
                     "혼돈의 젬 : 왜곡",
                     "혼돈",
                     16,
-                    8,
+                    gem3Need,
                     9,
-                    1,
+                    9 - gem3Need,
                     5,
                     List.of(
                         new CharacterLoadout.GemOption("보스 피해", 4, null, null),

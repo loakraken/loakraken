@@ -112,6 +112,19 @@ public class TestcontainersConfiguration {
     };
   }
 
+  /** 클라이언트 한도 창 시계(컨텍스트마다 하나). 한도를 여러 요청에 걸쳐 세는 시험이 {@link ClientLimitWindow#startFreshWindow()}로 창을 고정한다. */
+  @Bean
+  ClientLimitWindow clientLimitWindow(java.time.Clock clock) {
+    return new ClientLimitWindow(clock);
+  }
+
+  /** 앱 시계 대신 위 창 시계로 클라이언트 한도를 센다(부르기 전까지는 실제 시각과 같다). */
+  @Bean
+  @org.springframework.context.annotation.Primary
+  com.loakraken.common.lostark.ClientLimitClock testClientLimitClock(ClientLimitWindow window) {
+    return window.limitClock();
+  }
+
   /** 풀 크기만 설정 값으로(데이터소스는 이 설정이 들어간 뒤에 만들어진다). */
   @Bean
   DynamicPropertyRegistrar poolProperties() {

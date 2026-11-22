@@ -75,6 +75,31 @@ class UserPriceSolvePoolTest {
   }
 
   @Test
+  void 요청_하나는_자리를_끝까지_쥐고_늦게_온_요청은_풀기_전에_429다() {
+    var registry = new SimpleMeterRegistry();
+    var pool = new UserPriceSolvePool(registry, 1);
+    pool.get("cached", () -> null);
+    try (var first = pool.open()) {
+      first.get("a1", () -> null);
+      // 단계 사이: 자리를 쥔 채(놓지 않음).
+      assertThat(registry.get(PREFIX + ".solving").gauge().value()).isEqualTo(1);
+      try (var second = pool.open()) {
+        // 캐시에만 있는 단계는 자리 없이 답한다.
+        assertThat(second.get("cached", () -> fail())).isEmpty();
+        assertThatThrownBy(() -> second.get("b1", () -> fail()))
+            .isInstanceOf(BusinessException.class);
+      }
+      // 먼저 온 요청은 다음 단계도 푼다(다시 자리를 받지 않음).
+      assertThat(first.get("a2", () -> null)).isEmpty();
+      assertThat(registry.get(PREFIX + ".solving").gauge().value()).isEqualTo(1);
+    }
+    // 끝나면 놓는다.
+    assertThat(registry.get(PREFIX + ".solving").gauge().value()).isZero();
+    assertThat(pool.get("b1", () -> null)).isEmpty();
+    assertThat(registry.counter(PREFIX + ".rejected").count()).isEqualTo(1);
+  }
+
+  @Test
   void 공유_OPTIMAL_자리가_다_차도_사용자_가격_풀이는_돈다() throws Exception {
     var registry = new SimpleMeterRegistry();
     var shared =

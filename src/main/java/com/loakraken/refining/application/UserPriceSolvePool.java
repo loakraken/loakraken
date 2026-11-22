@@ -67,45 +67,78 @@ public class UserPriceSolvePool {
         .description("사용자 가격 특재 가치 풀이 캐시에 든 결과 수")
         .register(registry);
     Gauge.builder(name + ".solving", this, UserPriceSolvePool::solving)
-        .description("지금 진행 중인 사용자 가격 특재 가치 풀이 수")
+        .description("지금 풀이 자리를 쥔 사용자 가격 특재 가치 요청 수")
         .register(registry);
   }
 
   /**
-   * {@link RefiningPlanService#optimalWith}에 넘길 풀이기(이 캐시 + 이 자리). 이 클래스는 {@link OptimalStageCache}
-   * 빈이 아니다(공유 캐시 빈이 하나뿐이어야 RefiningPlanService가 그것을 받는다).
+   * 요청 하나의 풀이 자리(PM 총괄 2026-11-22, #1101 리뷰 메모). 처음 캐시에 없는 단계에서 자리를 받아 {@link #close()}까지 쥔다. 그래서
+   * 풀기 시작한 요청은 단계 사이에 다른 요청이 와도 끝까지 가고, 늦게 온 요청은 풀기 전에 바로 429다(일한 뒤 중간에 429가 아니라). 캐시에만 있는 요청은 자리를
+   * 받지 않는다. try-with-resources로 쓴다.
    */
-  public OptimalStageCache solver() {
-    return this::get;
+  public Session open() {
+    return new Session();
   }
 
-  Optional<RefiningOptimal.Result> get(String key, Supplier<RefiningOptimal.Result> compute) {
-    synchronized (entries) {
-      var cached = entries.get(key);
-      if (cached != null) {
-        hits.increment();
-        return cached;
+  /** 요청 하나 동안의 풀이기. 한 스레드에서만 쓴다. */
+  public final class Session implements AutoCloseable {
+    private boolean held;
+
+    private Session() {}
+
+    /**
+     * {@link RefiningPlanService#optimalWith}에 넘길 풀이기(이 캐시 + 이 요청의 자리). 풀이 풀은 {@link
+     * OptimalStageCache} 빈이 아니다(공유 캐시 빈이 하나뿐이어야 RefiningPlanService가 그것을 받는다).
+     */
+    public OptimalStageCache solver() {
+      return this::get;
+    }
+
+    Optional<RefiningOptimal.Result> get(String key, Supplier<RefiningOptimal.Result> compute) {
+      synchronized (entries) {
+        var cached = entries.get(key);
+        if (cached != null) {
+          hits.increment();
+          return cached;
+        }
+      }
+      misses.increment();
+      if (!held) {
+        if (!seats.tryAcquire()) {
+          rejected.increment();
+          throw new BusinessException(
+              RefiningErrorCode.REFINING_SOLVE_BUSY, RefiningPlanService.RETRY_AFTER);
+        }
+        held = true;
+      }
+      // 계산은 잠금 밖에서(같은 키를 동시에 풀면 마지막 결과를 둔다, 값은 같다).
+      Optional<RefiningOptimal.Result> computed;
+      var sample = Timer.start();
+      try {
+        computed = Optional.ofNullable(compute.get());
+      } finally {
+        sample.stop(solveTime);
+      }
+      synchronized (entries) {
+        entries.put(key, computed);
+      }
+      return computed;
+    }
+
+    @Override
+    public void close() {
+      if (held) {
+        held = false;
+        seats.release();
       }
     }
-    // 캐시에 없는 풀이만 자리를 받는다. 계산은 잠금 밖에서(같은 키를 동시에 풀면 마지막 결과를 둔다, 값은 같다).
-    misses.increment();
-    if (!seats.tryAcquire()) {
-      rejected.increment();
-      throw new BusinessException(
-          RefiningErrorCode.REFINING_SOLVE_BUSY, RefiningPlanService.RETRY_AFTER);
+  }
+
+  /** 단계 하나만 푸는 요청(자리를 받았다면 풀이 뒤 바로 놓는다). */
+  Optional<RefiningOptimal.Result> get(String key, Supplier<RefiningOptimal.Result> compute) {
+    try (var session = open()) {
+      return session.get(key, compute);
     }
-    Optional<RefiningOptimal.Result> computed;
-    var sample = Timer.start();
-    try {
-      computed = Optional.ofNullable(compute.get());
-    } finally {
-      sample.stop(solveTime);
-      seats.release();
-    }
-    synchronized (entries) {
-      entries.put(key, computed);
-    }
-    return computed;
   }
 
   int size() {

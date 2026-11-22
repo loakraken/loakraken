@@ -21,6 +21,8 @@ import org.springframework.stereotype.Service;
  */
 @Service
 public class ArkGridGemPriceService {
+  private static final org.slf4j.Logger log =
+      org.slf4j.LoggerFactory.getLogger(ArkGridGemPriceService.class);
   private final MarketBoardService boards;
   private final ArkGridGemCatalog catalog = ArkGridGemCatalog.load();
 
@@ -38,7 +40,7 @@ public class ArkGridGemPriceService {
     return scan().flatMap(scan -> priced(gem.get(), scan));
   }
 
-  /** 시세가 있는 젬 전부(스캔 한 번). 스캔 실패는 빈 목록. */
+  /** 시세가 있는 젬 전부(스캔 한 번). 스캔 실패는 빈 목록. 여러 젬을 한 번에 값 매기는 쪽은 price를 젬마다 부르지 말고 이것을 한 번 부른다. */
   public List<Price> prices() {
     var scan = scan();
     if (scan.isEmpty()) return List.of();
@@ -51,6 +53,9 @@ public class ArkGridGemPriceService {
     try {
       return Optional.ofNullable(boards.scanForVolume(MarketTab.ARK_GRID));
     } catch (RuntimeException exception) {
+      // 시세 없음으로 두되(추정하지 않음) 스캔 실패는 보이게 한다. 예외 유형만 남긴다.
+      log.warn(
+          "event=ark_grid_gem_scan_failed exceptionType={}", exception.getClass().getSimpleName());
       return Optional.empty();
     }
   }

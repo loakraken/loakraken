@@ -152,10 +152,10 @@ class TitleSnapshotJob {
         retries = 0;
       }
       log.warn(
-          "event=title_snapshot_failed trigger={} 칭호 일별 스냅숏을 만들지 못했습니다. 확인 주기마다 다시 합니다(하루 {}번까지, 지금 {}번). 예외 유형={}",
+          "event=title_snapshot_failed trigger={} retries={} maxRetries={} exceptionType={} 칭호 일별 스냅숏을 만들지 못했습니다. 확인 주기마다 다시 합니다.",
           trigger,
-          MAX_RETRIES_PER_DAY,
           retries,
+          MAX_RETRIES_PER_DAY,
           exception.getClass().getSimpleName());
       return false;
     } finally {

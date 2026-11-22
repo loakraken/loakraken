@@ -83,7 +83,9 @@ class TitleSnapshotJobTest {
         .thenReturn(new TitleSnapshotService.Built(3, 12, 0));
     var job = job();
     assertThat(job.run("schedule")).isFalse();
-    assertThat(output.getOut()).contains("event=title_snapshot_failed trigger=schedule");
+    assertThat(output.getOut())
+        .contains(
+            "event=title_snapshot_failed trigger=schedule retries=0 maxRetries=5 exceptionType=CannotAcquireLockException");
     job.checkExclusion();
     verify(service, org.mockito.Mockito.times(2)).build();
     assertThat(retries("built")).isEqualTo(1);

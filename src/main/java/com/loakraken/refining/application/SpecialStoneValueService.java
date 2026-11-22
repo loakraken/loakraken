@@ -102,16 +102,28 @@ public class SpecialStoneValueService {
 
   /**
    * prices = 이름 → 1개 골드(사용자 가격으로 시세를 덮은 값). 요청 순서대로 한 줄씩. userPriced(사용자 가격이 하나라도 있음)면 일반 재련 풀이는 따로
-   * 둔 자리·캐시({@link UserPriceSolvePool})로, 아니면 /plans OPTIMAL과 같은 공유 자리·캐시로 푼다(값은 같다).
+   * 둔 자리·캐시({@link UserPriceSolvePool})로, 아니면 /plans OPTIMAL과 같은 공유 자리·캐시로 푼다(값은 같다). 따로 둔 자리는 요청
+   * 하나가 처음 캐시에 없는 단계에서 받아 끝까지 쥔다(풀기 시작한 요청은 중간에 429가 나지 않는다).
    */
   public List<Row> values(
       List<Target> targets, Map<String, BigDecimal> prices, boolean userPriced) {
     var rows = new ArrayList<Row>();
-    for (var target : targets) rows.add(row(target, prices, userPriced));
+    if (!userPriced) {
+      for (var target : targets) rows.add(row(target, prices, null));
+      return List.copyOf(rows);
+    }
+    try (var session = userPricePool.open()) {
+      var solver = session.solver();
+      for (var target : targets) rows.add(row(target, prices, solver));
+    }
     return List.copyOf(rows);
   }
 
-  private Row row(Target target, Map<String, BigDecimal> prices, boolean userPriced) {
+  /** solver가 null이면 공유 자리·캐시(/plans OPTIMAL과 같다). */
+  private Row row(
+      Target target,
+      Map<String, BigDecimal> prices,
+      com.loakraken.refining.domain.OptimalStageCache solver) {
     if (!sourced(target))
       return new Row(
           target,
@@ -155,9 +167,8 @@ public class SpecialStoneValueService {
         new RefiningPlan.Options(
             target.fromStage(), target.fromStage() + 1, false, true, true, 0, 0, false, true);
     var optimal =
-        userPriced
-            ? plans.optimalWith(
-                target.grade(), target.type(), options, prices, userPricePool.solver())
+        solver != null
+            ? plans.optimalWith(target.grade(), target.type(), options, prices, solver)
             : plans.optimal(target.grade(), target.type(), options, prices);
     if (optimal == null)
       return new Row(

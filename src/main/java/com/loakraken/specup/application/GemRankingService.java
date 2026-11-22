@@ -128,27 +128,60 @@ public class GemRankingService {
   private final ArkGridGemProcessing processing =
       new ArkGridGemProcessing(ArkGridGemProcessing.rules());
   private final Semaphore seats;
+  private final io.micrometer.core.instrument.Counter cacheHits;
+  private final io.micrometer.core.instrument.Counter cacheMisses;
+
+  /** 결과 캐시 크기(최근에 쓴 순서). 캐릭터 캐시 수집 시각·시세 관측 시각이 열쇠에 있어 둘 중 하나가 바뀌면 자연히 새 열쇠다. */
+  static final int CACHE_ENTRIES = 256;
+
+  /** 순위를 매긴 모든 줄(limit 전). limit은 꺼낼 때 자른다. */
+  private record Ranked(Instant pricesObservedAt, List<Row> rows) {}
+
+  /** 결과 캐시 열쇠(#1095 코드 리뷰 P2): 같은 캐릭터 캐시·등급·정책·초기화·사용자 가격·젬 시세면 같은 줄이다. */
+  private record CacheKey(
+      String characterName,
+      Instant fetchedAt,
+      Grade grade,
+      Set<Policy> policies,
+      Set<Boolean> resets,
+      Long resetTicketGold,
+      BigDecimal pheonGold,
+      Instant pricesObservedAt,
+      Map<String, Long> gemPrices) {}
+
+  private final Map<CacheKey, Ranked> cache =
+      new LinkedHashMap<>(64, 0.75f, true) {
+        @Override
+        protected boolean removeEldestEntry(Map.Entry<CacheKey, Ranked> eldest) {
+          return size() > CACHE_ENTRIES;
+        }
+      };
 
   public GemRankingService(
       CombatPowerSimulationService simulator,
       ArkGridGemPriceService prices,
-      @Value("${combat-power-sim.gem-ranking.max-concurrent:2}") int maxConcurrent) {
+      @Value("${combat-power-sim.gem-ranking.max-concurrent:2}") int maxConcurrent,
+      io.micrometer.core.instrument.MeterRegistry registry) {
     this.simulator = simulator;
     this.prices = prices;
     this.seats = new Semaphore(Math.max(1, maxConcurrent));
+    this.cacheHits =
+        io.micrometer.core.instrument.Counter.builder("loakraken.gem_ranking.cache")
+            .tag("outcome", "hit")
+            .description("젬 교체 순위를 결과 캐시에서 준 수")
+            .register(registry);
+    this.cacheMisses =
+        io.micrometer.core.instrument.Counter.builder("loakraken.gem_ranking.cache")
+            .tag("outcome", "miss")
+            .description("젬 교체 순위를 새로 계산한 수")
+            .register(registry);
   }
 
+  /**
+   * 캐시에 있으면 계산 자리 없이 바로 준다. 없으면 자리를 받아 계산하고(자리가 없으면 429 GEM_RANKING_BUSY) 넣는다. 캐릭터·시세 읽기는 캐시만이라
+   * 가볍다.
+   */
   public Result rank(Query query) {
-    if (!seats.tryAcquire())
-      throw new BusinessException(SpecUpErrorCode.GEM_RANKING_BUSY, RETRY_AFTER);
-    try {
-      return compute(query);
-    } finally {
-      seats.release();
-    }
-  }
-
-  private Result compute(Query query) {
     var result = simulator.snapshot(query.characterName());
     var name = result.details().profile().characterName();
     var fetchedAt = result.fetchedAt();
@@ -165,16 +198,65 @@ public class GemRankingService {
           0,
           List.of(),
           ASSUMPTIONS);
-    var grid = result.details().loadout().arkGrid();
-    var cached = prices.cachedPrices();
     Instant pricesAt = null;
     var gemPrice = new LinkedHashMap<String, Long>();
-    for (var price : cached)
+    for (var price : prices.cachedPrices())
       if (query.grade().label.equals(price.grade())) {
         gemPrice.put(price.type(), price.unitPrice());
         if (pricesAt == null || price.observedAt().isBefore(pricesAt))
           pricesAt = price.observedAt();
       }
+    var key =
+        new CacheKey(
+            name,
+            fetchedAt,
+            query.grade(),
+            Set.copyOf(query.policies()),
+            Set.copyOf(query.resets()),
+            query.resetTicketGold(),
+            query.pheonGold() == null ? null : query.pheonGold().stripTrailingZeros(),
+            pricesAt,
+            Map.copyOf(gemPrice));
+    Ranked ranked;
+    synchronized (cache) {
+      ranked = cache.get(key);
+    }
+    if (ranked != null) cacheHits.increment();
+    else {
+      if (!seats.tryAcquire())
+        throw new BusinessException(SpecUpErrorCode.GEM_RANKING_BUSY, RETRY_AFTER);
+      try {
+        cacheMisses.increment();
+        ranked = new Ranked(pricesAt, compute(query, result, gemPrice));
+      } finally {
+        seats.release();
+      }
+      synchronized (cache) {
+        cache.put(key, ranked);
+      }
+    }
+    var limited = new ArrayList<Row>();
+    for (int i = 0; i < ranked.rows().size() && i < query.limit(); i++)
+      limited.add(ranked.rows().get(i));
+    return new Result(
+        RULE_VERSION,
+        name,
+        fetchedAt,
+        "OK",
+        null,
+        null,
+        ranked.pricesObservedAt(),
+        ranked.rows().size(),
+        List.copyOf(limited),
+        ASSUMPTIONS);
+  }
+
+  /** 딜러 캐릭터의 모든 줄을 순위대로(rank 채움). */
+  private List<Row> compute(
+      Query query,
+      com.loakraken.character.application.CharacterResult result,
+      Map<String, Long> gemPrice) {
+    var grid = result.details().loadout().arkGrid();
     var rows = new ArrayList<Row>();
     if (grid != null && grid.slots() != null)
       for (var slot : grid.slots()) {
@@ -204,19 +286,8 @@ public class GemRankingService {
       }
     rows.sort(ORDER);
     var ranked = new ArrayList<Row>();
-    for (int i = 0; i < rows.size() && i < query.limit(); i++)
-      ranked.add(withRank(rows.get(i), i + 1));
-    return new Result(
-        RULE_VERSION,
-        name,
-        fetchedAt,
-        "OK",
-        null,
-        null,
-        pricesAt,
-        rows.size(),
-        List.copyOf(ranked),
-        ASSUMPTIONS);
+    for (int i = 0; i < rows.size(); i++) ranked.add(withRank(rows.get(i), i + 1));
+    return List.copyOf(ranked);
   }
 
   private static CurrentGem current(com.loakraken.character.domain.CharacterLoadout.GridGem gem) {

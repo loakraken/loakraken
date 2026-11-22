@@ -133,6 +133,9 @@ class RefiningAdvancedPlanIntegrationTest {
     }
     assertThat(data.path("assumptions").toString()).contains("즉시 구매 최저가");
     SiteNames.assertAbsent(response.body());
+    // 견본의 null(20 아래 강화 선조 등)이 생성 문서에서 null 허용인가(프론트2 11-22: 등록이 빠져 nullable이 안 붙었었다).
+    OpenApiNulls.assertNullsAllowed(
+        OpenApiNulls.document(port), "AdvancedRefiningPlanResponse", data);
   }
 
   @Test

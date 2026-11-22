@@ -1925,6 +1925,22 @@ public class CombatPowerSimulationService {
     return blocked;
   }
 
+  /** M49 2단계 G1 값 표. 뼈대. */
+  public record GemSwapEvaluator(String reason) {
+    public boolean willFits(int willEfficiency) {
+      return false;
+    }
+
+    public double ratio(int point, String first, int firstLevel, String second, int secondLevel) {
+      return Double.NaN;
+    }
+  }
+
+  public GemSwapEvaluator gemSwapEvaluator(
+      CharacterResult result, int slotIndex, int gemIndex, String type) {
+    return null;
+  }
+
   private static final String ARK_GRID_GEM_UNCOMPUTABLE =
       "이 코어의 젬 교체를 함께 계산하지 못해(옵션 합·코어 포인트를 다시 더할 수 없음) 계산하지 않았습니다.";
 

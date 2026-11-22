@@ -117,7 +117,8 @@ class RefiningController {
         observedAt = price.observedAt();
     }
     unit.putAll(overrides);
-    var rows = specialStones.values(targets, unit);
+    // 사용자 가격이 있으면 따로 둔 풀이 자리·캐시(공유 OPTIMAL 자리·캐시를 붙잡거나 밀어내지 않게, #1099 리뷰 P2).
+    var rows = specialStones.values(targets, unit, !overrides.isEmpty());
     return ApiResponse.of(
         RefiningSuccessCode.REFINING_SPECIAL_STONE_SUCCESS,
         SpecialStoneValuesResponse.from(

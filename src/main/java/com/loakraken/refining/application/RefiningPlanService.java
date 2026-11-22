@@ -186,16 +186,28 @@ public class RefiningPlanService {
       RefiningRules.EquipmentType equipmentType,
       RefiningPlan.Options options,
       java.util.Map<String, ? extends Number> prices) {
-    if (equipmentType == RefiningRules.EquipmentType.ARM_GUARD)
-      return RefiningPlan.optimal(
-          vambrace, options, prices, (key, compute) -> cache.get(key, () -> bounded(compute)));
-    return RefiningPlan.optimal(
-        rules.track(grade, equipmentType),
+    return optimalWith(
         grade,
+        equipmentType,
         options,
-        growthCosts,
         prices,
         (key, compute) -> cache.get(key, () -> bounded(compute)));
+  }
+
+  /**
+   * 공유 캐시·계산 자리 대신 {@code solver}(캐시와 계산 자리를 함께 맡는다)로 푸는 회차별 최적 계획. 사용자 가격 풀이가 /plans OPTIMAL의 자리를
+   * 붙잡거나 공유 캐시를 밀어내지 않게 따로 둔다(#1099 리뷰 P2, {@link UserPriceSolvePool}).
+   */
+  public RefiningPlan.Optimal optimalWith(
+      RefiningRules.Grade grade,
+      RefiningRules.EquipmentType equipmentType,
+      RefiningPlan.Options options,
+      java.util.Map<String, ? extends Number> prices,
+      OptimalStageCache solver) {
+    if (equipmentType == RefiningRules.EquipmentType.ARM_GUARD)
+      return RefiningPlan.optimal(vambrace, options, prices, solver);
+    return RefiningPlan.optimal(
+        rules.track(grade, equipmentType), grade, options, growthCosts, prices, solver);
   }
 
   /** 캐시에 없는 단계 풀이만 자리를 받는다. 빈 자리가 없으면 기다리지 않고 429 REFINING_SOLVE_BUSY(Retry-After). */

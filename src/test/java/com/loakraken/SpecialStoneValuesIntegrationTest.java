@@ -151,8 +151,43 @@ class SpecialStoneValuesIntegrationTest {
   }
 
   /**
-   * 사용자 가격이 있는 요청은 따로 둔 풀이 자리·캐시를 쓴다(#1099 리뷰 P2): 가격을 바꿔 가며 보내도 /plans OPTIMAL이 쓰는 공유 자리를
-   * 붙잡거나 공유 캐시(시세 기준 단계)를 밀어내지 않는다. 시세만 쓰는 요청은 그대로 공유 쪽.
+   * 최악(#1099 리뷰 P2): 28개 전부 + 무기·방어구 재료 가격을 매번 바꿔(모든 단계가 캐시에 없음) 10번. 걸린 시간 p50·최대를 남기고, 따로 둔 캐시는
+   * 64개를 넘지 않는다.
+   */
+  @Test
+  void 사용자_가격을_바꿔_가며_28개를_보내도_따로_둔_캐시는_64개까지다() throws Exception {
+    capturePrices(true);
+    var times = new ArrayList<Long>();
+    for (int i = 0; i < 10; i++) {
+      var body = new StringBuilder("{\"targets\":[");
+      int n = 0;
+      for (var type : List.of("WEAPON", "ARMOR"))
+        for (int from = 11; from <= 24; from++)
+          body.append(n++ == 0 ? "" : ",").append(target("JEONYUL", type, from));
+      body.append("],\"prices\":[{\"name\":\"운명의 파괴석 결정\",\"unitPriceGold\":")
+          .append(900 + i)
+          .append("},{\"name\":\"운명의 수호석 결정\",\"unitPriceGold\":")
+          .append(150 + i)
+          .append(
+              "},{\"name\":\"재봉술 : 전율 [12-15]\",\"unitPriceGold\":2327},{\"name\":\"재봉술 : 전율 [16-19]\",\"unitPriceGold\":7100},{\"name\":\"야금술 : 전율 [12-15]\",\"unitPriceGold\":2400},{\"name\":\"야금술 : 전율 [16-19]\",\"unitPriceGold\":16995}]}");
+      long started = System.nanoTime();
+      var rows = data(request(body.toString())).path("rows");
+      times.add((System.nanoTime() - started) / 1_000_000);
+      for (var row : rows)
+        assertThat(row.path("status").asString()).as(row.toString()).isEqualTo("OK");
+    }
+    var sorted = times.stream().sorted().toList();
+    System.out.printf(
+        "SPECIALSTONE user-priced 28 x10 cold p50 %d ms max %d ms%n",
+        sorted.get(sorted.size() / 2), sorted.getLast());
+    assertThat(
+            registry.get("loakraken.refining.special_stone.user_price.cache.size").gauge().value())
+        .isLessThanOrEqualTo(64);
+  }
+
+  /**
+   * 사용자 가격이 있는 요청은 따로 둔 풀이 자리·캐시를 쓴다(#1099 리뷰 P2): 가격을 바꿔 가며 보내도 /plans OPTIMAL이 쓰는 공유 자리를 붙잡거나 공유
+   * 캐시(시세 기준 단계)를 밀어내지 않는다. 시세만 쓰는 요청은 그대로 공유 쪽.
    */
   @Test
   void 사용자_가격_풀이는_공유_자리와_공유_캐시를_쓰지_않는다() throws Exception {
@@ -173,15 +208,27 @@ class SpecialStoneValuesIntegrationTest {
         .isEqualTo(sharedSolves);
     var privateSolves = registry.find("loakraken.refining.special_stone.user_price.solve").timer();
     assertThat(privateSolves).as("사용자 가격 풀이 시간").isNotNull();
-    assertThat(privateSolves.count()).isEqualTo(1);
+    // 같은 맥락의 다른 시험도 이 지표를 쌓으니, 이 요청 뒤 값을 기준으로 본다(풀이가 하나 이상 있었다).
+    long afterFirst = privateSolves.count();
+    assertThat(afterFirst).isPositive();
     // 같은 요청은 따로 둔 캐시에서 답한다(다시 풀지 않음, 값 같음).
     var again = data(request(userPriced));
-    assertThat(privateSolves.count()).isEqualTo(1);
+    assertThat(privateSolves.count()).isEqualTo(afterFirst);
     assertThat(again.at("/rows/0/valuePerStoneGold").decimalValue())
         .isEqualByComparingTo(first.at("/rows/0/valuePerStoneGold").decimalValue());
     // 시세만 쓰는 요청은 공유 쪽(사용자 가격 풀이 수는 그대로).
     data(request("{\"targets\":[" + target("JEONYUL", "WEAPON", 19) + "]}"));
-    assertThat(privateSolves.count()).isEqualTo(1);
+    assertThat(privateSolves.count()).isEqualTo(afterFirst);
+    // 값은 같다: 시세와 같은 사용자 가격(파괴석 결정 100개 1,036 → 1개 10.36)이면 따로 둔 쪽도 1,471,202 / 490.4.
+    var same =
+        data(
+            request(
+                "{\"targets\":["
+                    + target("JEONYUL", "WEAPON", 20)
+                    + "],\"prices\":[{\"name\":\"운명의 파괴석 결정\",\"unitPriceGold\":10.36}]}"));
+    assertThat(same.at("/rows/0/expectedNormalCostGold").doubleValue())
+        .isCloseTo(1_471_202, within(1.0));
+    assertThat(same.at("/rows/0/valuePerStoneGold").decimalValue()).isEqualByComparingTo("490.4");
   }
 
   @Test

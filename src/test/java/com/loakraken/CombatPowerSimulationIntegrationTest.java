@@ -1140,6 +1140,8 @@ class CombatPowerSimulationIntegrationTest {
     SiteNames.assertAbsent(response.body());
     var data = mapper.readTree(response.body()).path("data");
     assertThat(data.at("/contributions/0/status").asText()).isEqualTo("OK");
+    // 표시는 1부터: 공식 Gems Index 1 = 두 번째 젬 = "젬 2"(프론트2 11-22).
+    assertThat(data.at("/contributions/0/target").asText()).isEqualTo("혼돈의 해 코어 : 현란한 공격 젬 2");
     assertThat(data.at("/contributions/0/from").asText()).isEqualTo("침식 4P 아군 피해 강화 2 · 낙인력 5");
     assertThat(data.at("/contributions/0/to").asText()).isEqualTo("침식 5P 추가 피해 3 · 공격력 2");
     assertThat(data.path("deltaPercent").decimalValue())
@@ -1216,6 +1218,64 @@ class CombatPowerSimulationIntegrationTest {
                 .body());
     assertThat(mixed.at("/data/contributions/1/status").asText()).isEqualTo("UNSUPPORTED");
     assertThat(mixed.at("/data/contributions/1/basis").asText()).contains("젬 교체를 함께 계산하지");
+  }
+
+  /**
+   * #1079 대체 리뷰 P3: 같은 코어의 교체 하나를 계산하지 못하면 그 코어의 교체는 모두 계산하지 않는다(의지력 판정은 그 코어의 교체 전부를 전제로 했다). 공식
+   * 옵션 합(추가 피해 1)이 젬 0의 추가 피해 3보다 작은 어긋난 상태: 젬 0을 빼면 레벨이 음수라 다시 더할 수 없다. 젬 1 교체만이면 계산된다.
+   */
+  @Test
+  void 같은_코어의_교체_하나를_계산하지_못하면_그_코어의_교체는_모두_계산하지_않는다() throws Exception {
+    when(detailsPort.fetch(anyString()))
+        .thenAnswer(
+            invocation -> {
+              var base = fetchedBracelet(invocation.getArgument(0));
+              var details = base.details();
+              var old = details.loadout();
+              var grid = gemSwapGrid();
+              var effects =
+                  grid.effects().stream()
+                      .map(
+                          effect ->
+                              "추가 피해".equals(effect.name())
+                                  ? new CharacterLoadout.GridEffect("추가 피해", 1, null, null)
+                                  : effect)
+                      .toList();
+              var loadout =
+                  new CharacterLoadout(
+                      old.equipment(),
+                      old.engravings(),
+                      old.gems(),
+                      old.cards(),
+                      old.arkPassive(),
+                      new CharacterLoadout.ArkGrid(grid.slots(), effects),
+                      old.skills());
+              return new FetchedCharacter(
+                  CharacterTestFixture.details(details.profile(), loadout, List.of()), "{}", "[]");
+            });
+    assertThat(get("/api/v1/characters/search?characterName=" + encode("시뮬젬형제")).statusCode())
+        .isEqualTo(200);
+    var gem1 =
+        """
+        {"kind": "ARK_GRID_GEM", "slotIndex": 5, "index": 1, "gemType": "침식", "willEfficiency": 4,
+         "point": 4, "effects": [{"name": "아군 피해 강화", "level": 2}, {"name": "낙인력", "level": 5}]}
+        """;
+    var gem0 =
+        """
+        {"kind": "ARK_GRID_GEM", "slotIndex": 5, "index": 0, "gemType": "침식", "willEfficiency": 5,
+         "point": 4, "effects": [{"name": "낙인력", "level": 1}, {"name": "공격력", "level": 2}]}
+        """;
+    var alone = mapper.readTree(simulate("시뮬젬형제", "[" + gem1 + "]").body());
+    assertThat(alone.at("/data/contributions/0/status").asText()).isEqualTo("OK");
+    var both = mapper.readTree(simulate("시뮬젬형제", "[" + gem1 + "," + gem0 + "]").body());
+    assertThat(both.at("/data/contributions/0/status").asText())
+        .as(both.toString())
+        .isEqualTo("UNSUPPORTED");
+    assertThat(both.at("/data/contributions/1/status").asText()).isEqualTo("UNSUPPORTED");
+    assertThat(both.at("/data/contributions/0/basis").asText())
+        .isEqualTo(both.at("/data/contributions/1/basis").asText())
+        .contains("함께 계산하지 못해");
+    assertThat(both.at("/data/delta").decimalValue()).isEqualByComparingTo("0");
   }
 
   /** 11-15 표본과 같은 아크 그리드(이름 없음): 혼돈의 해 코어 하나와 공식 옵션 합. */

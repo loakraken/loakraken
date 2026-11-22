@@ -1705,7 +1705,8 @@ public class CombatPowerSimulationService {
                 .orElse(null);
     if (old == null)
       throw notFound("아크 그리드 slotIndex " + change.slotIndex() + " 젬 index " + change.index());
-    var target = slot.name() + " 젬 " + change.index();
+    // 화면 표시는 1부터(웹 편집기·순위와 같게, 프론트2 11-22). 요청의 index는 공식 Gems Index(0부터) 그대로.
+    var target = slot.name() + " 젬 " + (change.index() + 1);
     var from = gemText(old);
     var to =
         swap.gemType()
@@ -1740,9 +1741,11 @@ public class CombatPowerSimulationService {
 
   /**
    * 젬 교체를 계산하지 않을 이유(코어 index → 이유). 같은 요청의 그 코어 교체를 모두 반영한 필요 의지력 합(바꾸지 않은 활성 젬 + 새 젬)이 공급 의지력을
-   * 넘으면 ARK_GRID_WILL_SHORT(어느 젬이 꺼질지 공식 문구가 없다), 같은 코어의 ARK_GRID_CORE와 함께 오면 그 조합은 계산하지 않는다.
+   * 넘으면 ARK_GRID_WILL_SHORT(어느 젬이 꺼질지 공식 문구가 없다), 같은 코어의 ARK_GRID_CORE와 함께 오면 그 조합은 계산하지 않는다. 그 코어의
+   * 교체를 모두 함께 계산할 수 없으면(코어 계수 미확인·혼돈의 별 : 무기 등) 그 코어의 교체는 모두 같은 이유로 계산하지 않는다 — 하나만 빠지고 나머지가 계산되면
+   * 의지력 판정의 전제(코어의 교체 전부)가 깨진다(#1079 대체 리뷰 P3).
    */
-  private static Map<Integer, String> arkGemBlocked(java.util.Collection<Planned> merged) {
+  private Map<Integer, String> arkGemBlocked(java.util.Collection<Planned> merged) {
     var swaps = new LinkedHashMap<Integer, List<ArkGridGemEffect>>();
     var cores = new java.util.HashSet<Integer>();
     for (var planned : merged) {
@@ -1766,11 +1769,36 @@ public class CombatPowerSimulationService {
       for (var gem : core.gems())
         if (gem != null && !replaced.contains(gem.index()) && Boolean.TRUE.equals(gem.active()))
           required += gem.detail().requiredWillpower();
-      if (required > core.core().supplyWillpower())
+      if (required > core.core().supplyWillpower()) {
         blocked.put(entry.getKey(), CombatPowerReasons.ARK_GRID_WILL_SHORT.text());
+        continue;
+      }
+      // 그 코어의 교체만 담은 상태로 미리 계산해 본다. 안 되면 코어 계수의 이유(있으면) 또는 일반 이유로 코어 전체를 막는다.
+      var only = new LinkedHashMap<String, ArkGridGemEffect>();
+      for (var swap : entry.getValue()) only.put(swap.key(), swap);
+      var trial =
+          new State(
+              Map.of(),
+              null,
+              Map.of(),
+              Map.of(),
+              Map.of(),
+              null,
+              Map.of(),
+              Map.of(),
+              Map.of(),
+              null,
+              Map.copyOf(only));
+      if (arkGemRatio(trial) == null) {
+        var reason = CombatPowerArkGridModel.core(arkGridCoefficients, core).reason();
+        blocked.put(entry.getKey(), reason != null ? reason : ARK_GRID_GEM_UNCOMPUTABLE);
+      }
     }
     return blocked;
   }
+
+  private static final String ARK_GRID_GEM_UNCOMPUTABLE =
+      "이 코어의 젬 교체를 함께 계산하지 못해(옵션 합·코어 포인트를 다시 더할 수 없음) 계산하지 않았습니다.";
 
   /** 젬 교체에 필요한 공식 값(활성 여부, 포인트, 필요 의지력, 옵션, 코어 공급 의지력, 옵션 합)을 읽지 못했으면 이유. */
   private static String gemUnreadable(

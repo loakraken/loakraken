@@ -42,6 +42,39 @@ class RefiningRulesConfiguration {
     }
   }
 
+  static final String SPECIAL_RESOURCE = "refining/t4-special-refine.json";
+
+  /** 특수 재련 1회 소모량(M42). 출처는 파일 안. 읽을 수 없으면 애플리케이션이 시작하지 않는다. */
+  @Bean
+  com.loakraken.refining.domain.SpecialRefineRules specialRefineRules(JsonMapper mapper)
+      throws IOException {
+    try (var input = new ClassPathResource(SPECIAL_RESOURCE).getInputStream()) {
+      var root = mapper.readTree(input);
+      var source = root.path("source");
+      var tracks =
+          new java.util.ArrayList<com.loakraken.refining.domain.SpecialRefineRules.Track>();
+      for (var node : root.path("tracks")) {
+        var perTry = new java.util.HashMap<Integer, Integer>();
+        node.path("perTryByFromStage")
+            .properties()
+            .forEach(e -> perTry.put(Integer.parseInt(e.getKey()), e.getValue().asInt()));
+        tracks.add(
+            new com.loakraken.refining.domain.SpecialRefineRules.Track(
+                RefiningRules.Grade.valueOf(node.path("grade").asString()),
+                RefiningRules.EquipmentType.valueOf(node.path("equipmentType").asString()),
+                perTry));
+      }
+      return new com.loakraken.refining.domain.SpecialRefineRules(
+          root.path("ruleVersion").asString(),
+          new com.loakraken.refining.domain.SpecialRefineRules.Source(
+              source.path("rule").asString(),
+              source.path("perTry").asString(),
+              source.path("capturedOn").asString(),
+              source.path("singleSource").asBoolean()),
+          tracks);
+    }
+  }
+
   static final String ADVANCED_RESOURCE = "refining/t4-advanced-refining-rules.json";
 
   /** 상급 재련 규칙(계산 검증 명세 2026-11-22). 블록마다 출처가 있다. 읽을 수 없거나 값이 어긋나면 애플리케이션이 시작하지 않는다. */

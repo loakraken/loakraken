@@ -26,9 +26,9 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * 특수 재련 돌파석 1개 가치(M42, 계약 초안 'special-stone-values' 2026-11-22, 프론트 검토 OK). 가치 = 그 단계 일반 재련 기대 비용(회차별
- * 최적) ÷ 평균 필요량(1회 소모량 ÷ 공식 기본 확률). 계산 검증 기준(캡처 시세): 전율 무기 +20 → +21 = 1,471,202 G ÷ 3,000개 = 490.4 G, 일반 재련
- * 1회 57,476 G(숨결 없음) · 68,301 G(숨결 최대 25).
+ * 특수 재련 돌파석 1개 가치(M42, 계약 초안 'special-stone-values' 2026-11-22, 프론트 검토 OK). 가치 = 그 단계 일반 재련 기대
+ * 비용(회차별 최적) ÷ 평균 필요량(1회 소모량 ÷ 공식 기본 확률). 계산 검증 기준(캡처 시세): 전율 무기 +20 → +21 = 1,471,202 G ÷ 3,000개 =
+ * 490.4 G, 일반 재련 1회 57,476 G(숨결 없음) · 68,301 G(숨결 최대 25).
  */
 @Import(TestcontainersConfiguration.class)
 @SpringBootTest(
@@ -64,7 +64,13 @@ class SpecialStoneValuesIntegrationTest {
   }
 
   private static String target(String grade, String type, int from) {
-    return "{\"grade\":\"" + grade + "\",\"equipmentType\":\"" + type + "\",\"fromStage\":" + from + "}";
+    return "{\"grade\":\""
+        + grade
+        + "\",\"equipmentType\":\""
+        + type
+        + "\",\"fromStage\":"
+        + from
+        + "}";
   }
 
   @Test
@@ -95,7 +101,8 @@ class SpecialStoneValuesIntegrationTest {
     assertThat(weapon.path("perTry").asInt()).isEqualTo(45);
     assertThat(weapon.path("baseRateBp").asInt()).isEqualTo(150);
     assertThat(weapon.path("averageNeeded").doubleValue()).isCloseTo(3000, within(1e-9));
-    assertThat(weapon.path("expectedNormalCostGold").doubleValue()).isCloseTo(1_471_202, within(1.0));
+    assertThat(weapon.path("expectedNormalCostGold").doubleValue())
+        .isCloseTo(1_471_202, within(1.0));
     assertThat(weapon.path("valuePerStoneGold").decimalValue()).isEqualByComparingTo("490.4");
     assertThat(weapon.path("expectedNormalAttempts").doubleValue()).isCloseTo(21.57, within(0.01));
     assertThat(weapon.path("stone").isNull()).isTrue();
@@ -116,7 +123,8 @@ class SpecialStoneValuesIntegrationTest {
     }
     assertThat(rows.get(1).path("grade").asString()).isEqualTo("UPHWA");
     assertThat(rows.get(3).path("fromStage").asInt()).isEqualTo(10);
-    OpenApiNulls.assertNullsAllowed(OpenApiNulls.document(port), "SpecialStoneValuesResponse", data);
+    OpenApiNulls.assertNullsAllowed(
+        OpenApiNulls.document(port), "SpecialStoneValuesResponse", data);
     SiteNames.assertAbsent(response.body());
   }
 
@@ -129,7 +137,8 @@ class SpecialStoneValuesIntegrationTest {
     for (var type : List.of("WEAPON", "ARMOR"))
       for (int from = 11; from <= 24; from++)
         body.append(n++ == 0 ? "" : ",").append(target("JEONYUL", type, from));
-    body.append("],\"prices\":[{\"name\":\"재봉술 : 전율 [12-15]\",\"unitPriceGold\":2327},{\"name\":\"재봉술 : 전율 [16-19]\",\"unitPriceGold\":7100},{\"name\":\"야금술 : 전율 [12-15]\",\"unitPriceGold\":2400},{\"name\":\"야금술 : 전율 [16-19]\",\"unitPriceGold\":16995}]}");
+    body.append(
+        "],\"prices\":[{\"name\":\"재봉술 : 전율 [12-15]\",\"unitPriceGold\":2327},{\"name\":\"재봉술 : 전율 [16-19]\",\"unitPriceGold\":7100},{\"name\":\"야금술 : 전율 [12-15]\",\"unitPriceGold\":2400},{\"name\":\"야금술 : 전율 [16-19]\",\"unitPriceGold\":16995}]}");
     long started = System.nanoTime();
     var response = request(body.toString());
     long ms = (System.nanoTime() - started) / 1_000_000;
@@ -152,7 +161,8 @@ class SpecialStoneValuesIntegrationTest {
                     + "],\"prices\":[{\"name\":\"운명의 파괴석 결정\",\"unitPriceGold\":5}]}"));
     assertThat(cheaper.at("/rows/0/expectedNormalCostGold").doubleValue())
         .isLessThan(base.at("/rows/0/expectedNormalCostGold").doubleValue());
-    assertThat(cheaper.at("/rows/0/normalTry/materials").toString()).contains("\"unitPriceGold\":5");
+    assertThat(cheaper.at("/rows/0/normalTry/materials").toString())
+        .contains("\"unitPriceGold\":5");
     var unused =
         request(
             "{\"targets\":["
@@ -193,17 +203,26 @@ class SpecialStoneValuesIntegrationTest {
     capturePrices(true);
     var many = new StringBuilder("{\"targets\":[");
     for (int i = 0; i < 29; i++)
-      many.append(i == 0 ? "" : ",").append(target(i % 2 == 0 ? "JEONYUL" : "UPHWA", "WEAPON", 10 + i / 2));
+      many.append(i == 0 ? "" : ",")
+          .append(target(i % 2 == 0 ? "JEONYUL" : "UPHWA", "WEAPON", 10 + i / 2));
     many.append("]}");
     for (var body :
         List.of(
             "{\"targets\":[]}",
             many.toString(),
-            "{\"targets\":[" + target("JEONYUL", "WEAPON", 20) + "," + target("JEONYUL", "WEAPON", 20) + "]}",
+            "{\"targets\":["
+                + target("JEONYUL", "WEAPON", 20)
+                + ","
+                + target("JEONYUL", "WEAPON", 20)
+                + "]}",
             "{\"targets\":[" + target("JEONYUL", "WEAPON", 25) + "]}",
             "{\"targets\":[" + target("JEONYUL", "WEAPON", 9) + "]}",
-            "{\"targets\":[" + target("JEONYUL", "WEAPON", 20) + "],\"prices\":[{\"name\":\"운명의 파괴석 결정\",\"unitPriceGold\":-1}]}",
-            "{\"targets\":[" + target("JEONYUL", "WEAPON", 20) + "],\"prices\":[{\"name\":\"운명의 파괴석 결정\",\"unitPriceGold\":1.234}]}"))
+            "{\"targets\":["
+                + target("JEONYUL", "WEAPON", 20)
+                + "],\"prices\":[{\"name\":\"운명의 파괴석 결정\",\"unitPriceGold\":-1}]}",
+            "{\"targets\":["
+                + target("JEONYUL", "WEAPON", 20)
+                + "],\"prices\":[{\"name\":\"운명의 파괴석 결정\",\"unitPriceGold\":1.234}]}"))
       assertThat(request(body).statusCode()).as(body).isEqualTo(400);
   }
 
@@ -244,7 +263,8 @@ class SpecialStoneValuesIntegrationTest {
     return HttpClient.newHttpClient()
         .send(
             HttpRequest.newBuilder(
-                    URI.create("http://localhost:" + port + "/api/v1/refining/special-stone-values"))
+                    URI.create(
+                        "http://localhost:" + port + "/api/v1/refining/special-stone-values"))
                 .header("Content-Type", "application/json")
                 .header("Accept", "application/json")
                 .POST(HttpRequest.BodyPublishers.ofString(body))

@@ -1925,6 +1925,141 @@ public class CombatPowerSimulationService {
     return blocked;
   }
 
+  /**
+   * M49 2단계: 한 코어 칸(slotIndex)의 젬 하나(gemIndex)를 type 젬으로 바꿀 때의 G1 값 표. 공식 호출 없음. 바꾼 뒤 전투력 비율 =
+   * gemsRatio(이름 쌍·레벨) × coreRatio(포인트) — G1(ARK_GRID_GEM)과 같은 계산(공식 옵션 합에서 옛 젬 몫을 빼고 새 옵션을 더한 젬 옵션
+   * 배수, 코어 포인트를 바꾼 코어 배수). 새 젬이 켜지는지는 의지력 효율만으로 정해진다(willFits). reason이 있으면 이 칸은 계산할 수 없다.
+   */
+  public record GemSwapEvaluator(
+      int slotIndex,
+      int gemIndex,
+      String type,
+      List<String> options,
+      int minWillEfficiency,
+      double[] coreRatio,
+      Map<String, double[][]> gemsRatio,
+      String reason) {
+    /** 의지력 효율 w(1~5)에서 그 코어의 필요 의지력 합이 공급 안에 드는지. */
+    public boolean willFits(int willEfficiency) {
+      return willEfficiency >= minWillEfficiency;
+    }
+
+    /** 바꾼 뒤 전투력 비율(point 1~5, 두 옵션 이름·레벨 1~5). 계산할 수 없으면 NaN. */
+    public double ratio(int point, String first, int firstLevel, String second, int secondLevel) {
+      var table = gemsRatio.get(pairKey(first, second));
+      if (table == null || reason != null) return Double.NaN;
+      boolean ordered = first.compareTo(second) <= 0;
+      double gems = ordered ? table[firstLevel][secondLevel] : table[secondLevel][firstLevel];
+      return gems * coreRatio[point];
+    }
+
+    static String pairKey(String a, String b) {
+      return a.compareTo(b) <= 0 ? a + "|" + b : b + "|" + a;
+    }
+  }
+
+  /** 젬 교체 순위(M49 2단계)용 G1 값 표. 칸·젬이 없으면 null, 계산할 수 없으면 reason이 있는 표. */
+  public GemSwapEvaluator gemSwapEvaluator(
+      CharacterResult result, int slotIndex, int gemIndex, String type) {
+    var loadout = result.details().loadout();
+    var grid = loadout.arkGrid();
+    if (grid == null || grid.slots() == null) return null;
+    var slot =
+        grid.slots().stream()
+            .filter(item -> item != null && item.index() != null && item.index() == slotIndex)
+            .findFirst()
+            .orElse(null);
+    if (slot == null || slot.gems() == null) return null;
+    var old =
+        slot.gems().stream()
+            .filter(item -> item != null && item.index() != null && item.index() == gemIndex)
+            .findFirst()
+            .orElse(null);
+    if (old == null) return null;
+    var options = GEM_TYPE_OPTIONS.get(type);
+    if (options == null) return null;
+    var unreadable = gemUnreadable(slot, old, grid);
+    if (unreadable != null)
+      return new GemSwapEvaluator(
+          slotIndex, gemIndex, type, options, 6, null, Map.of(), unreadable);
+    boolean active = Boolean.TRUE.equals(old.active());
+    // 의지력: 바꾸지 않은 활성 젬 + 새 젬(종류 기본값 − 효율) ≤ 공급.
+    int others = 0;
+    for (var gem : slot.gems())
+      if (gem != null
+          && !Objects.equals(gem.index(), gemIndex)
+          && Boolean.TRUE.equals(gem.active())) others += gem.detail().requiredWillpower();
+    int room = slot.core().supplyWillpower() - others;
+    int minWill = Math.max(1, GEM_TYPE_BASE_WILL.get(type) - room);
+    // 코어 배수: 공식 코어 포인트 − 옛 젬(활성) + 새 포인트.
+    var before = CombatPowerArkGridModel.core(arkGridCoefficients, slot);
+    if (before.reason() != null)
+      return new GemSwapEvaluator(
+          slotIndex, gemIndex, type, options, 6, null, Map.of(), before.reason());
+    var coreRatio = new double[6];
+    int base = slot.point() - (active ? old.detail().corePoint() : 0);
+    for (int point = 1; point <= 5; point++) {
+      var moved =
+          new CharacterLoadout.GridSlot(
+              slot.index(),
+              slot.icon(),
+              slot.name(),
+              base + point,
+              slot.grade(),
+              slot.gems(),
+              slot.core(),
+              slot.lines());
+      var target = CombatPowerArkGridModel.core(arkGridCoefficients, moved);
+      if (target.reason() != null)
+        return new GemSwapEvaluator(
+            slotIndex, gemIndex, type, options, 6, null, Map.of(), target.reason());
+      coreRatio[point] =
+          CombatPowerArkGridModel.factor(target.pct())
+              .divide(CombatPowerArkGridModel.factor(before.pct()), MATH)
+              .doubleValue();
+    }
+    // 젬 옵션 배수: 공식 옵션 합 − 옛 젬 옵션(활성) + 새 두 옵션.
+    var official = grid.effects();
+    var levels = new LinkedHashMap<String, Integer>();
+    for (var effect : official) levels.merge(effect.name().strip(), effect.level(), Integer::sum);
+    if (active)
+      for (var option : old.detail().options())
+        levels.merge(option.name().strip(), -option.level(), Integer::sum);
+    var now = CombatPowerArkGridModel.gems(arkGridCoefficients, official);
+    if (now.ratio() == null)
+      return new GemSwapEvaluator(
+          slotIndex, gemIndex, type, options, 6, null, Map.of(), ARK_GRID_GEM_UNCOMPUTABLE);
+    var gemsRatio = new LinkedHashMap<String, double[][]>();
+    for (int i = 0; i < options.size(); i++)
+      for (int j = i + 1; j < options.size(); j++) {
+        var a = options.get(i).compareTo(options.get(j)) <= 0 ? options.get(i) : options.get(j);
+        var b = a.equals(options.get(i)) ? options.get(j) : options.get(i);
+        var table = new double[6][6];
+        for (int la = 1; la <= 5; la++)
+          for (int lb = 1; lb <= 5; lb++) {
+            var after = new LinkedHashMap<>(levels);
+            after.merge(a, la, Integer::sum);
+            after.merge(b, lb, Integer::sum);
+            var effects = new ArrayList<CharacterLoadout.GridEffect>();
+            boolean negative = false;
+            for (var entry : after.entrySet()) {
+              if (entry.getValue() < 0) negative = true;
+              if (entry.getValue() > 0)
+                effects.add(
+                    new CharacterLoadout.GridEffect(entry.getKey(), entry.getValue(), null, null));
+            }
+            var next = negative ? null : CombatPowerArkGridModel.gems(arkGridCoefficients, effects);
+            table[la][lb] =
+                next == null || next.ratio() == null
+                    ? Double.NaN
+                    : next.ratio().divide(now.ratio(), MATH).doubleValue();
+          }
+        gemsRatio.put(GemSwapEvaluator.pairKey(a, b), table);
+      }
+    return new GemSwapEvaluator(
+        slotIndex, gemIndex, type, options, minWill, coreRatio, Map.copyOf(gemsRatio), null);
+  }
+
   private static final String ARK_GRID_GEM_UNCOMPUTABLE =
       "이 코어의 젬 교체를 함께 계산하지 못해(옵션 합·코어 포인트를 다시 더할 수 없음) 계산하지 않았습니다.";
 

@@ -24,10 +24,35 @@ public class ArkGridGemPriceService {
   private static final org.slf4j.Logger log =
       org.slf4j.LoggerFactory.getLogger(ArkGridGemPriceService.class);
   private final MarketBoardService boards;
+  private final MarketCache cache;
   private final ArkGridGemCatalog catalog = ArkGridGemCatalog.load();
 
   public ArkGridGemPriceService(MarketBoardService boards) {
+    this(boards, null);
+  }
+
+  @org.springframework.beans.factory.annotation.Autowired
+  public ArkGridGemPriceService(MarketBoardService boards, MarketCache cache) {
     this.boards = boards;
+    this.cache = cache;
+  }
+
+  /**
+   * 캐시에 이미 있는 아크 그리드 탭 스캔에서만 읽는다 — 스캔하지 않고 공식 호출도 없다(M49 2단계 젬 순위: 사용자 요청 경로, PM 총괄 11-22 · #1087
+   * 리뷰 P3). 캐시가 없거나 읽지 못하면 빈 목록(쓰는 쪽은 시세 없음).
+   */
+  public List<Price> cachedPrices() {
+    if (cache == null) return List.of();
+    Optional<MarketBoardScan> scan;
+    try {
+      scan = cache.findBoardScan(MarketTab.ARK_GRID, MarketTab.ARK_GRID.defaultTier());
+    } catch (RuntimeException exception) {
+      return List.of();
+    }
+    if (scan.isEmpty()) return List.of();
+    var result = new ArrayList<Price>();
+    for (var gem : catalog.gems()) priced(gem, scan.get()).ifPresent(result::add);
+    return List.copyOf(result);
   }
 
   /** 젬 하나의 1개 즉시 구매 최저가(묶음이면 1개 값, 올림)와 스캔 관측 시각. */

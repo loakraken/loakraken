@@ -103,6 +103,42 @@ class TitleSnapshotExclusionRaceIntegrationTest {
     assertThat(mapper.readTree(after.body()).at("/data/titles").size()).isZero();
   }
 
+  /** #1064 코드 리뷰 메모: 오늘이 지금 목록으로 있어도 지난 목록 값으로 만든 날짜는 지운다(두 표 모두, 오늘은 그대로). */
+  @Test
+  void 지난_목록_날짜만_지우고_오늘은_남긴다() {
+    character("칭호경합둘", "혼돈의 지배자");
+    snapshots.build();
+    var today = LocalDate.now(TitleSnapshotService.KST);
+    var old = today.minusDays(3);
+    jdbc.sql(
+            "INSERT INTO title_equip_daily_meta"
+                + " (snapshot_date, server_key, population, built_at, exclusion_revision)"
+                + " VALUES (:d, '', 1, now(), 'stale0')")
+        .param("d", old)
+        .update();
+    jdbc.sql(
+            "INSERT INTO title_equip_daily (snapshot_date, server_key, title, equipped_rosters,"
+                + " observed_rosters, new_rosters_30d, observed_characters)"
+                + " VALUES (:d, '', '지난 칭호', 1, 1, 0, 1)")
+        .param("d", old)
+        .update();
+    assertThat(snapshots.staleStored()).isTrue();
+    assertThat(snapshots.builtToday()).isTrue();
+
+    assertThat(snapshots.purgeStale()).isEqualTo(1);
+
+    assertThat(snapshots.staleStored()).isFalse();
+    assertThat(snapshots.builtToday()).isTrue();
+    for (var table : java.util.List.of("title_equip_daily", "title_equip_daily_meta"))
+      assertThat(
+              jdbc.sql("SELECT count(*) FROM " + table + " WHERE snapshot_date = :d")
+                  .param("d", old)
+                  .query(Long.class)
+                  .single())
+          .as(table)
+          .isZero();
+  }
+
   /** 처리정지 목록에 넣거나 뺀다. 만들기 트랜잭션과 따로 바로 커밋한다. */
   private void exclude(boolean on) {
     var template = new TransactionTemplate(transactions);

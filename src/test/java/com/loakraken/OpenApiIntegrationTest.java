@@ -56,6 +56,13 @@ class OpenApiIntegrationTest {
                 .at("/paths/~1api~1v1~1characters~1search/get/responses/429/description")
                 .asText())
         .startsWith("LOST_ARK_RATE_LIMITED");
+    // 젬 교체 순위(M49 2단계)는 스위치가 꺼져 있어도 계약 산출물에 경로·응답·스키마가 있어야 웹이 계약을 맞춘다(프론트2 11-22).
+    var gemRanking = document.at("/paths/~1api~1v1~1characters~1combat-power~1gem-ranking/post");
+    assertThat(gemRanking.isMissingNode()).as("gem-ranking 경로").isFalse();
+    assertThat(gemRanking.at("/responses/404/description").asText())
+        .contains("CHARACTER_NOT_CACHED");
+    assertThat(gemRanking.at("/responses/429/description").asText()).contains("GEM_RANKING_BUSY");
+    assertThat(document.at("/components/schemas/GemRankingResponse").isMissingNode()).isFalse();
     ApiContractFixture.write("openapi.json", response.body());
     // 다른 사이트 이름 금지(#261): OpenAPI 설명·예시는 계약 산출물로 웹에 넘어간다.
     SiteNames.assertAbsent(response.body());

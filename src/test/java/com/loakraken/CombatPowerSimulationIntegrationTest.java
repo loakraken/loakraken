@@ -1100,6 +1100,151 @@ class CombatPowerSimulationIntegrationTest {
     verify(detailsPort, times(1)).fetch(anyString());
   }
 
+  /**
+   * M49 G1(계산 검증 11-22): 아크 그리드 젬 교체. 공식 원본(11-15 표본)과 같은 아크 그리드 상태를 이름 없이 만든다 — 젬 옵션 합 추가 피해 49 ·
+   * 공격력 34 · 보스 피해 4 · 낙인력 39 · 아군 피해 강화 24, 혼돈의 해 코어 : 현란한 공격(고대, Slots Index 5, 17P, 공급 의지력 17, 젬
+   * 필요 의지력 3+4+3+7 = 17). 비교 기준 식 기대값: 젬 1(아군 피해 강화 2 · 낙인력 5, 4P)을 침식 5P 추가 피해 3 · 공격력 2로 바꾸면 옵션
+   * +0.2443% × 코어 17 → 18P +0.1643% = +0.4091%.
+   */
+  @Test
+  void 아크_그리드_젬_교체는_옵션_합과_코어_포인트를_다시_더하고_의지력이_모자라면_계산하지_않는다() throws Exception {
+    when(detailsPort.fetch(anyString()))
+        .thenAnswer(
+            invocation -> {
+              var base = fetchedBracelet(invocation.getArgument(0));
+              var details = base.details();
+              var old = details.loadout();
+              var loadout =
+                  new CharacterLoadout(
+                      old.equipment(),
+                      old.engravings(),
+                      old.gems(),
+                      old.cards(),
+                      old.arkPassive(),
+                      gemSwapGrid(),
+                      old.skills());
+              return new FetchedCharacter(
+                  CharacterTestFixture.details(details.profile(), loadout, List.of()), "{}", "[]");
+            });
+    assertThat(get("/api/v1/characters/search?characterName=" + encode("시뮬젬")).statusCode())
+        .isEqualTo(200);
+    var swap =
+        """
+        {"kind": "ARK_GRID_GEM", "slotIndex": 5, "index": 1, "gemType": "침식", "willEfficiency": %d,
+         "point": %d, "effects": [{"name": "추가 피해", "level": 3}, {"name": "공격력", "level": 2}]}
+        """;
+    // (A) 효율 4(필요 4, 합 17 = 공급 17): 옵션 + 포인트.
+    var response = simulate("시뮬젬", "[" + swap.formatted(4, 5) + "]");
+    assertThat(response.statusCode()).as(response.body()).isEqualTo(200);
+    ApiContractFixture.write("character-combat-power-simulate-ark-grid-gem.json", response.body());
+    SiteNames.assertAbsent(response.body());
+    var data = mapper.readTree(response.body()).path("data");
+    assertThat(data.at("/contributions/0/status").asText()).isEqualTo("OK");
+    assertThat(data.at("/contributions/0/from").asText()).isEqualTo("침식 4P 아군 피해 강화 2 · 낙인력 5");
+    assertThat(data.at("/contributions/0/to").asText()).isEqualTo("침식 5P 추가 피해 3 · 공격력 2");
+    assertThat(data.path("deltaPercent").decimalValue())
+        .isBetween(new BigDecimal("0.408"), new BigDecimal("0.410"));
+    // 옵션만(포인트 4 그대로, 코어 17P): +0.2443%.
+    var options = mapper.readTree(simulate("시뮬젬", "[" + swap.formatted(4, 4) + "]").body());
+    assertThat(options.at("/data/deltaPercent").decimalValue())
+        .isBetween(new BigDecimal("0.243"), new BigDecimal("0.245"));
+    // (B) 효율 3(필요 5, 합 18 > 공급 17): 어느 젬이 꺼질지 몰라 계산하지 않는다.
+    var shortWill = mapper.readTree(simulate("시뮬젬", "[" + swap.formatted(3, 5) + "]").body());
+    assertThat(shortWill.at("/data/contributions/0/status").asText()).isEqualTo("UNSUPPORTED");
+    assertThat(shortWill.at("/data/contributions/0/reasonCode").asText())
+        .isEqualTo("ARK_GRID_WILL_SHORT");
+    assertThat(shortWill.at("/data/contributions/0/delta").isNull()).isTrue();
+    // 잘못된 젬: 혼돈 코어에 질서 젬, 그 종류에 없는 옵션, 같은 옵션 두 줄 → 400. 없는 젬 칸 → 409.
+    assertThat(
+            simulate("시뮬젬", "[" + swap.formatted(4, 5).replace("\"침식\"", "\"견고\"") + "]")
+                .statusCode())
+        .isEqualTo(400);
+    assertThat(
+            simulate("시뮬젬", "[" + swap.formatted(4, 5).replace("\"공격력\"", "\"보스 피해\"") + "]")
+                .statusCode())
+        .isEqualTo(400);
+    assertThat(
+            simulate("시뮬젬", "[" + swap.formatted(4, 5).replace("\"공격력\"", "\"추가 피해\"") + "]")
+                .statusCode())
+        .isEqualTo(400);
+    assertThat(
+            simulate(
+                    "시뮬젬", "[" + swap.formatted(4, 5).replace("\"index\": 1", "\"index\": 9") + "]")
+                .statusCode())
+        .isEqualTo(409);
+  }
+
+  /** 11-15 표본과 같은 아크 그리드(이름 없음): 혼돈의 해 코어 하나와 공식 옵션 합. */
+  private static CharacterLoadout.ArkGrid gemSwapGrid() {
+    var gems =
+        List.of(
+            gridGem(0, 4, 3, 8, 5, "추가 피해", 3, "낙인력", 1),
+            gridGem(1, 4, 4, 8, 4, "아군 피해 강화", 2, "낙인력", 5),
+            gridGem(2, 4, 3, 8, 5, "아군 피해 강화", 3, "낙인력", 2),
+            new CharacterLoadout.GridGem(
+                3,
+                null,
+                true,
+                "전설",
+                new CharacterLoadout.GemDetail(
+                    "혼돈의 젬 : 왜곡",
+                    "혼돈",
+                    5,
+                    7,
+                    9,
+                    2,
+                    null,
+                    List.of(
+                        new CharacterLoadout.GemOption("보스 피해", 4, null, null),
+                        new CharacterLoadout.GemOption("공격력", 3, null, null)))));
+    var core =
+        new CharacterLoadout.GridSlot(
+            5,
+            null,
+            "혼돈의 해 코어 : 현란한 공격",
+            17,
+            "고대",
+            gems,
+            new CharacterLoadout.CoreDetail("혼돈", 17, List.of(), List.of()),
+            null);
+    return new CharacterLoadout.ArkGrid(
+        List.of(core),
+        List.of(
+            new CharacterLoadout.GridEffect("추가 피해", 49, null, null),
+            new CharacterLoadout.GridEffect("낙인력", 39, null, null),
+            new CharacterLoadout.GridEffect("아군 피해 강화", 24, null, null),
+            new CharacterLoadout.GridEffect("공격력", 34, null, null),
+            new CharacterLoadout.GridEffect("보스 피해", 4, null, null)));
+  }
+
+  private static CharacterLoadout.GridGem gridGem(
+      int index,
+      int point,
+      int will,
+      int baseWill,
+      int efficiency,
+      String first,
+      int firstLevel,
+      String second,
+      int secondLevel) {
+    return new CharacterLoadout.GridGem(
+        index,
+        null,
+        true,
+        "전설",
+        new CharacterLoadout.GemDetail(
+            "혼돈의 젬 : 침식",
+            "혼돈",
+            point,
+            will,
+            baseWill,
+            efficiency,
+            null,
+            List.of(
+                new CharacterLoadout.GemOption(first, firstLevel, null, null),
+                new CharacterLoadout.GemOption(second, secondLevel, null, null))));
+  }
+
   private static CharacterLoadout.GridSlot gridSlot(
       int index, String name, int point, String grade) {
     return new CharacterLoadout.GridSlot(index, null, name, point, grade, List.of());

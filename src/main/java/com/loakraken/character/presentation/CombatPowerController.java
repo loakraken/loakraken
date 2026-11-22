@@ -207,12 +207,24 @@ public class CombatPowerController {
       @Schema(description = "팔찌 효과·각인·스톤 각인 이름") @Size(max = 32) String name,
       @Schema(description = "아크 패시브 트리(진화·깨달음·도약)") @Size(max = 8) String tree,
       @Schema(description = "아크 패시브 포인트(0~999, 도약은 0~70)") Integer points,
-      @Schema(description = "아크 그리드 slot index") Integer slotIndex,
-      @Schema(description = "아크 그리드 코어 포인트") Integer point,
+      @Schema(description = "아크 그리드 slot index(ARK_GRID_CORE·ARK_GRID_GEM, 공식 ArkGrid.Slots Index)")
+          Integer slotIndex,
+      @Schema(description = "아크 그리드 코어 포인트(ARK_GRID_CORE 0~20), 새 젬 포인트(ARK_GRID_GEM 1~5)")
+          Integer point,
       @Schema(
               description =
                   "깨달음 카르마 레벨(0~30, ARK_PASSIVE_POINT tree 깨달음만, points·level과 함께 쓰지 않음). 딜러만 계산한다(무기 공격력 레벨당 +0.1%)")
-          Integer karmaLevel) {
+          Integer karmaLevel,
+      @Schema(
+              description =
+                  "새 젬 종류(ARK_GRID_GEM): 질서 코어는 안정·견고·불변, 혼돈 코어는 침식·왜곡·붕괴. 바꿀 젬은 index(공식 Gems Index). 종류별 옵션 4종(effects[].name, 공식 확률 정보·공지 13204): 안정·침식 = 공격력·추가 피해·아군 피해 강화·낙인력, 견고·왜곡 = 공격력·보스 피해·아군 피해 강화·아군 공격 강화, 불변·붕괴 = 추가 피해·보스 피해·낙인력·아군 공격 강화. 필요 의지력 기본값 안정·침식 8, 견고·왜곡 9, 불변·붕괴 10. 바꾼 뒤 그 코어의 의지력이 모자라면 그 줄은 UNSUPPORTED, reasonCode ARK_GRID_WILL_SHORT(basis에 한국어 문장)")
+          @Size(max = 4)
+          String gemType,
+      @Schema(description = "새 젬 의지력 효율(ARK_GRID_GEM 1~5). 필요 의지력 = 종류 기본값(8·9·10) − 효율")
+          Integer willEfficiency,
+      @Schema(description = "새 젬 옵션 두 줄(ARK_GRID_GEM): 그 종류의 옵션 4종 중 서로 다른 둘, 레벨 1~5")
+          @Size(max = 2)
+          List<@Valid GemOptionRequest> effects) {
     CombatPowerSimulationService.Change toChange() {
       return new CombatPowerSimulationService.Change(
           kind,
@@ -229,9 +241,30 @@ public class CombatPowerController {
           points,
           slotIndex,
           point,
-          karmaLevel);
+          karmaLevel,
+          kind == CombatPowerSimulationService.Kind.ARK_GRID_GEM
+              ? new CombatPowerSimulationService.GemSwap(
+                  gemType,
+                  willEfficiency,
+                  effects == null
+                      ? null
+                      : effects.stream()
+                          .map(
+                              effect ->
+                                  effect == null
+                                      ? null
+                                      : new CombatPowerSimulationService.GemOption(
+                                          effect.name(), effect.level()))
+                          .toList())
+              : null);
     }
   }
+
+  @Schema(description = "젬 옵션 한 줄(ARK_GRID_GEM)")
+  public record GemOptionRequest(
+      @Schema(description = "옵션 이름(공격력·추가 피해·보스 피해·아군 피해 강화·아군 공격 강화·낙인력)") @Size(max = 16)
+          String name,
+      @Schema(description = "옵션 레벨 1~5") Integer level) {}
 
   public record CombatPowerSimulationResponse(
       @Schema(description = "계산 규칙 버전(문자열)") String ruleVersion,

@@ -1280,6 +1280,82 @@ class CombatPowerSimulationIntegrationTest {
     assertThat(both.at("/data/delta").decimalValue()).isEqualByComparingTo("0");
   }
 
+  /**
+   * #1083 대체 리뷰 P3: 코어마다 미리 계산해 보는 것으로는 부족하다 — 옵션 합은 그리드 전체에서 더한다. 공식 추가 피해 합 4인 어긋난 상태에서 두
+   * 코어(5·6)가 추가 피해 3인 젬을 하나씩 바꾸면 하나씩은 계산되지만(4 − 3 = 1) 함께면 −2라 다시 더할 수 없다. 그러면 젬 교체를 모두 같은 이유로 계산하지
+   * 않는다(앞 코어만 계산되고 뒤 코어만 빠지지 않게).
+   */
+  @Test
+  void 여러_코어의_젬_교체를_함께_계산하지_못하면_젬_교체는_모두_계산하지_않는다() throws Exception {
+    when(detailsPort.fetch(anyString()))
+        .thenAnswer(
+            invocation -> {
+              var base = fetchedBracelet(invocation.getArgument(0));
+              var details = base.details();
+              var old = details.loadout();
+              var grid = gemSwapGrid();
+              var second =
+                  new CharacterLoadout.GridSlot(
+                      6,
+                      null,
+                      "혼돈의 해 코어 : 현란한 공격",
+                      4,
+                      "고대",
+                      List.of(gridGem(0, 4, 3, 8, 5, "추가 피해", 3, "공격력", 1)),
+                      new CharacterLoadout.CoreDetail("혼돈", 17, List.of(), List.of()),
+                      null);
+              var slots = new java.util.ArrayList<>(grid.slots());
+              slots.add(second);
+              var effects =
+                  grid.effects().stream()
+                      .map(
+                          effect ->
+                              "추가 피해".equals(effect.name())
+                                  ? new CharacterLoadout.GridEffect("추가 피해", 4, null, null)
+                                  : effect)
+                      .toList();
+              var loadout =
+                  new CharacterLoadout(
+                      old.equipment(),
+                      old.engravings(),
+                      old.gems(),
+                      old.cards(),
+                      old.arkPassive(),
+                      new CharacterLoadout.ArkGrid(List.copyOf(slots), effects),
+                      old.skills());
+              return new FetchedCharacter(
+                  CharacterTestFixture.details(details.profile(), loadout, List.of()), "{}", "[]");
+            });
+    assertThat(get("/api/v1/characters/search?characterName=" + encode("시뮬젬두코어")).statusCode())
+        .isEqualTo(200);
+    var core5 =
+        """
+        {"kind": "ARK_GRID_GEM", "slotIndex": 5, "index": 0, "gemType": "침식", "willEfficiency": 5,
+         "point": 4, "effects": [{"name": "낙인력", "level": 1}, {"name": "공격력", "level": 2}]}
+        """;
+    var core6 =
+        """
+        {"kind": "ARK_GRID_GEM", "slotIndex": 6, "index": 0, "gemType": "침식", "willEfficiency": 5,
+         "point": 4, "effects": [{"name": "낙인력", "level": 1}, {"name": "공격력", "level": 2}]}
+        """;
+    // 하나씩은 계산된다.
+    for (var alone : List.of(core5, core6)) {
+      var body = mapper.readTree(simulate("시뮬젬두코어", "[" + alone + "]").body());
+      assertThat(body.at("/data/contributions/0/status").asText())
+          .as(body.toString())
+          .isEqualTo("OK");
+    }
+    var both = mapper.readTree(simulate("시뮬젬두코어", "[" + core5 + "," + core6 + "]").body());
+    assertThat(both.at("/data/contributions/0/status").asText())
+        .as(both.toString())
+        .isEqualTo("UNSUPPORTED");
+    assertThat(both.at("/data/contributions/1/status").asText()).isEqualTo("UNSUPPORTED");
+    assertThat(both.at("/data/contributions/0/basis").asText())
+        .isEqualTo(both.at("/data/contributions/1/basis").asText())
+        .contains("여러 코어의 젬 교체를 함께 계산하지 못해");
+    assertThat(both.at("/data/delta").decimalValue()).isEqualByComparingTo("0");
+  }
+
   /** 11-15 표본과 같은 아크 그리드(이름 없음): 혼돈의 해 코어 하나와 공식 옵션 합. */
   private static CharacterLoadout.ArkGrid gemSwapGrid() {
     var gems =

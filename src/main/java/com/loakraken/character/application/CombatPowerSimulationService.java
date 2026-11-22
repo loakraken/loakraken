@@ -512,7 +512,9 @@ public class CombatPowerSimulationService {
   private static final String ENLIGHTENMENT_OVER_REASON = "깨달음 포인트가 최대(101)를 넘는 값이라 계산하지 않았습니다.";
   private static final String PASSIVE_UNREAD = "아크 패시브 포인트 합을 읽지 못해 계산하지 않았습니다.";
 
-  /** 트리 포인트 합의 전투력 배수. 계산할 수 없으면(깨달음 100 초과·모르는 트리) null. */
+  /**
+   * 트리 포인트 합의 전투력 배수. 계산할 수 없으면(깨달음 최대 101 초과·모르는 트리) null. 깨달음 101번째 포인트는 계산하되 전투력이 없다(100까지만 센다).
+   */
   private BigDecimal passiveFactor(String tree, int points) {
     if (LEAP.equals(tree))
       return BigDecimal.ONE.add(
@@ -1871,7 +1873,8 @@ public class CombatPowerSimulationService {
    * 젬 교체를 계산하지 않을 이유(코어 index → 이유). 같은 요청의 그 코어 교체를 모두 반영한 필요 의지력 합(바꾸지 않은 활성 젬 + 새 젬)이 공급 의지력을
    * 넘으면 ARK_GRID_WILL_SHORT(어느 젬이 꺼질지 공식 문구가 없다), 같은 코어의 ARK_GRID_CORE와 함께 오면 그 조합은 계산하지 않는다. 그 코어의
    * 교체를 모두 함께 계산할 수 없으면(코어 계수 미확인·혼돈의 별 : 무기 등) 그 코어의 교체는 모두 같은 이유로 계산하지 않는다 — 하나만 빠지고 나머지가 계산되면
-   * 의지력 판정의 전제(코어의 교체 전부)가 깨진다(#1079 대체 리뷰 P3).
+   * 의지력 판정의 전제(코어의 교체 전부)가 깨진다(#1079 대체 리뷰 P3). 코어마다 되어도 여러 코어의 교체를 함께 계산할 수 없으면(옵션 합은 그리드 전체) 남은 젬
+   * 교체를 모두 같은 이유로 계산하지 않는다(#1083 대체 리뷰 P3).
    */
   private Map<Integer, String> arkGemBlocked(java.util.Collection<Planned> merged) {
     var swaps = new LinkedHashMap<Integer, List<ArkGridGemEffect>>();
@@ -1922,8 +1925,37 @@ public class CombatPowerSimulationService {
         blocked.put(entry.getKey(), reason != null ? reason : ARK_GRID_GEM_UNCOMPUTABLE);
       }
     }
+    // 옵션 합은 그리드 전체에서 더하므로, 코어마다 되어도 함께는 안 될 수 있다. 막히지 않은 교체를 모두 담아 한 번 더 계산해 보고, 안 되면 모두
+    // 막는다(앞 코어만 계산되고 뒤 코어만 빠지지 않게, #1083 대체 리뷰 P3).
+    var remaining = new LinkedHashMap<String, ArkGridGemEffect>();
+    for (var entry : swaps.entrySet())
+      if (!blocked.containsKey(entry.getKey()))
+        for (var swap : entry.getValue()) remaining.put(swap.key(), swap);
+    long remainingCores =
+        swaps.keySet().stream().filter(index -> !blocked.containsKey(index)).count();
+    if (remainingCores > 1) {
+      var together =
+          new State(
+              Map.of(),
+              null,
+              Map.of(),
+              Map.of(),
+              Map.of(),
+              null,
+              Map.of(),
+              Map.of(),
+              Map.of(),
+              null,
+              Map.copyOf(remaining));
+      if (arkGemRatio(together) == null)
+        for (var index : swaps.keySet())
+          if (!blocked.containsKey(index)) blocked.put(index, ARK_GRID_GEM_CROSS_CORE_UNCOMPUTABLE);
+    }
     return blocked;
   }
+
+  private static final String ARK_GRID_GEM_CROSS_CORE_UNCOMPUTABLE =
+      "여러 코어의 젬 교체를 함께 계산하지 못해(옵션 합을 다시 더할 수 없음) 계산하지 않았습니다.";
 
   /**
    * M49 2단계: 한 코어 칸(slotIndex)의 젬 하나(gemIndex)를 type 젬으로 바꿀 때의 G1 값 표. 공식 호출 없음. 바꾼 뒤 전투력 비율 =

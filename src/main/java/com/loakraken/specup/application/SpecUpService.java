@@ -55,6 +55,7 @@ public class SpecUpService {
   private final CombatPowerPolishValues polishValues;
   private final com.loakraken.refining.domain.OptimalStageCache optimalCache;
   private final com.loakraken.refining.domain.VambraceRules vambrace;
+  private final com.loakraken.refining.domain.AdvancedRefineRules advancedRules;
   private final boolean polishPriceFill;
   private final boolean enabled;
 
@@ -78,6 +79,7 @@ public class SpecUpService {
       CombatPowerPolishValues polishValues,
       com.loakraken.refining.domain.OptimalStageCache optimalCache,
       com.loakraken.refining.domain.VambraceRules vambrace,
+      com.loakraken.refining.domain.AdvancedRefineRules advancedRules,
       @Value("${spec-up.enabled:false}") boolean enabled,
       // 연마 시세 칸을 요청에서 채우는가(PM 총괄 10-25: 기본 꺼짐 — 꺼져 있으면 캐시된 칸만 쓰고 없으면 비용 미확정).
       @Value("${spec-up.polish-price-fill.enabled:false}") boolean polishPriceFill,
@@ -93,6 +95,7 @@ public class SpecUpService {
     this.polishValues = polishValues;
     this.optimalCache = optimalCache;
     this.vambrace = vambrace;
+    this.advancedRules = advancedRules;
     this.polishPriceFill = polishPriceFill;
     this.enabled = enabled;
     this.environment = environment;
@@ -1212,7 +1215,7 @@ public class SpecUpService {
 
   /**
    * 재련 +1·상급 재련 +1: 무기·방어구마다. Δ전투력은 시뮬레이터(재련 모델)가 정한다. 일반 재련 비용은 재련 계획의 기대 소모 × 재료 시세 캐시(L30 후속),
-   * 상급 재련은 계획 범위 밖이라 UNKNOWN이다.
+   * 상급 재련은 상급 재련 기대 비용 모델(계산 검증 명세 2026-11-22) × 같은 시세 캐시다.
    */
   private void refines(
       CharacterLoadout loadout,
@@ -1268,7 +1271,7 @@ public class SpecUpService {
                 item.grade(),
                 null,
                 change(Kind.EQUIPMENT_ADVANCED_REFINE, null, index, advanced + 1, null, null),
-                SpecUpCost.REFINE_COST_UNCONFIRMED));
+                advancedRefineCost(item, advanced, advanced + 1, prices, pricesAt)));
     }
   }
 
@@ -1471,6 +1474,34 @@ public class SpecUpService {
         && (pricesAt[0] == null || breakdown.prices().observedAt().isBefore(pricesAt[0])))
       pricesAt[0] = breakdown.prices().observedAt();
     return breakdown.cost();
+  }
+
+  /**
+   * 상급 재련 from → to 기대 비용(계산 검증 명세 2026-11-22). 업화 무기·방어구만(전율은 후보 없음, 계열을 모르면 미확정). 재료 시세 캐시가 없거나
+   * 기본 재료 시세가 없으면 PRICE_PENDING. 숨결·책 시세가 없으면 그 재료를 쓰는 조합을 빼고 고른다.
+   */
+  public SpecUpCost advancedRefineCost(
+      CharacterLoadout.Equipment item,
+      int from,
+      int to,
+      java.util.Optional<RefiningMaterialPriceService.Prices> prices,
+      Instant[] pricesAt) {
+    if (refineGrade(item.name()) != RefiningRules.Grade.UPHWA)
+      return SpecUpCost.REFINE_COST_UNCONFIRMED;
+    if (prices.isEmpty()) return SpecUpCost.REFINE_PRICE_PENDING;
+    var unit = prices.get();
+    var result =
+        com.loakraken.refining.domain.AdvancedRefineCost.expected(
+            advancedRules,
+            "무기".equals(item.type()) ? "WEAPON" : "ARMOR",
+            from,
+            to,
+            name -> unit.unit(name).orElse(null));
+    if (result == null) return SpecUpCost.REFINE_PRICE_PENDING;
+    if (pricesAt[0] == null || unit.observedAt().isBefore(pricesAt[0]))
+      pricesAt[0] = unit.observedAt();
+    return SpecUpCost.advancedRefineExpected(
+        result.expectedGold().setScale(0, java.math.RoundingMode.CEILING).longValueExact());
   }
 
   /**

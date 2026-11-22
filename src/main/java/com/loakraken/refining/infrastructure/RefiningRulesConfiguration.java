@@ -41,4 +41,15 @@ class RefiningRulesConfiguration {
       return mapper.readValue(input, GrowthCosts.class);
     }
   }
+
+  static final String ADVANCED_RESOURCE = "refining/t4-advanced-refining-rules.json";
+
+  /** 상급 재련 규칙(계산 검증 명세 2026-11-22). 블록마다 출처가 있다. 읽을 수 없거나 값이 어긋나면 애플리케이션이 시작하지 않는다. */
+  @Bean
+  com.loakraken.refining.domain.AdvancedRefineRules advancedRefineRules(JsonMapper mapper)
+      throws IOException {
+    try (var input = new ClassPathResource(ADVANCED_RESOURCE).getInputStream()) {
+      return AdvancedRefineRulesReader.read(mapper.readTree(input));
+    }
+  }
 }

@@ -17,9 +17,9 @@ import org.springframework.web.filter.OncePerRequestFilter;
  *
  * <ul>
  *   <li>검색봇 표시({@value #BOT_HEADER}: 1)는 웹이 User-Agent로 판단해 붙인다. 주소가 {@link CrawlerVerifier}로 공식
- *       크롤러로 확인될 때만 봇 요청이고, 확인되지 않으면 사람 클라이언트로 센다. 봇 요청은 봇 주소별 BOT 버킷(한도 ≤ GENERAL)을 쓰고, 통계 경로는 그
- *       주소의 STATS도 센다. 공식 호출은 주소별 OFFICIAL과 모든 봇이 함께 쓰는 BOT_OFFICIAL 상한을 함께 센다. 웹은 밖에서 들어온 같은 헤더를
- *       지워야 한다.
+ *       크롤러로 확인될 때만 봇 요청이고, 확인되지 않으면 사람 클라이언트로 센다(공식 호출만은 주소별 봇 칸과 확인되지 않은 봇 표시 합계 상한도 함께 센다). 봇
+ *       요청은 봇 주소별 BOT 버킷(한도 ≤ GENERAL)을 쓰고, 통계 경로는 그 주소의 STATS도 센다. 공식 호출은 주소별 OFFICIAL과 모든 봇이 함께
+ *       쓰는 BOT_OFFICIAL 상한을 함께 센다. 웹은 밖에서 들어온 같은 헤더를 지워야 한다.
  *   <li>그 밖에는 클라이언트별 GENERAL을 세고, 통계·랭킹 경로는 STATS도 센다.
  *   <li>요청을 처리하는 동안 클라이언트 키를 스레드에 두어, 공유 게이트가 공식 호출을 OFFICIAL로 매기게 한다.
  * </ul>
@@ -57,7 +57,8 @@ class ClientLimitFilter extends OncePerRequestFilter {
   private void limit(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
       throws ServletException, IOException {
     // 봇 표시는 User-Agent로 붙어 흉내 낼 수 있다(#458 P2 ①). 주소가 공식 크롤러로 확인될 때만 봇 칸을 쓰고, 아니면 아래 사람 칸으로 센다.
-    if ("1".equals(request.getHeader(BOT_HEADER)) && crawlers.verified(request.getRemoteAddr())) {
+    boolean marked = "1".equals(request.getHeader(BOT_HEADER));
+    if (marked && crawlers.verified(request.getRemoteAddr())) {
       // 확인된 크롤러도 봇 칸은 일반 칸보다 느슨하면 안 된다(PM-백엔드 #151 P1): 주소별 BOT 한도(≤ GENERAL)에 통계 경로는 그 주소의
       // STATS도 센다. 주소별로 세므로 한 주소가 다른 봇 주소를 막지 못한다.
       var botAddress = request.getRemoteAddr();
@@ -73,7 +74,7 @@ class ClientLimitFilter extends OncePerRequestFilter {
         return;
       }
       // 봇의 공식 호출은 그 주소의 OFFICIAL과 모든 봇 합계 BOT_OFFICIAL 상한을 함께 센다(#145).
-      run(botClient, request, response, chain);
+      run(botClient, false, request, response, chain);
       return;
     }
     // 제외는 연결 상대(소켓)가 루프백이고 X-Forwarded-For가 아예 없을 때만(같은 호스트의 점검·도구). 신뢰 프록시가 넘긴 주소는 사설·루프백이어도 그
@@ -95,13 +96,18 @@ class ClientLimitFilter extends OncePerRequestFilter {
       reject(response, decision);
       return;
     }
-    run(client, request, response, chain);
+    // 확인되지 않은 봇 표시 요청: 요청 칸은 사람 칸 그대로, 공식 호출은 주소별 봇 칸과 그런 요청 합계 상한도 함께 센다(주소를 늘려 공유 게이트를 다 쓰지 못하게).
+    run(client, marked, request, response, chain);
   }
 
   private void run(
-      String client, HttpServletRequest request, HttpServletResponse response, FilterChain chain)
+      String client,
+      boolean unverifiedMarked,
+      HttpServletRequest request,
+      HttpServletResponse response,
+      FilterChain chain)
       throws ServletException, IOException {
-    limiter.enter(client);
+    limiter.enter(client, unverifiedMarked);
     try {
       chain.doFilter(request, response);
     } finally {

@@ -68,7 +68,8 @@ public class GemRankingController {
         content = @Content(schema = @Schema(ref = "#/components/schemas/ErrorResponse"))),
     @io.swagger.v3.oas.annotations.responses.ApiResponse(
         responseCode = "404",
-        description = "CHARACTER_NOT_CACHED: 캐릭터를 먼저 검색해야 함",
+        description =
+            "CHARACTER_NOT_CACHED: 캐릭터를 먼저 검색해야 함. 스위치(combat-power-sim.gem-ranking.enabled)가 꺼져 있으면 이 경로가 없어 404",
         content = @Content(schema = @Schema(ref = "#/components/schemas/ErrorResponse"))),
     @io.swagger.v3.oas.annotations.responses.ApiResponse(
         responseCode = "429",

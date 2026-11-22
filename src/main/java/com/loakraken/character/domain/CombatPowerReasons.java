@@ -29,7 +29,7 @@ public final class CombatPowerReasons {
   public static final Reason GEM_BASE_ATTACK_MISMATCH =
       new Reason("GEM_BASE_ATTACK_MISMATCH", "보석의 기본 공격력 표기가 계수표와 달라 계산하지 않았습니다.");
   public static final Reason BASE_ATTACK_SOURCE_UNKNOWN =
-      new Reason("BASE_ATTACK_SOURCE_UNKNOWN", "확인하지 않은 기본 공격력 % 출처가 있어 보석 변화는 계산하지 않았습니다.");
+      new Reason("BASE_ATTACK_SOURCE_UNKNOWN", "확인하지 않은 기본 공격력 % 효과가 있어 보석 변화는 계산하지 않았습니다.");
   public static final Reason STONE_BONUS_UNCONFIRMED =
       new Reason("STONE_BONUS_UNCONFIRMED", "스톤 레벨 보너스가 아직 확인하지 않은 구간으로 바뀌어 계산하지 않았습니다.");
   public static final Reason WEAPON_ADD_DAMAGE_UNREADABLE =
@@ -70,7 +70,7 @@ public final class CombatPowerReasons {
     if (simulatorReason.contains("티어 보석 계수")) return GEM_TIER_UNCONFIRMED;
     if (simulatorReason.contains("보석의 기본 공격력 수치")) return GEM_LEVEL_UNCONFIRMED;
     if (simulatorReason.contains("기본 공격력 표기")) return GEM_BASE_ATTACK_MISMATCH;
-    if (simulatorReason.contains("기본 공격력 % 출처")) return BASE_ATTACK_SOURCE_UNKNOWN;
+    if (simulatorReason.contains("기본 공격력 % 효과")) return BASE_ATTACK_SOURCE_UNKNOWN;
     if (simulatorReason.contains("레벨 보너스")) return STONE_BONUS_UNCONFIRMED;
     if (simulatorReason.contains("무기 추가 피해(공식 툴팁)를 읽지")) return WEAPON_ADD_DAMAGE_UNREADABLE;
     if (simulatorReason.contains("무기 추가 피해 수치")) return QUALITY_VALUE_UNCONFIRMED;

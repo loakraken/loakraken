@@ -172,6 +172,40 @@ class GemRankingIntegrationTest {
     assertThat(evaluator.willFits(3)).isFalse();
   }
 
+  @Autowired io.micrometer.core.instrument.MeterRegistry meters;
+
+  private double cache(String outcome) {
+    var counter = meters.find("loakraken.gem_ranking.cache").tag("outcome", outcome).counter();
+    return counter == null ? 0 : counter.count();
+  }
+
+  /**
+   * 켜기 전 조건(#1095 코드 리뷰 P2: 캐릭터 하나 216~327ms): 같은 캐릭터 캐시·등급·정책·초기화·가격·시세 관측 시각이면 다시 풀지 않는다. limit만 다르면 같은
+   * 결과에서 자른다. 응답은 같다.
+   */
+  @Test
+  void 같은_요청은_결과_캐시를_쓰고_limit만_달라도_같은_결과에서_자른다() throws Exception {
+    search("l01", "블레이드", "4052.77");
+    var body =
+        "{\"characterName\":\"" + DEALER + "\",\"grade\":\"HERO\",\"prices\":{\"pheonGold\":72.5},";
+    double hits = cache("hit");
+    double misses = cache("miss");
+    var first = rank(body + "\"limit\":200}");
+    long started = System.nanoTime();
+    var second = rank(body + "\"limit\":200}");
+    long ms = (System.nanoTime() - started) / 1_000_000;
+    System.out.printf("GEMRANK cached request %d ms%n", ms);
+    assertThat(second.body()).isEqualTo(first.body());
+    var top = data(rank(body + "\"limit\":3}"));
+    assertThat(cache("miss") - misses).isEqualTo(1);
+    assertThat(cache("hit") - hits).isEqualTo(2);
+    assertThat(top.path("rows").size()).isEqualTo(Math.min(3, data(first).path("rows").size()));
+    assertThat(top.path("totalRows").asInt()).isEqualTo(data(first).path("totalRows").asInt());
+    // 가격이 바뀌면(페온) 다시 푼다.
+    rank("{\"characterName\":\"" + DEALER + "\",\"grade\":\"HERO\",\"prices\":{\"pheonGold\":80}}");
+    assertThat(cache("miss") - misses).isEqualTo(2);
+  }
+
   @Test
   void 서포터는_UNSUPPORTED와_빈_줄이다() throws Exception {
     search("l04", "도화가", "3000.00");

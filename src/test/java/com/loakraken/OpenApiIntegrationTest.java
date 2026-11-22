@@ -22,6 +22,7 @@ import tools.jackson.databind.json.JsonMapper;
       "gem.enabled=true",
       "crit-speed.enabled=true",
       "combat-power-sim.enabled=true",
+      "combat-power-sim.gem-ranking.enabled=true",
       "ranking.collectibles.enabled=true",
       "ranking.rosters.enabled=true",
       "ranking.guilds.enabled=true",

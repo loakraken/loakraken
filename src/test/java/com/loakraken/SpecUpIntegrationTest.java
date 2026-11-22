@@ -245,6 +245,11 @@ class SpecUpIntegrationTest {
         mapper
             .readTree(get("/api/v1/characters/spec-up/path?characterName=" + encode("스펙각인")).body())
             .path("data");
+    // 연마·카르마 경로 스위치가 꺼져 있으면(운영 기본) 답은 둘을 보지 않았다고 알린다(false, 빠지지 않음).
+    for (var field : List.of("polishStepsConsidered", "karmaStepsConsidered")) {
+      assertThat(path.path(field).isBoolean()).as(field).isTrue();
+      assertThat(path.path(field).asBoolean()).as(field).isFalse();
+    }
     var engravingSteps = new java.util.ArrayList<JsonNode>();
     for (var group : List.of(path.path("steps"), path.path("unpriced")))
       for (var step : group)
@@ -758,6 +763,10 @@ class SpecUpIntegrationTest {
                 + "&targetCombatPower=3048");
     assertThat(response.statusCode()).as(response.body()).isEqualTo(200);
     var data = mapper.readTree(response.body()).path("data");
+    for (var field : List.of("polishStepsConsidered", "karmaStepsConsidered")) {
+      assertThat(data.path(field).isBoolean()).as(field).isTrue();
+      assertThat(data.path(field).asBoolean()).as(field).isFalse();
+    }
     var steps = data.path("steps");
     assertThat(steps.size()).isEqualTo(2);
     assertThat(steps.get(0).path("candidateId").asText()).isEqualTo("GEM_LEVEL:0:9");
@@ -880,7 +889,7 @@ class SpecUpIntegrationTest {
     ApiContractFixture.write("character-spec-up-path.json", response.body());
     SiteNames.assertAbsent(response.body());
     var data = mapper.readTree(response.body()).path("data");
-    assertThat(data.path("ruleVersion").asText()).isEqualTo("spec-up-path-v6");
+    assertThat(data.path("ruleVersion").asText()).isEqualTo("spec-up-path-v7");
     assertThat(data.path("sort").asText()).isEqualTo("EFFICIENCY");
     assertThat(data.path("limit").asInt()).isEqualTo(30);
     var steps = data.path("steps");

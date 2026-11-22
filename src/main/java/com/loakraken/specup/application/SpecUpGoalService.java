@@ -173,11 +173,15 @@ public class SpecUpGoalService {
     }
   }
 
-  /** 계산 자리를 받는다. 받으면 null, 못 받으면 이유. holder가 null이면(클라이언트 키 없음) 전체 자리만 센다. */
+  /**
+   * 계산 자리를 받는다. 받으면 null, 못 받으면 이유. holder가 null이면(클라이언트 키 없음) 전체 자리만 센다. 자리는 주소 키로 센다: 검색봇
+   * 표시('bot:' 접두)는 User-Agent만 바꿔 붙일 수 있어 같은 주소의 두 번째 자리가 되지 않게 뗀다.
+   */
   private SeatRefusal takeSeat(String holder) {
-    if (holder != null && !seatHolders.add(holder)) return SeatRefusal.CLIENT_BUSY;
+    var seat = com.loakraken.common.lostark.ClientLimiter.addressKey(holder);
+    if (seat != null && !seatHolders.add(seat)) return SeatRefusal.CLIENT_BUSY;
     if (solves.tryAcquire()) return null;
-    if (holder != null) seatHolders.remove(holder);
+    if (seat != null) seatHolders.remove(seat);
     return SeatRefusal.FULL;
   }
 
@@ -185,7 +189,8 @@ public class SpecUpGoalService {
   // 본다.
   private void releaseSeat(String holder) {
     solves.release();
-    if (holder != null) seatHolders.remove(holder);
+    var seat = com.loakraken.common.lostark.ClientLimiter.addressKey(holder);
+    if (seat != null) seatHolders.remove(seat);
   }
 
   /** 목표 경로 운영 지표 loakraken.spec_up.goal{outcome=cache_hit|computed|busy|client_busy}. */
@@ -194,7 +199,7 @@ public class SpecUpGoalService {
   }
 
   // v2: 완갑(팔 보호구) 재련 단계를 고른다. v3: 어빌리티 스톤 목표 조합(각인 둘을 한 단계에), 단계 changes.
-  public static final String PATH_RULE_VERSION = "spec-up-path-v6";
+  public static final String PATH_RULE_VERSION = "spec-up-path-v7";
   static final int PATH_MAX_STEPS = 30;
   static final int SOLVE_MAX_CONCURRENT = 2;
   static final Duration PATH_RETRY_AFTER = Duration.ofSeconds(2);
@@ -244,7 +249,48 @@ public class SpecUpGoalService {
       BigDecimal finalKrakenScore,
       String krakenSortUnavailableReason,
       Boolean supportOrderAvailable,
-      String krakenScoreRole) {
+      String krakenScoreRole,
+      Integer combatPowerStopOrder,
+      String combatPowerStopReasonCode,
+      Boolean polishStepsConsidered,
+      Boolean karmaStepsConsidered) {
+    /**
+     * 딜러 KRAKEN 경로에서 전투력을 비우기 시작한 단계(order)와 그 이유 코드(PM 총괄 11-21 (e)): 방어구 재련·상급 재련·완갑 단계는 점수로 고르지만
+     * 시뮬레이터가 전투력을 내지 않으므로, 그 단계부터 단계와 경로 끝 전투력을 비운다.
+     */
+    public static final String ARMOR_REFINE_CP_UNCONFIRMED = "ARMOR_REFINE_CP_UNCONFIRMED";
+
+    /** 전투력을 비우기 시작한 단계(없으면 그대로). */
+    Path withCombatPowerStop(Integer order, String reason) {
+      if (order == null) return this;
+      return new Path(
+          characterName,
+          serverName,
+          className,
+          combatPower,
+          finalCombatPower,
+          pick,
+          limit,
+          stopReasonCode,
+          stopReason,
+          totalCost,
+          ruleVersion,
+          simulatorRuleVersion,
+          fetchedAt,
+          pricesAt,
+          steps,
+          unpriced,
+          krakenScore,
+          finalKrakenScore,
+          krakenSortUnavailableReason,
+          supportOrderAvailable,
+          krakenScoreRole,
+          order,
+          reason == null ? ARMOR_REFINE_CP_UNCONFIRMED : reason,
+          polishStepsConsidered,
+          karmaStepsConsidered);
+    }
+
     /** supportOrderAvailable 없이(경로를 만드는 곳에서 따로 채운다). */
     Path(
         String characterName,
@@ -287,6 +333,10 @@ public class SpecUpGoalService {
           finalKrakenScore,
           krakenSortUnavailableReason,
           null,
+          null,
+          null,
+          null,
+          null,
           null);
     }
 
@@ -305,6 +355,39 @@ public class SpecUpGoalService {
       int count = 0;
       for (var step : steps) if (step.extraCost() == null) count++;
       return count;
+    }
+
+    /**
+     * 이 답이 연마·카르마 단계를 후보로 봤는지(프론트 11-21). 스위치·역할·실제 기준(sort)으로 정해지고, 캐시와 따로 돌려줄 때마다 채운다(스위치를 바꿔도
+     * 캐시가 옛 값을 주지 않게).
+     */
+    Path withConsidered(boolean polish, boolean karma) {
+      return new Path(
+          characterName,
+          serverName,
+          className,
+          combatPower,
+          finalCombatPower,
+          pick,
+          limit,
+          stopReasonCode,
+          stopReason,
+          totalCost,
+          ruleVersion,
+          simulatorRuleVersion,
+          fetchedAt,
+          pricesAt,
+          steps,
+          unpriced,
+          krakenScore,
+          finalKrakenScore,
+          krakenSortUnavailableReason,
+          supportOrderAvailable,
+          krakenScoreRole,
+          combatPowerStopOrder,
+          combatPowerStopReasonCode,
+          polish,
+          karma);
     }
 
     Path withSupportOrderAvailable(boolean available, String role) {
@@ -329,7 +412,11 @@ public class SpecUpGoalService {
           finalKrakenScore,
           krakenSortUnavailableReason,
           available,
-          role);
+          role,
+          combatPowerStopOrder,
+          combatPowerStopReasonCode,
+          polishStepsConsidered,
+          karmaStepsConsidered);
     }
 
     /** KRAKEN이 아닌 경로(점수 필드 없음). */
@@ -418,16 +505,23 @@ public class SpecUpGoalService {
                 String.valueOf(refinePrices.map(p -> p.observedAt().toEpochMilli()).orElse(0L)),
                 String.valueOf(books.observedAt().map(Instant::toEpochMilli).orElse(0L)),
                 PATH_RULE_VERSION,
-                CombatPowerSimulationService.RULE_VERSION,
+                simulator.ruleVersion(),
                 String.valueOf(specUp.costRuleVersions()),
                 specUp.armGuardEnabled() ? "ag" : "-")
             + polishSignature(polish)
+            + karmaSignature()
+            + (simulator.armorGateEnabled() ? ":acg" : "")
             + (pick == Pick.KRAKEN ? ":k" + SpecUpKrakenScore.RULE_VERSION : "")
             + (krakenUnavailable == null ? "" : ":ku" + krakenUnavailable);
+    boolean polishConsidered = specUp.polishPathApplies(snapshot);
+    boolean karmaConsidered = specUp.karmaPathApplies(snapshot, pick == Pick.KRAKEN);
     var cached = store.findPath(key);
     if (cached.isPresent()) {
       pathOutcome("cache_hit");
-      return cached.get().withSupportOrderAvailable(supportOrderAvailable, krakenScoreRole);
+      return cached
+          .get()
+          .withSupportOrderAvailable(supportOrderAvailable, krakenScoreRole)
+          .withConsidered(polishConsidered, karmaConsidered);
     }
     var computed =
         single(
@@ -480,7 +574,8 @@ public class SpecUpGoalService {
                     releaseSeat(holder);
                   }
                 })
-            .withSupportOrderAvailable(supportOrderAvailable, krakenScoreRole);
+            .withSupportOrderAvailable(supportOrderAvailable, krakenScoreRole)
+            .withConsidered(polishConsidered, karmaConsidered);
     return computed;
   }
 
@@ -529,7 +624,7 @@ public class SpecUpGoalService {
           reason.text(),
           null,
           PATH_RULE_VERSION,
-          CombatPowerSimulationService.RULE_VERSION,
+          simulator.ruleVersion(),
           snapshot.fetchedAt(),
           null,
           List.of(),
@@ -563,28 +658,31 @@ public class SpecUpGoalService {
             ? List.<Excluded>of()
             : unpricedAtStart(snapshot, before, armGuard, gems, refinePrices, polish);
     return new Path(
-        profile.characterName(),
-        profile.serverName(),
-        profile.className(),
-        before,
-        scoreOnly ? null : chain.last(),
-        pick.name(),
-        limit,
-        chain.stop(),
-        // KRAKEN은 점수가 오르는 단계를 고르므로 그 문장(코드 리뷰 #967 P3).
-        pick == Pick.KRAKEN && PATH_STOP_TEXT.containsKey(chain.stop() + ":KRAKEN")
-            ? PATH_STOP_TEXT.get(chain.stop() + ":KRAKEN")
-            : PATH_STOP_TEXT.get(chain.stop()),
-        chain.cumulative(),
-        PATH_RULE_VERSION,
-        CombatPowerSimulationService.RULE_VERSION,
-        snapshot.fetchedAt(),
-        chain.pricesAt(),
-        chain.steps(),
-        unpriced,
-        krakenBefore,
-        chain.krakenLast() == null ? krakenBefore : SpecUpKrakenScore.round2(chain.krakenLast()),
-        krakenUnavailable);
+            profile.characterName(),
+            profile.serverName(),
+            profile.className(),
+            before,
+            scoreOnly ? null : chain.last(),
+            pick.name(),
+            limit,
+            chain.stop(),
+            // KRAKEN은 점수가 오르는 단계를 고르므로 그 문장(코드 리뷰 #967 P3).
+            pick == Pick.KRAKEN && PATH_STOP_TEXT.containsKey(chain.stop() + ":KRAKEN")
+                ? PATH_STOP_TEXT.get(chain.stop() + ":KRAKEN")
+                : PATH_STOP_TEXT.get(chain.stop()),
+            chain.cumulative(),
+            PATH_RULE_VERSION,
+            simulator.ruleVersion(),
+            snapshot.fetchedAt(),
+            chain.pricesAt(),
+            chain.steps(),
+            unpriced,
+            krakenBefore,
+            chain.krakenLast() == null
+                ? krakenBefore
+                : SpecUpKrakenScore.round2(chain.krakenLast()),
+            krakenUnavailable)
+        .withCombatPowerStop(chain.cpStopOrder(), chain.cpStopReason());
   }
 
   /** 지금 상태에서 비용을 몰라 순서에서 뺀 다음 단계 중 전투력이 오르는 것. Δ 큰 순, 같으면 id. */
@@ -600,11 +698,13 @@ public class SpecUpGoalService {
     for (var option :
         options(
             State.of(snapshot.details().loadout(), armGuard, true)
-                .withStoneOrientations(specUp.stoneOrientations(snapshot)),
+                .withStoneOrientations(specUp.stoneOrientations(snapshot))
+                .withKarma(specUp.karmaPathLevel(snapshot)),
             gems,
             refinePrices,
             pricesAt,
-            polish)) {
+            polish,
+            false)) {
       if (option.cost() != null && option.cost().amount() != null) continue;
       // '상·상 뒤' 후보는 처음 상태에서 고를 수 없다.
       if (afterTop(polish, option.id())) continue;
@@ -712,7 +812,32 @@ public class SpecUpGoalService {
       String simulatorRuleVersion,
       Instant fetchedAt,
       Instant pricesAt,
-      List<Step> steps) {}
+      List<Step> steps,
+      Boolean polishStepsConsidered,
+      Boolean karmaStepsConsidered) {
+    /** 이 답이 연마·카르마 단계를 후보로 봤는지(경로와 같은 뜻, 캐시와 따로 채운다). */
+    Goal withConsidered(boolean polish, boolean karma) {
+      return new Goal(
+          characterName,
+          serverName,
+          className,
+          combatPower,
+          targetCombatPower,
+          finalCombatPower,
+          reached,
+          stopReasonCode,
+          stopReason,
+          totalCost,
+          unpricedSteps,
+          ruleVersion,
+          simulatorRuleVersion,
+          fetchedAt,
+          pricesAt,
+          steps,
+          polish,
+          karma);
+    }
+  }
 
   public Goal goal(String characterName, BigDecimal target) {
     if (!specUp.enabled()) throw new BusinessException(SpecUpErrorCode.SPEC_UP_DISABLED);
@@ -745,47 +870,54 @@ public class SpecUpGoalService {
                 // 각인서 시세가 바뀌면 각인 비용이 달라지므로 다시 계산한다(시세가 그대로면 캐시 그대로).
                 String.valueOf(books.observedAt().map(Instant::toEpochMilli).orElse(0L)),
                 RULE_VERSION,
-                CombatPowerSimulationService.RULE_VERSION,
+                simulator.ruleVersion(),
                 String.valueOf(specUp.costRuleVersions()),
                 specUp.armGuardEnabled() ? "ag" : "-")
-            + polishSignature(polish);
+            + polishSignature(polish)
+            + karmaSignature()
+            + (simulator.armorGateEnabled() ? ":acg" : "");
+    // 목표 경로는 전투력으로 고르므로 카르마는 딜러만(KRAKEN 순서가 아님).
+    boolean polishConsidered = specUp.polishPathApplies(snapshot);
+    boolean karmaConsidered = specUp.karmaPathApplies(snapshot, false);
     var cached = store.find(key);
     if (cached.isPresent()) {
       goalOutcome("cache_hit");
-      return cached.get();
+      return cached.get().withConsidered(polishConsidered, karmaConsidered);
     }
     return single(
-        key,
-        () -> {
-          var holder = client.get();
-          var refusal = takeSeat(holder);
-          if (refusal != null) {
-            goalOutcome(refusal.outcome);
-            log.warn(
-                "event=spec_up_goal_busy reason={} client={} slots={}",
-                refusal.outcome,
-                com.loakraken.common.lostark.ClientLimiter.shortKey(holder),
-                SOLVE_MAX_CONCURRENT);
-            throw new BusinessException(SpecUpErrorCode.SPEC_UP_BUSY, PATH_RETRY_AFTER);
-          }
-          try {
-            // 계산 시간 측정은 시간 상한 판정에 쓰는 시계(nanoTime)와 따로 잰다(상한 판정을 건드리지 않게).
-            long started = System.nanoTime();
-            var result = compute(snapshot, before, goal, gems, refinePrices, polish);
-            goalOutcome("computed");
-            // 추천 순서처럼 계산 시간(p95·p99)을 남긴다. stop은 멈춘 이유 코드(작은 고정 집합).
-            Timer.builder("loakraken.spec_up.goal_compute")
-                .tag("stop", result.stopReasonCode())
-                .publishPercentiles(0.5, 0.95, 0.99)
-                .register(meters)
-                .record(Duration.ofNanos(System.nanoTime() - started));
-            // 시간 상한으로 멈춘 부분 결과는 캐시하지 않는다(PM-프론트 L31 ③).
-            if (!TIME_LIMITED.equals(result.stopReasonCode())) store.save(key, result, CACHE_TTL);
-            return result;
-          } finally {
-            releaseSeat(holder);
-          }
-        });
+            key,
+            () -> {
+              var holder = client.get();
+              var refusal = takeSeat(holder);
+              if (refusal != null) {
+                goalOutcome(refusal.outcome);
+                log.warn(
+                    "event=spec_up_goal_busy reason={} client={} slots={}",
+                    refusal.outcome,
+                    com.loakraken.common.lostark.ClientLimiter.shortKey(holder),
+                    SOLVE_MAX_CONCURRENT);
+                throw new BusinessException(SpecUpErrorCode.SPEC_UP_BUSY, PATH_RETRY_AFTER);
+              }
+              try {
+                // 계산 시간 측정은 시간 상한 판정에 쓰는 시계(nanoTime)와 따로 잰다(상한 판정을 건드리지 않게).
+                long started = System.nanoTime();
+                var result = compute(snapshot, before, goal, gems, refinePrices, polish);
+                goalOutcome("computed");
+                // 추천 순서처럼 계산 시간(p95·p99)을 남긴다. stop은 멈춘 이유 코드(작은 고정 집합).
+                Timer.builder("loakraken.spec_up.goal_compute")
+                    .tag("stop", result.stopReasonCode())
+                    .publishPercentiles(0.5, 0.95, 0.99)
+                    .register(meters)
+                    .record(Duration.ofNanos(System.nanoTime() - started));
+                // 시간 상한으로 멈춘 부분 결과는 캐시하지 않는다(PM-프론트 L31 ③).
+                if (!TIME_LIMITED.equals(result.stopReasonCode()))
+                  store.save(key, result, CACHE_TTL);
+                return result;
+              } finally {
+                releaseSeat(holder);
+              }
+            })
+        .withConsidered(polishConsidered, karmaConsidered);
   }
 
   private Goal compute(
@@ -853,12 +985,17 @@ public class SpecUpGoalService {
       int unpriced,
       BigDecimal last,
       Instant pricesAt,
-      Double krakenLast) {}
+      Double krakenLast,
+      Integer cpStopOrder,
+      String cpStopReason) {}
 
   /**
    * 지금 상태에서 다음 한 단계를 고르고 적용한 뒤 다시 모든 칸의 다음 단계를 시뮬레이터로 재기를 되풀이한다(사슬). target이 있으면 닿을 때 멈추고,
    * pricedOnly면 비용(더 드는 비용)을 모르는 단계는 고르지 않는다. 같은 입력이면 같은 사슬이다(같으면 id 순).
    */
+  /** KRAKEN 한 라운드 후보(점수로 고른 뒤 전투력을 잰다). */
+  private record KrakenCandidate(Option option, Long marginal, double score) {}
+
   private Chain chain(
       CharacterResult snapshot,
       BigDecimal before,
@@ -885,7 +1022,8 @@ public class SpecUpGoalService {
     // 추천 순서와 목표 경로 모두 어빌리티 스톤 목표 조합도 고른다(목표 경로 v3).
     var state =
         State.of(snapshot.details().loadout(), armGuard, true)
-            .withStoneOrientations(specUp.stoneOrientations(snapshot));
+            .withStoneOrientations(specUp.stoneOrientations(snapshot))
+            .withKarma(specUp.karmaPathLevel(snapshot));
     // 칸마다 그 칸의 마지막 단계 변경(스톤은 각인 둘이라 여러 개).
     var applied = new LinkedHashMap<String, List<Change>>();
     var current = before;
@@ -918,6 +1056,10 @@ public class SpecUpGoalService {
     long paidSum = 0;
     boolean paidUnknown = false;
     long started = nanoTime.getAsLong();
+    // KRAKEN에서 전투력을 비우고 고른 방어구 단계의 칸(PM 총괄 11-21 (e)). 하나라도 있으면 그 뒤 단계와 경로 끝 전투력은 비운다.
+    var cpNullSlots = new java.util.LinkedHashSet<String>();
+    Integer cpStopOrder = null;
+    String cpStopReason = null;
     String stop;
     while (true) {
       if (target != null && current.compareTo(target) >= 0) {
@@ -935,12 +1077,22 @@ public class SpecUpGoalService {
       Option best = null;
       Long bestMarginal = null;
       Double bestScore = null;
-      for (var listed : options(state, gems, refinePrices, pricesAt, polish)) {
+      boolean bestCpNull = false;
+      // 레벨 점프는 추천 순서 KRAKEN·EFFICIENCY만(비교 기준 경로와 같음). DELTA·목표 경로는 다음 한 단계.
+      var round = options(state, gems, refinePrices, pricesAt, polish, baseline);
+      // 비용 모름 점프 줄이기(계산 검증 11-21, 계산 시간): 비용 모름 줄은 비율이 없어 오름폭 순이고 오름폭은 목표가 높을수록 크므로,
+      // 한 칸에서 비용을 모르는 목표는 가장 높은 것만 잰다. 비용을 아는 목표는 모두 잰다.
+      var topUnknown =
+          baseline
+              ? topUnknownTargets(round, option -> paidCost(option, held))
+              : Map.<String, Integer>of();
+      var krakenRound = new ArrayList<KrakenCandidate>();
+      for (var listed : round) {
         var option = listed;
         if (krakenExcluded.contains(option.slot())) continue;
-        // 99·109·1010돌은 목록에만(EFFICIENCY·KRAKEN 정렬). 추천 순서(세 기준)와 목표 경로는 뺀다: 닿는 경로마다 셋을 모두 골라 합계가 약
-        // 341억이 되고
-        // 아무도 사지 않는 1010돌이 합계를 덮는다(PM 총괄 11-19, 비교 기준 경로와 다른 점).
+        // 99·109·1010돌은 목록에만(EFFICIENCY·KRAKEN 정렬). 추천 순서(세 기준)와 목표 경로는 뺀다.
+        // 닿는 경로마다 셋을 모두 골라 합계가 약 341억이 되고, 아무도 사지 않는 1010돌이 합계를 덮는다.
+        // (PM 총괄 11-19, 비교 기준 경로와 다른 점)
         if (SpecUpScoreCandidates.extremeStone(option.id())) continue;
         var polishStep = polishById.get(option.id());
         // '상·상 뒤' 셋째 줄 후보는 이 장신구의 지금 매물이 상·상(HH)일 때만(비교 기준은 지금 상태에서 후보를 만든다).
@@ -959,11 +1111,13 @@ public class SpecUpGoalService {
         // (스톤·귀속은 전부, 거래 가능은 앞 단계 품목과의 차이). DELTA와 목표 경로는 더 드는 비용(보석은 누적 차이) 그대로.
         var marginal = baseline ? paidCost(option, held) : marginal(option, gemTotals);
         if (pricedOnly && marginal == null) continue;
+        if (marginal == null && belowTopUnknown(option, topUnknown)) continue;
         var trial = new LinkedHashMap<>(applied);
         trial.put(option.slot(), option.changes());
         BigDecimal delta = null;
         BigDecimal after = null;
-        if (!scoreOnly) {
+        // KRAKEN 고르기는 점수·비용·id만 쓰므로 전투력은 고른 뒤에 잰다(아래, 계산 시간, 고르는 결과는 같음).
+        if (!scoreOnly && kraken == null) {
           var simulated = simulator.simulate(snapshot, flatten(trial));
           // 지금까지 적용한 단계는 모두 계산된 것이므로, 계산하지 못한 변경이 있으면 이 후보다.
           if (simulated.unsupportedCount() > 0 || simulated.after() == null) continue;
@@ -979,6 +1133,8 @@ public class SpecUpGoalService {
           else trialEdits.remove(option.slot());
           score = specUp.chainedKrakenScore(kraken, loadout, trial, trialEdits);
           if (score == null || score - scoreNow <= 0) continue;
+          krakenRound.add(new KrakenCandidate(option, marginal, score));
+          continue;
         } else if (delta.signum() <= 0) continue;
         // 고르기는 반올림하지 않은 비율로(소수 둘째 자리에서 같아져 id 순으로 갈리지 않게, 계산 검증 11-01). 화면 값은 단계를 만들 때 따로 반올림한다.
         var scored = option.scored(delta, after, delta == null ? null : rank(delta, marginal));
@@ -1002,11 +1158,65 @@ public class SpecUpGoalService {
           bestScore = score;
         }
       }
+      // KRAKEN: 점수로 가장 앞선 후보부터 전투력을 재고, 시뮬레이터가 계산하지 못하는 후보는 빼고 다음으로(전에는 모든 후보를 재고 계산 못 한
+      // 후보를 뺀 뒤 골랐다: 고르기 순서가 같으므로 결과도 같다).
+      while (kraken != null && best == null && !krakenRound.isEmpty()) {
+        var top = krakenRound.getFirst();
+        for (var each : krakenRound)
+          if (krakenPreferred(
+              each.score() - scoreNow,
+              each.marginal(),
+              each.option().id(),
+              top.score() - scoreNow,
+              top.marginal(),
+              top.option().id(),
+              engravingOrder)) top = each;
+        krakenRound.remove(top);
+        BigDecimal delta = null;
+        BigDecimal after = null;
+        if (!scoreOnly) {
+          // 방어구 재련·상급 재련·완갑은 시뮬레이터가 전투력을 내지 않는다(UNSUPPORTED, 주 스탯 경로 확인 전). KRAKEN 추천 순서는 이 단계를
+          // 점수로 고르고 전투력은 비운다(PM 총괄 11-21 (e), 비교 기준 점수 모드와 같음). 그 뒤 단계의 전투력도 비운다(방어구 몫이 빠진 값을
+          // 보이지 않음, (i)).
+          if (target == null && simulator.armorClosed(snapshot, top.option().change())) {
+            bestCpNull = true;
+          } else {
+            // 시뮬레이터에는 전투력을 비운 단계를 넣지 않는다(넣으면 그 뒤 후보가 모두 계산 못 함이 된다). 여기서는 계산 못 하는 후보를 빼는 데만 쓴다.
+            var trial = new LinkedHashMap<>(applied);
+            for (var slot : cpNullSlots) trial.remove(slot);
+            trial.put(top.option().slot(), top.option().changes());
+            var simulated = simulator.simulate(snapshot, flatten(trial));
+            if (simulated.unsupportedCount() > 0 || simulated.after() == null) {
+              // 문이 열렸어도 방어구 단계를 모델이 계산하지 못하면(단계표 밖 등) 문 전처럼 전투력을 비우고 남긴다(코드 리뷰 #1036 P2-3: 빼면 점수로
+              // 고른 단계가 사라진다). 그 밖의 계산 못 함은 지금처럼 뺀다.
+              if (target == null
+                  && com.loakraken.character.application.CombatPowerSimulationService.armorClosed(
+                      snapshot.details().loadout(), top.option().change())) bestCpNull = true;
+              else continue;
+            } else if (cpNullSlots.isEmpty()) {
+              after = simulated.after();
+              delta = after.subtract(current);
+            }
+          }
+        }
+        best =
+            top.option().scored(delta, after, delta == null ? null : rank(delta, top.marginal()));
+        bestMarginal = top.marginal();
+        bestScore = top.score();
+      }
       if (best == null) {
         stop = NO_CANDIDATE;
         break;
       }
       applied.put(best.slot(), best.changes());
+      if (bestCpNull) {
+        if (cpStopOrder == null) {
+          cpStopOrder = steps.size() + 1;
+          // 이유는 문 상태를 따른다(코드 리뷰 #1036 P2-4: 시뮬레이터 이유와 같게).
+          cpStopReason = simulator.armorStopReason(snapshot);
+        }
+        cpNullSlots.add(best.slot());
+      }
       if (polishById.containsKey(best.id())) polishChosen.put(best.slot(), best.id());
       BigDecimal deltaScore = null;
       BigDecimal scoreAfter = null;
@@ -1025,7 +1235,7 @@ public class SpecUpGoalService {
         scoreNow = bestScore;
       }
       state = state.after(best);
-      if (!scoreOnly) current = best.after();
+      if (!scoreOnly && cpNullSlots.isEmpty()) current = best.after();
       var amount = best.cost() == null ? null : best.cost().amount();
       if (amount == null) unpriced++;
       if (slotCost(best)) {
@@ -1061,7 +1271,15 @@ public class SpecUpGoalService {
               scorePer100k));
     }
     return new Chain(
-        List.copyOf(steps), stop, cumulative, unpriced, current, pricesAt[0], scoreNow);
+        List.copyOf(steps),
+        stop,
+        cumulative,
+        unpriced,
+        cpNullSlots.isEmpty() ? current : null,
+        pricesAt[0],
+        scoreNow,
+        cpStopOrder,
+        cpStopReason);
   }
 
   /**
@@ -1135,7 +1353,7 @@ public class SpecUpGoalService {
    * 같은 비율·Δ·비용일 때의 후보 종류 순서(PM 총괄 11-19 (D), 비교 기준의 후보 순서): 보석 → 재련·상급 재련·품질 → 장신구(연마) → 스톤 → 각인.
    */
   static final List<String> CANDIDATE_KINDS =
-      List.of("GEM_LEVEL", "REFINE", "POLISH", "ABILITY_STONE", "ENGRAVING_LEVEL");
+      List.of("GEM_LEVEL", "REFINE", "POLISH", "ABILITY_STONE", "ENGRAVING_LEVEL", "KARMA_LEVEL");
 
   /** 재련 묶음(비교 기준은 재련·상급 재련·품질을 한 종류로 칸 번호 순, 코드 리뷰 #993 P3). 같은 칸이면 이 순서. */
   static final List<String> REFINE_KINDS =
@@ -1172,7 +1390,19 @@ public class SpecUpGoalService {
       if (REFINE_KINDS.contains(pa[0]) && !pa[0].equals(pb[0]))
         return Integer.compare(REFINE_KINDS.indexOf(pa[0]), REFINE_KINDS.indexOf(pb[0]));
     }
+    // 같은 칸의 목표끼리는 낮은 목표가 먼저(비교 기준 후보 순서, 계산 검증 11-21 P3: 문자열로는 ':10'이 ':9' 앞).
+    var ta = sameSlotTarget(pa, pb);
+    if (ta != null) return ta;
     return a.compareTo(b);
+  }
+
+  /** a·b가 마지막 토큰(목표)만 다른 같은 칸이고 목표가 숫자면 목표 오름차순 비교값, 아니면 null. */
+  private static Integer sameSlotTarget(String[] pa, String[] pb) {
+    if (pa.length != pb.length || pa.length < 2) return null;
+    for (int i = 0; i < pa.length - 1; i++) if (!pa[i].equals(pb[i])) return null;
+    var x = slotNumber(pa[pa.length - 1]);
+    var y = slotNumber(pb[pb.length - 1]);
+    return x == null || y == null || x.equals(y) ? null : Integer.compare(x, y);
   }
 
   private static int kindRank(String kind) {
@@ -1284,7 +1514,7 @@ public class SpecUpGoalService {
           .thenComparing(Option::efficiency, Comparator.nullsLast(Comparator.reverseOrder()))
           .thenComparing(Option::id);
 
-  private static Goal result(
+  private Goal result(
       CharacterResult snapshot,
       BigDecimal before,
       BigDecimal target,
@@ -1309,10 +1539,12 @@ public class SpecUpGoalService {
         totalCost,
         unpriced,
         RULE_VERSION,
-        CombatPowerSimulationService.RULE_VERSION,
+        simulator.ruleVersion(),
         snapshot.fetchedAt(),
         pricesAt,
-        List.copyOf(steps));
+        List.copyOf(steps),
+        null,
+        null);
   }
 
   /** 단계마다 그 비용 전부를 내는 비용 코드: 귀속(또는 빈 칸) 보석, 거래할 수 없는 장신구(새로 사서 바꾼다, 비교 기준과 같음). */
@@ -1421,13 +1653,101 @@ public class SpecUpGoalService {
           .thenComparing(Option::delta, Comparator.nullsLast(Comparator.reverseOrder()))
           .thenComparing(Option::id);
 
-  /** 지금 상태에서 칸마다 다음 한 단계. */
+  /**
+   * 한 칸의 목표 단계들. jumps면 다음 단계부터 끝(max)까지 하나하나가 후보(레벨 점프, 비교 기준과 같음: 계산 검증 11-20 22:21), 아니면 다음 한
+   * 단계만.
+   */
+  static List<Integer> targets(int current, int max, boolean jumps) {
+    if (current >= max) return List.of();
+    if (!jumps) return List.of(current + 1);
+    var result = new ArrayList<Integer>();
+    for (int target = current + 1; target <= max; target++) result.add(target);
+    return result;
+  }
+
+  /** 레벨 점프가 있는 종류(후보 id 마지막 토큰이 목표 레벨). */
+  static final java.util.Set<String> JUMP_KINDS =
+      java.util.Set.of(
+          "GEM_LEVEL", "EQUIPMENT_REFINE", "EQUIPMENT_ADVANCED_REFINE", "ENGRAVING_LEVEL");
+
+  /** 칸마다 비용을 모르는 점프 목표 가운데 가장 높은 목표(레벨 점프 종류만). */
+  static Map<String, Integer> topUnknownTargets(
+      List<Option> options, java.util.function.Function<Option, Long> cost) {
+    var top = new HashMap<String, Integer>();
+    for (var option : options) {
+      var target = jumpTarget(option);
+      if (target == null || cost.apply(option) != null) continue;
+      top.merge(option.slot(), target, Math::max);
+    }
+    return top;
+  }
+
+  /** 비용을 모르는 이 점프 목표가 같은 칸의 가장 높은 비용 모름 목표보다 낮은지. */
+  static boolean belowTopUnknown(Option option, Map<String, Integer> topUnknown) {
+    var target = jumpTarget(option);
+    var top = topUnknown.get(option.slot());
+    return target != null && top != null && target < top;
+  }
+
+  private static Integer jumpTarget(Option option) {
+    var id = option.id();
+    if (id == null || !JUMP_KINDS.contains(id.substring(0, Math.max(0, id.indexOf(':')))))
+      return null;
+    return slotNumber(id.substring(id.lastIndexOf(':') + 1));
+  }
+
+  /** 상급 재련 목표: jumps면 10의 배수만(다음 10단계 … 40, +1 후보 없음, 비교 기준과 같음), 아니면 다음 한 단계. */
+  static List<Integer> advancedTargets(int current, boolean jumps) {
+    if (current >= 40) return List.of();
+    if (!jumps) return List.of(current + 1);
+    var result = new ArrayList<Integer>();
+    for (int target = (current / 10 + 1) * 10; target <= 40; target += 10) result.add(target);
+    return result;
+  }
+
+  /**
+   * 여러 단계를 한 번에 올리는 비용 = 단계 비용의 합(기대 비용은 더해진다, 계산 검증 11-20 22:21). 한 단계면 그 비용 그대로. 모르는 단계가 하나라도 있으면
+   * 그 단계의 비용(모름)을 준다. 시세 관측 시각은 가장 이른 것, 이전 시세(stale)는 하나라도 있으면 true.
+   */
+  static SpecUpCost rangeCost(List<SpecUpCost> stages) {
+    if (stages.size() == 1) return stages.getFirst();
+    long amount = 0;
+    double exact = 0;
+    Instant observedAt = null;
+    Boolean stale = null;
+    for (var stage : stages) {
+      if (stage == null || stage.amount() == null) return stage;
+      amount += stage.amount();
+      exact += stage.exact() == null ? stage.amount() : stage.exact();
+      if (stage.priceObservedAt() != null
+          && (observedAt == null || stage.priceObservedAt().isBefore(observedAt)))
+        observedAt = stage.priceObservedAt();
+      if (stage.stale() != null) stale = Boolean.TRUE.equals(stale) || stage.stale();
+    }
+    var first = stages.getFirst();
+    return new SpecUpCost(
+        first.unit(),
+        amount,
+        first.status(),
+        first.code(),
+        first.basis(),
+        exact,
+        observedAt,
+        stale,
+        null);
+  }
+
+  /**
+   * 지금 상태에서 칸마다 다음 단계들. jumps(추천 순서 KRAKEN·EFFICIENCY)면 보석·재련·완갑·각인은 끝까지의 모든 레벨, 상급 재련은 10의 배수가
+   * 후보다(레벨 점프). DELTA·목표 경로는 다음 한 단계(PM 총괄 판단 전 기본).
+   */
   private List<Option> options(
       State state,
       Map<String, MarketAuctionService.GemCell> gems,
       Optional<RefiningMaterialPriceService.Prices> refinePrices,
       Instant[] pricesAt,
-      List<SpecUpService.PolishStep> polish) {
+      List<SpecUpService.PolishStep> polish,
+      boolean jumps) {
     var result = new ArrayList<Option>();
     // 연마 단계(spec-up.polish-path.enabled): 목록 연마 교체 줄과 같은 목표·id·비용. 같은 장신구 칸의 다른 매물을 고르면 앞 매물을
     // 바꾼다(칸마다 마지막
@@ -1456,144 +1776,152 @@ public class SpecUpGoalService {
               null,
               step.changes().subList(1, step.changes().size())));
     }
-    for (var gem : state.gems().values()) {
-      if (gem.level() >= 10) continue;
-      int next = gem.level() + 1;
-      String label = gem.level() + "레벨 " + (gem.kind() == null ? "보석" : gem.kind());
-      String target =
-          gem.skill() == null ? "보석 " + gem.slot() + "번 · " + label : gem.skill() + " · " + label;
-      result.add(
-          new Option(
-              "GEM_LEVEL:" + gem.slot(),
-              "GEM_LEVEL:" + gem.slot() + ":" + next,
-              target,
-              gem.level() + "레벨",
-              next + "레벨",
-              gem.icon(),
-              gem.grade(),
-              gem.skill(),
-              new Change(
-                  Kind.GEM_LEVEL,
-                  gem.slot(),
-                  null,
-                  null,
-                  next,
-                  null,
-                  null,
-                  null,
-                  null,
-                  null,
-                  null,
-                  null,
-                  null,
-                  null),
-              gemCost(gems, pricesAt, gem, next),
-              null,
-              null,
-              null));
-    }
-    for (var item : state.refines().values()) {
-      int next = item.refine() + 1;
-      result.add(
-          new Option(
-              "EQUIPMENT_REFINE:" + item.index(),
-              "EQUIPMENT_REFINE:" + item.index() + ":" + next,
-              item.equipment().name(),
-              "+" + item.refine(),
-              "+" + next,
-              item.equipment().icon(),
-              item.equipment().grade(),
-              null,
-              new Change(
-                  Kind.EQUIPMENT_REFINE,
-                  null,
-                  item.index(),
-                  null,
-                  null,
-                  next,
-                  null,
-                  null,
-                  null,
-                  null,
-                  null,
-                  null,
-                  null,
-                  null),
-              item.refine() >= 10 && item.refine() < 25
-                  ? specUp.refineCost(item.equipment(), item.refine(), refinePrices, pricesAt)
-                  : SpecUpCost.REFINE_COST_UNCONFIRMED,
-              null,
-              null,
-              null));
-    }
-    if (state.armGuard() != null) {
-      var item = state.armGuard();
-      int next = item.refine() + 1;
-      // 등급은 목록 완갑 줄과 같이 처음 등급에서 목표 단계로 정한다(시뮬레이터 ARM_GUARD는 목표 단계·등급을 그대로 받는다).
-      var grade = specUp.armGuardGrade(item.equipment().grade(), next);
-      if (grade != null)
+    for (var gem : state.gems().values())
+      for (int next : targets(gem.level(), 10, jumps)) {
+        String label = gem.level() + "레벨 " + (gem.kind() == null ? "보석" : gem.kind());
+        String target =
+            gem.skill() == null ? "보석 " + gem.slot() + "번 · " + label : gem.skill() + " · " + label;
         result.add(
             new Option(
-                "EQUIPMENT_REFINE:" + item.index(),
-                "EQUIPMENT_REFINE:" + item.index() + ":" + next,
-                item.equipment().name(),
-                "+" + item.refine(),
-                "+" + next + (grade.equals(item.equipment().grade()) ? "" : " " + grade),
-                item.equipment().icon(),
-                item.equipment().grade(),
-                null,
+                "GEM_LEVEL:" + gem.slot(),
+                "GEM_LEVEL:" + gem.slot() + ":" + next,
+                target,
+                gem.level() + "레벨",
+                next + "레벨",
+                gem.icon(),
+                gem.grade(),
+                gem.skill(),
                 new Change(
-                    Kind.ARM_GUARD,
-                    null,
+                    Kind.GEM_LEVEL,
+                    gem.slot(),
                     null,
                     null,
                     next,
                     null,
                     null,
                     null,
-                    grade,
+                    null,
                     null,
                     null,
                     null,
                     null,
                     null),
-                specUp.armGuardStepCost(item.refine(), refinePrices, pricesAt),
+                gemCost(gems, pricesAt, gem, next),
                 null,
                 null,
                 null));
+      }
+    for (var item : state.refines().values()) {
+      // 단계 비용은 칸마다 한 번만 재고(재련 계획), 점프는 그 합.
+      var stages = new ArrayList<SpecUpCost>();
+      for (int next : targets(item.refine(), 25, jumps)) {
+        int from = next - 1;
+        stages.add(
+            from >= 10 && from < 25
+                ? specUp.refineCost(item.equipment(), from, refinePrices, pricesAt)
+                : SpecUpCost.REFINE_COST_UNCONFIRMED);
+        result.add(
+            new Option(
+                "EQUIPMENT_REFINE:" + item.index(),
+                "EQUIPMENT_REFINE:" + item.index() + ":" + next,
+                item.equipment().name(),
+                "+" + item.refine(),
+                "+" + next,
+                item.equipment().icon(),
+                item.equipment().grade(),
+                null,
+                new Change(
+                    Kind.EQUIPMENT_REFINE,
+                    null,
+                    item.index(),
+                    null,
+                    null,
+                    next,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null),
+                rangeCost(stages),
+                null,
+                null,
+                null));
+      }
     }
-    for (var item : state.advanced().values()) {
-      int next = item.refine() + 1;
-      result.add(
-          new Option(
-              "EQUIPMENT_ADVANCED_REFINE:" + item.index(),
-              "EQUIPMENT_ADVANCED_REFINE:" + item.index() + ":" + next,
-              item.equipment().name(),
-              "상급 재련 " + item.refine() + "단계",
-              "상급 재련 " + next + "단계",
-              item.equipment().icon(),
-              item.equipment().grade(),
-              null,
-              new Change(
-                  Kind.EQUIPMENT_ADVANCED_REFINE,
+    if (state.armGuard() != null) {
+      var item = state.armGuard();
+      var stages = new ArrayList<SpecUpCost>();
+      for (int next : targets(item.refine(), 25, jumps)) {
+        stages.add(specUp.armGuardStepCost(next - 1, refinePrices, pricesAt));
+        // 등급은 목록 완갑 줄과 같이 처음 등급에서 목표 단계로 정한다(시뮬레이터 ARM_GUARD는 목표 단계·등급을 그대로 받는다).
+        var grade = specUp.armGuardGrade(item.equipment().grade(), next);
+        if (grade != null)
+          result.add(
+              new Option(
+                  "EQUIPMENT_REFINE:" + item.index(),
+                  "EQUIPMENT_REFINE:" + item.index() + ":" + next,
+                  item.equipment().name(),
+                  "+" + item.refine(),
+                  "+" + next + (grade.equals(item.equipment().grade()) ? "" : " " + grade),
+                  item.equipment().icon(),
+                  item.equipment().grade(),
                   null,
-                  item.index(),
+                  new Change(
+                      Kind.ARM_GUARD,
+                      null,
+                      null,
+                      null,
+                      next,
+                      null,
+                      null,
+                      null,
+                      grade,
+                      null,
+                      null,
+                      null,
+                      null,
+                      null),
+                  rangeCost(stages),
                   null,
-                  next,
                   null,
-                  null,
-                  null,
-                  null,
-                  null,
-                  null,
-                  null,
-                  null,
-                  null),
-              SpecUpCost.REFINE_COST_UNCONFIRMED,
-              null,
-              null,
-              null));
+                  null));
+      }
     }
+    for (var item : state.advanced().values())
+      for (int next : advancedTargets(item.refine(), jumps)) {
+        result.add(
+            new Option(
+                "EQUIPMENT_ADVANCED_REFINE:" + item.index(),
+                "EQUIPMENT_ADVANCED_REFINE:" + item.index() + ":" + next,
+                item.equipment().name(),
+                "상급 재련 " + item.refine() + "단계",
+                "상급 재련 " + next + "단계",
+                item.equipment().icon(),
+                item.equipment().grade(),
+                null,
+                new Change(
+                    Kind.EQUIPMENT_ADVANCED_REFINE,
+                    null,
+                    item.index(),
+                    null,
+                    next,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null),
+                SpecUpCost.REFINE_COST_UNCONFIRMED,
+                null,
+                null,
+                null));
+      }
     if (state.quality() != null) {
       var weapon = state.quality();
       int next = Math.min(100, (weapon.refine() / 10 + 1) * 10);
@@ -1628,39 +1956,82 @@ public class SpecUpGoalService {
               null));
     }
     for (var engraving : state.engravings().values()) {
-      int next = engraving.level() + 1;
+      // 한 레벨 비용(각인서 5권)을 올리는 레벨 수만큼 더한다(비교 기준: 각인서 × (목표 − 지금) × 5).
+      var perLevel =
+          SpecUpService.bookCost(engraving.name(), engraving.grade(), books::price, pricesAt);
+      var stages = new ArrayList<SpecUpCost>();
+      for (int next :
+          targets(engraving.level(), SpecUpService.engravingMaxLevel(engraving.grade()), jumps)) {
+        stages.add(perLevel);
+        result.add(
+            new Option(
+                "ENGRAVING_LEVEL:" + engraving.name(),
+                "ENGRAVING_LEVEL:" + engraving.name() + ":" + next,
+                engraving.name() + " 각인",
+                engraving.level() + "레벨",
+                next + "레벨",
+                // 추천 순서 줄도 스펙업 후보와 같은 유물 각인서 공식 아이콘(시세 캐시, 공식 호출 없음).
+                books.icon(engraving.name()).orElse(null),
+                engraving.grade(),
+                null,
+                new Change(
+                    Kind.ENGRAVING_LEVEL,
+                    null,
+                    null,
+                    null,
+                    next,
+                    null,
+                    null,
+                    null,
+                    null,
+                    engraving.name(),
+                    null,
+                    null,
+                    null,
+                    null),
+                rangeCost(stages),
+                null,
+                null,
+                null));
+      }
+    }
+    if (state.stone() != null) result.addAll(stoneOptions(state.stone()));
+    if (state.karma() != null) result.addAll(karmaOptions(state.karma()));
+    return result;
+  }
+
+  /** 카르마 단계 스위치가 켜지면 캐시 키 끝에 ":kc"(꺼져 있으면 키가 그대로라 배포 뒤 캐시가 한꺼번에 비지 않음). */
+  private String karmaSignature() {
+    return specUp.karmaCpEnabled() ? ":kc" : "";
+  }
+
+  /** 깨달음 카르마 최대 레벨(SpecUpScoreCandidates와 같음). */
+  static final int KARMA_MAX = 30;
+
+  /**
+   * 깨달음 카르마 단계(목록 카르마 줄과 같은 id·대상·비용): 지금 레벨 → 다음 레벨 … 30 가운데 하나(비교 기준처럼 한 번에 여러 레벨도 고른다). 비용은 지금
+   * 레벨에서 그 레벨까지의 기대 골드(SpecUpCostRules.karmaGold, 거래 불가라 단계마다 그대로 낸다).
+   */
+  static List<Option> karmaOptions(int current) {
+    var result = new ArrayList<Option>();
+    for (int next = current + 1; next <= KARMA_MAX; next++) {
+      var gold = com.loakraken.specup.domain.SpecUpCostRules.karmaGold(current, next);
       result.add(
           new Option(
-              "ENGRAVING_LEVEL:" + engraving.name(),
-              "ENGRAVING_LEVEL:" + engraving.name() + ":" + next,
-              engraving.name() + " 각인",
-              engraving.level() + "레벨",
+              "KARMA_LEVEL",
+              "KARMA_LEVEL:" + next,
+              "깨달음 카르마",
+              current + "레벨",
               next + "레벨",
-              // 추천 순서 줄도 스펙업 후보와 같은 유물 각인서 공식 아이콘(시세 캐시, 공식 호출 없음).
-              books.icon(engraving.name()).orElse(null),
-              engraving.grade(),
               null,
-              new Change(
-                  Kind.ENGRAVING_LEVEL,
-                  null,
-                  null,
-                  null,
-                  next,
-                  null,
-                  null,
-                  null,
-                  null,
-                  engraving.name(),
-                  null,
-                  null,
-                  null,
-                  null),
-              SpecUpService.bookCost(engraving.name(), engraving.grade(), books::price, pricesAt),
+              null,
+              null,
+              CombatPowerSimulationService.karmaLevelChange(next),
+              gold == null ? SpecUpCost.KARMA_COST_UNCONFIRMED : SpecUpCost.karma(gold),
               null,
               null,
               null));
     }
-    if (state.stone() != null) result.addAll(stoneOptions(state.stone()));
     return result;
   }
 
@@ -1893,6 +2264,8 @@ public class SpecUpGoalService {
 
     /** 단계 종류: 변경이 하나면 그 kind, 여럿이면(어빌리티 스톤) 후보 id의 종류(목록과 같음). */
     String kind() {
+      // 카르마 단계는 시뮬레이터 변경(ARK_PASSIVE_POINT 깨달음 level)과 달리 목록과 같은 종류 KARMA_LEVEL.
+      if (id != null && id.startsWith("KARMA_LEVEL:")) return "KARMA_LEVEL";
       if (more == null || more.isEmpty()) return change.kind().name();
       int colon = id.indexOf(':');
       return colon < 0 ? id : id.substring(0, colon);
@@ -1934,7 +2307,8 @@ public class SpecUpGoalService {
       Item quality,
       Map<String, Engraving> engravings,
       Item armGuard,
-      Stone stone) {
+      Stone stone,
+      Integer karma) {
     /** 스톤 배치를 목록과 같게(목표 조합마다 하나). 스톤이 없거나 배치를 모르면 그대로. */
     State withStoneOrientations(List<Map<String, Integer>> orientations) {
       if (stone == null || orientations == null) return this;
@@ -1945,7 +2319,17 @@ public class SpecUpGoalService {
           quality,
           engravings,
           armGuard,
-          new Stone(stone.item(), stone.levels(), orientations));
+          new Stone(stone.item(), stone.levels(), orientations),
+          karma);
+    }
+
+    /**
+     * 깨달음 카르마 단계(spec-up.karma-cp.enabled): 지금 레벨에서 다음 레벨 … 30까지 한 단계에 하나(목록 카르마 줄과 같은 id·비용).
+     * null이거나 30이면 넣지 않는다.
+     */
+    State withKarma(Integer level) {
+      var next = level == null || level >= KARMA_MAX ? null : level;
+      return new State(gems, refines, advanced, quality, engravings, armGuard, stone, next);
     }
 
     /** 완갑(팔 보호구)·어빌리티 스톤은 넣지 않는 상태(목표 경로). */
@@ -2051,7 +2435,7 @@ public class SpecUpGoalService {
           if (levels.size() == 2) stoneState = new Stone(item, levels);
         }
       }
-      return new State(gems, refines, advanced, quality, engravings, guard, stoneState);
+      return new State(gems, refines, advanced, quality, engravings, guard, stoneState, null);
     }
 
     /** option 단계를 적용한 다음 상태. 끝 단계에 닿은 칸은 뺀다. */
@@ -2063,6 +2447,7 @@ public class SpecUpGoalService {
       var engravings = new LinkedHashMap<>(this.engravings);
       var armGuard = this.armGuard;
       var stone = this.stone;
+      var karma = this.karma;
       var change = option.change();
       switch (change.kind()) {
         case GEM_LEVEL -> {
@@ -2117,9 +2502,13 @@ public class SpecUpGoalService {
           for (var each : option.changes()) levels.put(each.name(), each.level());
           stone = new Stone(stone.item(), levels, stone.orientations());
         }
+        case ARK_PASSIVE_POINT -> {
+          if (CombatPowerSimulationService.karmaChange(change))
+            karma = change.karmaLevel() >= KARMA_MAX ? null : change.karmaLevel();
+        }
         default -> {}
       }
-      return new State(gems, refines, advanced, quality, engravings, armGuard, stone);
+      return new State(gems, refines, advanced, quality, engravings, armGuard, stone, karma);
     }
   }
 }

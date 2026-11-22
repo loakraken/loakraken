@@ -477,6 +477,19 @@ class CritEffectTableTest {
     // 비교 기준 주력기에도 들어간다(계산 검증 11-16: 디스트로이어 주력 99.22).
     assertThat(result.crit().mainSkillRate())
         .isEqualByComparingTo(off.crit().mainSkillRate().add(new BigDecimal("18")));
+    // 스킬별로는 '[해방 스킬]'에만(코드 리뷰 #979 P2 재실행): 풀 스윙 +18·+51, 헤비 크러쉬·분류 없는 옛 캐시는 그대로.
+    assertThat(skill(result, "풀 스윙").total())
+        .isEqualByComparingTo(skill(off, "풀 스윙").total().add(new BigDecimal("18")));
+    assertThat(skill(result, "풀 스윙").damage())
+        .isEqualByComparingTo(skill(off, "풀 스윙").damage().add(new BigDecimal("51")));
+    for (var name : List.of("헤비 크러쉬", "옛 캐시")) {
+      assertThat(skill(result, name).total())
+          .as(name)
+          .isEqualByComparingTo(skill(off, name).total());
+      assertThat(skill(result, name).damage())
+          .as(name)
+          .isEqualByComparingTo(skill(off, name).damage());
+    }
   }
 
   private static CharacterLoadout.Skill categorized(String name, String category) {
@@ -610,11 +623,40 @@ class CritEffectTableTest {
                 java.util.Map.of("연가비기", true)));
     assertThat(values(both, Axis.CRIT, Category.ASSUMPTION))
         .containsExactly("연가공법 16초 유지 가정(연가비기 Lv.3)=20");
-    var arcana =
-        calculate(
-            "아르카나", List.of(), List.of(skill("스트림 오브 엣지", "다크니스 엣지")), null, Assumptions.NONE);
+    // 다크니스 엣지는 트라이포드 문구의 '최대 X%'를 읽는다(2026-11-15 공식 원문, 최대 레벨). 문구가 없으면 고정값으로 채우지 않는다(코드 리뷰 #979 P2
+    // 재실행).
+    var arcanaSkill =
+        new CharacterLoadout.Skill(
+            "스트림 오브 엣지",
+            null,
+            12,
+            null,
+            null,
+            null,
+            List.of(
+                new CharacterLoadout.Tripod(
+                    1,
+                    1,
+                    "다크니스 엣지",
+                    null,
+                    "[암] 속성으로 변경되고, 적중 시 마다 아르카나의 치명타 적중률이 3.0초간 5.5% 씩 최대 27.6% 까지 증가한다.")),
+            null,
+            List.of(),
+            null);
+    var arcana = calculate("아르카나", List.of(), List.of(arcanaSkill), null, Assumptions.NONE);
     assertThat(values(arcana, Axis.CRIT, Category.ASSUMPTION))
         .containsExactly("다크니스 엣지 최대 중첩 가정=27.6");
+    assertThat(
+            values(
+                calculate(
+                    "아르카나",
+                    List.of(),
+                    List.of(skill("스트림 오브 엣지", "다크니스 엣지")),
+                    null,
+                    Assumptions.NONE),
+                Axis.CRIT,
+                Category.ASSUMPTION))
+        .isEmpty();
     var soul =
         calculate("소울이터", List.of(), List.of(skill("아스타로스", "데런의 족쇄")), null, Assumptions.NONE);
     assertThat(values(soul, Axis.CRIT, Category.ASSUMPTION)).containsExactly("데런의 족쇄 버프 가정=20");
@@ -637,6 +679,33 @@ class CritEffectTableTest {
             toggle("고대의 힘", false));
     assertThat(skill(summoner, "마력의 질주").total())
         .isEqualByComparingTo(skill(summonerOff, "마력의 질주").total().add(new BigDecimal("16")));
+    // 노드 문구('일반 및 고대의 정령 스킬')대로 [고대의 정령] 스킬에도 더한다. [소환 스킬]은 아니다(비교 기준과 다른 점,
+    // 공식 문구 우선, PM 총괄 11-19). 합계는 그대로다.
+    var ancientNodes = List.of(node("깨달음 3티어 고대의 힘 Lv.3", "일반 및 고대의 정령 스킬의 치명타 적중률이 16.0% 증가한다."));
+    var ancientSkills =
+        List.of(
+            skill("슈르디", "빛의 성장"),
+            categorized("마력의 질주", "일반 스킬"),
+            categorized("정령 스킬", "고대의 정령"),
+            categorized("소환 스킬", "소환 스킬"));
+    var ancientOn = calculate("서머너", ancientNodes, ancientSkills, null, Assumptions.NONE);
+    var ancientOff = calculate("서머너", ancientNodes, ancientSkills, null, toggle("고대의 힘", false));
+    assertThat(skill(ancientOn, "정령 스킬").total())
+        .isEqualByComparingTo(skill(ancientOff, "정령 스킬").total().add(new BigDecimal("16")));
+    assertThat(skill(ancientOn, "소환 스킬").total())
+        .isEqualByComparingTo(skill(ancientOff, "소환 스킬").total());
+    // 합계·주력은 같은 묶음에서 [고대의 정령] 스킬만 뺀 계산과 같다(PM 총괄 11-20 23:03 P3: 다른 묶음과 비교하지 않음).
+    var withoutSpirit =
+        calculate(
+            "서머너",
+            ancientNodes,
+            ancientSkills.stream().filter(each -> !"정령 스킬".equals(each.name())).toList(),
+            null,
+            Assumptions.NONE);
+    assertThat(withoutSpirit.skills()).noneMatch(each -> "정령 스킬".equals(each.name()));
+    assertThat(ancientOn.crit().totalRate()).isEqualByComparingTo(withoutSpirit.crit().totalRate());
+    assertThat(ancientOn.crit().mainSkillRate())
+        .isEqualByComparingTo(withoutSpirit.crit().mainSkillRate());
     var spiritNodes = List.of(node("깨달음 2티어 깨어난 잠재력 Lv.3", "둔갑 스킬 치명타 적중률이 30.0% 증가한다."));
     var spirit =
         calculate(

@@ -191,11 +191,11 @@ class MaterialPriceClientLimitIntegrationTest {
     return items.stream().filter(item -> status.equals(item.path("status").asText())).count();
   }
 
-  /** 지금 분(UTC 1분 창)에 남은 시간이 needed보다 짧으면 다음 분이 시작될 때까지 기다린다. */
-  private static void awaitMinuteWithAtLeast(Duration needed) throws InterruptedException {
-    long minute = Duration.ofMinutes(1).toMillis();
-    long remaining = minute - System.currentTimeMillis() % minute;
-    if (remaining < needed.toMillis()) Thread.sleep(remaining + 50);
+  @org.springframework.beans.factory.annotation.Autowired ClientLimitWindow window;
+
+  /** 클라이언트 한도 창을 새 창 시작 직후로 옮긴다(기다리지 않음, 새 창에는 59초가 남아 needed보다 길다). */
+  private void awaitMinuteWithAtLeast(Duration needed) {
+    window.startFreshWindow();
   }
 
   /** 로아샵 화면이 묻는 15개(재련 5 + 배틀 아이템 5 + 페온 + 거래 불가 4). */

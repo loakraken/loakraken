@@ -51,6 +51,7 @@ class RosterCombatPowerIntegrationTest {
   @LocalServerPort int port;
   @Autowired JdbcClient jdbc;
   @Autowired StringRedisTemplate redis;
+  @Autowired ClientLimitWindow window;
   @MockitoBean CharacterDetailsPort detailsPort;
 
   @org.springframework.test.context.bean.override.mockito.MockitoSpyBean
@@ -359,6 +360,8 @@ class RosterCombatPowerIntegrationTest {
     roster("원정전투한가");
     when(detailsPort.fetchProfile(anyString(), anyInt()))
         .thenAnswer(invocation -> profile(invocation.getArgument(0), "3000.00"));
+    // 분당 2회는 1분 고정 창이다. 세 요청이 한 창 안에 들어야 세 번째가 한도에 걸린다 — 새 창에서 시작한다.
+    window.startFreshWindow();
     assertThat(post("원정전투한가", "198.51.100.50").statusCode()).isEqualTo(200);
     // 두 번째는 원정대 쿨다운(429 ROSTER_REFRESH_COOLDOWN), 세 번째는 클라이언트 분당 2회 한도(429).
     var cooldown = post("원정전투한가", "198.51.100.50");

@@ -32,11 +32,17 @@ import tools.jackson.databind.node.ObjectNode;
 public final class KrakenScoreInputMapper {
   private static final JsonMapper MAPPER = JsonMapper.builder().build();
   private static final JsonNodeFactory F = JsonNodeFactory.instance;
-  private static final Pattern TAG = Pattern.compile("<[^>]*>");
   private static final Pattern BR = Pattern.compile("<br\\s*/?>", Pattern.CASE_INSENSITIVE);
   private static final Pattern GRAY = Pattern.compile("#686660", Pattern.CASE_INSENSITIVE);
   private static final Pattern NUMBER = Pattern.compile("-?\\d+(\\.\\d+)?");
   private static final Pattern KARMA = Pattern.compile("(\\d+)랭크\\s*(\\d+)레벨");
+
+  /**
+   * 카르마를 아직 열지 않은 포인트의 공식 설명. 출처: 공식 Open API armories 캐릭터 응답의 ArkPassive.Points[].Description,
+   * 2026-11-15 20:18 KST 수집 직업 표본 하나(계산 검증 표본 C-1115-b, 진화·도약 '미개방', 깨달음 '1랭크 1레벨').
+   */
+  private static final String KARMA_CLOSED = "미개방";
+
   private static final Pattern NODE = Pattern.compile("(\\d+)티어\\s+(.+?)\\s+Lv\\.(\\d+)");
   private static final Pattern GEM_POINT = Pattern.compile("(?:질서|혼돈) 포인트 : (\\d+)");
   private static final Pattern GEM_EFFECT = Pattern.compile("\\[([^\\]]+)\\] Lv\\.(\\d+)");
@@ -53,9 +59,10 @@ public final class KrakenScoreInputMapper {
       Pattern.compile("^\\s*\\[([^\\]]+)\\]\\s*Lv\\.(\\d+)");
   // 저장된 실제 응답은 쉼표 없이 오지만, 쉼표가 붙어도 첫 묶음만 읽지 않게 쉼표까지 받아 뺀다(장비 요약 낙원력과 같은 규칙).
   private static final Pattern ORB = Pattern.compile("달성 최대 낙원력\\s*:\\s*(\\d[\\d,]*)");
-  private static final Pattern BRACELET_ICON =
+  static final Pattern BRACELET_ICON =
       Pattern.compile(
-          "<img[^>]*emoticon_tooltip_bracelet[^>]*>(?:\\s*</img>)?", Pattern.CASE_INSENSITIVE);
+          // 태그 안은 '<'·'>'를 넘지 않는다(닫는 '>' 없는 긴 줄에서 시작점마다 끝까지 다시 훑지 않게).
+          "<img[^<>]*emoticon_tooltip_bracelet[^<>]*>(?:\\s*</img>)?", Pattern.CASE_INSENSITIVE);
   private static final Pattern BRACELET_STAT = Pattern.compile("^(치명|특화|신속)\\+(\\d+)$");
   private static final Pattern GEM_BONUS = Pattern.compile("기본 공격력 (\\d+(?:\\.\\d+)?)% 증가");
   private static final Pattern AVATAR_STAT =
@@ -91,6 +98,33 @@ public final class KrakenScoreInputMapper {
     return CharacterPosition.judgeDescriptions(className, descriptions);
   }
 
+  private static final Pattern CARD_SET = Pattern.compile("^(.+?) \\d세트 \\((\\d+)각성합계\\)$");
+  // 재련 단계는 세 자리까지(더 긴 수는 깨진 이름으로 보고 0, 정수 변환이 터져 점수 입력 전체가 비지 않게, 코드 리뷰 #1027 P3).
+  private static final Pattern REFORGE = Pattern.compile("^\\+(\\d{1,3})(?!\\d)");
+
+  /**
+   * 카드 세트 효과 문자열: 공식 ArmoryCard.Effects 묶음마다 '… N세트 (M각성합계)' 줄 가운데 마지막 줄을 '<세트 이름> M각'으로, 묶음 순서대로 '
+   * + '로 잇는다(비교 기준 계산기 입력 형식, 계산 검증 11-21). 각성합계 줄이 하나도 없으면 null.
+   */
+  static String cardSets(JsonNode raw) {
+    var parts = new java.util.ArrayList<String>();
+    for (var group : raw.path("ArmoryCard").path("Effects")) {
+      String last = null;
+      for (var item : group.path("Items")) {
+        var matcher = CARD_SET.matcher(strip(item.path("Name").asString("")).strip());
+        if (matcher.matches()) last = matcher.group(1) + " " + matcher.group(2) + "각";
+      }
+      if (last != null) parts.add(last);
+    }
+    return parts.isEmpty() ? null : String.join(" + ", parts);
+  }
+
+  /** 장비 이름 앞 '+N'의 재련 단계(태그를 떼고, 카드 줄과 같은 길이 상한). 없거나 읽을 수 없으면 0. */
+  static int reforge(String name) {
+    var matcher = REFORGE.matcher(strip(name).strip());
+    return matcher.find() ? Integer.parseInt(matcher.group(1)) : 0;
+  }
+
   /** 공식 armories 응답 본문(JSON 트리) → 엔진 입력. */
   public static ObjectNode from(JsonNode raw) {
     var out = F.objectNode();
@@ -102,17 +136,69 @@ public final class KrakenScoreInputMapper {
     profile.put("secondClass", secondClass);
     // 딜러·서포터는 서비스 전체와 같은 규칙(CharacterPosition: 깨달음 노드)으로 판정한다.
     profile.put("supportCheck", position(raw, className).role() == CharacterPosition.Role.SUPPORT);
+    // 전투력(절대값) 경로에 쓰는 전투 레벨(공식 ArmoryProfile.CharacterLevel). 없으면 null.
+    profile.set("level", copy(raw.path("ArmoryProfile").path("CharacterLevel")));
     out.putObject("avatar").set("avatarStats", number(avatarStats(raw)));
     out.set("skills", skills(raw));
-    // 점수·젬 효율에 쓰이지 않는 전투력 경로 값 — 엔진 기본값.
-    out.putObject("baseEffect").set("petStat", number(1));
+    // 카드 세트 효과 문자열(전투력 경로): 묶음마다 '<세트 이름> N각', ' + '로 잇는다. 없으면 null.
+    var card = cardSets(raw);
+    if (card == null) out.putNull("card");
+    else out.put("card", card);
+    // 전투력 경로 기본값(가정, 비교 기준 계산기 상수 — 공식 응답에 없는 펫·음식 효과): 펫 피해 1%, 펫 주스탯 1%, 펫 체력 효과 5,
+    // 펫 체력 순찰 2, 음식 0, 아제나 축복 있음. 딜러 전투력에는 petDamage·petStat만 움직인다(계산 검증 11-21).
+    var baseEffect = out.putObject("baseEffect");
+    baseEffect.set("petDamage", number(1));
+    baseEffect.set("petStat", number(1));
+    baseEffect.set("petHpEffect", number(5));
+    baseEffect.set("petHpPatrol", number(2));
+    baseEffect.set("dinner", number(0));
+    baseEffect.put("isAzena", true);
     out.set("gem", gem(raw));
     out.set("armory", armory);
     out.set("stats", stats(raw, braceletStats(armory)));
     out.set("arkPassive", arkPassive(raw));
     out.set("engraving", engraving(raw));
     out.set("arkGrid", arkGrid(raw));
+    // 원문에 줄이 있는데 읽지 못한 칸(PM 총괄 11-21, #1036): 없어서 null인 칸(×1)과 구별한다. 있을 때만 넣어 지금 입력은 그대로.
+    var unparsed = unparsed(raw, out);
+    if (!unparsed.isEmpty()) {
+      var list = out.putArray("unparsed");
+      unparsed.forEach(list::add);
+    }
     return out;
+  }
+
+  /**
+   * 원문에 그 줄이 있는데 읽은 값이 비어 있는 칸 경로. 값을 채운 파싱 결과(out)를 보고 정한다(코드 리뷰 #1040 P2: 따로 다시 읽으면 태그가 있는 설명처럼
+   * 둘이 갈라질 수 있다). '있음'은 길이 상한 전 원문 글로 본다(코드 리뷰 #1040 P3: 상한에 걸려 빈 값이 된 칸도 읽지 못한 것).
+   *
+   * <ul>
+   *   <li>카르마: 포인트 설명이 비어 있지 않고 '미개방'(카르마를 열지 않음, 랭크 0·레벨 0, 비교 기준 ×1)도 아닌데 랭크·레벨이 null.
+   *   <li>돌 보너스: 어빌리티 스톤 툴팁 원문에 '레벨 보너스'가 있는데 보너스가 null.
+   * </ul>
+   *
+   * 설명이 비었거나 '미개방'이거나 줄이 없으면 넣지 않는다(null = ×1).
+   */
+  static List<String> unparsed(JsonNode raw, JsonNode out) {
+    var result = new ArrayList<String>();
+    for (var p : raw.path("ArkPassive").path("Points")) {
+      var key = ARK_PASSIVE.get(p.path("Name").asString(""));
+      if (key == null) continue;
+      var description = p.path("Description").asString("").strip();
+      if (description.isEmpty() || KARMA_CLOSED.equals(description)) continue;
+      var parsed = out.path("arkPassive").path(key);
+      if (!parsed.path("karmaRank").isNumber() || !parsed.path("karmalevel").isNumber())
+        result.add("arkPassive." + key + ".karma");
+    }
+    var stone = out.path("armory").path("abilityStone");
+    if (stone.isObject() && !stone.path("attackbonus").isNumber())
+      for (var item : raw.path("ArmoryEquipment")) {
+        if (!"어빌리티 스톤".equals(item.path("Type").asString(""))) continue;
+        var tooltip = item.path("Tooltip");
+        var text = tooltip.isString() ? tooltip.asString("") : tooltip.toString();
+        if (text.contains("레벨 보너스")) result.add("abilityStone.attackbonus");
+      }
+    return result;
   }
 
   /**
@@ -154,7 +240,8 @@ public final class KrakenScoreInputMapper {
     for (var p : raw.path("ArkPassive").path("Points")) {
       var key = ARK_PASSIVE.get(p.path("Name").asString(""));
       if (key == null) continue;
-      var m = KARMA.matcher(p.path("Description").asString(""));
+      // 태그를 떼고 읽는다('6랭크 <b>21</b>레벨'도 21, PM 총괄 11-21). 그래도 읽지 못하면 null이고 unparsed에 남는다.
+      var m = KARMA.matcher(strip(p.path("Description").asString("")));
       boolean found = m.find();
       var group = out.putObject(key);
       group.set("points", p.path("Value").isMissingNode() ? F.nullNode() : p.get("Value"));
@@ -230,7 +317,7 @@ public final class KrakenScoreInputMapper {
       effect.set("name", copy(e.path("Name")));
       effect.set("level", copy(e.path("Level")));
       // 원본: 태그를 지운 문장에서 마지막 '+' 뒤 수.
-      var value = firstNumber(strip(e.path("Tooltip").asString("")).replaceFirst(".*\\+", ""));
+      var value = firstNumber(afterLastPlus(strip(e.path("Tooltip").asString(""))));
       effect.set("effect", value == null ? F.nullNode() : number(value));
     }
     return out;
@@ -267,6 +354,8 @@ public final class KrakenScoreInputMapper {
         }
         var weapon = equipment.putObject("weapon");
         weapon.set("grade", grade);
+        // 재련 단계(이름 앞 '+N', 없으면 0): 전투력 경로의 에스더 무기 항에만 쓴다.
+        weapon.put("reforge", reforge(item.path("Name").asString("")));
         weapon.set("quality", copy(itemTitle(tooltip).path("qualityValue")));
         weapon.set("stat", lineValue(base, WEAPON_ATK));
       } else if ("vambrace".equals(key)) {
@@ -466,6 +555,7 @@ public final class KrakenScoreInputMapper {
   private static JsonNode tooltip(JsonNode node) {
     if (node == null || node.isMissingNode() || node.isNull()) return F.objectNode();
     if (!node.isString()) return node;
+    if (!OfficialTextLimit.fits(node.asString())) return F.objectNode();
     try {
       return MAPPER.readTree(node.asString());
     } catch (JacksonException exception) {
@@ -481,8 +571,43 @@ public final class KrakenScoreInputMapper {
     }
   }
 
+  /**
+   * 마지막 '+' 뒤 글. 결과는 {@code replaceFirst(".*\\+", "")}와 같지만 한 번만 훑는다: '.'은 줄 끝 문자를 넘지 않으므로, 첫 '+'가
+   * 있는 줄의 처음부터 그 줄의 마지막 '+'까지를 뗀다(패턴은 '+' 없는 줄에서 시작점마다 줄 끝까지 다시 훑음). '+'가 없으면 그대로.
+   */
+  static String afterLastPlus(String text) {
+    int first = text.indexOf('+');
+    if (first < 0) return text;
+    int start = first;
+    while (start > 0 && !lineEnd(text.charAt(start - 1))) start--;
+    int end = first;
+    while (end < text.length() && !lineEnd(text.charAt(end))) end++;
+    int last = text.lastIndexOf('+', end - 1);
+    return text.substring(0, start) + text.substring(last + 1);
+  }
+
+  /** java.util.regex의 '.'이 넘지 않는 줄 끝 문자(UNIX_LINES 없음). */
+  private static boolean lineEnd(char c) {
+    return c == '\n' || c == '\r' || c == '\u0085' || c == ' ' || c == ' ';
+  }
+
+  /**
+   * 태그('<'부터 다음 '>'까지)를 뗀다. 결과는 패턴 {@code <[^>]*>}의 replaceAll과 같지만 한 번만 훑는다: '<' 뒤에 '>'가 없으면 그 뒤로는
+   * 맞는 태그가 없으므로 나머지를 그대로 붙이고 끝낸다(패턴은 그 '<'마다 끝까지 다시 훑어 길이의 제곱). 상한을 넘는 칸은 읽지 않는다.
+   */
   static String strip(String html) {
-    return TAG.matcher(html == null ? "" : html).replaceAll("");
+    if (html == null || !OfficialTextLimit.fits(html)) return "";
+    var out = new StringBuilder(html.length());
+    int from = 0;
+    while (from < html.length()) {
+      int open = html.indexOf('<', from);
+      if (open < 0) break;
+      int close = html.indexOf('>', open + 1);
+      if (close < 0) break;
+      out.append(html, from, open);
+      from = close + 1;
+    }
+    return out.append(html, from, html.length()).toString();
   }
 
   private static Double firstNumber(JsonNode node) {

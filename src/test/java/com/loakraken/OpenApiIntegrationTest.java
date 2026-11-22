@@ -261,6 +261,44 @@ class OpenApiIntegrationTest {
                   .asText())
           .as(field)
           .isEqualTo("null");
+    // 딜러 KRAKEN 전투력 멈춤(PM 총괄 11-21 (e)): 경로에 nullable 필드 둘(웹은 배포 전까지 optional).
+    for (var field : List.of("combatPowerStopOrder", "combatPowerStopReasonCode"))
+      assertThat(
+              document
+                  .at(
+                      "/components/schemas/SpecUpPathResponse/properties/"
+                          + field
+                          + "/anyOf/1/type")
+                  .asText())
+          .as(field)
+          .isEqualTo("null");
+    // 답이 연마·카르마 단계를 봤는지(프론트 11-21, v0.3.15): 경로·목표 답에 boolean 선택 필드 둘(null 아님, 배포 전까지 required 아님).
+    for (var schema : List.of("SpecUpPathResponse", "SpecUpGoalResponse"))
+      for (var field : List.of("polishStepsConsidered", "karmaStepsConsidered")) {
+        assertThat(document.at("/components/schemas/" + schema + "/required").toString())
+            .as(schema + "." + field)
+            .doesNotContain(field);
+        assertThat(
+                document
+                    .at("/components/schemas/" + schema + "/properties/" + field + "/type")
+                    .asText())
+            .as(schema + "." + field)
+            .isEqualTo("boolean");
+      }
+    // 아크 패시브 포인트 카르마 레벨(프론트 #1815 후속): 기존 응답에 nullable 선택 필드 추가(계약에서 required가 아니어서 웹 계약 동기화가
+    // 배포 순서와 상관없이 안전, 코드 리뷰 #1023 P3).
+    assertThat(document.at("/components/schemas/PassivePointResponse/required").toString())
+        .doesNotContain("karmaLevel");
+    assertThat(
+            document
+                .at("/components/schemas/PassivePointResponse/properties/karmaLevel")
+                .isMissingNode())
+        .isFalse();
+    assertThat(
+            document
+                .at("/components/schemas/PassivePointResponse/properties/karmaLevel/anyOf/1/type")
+                .asText())
+        .isEqualTo("null");
     // 에스더 무기 안쪽 필드(K32, #449 P3): 둘 다 required이고 못 읽으면 null.
     assertThat(document.at("/components/schemas/StatsEstherWeaponResponse/required").toString())
         .contains("refineLevel", "ellaStage");
@@ -289,6 +327,18 @@ class OpenApiIntegrationTest {
                   .asText())
           .as(field)
           .isEqualTo("null");
+    // 줄마다 점수를 매기지 않은 이유(PM 총괄 11-21 (a)): nullable 선택 필드 둘(배포 전까지 required 아님).
+    for (var field : List.of("krakenScoreReasonCode", "krakenScoreReason")) {
+      assertThat(document.at("/components/schemas/CandidateResponse/required").toString())
+          .as(field)
+          .doesNotContain(field);
+      assertThat(
+              document
+                  .at("/components/schemas/CandidateResponse/properties/" + field + "/anyOf/1/type")
+                  .asText())
+          .as(field)
+          .isEqualTo("null");
+    }
     assertThat(document.at("/components/schemas/SpecUpResponse/required").toString())
         .contains("cooldownGemsIncluded");
     // 스펙업 목표 경로(L31): 새 경로, 모든 필드 required, 값이 없을 수 있는 필드만 nullable.

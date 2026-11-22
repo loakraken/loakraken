@@ -1002,8 +1002,8 @@
             "type": "prometheus",
             "uid": "loakraken-prometheus"
           },
-          "expr": "sum by (outcome) (rate(loakraken_market_warmup_total{application=\"loakraken\"}[5m])) * 60",
-          "legendFormat": "{{outcome}}",
+          "expr": "sum by (target, outcome) (rate(loakraken_market_warmup_total{application=\"loakraken\"}[5m])) * 60",
+          "legendFormat": "{{target}} {{outcome}}",
           "range": true
         }
       ]

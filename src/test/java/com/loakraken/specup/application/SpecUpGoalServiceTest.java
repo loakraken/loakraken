@@ -35,6 +35,8 @@ class SpecUpGoalServiceTest {
   {
     // 실제 서비스는 점수 입력을 읽을 수 없을 때 null(앞 배치)이다. 목은 빈 목록(점수가 오르는 조합 없음)을 돌려주므로 null로 둔다.
     when(specUp.stoneOrientations(org.mockito.ArgumentMatchers.any())).thenReturn(null);
+    // 카르마 단계 스위치 꺼짐(Mockito 기본 0이면 0레벨에서 카르마 단계가 생긴다).
+    when(specUp.karmaPathLevel(org.mockito.ArgumentMatchers.any())).thenReturn(null);
   }
 
   private final MemoryStore store = new MemoryStore();
@@ -164,8 +166,9 @@ class SpecUpGoalServiceTest {
   void 추천_순서는_시세가_있는_단계만_limit까지_이어_고르고_다시_재도_같다() {
     var service = service(System::nanoTime);
     when(auctions.cachedGems()).thenReturn(gemCells(Instant.parse("2026-10-31T12:00:00Z"), false));
-    var path = service.path("목표테스트", SpecUpGoalService.Pick.EFFICIENCY, 5);
-    assertThat(path.steps()).hasSize(5);
+    // 레벨 점프로 보석 4칸이 한 단계씩 10레벨이 되어 4단계 뒤에는 후보가 없다: limit 3으로 STEP_LIMIT을 본다.
+    var path = service.path("목표테스트", SpecUpGoalService.Pick.EFFICIENCY, 3);
+    assertThat(path.steps()).hasSize(3);
     assertThat(path.stopReasonCode()).isEqualTo("STEP_LIMIT");
     assertThat(path.unpriced()).isEmpty();
     // 같은 칸(candidateId에서 마지막 ':목표' 앞)은 마지막 단계의 change만 남긴다(서비스가 그 칸을 바꿔 끼우는 것과 같음).
@@ -191,7 +194,7 @@ class SpecUpGoalServiceTest {
     // 같은 입력이면 같은 순서(캐시를 비워도)
     store.saved.clear();
     store.paths.clear();
-    var again = service.path("목표테스트", SpecUpGoalService.Pick.EFFICIENCY, 5);
+    var again = service.path("목표테스트", SpecUpGoalService.Pick.EFFICIENCY, 3);
     assertThat(again.steps().stream().map(SpecUpGoalService.Step::candidateId).toList())
         .isEqualTo(path.steps().stream().map(SpecUpGoalService.Step::candidateId).toList());
     assertThat(meters.counter("loakraken.spec_up.path", "outcome", "computed").count())
@@ -245,6 +248,86 @@ class SpecUpGoalServiceTest {
   }
 
   /**
+   * 레벨 점프(계산 검증 11-20 22:21, 비교 기준과 같음): 추천 순서 KRAKEN·EFFICIENCY는 칸마다 끝까지의 모든 레벨이 후보다. 비율이 같으면 Δ가 큰
+   * 점프가 이긴다. 가짜 시세는 레벨 × 1,000골드라 1 → n 보석은 모두 비율이 같다(Δ n−1, 비용 (n−1) × 1,000). DELTA는 다음 한 단계 그대로.
+   */
+  @Test
+  void 추천_순서는_비율이_같으면_보석을_10레벨까지_한_번에_올리고_DELTA는_한_단계씩이다() {
+    var service = service(System::nanoTime);
+    when(auctions.cachedGems()).thenReturn(gemCells(Instant.parse("2026-10-31T12:00:00Z"), false));
+    var path = service.path("목표테스트", SpecUpGoalService.Pick.EFFICIENCY, 4);
+    assertThat(path.steps())
+        .extracting(SpecUpGoalService.Step::candidateId)
+        .containsExactly("GEM_LEVEL:0:10", "GEM_LEVEL:1:10", "GEM_LEVEL:2:10", "GEM_LEVEL:3:10");
+    var first = path.steps().getFirst();
+    assertThat(first.deltaCombatPower()).isEqualByComparingTo("9");
+    assertThat(first.extraCost()).isEqualTo(9_000L);
+    assertThat(path.totalCost()).isEqualTo(36_000L);
+    var delta = service.path("목표테스트", SpecUpGoalService.Pick.DELTA, 4);
+    assertThat(delta.steps())
+        .allSatisfy(
+            step ->
+                assertThat(Integer.parseInt(step.to().replace("레벨", "")))
+                    .isEqualTo(Integer.parseInt(step.from().replace("레벨", "")) + 1));
+  }
+
+  /** 비용을 모르는 단계끼리는 Δ가 큰 순이라 가장 큰 점프를 먼저 고른다(비교 기준 10-18 꼬리: 완갑 16 → 25). 완갑 비용을 모르고 보석 시세도 없다. */
+  @Test
+  void 비용을_모르면_가장_큰_점프를_먼저_고른다() {
+    equipment = List.of(armGuard(14));
+    var service = service(System::nanoTime);
+    when(specUp.armGuardEnabled()).thenReturn(true);
+    when(specUp.armGuardGrade(
+            org.mockito.ArgumentMatchers.eq("고대"), org.mockito.ArgumentMatchers.anyInt()))
+        .thenReturn("고대");
+    when(specUp.armGuardStepCost(org.mockito.ArgumentMatchers.anyInt(), any(), any()))
+        .thenReturn(com.loakraken.specup.domain.SpecUpCost.ARM_GUARD_COST_UNCONFIRMED);
+    var path = service.path("목표테스트", SpecUpGoalService.Pick.EFFICIENCY, 2);
+    // 가짜 시뮬레이터 Δ = 목표 − 1: 완갑 25(Δ 24)가 보석 10(Δ 9)보다 크다.
+    assertThat(path.steps())
+        .extracting(SpecUpGoalService.Step::candidateId)
+        .containsExactly("EQUIPMENT_REFINE:0:25", "GEM_LEVEL:0:10");
+    assertThat(path.steps().getFirst().change().level()).isEqualTo(25);
+    assertThat(path.steps().getFirst().extraCost()).isNull();
+  }
+
+  /**
+   * 점프 비용 = 지금부터 목표까지 단계 비용의 합(기대 비용은 더해진다). 14 → 15만 140,000, 그 뒤 단계는 10,000골드라 어느 목표든 비율이 같고(Δ
+   * 목표−1, 비용 10,000 × (목표−1)), Δ가 큰 25가 이긴다: 140,000 + 10 × 10,000.
+   */
+  @Test
+  void 점프_비용은_목표까지_단계_비용의_합이다() {
+    equipment = List.of(armGuard(14));
+    var service = service(System::nanoTime);
+    when(specUp.armGuardEnabled()).thenReturn(true);
+    when(specUp.armGuardGrade(
+            org.mockito.ArgumentMatchers.eq("고대"), org.mockito.ArgumentMatchers.anyInt()))
+        .thenReturn("고대");
+    when(specUp.armGuardStepCost(org.mockito.ArgumentMatchers.anyInt(), any(), any()))
+        .thenAnswer(
+            invocation ->
+                com.loakraken.specup.domain.SpecUpCost.armGuardExpected(
+                    (int) invocation.getArgument(0) == 14 ? 140_000L : 10_000L));
+    var path = service.path("목표테스트", SpecUpGoalService.Pick.EFFICIENCY, 1);
+    assertThat(path.steps())
+        .extracting(SpecUpGoalService.Step::candidateId)
+        .containsExactly("EQUIPMENT_REFINE:0:25");
+    assertThat(path.steps().getFirst().extraCost()).isEqualTo(240_000L);
+    assertThat(path.steps().getFirst().cost().code()).isEqualTo("ARM_GUARD_EXPECTED");
+  }
+
+  private static CharacterLoadout.Equipment armGuard(int refine) {
+    return new CharacterLoadout.Equipment(
+        "완갑",
+        "테스트 완갑",
+        null,
+        "고대",
+        new CharacterLoadout.EquipmentDetail(
+            refine, null, null, null, null, List.of(), List.of(), List.of(), List.of(), null,
+            List.of(), null, List.of(), null, List.of()));
+  }
+
+  /**
    * 추천 순서는 완갑(팔 보호구) 재련도 다음 단계 후보로 둔다(스위치가 켜져 있을 때): 한 단계 = 다음 단계, id·등급·한 단계 비용은 목록 완갑 줄과 같은 규칙,
    * 시뮬레이터에는 ARM_GUARD(목표 단계·등급). 같은 칸이라 다음 단계로 이어 올린다. 스위치를 끄면 완갑은 순서에도 unpriced에도 없다.
    */
@@ -286,7 +369,7 @@ class SpecUpGoalServiceTest {
     // 비용을 모두 알면 아는 합 = 합계, 모르는 단계 0(PM 총괄 11-19).
     assertThat(path.knownCostTotal()).isEqualTo(480_000L);
     assertThat(path.unknownCostSteps()).isZero();
-    assertThat(path.ruleVersion()).isEqualTo("spec-up-path-v6");
+    assertThat(path.ruleVersion()).isEqualTo("spec-up-path-v7");
 
     when(specUp.armGuardEnabled()).thenReturn(false);
     var off = service.path("목표테스트", SpecUpGoalService.Pick.EFFICIENCY, 3);
@@ -850,6 +933,79 @@ class SpecUpGoalServiceTest {
   }
 
   /**
+   * 검색봇 표시(User-Agent로 붙는 'bot:' 접두)는 같은 주소에 두 번째 자리를 주지 않는다(보안 11-20 (b)): 주소 키로 자리를 잡은 동안 같은 주소의
+   * 봇 키는 client_busy이고, 끝나면 봇 키로 계산한 뒤 돌려준 자리를 주소 키가 다시 쓴다.
+   */
+  @Test
+  void 검색봇_표시로_같은_주소가_두_번째_계산_자리를_받지_못한다() throws Exception {
+    var entered = new java.util.concurrent.CountDownLatch(1);
+    var release = new java.util.concurrent.CountDownLatch(1);
+    var holding = java.util.concurrent.ConcurrentHashMap.<String>newKeySet();
+    LongSupplier clock =
+        () -> {
+          var name = Thread.currentThread().getName();
+          if (name.equals("address-path") && holding.add(name)) {
+            entered.countDown();
+            try {
+              if (!release.await(10, java.util.concurrent.TimeUnit.SECONDS))
+                throw new AssertionError("계산 자리 놓아주기 대기 시간 초과");
+            } catch (InterruptedException exception) {
+              Thread.currentThread().interrupt();
+              throw new AssertionError("계산 자리 놓아주기 대기 중 중단", exception);
+            }
+          }
+          return System.nanoTime();
+        };
+    var current = new ThreadLocal<String>();
+    var service = service(clock, current::get);
+    var errors = new java.util.concurrent.ConcurrentLinkedQueue<Throwable>();
+    var first =
+        new Thread(
+            () -> {
+              current.set("a1b2c3d4");
+              try {
+                service.path("목표테스트", SpecUpGoalService.Pick.EFFICIENCY, 3);
+              } catch (Throwable error) {
+                errors.add(error);
+              }
+            },
+            "address-path");
+    first.start();
+    try {
+      assertThat(entered.await(10, java.util.concurrent.TimeUnit.SECONDS))
+          .as("주소 키의 추천 순서 계산이 자리를 잡음")
+          .isTrue();
+      current.set("bot:a1b2c3d4");
+      org.assertj.core.api.Assertions.assertThatThrownBy(
+              () -> service.goal("목표테스트", new BigDecimal("6000")))
+          .isInstanceOf(com.loakraken.common.api.BusinessException.class)
+          .satisfies(
+              e ->
+                  assertThat(((com.loakraken.common.api.BusinessException) e).errorCode())
+                      .isEqualTo(SpecUpErrorCode.SPEC_UP_BUSY));
+      assertThat(meters.counter("loakraken.spec_up.goal", "outcome", "client_busy").count())
+          .isEqualTo(1);
+      assertThat(meters.counter("loakraken.spec_up.goal", "outcome", "computed").count()).isZero();
+    } finally {
+      release.countDown();
+      first.join(10_000);
+      current.remove();
+    }
+    assertThat(first.isAlive()).isFalse();
+    assertThat(errors).isEmpty();
+    current.set("bot:a1b2c3d4");
+    service.goal("목표테스트", new BigDecimal("6000"));
+    assertThat(meters.counter("loakraken.spec_up.goal", "outcome", "computed").count())
+        .isEqualTo(1);
+    // 봇 키로 잡은 자리도 주소 키 하나로 돌려준다.
+    current.set("a1b2c3d4");
+    service.path("목표테스트", SpecUpGoalService.Pick.EFFICIENCY, 5);
+    assertThat(meters.counter("loakraken.spec_up.path", "outcome", "computed").count())
+        .isEqualTo(2);
+    current.remove();
+  }
+
+  /**
    * 동시 요청 8개(같은 클라이언트, 서로 다른 계산): 자리를 잡는 것은 정확히 하나이고 나머지 7개는 기다리지 않고 client_busy다. 자리를 잡은 계산은 나머지가
    * 모두 거절될 때까지 붙잡아 둔다(겹침을 강제).
    */
@@ -988,6 +1144,8 @@ class SpecUpGoalServiceTest {
             CharacterTestFixture.details(profile, loadout, List.of()),
             Instant.parse("2026-10-12T00:00:00Z"));
     when(simulator.snapshot("목표테스트")).thenReturn(snapshot);
+    // 방어구 문 스위치 꺼짐(기본)의 시뮬레이터 규칙 버전(#1036 이후 시뮬레이터 빈이 준다).
+    when(simulator.ruleVersion()).thenReturn(CombatPowerSimulationService.RULE_VERSION);
     // 가짜 시뮬레이터: 전투력 = 3000 + (적용한 보석 레벨 합 − 처음 레벨 합).
     when(simulator.simulate(any(CharacterResult.class), anyList()))
         .thenAnswer(

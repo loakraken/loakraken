@@ -95,7 +95,8 @@ public class CombatPowerController {
     return ApiResponse.of(
         CharacterSuccessCode.CHARACTER_COMBAT_POWER_SIMULATE_SUCCESS,
         CombatPowerSimulationResponse.from(
-            simulator.simulate(request.characterName(), request.toChanges())));
+            simulator.simulate(request.characterName(), request.toChanges()),
+            simulator.ruleVersion()));
   }
 
   @GetMapping(
@@ -123,7 +124,8 @@ public class CombatPowerController {
           String characterName) {
     return ApiResponse.of(
         CharacterSuccessCode.CHARACTER_COMBAT_POWER_CONTRIBUTIONS_SUCCESS,
-        CombatPowerContributionsResponse.from(simulator.contributions(characterName)));
+        CombatPowerContributionsResponse.from(
+            simulator.contributions(characterName), simulator.ruleVersion()));
   }
 
   public record CombatPowerContributionsResponse(
@@ -132,12 +134,13 @@ public class CombatPowerController {
       @Schema(description = "공식 전투력(소수 둘째 자리)") @NullableResponse BigDecimal combatPower,
       String ruleVersion,
       List<ContributionItemResponse> items) {
-    static CombatPowerContributionsResponse from(CombatPowerSimulationService.Contributions value) {
+    static CombatPowerContributionsResponse from(
+        CombatPowerSimulationService.Contributions value, String ruleVersion) {
       return new CombatPowerContributionsResponse(
           value.characterName(),
           value.fetchedAt(),
           value.combatPower(),
-          CombatPowerSimulationService.RULE_VERSION,
+          ruleVersion,
           value.items().stream()
               .map(
                   item ->
@@ -205,11 +208,28 @@ public class CombatPowerController {
       @Schema(description = "아크 패시브 트리(진화·깨달음·도약)") @Size(max = 8) String tree,
       @Schema(description = "아크 패시브 포인트(0~999, 도약은 0~70)") Integer points,
       @Schema(description = "아크 그리드 slot index") Integer slotIndex,
-      @Schema(description = "아크 그리드 코어 포인트") Integer point) {
+      @Schema(description = "아크 그리드 코어 포인트") Integer point,
+      @Schema(
+              description =
+                  "깨달음 카르마 레벨(0~30, ARK_PASSIVE_POINT tree 깨달음만, points·level과 함께 쓰지 않음). 딜러만 계산한다(무기 공격력 레벨당 +0.1%)")
+          Integer karmaLevel) {
     CombatPowerSimulationService.Change toChange() {
       return new CombatPowerSimulationService.Change(
-          kind, slot, index, line, level, refine, quality, option, grade, name, tree, points,
-          slotIndex, point);
+          kind,
+          slot,
+          index,
+          line,
+          level,
+          refine,
+          quality,
+          option,
+          grade,
+          name,
+          tree,
+          points,
+          slotIndex,
+          point,
+          karmaLevel);
     }
   }
 
@@ -228,9 +248,10 @@ public class CombatPowerController {
       List<ContributionResponse> contributions,
       int unsupportedCount,
       List<String> assumptions) {
-    static CombatPowerSimulationResponse from(CombatPowerSimulationService.Result result) {
+    static CombatPowerSimulationResponse from(
+        CombatPowerSimulationService.Result result, String ruleVersion) {
       return new CombatPowerSimulationResponse(
-          CombatPowerSimulationService.RULE_VERSION,
+          ruleVersion,
           result.characterName(),
           result.fetchedAt(),
           result.before(),

@@ -63,7 +63,7 @@ class AlertRateLimitIntegrationTest {
   @Test
   void 구독_만들기는_분당_상한을_넘으면_429다() throws Exception {
     jdbc.sql("DELETE FROM push_subscription").update();
-    // 한도는 실제 시각 기준 1분 고정 창이다. 세 요청이 한 창 안에 들어야 세 번째가 429다(분 경계를 넘으면 새 창에서 허용).
+    // 한도는 1분 고정 창이다. 세 요청이 한 창 안에 들어야 세 번째가 429다(분 경계를 넘으면 새 창에서 허용) — 시험용 창 시계로 새 창에서 시작한다.
     awaitMinuteWithAtLeast(Duration.ofSeconds(20));
     int[] statuses = new int[3];
     try (var client = HttpClient.newHttpClient()) {
@@ -92,11 +92,11 @@ class AlertRateLimitIntegrationTest {
     jdbc.sql("DELETE FROM push_subscription").update();
   }
 
-  /** 지금 분(UTC 1분 창)에 남은 시간이 needed보다 짧으면 다음 분이 시작될 때까지 기다린다. */
-  private static void awaitMinuteWithAtLeast(Duration needed) throws InterruptedException {
-    long minute = Duration.ofMinutes(1).toMillis();
-    long remaining = minute - System.currentTimeMillis() % minute;
-    if (remaining < needed.toMillis()) Thread.sleep(remaining + 50);
+  @Autowired com.loakraken.ClientLimitWindow window;
+
+  /** 클라이언트 한도 창을 새 창 시작 직후로 옮긴다(기다리지 않음, 새 창에는 59초가 남아 needed보다 길다). */
+  private void awaitMinuteWithAtLeast(Duration needed) {
+    window.startFreshWindow();
   }
 
   private static String[] keys() {

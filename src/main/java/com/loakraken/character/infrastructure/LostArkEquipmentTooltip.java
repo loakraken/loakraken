@@ -19,10 +19,10 @@ final class LostArkEquipmentTooltip {
   private static final String STONE_ENGRAVING_TITLE = "무작위 각인 효과";
   private static final String POLISH_TITLE = "연마 효과";
   private static final String BRACELET_TITLE = "팔찌 효과";
-  private static final Pattern ICON = Pattern.compile("(?i)<img[^>]*>(\\s*</img>)?");
+  // 태그 안은 '<'·'>'를 넘지 않는다: 닫는 '>' 없는 긴 줄에서 '<'마다 끝까지 다시 훑지 않게(실제 툴팁의 태그 속성에는 '<'가 없다).
+  static final Pattern ICON = Pattern.compile("(?i)<img[^<>]*>(\\s*</img>)?");
   private static final Pattern LINE_BREAK = Pattern.compile("(?i)<br\\s*/?>");
-  private static final Pattern FONT_COLOR =
-      Pattern.compile("(?i)<font[^>]*color=['\"]?#?([0-9a-f]{6})");
+  static final Pattern FONT_COLOR = Pattern.compile("(?i)<font[^<>]*color=['\"]?#?([0-9a-f]{6})");
   private static final Pattern NAME_VALUE = Pattern.compile("^(.+?) ([+-][0-9][0-9.,]*%?)$");
   private static final java.util.Map<String, CharacterLoadout.EffectGrade> EFFECT_GRADES =
       java.util.Map.of(
@@ -34,6 +34,8 @@ final class LostArkEquipmentTooltip {
 
   static CharacterLoadout.EquipmentDetail parse(String name, String tooltip) {
     if (tooltip == null || tooltip.isBlank()) return null;
+    // 아이콘·글자색 패턴은 닫는 '>' 없는 긴 줄에서 길이의 제곱으로 느려진다: 상한을 넘는 툴팁은 읽지 않는다.
+    if (!com.loakraken.character.domain.OfficialTextLimit.fits(tooltip)) return null;
     JsonNode root;
     try {
       root = MAPPER.readTree(tooltip);

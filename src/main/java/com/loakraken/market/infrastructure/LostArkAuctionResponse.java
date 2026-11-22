@@ -20,8 +20,19 @@ record LostArkAuctionResponse(
         totalCount == null ? 0 : totalCount,
         items == null
             ? List.of()
-            : items.stream().filter(item -> item != null).map(Item::toListing).toList(),
+            : items.stream()
+                .filter(item -> item != null && item.plausible())
+                .map(Item::toListing)
+                .toList(),
         observedAt);
+  }
+
+  /**
+   * 가격·옵션 값이 상한 밖인 매물 수(#995 리뷰 뒤속, 보안 11-16 (b)). toPage는 이 매물을 버린다(최저가·칸 값이 고장 난 상위 응답에 끌려가지 않게).
+   */
+  int implausibleItems() {
+    if (items == null) return 0;
+    return (int) items.stream().filter(item -> item != null && !item.plausible()).count();
   }
 
   @JsonIgnoreProperties(ignoreUnknown = true)
@@ -32,6 +43,20 @@ record LostArkAuctionResponse(
       @JsonProperty("AuctionInfo") AuctionInfo auctionInfo,
       @JsonProperty("Options") List<Option> options,
       @JsonProperty("Icon") String icon) {
+    /** 즉시 구매가·입찰가·시작가가 없거나 정수 자리 12 안쪽이고, 옵션 값이 지수 표기로 크지 않은가. */
+    boolean plausible() {
+      if (auctionInfo != null
+          && !(MarketPriceBounds.plausibleOrAbsent(auctionInfo.buyPrice())
+              && MarketPriceBounds.plausibleOrAbsent(auctionInfo.bidPrice())
+              && MarketPriceBounds.plausibleOrAbsent(auctionInfo.bidStartPrice()))) return false;
+      if (options != null)
+        for (var option : options)
+          if (option != null
+              && option.value() != null
+              && !MarketPriceBounds.plausible(option.value().abs())) return false;
+      return true;
+    }
+
     AuctionPort.AuctionListing toListing() {
       var info = auctionInfo == null ? new AuctionInfo(null, null, null, null, null) : auctionInfo;
       return new AuctionPort.AuctionListing(

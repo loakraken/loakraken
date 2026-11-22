@@ -126,6 +126,12 @@ class SpecUpPolishPathIntegrationTest {
                 + "&limit=30");
     assertThat(response.statusCode()).as(response.body()).isEqualTo(200);
     SiteNames.assertAbsent(response.body());
+    // 연마 스위치 켬 + 딜러 + 점수 입력: 답이 연마 단계를 봤다(프론트 11-21). 카르마 스위치는 꺼져 있다.
+    var answer = mapper.readTree(response.body()).path("data");
+    assertThat(answer.path("polishStepsConsidered").isBoolean()).as(sort).isTrue();
+    assertThat(answer.path("polishStepsConsidered").asBoolean()).as(sort).isTrue();
+    assertThat(answer.path("karmaStepsConsidered").isBoolean()).as(sort).isTrue();
+    assertThat(answer.path("karmaStepsConsidered").asBoolean()).as(sort).isFalse();
     var steps = mapper.readTree(response.body()).at("/data/steps");
     var all = new ArrayList<JsonNode>();
     // 칸(장신구)마다 앞 단계들이 바꾼 줄.

@@ -95,6 +95,13 @@ public class CombatPowerSimulationService {
   private final com.loakraken.character.domain.CombatPowerArkPassiveModel.Coefficients
       arkPassiveCoefficients;
 
+  /** 방어구 재련·상급 재련·완갑 전투력 문(spec-up.armor-cp-gate.enabled, 기본 꺼짐). */
+  private final ArmorCpGate armorGate;
+
+  /** 문 밖(|r| > 0.10%)일 때의 이유(코드 ARMOR_CP_RESIDUAL_HIGH, 웹 문구와 같은 해요체, PM-프론트 11-21). */
+  static final String ARMOR_CP_RESIDUAL_HIGH =
+      com.loakraken.character.domain.CombatPowerReasons.ARMOR_CP_RESIDUAL_HIGH.text();
+
   public CombatPowerSimulationService(
       CharacterCache cache,
       CharacterPublicSummaryPort stored,
@@ -104,8 +111,9 @@ public class CombatPowerSimulationService {
       CombatPowerRefineModel.Coefficients refineCoefficients,
       CombatPowerBraceletModel.Coefficients braceletCoefficients,
       CombatPowerArkGridModel.Coefficients arkGridCoefficients,
-      com.loakraken.character.domain.CombatPowerArkPassiveModel.Coefficients
-          arkPassiveCoefficients) {
+      com.loakraken.character.domain.CombatPowerArkPassiveModel.Coefficients arkPassiveCoefficients,
+      ArmorCpGate armorGate) {
+    this.armorGate = armorGate;
     this.cache = cache;
     this.stored = stored;
     this.gemCoefficients = gemCoefficients;
@@ -147,7 +155,29 @@ public class CombatPowerSimulationService {
       String tree,
       Integer points,
       Integer slotIndex,
-      Integer point) {}
+      Integer point,
+      Integer karmaLevel) {
+    /** karmaLevel 없는 변경(깨달음 카르마 레벨 바꾸기가 아닌 모든 종류). */
+    public Change(
+        Kind kind,
+        Integer slot,
+        Integer index,
+        Integer line,
+        Integer level,
+        Integer refine,
+        Integer quality,
+        String option,
+        String grade,
+        String name,
+        String tree,
+        Integer points,
+        Integer slotIndex,
+        Integer point) {
+      this(
+          kind, slot, index, line, level, refine, quality, option, grade, name, tree, points,
+          slotIndex, point, null);
+    }
+  }
 
   public enum Status {
     OK,
@@ -614,7 +644,8 @@ public class CombatPowerSimulationService {
     var engravings = currentEngravings(loadout);
     var weaponAddDamage = CombatPowerEquipmentModel.currentWeaponAddDamage(weaponDetail(loadout));
     var state =
-        new State(Map.of(), null, Map.of(), Map.of(), Map.of(), null, Map.of(), Map.of(), Map.of());
+        new State(
+            Map.of(), null, Map.of(), Map.of(), Map.of(), null, Map.of(), Map.of(), Map.of(), null);
     var running = before;
     var contributions = new ArrayList<Contribution>();
     int unsupported = 0;
@@ -623,6 +654,14 @@ public class CombatPowerSimulationService {
       String reason = roleReason != null ? roleReason : planned.reason();
       if (roleReason == null) {
         var hold = heldReason(loadout, braceletModel, planned);
+        // 방어구 재련·상급 재련·완갑: 문이 열린 스냅샷이면 계산하고, r이 크면 그 이유로 닫는다(스위치가 꺼져 있으면 지금처럼).
+        if (hold != null && armorClosed(loadout, planned.change()))
+          hold =
+              switch (armorGate.state(result)) {
+                case OPEN -> null;
+                case RESIDUAL_HIGH -> ARMOR_CP_RESIDUAL_HIGH;
+                case DISABLED, UNAVAILABLE -> hold;
+              };
         if (hold != null) reason = hold;
       }
       if (planned.effect() != null && reason == null) {
@@ -697,6 +736,9 @@ public class CombatPowerSimulationService {
   /** 아크 패시브 트리(진화·깨달음·도약) 포인트 합: 지금 → 새 합. */
   private record PassiveEffect(String tree, int current, int next) implements Effect {}
 
+  /** 깨달음 카르마 레벨: 지금 → 새 레벨. W 항의 무기 공격력 %가 레벨마다 karmaWeaponPctPerLevel만큼 바뀐다. */
+  private record KarmaEffect(int current, int next) implements Effect {}
+
   /** 아크 그리드 코어(slotIndex) 등급·포인트: 지금·바꾼 뒤 코어 계수 C(%). */
   private record ArkGridCoreEffect(int slot, BigDecimal nowPct, BigDecimal nextPct)
       implements Effect {}
@@ -714,7 +756,8 @@ public class CombatPowerSimulationService {
       CombatPowerRefineModel.ArmGuard armGuard,
       Map<String, PolishEffect> polish,
       Map<Integer, ArkGridCoreEffect> cores,
-      Map<String, PassiveEffect> passives) {
+      Map<String, PassiveEffect> passives,
+      KarmaEffect karma) {
     State apply(Effect effect, Map<String, CharacterLoadout.PassiveEngraving> currents) {
       return switch (effect) {
         case GemEffect gem -> {
@@ -729,7 +772,8 @@ public class CombatPowerSimulationService {
               armGuard,
               polish,
               cores,
-              passives);
+              passives,
+              karma);
         }
         case WeaponQualityEffect quality ->
             new State(
@@ -741,7 +785,8 @@ public class CombatPowerSimulationService {
                 armGuard,
                 polish,
                 cores,
-                passives);
+                passives,
+                karma);
         case RefineEffect refine -> {
           var next = new HashMap<>(refines);
           var base = refines.getOrDefault(refine.index(), refine.current());
@@ -759,7 +804,8 @@ public class CombatPowerSimulationService {
               armGuard,
               polish,
               cores,
-              passives);
+              passives,
+              karma);
         }
         case BraceletEffect line -> {
           var next = new HashMap<>(bracelet);
@@ -773,7 +819,8 @@ public class CombatPowerSimulationService {
               armGuard,
               polish,
               cores,
-              passives);
+              passives,
+              karma);
         }
         case ArmGuardEffect guard ->
             new State(
@@ -785,8 +832,21 @@ public class CombatPowerSimulationService {
                 guard.target(),
                 polish,
                 cores,
-                passives);
+                passives,
+                karma);
         case NeutralEffect neutral -> this;
+        case KarmaEffect next ->
+            new State(
+                gems,
+                weaponAddDamage,
+                engravings,
+                refines,
+                bracelet,
+                armGuard,
+                polish,
+                cores,
+                passives,
+                next);
         case ArkGridCoreEffect core -> {
           var next = new HashMap<>(cores);
           next.put(core.slot(), core);
@@ -799,7 +859,8 @@ public class CombatPowerSimulationService {
               armGuard,
               polish,
               Map.copyOf(next),
-              passives);
+              passives,
+              karma);
         }
         case PolishEffect line -> {
           var next = new HashMap<>(polish);
@@ -813,7 +874,8 @@ public class CombatPowerSimulationService {
               armGuard,
               Map.copyOf(next),
               cores,
-              passives);
+              passives,
+              karma);
         }
         case PassiveEffect next -> {
           var map = new HashMap<>(passives);
@@ -827,7 +889,8 @@ public class CombatPowerSimulationService {
               armGuard,
               polish,
               cores,
-              Map.copyOf(map));
+              Map.copyOf(map),
+              karma);
         }
         case EngravingEffect engraving -> {
           var next = new HashMap<>(engravings);
@@ -853,7 +916,8 @@ public class CombatPowerSimulationService {
               armGuard,
               polish,
               cores,
-              passives);
+              passives,
+              karma);
         }
       };
     }
@@ -922,7 +986,16 @@ public class CombatPowerSimulationService {
       weaponPctDelta =
           weaponPctDelta.add(line.to().weaponPct().subtract(line.from().weaponPct()), MATH);
     }
-    // 재련 단계와 팔찌·연마의 무기 공격력은 같은 W 항을 쓴다.
+    // 깨달음 카르마(PM 총괄 11-15 (f), 딜러만): 레벨마다 무기 공격력 % +0.1%(W 항 안, 3곳 일치).
+    if (state.karma() != null)
+      weaponPctDelta =
+          weaponPctDelta.add(
+              refineModel
+                  .coefficients()
+                  .karmaWeaponPctPerLevel()
+                  .multiply(BigDecimal.valueOf(state.karma().next() - state.karma().current())),
+              MATH);
+    // 재련 단계와 팔찌·연마·카르마의 무기 공격력은 같은 W 항을 쓴다.
     if (!state.refines().isEmpty()
         || weaponFlatDelta.signum() != 0
         || weaponPctDelta.signum() != 0
@@ -1053,7 +1126,7 @@ public class CombatPowerSimulationService {
       case BRACELET_EFFECT -> "BRACELET:" + change.line();
       case ENGRAVING_LEVEL -> "ENGRAVING:" + change.name();
       case STONE_ENGRAVING -> "STONE:" + change.name();
-      case ARK_PASSIVE_POINT -> "ARK_PASSIVE:" + change.tree();
+      case ARK_PASSIVE_POINT -> karmaChange(change) ? "KARMA" : "ARK_PASSIVE:" + change.tree();
       case ARK_GRID_CORE -> "ARK_GRID:" + change.slotIndex();
       case ARM_GUARD -> "ARM_GUARD";
     };
@@ -1066,6 +1139,8 @@ public class CombatPowerSimulationService {
       CombatPowerBraceletModel.Model braceletModel,
       Change change) {
     if (change.kind() == null) throw invalid("kind가 필요합니다.");
+    if (change.karmaLevel() != null && change.kind() != Kind.ARK_PASSIVE_POINT)
+      throw invalid("karmaLevel은 ARK_PASSIVE_POINT(tree 깨달음)에만 쓸 수 있습니다.");
     return switch (change.kind()) {
       case GEM_LEVEL_ALL -> {
         range("level", change.level(), 0, 10);
@@ -1288,6 +1363,14 @@ public class CombatPowerSimulationService {
             engraving);
       }
       case ARK_PASSIVE_POINT -> {
+        if (change.karmaLevel() != null) {
+          // 깨달음 카르마 레벨은 자기 필드로만(포인트·level과 섞지 않음, PM 총괄 11-19).
+          if (!ENLIGHTENMENT.equals(change.tree()))
+            throw invalid("karmaLevel은 tree 깨달음에만 쓸 수 있습니다.");
+          if (change.points() != null || change.level() != null)
+            throw invalid("karmaLevel은 points·level과 함께 쓸 수 없습니다.");
+          yield karma(loadout, refineModel, change, change.karmaLevel(), karmaCpEnabled);
+        }
         range("points", change.points(), 0, 999);
         var point =
             loadout.arkPassive() == null
@@ -1388,6 +1471,51 @@ public class CombatPowerSimulationService {
             reason);
       }
     };
+  }
+
+  /**
+   * 방어구 재련·상급 재련·팔 보호구처럼 전투력을 아직 계산하지 않는(UNSUPPORTED, 주 스탯 경로 확인 전) 변경인지. heldReason과 같은 규칙(팔찌 줄은
+   * 빼고). 스펙업 KRAKEN 추천 순서는 이 단계를 점수로 고르고 전투력은 비운다(PM 총괄 11-21 (e)).
+   */
+  public static boolean armorClosed(CharacterLoadout loadout, Change change) {
+    if (change == null) return false;
+    if (change.kind() == Kind.ARM_GUARD) return true;
+    if (change.kind() != Kind.EQUIPMENT_REFINE && change.kind() != Kind.EQUIPMENT_ADVANCED_REFINE)
+      return false;
+    var index = change.index();
+    if (loadout == null || index == null || index < 0 || index >= loadout.equipment().size())
+      return false;
+    var item = loadout.equipment().get(index);
+    return item != null && !"무기".equals(item.type());
+  }
+
+  /**
+   * 이 스냅샷에서 이 변경의 전투력을 아직 내지 않는지(방어구 재련·상급 재련·완갑이고 문이 열리지 않음). 스펙업 추천 순서 KRAKEN이 전투력을 비울 단계를 고를 때
+   * 쓴다(문이 열리면 전투력을 그대로 잰다).
+   */
+  public boolean armorClosed(CharacterResult snapshot, Change change) {
+    if (!armorClosed(snapshot.details().loadout(), change)) return false;
+    return armorGate.state(snapshot) != ArmorCpGate.State.OPEN;
+  }
+
+  /** 방어구 전투력 문 스위치가 켜졌는지(캐시 키·규칙 버전에 쓴다). */
+  public boolean armorGateEnabled() {
+    return armorGate.enabled();
+  }
+
+  /**
+   * 응답에 쓰는 규칙 버전: 방어구 전투력 문 스위치가 켜지면 '-acg'를 붙인다(같은 버전에 다른 값이 나오지 않게, 코드 리뷰 #1036 P2-5). 꺼져 있으면 지금과
+   * 같다. 웹은 이 값을 비교하지 않는다(PM-프론트 11-21).
+   */
+  public String ruleVersion() {
+    return armorGate.enabled() ? RULE_VERSION + "-acg" : RULE_VERSION;
+  }
+
+  /** 스펙업 추천 순서가 방어구 단계에서 전투력을 비울 때의 이유 코드: 문 밖이면 ARMOR_CP_RESIDUAL_HIGH, 그 밖은 계산식 확인 전. */
+  public String armorStopReason(CharacterResult snapshot) {
+    return armorGate.state(snapshot) == ArmorCpGate.State.RESIDUAL_HIGH
+        ? com.loakraken.character.domain.CombatPowerReasons.ARMOR_CP_RESIDUAL_HIGH.code()
+        : "ARMOR_REFINE_CP_UNCONFIRMED";
   }
 
   /** 확인 전이라 계산하지 않는 변경의 이유(방어구 재련·상급 재련, 팔 보호구, 팔찌 힘·민첩·지능 줄). 그 밖이면 null. */
@@ -1532,6 +1660,75 @@ public class CombatPowerSimulationService {
     return name.endsWith("%") ? name.substring(0, name.length() - 1).strip() : name;
   }
 
+  /** 깨달음 카르마 레벨 최대(공식 가이드 아크 패시브: 랭크마다 레벨 1~30). */
+  static final int KARMA_MAX_LEVEL = 30;
+
+  private static final String KARMA_BASIS =
+      "깨달음 카르마 레벨마다 무기 공격력 +0.1%(전투력 W 항 안, 세 곳 일치)를 바꾼 비율을 공식 전투력에 곱했습니다.";
+  private static final String KARMA_UNREAD = "깨달음 카르마 레벨을 읽지 못해 계산하지 않았습니다.";
+
+  private static final String KARMA_OFF = "깨달음 카르마 레벨 전투력 계산은 아직 켜지 않아 계산하지 않았습니다.";
+
+  /** 깨달음 카르마 레벨 계산 스위치(spec-up.karma-cp.enabled, 기본 꺼짐). 스펙업 줄·단계와 /simulate가 같은 스위치를 본다. */
+  private volatile boolean karmaCpEnabled;
+
+  @org.springframework.beans.factory.annotation.Value("${spec-up.karma-cp.enabled:false}")
+  void setKarmaCpEnabled(boolean enabled) {
+    this.karmaCpEnabled = enabled;
+  }
+
+  /**
+   * 깨달음 카르마 레벨 바꾸기: ARK_PASSIVE_POINT(tree 깨달음)에 karmaLevel을 넣는다(points·level 없음). 새 kind를 만들지 않아
+   * 응답의 kind 값이 늘지 않고, 깨달음 포인트(points)와 헷갈리지 않게 자기 필드를 쓴다(PM 총괄 11-19).
+   */
+  public static Change karmaLevelChange(int level) {
+    return new Change(
+        Kind.ARK_PASSIVE_POINT,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        ENLIGHTENMENT,
+        null,
+        null,
+        null,
+        level);
+  }
+
+  /** 깨달음 카르마 레벨 변경인가(ARK_PASSIVE_POINT + karmaLevel). */
+  public static boolean karmaChange(Change change) {
+    return change.kind() == Kind.ARK_PASSIVE_POINT && change.karmaLevel() != null;
+  }
+
+  /**
+   * 깨달음 카르마 레벨을 level로(0~30). 딜러가 아니면 compute가 역할 이유로 거른다(서포터 식은 비교 기준과 달라 계산하지 않음, PM 총괄 11-15).
+   */
+  private static Planned karma(
+      CharacterLoadout loadout,
+      CombatPowerRefineModel.Model refineModel,
+      Change change,
+      Integer level,
+      boolean enabled) {
+    range("karmaLevel", level, 0, KARMA_MAX_LEVEL);
+    var target = "깨달음 카르마";
+    var to = String.valueOf(level);
+    // 스위치(spec-up.karma-cp.enabled)가 꺼져 있으면 시뮬레이터에 바로 넣어도 계산하지 않는다(검증 전 값이 나가지 않게, 코드 리뷰 #1004 P2).
+    if (!enabled) return new Planned(change, target, null, to, null, null, KARMA_OFF);
+    // 아크 패시브나 깨달음 포인트 줄이 없으면 카르마 레벨을 읽은 것이 아니다(0으로 보고 +3%를 내지 않게, 코드 리뷰 #1004 P3·재실행 P2).
+    var current = CombatPowerRefineModel.observedKarmaLevel(loadout);
+    if (current == null) return new Planned(change, target, null, to, null, null, KARMA_UNREAD);
+    var from = String.valueOf(current);
+    if (refineModel.unsupportedReason() != null)
+      return new Planned(change, target, from, to, null, null, refineModel.unsupportedReason());
+    return new Planned(
+        change, target, from, to, new KarmaEffect(current, level), KARMA_BASIS, null);
+  }
+
   private static Planned unsupported(Change change, String target, String from, String to) {
     return new Planned(change, target, from, to, null, null, UNSUPPORTED_BASIS);
   }
@@ -1636,7 +1833,7 @@ public class CombatPowerSimulationService {
 
   public Options options() {
     return new Options(
-        RULE_VERSION,
+        ruleVersion(),
         false,
         List.of(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10),
         10,

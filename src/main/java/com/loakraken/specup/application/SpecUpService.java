@@ -8,6 +8,7 @@ import com.loakraken.character.domain.CharacterLoadout;
 import com.loakraken.character.domain.CombatPowerGemModel;
 import com.loakraken.character.domain.CombatPowerPolishValues;
 import com.loakraken.character.domain.CombatPowerReasons;
+import com.loakraken.character.domain.CombatPowerRefineModel;
 import com.loakraken.common.api.BusinessException;
 import com.loakraken.market.application.MarketAuctionService;
 import com.loakraken.market.application.RefiningMaterialPriceService;
@@ -101,7 +102,7 @@ public class SpecUpService {
   /**
    * 점수 입력 줄 전투력 실패 수(loakraken.spec_up.row_cp_failed{kind, error}). 스위치를 켠 뒤 줄이 조용히 점수만으로 떨어지는지 보는
    * 값이다. kind는 POLISH·ABILITY_STONE(목록 줄)·POLISH_STEP(추천 순서 연마 단계가 빠짐), error는 예외 클래스 이름,
-   * line_mismatch(점수 입력 줄과 툴팁 줄이 다름) 또는 unmappable이라 값이 몇 개뿐이다.
+   * line_mismatch(점수 입력 줄과 툴팁 줄이 다름), level_mismatch(카르마 레벨이 다름) 또는 unmappable이라 값이 몇 개뿐이다.
    */
   private final io.micrometer.core.instrument.MeterRegistry meters;
 
@@ -126,6 +127,14 @@ public class SpecUpService {
   }
 
   /**
+   * 깨달음 카르마 줄의 Δ전투력(spec-up.karma-cp.enabled, 기본 끔, PM 총괄 11-15 (f)). 켜면 딜러 카르마 줄에 레벨마다 무기 공격력
+   * +0.1%(W 항)로 전투력을 낸다. 서포터는 비교 기준과 식이 달라 점수만.
+   */
+  boolean karmaCpEnabled() {
+    return environment.getProperty("spec-up.karma-cp.enabled", Boolean.class, false);
+  }
+
+  /**
    * 추천 순서·목표 경로의 연마 단계(spec-up.polish-path.enabled, 기본 끔, 목록 연마 전투력 스위치와 따로). 켜면 딜러 연마 교체 줄을 같은
    * 목표·id·비용으로 단계 후보에 넣는다. 요청마다 읽는다.
    */
@@ -145,6 +154,24 @@ public class SpecUpService {
   java.util.List<Map<String, Integer>> stoneOrientations(CharacterResult snapshot) {
     // 비교 기준은 점수 표시와 상관없이 늘 점수로 배치를 고른다(PM 총괄 11-15): 표시 스위치가 꺼져도 안에서 점수를 잰다.
     return SpecUpScoreCandidates.stoneOrientations(kraken, kraken.internalContext(snapshot));
+  }
+
+  /**
+   * 추천 순서·목표 경로 카르마 단계의 시작 레벨(spec-up.karma-cp.enabled): 툴팁(아크 패시브 설명) 레벨, 점수 입력이 있으면 그 레벨과 같을 때만(두
+   * 원문 파서가 갈라지면 단계를 내지 않음). 스위치가 꺼졌거나 읽지 못하면 null.
+   */
+  Integer karmaPathLevel(CharacterResult snapshot) {
+    if (!karmaCpEnabled()) return null;
+    var loadout = snapshot.details().loadout();
+    // 깨달음 포인트 줄이 없으면 관측한 레벨이 아니라 단계를 내지 않는다(코드 리뷰 #1004 재실행 P2).
+    var level = CombatPowerRefineModel.observedKarmaLevel(loadout);
+    if (level == null) return null;
+    var context = kraken.internalContext(snapshot);
+    if (context != null && context.input() != null) {
+      var input = context.input().path("arkPassive").path("enlightenment").path("karmalevel");
+      if (input.isNumber() && input.asInt() != level) return null;
+    }
+    return level;
   }
 
   /** 크라켄 점수 문맥(목록과 같음). */
@@ -231,15 +258,38 @@ public class SpecUpService {
     }
   }
 
+  /** 연마 단계를 보는 점수 문맥: 스위치 켬 + 딜러 + 크라켄 점수 입력. 아니면 null. */
+  private SpecUpKrakenScore.Context polishContext(CharacterResult snapshot) {
+    if (!polishPathEnabled() || CombatPowerSimulationService.roleReason(snapshot) != null)
+      return null;
+    var context = kraken.context(snapshot);
+    return context.available() && !context.support() ? context : null;
+  }
+
+  /**
+   * 이 답(추천 순서·목표 경로)이 연마 단계를 후보로 보는지(프론트 11-21, 응답 polishStepsConsidered). polishSteps와 같은 조건이라 고른
+   * 연마 단계가 없어도 true일 수 있다.
+   */
+  boolean polishPathApplies(CharacterResult snapshot) {
+    return polishContext(snapshot) != null;
+  }
+
+  /**
+   * 이 답이 깨달음 카르마 단계를 후보로 보는지(응답 karmaStepsConsidered): 스위치 켬 + (딜러 또는 KRAKEN 순서). 서포터는 점수로 고르는
+   * KRAKEN 순서에서만 카르마 단계를 고르고, 전투력으로 고르는 순서·목표 경로에서는 시뮬레이터가 서포터 전투력을 내지 않는다.
+   */
+  boolean karmaPathApplies(CharacterResult snapshot, boolean krakenOrder) {
+    return karmaCpEnabled()
+        && (krakenOrder || CombatPowerSimulationService.roleReason(snapshot) == null);
+  }
+
   /**
    * 연마 단계 후보(스위치가 꺼졌거나, 딜러가 아니거나, 크라켄 점수 입력이 없으면 빈 목록). 비용은 목록과 같은 식이고 캐시된 연마 시세 칸만 쓴다(경로는 시세 칸을
    * 채우지 않음). 변경을 만들 수 없는 줄(점수 입력·툴팁이 다름, 수치표에 없음)은 뺀다.
    */
   List<PolishStep> polishSteps(CharacterResult snapshot) {
-    if (!polishPathEnabled() || CombatPowerSimulationService.roleReason(snapshot) != null)
-      return List.of();
-    var context = kraken.context(snapshot);
-    if (!context.available() || context.support()) return List.of();
+    var context = polishContext(snapshot);
+    if (context == null) return List.of();
     var loadout = snapshot.details().loadout();
     var rows = SpecUpScoreCandidates.polish(context.input(), loadout, polishValues);
     if (rows == null) return List.of();
@@ -378,7 +428,46 @@ public class SpecUpService {
        * KRAKEN 정렬 키: 반올림 전 10만 골드당(raw ÷ 비용 × 10만). 비교 기준 B 원본도 반올림 전 값으로 정렬하고 표시만 둘째 자리다(계산 검증
        * 11-01). 응답에는 내지 않는다(화면 값은 krakenScorePer100kGold).
        */
-      Double krakenRank) {
+      Double krakenRank,
+      /** 점수를 낼 수 있는 캐릭터인데 이 줄의 Δ크라켄 점수를 매기지 않은 이유(코드·문장, PM 총괄 11-21). 그 밖에는 null. */
+      String krakenScoreReasonCode,
+      String krakenScoreReason) {
+    /** 빈 보석 칸 줄: 새 보석을 넣을 스킬이 정해지지 않아 점수 모델이 Δ를 내지 않는다(전투력은 칸과 상관없는 기본 공격력이라 낸다). */
+    static final String EMPTY_GEM_SLOT = "KRAKEN_SCORE_EMPTY_GEM_SLOT";
+
+    static final String EMPTY_GEM_SLOT_TEXT = "빈 보석 칸은 넣을 스킬이 정해지지 않아 크라켄 점수를 매기지 않아요.";
+
+    Candidate withKrakenReason(String code, String text) {
+      return new Candidate(
+          id,
+          kind,
+          target,
+          from,
+          to,
+          icon,
+          grade,
+          skillName,
+          suggestedTo,
+          change,
+          status,
+          deltaCombatPower,
+          deltaPercent,
+          cost,
+          combatPowerPer10kGold,
+          reasonCode,
+          reason,
+          reasonDetail,
+          emptySlot,
+          baseAttackPctFrom,
+          baseAttackPctTo,
+          deltaKrakenScore,
+          krakenScorePer100kGold,
+          gemType,
+          krakenRank,
+          code,
+          text);
+    }
+
     /**
      * Δ크라켄 점수와 10만 골드당 점수를 붙인다. 10만 골드당은 같은 Δ에서 만든다(정렬 키 = 보이는 값). 전투력 계산이 UNSUPPORTED라 비용이 비었어도
      * Δ크라켄 점수가 있으면 계획한 비용(planned)을 준다 — 그래야 KRAKEN 정렬에서 비용으로 나눌 수 있다.
@@ -433,7 +522,9 @@ public class SpecUpService {
           delta,
           per100k,
           gemType,
-          rank);
+          rank,
+          krakenScoreReasonCode,
+          krakenScoreReason);
     }
   }
 
@@ -575,9 +666,9 @@ public class SpecUpService {
     var models = new Models(snapshot);
     for (var plan : planned) {
       if (!cooldownGemsIncluded && "COOLDOWN".equals(plan.gemType())) continue;
-      // 99·109·1010돌은 EFFICIENCY·KRAKEN 정렬 목록에만(DELTA는 비용을 보지 않아 맨 위에 오고 추천 순서 DELTA와도 맞춘다, PM 총괄
-      // 11-19). 줄 상세는
-      // 어느 정렬 목록의 id든 찾는다.
+      // 99·109·1010돌은 EFFICIENCY·KRAKEN 정렬 목록에만(PM 총괄 11-19).
+      // DELTA는 비용을 보지 않아 맨 위에 오고, 추천 순서 DELTA와도 맞춘다.
+      // 줄 상세는 어느 정렬 목록의 id든 찾는다.
       if (sort == Sort.DELTA && !allRefineStages && SpecUpScoreCandidates.extremeStone(plan.id()))
         continue;
       var candidate =
@@ -595,6 +686,10 @@ public class SpecUpService {
       candidate =
           candidate.withKraken(
               raw == null ? null : SpecUpKrakenScore.round2(raw), raw, plan.cost());
+      // 점수를 낼 수 있는 캐릭터의 빈 보석 칸 줄은 점수를 매기지 않은 이유를 준다(PM 총괄 11-21 (a)).
+      if (raw == null && krakenContext.available() && Boolean.TRUE.equals(plan.emptySlot()))
+        candidate =
+            candidate.withKrakenReason(Candidate.EMPTY_GEM_SLOT, Candidate.EMPTY_GEM_SLOT_TEXT);
       // KRAKEN은 Δ크라켄 점수가 있으면 전투력 계산과 상관없이 순위에 넣는다.
       boolean ranked =
           "OK".equals(candidate.status())
@@ -614,7 +709,7 @@ public class SpecUpService {
             ? null
             : profile.combatPower().setScale(2, RoundingMode.HALF_UP),
         RULE_VERSION,
-        CombatPowerSimulationService.RULE_VERSION,
+        simulator.ruleVersion(),
         snapshot.fetchedAt(),
         pricesAt[0],
         sort.name(),
@@ -759,8 +854,28 @@ public class SpecUpService {
       rowRejected(plan, CombatPowerSimulationService.POLISH_REJECT_UNMAPPABLE);
       return null;
     }
+    // 카르마: 딜러만(서포터 전투력은 비교 기준과 식이 달라 점수만, PM 총괄 11-15).
+    if (plan.kraken() instanceof SpecUpKrakenScore.Karma karma
+        && karmaCpEnabled()
+        && CombatPowerSimulationService.roleReason(snapshot) == null) {
+      // 점수 입력의 지금 레벨과 툴팁(아크 패시브 설명)의 레벨이 다르면 두 원문 파서가 갈라진 것: 틀린 Δ 대신 점수만.
+      var tooltip = CombatPowerRefineModel.observedKarmaLevel(snapshot.details().loadout());
+      if (tooltip == null || !(tooltip + "레벨").equals(plan.from())) {
+        rowRejected(plan, KARMA_REJECT_LEVEL_MISMATCH);
+        return null;
+      }
+      return evaluated(
+          plan,
+          simulator.simulate(
+              snapshot,
+              models.get(),
+              List.of(CombatPowerSimulationService.karmaLevelChange(karma.level()))));
+    }
     return null;
   }
+
+  /** 카르마 줄: 점수 입력의 지금 레벨과 툴팁 레벨이 다름(지표 error 값, 코드 리뷰 #1004 P3: 연마의 line_mismatch와 나눔). */
+  static final String KARMA_REJECT_LEVEL_MISMATCH = "level_mismatch";
 
   /**
    * 스위치가 켜졌는데 계산하지 못해 점수만 남는 줄(예외 아님): 연마 교체는 점수 입력 줄이 툴팁 줄과 다르면 line_mismatch, 그 밖은 unmappable. 같은
@@ -1860,6 +1975,8 @@ public class SpecUpService {
           null,
           null,
           gemType,
+          null,
+          null,
           null);
     }
   }

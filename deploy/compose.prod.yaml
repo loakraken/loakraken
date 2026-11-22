@@ -105,6 +105,12 @@ services:
       # 지옥·나락 열쇠 보상 도구(web #1525). on|off, 비우면 web 기본값(운영 SITE_URL이면 숨김).
       # 백엔드 짝 스위치는 없다(이미 쓰는 재료 시세 API로 값을 매긴다).
       HELL_REWARD_TOOL: "${HELL_REWARD_TOOL:-}"
+      # 시뮬레이터 깨달음 카르마 레벨 칸 · 카르마 단계(web #1815). on|off, 비우면 web 기본값(운영 SITE_URL이면 숨김, 시뮬레이터가 꺼져 있으면 늘 숨김).
+      # 백엔드 짝 SPEC_UP_KARMA_CP_ENABLED와 같이 켠다(계산 검증 판정 + PM 총괄 OK 뒤, 하나만 켜지 않는다).
+      KARMA_SIM: "${KARMA_SIM:-}"
+      # 시뮬레이터 방어구 재련 · 상급 재련 칸(프론트2 web PR). on|off, 비우면 web 기본값(운영 SITE_URL이면 숨김).
+      # 백엔드 짝 스위치(방어구 Δ전투력 게이트, 백엔드 PR3)와 같이 켠다(계산 검증 실경로 판정 + PM 총괄 OK 뒤, 하나만 켜지 않는다).
+      ARMOR_CP_SIM: "${ARMOR_CP_SIM:-}"
       # 이 둘은 비우면 어디서나 꺼짐(on일 때만 켜짐): 검색엔진 색인, 시세 알림 화면.
       CHARACTER_INDEXING: "${CHARACTER_INDEXING:-}"
       PRICE_ALERTS: "${PRICE_ALERTS:-}"
@@ -167,6 +173,8 @@ services:
       HTTP_MAX_REQUEST_BODY: ${HTTP_MAX_REQUEST_BODY:-64KB}
       # 검색봇 표시 요청 전체가 분당 일으킬 수 있는 공식 호출 수(기본 20). 캐릭터 페이지 색인을 켤 때만 낮춘다.
       CLIENT_LIMIT_BOT_OFFICIAL: ${CLIENT_LIMIT_BOT_OFFICIAL:-20}
+      # 검색봇 표시가 붙었지만 크롤러로 확인되지 않은 요청 전체가 분당 일으킬 수 있는 공식 호출 수(기본 20, 확인된 봇 합계와 따로). 봇 주소별 한도(5)보다 커야 한다.
+      CLIENT_LIMIT_UNVERIFIED_BOT_OFFICIAL: ${CLIENT_LIMIT_UNVERIFIED_BOT_OFFICIAL:-20}
       # 상점 공지 알림 배치(#640): 하루 한 번 공식 공지를 읽어 새 상점·패키지 공지를 Slack에 알린다. 기본 꺼짐.
       # 웹훅 주소는 상점 공지 전용 비밀 파일(감시 알림 웹훅과 분리)에서 보낼 때마다 읽는다.
       SHOP_NOTICE_ENABLED: ${SHOP_NOTICE_ENABLED:-false}
@@ -210,6 +218,8 @@ services:
       SPEC_UP_POLISH_CP_ENABLED: ${SPEC_UP_POLISH_CP_ENABLED:-false}
       # 스펙업 어빌리티 스톤 줄 Δ전투력. 기본 끔, 계산 검증 판정 뒤 켠다.
       SPEC_UP_STONE_CP_ENABLED: ${SPEC_UP_STONE_CP_ENABLED:-false}
+      SPEC_UP_KARMA_CP_ENABLED: ${SPEC_UP_KARMA_CP_ENABLED:-false}
+      SPEC_UP_ARMOR_CP_GATE_ENABLED: ${SPEC_UP_ARMOR_CP_GATE_ENABLED:-false}
       # 스펙업 추천 순서·목표 경로 연마 단계. 기본 끔, 웹 NONE 처리·계산 검증 판정 뒤 켠다.
       SPEC_UP_POLISH_PATH_ENABLED: ${SPEC_UP_POLISH_PATH_ENABLED:-false}
       # 재련 계획 숨결 OPTIMAL. 웹 화면(v0.3.4)과 같이 켠다.

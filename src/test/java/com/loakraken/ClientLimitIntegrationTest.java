@@ -36,15 +36,15 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 class ClientLimitIntegrationTest {
   @LocalServerPort private int port;
   @Autowired private StringRedisTemplate redis;
+  @Autowired private ClientLimitWindow window;
   @MockitoBean private CharacterDetailsPort detailsPort;
   private final HttpClient http = HttpClient.newHttpClient();
 
   @Test
   void 공개_주소별로_분당_요청을_세고_넘으면_429와_Retry_After를_준다() throws Exception {
     String address = "203.0.113." + (10 + (int) (Math.random() * 200));
-    // 1분 고정 창이라 창 끝 직전이면 다음 창까지 기다려 같은 창 안에서 센다.
-    long second = (System.currentTimeMillis() / 1000) % 60;
-    if (second >= 50) Thread.sleep((61 - second) * 1000);
+    // 1분 고정 창이라 시험용 창 시계로 새 창에서 시작해 같은 창 안에서 센다.
+    window.startFreshWindow();
     assertThat(get("/api/v1/stats/summary", address).statusCode()).isEqualTo(200);
     assertThat(get("/api/v1/rankings?metric=COMBAT_POWER", address).statusCode()).isEqualTo(200);
     var stats = get("/api/v1/stats/summary", address);
@@ -66,8 +66,7 @@ class ClientLimitIntegrationTest {
   @Test
   void 랭킹_아래_경로와_경로_매개변수가_붙은_경로도_센다() throws Exception {
     // STATS 2: 랭킹 아래 경로도 통계 칸이고, 원문 URI에 ';…'가 붙어도 정규화된 경로로 센다.
-    long second = (System.currentTimeMillis() / 1000) % 60;
-    if (second >= 50) Thread.sleep((61 - second) * 1000);
+    window.startFreshWindow();
     String address = "203.0.113." + (10 + (int) (Math.random() * 200));
     var statuses = new java.util.ArrayList<Integer>();
     for (var path :
@@ -90,8 +89,7 @@ class ClientLimitIntegrationTest {
   @Test
   void 신뢰_프록시가_넘긴_사설_루프백_주소도_센다() throws Exception {
     // 연결 상대는 루프백(이 테스트의 신뢰 프록시)이고, 넘긴 주소가 사설·루프백이어도 그 주소로 센다(GENERAL 4).
-    long second = (System.currentTimeMillis() / 1000) % 60;
-    if (second >= 50) Thread.sleep((61 - second) * 1000);
+    window.startFreshWindow();
     for (var forwarded :
         new String[] {"10.0.0." + (1 + (int) (Math.random() * 200)), "127.0.0.2", "127.0.0.1"}) {
       for (int i = 0; i < 4; i++)

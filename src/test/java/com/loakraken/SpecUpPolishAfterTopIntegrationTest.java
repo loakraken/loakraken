@@ -149,7 +149,8 @@ class SpecUpPolishAfterTopIntegrationTest {
                   Instant.parse("2026-11-15T05:00:00Z"));
             });
     search();
-    // 추천 순서(시세가 있는 단계만): 셋째 줄 상 단계는 없다.
+    // 추천 순서: 셋째 줄 상 단계는 비용을 몰라 비용 있는 단계 뒤(PM 총괄 11-19 (B))에만 올 수 있고, 공짜로 앞서지 않는다.
+    // (레벨 점프로 비용 있는 단계가 줄어 30단계 안에 비용 모름 꼬리가 들어올 수 있다.)
     var path =
         get(
             "/api/v1/characters/spec-up/path?characterName="
@@ -157,10 +158,14 @@ class SpecUpPolishAfterTopIntegrationTest {
                 + "&sort=EFFICIENCY&limit=30");
     assertThat(path.statusCode()).as(path.body()).isEqualTo(200);
     var hh = 0;
+    var unknownSeen = false;
     for (var step : mapper.readTree(path.body()).at("/data/steps")) {
       var id = step.path("candidateId").asText();
       if (id.endsWith(":HH")) hh++;
-      assertThat(id).doesNotEndWith("HHAH").doesNotEndWith("HHWH");
+      var unknown = step.path("extraCost").isNull();
+      if (id.endsWith("HHAH") || id.endsWith("HHWH")) assertThat(unknown).as(id).isTrue();
+      if (unknownSeen) assertThat(unknown).as("비용 모름 뒤 " + id).isTrue();
+      unknownSeen |= unknown;
     }
     // 상·상 단계는 골랐다(그래서 셋째 줄 후보가 열렸지만 시세가 없어 빠졌다).
     assertThat(hh).isPositive();

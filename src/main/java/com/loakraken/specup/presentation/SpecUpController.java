@@ -271,7 +271,9 @@ public class SpecUpController {
       @Schema(description = "캐릭터 캐시 수집 시각") Instant fetchedAt,
       @Schema(description = "비용에 쓴 시세 칸 가운데 가장 오래된 관측 시각(쓴 칸이 없으면 null)") @NullableResponse
           Instant pricesAt,
-      @Schema(description = "효율 순으로 목표에 닿을 때까지 고른 단계(순서대로)") List<SpecUpGoalStepResponse> steps) {
+      @Schema(description = "효율 순으로 목표에 닿을 때까지 고른 단계(순서대로)") List<SpecUpGoalStepResponse> steps,
+      @Schema(description = POLISH_CONSIDERED) @OptionalResponse Boolean polishStepsConsidered,
+      @Schema(description = KARMA_CONSIDERED_GOAL) @OptionalResponse Boolean karmaStepsConsidered) {
     static SpecUpGoalResponse from(SpecUpGoalService.Goal goal) {
       return new SpecUpGoalResponse(
           goal.characterName(),
@@ -289,7 +291,9 @@ public class SpecUpController {
           goal.simulatorRuleVersion(),
           goal.fetchedAt(),
           goal.pricesAt(),
-          goal.steps().stream().map(SpecUpGoalStepResponse::from).toList());
+          goal.steps().stream().map(SpecUpGoalStepResponse::from).toList(),
+          Boolean.TRUE.equals(goal.polishStepsConsidered()),
+          Boolean.TRUE.equals(goal.karmaStepsConsidered()));
     }
   }
 
@@ -298,7 +302,7 @@ public class SpecUpController {
       @Schema(description = "스펙업 가이드 후보 id와 같은 형식", example = "GEM_LEVEL:3:8") String candidateId,
       @Schema(
               description =
-                  "단계 종류(문자열, 값이 늘 수 있음). 지금 값: GEM_LEVEL·EQUIPMENT_REFINE·EQUIPMENT_ADVANCED_REFINE·EQUIPMENT_QUALITY·ENGRAVING_LEVEL. 예정: POLISH(장신구 연마 교체), EQUIPMENT_SUCCESSION(장비 계승, 나중에 추가), 같은 칸 연속 재련은 EQUIPMENT_REFINE 그대로. 모르는 값은 target·from·to로 일반 줄로 다룬다.",
+                  "단계 종류(문자열, 값이 늘 수 있음). 지금 값: GEM_LEVEL·EQUIPMENT_REFINE·EQUIPMENT_ADVANCED_REFINE·EQUIPMENT_QUALITY·ENGRAVING_LEVEL. KARMA_LEVEL(깨달음 카르마, spec-up.karma-cp.enabled, change는 ARK_PASSIVE_POINT 깨달음 karmaLevel). 예정: POLISH(장신구 연마 교체), EQUIPMENT_SUCCESSION(장비 계승, 나중에 추가), 같은 칸 연속 재련은 EQUIPMENT_REFINE 그대로. 모르는 값은 target·from·to로 일반 줄로 다룬다.",
               example = "GEM_LEVEL")
           String kind,
       @Schema(description = "화면에 그대로 쓰는 대상 이름") String target,
@@ -310,10 +314,12 @@ public class SpecUpController {
       @Schema(description = "전투력 시뮬레이터 요청의 changes[] 하나와 같은 모양") ChangeResponse change,
       @Schema(
               description =
-                  "이 단계로 늘어난 전투력(소수 둘째 자리). 서포터 추천 순서 sort=KRAKEN에서만 null(서포터 전투력 모델이 없어 점수로만 고름)")
+                  "이 단계로 늘어난 전투력(소수 둘째 자리). 서포터 추천 순서 sort=KRAKEN(서포터 전투력 모델이 없어 점수로만 고름)과, 딜러 sort=KRAKEN의 combatPowerStopOrder 단계부터(방어구 재련·상급 재련·완갑 전투력 확인 전)는 null")
           @NullableResponse
           BigDecimal deltaCombatPower,
-      @Schema(description = "이 단계까지 적용한 전투력(시뮬레이터). 서포터 추천 순서 sort=KRAKEN에서만 null")
+      @Schema(
+              description =
+                  "이 단계까지 적용한 전투력(시뮬레이터). 서포터 추천 순서 sort=KRAKEN과 딜러 sort=KRAKEN의 combatPowerStopOrder 단계부터는 null")
           @NullableResponse
           BigDecimal combatPowerAfter,
       @Schema(description = "이 단계 비용(골드). 보석 단계는 지금에서 그 레벨까지의 누적 비용(음수 없음)") CostResponse cost,
@@ -386,7 +392,7 @@ public class SpecUpController {
           BigDecimal combatPower,
       @Schema(
               description =
-                  "마지막 단계까지 적용한 전투력(단계가 없으면 지금 전투력). 지금 전투력이 없거나 서포터 추천 순서 sort=KRAKEN이면 null")
+                  "마지막 단계까지 적용한 전투력(단계가 없으면 지금 전투력). 지금 전투력이 없거나, 서포터 추천 순서 sort=KRAKEN이거나, 딜러 sort=KRAKEN에서 combatPowerStopOrder가 있으면 null")
           @NullableResponse
           BigDecimal finalCombatPower,
       @Schema(
@@ -403,7 +409,7 @@ public class SpecUpController {
       @Schema(description = "멈춘 이유(화면 문구)") @NullableResponse String stopReason,
       @Schema(description = "전체 합계(골드) = 마지막 단계의 cumulativeCost. 모르면 null") @NullableResponse
           Long totalCost,
-      @Schema(example = "spec-up-path-v6") String ruleVersion,
+      @Schema(example = "spec-up-path-v7") String ruleVersion,
       @Schema(description = "전투력을 낸 시뮬레이터 규칙") String simulatorRuleVersion,
       @Schema(description = "캐릭터 캐시 수집 시각") @NullableResponse Instant fetchedAt,
       @Schema(description = "비용에 쓴 시세 칸 가운데 가장 오래된 관측 시각") @NullableResponse Instant pricesAt,
@@ -447,7 +453,23 @@ public class SpecUpController {
               description =
                   "단계 비용(extraCost)을 모르는 단계 수. 0이면 totalCost = knownCostTotal. 배포 순서 때문에 계약에서는 선택 필드")
           @OptionalResponse
-          Integer unknownCostSteps) {
+          Integer unknownCostSteps,
+      @Schema(
+              description =
+                  "딜러 sort=KRAKEN만: 전투력을 비우기 시작한 단계 순서(order). 방어구 재련·상급 재련·완갑 단계는 점수로 고르지만 전투력을 아직 계산하지 않으므로, 그 단계부터 그 뒤 단계의 deltaCombatPower·combatPowerAfter와 finalCombatPower가 null이다(점수·비용은 그대로). 그런 단계가 없으면 null. 배포 순서 때문에 계약에서는 선택 필드",
+              example = "3")
+          @NullableResponse
+          @OptionalResponse
+          Integer combatPowerStopOrder,
+      @Schema(
+              description =
+                  "combatPowerStopOrder의 이유 코드(문자열, 값이 늘 수 있음): ARMOR_REFINE_CP_UNCONFIRMED(방어구 재련·상급 재련·완갑 전투력 계산식 확인 전). combatPowerStopOrder가 null이면 null. 배포 순서 때문에 계약에서는 선택 필드",
+              example = "ARMOR_REFINE_CP_UNCONFIRMED")
+          @NullableResponse
+          @OptionalResponse
+          String combatPowerStopReasonCode,
+      @Schema(description = POLISH_CONSIDERED) @OptionalResponse Boolean polishStepsConsidered,
+      @Schema(description = KARMA_CONSIDERED_PATH) @OptionalResponse Boolean karmaStepsConsidered) {
     static SpecUpPathResponse from(SpecUpGoalService.Path path) {
       return new SpecUpPathResponse(
           path.characterName(),
@@ -486,9 +508,20 @@ public class SpecUpController {
           path.supportOrderAvailable(),
           path.krakenScoreRole(),
           path.knownCostTotal(),
-          path.unknownCostSteps());
+          path.unknownCostSteps(),
+          path.combatPowerStopOrder(),
+          path.combatPowerStopReasonCode(),
+          Boolean.TRUE.equals(path.polishStepsConsidered()),
+          Boolean.TRUE.equals(path.karmaStepsConsidered()));
     }
   }
+
+  static final String POLISH_CONSIDERED =
+      "이 답이 장신구 연마 단계를 후보로 봤는지: 스위치 spec-up.polish-path.enabled가 켜졌고 딜러이며 크라켄 점수 입력이 있으면 true(고른 연마 단계가 없어도). 아니면 false. 배포 순서 때문에 계약에서는 선택 필드(없으면 false로 읽는다)";
+  static final String KARMA_CONSIDERED_PATH =
+      "이 답이 깨달음 카르마 단계를 후보로 봤는지: 스위치 spec-up.karma-cp.enabled가 켜졌고 딜러이거나 실제 기준(sort)이 KRAKEN이면 true(서포터는 KRAKEN 순서에서만 카르마 단계를 고름, 고른 카르마 단계가 없어도 true). 아니면 false. 배포 순서 때문에 계약에서는 선택 필드(없으면 false로 읽는다)";
+  static final String KARMA_CONSIDERED_GOAL =
+      "이 답이 깨달음 카르마 단계를 후보로 봤는지: 스위치 spec-up.karma-cp.enabled가 켜졌고 딜러면 true(목표 경로는 전투력으로 고르므로 서포터는 false, 고른 카르마 단계가 없어도 true). 아니면 false. 배포 순서 때문에 계약에서는 선택 필드(없으면 false로 읽는다)";
 
   public record SpecUpPathExcludedResponse(
       @Schema(description = "스펙업 가이드 후보 id와 같은 형식") String candidateId,
@@ -573,7 +606,7 @@ public class SpecUpController {
       @Schema(description = "같은 캐릭터·같은 후보면 늘 같은 값(목록 키)", example = "GEM_LEVEL:3:8") String id,
       @Schema(
               description =
-                  "후보 종류(문자열, 값이 늘 수 있음). 시뮬레이터 kind와 같다. POLISH(장신구 연마 교체)·ABILITY_STONE(어빌리티 스톤)·KARMA_LEVEL(깨달음 카르마)은 크라켄 점수를 낼 수 있으면 후보마다 한 줄(change null·전투력 UNSUPPORTED·deltaKrakenScore 있음)이고, 그럴 수 없으면 종류마다 한 줄 UNSUPPORTED 알림. 다만 연마 교체 줄 전투력 스위치가 켜지면 딜러 POLISH 줄은 Δ크라켄 점수와 같은 목표 장신구로, 스톤 줄 전투력 스위치가 켜지면 ABILITY_STONE 줄은 추천 순서와 같은 변경(STONE_ENGRAVING 둘)으로 전투력도 낸다(status OK, change는 그대로 null)",
+                  "후보 종류(문자열, 값이 늘 수 있음). 시뮬레이터 kind와 같다. POLISH(장신구 연마 교체)·ABILITY_STONE(어빌리티 스톤)·KARMA_LEVEL(깨달음 카르마)은 크라켄 점수를 낼 수 있으면 후보마다 한 줄(change null·전투력 UNSUPPORTED·deltaKrakenScore 있음)이고, 그럴 수 없으면 종류마다 한 줄 UNSUPPORTED 알림. 다만 연마 교체 줄 전투력 스위치가 켜지면 딜러 POLISH 줄은 Δ크라켄 점수와 같은 목표 장신구로, 스톤 줄 전투력 스위치가 켜지면 ABILITY_STONE 줄은 추천 순서와 같은 변경(STONE_ENGRAVING 둘)으로, 카르마 스위치가 켜지면 딜러 KARMA_LEVEL 줄은 무기 공격력 % W 항으로 전투력도 낸다(status OK, change는 그대로 null)",
               example = "GEM_LEVEL")
           String kind,
       @Schema(description = "화면에 그대로 쓰는 대상 이름", example = "블레이드 버스트 · 7레벨 겁화") String target,
@@ -640,7 +673,21 @@ public class SpecUpController {
           BigDecimal krakenScorePer100kGold,
       @Schema(description = "보석 후보만: DAMAGE(딜) 또는 COOLDOWN(쿨, 작열), 문자열·값이 늘 수 있음. 그 밖 null")
           @NullableResponse
-          String gemType) {
+          String gemType,
+      @Schema(
+              description =
+                  "크라켄 점수를 낼 수 있는 캐릭터인데 이 줄의 deltaKrakenScore를 매기지 않은 이유 코드(문자열, 값이 늘 수 있음). 지금 값: KRAKEN_SCORE_EMPTY_GEM_SLOT(빈 보석 칸: 넣을 스킬이 정해지지 않음). 줄의 status와 상관없이 준다(전투력이 OK인 딜러 줄에도, 전투력 UNSUPPORTED인 서포터 줄에도 — 전투력 이유는 reasonCode, 점수 이유는 이 필드라 접힌 줄에 어느 이유를 보일지는 웹이 고른다). 그 밖에는 null. 배포 순서 때문에 계약에서는 선택 필드",
+              example = "KRAKEN_SCORE_EMPTY_GEM_SLOT")
+          @NullableResponse
+          @OptionalResponse
+          String krakenScoreReasonCode,
+      @Schema(
+              description =
+                  "krakenScoreReasonCode의 화면용 문장(같은 코드는 같은 문장). 코드가 null이면 null. 배포 순서 때문에 계약에서는 선택 필드",
+              example = "빈 보석 칸은 넣을 스킬이 정해지지 않아 크라켄 점수를 매기지 않아요.")
+          @NullableResponse
+          @OptionalResponse
+          String krakenScoreReason) {
     static CandidateResponse from(SpecUpService.Candidate candidate) {
       return new CandidateResponse(
           candidate.id(),
@@ -666,7 +713,9 @@ public class SpecUpController {
           candidate.baseAttackPctTo(),
           candidate.deltaKrakenScore(),
           candidate.krakenScorePer100kGold(),
-          candidate.gemType());
+          candidate.gemType(),
+          candidate.krakenScoreReasonCode(),
+          candidate.krakenScoreReason());
     }
   }
 
@@ -720,7 +769,19 @@ public class SpecUpController {
                   "연마 옵션(POLISH만, 시뮬레이터 요청 option과 같은 값: % 옵션은 끝에 \" %\", 점수 옵션이 없는 줄은 \"NONE\"). 그 밖에는 null. 배포 순서 때문에 계약에서는 아직 선택 필드")
           @NullableResponse
           @OptionalResponse
-          String option) {
+          String option,
+      @Schema(
+              description =
+                  "아크 패시브 트리(ARK_PASSIVE_POINT만). 깨달음 카르마 단계(spec-up.karma-cp.enabled)는 tree 깨달음 + karmaLevel(points·level 없음). 그 밖에는 null. 배포 순서 때문에 계약에서는 아직 선택 필드")
+          @NullableResponse
+          @OptionalResponse
+          String tree,
+      @Schema(
+              description =
+                  "깨달음 카르마 레벨(ARK_PASSIVE_POINT tree 깨달음, 카르마 단계만). 그 밖에는 null. 배포 순서 때문에 계약에서는 아직 선택 필드")
+          @NullableResponse
+          @OptionalResponse
+          Integer karmaLevel) {
     static ChangeResponse from(CombatPowerSimulationService.Change change) {
       return change == null
           ? null
@@ -734,7 +795,9 @@ public class SpecUpController {
               change.name(),
               change.grade(),
               change.line(),
-              change.option());
+              change.option(),
+              change.tree(),
+              change.karmaLevel());
     }
   }
 

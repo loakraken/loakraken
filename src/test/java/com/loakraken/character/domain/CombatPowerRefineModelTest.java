@@ -876,4 +876,33 @@ class CombatPowerRefineModelTest {
       }
     assertThat(cells).isEqualTo(6 * 26);
   }
+
+  /**
+   * 관측한 깨달음 카르마 레벨(코드 리뷰 #1004 재실행 P2·#1050 P3): 줄이 있으면 0레벨도 관측한 0이라 0, 아크 패시브나 깨달음 포인트 줄이 없으면 관측하지
+   * 않은 것이라 null. 재련 모델 W 항의 karmaLevel(loadout)은 지금처럼 없으면 0.
+   */
+  @Test
+  void 관측한_깨달음_카르마는_0레벨도_0이고_줄이_없으면_null이다() {
+    var observed0 = karmaLoadout(List.of(new CharacterLoadout.PassivePoint("깨달음", 0, "0랭크 0레벨")));
+    assertThat(CombatPowerRefineModel.observedKarmaLevel(observed0)).isZero();
+    var observed29 =
+        karmaLoadout(List.of(new CharacterLoadout.PassivePoint("깨달음", 101, "6랭크 29레벨")));
+    assertThat(CombatPowerRefineModel.observedKarmaLevel(observed29)).isEqualTo(29);
+    var noRow = karmaLoadout(List.of(new CharacterLoadout.PassivePoint("진화", 140, "6랭크 21레벨")));
+    assertThat(CombatPowerRefineModel.observedKarmaLevel(noRow)).isNull();
+    assertThat(CombatPowerRefineModel.karmaLevel(noRow)).isZero();
+    var noArkPassive = new CharacterLoadout(List.of(), null, null, null, null, null, List.of());
+    assertThat(CombatPowerRefineModel.observedKarmaLevel(noArkPassive)).isNull();
+  }
+
+  private static CharacterLoadout karmaLoadout(List<CharacterLoadout.PassivePoint> points) {
+    return new CharacterLoadout(
+        List.of(),
+        null,
+        null,
+        null,
+        new CharacterLoadout.ArkPassive("아크패시브", true, points, List.of()),
+        null,
+        List.of());
+  }
 }

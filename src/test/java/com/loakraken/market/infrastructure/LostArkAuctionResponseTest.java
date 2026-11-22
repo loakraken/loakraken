@@ -28,6 +28,31 @@ class LostArkAuctionResponseTest {
       ]}
       """;
 
+  /**
+   * 가격·옵션 값이 상한 밖인 매물은 버리고 센다(#995 리뷰 뒤속): 즉시 구매가 정수 13자리, 음수 입찰가, 지수 표기 옵션 값. 정상 매물과 가격 없는
+   * 매물(입찰만)은 남는다.
+   */
+  @Test
+  void 가격이나_옵션_값이_상한_밖인_매물은_버리고_센다() throws Exception {
+    var json =
+        """
+        {"TotalCount":5,"Items":[
+          {"Name":"정상","AuctionInfo":{"BuyPrice":999999999999,"BidPrice":0,"BidStartPrice":10},
+           "Options":[{"OptionName":"깨달음","Value":-2.5}]},
+          {"Name":"가격 없음","AuctionInfo":{"BuyPrice":null,"BidPrice":null,"BidStartPrice":null},"Options":[]},
+          {"Name":"큰 즉시 구매가","AuctionInfo":{"BuyPrice":1000000000000,"BidStartPrice":10},"Options":[]},
+          {"Name":"음수 입찰가","AuctionInfo":{"BuyPrice":100,"BidPrice":-1},"Options":[]},
+          {"Name":"지수 표기 옵션","AuctionInfo":{"BuyPrice":100},
+           "Options":[{"OptionName":"깨달음","Value":1e100000000}]}
+        ]}
+        """;
+    var response = MAPPER.readValue(json, LostArkAuctionResponse.class);
+    assertThat(response.implausibleItems()).isEqualTo(3);
+    assertThat(response.toPage(Instant.EPOCH).items())
+        .extracting(listing -> listing.name())
+        .containsExactly("정상", "가격 없음");
+  }
+
   @Test
   void 공식_Icon이_매물_icon까지_온다() throws Exception {
     var page = MAPPER.readValue(RESPONSE, LostArkAuctionResponse.class).toPage(Instant.EPOCH);

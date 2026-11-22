@@ -10,8 +10,9 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * 응답 견본의 null이 OpenAPI 문서에서 null을 허용하는지 본다(프론트2 11-22: 견본이 생성 문서 검증을 통과해야 한다). 객체는 $ref·anyOf를 따라가고 배열은
- * items를 따라간다. null 칸의 스키마는 anyOf 안에 type null이 있어야 한다(ResponseContracts의 @NullableResponse 감싸기).
+ * 응답 견본의 null이 OpenAPI 문서에서 null을 허용하는지 본다(프론트2 11-22: 견본이 생성 문서 검증을 통과해야 한다). 객체는 $ref·anyOf를 따라가고
+ * 배열은 items를 따라간다. null 칸의 스키마는 anyOf 안에 type null이 있어야 한다(ResponseContracts의 @NullableResponse
+ * 감싸기).
  */
 final class OpenApiNulls {
   private OpenApiNulls() {}

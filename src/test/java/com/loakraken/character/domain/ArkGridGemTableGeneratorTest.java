@@ -11,9 +11,9 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 import org.junit.jupiter.api.Test;
 
 /**
- * 젬 가공 정책 표 만들기(오프라인, M49 2단계). 환경 변수 GEM_TABLES_GENERATE=true일 때만 돈다(보통 실행에서는 건너뜀): 등급(HERO·RARE) ×
- * 초기화(끔·켬) × 목표 합 T(규칙 targets)마다 {@link ArkGridGemProcessing#table}로 풀어 src/main/resources/combat-power/
- * ark-grid-gem-tables.json에 쓰고, 걸린 시간을 남긴다.
+ * 젬 가공 정책 표 만들기(오프라인, M49 2단계). 환경 변수 GEM_TABLES_GENERATE=true일 때만 돈다(보통 실행에서는 건너뜀): 등급(HERO·RARE)
+ * × 초기화(끔·켬) × 목표 합 T(규칙 targets)마다 {@link ArkGridGemProcessing#table}로 풀어
+ * src/main/resources/combat-power/ ark-grid-gem-tables.json에 쓰고, 걸린 시간을 남긴다.
  */
 class ArkGridGemTableGeneratorTest {
   @Test

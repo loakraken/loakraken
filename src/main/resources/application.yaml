@@ -217,6 +217,10 @@ crit-speed:
 # 전투력 시뮬레이터 API: 계산식(실측 대조) 확정 전까지 기본 꺼짐
 combat-power-sim:
   enabled: ${COMBAT_POWER_SIM_ENABLED:false}
+  # 젬 교체 순위(M49 2단계, POST /api/v1/characters/combat-power/gem-ranking): 웹 화면이 붙을 때 켠다. 꺼져 있으면 404.
+  gem-ranking:
+    enabled: ${GEM_RANKING_ENABLED:false}
+    max-concurrent: ${GEM_RANKING_MAX_CONCURRENT:2}
 
 # 스펙업 가이드(#315): 꺼져 있으면 SPEC_UP_DISABLED(404). 시뮬레이터 계산식 검증 뒤 켠다.
 spec-up:

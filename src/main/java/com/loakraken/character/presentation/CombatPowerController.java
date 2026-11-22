@@ -217,7 +217,7 @@ public class CombatPowerController {
           Integer karmaLevel,
       @Schema(
               description =
-                  "카르마 랭크(0~6, ARK_PASSIVE_POINT tree 진화·깨달음·도약, points·karmaLevel·level과 함께 쓰지 않음). 깨달음은 랭크마다 포인트 +1, 도약은 +2(같은 요청의 앞 변경 뒤 포인트에 더하고, 깨달음 0~101·도약 0~70 밖이면 400), 진화는 × (1 + 0.006 × 랭크) 모델값. 딜러만 계산한다")
+                  "카르마 랭크(0~6, ARK_PASSIVE_POINT tree 진화·깨달음·도약, points·karmaLevel·level과 함께 쓰지 않음). 깨달음은 랭크마다 포인트 +1, 도약은 +2(같은 요청의 앞 변경 뒤 포인트에 더하고, 깨달음 0~101·도약 0~70 밖이면 400), 진화는 × (1 + 0.006 × 랭크) 모델값. 같은 트리의 points 변경이 랭크 변경보다 뒤에 오면 그 points가 포인트 합을 정한다(랭크로 옮긴 포인트를 덮음). 딜러만 계산한다")
           Integer karmaRank,
       @Schema(
               description =

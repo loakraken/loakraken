@@ -1,0 +1,29 @@
+{
+  "ruleVersion": "ark-grid-gem-processing-v1",
+  "source": "확률: 공식 확률 정보 공개 '젬 가공, 젬 융합'(최근 수정일 2025-08-20)·공지 13204 — 가공 항목 27종의 표기 확률과 제외 조건, 매 차수 4개를 중복 없이 비복원 가중 추출해 그중 1개가 25%로 적용, 제외된 항목은 나머지 표기 확률로 다시 나눔, 다른 항목 보기 기본 횟수(고급 0·희귀 1·영웅 2), 효과 변경은 그 종류의 다른 두 효과 가운데 하나(25% 표기를 다시 나눔), 초기화는 분배 직후 상태로(가공 횟수·다른 항목 보기·추가 비율도). 가공 횟수(고급 5·희귀 7·영웅 9)와 1회 기본 비용 900골드는 공식 문서에 수치가 없어 공개 글 두 곳과 게임 화면 기준 값(계산 검증 G3, 2026-11-22). 순위 정책은 '목표 포인트 합 이상' 가공(계산 검증 M49 2단계 명세 §4 REVISED, 2026-11-22).",
+  "maxLevel": 5,
+  "options": 4,
+  "perOption": [
+    { "kind": "PLUS_1", "weightPct": 11.65, "delta": 1, "excludedAtOrAbove": 5 },
+    { "kind": "PLUS_2", "weightPct": 4.40, "delta": 2, "excludedAtOrAbove": 4 },
+    { "kind": "PLUS_3", "weightPct": 1.75, "delta": 3, "excludedAtOrAbove": 3 },
+    { "kind": "PLUS_4", "weightPct": 0.45, "delta": 4, "excludedAtOrAbove": 2 },
+    { "kind": "MINUS_1", "weightPct": 3.00, "delta": -1, "excludedAtOrBelow": 1 }
+  ],
+  "general": [
+    { "kind": "EFFECT1_CHANGE", "weightPct": 3.25 },
+    { "kind": "EFFECT2_CHANGE", "weightPct": 3.25 },
+    { "kind": "COST_PLUS_100", "weightPct": 1.75, "excludedAtCostRatio": 1, "excludedOnLastTry": true },
+    { "kind": "COST_MINUS_100", "weightPct": 1.75, "excludedAtCostRatio": -1, "excludedOnLastTry": true },
+    { "kind": "KEEP", "weightPct": 1.75 },
+    { "kind": "REROLL_PLUS_1", "weightPct": 2.50, "rerolls": 1, "excludedOnLastTry": true },
+    { "kind": "REROLL_PLUS_2", "weightPct": 0.75, "rerolls": 2, "excludedOnLastTry": true }
+  ],
+  "grades": {
+    "HERO": { "tries": 9, "rerolls": 2 },
+    "RARE": { "tries": 7, "rerolls": 1 },
+    "UNCOMMON": { "tries": 5, "rerolls": 0 }
+  },
+  "baseCostGold": 900,
+  "targets": [5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]
+}

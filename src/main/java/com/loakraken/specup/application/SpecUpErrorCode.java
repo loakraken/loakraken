@@ -14,7 +14,9 @@ public enum SpecUpErrorCode implements ErrorCode {
    */
   SPEC_UP_CANDIDATE_NOT_FOUND(HttpStatus.NOT_FOUND, "이 후보가 바뀌었습니다. 목록을 새로 불러 주세요."),
   /** 추천 순서(이어 고르기) 계산 자리가 모두 차 있다. 기다리지 않고 바로 돌려준다(Retry-After). */
-  SPEC_UP_BUSY(HttpStatus.TOO_MANY_REQUESTS, "추천 순서 요청이 몰려 지금 계산하지 못했습니다. 잠시 뒤 다시 요청해 주세요.");
+  SPEC_UP_BUSY(HttpStatus.TOO_MANY_REQUESTS, "추천 순서 요청이 몰려 지금 계산하지 못했습니다. 잠시 뒤 다시 요청해 주세요."),
+  /** 젬 교체 순위(M49 2단계) 계산 자리가 모두 차 있다. 기다리지 않고 바로 돌려준다(Retry-After, REFINING_SOLVE_BUSY와 같은 모양). */
+  GEM_RANKING_BUSY(HttpStatus.TOO_MANY_REQUESTS, "젬 교체 순위 요청이 몰려 지금 계산하지 못했습니다. 잠시 뒤 다시 요청해 주세요.");
 
   private final HttpStatus httpStatus;
   private final String message;

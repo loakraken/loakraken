@@ -30,14 +30,45 @@ class TitleSnapshotJobTest {
   private final StringRedisTemplate redis = mock(StringRedisTemplate.class);
   private final SimpleMeterRegistry registry = new SimpleMeterRegistry();
 
-  @SuppressWarnings("unchecked")
   private TitleSnapshotJob job() {
+    return job(Clock.fixed(Instant.parse("2026-11-08T06:00:00Z"), ZoneOffset.UTC));
+  }
+
+  @SuppressWarnings("unchecked")
+  private TitleSnapshotJob job(Clock clock) {
     var ops = (ValueOperations<String, String>) mock(ValueOperations.class);
     when(redis.opsForValue()).thenReturn(ops);
     when(ops.setIfAbsent(eq(TitleSnapshotJob.LEASE), any(), any(java.time.Duration.class)))
         .thenReturn(true);
-    var clock = Clock.fixed(Instant.parse("2026-11-08T06:00:00Z"), ZoneOffset.UTC);
     return new TitleSnapshotJob(service, redis, clock, registry);
+  }
+
+  /** 시험에서 옮길 수 있는 시계. */
+  private static final class MovableClock extends Clock {
+    private Instant now;
+
+    MovableClock(Instant now) {
+      this.now = now;
+    }
+
+    void set(Instant instant) {
+      now = instant;
+    }
+
+    @Override
+    public java.time.ZoneId getZone() {
+      return ZoneOffset.UTC;
+    }
+
+    @Override
+    public Clock withZone(java.time.ZoneId zone) {
+      return Clock.fixed(now, zone);
+    }
+
+    @Override
+    public Instant instant() {
+      return now;
+    }
   }
 
   private double resets() {
@@ -122,6 +153,49 @@ class TitleSnapshotJobTest {
     job.checkExclusion();
     verify(service, org.mockito.Mockito.times(1)).build();
     assertThat(retries("built") + retries("failed")).isZero();
+  }
+
+  /**
+   * #1064 코드 리뷰 P3: 지난 목록 날짜가 계속 남아 있고 다시 만들기도 계속 실패하면, 처리정지 다시 만들기도 같은 하루 상한·지표로 센다(전에는 주기마다 제한
+   * 없음).
+   */
+  @Test
+  void 지난_목록_날짜가_계속_남고_만들기가_실패해도_하루_다섯_번까지만_다시_한다(CapturedOutput output) {
+    when(service.staleStored()).thenReturn(true);
+    when(service.builtToday()).thenReturn(false);
+    when(service.build())
+        .thenThrow(new org.springframework.dao.CannotAcquireLockException("40001"));
+    var job = job();
+    for (int i = 0; i < 10; i++) job.checkExclusion();
+    // 처음 1번(실패로 오늘을 기억) + 다시 만들기 5번.
+    verify(service, org.mockito.Mockito.times(1 + TitleSnapshotJob.MAX_RETRIES_PER_DAY)).build();
+    assertThat(retries("failed")).isEqualTo(TitleSnapshotJob.MAX_RETRIES_PER_DAY);
+    assertThat(output.getOut().split("event=title_snapshot_retry_exhausted", -1)).hasSize(2);
+    assertThat(output.getOut()).contains("event=title_snapshot_failed trigger=exclusion retries=1");
+  }
+
+  /** #1064 코드 리뷰 P3: KST 날이 바뀌면(15:00Z) 앞날의 다시 만들기 횟수를 버리고, 새 날 실패부터 다시 다섯 번까지 한다. */
+  @Test
+  void 날이_바뀌면_다시_만들기_횟수를_새로_센다() {
+    when(service.staleStored()).thenReturn(false);
+    when(service.builtToday()).thenReturn(false);
+    when(service.build())
+        .thenThrow(new org.springframework.dao.CannotAcquireLockException("40001"));
+    var clock = new MovableClock(Instant.parse("2026-11-08T14:00:00Z")); // KST 11-08 23:00
+    var job = job(clock);
+    job.run("schedule");
+    for (int i = 0; i < 8; i++) job.checkExclusion();
+    verify(service, org.mockito.Mockito.times(1 + TitleSnapshotJob.MAX_RETRIES_PER_DAY)).build();
+    // KST 11-09 00:10: 앞날의 실패는 다시 하지 않는다(새 날은 정해진 시각·기동 뒤에 만든다).
+    clock.set(Instant.parse("2026-11-08T15:10:00Z"));
+    job.checkExclusion();
+    verify(service, org.mockito.Mockito.times(1 + TitleSnapshotJob.MAX_RETRIES_PER_DAY)).build();
+    // 새 날 정해진 시각에 실패하면 그날 몫으로 다시 다섯 번까지.
+    job.run("schedule");
+    for (int i = 0; i < 8; i++) job.checkExclusion();
+    verify(service, org.mockito.Mockito.times(2 * (1 + TitleSnapshotJob.MAX_RETRIES_PER_DAY)))
+        .build();
+    assertThat(retries("failed")).isEqualTo(2 * TitleSnapshotJob.MAX_RETRIES_PER_DAY);
   }
 
   @Test

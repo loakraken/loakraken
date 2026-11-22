@@ -88,22 +88,30 @@ class TitleSnapshotJob {
       initialDelayString = "${stats.title-snapshot.exclusion-check:10m}",
       fixedDelayString = "${stats.title-snapshot.exclusion-check:10m}")
   synchronized void checkExclusion() {
+    boolean stale;
     try {
-      if (!snapshots.staleStored()) {
-        retryFailedToday();
-        return;
-      }
+      stale = snapshots.staleStored();
     } catch (org.springframework.dao.DataAccessException exception) {
       log.warn(
           "event=title_snapshot_check_failed 처리정지 목록 변경을 확인하지 못했습니다. 다음 주기에 다시 합니다. 예외 유형={}",
           exception.getClass().getSimpleName());
       return;
     }
+    if (!stale) {
+      retryFailedToday("retry");
+      return;
+    }
+    // 지난 목록 날짜가 남아 있어도 오늘 이미 실패했으면 같은 하루 상한·지표로 다시 한다(#1064 코드 리뷰 P3: 남은 날짜가 계속 있으면 주기마다
+    // 제한 없이 다시 만들었다).
+    if (java.time.LocalDate.now(clock.withZone(TitleSnapshotService.KST)).equals(failedOn)) {
+      retryFailedToday("exclusion");
+      return;
+    }
     run("exclusion");
   }
 
-  /** 오늘 실패한 만들기를 다시 한다(하루 최대 횟수까지). 그사이 다른 곳이 만들었으면 그만둔다. */
-  private void retryFailedToday() {
+  /** 오늘 실패한 만들기를 다시 한다(하루 최대 횟수까지). 그사이 다른 곳이 만들었으면 그만둔다. trigger는 로그용(retry·exclusion). */
+  private void retryFailedToday(String trigger) {
     var today = java.time.LocalDate.now(clock.withZone(TitleSnapshotService.KST));
     if (!today.equals(failedOn) || retries >= MAX_RETRIES_PER_DAY) return;
     if (snapshots.builtToday()) {
@@ -111,7 +119,7 @@ class TitleSnapshotJob {
       return;
     }
     retries++;
-    boolean built = run("retry");
+    boolean built = run(trigger);
     registry
         .counter("loakraken.stats.title_snapshot_retry", "outcome", built ? "built" : "failed")
         .increment();

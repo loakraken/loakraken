@@ -165,7 +165,46 @@ public class CombatPowerSimulationService {
       Integer slotIndex,
       Integer point,
       Integer karmaLevel,
-      GemSwap gem) {
+      GemSwap gem,
+      Integer karmaRank) {
+    /** 카르마 랭크가 없는 변경(젬 교체 포함). */
+    public Change(
+        Kind kind,
+        Integer slot,
+        Integer index,
+        Integer line,
+        Integer level,
+        Integer refine,
+        Integer quality,
+        String option,
+        String grade,
+        String name,
+        String tree,
+        Integer points,
+        Integer slotIndex,
+        Integer point,
+        Integer karmaLevel,
+        GemSwap gem) {
+      this(
+          kind,
+          slot,
+          index,
+          line,
+          level,
+          refine,
+          quality,
+          option,
+          grade,
+          name,
+          tree,
+          points,
+          slotIndex,
+          point,
+          karmaLevel,
+          gem,
+          null);
+    }
+
     /** 젬 교체가 아닌 변경(깨달음 카르마 레벨 포함). */
     public Change(
         Kind kind,
@@ -199,6 +238,7 @@ public class CombatPowerSimulationService {
           slotIndex,
           point,
           karmaLevel,
+          null,
           null);
     }
 
@@ -237,7 +277,21 @@ public class CombatPowerSimulationService {
       BigDecimal delta,
       Status status,
       String basis,
-      String reasonCode) {}
+      String reasonCode,
+      boolean modelValue) {
+    /** 모델값 표시 없는 줄(공식·두 곳 이상 근거). */
+    public Contribution(
+        String kind,
+        String target,
+        String from,
+        String to,
+        BigDecimal delta,
+        Status status,
+        String basis,
+        String reasonCode) {
+      this(kind, target, from, to, delta, status, basis, reasonCode, false);
+    }
+  }
 
   public record Result(
       String characterName,
@@ -538,9 +592,12 @@ public class CombatPowerSimulationService {
     var loadout = result.details().loadout();
     // 같은 대상은 뒤의 변경이 이긴다. 순서는 처음 나온 자리를 지킨다.
     var merged = new LinkedHashMap<String, Planned>();
+    // 카르마 랭크는 같은 요청의 앞 변경 뒤 포인트·랭크에 더한다(계약 초안 2026-11-22 a).
+    var run = new PassiveRun();
     for (var change : changes)
       merged.put(
-          key(change), describe(loadout, models.gem(), models.refine(), models.bracelet(), change));
+          key(change),
+          describe(loadout, models.gem(), models.refine(), models.bracelet(), change, run));
     return compute(result, models.gem(), models.refine(), models.bracelet(), merged.values());
   }
 
@@ -787,6 +844,31 @@ public class CombatPowerSimulationService {
   /** 깨달음 카르마 레벨: 지금 → 새 레벨. W 항의 무기 공격력 %가 레벨마다 karmaWeaponPctPerLevel만큼 바뀐다. */
   private record KarmaEffect(int current, int next) implements Effect {}
 
+  /** 카르마 배수 종류(모델값, 계산 검증 M13 §3): 진화 랭크 × (1 + c·랭크), 도약 레벨 × (1 + c·레벨). */
+  private enum KarmaFactor {
+    EVOLUTION_RANK,
+    LEAP_LEVEL
+  }
+
+  /** 진화 카르마 랭크·도약 카르마 레벨: 공식 값 → 새 값(독립 배수). */
+  private record KarmaFactorEffect(KarmaFactor factor, int current, int next) implements Effect {}
+
+  /** 지금까지 적용한 카르마 변경(없으면 null 칸). */
+  private record KarmaState(
+      KarmaEffect enlightenment, KarmaFactorEffect evolutionRank, KarmaFactorEffect leapLevel) {
+    static final KarmaState NONE = new KarmaState(null, null, null);
+
+    KarmaState with(KarmaEffect next) {
+      return new KarmaState(next, evolutionRank, leapLevel);
+    }
+
+    KarmaState with(KarmaFactorEffect next) {
+      return next.factor() == KarmaFactor.EVOLUTION_RANK
+          ? new KarmaState(enlightenment, next, leapLevel)
+          : new KarmaState(enlightenment, evolutionRank, next);
+    }
+  }
+
   /** 아크 그리드 코어(slotIndex) 등급·포인트: 지금·바꾼 뒤 코어 계수 C(%). */
   private record ArkGridCoreEffect(int slot, BigDecimal nowPct, BigDecimal nextPct)
       implements Effect {}
@@ -822,7 +904,7 @@ public class CombatPowerSimulationService {
       Map<String, PolishEffect> polish,
       Map<Integer, ArkGridCoreEffect> cores,
       Map<String, PassiveEffect> passives,
-      KarmaEffect karma,
+      KarmaState karma,
       Map<String, ArkGridGemEffect> arkGems) {
     State apply(Effect effect, Map<String, CharacterLoadout.PassiveEngraving> currents) {
       return switch (effect) {
@@ -933,7 +1015,20 @@ public class CombatPowerSimulationService {
                 polish,
                 cores,
                 passives,
-                next,
+                (karma == null ? KarmaState.NONE : karma).with(next),
+                arkGems);
+        case KarmaFactorEffect next ->
+            new State(
+                gems,
+                weaponAddDamage,
+                engravings,
+                refines,
+                bracelet,
+                armGuard,
+                polish,
+                cores,
+                passives,
+                (karma == null ? KarmaState.NONE : karma).with(next),
                 arkGems);
         case ArkGridCoreEffect core -> {
           var next = new HashMap<>(cores);
@@ -1026,7 +1121,15 @@ public class CombatPowerSimulationService {
       String reason) {
     Contribution ok(BigDecimal delta, String okBasis) {
       return new Contribution(
-          change.kind().name(), target, from, to, delta, Status.OK, okBasis, null);
+          change.kind().name(),
+          target,
+          from,
+          to,
+          delta,
+          Status.OK,
+          okBasis,
+          null,
+          modelValue(change));
     }
 
     Contribution unsupported(String why) {
@@ -1038,7 +1141,8 @@ public class CombatPowerSimulationService {
           null,
           Status.UNSUPPORTED,
           why,
-          CombatPowerReasons.classify(why).code());
+          CombatPowerReasons.classify(why).code(),
+          modelValue(change));
     }
   }
 
@@ -1079,14 +1183,26 @@ public class CombatPowerSimulationService {
           weaponPctDelta.add(line.to().weaponPct().subtract(line.from().weaponPct()), MATH);
     }
     // 깨달음 카르마(PM 총괄 11-15 (f), 딜러만): 레벨마다 무기 공격력 % +0.1%(W 항 안, 3곳 일치).
-    if (state.karma() != null)
+    var enlightenmentKarma = state.karma() == null ? null : state.karma().enlightenment();
+    if (enlightenmentKarma != null)
       weaponPctDelta =
           weaponPctDelta.add(
               refineModel
                   .coefficients()
                   .karmaWeaponPctPerLevel()
-                  .multiply(BigDecimal.valueOf(state.karma().next() - state.karma().current())),
+                  .multiply(
+                      BigDecimal.valueOf(enlightenmentKarma.next() - enlightenmentKarma.current())),
               MATH);
+    // 진화 카르마 랭크·도약 카르마 레벨(모델값, 계산 검증 M13 §3·5a-3): 다른 배수와 독립, 새/지금 비율을 곱한다(배수는 반올림하지 않음).
+    if (state.karma() != null)
+      for (var factor :
+          new KarmaFactorEffect[] {state.karma().evolutionRank(), state.karma().leapLevel()})
+        if (factor != null)
+          ratio =
+              ratio.multiply(
+                  karmaFactor(factor.factor(), factor.next())
+                      .divide(karmaFactor(factor.factor(), factor.current()), MATH),
+                  MATH);
     // 재련 단계와 팔찌·연마·카르마의 무기 공격력은 같은 W 항을 쓴다.
     if (!state.refines().isEmpty()
         || weaponFlatDelta.signum() != 0
@@ -1285,7 +1401,10 @@ public class CombatPowerSimulationService {
       case BRACELET_EFFECT -> "BRACELET:" + change.line();
       case ENGRAVING_LEVEL -> "ENGRAVING:" + change.name();
       case STONE_ENGRAVING -> "STONE:" + change.name();
-      case ARK_PASSIVE_POINT -> karmaChange(change) ? "KARMA" : "ARK_PASSIVE:" + change.tree();
+      case ARK_PASSIVE_POINT ->
+          change.karmaRank() != null
+              ? "KARMA_RANK:" + change.tree()
+              : karmaChange(change) ? "KARMA:" + change.tree() : "ARK_PASSIVE:" + change.tree();
       case ARK_GRID_CORE -> "ARK_GRID:" + change.slotIndex();
       case ARM_GUARD -> "ARM_GUARD";
       case ARK_GRID_GEM -> "ARK_GRID_GEM:" + change.slotIndex() + ":" + change.index();
@@ -1297,10 +1416,13 @@ public class CombatPowerSimulationService {
       CombatPowerGemModel.Model gemModel,
       CombatPowerRefineModel.Model refineModel,
       CombatPowerBraceletModel.Model braceletModel,
-      Change change) {
+      Change change,
+      PassiveRun run) {
     if (change.kind() == null) throw invalid("kind가 필요합니다.");
     if (change.karmaLevel() != null && change.kind() != Kind.ARK_PASSIVE_POINT)
-      throw invalid("karmaLevel은 ARK_PASSIVE_POINT(tree 깨달음)에만 쓸 수 있습니다.");
+      throw invalid("karmaLevel은 ARK_PASSIVE_POINT(tree 깨달음·도약)에만 쓸 수 있습니다.");
+    if (change.karmaRank() != null && change.kind() != Kind.ARK_PASSIVE_POINT)
+      throw invalid("karmaRank는 ARK_PASSIVE_POINT에만 쓸 수 있습니다.");
     return switch (change.kind()) {
       case GEM_LEVEL_ALL -> {
         range("level", change.level(), 0, 10);
@@ -1523,12 +1645,18 @@ public class CombatPowerSimulationService {
             engraving);
       }
       case ARK_PASSIVE_POINT -> {
+        // points·karmaRank·karmaLevel 가운데 하나만(계약 초안 2026-11-22 §1).
+        if (change.karmaRank() != null
+            && (change.points() != null || change.karmaLevel() != null || change.level() != null))
+          throw invalid("karmaRank는 points·karmaLevel·level과 함께 쓸 수 없습니다.");
+        if (change.karmaRank() != null) yield karmaRank(loadout, change, run);
         if (change.karmaLevel() != null) {
-          // 깨달음 카르마 레벨은 자기 필드로만(포인트·level과 섞지 않음, PM 총괄 11-19).
-          if (!ENLIGHTENMENT.equals(change.tree()))
-            throw invalid("karmaLevel은 tree 깨달음에만 쓸 수 있습니다.");
+          // 카르마 레벨은 자기 필드로만(포인트·level과 섞지 않음, PM 총괄 11-19). 깨달음은 W 항, 도약은 모델값 배수, 진화는 근거 없음(400).
+          if (!ENLIGHTENMENT.equals(change.tree()) && !LEAP.equals(change.tree()))
+            throw invalid("karmaLevel은 tree 깨달음·도약에만 쓸 수 있습니다.");
           if (change.points() != null || change.level() != null)
             throw invalid("karmaLevel은 points·level과 함께 쓸 수 없습니다.");
+          if (LEAP.equals(change.tree())) yield leapKarmaLevel(loadout, change);
           yield karma(loadout, refineModel, change, change.karmaLevel(), karmaCpEnabled);
         }
         range("points", change.points(), 0, 999);
@@ -1555,6 +1683,7 @@ public class CombatPowerSimulationService {
         // 깨달음 포인트 최대 101(계수 리소스 enlightenmentLimitPoints): 넘으면 400, 100 초과는 계산하지 않음(아래).
         if (ENLIGHTENMENT.equals(point.name()))
           range("points", change.points(), 0, arkPassiveCoefficients.enlightenmentLimitPoints());
+        run.setPoints(point.name(), change.points());
         var target = "아크 패시브 " + point.name();
         var from = str(point.value());
         var to = str(change.points());
@@ -2026,8 +2155,138 @@ public class CombatPowerSimulationService {
     return name.endsWith("%") ? name.substring(0, name.length() - 1).strip() : name;
   }
 
-  /** 깨달음 카르마 레벨 최대(공식 가이드 아크 패시브: 랭크마다 레벨 1~30). */
+  /**
+   * 카르마 레벨 최대(요청 상한). 공식 가이드 아크 패시브(2026-06-24)에는 숫자가 없다('랭크 단계별로 성장 가능한 레벨 구간이 다르게 적용') — 저장한 공식
+   * 원문 82개에서 세 트리 모두 레벨 1~30, 30을 넘는 값 없음(계산 검증 2026-11-22). 랭크 × 레벨 교차 검사는 하지 않는다(공개되지 않음).
+   */
   static final int KARMA_MAX_LEVEL = 30;
+
+  private static final String ENLIGHTENMENT_RANK_BASIS =
+      "깨달음 카르마 랭크마다 깨달음 포인트 +1(공식 가이드)로 바꾼 포인트 합의 전투력 배수(1 + 0.007 × 포인트, 100까지)의 비율을 공식 전투력에 곱했습니다.";
+  private static final String LEAP_RANK_BASIS =
+      "도약 카르마 랭크마다 도약 포인트 +2(공식 가이드)로 바꾼 포인트 합의 전투력 배수(1 + 0.002 × 포인트)의 비율을 공식 전투력에 곱했습니다.";
+  private static final String EVOLUTION_RANK_BASIS =
+      "진화 카르마 랭크의 전투력 배수(1 + 0.006 × 랭크)를 바꾼 비율을 공식 전투력에 곱한 모델값입니다(비교 기준 한 곳의 식, 다른 배수와 독립).";
+  private static final String LEAP_LEVEL_BASIS =
+      "도약 카르마 레벨의 전투력 배수(1 + 0.0002 × 레벨)를 바꾼 비율을 공식 전투력에 곱한 모델값입니다(비교 기준 한 곳의 식, 다른 배수와 독립).";
+  private static final String KARMA_RANK_UNREAD = "카르마 랭크를 읽지 못해 계산하지 않았습니다.";
+  private static final String LEAP_LEVEL_UNREAD = "도약 카르마 레벨을 읽지 못해 계산하지 않았습니다.";
+  private static final String KARMA_INPUT_OFF = "카르마 랭크·레벨 전투력 계산은 아직 켜지 않아 계산하지 않았습니다.";
+
+  /** 같은 요청 안에서 트리마다 앞 변경까지 반영한 포인트·카르마 랭크(없으면 공식 값). */
+  private static final class PassiveRun {
+    private final Map<String, Integer> points = new HashMap<>();
+    private final Map<String, Integer> ranks = new HashMap<>();
+
+    int pointsOr(String tree, int official) {
+      return points.getOrDefault(tree, official);
+    }
+
+    void setPoints(String tree, Integer value) {
+      if (value != null) points.put(tree, value);
+    }
+
+    int rankOr(String tree, int official) {
+      return ranks.getOrDefault(tree, official);
+    }
+
+    void setRank(String tree, int value) {
+      ranks.put(tree, value);
+    }
+  }
+
+  /** 모델값 줄(계약 초안 2026-11-22 §2): 진화 포인트(기울기)·진화 카르마 랭크·도약 카르마 레벨. */
+  static boolean modelValue(Change change) {
+    if (change.kind() != Kind.ARK_PASSIVE_POINT) return false;
+    if (EVOLUTION.equals(change.tree())) return change.karmaLevel() == null;
+    return LEAP.equals(change.tree()) && change.karmaLevel() != null;
+  }
+
+  private CharacterLoadout.PassivePoint passivePoint(CharacterLoadout loadout, String tree) {
+    if (loadout.arkPassive() == null || tree == null) return null;
+    return loadout.arkPassive().points().stream()
+        .filter(item -> item != null && tree.equals(item.name()))
+        .findFirst()
+        .orElse(null);
+  }
+
+  /**
+   * 카르마 랭크 바꾸기(0~6). 깨달음 +1·도약 +2 포인트를 같은 요청의 앞 변경 뒤 포인트에 더하고(범위 밖이면 400, 자르지 않음), 진화는 모델값 배수. 검사는
+   * 스위치와 상관없고, 지금 랭크를 읽지 못하면 계산하지 않는다(0으로 보지 않음).
+   */
+  private Planned karmaRank(CharacterLoadout loadout, Change change, PassiveRun run) {
+    range("karmaRank", change.karmaRank(), 0, CombatPowerRefineModel.KARMA_MAX_RANK);
+    var tree = change.tree();
+    if (!ENLIGHTENMENT.equals(tree) && !LEAP.equals(tree) && !EVOLUTION.equals(tree))
+      throw invalid("karmaRank는 tree 진화·깨달음·도약에만 쓸 수 있습니다.");
+    var target = tree + " 카르마 랭크";
+    int next = change.karmaRank();
+    var to = String.valueOf(next);
+    var point = passivePoint(loadout, tree);
+    var official = point == null ? null : CombatPowerRefineModel.karmaRank(point.description());
+    if (official == null || point.value() == null)
+      return new Planned(change, target, null, to, null, null, KARMA_RANK_UNREAD);
+    var from = String.valueOf(official);
+    int previous = run.rankOr(tree, official);
+    run.setRank(tree, next);
+    if (EVOLUTION.equals(tree)) {
+      if (!karmaCpEnabled)
+        return new Planned(change, target, from, to, null, null, KARMA_INPUT_OFF);
+      return new Planned(
+          change,
+          target,
+          from,
+          to,
+          new KarmaFactorEffect(KarmaFactor.EVOLUTION_RANK, official, next),
+          EVOLUTION_RANK_BASIS,
+          null);
+    }
+    int perRank = ENLIGHTENMENT.equals(tree) ? 1 : 2;
+    int max =
+        ENLIGHTENMENT.equals(tree) ? arkPassiveCoefficients.enlightenmentLimitPoints() : LEAP_MAX;
+    int points = run.pointsOr(tree, point.value()) + (next - previous) * perRank;
+    if (points < 0 || points > max)
+      throw invalid("카르마 랭크를 바꾼 " + tree + " 포인트 합이 0~" + max + " 밖입니다.");
+    run.setPoints(tree, points);
+    if (!karmaCpEnabled) return new Planned(change, target, from, to, null, null, KARMA_INPUT_OFF);
+    return new Planned(
+        change,
+        target,
+        from,
+        to,
+        new PassiveEffect(tree, point.value(), points),
+        ENLIGHTENMENT.equals(tree) ? ENLIGHTENMENT_RANK_BASIS : LEAP_RANK_BASIS,
+        null);
+  }
+
+  /** 도약 카르마 레벨 바꾸기(0~30, 모델값 배수). 스위치가 꺼져 있거나 지금 레벨을 읽지 못하면 계산하지 않는다. */
+  private Planned leapKarmaLevel(CharacterLoadout loadout, Change change) {
+    range("karmaLevel", change.karmaLevel(), 0, KARMA_MAX_LEVEL);
+    var target = LEAP + " 카르마 레벨";
+    var to = String.valueOf(change.karmaLevel());
+    if (!karmaCpEnabled) return new Planned(change, target, null, to, null, null, KARMA_INPUT_OFF);
+    var point = passivePoint(loadout, LEAP);
+    var official = point == null ? null : CombatPowerRefineModel.karmaLevel(point.description());
+    if (official == null)
+      return new Planned(change, target, null, to, null, null, LEAP_LEVEL_UNREAD);
+    return new Planned(
+        change,
+        target,
+        String.valueOf(official),
+        to,
+        new KarmaFactorEffect(KarmaFactor.LEAP_LEVEL, official, change.karmaLevel()),
+        LEAP_LEVEL_BASIS,
+        null);
+  }
+
+  /** 카르마 배수(모델값): 진화 랭크 1 + 0.006·랭크, 도약 레벨 1 + 0.0002·레벨. */
+  private BigDecimal karmaFactor(KarmaFactor factor, int value) {
+    return factor == KarmaFactor.EVOLUTION_RANK
+        ? com.loakraken.character.domain.CombatPowerArkPassiveModel.evolutionKarmaRank(
+            arkPassiveCoefficients, value)
+        : com.loakraken.character.domain.CombatPowerArkPassiveModel.leapKarmaLevel(
+            arkPassiveCoefficients, value);
+  }
 
   private static final String KARMA_BASIS =
       "깨달음 카르마 레벨마다 무기 공격력 +0.1%(전투력 W 항 안, 세 곳 일치)를 바꾼 비율을 공식 전투력에 곱했습니다.";

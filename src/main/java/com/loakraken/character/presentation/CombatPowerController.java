@@ -213,8 +213,12 @@ public class CombatPowerController {
           Integer point,
       @Schema(
               description =
-                  "깨달음 카르마 레벨(0~30, ARK_PASSIVE_POINT tree 깨달음만, points·level과 함께 쓰지 않음). 딜러만 계산한다(무기 공격력 레벨당 +0.1%)")
+                  "카르마 레벨(0~30, ARK_PASSIVE_POINT tree 깨달음·도약, points·karmaRank·level과 함께 쓰지 않음). 깨달음은 무기 공격력 레벨당 +0.1%, 도약은 × (1 + 0.0002 × 레벨) 모델값. 진화는 400. 딜러만 계산한다")
           Integer karmaLevel,
+      @Schema(
+              description =
+                  "카르마 랭크(0~6, ARK_PASSIVE_POINT tree 진화·깨달음·도약, points·karmaLevel·level과 함께 쓰지 않음). 깨달음은 랭크마다 포인트 +1, 도약은 +2(같은 요청의 앞 변경 뒤 포인트에 더하고, 깨달음 0~101·도약 0~70 밖이면 400), 진화는 × (1 + 0.006 × 랭크) 모델값. 딜러만 계산한다")
+          Integer karmaRank,
       @Schema(
               description =
                   "새 젬 종류(ARK_GRID_GEM): 질서 코어는 안정·견고·불변, 혼돈 코어는 침식·왜곡·붕괴. 바꿀 젬은 index(공식 Gems Index). 종류별 옵션 4종(effects[].name, 공식 확률 정보·공지 13204): 안정·침식 = 공격력·추가 피해·아군 피해 강화·낙인력, 견고·왜곡 = 공격력·보스 피해·아군 피해 강화·아군 공격 강화, 불변·붕괴 = 추가 피해·보스 피해·낙인력·아군 공격 강화. 필요 의지력 기본값 안정·침식 8, 견고·왜곡 9, 불변·붕괴 10. 바꾼 뒤 그 코어의 의지력이 모자라면 그 줄은 UNSUPPORTED, reasonCode ARK_GRID_WILL_SHORT(basis에 한국어 문장)")
@@ -256,7 +260,8 @@ public class CombatPowerController {
                                       : new CombatPowerSimulationService.GemOption(
                                           effect.name(), effect.level()))
                           .toList())
-              : null);
+              : null,
+          karmaRank);
     }
   }
 
@@ -304,7 +309,8 @@ public class CombatPowerController {
                           item.delta(),
                           item.status().name(),
                           item.basis(),
-                          item.reasonCode()))
+                          item.reasonCode(),
+                          item.modelValue()))
               .toList(),
           result.unsupportedCount(),
           result.assumptions());
@@ -325,7 +331,12 @@ public class CombatPowerController {
               description = "UNSUPPORTED 이유 코드(문자열, 값이 늘 수 있음, 스펙업·전투력 기여와 같은 코드). OK면 null",
               example = "SUPPORTER_MODEL_PENDING")
           @NullableResponse
-          String reasonCode) {}
+          String reasonCode,
+      @Schema(
+              description =
+                  "이 줄의 배수가 모델값(공식이 아닌 비교 기준 한 곳의 식)이면 true: 진화 포인트·진화 카르마 랭크·도약 카르마 레벨. 배포 순서 때문에 계약에서는 선택 필드(없으면 false로 본다)")
+          @com.loakraken.common.api.OptionalResponse
+          boolean modelValue) {}
 
   public record CombatPowerOptionsResponse(
       String ruleVersion,

@@ -630,4 +630,27 @@ public final class CombatPowerRefineModel {
     var matcher = KARMA_LEVEL.matcher(description);
     return matcher.find() ? Integer.parseInt(matcher.group(1)) : null;
   }
+
+  /** 카르마 랭크 최대(공식 가이드 아크 패시브 2026-06-24: 랭크 성장 깨달음 총 +6, 도약 총 +12). */
+  public static final int KARMA_MAX_RANK = 6;
+
+  private static final java.util.regex.Pattern KARMA_RANK =
+      java.util.regex.Pattern.compile("(\\d+)랭크");
+
+  /**
+   * 아크 패시브 포인트 설명("6랭크 29레벨")의 첫 'N랭크'. 설명이 없거나 랭크가 없거나 0~6 밖이면 null(읽지 못한 것으로 본다, 0으로 보지 않음 — 계약
+   * 초안 2026-11-22 5b).
+   */
+  public static Integer karmaRank(String description) {
+    if (description == null) return null;
+    var matcher = KARMA_RANK.matcher(description);
+    if (!matcher.find()) return null;
+    int rank;
+    try {
+      rank = Integer.parseInt(matcher.group(1));
+    } catch (NumberFormatException exception) {
+      return null;
+    }
+    return rank >= 0 && rank <= KARMA_MAX_RANK ? rank : null;
+  }
 }

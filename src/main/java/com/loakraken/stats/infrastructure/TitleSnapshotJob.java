@@ -31,7 +31,15 @@ class TitleSnapshotJob {
   private final Clock clock;
   private final Timer timer;
   private final io.micrometer.core.instrument.Counter exclusionResets;
+  private final MeterRegistry registry;
   private final AtomicLong lastSuccess = new AtomicLong();
+
+  /** 오늘 만들기가 실패했을 때 확인 주기(기본 10분)마다 다시 만드는 최대 횟수(하루). 넘으면 다음 날 정해진 시각에 만든다. */
+  static final int MAX_RETRIES_PER_DAY = 5;
+
+  // 오늘(KST) 만들기가 실패한 날과 그날 다시 만든 횟수. 실패를 겪은 인스턴스(임대를 잡았던 곳)만 다시 한다.
+  private java.time.LocalDate failedOn;
+  private int retries;
 
   TitleSnapshotJob(
       TitleSnapshotService snapshots,
@@ -41,6 +49,7 @@ class TitleSnapshotJob {
     this.snapshots = snapshots;
     this.redis = redis;
     this.clock = clock;
+    this.registry = registry;
     this.timer =
         Timer.builder("loakraken.stats.title_snapshot")
             .description("칭호 장착 확인 일별 스냅숏 한 번 만드는 데 걸린 시간")
@@ -71,24 +80,59 @@ class TitleSnapshotJob {
     run("startup");
   }
 
-  /** 지난 처리정지 목록으로 만든 날짜가 남아 있을 때만 지우고 오늘을 다시 만든다(없으면 오늘 몫을 미리 만들지 않음). */
+  /**
+   * 지난 처리정지 목록으로 만든 날짜가 남아 있을 때만 지우고 오늘을 다시 만든다(없으면 오늘 몫을 미리 만들지 않음). 오늘 만들기가 실패했으면(정해진 시각·기동 뒤·다시
+   * 만들기) 하루 {@value #MAX_RETRIES_PER_DAY}번까지 이 주기에 다시 만든다(#864 코드 리뷰 P3: 실패하면 다음 날까지 빈 날이 생김).
+   */
   @Scheduled(
       initialDelayString = "${stats.title-snapshot.exclusion-check:10m}",
       fixedDelayString = "${stats.title-snapshot.exclusion-check:10m}")
-  void checkExclusion() {
+  synchronized void checkExclusion() {
+    boolean stale;
     try {
-      if (!snapshots.staleStored()) return;
+      stale = snapshots.staleStored();
     } catch (org.springframework.dao.DataAccessException exception) {
       log.warn(
           "event=title_snapshot_check_failed 처리정지 목록 변경을 확인하지 못했습니다. 다음 주기에 다시 합니다. 예외 유형={}",
           exception.getClass().getSimpleName());
       return;
     }
+    if (!stale) {
+      retryFailedToday("retry");
+      return;
+    }
+    // 지난 목록 날짜가 남아 있어도 오늘 이미 실패했으면 같은 하루 상한·지표로 다시 한다(#1064 코드 리뷰 P3: 남은 날짜가 계속 있으면 주기마다
+    // 제한 없이 다시 만들었다).
+    if (java.time.LocalDate.now(clock.withZone(TitleSnapshotService.KST)).equals(failedOn)) {
+      retryFailedToday("exclusion");
+      return;
+    }
     run("exclusion");
   }
 
-  /** 만들었으면 true. trigger = 이 실행을 연 곳(schedule·startup·exclusion). */
-  boolean run(String trigger) {
+  /** 오늘 실패한 만들기를 다시 한다(하루 최대 횟수까지). 그사이 다른 곳이 만들었으면 그만둔다. trigger는 로그용(retry·exclusion). */
+  private void retryFailedToday(String trigger) {
+    var today = java.time.LocalDate.now(clock.withZone(TitleSnapshotService.KST));
+    if (!today.equals(failedOn) || retries >= MAX_RETRIES_PER_DAY) return;
+    if (snapshots.builtToday()) {
+      failedOn = null;
+      return;
+    }
+    retries++;
+    boolean built = run(trigger);
+    registry
+        .counter("loakraken.stats.title_snapshot_retry", "outcome", built ? "built" : "failed")
+        .increment();
+    if (built) failedOn = null;
+    else if (retries >= MAX_RETRIES_PER_DAY && today.equals(failedOn))
+      log.warn(
+          "event=title_snapshot_retry_exhausted day={} retries={} 오늘 칭호 스냅숏을 다시 만들지 못했습니다. 다음 날 정해진 시각에 만듭니다.",
+          today,
+          retries);
+  }
+
+  /** 만들었으면 true. trigger = 이 실행을 연 곳(schedule·startup·exclusion·retry). */
+  synchronized boolean run(String trigger) {
     if (snapshots.builtToday()) return false;
     if (!hold(Duration.ofMinutes(10))) return false;
     long started = System.nanoTime();
@@ -110,9 +154,16 @@ class TitleSnapshotJob {
       }
       return true;
     } catch (org.springframework.dao.DataAccessException exception) {
+      var today = java.time.LocalDate.now(clock.withZone(TitleSnapshotService.KST));
+      if (!today.equals(failedOn)) {
+        failedOn = today;
+        retries = 0;
+      }
       log.warn(
-          "event=title_snapshot_failed trigger={} 칭호 일별 스냅숏을 만들지 못했습니다. 다음 날 다시 합니다. 예외 유형={}",
+          "event=title_snapshot_failed trigger={} retries={} maxRetries={} exceptionType={} 칭호 일별 스냅숏을 만들지 못했습니다. 확인 주기마다 다시 합니다.",
           trigger,
+          retries,
+          MAX_RETRIES_PER_DAY,
           exception.getClass().getSimpleName());
       return false;
     } finally {

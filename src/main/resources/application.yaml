@@ -253,6 +253,9 @@ refining:
   optimal:
     enabled: ${REFINING_OPTIMAL_ENABLED:false}
     max-concurrent-solves: ${REFINING_OPTIMAL_MAX_CONCURRENT_SOLVES:2}
+  # 상급 재련 기대 비용 API(POST /api/v1/refining/advanced-plans): 웹 화면이 붙을 때 켠다. 꺼져 있으면 400.
+  advanced:
+    enabled: ${REFINING_ADVANCED_ENABLED:false}
 
 home:
   cache:

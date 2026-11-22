@@ -76,9 +76,18 @@ final class AdvancedRefineRulesReader {
     var single = new ArrayList<String>();
     if (ancestors.path("enhanced").path("singleSource").asBoolean())
       single.add("enhancedAncestors");
+    // 출처 칸(문자열)은 그대로 둔다 — 상급 재련 API 응답 source가 공식 가이드·공지를 보인다.
+    var source = new LinkedHashMap<String, Object>();
+    root.path("source")
+        .properties()
+        .forEach(
+            entry -> {
+              if (entry.getValue().isString())
+                source.put(entry.getKey(), entry.getValue().asString());
+            });
     return new AdvancedRefineRules(
         root.path("ruleVersion").asString(),
-        Map.of(),
+        Map.copyOf(source),
         odds,
         support,
         Map.copyOf(bands),

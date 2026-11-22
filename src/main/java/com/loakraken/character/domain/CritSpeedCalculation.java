@@ -1429,8 +1429,14 @@ public final class CritSpeedCalculation {
       var texts = new ArrayList<String>();
       for (var option : slot.core().options()) {
         if (option == null || option.text() == null || option.threshold() > slot.point()) continue;
-        var matcher = pattern.matcher(option.text().strip());
-        if (!matcher.matches()) continue;
+        var text = option.text().strip();
+        var matcher = pattern.matcher(text);
+        if (!matcher.matches()) {
+          // '운명' 상태의 치명타 적중률("'운명: X' : 치명타 적중률이 N% 증가하고, …", M40 R1). 스킬 이름이 붙은 문구는 맞지 않는다.
+          if (axis != Axis.CRIT) continue;
+          matcher = CORE_RATE_FATE.matcher(text);
+          if (!matcher.find()) continue;
+        }
         total = total.add(new BigDecimal(matcher.group(1)));
         texts.add(option.text());
       }
@@ -1446,10 +1452,20 @@ public final class CritSpeedCalculation {
     }
   }
 
+  /**
+   * 직업 코어(INCLUDE)의 달성 구간 문구. 대상이 스킬 분류 전체인 "일반 스킬의"·"충격 스킬의"는 비교 기준처럼 기본에 더한다(M40 R1·R3). 스킬 이름이
+   * 붙은 문구(예: "섬열란아 치명타 피해량", "연환파신권의 치명타 적중률")는 맞지 않아 더하지 않는다.
+   */
+  private static final String CORE_SKILL_CATEGORY = "(?:(?:일반|충격) 스킬의\\s*)?";
+
   private static final Pattern CORE_RATE_ONLY =
-      Pattern.compile("치명타 적중률이\\s*" + NUMBER + "%\\s*증가한다\\.");
+      Pattern.compile(CORE_SKILL_CATEGORY + "치명타 적중률이\\s*" + NUMBER + "%\\s*증가한다\\.");
   private static final Pattern CORE_DAMAGE_ONLY =
-      Pattern.compile("치명타 피해(?:량이|가)\\s*" + NUMBER + "%\\s*증가한다\\.");
+      Pattern.compile(CORE_SKILL_CATEGORY + "치명타 피해(?:량이|가)\\s*" + NUMBER + "%\\s*증가한다\\.");
+
+  /** 직업 코어 '운명' 상태의 치명타 적중률: "'운명: 불완전 연소' : 치명타 적중률이 10.0% 증가하고, …" */
+  private static final Pattern CORE_RATE_FATE =
+      Pattern.compile("'운명: [^']+'\\s*:\\s*치명타 적중률이\\s*" + NUMBER + "%\\s*증가(?:한다\\.|하고)");
 
   /** 직업 코어의 급소 노출: "급소 노출 효과가 적용되어, 대상이 자신 및 파티원에게 받는 치명타 저항률이 … X% 감소" */
   private static final Pattern CORE_WEAK_POINT =

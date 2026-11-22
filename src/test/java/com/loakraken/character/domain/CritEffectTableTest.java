@@ -102,8 +102,8 @@ class CritEffectTableTest {
   }
 
   /**
-   * M40 켜기 기준 R1(계산 검증 11-22 13:36, PM 총괄 13:37): 공식 코어 문구(11-15 표본 원본)의 달성 구간 치명 효과를 기본에 더한다. '운명' 상태의
-   * 치명타 적중률, "일반 스킬의"·"충격 스킬의" 치명타 피해량은 더하고, 스킬 이름이 붙은 문구(섬열란아, 연환파신권)는 스킬 한정이라 기본에 넣지 않는다.
+   * M40 켜기 기준 R1(계산 검증 11-22 13:36, PM 총괄 13:37): 공식 코어 문구(11-15 표본 원본)의 달성 구간 치명 효과를 기본에 더한다. '운명'
+   * 상태의 치명타 적중률, "일반 스킬의"·"충격 스킬의" 치명타 피해량은 더하고, 스킬 이름이 붙은 문구(섬열란아, 연환파신권)는 스킬 한정이라 기본에 넣지 않는다.
    */
   @Test
   void 직업_코어_불완전_연소_초순환_파천격_충격파의_달성_구간_치명_효과를_기본에_더한다() {
@@ -179,6 +179,37 @@ class CritEffectTableTest {
         .containsExactly("질서의 해 코어 : 충격파 20P=1.2");
     // 17P 연환파신권 치명타 적중률은 스킬 한정이라 기본에 넣지 않는다.
     assertThat(values(infighter, Axis.CRIT, Category.ARK_GRID)).isEmpty();
+  }
+
+  /**
+   * M40 R6(계산 검증 11-22, 소울이터 11-15 표본 원본): 달성한 직업 코어 '망자의 발걸음' 20P의 "'운명: 데스 스텝' : 이동 속도가 5.0%
+   * 증가한다."를 다른 '운명' 공이속 상태처럼 기본 켬 가정 토글로 센다(이동 속도만).
+   */
+  @Test
+  void 소울이터_망자의_발걸음_운명_데스_스텝_이동_속도를_가정_토글로_센다() {
+    var result =
+        calculate(
+            "소울이터",
+            List.of(),
+            List.of(),
+            new CharacterLoadout.ArkGrid(
+                List.of(
+                    core(
+                        "질서의 해 코어 : 망자의 발걸음",
+                        20,
+                        List.of(
+                            new CharacterLoadout.CoreOption(
+                                14,
+                                "'운명' 발동 시 망자 스킬의 재사용 대기시간이 50% 감소하고 10.0초 동안 '운명: 데스 스텝' 효과를 획득한다. '운명: 데스 스텝' : 이동 속도가 5.0% 증가한다.")))),
+                List.of()),
+            Assumptions.NONE);
+    assertThat(values(result, Axis.MOVE_SPEED, Category.ASSUMPTION))
+        .containsExactly("운명: 데스 스텝 유지 가정(질서의 해 코어 : 망자의 발걸음)=5");
+    assertThat(values(result, Axis.ATTACK_SPEED, Category.ASSUMPTION)).isEmpty();
+    assertThat(result.toggles())
+        .extracting(t -> t.key() + "/" + t.axis() + "/" + t.on())
+        .contains("운명: 데스 스텝 유지 가정/MOVE_SPEED/true")
+        .noneMatch(line -> line.startsWith("운명: 데스 스텝 유지 가정/ATTACK_SPEED"));
   }
 
   /** M40 R3(PM 총괄 11-22 13:37): '일반 스킬에만' 치명타 피해(치명적인 체술·할버드의 대가)는 비교 기준처럼 합계에 넣는다(전술 훈련과 같게). */

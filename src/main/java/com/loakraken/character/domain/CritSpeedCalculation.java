@@ -16,7 +16,8 @@ import java.util.regex.Pattern;
  */
 public final class CritSpeedCalculation {
   // v15: 디스트로이어 해방 스킬 노드는 해방 스킬에만, 다크니스 엣지는 문구의 최대 중첩 값(코드 리뷰 #979 P2 재실행).
-  public static final String RULE_VERSION = "crit-speed-v15";
+  // v16: 직업 코어 4종 치명 효과, '일반 스킬의 치명타 피해' 노드 합계, 소울이터 '운명: 데스 스텝' 이동 속도(M40 켜기 기준).
+  public static final String RULE_VERSION = "crit-speed-v16";
 
   /**
    * 치명타 피해 앞(같은 문장)에 오면 조건부로 보고 합산하지 않는 말. 비교 기준 2곳은 "폭주 중"·"마력 해방 중"(각성 상태)은 넣고 "사신화 상태에서"· "페르소나

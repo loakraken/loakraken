@@ -93,11 +93,18 @@ class MarketVolumeWarmup {
   // 돌림 탭 페이지 재시도를 이 시각 전에는 하지 않는다. 리더 한 곳의 메모리에만 둔다(저장 위치 형식을 바꾸지 않음): 리더가 바뀌면 한 번 일찍 다시 받을 수 있다.
   private final java.util.Map<MarketTab, java.time.Instant> retryNotBefore =
       new java.util.EnumMap<>(MarketTab.class);
+  // 다시 받을 돌림 페이지의 처음 받은 결과(#1060 코드 리뷰 P3): 재시도는 5·15분 뒤라 검색 캐시(5분)가 지나 있어, 페이지를 다시 검색하지 않고 이것을 다시
+  // 쓴다(실패한 페이지 한 장 = 검색 1 + 상세 3). 리더 메모리에만 두고, 페이지를 넘기거나 날이 바뀌거나 리더를 다시 잡으면 버린다.
+  private final java.util.Map<MarketTab, RetryPage> retryPages =
+      new java.util.EnumMap<>(MarketTab.class);
   private final java.util.Map<MarketTab, RotationGauges> rotationGauges =
       new java.util.EnumMap<>(MarketTab.class);
 
   /** 대기열에 든 돌림 페이지. */
   private record Rotation(MarketTab tab, MarketVolumeCursor cursor, int totalPages) {}
+
+  /** 재시도용으로 남긴 돌림 페이지 결과(그 페이지 번호와 함께). */
+  private record RetryPage(int page, com.loakraken.market.application.MarketPage result) {}
 
   private record RotationGauges(AtomicLong page, AtomicLong pages, AtomicLong cycleDays) {}
 
@@ -175,6 +182,8 @@ class MarketVolumeWarmup {
       day = null;
       // 전에 잡고 있던 페이지의 기다림은 버린다(위치는 저장소에서 다시 읽으므로 다른 페이지일 수 있음, 코드 리뷰 #1060 P3).
       retryNotBefore.clear();
+      // 재시도용 페이지도 버린다(그사이 다른 인스턴스가 같은 페이지를 다시 받았을 수 있음).
+      retryPages.clear();
     }
     LocalDate today = LocalDate.now(clock.withZone(KST));
     if (!today.equals(day)) startDay(today);
@@ -202,6 +211,7 @@ class MarketVolumeWarmup {
     rotation = null;
     cursors.clear();
     rotatedToday.clear();
+    retryPages.clear();
     filledToday = 0;
     doneLogged = false;
     dailyCapLogged = false;
@@ -260,20 +270,17 @@ class MarketVolumeWarmup {
     var notBefore = retryNotBefore.get(tab);
     if (cursor.attempts() > 0 && notBefore != null && clock.instant().isBefore(notBefore))
       return false;
+    // 같은 페이지를 다시 받는 재시도면 처음 받은 결과를 다시 쓴다(공식 검색·하루 몫 없음, #1060 코드 리뷰 P3).
+    var kept = retryPages.get(tab);
+    if (cursor.attempts() > 0 && kept != null && kept.page() == cursor.page()) {
+      startRotation(tab, cursor, kept.result(), today);
+      return true;
+    }
     if (!reserve(today, 1)) return false;
     try {
       var page = gate.withReserve(RESERVE, () -> boards.volumePage(tab, cursor.page()));
-      int totalPages =
-          Math.max(
-              1,
-              (page.totalCount() + MarketBoardService.PAGE_SIZE - 1)
-                  / MarketBoardService.PAGE_SIZE);
-      var gauges = rotationGauges.get(tab);
-      gauges.page().set(cursor.page());
-      gauges.pages().set(totalPages);
-      rotation = new Rotation(tab, cursor, totalPages);
-      rotationFailures = 0;
-      enqueue(page.items(), today);
+      retryPages.put(tab, new RetryPage(cursor.page(), page));
+      startRotation(tab, cursor, page, today);
       return true;
     } catch (BusinessException exception) {
       metrics.volumeWarmup(failure("tab=" + tab + " page=" + cursor.page(), exception));
@@ -290,6 +297,24 @@ class MarketVolumeWarmup {
       tabs.pollFirst();
       return true;
     }
+  }
+
+  /** 받은(또는 재시도용으로 남긴) 돌림 페이지로 이번 돌림을 시작한다: 지표를 맞추고 품목을 대기열에 넣는다. */
+  private void startRotation(
+      MarketTab tab,
+      MarketVolumeCursor cursor,
+      com.loakraken.market.application.MarketPage page,
+      LocalDate today) {
+    int totalPages =
+        Math.max(
+            1,
+            (page.totalCount() + MarketBoardService.PAGE_SIZE - 1) / MarketBoardService.PAGE_SIZE);
+    var gauges = rotationGauges.get(tab);
+    gauges.page().set(cursor.page());
+    gauges.pages().set(totalPages);
+    rotation = new Rotation(tab, cursor, totalPages);
+    rotationFailures = 0;
+    enqueue(page.items(), today);
   }
 
   /**
@@ -344,6 +369,8 @@ class MarketVolumeWarmup {
       next = new MarketVolumeCursor(done.cursor().page() + 1, done.cursor().cycleStartedOn());
     }
     retryNotBefore.remove(tab);
+    // 페이지를 넘기면(성공·포기) 재시도용 페이지를 버린다.
+    retryPages.remove(tab);
     cursors.put(tab, next);
     rotationGauges.get(tab).page().set(next.page());
     cache.saveVolumeCursor(tab, next);

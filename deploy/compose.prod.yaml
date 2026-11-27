@@ -224,6 +224,8 @@ services:
       SPEC_UP_ENABLED: ${SPEC_UP_ENABLED:-false}
       # 스펙업 완갑 재련 줄. 기본 켬, 끄면 목록·줄 상세에서 뺀다.
       SPEC_UP_ARM_GUARD_ENABLED: ${SPEC_UP_ARM_GUARD_ENABLED:-true}
+      # 스펙업 상급 재련 기대 비용(#1081). 기본 끔(끄면 상급 재련 비용 미확정, 풀이 없음). 계산 검증 판정·요청 시간 측정 뒤 켠다.
+      SPEC_UP_ADVANCED_REFINE_COST_ENABLED: ${SPEC_UP_ADVANCED_REFINE_COST_ENABLED:-false}
       # 스펙업 연마 교체 줄 Δ전투력. 기본 끔, 계산 검증 판정 뒤 켠다.
       SPEC_UP_POLISH_CP_ENABLED: ${SPEC_UP_POLISH_CP_ENABLED:-false}
       # 스펙업 어빌리티 스톤 줄 Δ전투력. 기본 끔, 계산 검증 판정 뒤 켠다.

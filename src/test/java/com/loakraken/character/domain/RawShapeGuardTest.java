@@ -232,6 +232,39 @@ class RawShapeGuardTest {
     assertThat(RawShapeGuard.Verdict.group(RawShapeGuard.POINT_DESCRIPTION_FORM)).isEqualTo("W3");
   }
 
+  /** 코덱스 #1125 P2: 닫는 '>' 없는 '<'가 많아도 한 번 훑기라 빠르고, 상한을 넘는 칸은 읽지 않는다(빈 값). */
+  @Test
+  void stripIsLinearAndRespectsTheOfficialTextLimit() {
+    var underLimit = "<".repeat(OfficialTextLimit.MAX_CHARS - 1) + "x";
+    long started = System.nanoTime();
+    var stripped = RawShapeGuard.strip(underLimit);
+    long elapsedMs = (System.nanoTime() - started) / 1_000_000;
+
+    assertThat(stripped).isEqualTo(underLimit);
+    assertThat(elapsedMs)
+        .as("strip of %d '<' took %d ms", underLimit.length(), elapsedMs)
+        .isLessThan(100);
+    assertThat(RawShapeGuard.strip("<".repeat(OfficialTextLimit.MAX_CHARS + 1))).isEmpty();
+  }
+
+  /** 한 번 훑기 태그 떼기는 예전 패턴('<[^>]+>' → 공백)과 같은 결과다(빈 '<>', 태그 안의 '<', 닫히지 않은 '<' 포함). */
+  @Test
+  void stripTagsMatchesTheOldPatternExactly() {
+    var random = new java.util.Random(1125);
+    var alphabet = new char[] {'<', '>', 'a', ' ', '가'};
+    for (int n = 0; n < 20_000; n++) {
+      var text = new StringBuilder();
+      int length = random.nextInt(24);
+      for (int i = 0; i < length; i++) text.append(alphabet[random.nextInt(alphabet.length)]);
+      var input = text.toString();
+
+      assertThat(RawShapeGuard.stripTags(input))
+          .as(input)
+          .isEqualTo(input.replaceAll("<[^>]+>", " "));
+    }
+    assertThat(RawShapeGuard.stripTags("<FONT COLOR='#A9D0F5'>연마 효과</FONT>")).isEqualTo(" 연마 효과 ");
+  }
+
   @Test
   void nullRawHasNoEquipment() {
     assertThat(RawShapeGuard.check((JsonNode) null).hard())

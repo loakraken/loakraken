@@ -23,7 +23,6 @@ import tools.jackson.databind.node.MissingNode;
  */
 public final class RawShapeGuard {
   private static final JsonMapper MAPPER = JsonMapper.builder().build();
-  private static final Pattern TAG = Pattern.compile("<[^>]+>");
   private static final Pattern SPACES = Pattern.compile("\\s+", Pattern.UNICODE_CHARACTER_CLASS);
 
   private static final Map<String, Integer> MAX_PARTS =
@@ -149,6 +148,8 @@ public final class RawShapeGuard {
   }
 
   private static boolean qualityIsNumber(String tooltip) {
+    // 상한을 넘는 칸은 깨진 응답이라 읽지 않는다(다른 툴팁 파서와 같은 규칙).
+    if (!OfficialTextLimit.fits(tooltip)) return false;
     try {
       return MAPPER
           .readTree(tooltip)
@@ -207,7 +208,41 @@ public final class RawShapeGuard {
     }
   }
 
-  private static String strip(String text) {
-    return SPACES.matcher(TAG.matcher(text).replaceAll(" ")).replaceAll(" ").strip();
+  /**
+   * 태그를 공백으로 바꾸고 공백을 하나로 모은다. 상한({@link OfficialTextLimit})을 넘는 칸은 깨진 응답으로 보고 빈 값이다. 태그 떼기는 한 번
+   * 훑기다(코덱스 #1125 P2: '<[^>]+>' 패턴은 닫는 '>' 없는 '<'가 많으면 시작점마다 끝까지 다시 훑어 길이의 제곱이 된다). 결과는 그 패턴과 같다:
+   * 태그는 '<' 뒤 다음 '>'까지(사이에 '<'가 있어도 한 태그, 빈 '<>'는 태그가 아님), 뒤에 '>'가 없으면 나머지는 그대로.
+   */
+  static String strip(String text) {
+    if (!OfficialTextLimit.fits(text)) return "";
+    return SPACES.matcher(stripTags(text)).replaceAll(" ").strip();
+  }
+
+  static String stripTags(String text) {
+    var out = new StringBuilder(text.length());
+    int i = 0;
+    while (i < text.length()) {
+      char c = text.charAt(i);
+      if (c != '<') {
+        out.append(c);
+        i++;
+        continue;
+      }
+      int close = text.indexOf('>', i + 1);
+      if (close < 0) {
+        // 뒤에 '>'가 없으니 더 이상 태그가 없다 — 나머지를 그대로 두고 끝낸다(다시 훑지 않음).
+        out.append(text, i, text.length());
+        break;
+      }
+      if (close == i + 1) {
+        // '<>'는 태그가 아니다(패턴의 [^>]+는 한 글자 이상).
+        out.append(c);
+        i++;
+        continue;
+      }
+      out.append(' ');
+      i = close + 1;
+    }
+    return out.toString();
   }
 }

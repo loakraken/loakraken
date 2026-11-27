@@ -828,14 +828,17 @@ public class CombatPowerSimulationService {
       contributions.add(planned.unsupported(reason == null ? UNSUPPORTED_BASIS : reason));
     }
     var delta = before == null ? null : running.subtract(before);
+    // 2부 대비 막기(계산 검증 P3, PM 총괄 02:58): 막으면 after·delta·deltaPercent는 0이 아니라 null(계산하지 않음). before는
+    // 공식 값이라 그대로.
+    boolean blocked = forcedReason != null;
     return new Result(
         result.details().profile().characterName(),
         result.fetchedAt(),
         before,
         null,
-        running,
-        delta,
-        before == null || before.signum() == 0
+        blocked ? null : running,
+        blocked ? null : delta,
+        blocked || before == null || before.signum() == 0
             ? null
             : delta.multiply(BigDecimal.valueOf(100)).divide(before, 3, RoundingMode.HALF_UP),
         unsupported > 0,

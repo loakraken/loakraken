@@ -446,7 +446,7 @@ public class SpecUpController {
           String krakenScoreRole,
       @Schema(
               description =
-                  "비용을 아는 단계의 단계 비용(extraCost) 합(골드). 비용을 모르는 단계가 있어 totalCost가 null일 때 'X G + 비용 모름 N단계'로 보인다(unknownCostSteps와 함께). 단계가 없으면 0. 배포 순서 때문에 계약에서는 선택 필드")
+                  "비용을 아는 단계의 단계 비용(extraCost) 합(골드). 비용을 모르는 단계가 있어 totalCost가 null일 때 'X G + 비용 모름 N단계'로 보인다(unknownCostSteps와 함께). 단계가 없으면 0(stopReasonCode가 GAME_UPDATE_UNSUPPORTED면 계산하지 않은 것이라 금액으로 보이지 않는다). 배포 순서 때문에 계약에서는 선택 필드")
           @OptionalResponse
           Long knownCostTotal,
       @Schema(
@@ -564,7 +564,7 @@ public class SpecUpController {
           boolean cooldownGemsIncluded,
       @Schema(
               description =
-                  "Δ크라켄 점수를 낼 수 없는 이유(문자열, 값이 늘 수 있음): DISABLED·INPUT_PENDING·ROLE_UNKNOWN·SCORE_UNAVAILABLE·GAME_UPDATE_UNSUPPORTED(2부 대비 막기·끄기 스위치가 켜졌을 때만, 이때 모든 후보도 같은 reasonCode)(예전 SUPPORTER_PENDING은 더 내지 않음 — 서포터는 서포터 점수식으로 Δ를 낸다). 이때 KRAKEN도 효율 순. 낼 수 있으면 null",
+                  "Δ크라켄 점수를 낼 수 없는 이유(문자열, 값이 늘 수 있음): DISABLED·INPUT_PENDING·ROLE_UNKNOWN·SCORE_UNAVAILABLE·GAME_UPDATE_UNSUPPORTED(2부 대비 막기·끄기 스위치가 켜졌을 때만, 정렬과 상관없이 맨 위 이유이고 이때 candidates는 빈 목록·total 0, 줄 상세는 404 SPEC_UP_CANDIDATE_NOT_FOUND)(예전 SUPPORTER_PENDING은 더 내지 않음 — 서포터는 서포터 점수식으로 Δ를 낸다). 이때 KRAKEN도 효율 순. 낼 수 있으면 null",
               example = "INPUT_PENDING")
           @NullableResponse
           String krakenSortUnavailableReason,

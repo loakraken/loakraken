@@ -280,7 +280,11 @@ public class CombatPowerController {
           BigDecimal before,
       @Schema(description = "현재 세팅의 모델값(검증용, 화면 표시 안 함). 계산식 확정 전 null") @NullableResponse
           BigDecimal modelBefore,
-      @Schema(description = "바꾼 항목을 함께 적용한 전투력(계산된 항목만)") @NullableResponse BigDecimal after,
+      @Schema(
+              description =
+                  "바꾼 항목을 함께 적용한 전투력(계산된 항목만). 2부 대비 막기(모든 줄 GAME_UPDATE_UNSUPPORTED)면 delta·deltaPercent와 함께 null")
+          @NullableResponse
+          BigDecimal after,
       @NullableResponse BigDecimal delta,
       @Schema(description = "% 단위, 소수 셋째 자리") @NullableResponse BigDecimal deltaPercent,
       @Schema(description = "UNSUPPORTED 항목이 있어 after가 일부 변경만 반영했으면 true") boolean partial,
@@ -330,7 +334,7 @@ public class CombatPowerController {
       @Schema(description = "근거 문장") String basis,
       @Schema(
               description =
-                  "UNSUPPORTED 이유 코드(문자열, 값이 늘 수 있음, 스펙업·전투력 기여와 같은 코드). GAME_UPDATE_UNSUPPORTED(게임 업데이트로 바뀐 장비 정보 — 2부 대비 막기·끄기 스위치가 켜졌을 때만, 모든 줄이 이 코드이고 after = before). OK면 null",
+                  "UNSUPPORTED 이유 코드(문자열, 값이 늘 수 있음, 스펙업·전투력 기여와 같은 코드). GAME_UPDATE_UNSUPPORTED(게임 업데이트로 바뀐 장비 정보 — 2부 대비 막기·끄기 스위치가 켜졌을 때만, 모든 줄이 이 코드이고 after·delta·deltaPercent는 null). OK면 null",
               example = "SUPPORTER_MODEL_PENDING")
           @NullableResponse
           String reasonCode,

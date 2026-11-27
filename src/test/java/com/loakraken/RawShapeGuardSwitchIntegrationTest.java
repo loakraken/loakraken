@@ -119,19 +119,31 @@ class RawShapeGuardSwitchIntegrationTest {
     var blocked = surfaces(target);
     var simulate = blocked.get("simulate");
     assertThat(simulate.path("partial").asBoolean()).isTrue();
-    assertThat(simulate.path("delta").decimalValue()).isZero();
+    // 계산하지 않았으니 0이 아니라 null(공식 before는 그대로).
+    assertThat(simulate.path("after").isNull()).isTrue();
+    assertThat(simulate.path("delta").isNull()).isTrue();
+    assertThat(simulate.path("deltaPercent").isNull()).isTrue();
+    assertThat(simulate.path("before")).isEqualTo(before.get("simulate").path("before"));
     assertThat(simulate.path("contributions"))
         .allMatch(row -> CODE.equals(row.path("reasonCode").asText()))
         .allMatch(row -> SENTENCE.equals(row.path("basis").asText()));
     assertThat(blocked.get("contributions").path("items"))
         .allMatch(row -> CODE.equals(row.path("reasonCode").asText()));
+    // 목록은 후보 0개(오늘 표에서 나온 보석·재련 목표·%도 내지 않음)와 맨 위 이유만, 줄 상세는 404(계산 검증 P2, PM 총괄 02:58).
     var guide = blocked.get("guide");
-    assertThat(guide.path("candidates")).isNotEmpty();
-    assertThat(guide.path("candidates"))
-        .allMatch(row -> CODE.equals(row.path("reasonCode").asText()))
-        .allMatch(row -> row.path("deltaCombatPower").isNull())
-        .allMatch(row -> row.path("deltaKrakenScore").isNull());
+    assertThat(guide.path("candidates").size()).isZero();
+    assertThat(guide.path("total").asInt()).isZero();
     assertThat(guide.path("krakenSortUnavailableReason").asText()).isEqualTo(CODE);
+    var candidateId = before.get("guide").path("candidates").get(0).path("id").asText();
+    var detail =
+        get(
+            "/api/v1/characters/spec-up/candidates/"
+                + candidateId
+                + "?characterName="
+                + encode(NAME));
+    assertThat(detail.statusCode()).as(detail.body()).isEqualTo(404);
+    assertThat(mapper.readTree(detail.body()).path("code").asText())
+        .isEqualTo("SPEC_UP_CANDIDATE_NOT_FOUND");
     var path = blocked.get("path");
     assertThat(path.path("stopReasonCode").asText()).isEqualTo(CODE);
     assertThat(path.path("stopReason").asText()).isEqualTo(SENTENCE);

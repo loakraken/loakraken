@@ -652,6 +652,13 @@ public class SpecUpService {
       boolean allRefineStages) {
     var profile = snapshot.details().profile();
     var loadout = snapshot.details().loadout();
+    // 2부 대비 막기(계약 2026-11-28, 계산 검증 P2·PM 총괄 02:58): 후보를 만들기 전에 본다. 막으면 후보 0개(오늘 표에서 나온 보석·재련 목표·%도
+    // 내지 않음)와 맨 위 이유(krakenSortUnavailableReason)만. 줄 상세는 후보가 없어 SPEC_UP_CANDIDATE_NOT_FOUND다. 요청마다
+    // 한 번 센다.
+    if (guard != null
+        && guard.blocks(
+            snapshot, com.loakraken.character.application.CombatPowerGuard.Surface.SPEC_UP))
+      return blockedGuide(snapshot, requested, limit, includeCooldownGems);
     var prices = new HashMap<String, MarketAuctionService.GemCell>();
     for (var cell : auctions.cachedGems()) prices.put(cell.kind() + ":" + cell.level(), cell);
     var pricesAt = new Instant[1];
@@ -661,19 +668,9 @@ public class SpecUpService {
     engravings(loadout, books::price, books::icon, pricesAt, planned);
     refines(loadout, materials.cached(), pricesAt, planned);
     if (armGuardEnabled()) armGuard(loadout, materials.cached(), pricesAt, planned);
-    // 2부 대비 막기(계약 2026-11-28): 요청마다 한 번 센다. 막으면 연마 시세 채우기도 하지 않는다(숫자를 내지 않으므로).
-    boolean shapeBlocked =
-        guard != null
-            && guard.blocks(
-                snapshot, com.loakraken.character.application.CombatPowerGuard.Surface.SPEC_UP);
     var krakenContext = kraken.context(snapshot);
     // 줄 상세(allRefineStages)는 목록이 이미 채운 연마 시세 칸만 쓴다 — 다시 만들기(최대 두 번)마다 채우기 몫을 새로 쓰지 않게(코드 리뷰 10-25).
-    others(
-        loadout,
-        planned,
-        krakenContext,
-        pricesAt,
-        polishPriceFill && !allRefineStages && !shapeBlocked);
+    others(loadout, planned, krakenContext, pricesAt, polishPriceFill && !allRefineStages);
 
     // 점수를 낼 수 없으면 KRAKEN도 효율 순으로 되돌리고 그 이유를 응답에 둔다.
     var sort = requested == Sort.KRAKEN && !krakenContext.available() ? Sort.EFFICIENCY : requested;
@@ -681,12 +678,8 @@ public class SpecUpService {
         includeCooldownGems != null ? includeCooldownGems : requested != Sort.KRAKEN;
     var ok = new ArrayList<Candidate>();
     var unsupported = new ArrayList<Candidate>();
-    // 딜러가 아니면 모든 후보를 역할 이유로 UNSUPPORTED(PM-백엔드 P0 10-11 20:23). 2부 대비 막기면 모든 후보가
-    // GAME_UPDATE_UNSUPPORTED(점수 문맥도 같은 이유로 없음 — Δ점수 null, krakenSortUnavailableReason도 같은 코드).
-    var roleReason =
-        shapeBlocked
-            ? com.loakraken.character.application.CombatPowerGuard.sentence()
-            : CombatPowerSimulationService.roleReason(snapshot);
+    // 딜러가 아니면 모든 후보를 역할 이유로 UNSUPPORTED(PM-백엔드 P0 10-11 20:23).
+    var roleReason = CombatPowerSimulationService.roleReason(snapshot);
     // 점수 입력 줄(연마 교체·스톤)의 계산 모델(보석·재련·팔찌)은 같은 캐시라 요청마다 한 번만 만든다(코드 리뷰 #945 P3: 줄마다 다시 만들었다).
     var models = new Models(snapshot);
     for (var plan : planned) {
@@ -748,6 +741,37 @@ public class SpecUpService {
         // 추천 순서 sort=KRAKEN을 이 캐릭터에 쓸 수 있는지(스위치 + 점수 문맥, 프론트·PM 11-15: 웹은 이 값으로 버튼을 보인다).
         supportOrderEnabled() && krakenContext.available(),
         krakenScoreRole(krakenContext));
+  }
+
+  /**
+   * 막은 목록: 후보 0개, total 0, 점수 null, krakenSortUnavailableReason = GAME_UPDATE_UNSUPPORTED(정렬과 상관없이
+   * 맨 위 이유). sort는 KRAKEN을 요청해도 EFFICIENCY(쓸 수 있을 때만 KRAKEN을 돌려주는 규칙). 공식 전투력은 공식 값이라 그대로 둔다.
+   */
+  private Guide blockedGuide(
+      CharacterResult snapshot, Sort requested, int limit, Boolean includeCooldownGems) {
+    var profile = snapshot.details().profile();
+    var sort = requested == Sort.KRAKEN ? Sort.EFFICIENCY : requested;
+    return new Guide(
+        profile.characterName(),
+        profile.serverName(),
+        profile.className(),
+        profile.combatPower() == null
+            ? null
+            : profile.combatPower().setScale(2, RoundingMode.HALF_UP),
+        RULE_VERSION,
+        simulator.ruleVersion(),
+        snapshot.fetchedAt(),
+        null,
+        sort.name(),
+        limit,
+        0,
+        List.of(),
+        null,
+        null,
+        includeCooldownGems != null ? includeCooldownGems : requested != Sort.KRAKEN,
+        com.loakraken.character.domain.CombatPowerReasons.GAME_UPDATE_UNSUPPORTED.code(),
+        false,
+        null);
   }
 
   /**

@@ -69,6 +69,8 @@ class GemRankingIntegrationTest {
     var keys = redis.keys("*젬순위*");
     if (keys != null && !keys.isEmpty()) redis.delete(keys);
     redis.delete("market:v1:board-scan:ARK_GRID:all");
+    // 아크 그리드 스캔을 저장하면 젬 순위 스냅숏(15분)도 함께 생긴다 — 가격 없음 시험이 앞 시험의 스냅숏을 읽지 않게 함께 지운다.
+    redis.delete("market:v1:ark-grid-gem-snapshot");
   }
 
   @Test

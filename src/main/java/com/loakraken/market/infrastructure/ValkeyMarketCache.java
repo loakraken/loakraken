@@ -162,6 +162,26 @@ class ValkeyMarketCache implements MarketCache {
 
   public void saveBoardScan(MarketBoardScan scan) {
     write(boardKey(scan.tab(), scan.tier()), scan, boardScanTtl(scan.tab()), Kind.BOARD_SCAN);
+    // 아크 그리드 탭 기본 티어 스캔은 젬 교체 순위용 스냅숏으로도 둔다(보드 화면은 3분 그대로 새롭게, 순위는 예열 사이에 비지 않게).
+    if (scan.tab() == MarketTab.ARK_GRID
+        && Objects.equals(scan.tier(), MarketTab.ARK_GRID.defaultTier()))
+      write(ARK_GRID_GEM_SNAPSHOT_KEY, scan, ARK_GRID_GEM_SNAPSHOT_TTL, Kind.BOARD_SCAN);
+  }
+
+  /** 젬 교체 순위용 마지막 아크 그리드 탭 스캔(15분). 젬 순위 예열(10분마다)이 다음 예열까지 비지 않게 주기보다 길다. */
+  static final Duration ARK_GRID_GEM_SNAPSHOT_TTL = Duration.ofMinutes(15);
+
+  static final String ARK_GRID_GEM_SNAPSHOT_KEY = "market:v1:ark-grid-gem-snapshot";
+
+  @Override
+  public Optional<MarketBoardScan> findArkGridGemSnapshot() {
+    return read(
+        ARK_GRID_GEM_SNAPSHOT_KEY,
+        MarketBoardScan.class,
+        Kind.BOARD_SCAN,
+        scan ->
+            scan.tab() == MarketTab.ARK_GRID
+                && fresh(scan.observedAt(), ARK_GRID_GEM_SNAPSHOT_TTL));
   }
 
   /**

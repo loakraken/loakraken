@@ -194,6 +194,33 @@ class RawShapeGuardSwitchIntegrationTest {
     assertThat(surfaces(target).toString()).doesNotContain(CODE);
   }
 
+  /**
+   * 코덱스 P2: 막은 시뮬레이터는 바꿀 대상을 원문에서 읽기 전에 끝난다. 2부로 대상 칸이 바뀐 원문(여기서는 없는 장비 순번)도 409
+   * CHANGE_TARGET_NOT_FOUND가 아니라 200 + GAME_UPDATE_UNSUPPORTED다(다시 불러와도 고칠 수 없는 409를 내지 않게).
+   */
+  @Test
+  void 막은_시뮬레이터는_바뀐_대상을_읽지_않고_이유를_낸다() throws Exception {
+    when(auctions.cachedGems()).thenReturn(List.of());
+    search();
+    var body =
+        "{\"characterName\":\""
+            + NAME
+            + "\",\"changes\":[{\"kind\":\"EQUIPMENT_QUALITY\",\"index\":99,\"quality\":100}]}";
+    var open = post("/api/v1/characters/combat-power/simulate", body);
+    assertThat(open.statusCode()).as(open.body()).isEqualTo(409);
+
+    switches(Map.of("combat-power.raw-shape-guard.enforce", "true"));
+    var blocked = ok(post("/api/v1/characters/combat-power/simulate", body));
+
+    assertThat(blocked.path("contributions").size()).isEqualTo(1);
+    var row = blocked.path("contributions").get(0);
+    assertThat(row.path("reasonCode").asText()).isEqualTo(CODE);
+    assertThat(row.path("kind").asText()).isEqualTo("EQUIPMENT_QUALITY");
+    assertThat(row.path("from").isNull()).isTrue();
+    assertThat(blocked.path("after").isNull()).isTrue();
+    assertThat(blocked.path("delta").isNull()).isTrue();
+  }
+
   /** 전투력·스펙업 화면 응답(data) 모음. */
   private Map<String, JsonNode> surfaces(java.math.BigInteger target) throws Exception {
     var result = new java.util.LinkedHashMap<String, JsonNode>();

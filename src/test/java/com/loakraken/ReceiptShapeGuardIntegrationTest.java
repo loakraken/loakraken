@@ -161,6 +161,23 @@ class ReceiptShapeGuardIntegrationTest {
     assertThat(receipt().toString()).doesNotContain(CODE);
   }
 
+  /** 코덱스 P2: 영수증 끄기는 받기 전에 끝난다 — 캐시에 없는 대원도 공식 조회 없이 UNAVAILABLE + 이유, 대기·이어 받을 시각 없음. */
+  @Test
+  void 영수증_끄기는_캐시에_없는_대원을_받지_않고_모두_막는다() throws Exception {
+    switches(Map.of("combat-power.kill.receipt", "true"));
+
+    var killed = receipt();
+
+    for (var name : List.of(MAIN, ALT)) {
+      assertThat(character(killed, name).path("status").asText()).isEqualTo("UNAVAILABLE");
+      assertThat(character(killed, name).path("unavailableReasonCode").asText()).isEqualTo(CODE);
+    }
+    assertThat(killed.at("/coverage/pending").asInt()).isZero();
+    assertThat(killed.at("/coverage/nextAvailableAt").isNull()).isTrue();
+    assertThat(killed.at("/total/status").asText()).isEqualTo("UNAVAILABLE");
+    verify(detailsPort, never()).fetchArmory(anyString());
+  }
+
   private JsonNode receipt() throws Exception {
     var response = get("/api/v1/characters/receipt?characterName=" + encode(MAIN));
     assertThat(response.statusCode()).as(response.body()).isEqualTo(200);

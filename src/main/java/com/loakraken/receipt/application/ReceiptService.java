@@ -214,6 +214,11 @@ public class ReceiptService {
                     .reversed()
                     .thenComparing(CharacterSibling::characterName))
             .toList();
+    // 영수증 끄기(CP_KILL_RECEIPT): 받기 전에 모두 UNAVAILABLE + 이유로 끝낸다(코덱스 P2: 캐시에 없는 대원을 계속 받고 PENDING으로 남던
+    // 것).
+    // 공식 전투정보 호출 없음, 이어 받을 시각도 없음.
+    if (guard != null && guard.killed(CombatPowerGuard.Surface.RECEIPT))
+      return killedReceipt(server, self.characterName(), roster, assumeBook);
 
     var loadouts = new HashMap<String, ReceiptInputStore.Input>();
     var unavailableNames = new java.util.HashSet<String>();
@@ -406,6 +411,45 @@ public class ReceiptService {
         nextAvailableAt(pending, stopped, budgetLow),
         assumeBook,
         unavailableNames.size() + guardedNames.size());
+  }
+
+  /**
+   * 영수증 끄기: 모든 대원 UNAVAILABLE + GAME_UPDATE_UNSUPPORTED, 골드 0(값 아님, total.status UNAVAILABLE). 대원마다
+   * 한 번 센다.
+   */
+  private Receipt killedReceipt(
+      String server, String characterName, List<CharacterSibling> roster, boolean assumeBook) {
+    var rows = new ArrayList<CharacterReceipt>();
+    for (var sibling : roster) {
+      guard.blocks((List<String>) null, CombatPowerGuard.Surface.RECEIPT);
+      rows.add(
+          new CharacterReceipt(
+              sibling.characterName(),
+              sibling.className(),
+              sibling.itemLevel(),
+              Status.UNAVAILABLE,
+              null,
+              null,
+              CombatPowerGuard.code()));
+    }
+    return new Receipt(
+        server,
+        characterName,
+        clock.instant(),
+        null,
+        BigDecimal.ZERO,
+        List.copyOf(rows),
+        GemReceipt.calculate(List.of(), new HashMap<>()),
+        List.of(
+            new NotIncluded("ARK_GRID_GEM", 0),
+            new NotIncluded("BRACELET", 0),
+            new NotIncluded("ACCESSORY", 0)),
+        roster.size(),
+        0,
+        0,
+        null,
+        assumeBook,
+        roster.size());
   }
 
   /** 영수증에 쓰는 것만(장비·보석·아크 그리드)과 2부 대비 원본 형태 판정을 남긴 입력. 관측 시각은 그 전투정보를 받은 시각. */

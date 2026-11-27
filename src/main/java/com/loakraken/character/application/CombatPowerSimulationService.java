@@ -306,6 +306,12 @@ public class CombatPowerSimulationService {
       int unsupportedCount,
       List<String> assumptions) {}
 
+  private static final List<String> ASSUMPTIONS =
+      List.of(
+          "현재 세팅은 캐릭터 캐시(수집 시각 fetchedAt)를 기준으로 합니다.",
+          "before는 공식 전투력입니다. 계산식이 확정된 항목만 after에 반영하고, 나머지는 UNSUPPORTED로 값 없이 알립니다.",
+          "계산한 항목은 순서대로 적용합니다. contributions[].delta의 합은 delta와 같습니다.");
+
   private CombatPowerGuard guard;
 
   /** 2부 대비 막기(계약 2026-11-28). 손으로 만든 시험 객체에는 없다(막지 않음). */
@@ -327,7 +333,44 @@ public class CombatPowerSimulationService {
    */
   public Result simulate(String characterName, List<Change> changes) {
     var result = snapshot(characterName);
-    return simulate(result, models(result), changes, simulatorBlock(result));
+    var blocked = simulatorBlock(result);
+    // 막으면 바꿀 대상을 읽거나 모델을 만들기 전에 끝낸다(코덱스 P2: 바뀐 원문에서 대상 칸을 못 찾으면 409가 나던 것).
+    if (blocked != null) return blockedResult(result, changes, blocked);
+    return simulate(result, models(result), changes, null);
+  }
+
+  /**
+   * 막은 시뮬레이션: 요청 변경마다(같은 대상은 한 줄) UNSUPPORTED + GAME_UPDATE_UNSUPPORTED. 대상 이름·전후 값은 원문에서 읽지 않으므로
+   * target은 요청 kind, from·to는 null. after·delta·deltaPercent null, before는 공식 값.
+   */
+  private Result blockedResult(CharacterResult result, List<Change> changes, String why) {
+    var rows = new LinkedHashMap<String, Contribution>();
+    for (var change : changes)
+      rows.putIfAbsent(
+          key(change),
+          new Contribution(
+              change.kind().name(),
+              change.kind().name(),
+              null,
+              null,
+              null,
+              Status.UNSUPPORTED,
+              why,
+              CombatPowerReasons.classify(why).code(),
+              false));
+    var official = result.details().profile().combatPower();
+    return new Result(
+        result.details().profile().characterName(),
+        result.fetchedAt(),
+        official == null ? null : official.setScale(2, RoundingMode.HALF_UP),
+        null,
+        null,
+        null,
+        null,
+        true,
+        List.copyOf(rows.values()),
+        rows.size(),
+        ASSUMPTIONS);
   }
 
   /**
@@ -373,6 +416,20 @@ public class CombatPowerSimulationService {
     var loadout = result.details().loadout();
     var official = result.details().profile().combatPower();
     var before = official == null ? null : official.setScale(2, RoundingMode.HALF_UP);
+    var blocked = simulatorBlock(result);
+    // 막으면 모델을 만들기 전에 끝낸다(팔찌가 있으면 그 줄만 UNSUPPORTED + 코드).
+    if (blocked != null) {
+      boolean bracelet =
+          loadout.equipment().stream().anyMatch(item -> item != null && "팔찌".equals(item.type()));
+      return new Contributions(
+          result.details().profile().characterName(),
+          result.fetchedAt(),
+          before,
+          bracelet
+              ? List.of(
+                  new ContributionItem("BRACELET", "팔찌", Status.UNSUPPORTED, null, null, blocked))
+              : List.of());
+    }
     var gemModel = CombatPowerGemModel.of(gemCoefficients, loadout);
     var refineModel =
         CombatPowerRefineModel.of(
@@ -384,8 +441,7 @@ public class CombatPowerSimulationService {
         CombatPowerBraceletModel.of(
             braceletCoefficients, loadout, result.details().profile().stats());
     var items = new ArrayList<ContributionItem>();
-    var blocked = simulatorBlock(result);
-    var roleReason = blocked != null ? blocked : roleReason(result);
+    var roleReason = roleReason(result);
     if (braceletModel != null)
       items.add(
           roleReason != null
@@ -844,10 +900,7 @@ public class CombatPowerSimulationService {
         unsupported > 0,
         List.copyOf(contributions),
         unsupported,
-        List.of(
-            "현재 세팅은 캐릭터 캐시(수집 시각 fetchedAt)를 기준으로 합니다.",
-            "before는 공식 전투력입니다. 계산식이 확정된 항목만 after에 반영하고, 나머지는 UNSUPPORTED로 값 없이 알립니다.",
-            "계산한 항목은 순서대로 적용합니다. contributions[].delta의 합은 delta와 같습니다."));
+        ASSUMPTIONS);
   }
 
   /** 계산할 수 있는 변경의 효과. 보석(칸 → 레벨), 무기 품질(새 추가 피해 %), 방어구 품질(배수 1), 각인(각인서·스톤 레벨, null은 그대로). */

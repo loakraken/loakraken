@@ -462,10 +462,11 @@ class MarketVolumeWarmupTest {
     verify(cache)
         .saveVolumeCursor(MarketTab.AVATAR, new MarketVolumeCursor(2, today.minusDays(1), 1));
 
-    // 첫 재시도 기다림(5분) 뒤 주기: 같은 페이지를 다시 받되 이미 채운 품목은 부르지 않고 13번만 다시 받는다.
+    // 첫 재시도 기다림(5분) 뒤 주기: 같은 페이지를 다시 쓰되(처음 받은 페이지를 그대로 — 검색 캐시 5분이 지나도 공식 검색을 다시 하지 않음, #1060
+    // 코드 리뷰 P3) 이미 채운 품목은 부르지 않고 13번만 다시 받는다.
     clock.now = clock.now.plus(java.time.Duration.ofMinutes(5));
     job.tick();
-    verify(boards, times(2)).volumePage(MarketTab.AVATAR, 2);
+    verify(boards, times(1)).volumePage(MarketTab.AVATAR, 2);
     verify(markets, times(2)).refreshItemHistory(13L);
     verify(markets, times(11)).refreshItemHistory(anyLong());
     verify(cache).saveVolumeCursor(MarketTab.AVATAR, new MarketVolumeCursor(3, today.minusDays(1)));
@@ -503,7 +504,8 @@ class MarketVolumeWarmupTest {
     clock.now = clock.now.plus(java.time.Duration.ofMinutes(1));
     job.tick();
 
-    verify(boards, times(3)).volumePage(MarketTab.AVATAR, 2);
+    // 페이지 검색은 처음 한 번뿐(재시도는 처음 받은 페이지를 다시 씀): 실패한 페이지 한 장이 검색 1 + 상세 3.
+    verify(boards, times(1)).volumePage(MarketTab.AVATAR, 2);
     verify(markets, times(3)).refreshItemHistory(12L);
     verify(cache).saveVolumeCursor(MarketTab.AVATAR, new MarketVolumeCursor(3, today.minusDays(1)));
     assertThat(count("rotation_gave_up")).isEqualTo(1);
@@ -540,6 +542,34 @@ class MarketVolumeWarmupTest {
     clock.now = clock.now.plusSeconds(60);
     job.tick();
     verify(boards, times(1)).volumePage(MarketTab.AVATAR, 3);
+  }
+
+  /**
+   * 재시도용으로 남긴 페이지는 리더를 다시 잡으면 버린다(그사이 다른 인스턴스가 같은 페이지를 다시 받았을 수 있음 — 저장소 위치를 다시 읽고 페이지도 새로 받는다).
+   */
+  @Test
+  void 리더를_다시_잡으면_재시도용으로_남긴_페이지를_버리고_새로_받는다() {
+    when(cache.findVolumeCursor(MarketTab.AVATAR))
+        .thenReturn(Optional.of(new MarketVolumeCursor(2, today.minusDays(1))));
+    when(boards.volumePage(MarketTab.AVATAR, 2)).thenReturn(page(2, 25, 11, 12));
+    when(markets.refreshItemHistory(anyLong()))
+        .thenAnswer(invocation -> Optional.of(history(invocation.getArgument(0), clock.now)));
+    when(markets.refreshItemHistory(12L)).thenThrow(new IllegalStateException("5xx"));
+    var job = warmup("key", List.of(MarketTab.AVATAR), 15, 800);
+
+    job.tick();
+    reset(lease);
+    when(lease.hold(any(), any())).thenReturn(false);
+    clock.now = clock.now.plusSeconds(60);
+    job.tick();
+    // 저장소에는 같은 2페이지·시도 1이 남아 있다.
+    when(cache.findVolumeCursor(MarketTab.AVATAR))
+        .thenReturn(Optional.of(new MarketVolumeCursor(2, today.minusDays(1), 1)));
+    reset(lease);
+    when(lease.hold(any(), any())).thenReturn(true);
+    clock.now = clock.now.plusSeconds(60);
+    job.tick();
+    verify(boards, times(2)).volumePage(MarketTab.AVATAR, 2);
   }
 
   private double rotation(String name) {

@@ -248,6 +248,10 @@ spec-up:
   # 팔 보호구(완갑) 재련 줄: 기본 켬. 끄면 목록과 줄 상세에서 완갑 줄을 뺀다(되돌리기 없이 숨김).
   arm-guard:
     enabled: ${SPEC_UP_ARM_GUARD_ENABLED:true}
+  # 상급 재련 기대 비용(#1081): 기본 끔(요청마다 읽음). 꺼져 있으면 상급 재련 줄·단계 비용은 미확정(#1081 전과 같음)이고 기대 비용 풀이를 하지 않는다.
+  # 계산 검증 판정(연결 단계 상태)과 요청 시간 측정 뒤 켠다.
+  advanced-refine-cost:
+    enabled: ${SPEC_UP_ADVANCED_REFINE_COST_ENABLED:false}
   # 연마 교체 줄의 Δ전투력: 기본 끔. 켜면 딜러 연마 교체 줄(1680 고대)에 Δ크라켄 점수와 같은 목표 장신구로 Δ전투력을 낸다(계산 검증 판정 뒤 켬).
   polish-cp:
     enabled: ${SPEC_UP_POLISH_CP_ENABLED:false}

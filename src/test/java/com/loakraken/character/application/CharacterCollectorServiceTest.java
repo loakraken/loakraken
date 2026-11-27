@@ -92,7 +92,8 @@ class CharacterCollectorServiceTest {
     var service = service("key", true);
     assertThat(service.tick()).isEqualTo(Task.PROFILE);
     verify(history).record(profile, clock.instant());
-    verify(cards).record(any(), any(), eq(clock.instant()));
+    // 2부 대비 원본 형태 판정도 같이 넘긴다(효율 행에 저장, 랭킹이 읽을 때 거름).
+    verify(cards).record(any(), any(), any(), eq(clock.instant()));
     verify(collection).markProfileRefreshed(eq(target), any(), eq(clock.instant()));
     assertThat(service.tick()).isEqualTo(Task.ROSTER);
     verify(collection).markRosterScanned(target, clock.instant());

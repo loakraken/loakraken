@@ -258,7 +258,7 @@ public class SpecUpController {
       @Schema(description = "경로 끝 전투력이 목표 이상인가") boolean reached,
       @Schema(
               description =
-                  "멈춘 이유 코드(문자열, 값이 늘 수 있음): REACHED·ALREADY_REACHED·NO_CANDIDATE·STEP_LIMIT·TIME_LIMIT, 또는 스펙업 가이드의 이유 코드(ROLE_UNKNOWN 등)",
+                  "멈춘 이유 코드(문자열, 값이 늘 수 있음): REACHED·ALREADY_REACHED·NO_CANDIDATE·STEP_LIMIT·TIME_LIMIT, 또는 스펙업 가이드의 이유 코드(ROLE_UNKNOWN 등). GAME_UPDATE_UNSUPPORTED(2부 대비 막기·끄기 스위치가 켜졌을 때만)면 steps 빈 목록, finalCombatPower·totalCost null",
               example = "REACHED")
           String stopReasonCode,
       @Schema(description = "화면용 멈춘 이유 문장(같은 코드는 같은 문장)") String stopReason,
@@ -403,7 +403,7 @@ public class SpecUpController {
       @Schema(description = "요청한 단계 수") int limit,
       @Schema(
               description =
-                  "멈춘 이유 코드(문자열, 값이 늘 수 있음): STEP_LIMIT(limit까지)·NO_CANDIDATE(시세가 있고 전투력이 오르는 단계를 모두 고름)·TIME_LIMIT, 또는 스펙업 가이드의 이유 코드(ROLE_UNKNOWN 등)",
+                  "멈춘 이유 코드(문자열, 값이 늘 수 있음): STEP_LIMIT(limit까지)·NO_CANDIDATE(시세가 있고 전투력이 오르는 단계를 모두 고름)·TIME_LIMIT, 또는 스펙업 가이드의 이유 코드(ROLE_UNKNOWN 등). GAME_UPDATE_UNSUPPORTED(2부 대비 막기·끄기 스위치가 켜졌을 때만)면 steps·unpriced 빈 목록, finalCombatPower·점수 null",
               example = "STEP_LIMIT")
           String stopReasonCode,
       @Schema(description = "멈춘 이유(화면 문구)") @NullableResponse String stopReason,
@@ -429,7 +429,7 @@ public class SpecUpController {
           BigDecimal finalKrakenScore,
       @Schema(
               description =
-                  "sort=KRAKEN을 요청했지만 쓸 수 없어 EFFICIENCY로 되돌린 이유(스펙업 가이드 krakenSortUnavailableReason과 같은 값, DISABLED 등). 그 밖에는 null")
+                  "sort=KRAKEN을 요청했지만 쓸 수 없어 EFFICIENCY로 되돌린 이유(스펙업 가이드 krakenSortUnavailableReason과 같은 값, DISABLED·GAME_UPDATE_UNSUPPORTED 등). 그 밖에는 null")
           @NullableResponse
           @OptionalResponse
           String krakenSortUnavailableReason,
@@ -564,7 +564,7 @@ public class SpecUpController {
           boolean cooldownGemsIncluded,
       @Schema(
               description =
-                  "Δ크라켄 점수를 낼 수 없는 이유(문자열, 값이 늘 수 있음): DISABLED·INPUT_PENDING·ROLE_UNKNOWN·SCORE_UNAVAILABLE(예전 SUPPORTER_PENDING은 더 내지 않음 — 서포터는 서포터 점수식으로 Δ를 낸다). 이때 KRAKEN도 효율 순. 낼 수 있으면 null",
+                  "Δ크라켄 점수를 낼 수 없는 이유(문자열, 값이 늘 수 있음): DISABLED·INPUT_PENDING·ROLE_UNKNOWN·SCORE_UNAVAILABLE·GAME_UPDATE_UNSUPPORTED(2부 대비 막기·끄기 스위치가 켜졌을 때만, 이때 모든 후보도 같은 reasonCode)(예전 SUPPORTER_PENDING은 더 내지 않음 — 서포터는 서포터 점수식으로 Δ를 낸다). 이때 KRAKEN도 효율 순. 낼 수 있으면 null",
               example = "INPUT_PENDING")
           @NullableResponse
           String krakenSortUnavailableReason,

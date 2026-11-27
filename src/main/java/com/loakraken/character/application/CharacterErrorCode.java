@@ -22,6 +22,13 @@ public enum CharacterErrorCode implements ErrorCode {
   CHARACTER_POPULAR_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "인기 검색을 조회할 수 없습니다."),
   /** 공개 요약(#145): 캐시에도 저장된 관측에도 없다. 공식 API는 부르지 않는다. */
   CHARACTER_NOT_CACHED(HttpStatus.NOT_FOUND, "아직 확인한 기록이 없는 캐릭터입니다."),
+  /**
+   * 2부 대비 막기(계약 2026-11-28, PM 총괄 결정): 상태 칸이 없는 계산(치명타·공이속)은 422로 막는다. 막기·끄기 스위치가 모두 꺼져 있으면 나오지
+   * 않는다. 문장은 다른 화면의 GAME_UPDATE_UNSUPPORTED와 같다.
+   */
+  GAME_UPDATE_UNSUPPORTED(
+      HttpStatus.UNPROCESSABLE_ENTITY,
+      com.loakraken.character.domain.CombatPowerReasons.GAME_UPDATE_UNSUPPORTED.text()),
   /** 전투력 시뮬레이터: 캐시가 바뀌어 바꿀 대상(장비 순번·보석 slot 등)이 캐릭터에 없다. 웹은 다시 불러오기를 띄운다. */
   CHANGE_TARGET_NOT_FOUND(HttpStatus.CONFLICT, "캐릭터 정보가 바뀌어 바꿀 대상을 찾지 못했습니다. 다시 불러와 주세요."),
   /**

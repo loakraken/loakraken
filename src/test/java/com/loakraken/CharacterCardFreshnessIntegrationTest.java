@@ -78,6 +78,54 @@ class CharacterCardFreshnessIntegrationTest {
         .singleRow();
   }
 
+  /** 2부 대비 원본 형태 판정은 효율 값과 같이 쓴다: 규칙 id는 쉼표로, 빈 판정은 빈 문자열, 판정 없음은 NULL(랭킹은 읽을 때 거른다). */
+  @Test
+  void 효율과_함께_원본_형태_판정을_저장한다() {
+    record(
+        "DEALER",
+        T0,
+        new CharacterCardPort.Efficiency(
+            null,
+            null,
+            null,
+            null,
+            new BigDecimal("11.30"),
+            "bracelet-real-v1",
+            null,
+            null,
+            List.of("H1_UNKNOWN_PART", "H6_GEM")));
+    assertThat(verdict()).isEqualTo("H1_UNKNOWN_PART,H6_GEM");
+    assertThat((BigDecimal) row().get("bracelet_real_pct")).isEqualByComparingTo("11.30");
+
+    record(
+        "DEALER",
+        T0.plusSeconds(60),
+        new CharacterCardPort.Efficiency(
+            null,
+            null,
+            null,
+            null,
+            new BigDecimal("11.30"),
+            "bracelet-real-v1",
+            null,
+            null,
+            List.of()));
+    assertThat(verdict()).isEmpty();
+
+    record("DEALER", T0.plusSeconds(120), real("11.30"));
+    assertThat(verdict()).isNull();
+  }
+
+  private String verdict() {
+    return jdbc.sql(
+            "SELECT shape_verdict FROM characters WHERE server_name = :s AND character_name = :n")
+        .param("s", SERVER)
+        .param("n", NAME)
+        .query(String.class)
+        .optional()
+        .orElse(null);
+  }
+
   @Test
   void 늦게_도착한_옛_관측은_포지션과_효율을_덮지_않는다() {
     record("SUPPORT", T0.plusSeconds(60), real("13.47"));

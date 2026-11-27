@@ -141,7 +141,7 @@ public class CharacterCollectorService {
           return true;
         }
         history.record(profile, now);
-        cards.record(fetched.details(), fetched.krakenScoreInput(), now);
+        cards.record(fetched.details(), fetched.krakenScoreInput(), fetched.shapeVerdict(), now);
         var position =
             CharacterPosition.judge(profile.className(), fetched.details().loadout().arkPassive());
         collection.markProfileRefreshed(

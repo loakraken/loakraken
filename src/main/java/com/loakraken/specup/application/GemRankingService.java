@@ -184,11 +184,25 @@ public class GemRankingService {
    * 캐시에 있으면 계산 자리 없이 바로 준다. 없으면 자리를 받아 계산하고(자리가 없으면 429 GEM_RANKING_BUSY) 넣는다. 캐릭터·시세 읽기는 캐시만이라
    * 가볍다.
    */
+  private com.loakraken.character.application.CombatPowerGuard guard;
+
+  @org.springframework.beans.factory.annotation.Autowired
+  void guard(com.loakraken.character.application.CombatPowerGuard guard) {
+    this.guard = guard;
+  }
+
   public Result rank(Query query) {
     var result = simulator.snapshot(query.characterName());
     var name = result.details().profile().characterName();
     var fetchedAt = result.fetchedAt();
-    var role = CombatPowerSimulationService.roleReason(result);
+    // 2부 대비 막기(계약 2026-11-28): 결과 캐시보다 먼저 본다 — 스위치를 켜면 다음 요청부터 rows=[].
+    var role =
+        guard != null
+                && guard.blocks(
+                    result,
+                    com.loakraken.character.application.CombatPowerGuard.Surface.GEM_RANKING)
+            ? com.loakraken.character.application.CombatPowerGuard.sentence()
+            : CombatPowerSimulationService.roleReason(result);
     if (role != null)
       return new Result(
           RULE_VERSION,

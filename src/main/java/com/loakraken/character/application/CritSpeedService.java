@@ -8,9 +8,11 @@ import org.springframework.stereotype.Service;
 @Service
 public class CritSpeedService {
   private final CharacterQueryService characters;
+  private final CombatPowerGuard guard;
 
-  public CritSpeedService(CharacterQueryService characters) {
+  public CritSpeedService(CharacterQueryService characters, CombatPowerGuard guard) {
     this.characters = characters;
+    this.guard = guard;
   }
 
   public record CritSpeedResult(
@@ -22,6 +24,9 @@ public class CritSpeedService {
   public CritSpeedResult calculate(
       String characterName, CritSpeedCalculation.Assumptions assumptions) {
     var found = characters.search(new SearchCharacterCommand(characterName, false));
+    // 2부 대비 막기(계약 2026-11-28): 응답에 상태 칸이 없어 422 GAME_UPDATE_UNSUPPORTED로 막는다(숫자 없음).
+    if (guard.blocks(found, CombatPowerGuard.Surface.CRIT_SPEED))
+      throw new CharacterException(CharacterErrorCode.GAME_UPDATE_UNSUPPORTED);
     var profile = found.details().profile();
     return new CritSpeedResult(
         profile.characterName(),

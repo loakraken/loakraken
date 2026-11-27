@@ -59,9 +59,17 @@ public final class CombatPowerReasons {
   public static final Reason ARK_GRID_WILL_SHORT =
       new Reason("ARK_GRID_WILL_SHORT", "젬을 바꾸면 그 코어의 의지력이 모자라 어느 젬이 꺼질지 알 수 없어 계산하지 않았어요.");
 
+  /**
+   * 2부 대비 원본 형태 검사(계약 2026-11-28): 공식 장비 정보가 오늘 알려진 모양이 아니고 막기 스위치가 켜져 있거나, 그 화면의 끄기 스위치가 켜져 있다.
+   * 숫자를 하나도 내지 않는다. 스위치가 모두 꺼져 있으면 나오지 않는다.
+   */
+  public static final Reason GAME_UPDATE_UNSUPPORTED =
+      new Reason("GAME_UPDATE_UNSUPPORTED", "게임 업데이트로 바뀐 장비 정보라 아직 계산하지 않아요");
+
   /** 시뮬레이터 이유 문장 → 코드. 모르는 문장은 MODEL_UNCONFIRMED로 둔다(계산하지 않았다는 뜻은 같음). */
   public static Reason classify(String simulatorReason) {
     if (simulatorReason == null) return MODEL_UNCONFIRMED;
+    if (simulatorReason.equals(GAME_UPDATE_UNSUPPORTED.text())) return GAME_UPDATE_UNSUPPORTED;
     if (simulatorReason.equals(ARMOR_CP_RESIDUAL_HIGH.text())) return ARMOR_CP_RESIDUAL_HIGH;
     if (simulatorReason.equals(ARK_GRID_WILL_SHORT.text())) return ARK_GRID_WILL_SHORT;
     if (simulatorReason.contains("서포터 전투력 계산식")) return SUPPORTER_MODEL_PENDING;

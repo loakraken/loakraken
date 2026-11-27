@@ -613,6 +613,14 @@ public class SpecUpService {
         vambrace == null ? "-" : vambrace.ruleVersion());
   }
 
+  private com.loakraken.character.application.CombatPowerGuard guard;
+
+  /** 2부 대비 막기(계약 2026-11-28). 손으로 만든 시험 객체에는 없다(막지 않음). */
+  @org.springframework.beans.factory.annotation.Autowired
+  void guard(com.loakraken.character.application.CombatPowerGuard guard) {
+    this.guard = guard;
+  }
+
   public Guide guide(String characterName, Sort sort, int limit) {
     return guide(characterName, sort, limit, null);
   }
@@ -653,9 +661,19 @@ public class SpecUpService {
     engravings(loadout, books::price, books::icon, pricesAt, planned);
     refines(loadout, materials.cached(), pricesAt, planned);
     if (armGuardEnabled()) armGuard(loadout, materials.cached(), pricesAt, planned);
+    // 2부 대비 막기(계약 2026-11-28): 요청마다 한 번 센다. 막으면 연마 시세 채우기도 하지 않는다(숫자를 내지 않으므로).
+    boolean shapeBlocked =
+        guard != null
+            && guard.blocks(
+                snapshot, com.loakraken.character.application.CombatPowerGuard.Surface.SPEC_UP);
     var krakenContext = kraken.context(snapshot);
     // 줄 상세(allRefineStages)는 목록이 이미 채운 연마 시세 칸만 쓴다 — 다시 만들기(최대 두 번)마다 채우기 몫을 새로 쓰지 않게(코드 리뷰 10-25).
-    others(loadout, planned, krakenContext, pricesAt, polishPriceFill && !allRefineStages);
+    others(
+        loadout,
+        planned,
+        krakenContext,
+        pricesAt,
+        polishPriceFill && !allRefineStages && !shapeBlocked);
 
     // 점수를 낼 수 없으면 KRAKEN도 효율 순으로 되돌리고 그 이유를 응답에 둔다.
     var sort = requested == Sort.KRAKEN && !krakenContext.available() ? Sort.EFFICIENCY : requested;
@@ -663,8 +681,12 @@ public class SpecUpService {
         includeCooldownGems != null ? includeCooldownGems : requested != Sort.KRAKEN;
     var ok = new ArrayList<Candidate>();
     var unsupported = new ArrayList<Candidate>();
-    // 딜러가 아니면 모든 후보를 역할 이유로 UNSUPPORTED(PM-백엔드 P0 10-11 20:23).
-    var roleReason = CombatPowerSimulationService.roleReason(snapshot);
+    // 딜러가 아니면 모든 후보를 역할 이유로 UNSUPPORTED(PM-백엔드 P0 10-11 20:23). 2부 대비 막기면 모든 후보가
+    // GAME_UPDATE_UNSUPPORTED(점수 문맥도 같은 이유로 없음 — Δ점수 null, krakenSortUnavailableReason도 같은 코드).
+    var roleReason =
+        shapeBlocked
+            ? com.loakraken.character.application.CombatPowerGuard.sentence()
+            : CombatPowerSimulationService.roleReason(snapshot);
     // 점수 입력 줄(연마 교체·스톤)의 계산 모델(보석·재련·팔찌)은 같은 캐시라 요청마다 한 번만 만든다(코드 리뷰 #945 P3: 줄마다 다시 만들었다).
     var models = new Models(snapshot);
     for (var plan : planned) {

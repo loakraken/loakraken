@@ -240,7 +240,34 @@ public interface StatsPort {
    * 딜러인 캐릭터만 센다 — 실 효율은 서포터도 저장되지만(서포터는 점수 기준이 달라) 딜러와 한 줄로 세지 않는다. 전투력 기여 모델 값은 딜러만 계산된다.
    */
   record EfficiencyColumns(
-      String column, String versionColumn, String ruleVersion, boolean dealersOnly) {}
+      String column,
+      String versionColumn,
+      String ruleVersion,
+      boolean dealersOnly,
+      ShapeFilter shapeFilter) {
+    public EfficiencyColumns {
+      if (shapeFilter == null) shapeFilter = ShapeFilter.NONE;
+    }
+
+    public EfficiencyColumns(
+        String column, String versionColumn, String ruleVersion, boolean dealersOnly) {
+      this(column, versionColumn, ruleVersion, dealersOnly, ShapeFilter.NONE);
+    }
+
+    public EfficiencyColumns with(ShapeFilter filter) {
+      return new EfficiencyColumns(column, versionColumn, ruleVersion, dealersOnly, filter);
+    }
+  }
+
+  /**
+   * 2부 대비 막기(계약 2026-11-28)를 효율 랭킹에 적용하는 방법. NONE: 거르지 않음. FAILED: 원본 형태 판정이 있는 행(막기 스위치 켜짐)을 뺀다.
+   * ALL: 모두 뺀다(카드 끄기 스위치 켜짐).
+   */
+  enum ShapeFilter {
+    NONE,
+    FAILED,
+    ALL
+  }
 
   record EfficiencyRow(
       long rank,

@@ -61,9 +61,15 @@ public class ArkGridEfficiencyService {
   }
 
   public ArkGridEfficiency efficiency(CharacterResult result) {
+    return efficiency(result, null);
+  }
+
+  /** forcedReason이 있으면 모든 줄을 그 이유로 UNSUPPORTED로 낸다(2부 대비 막기, 검색 카드). 저장용 계산은 막지 않은 값을 쓴다. */
+  public ArkGridEfficiency efficiency(CharacterResult result, String forcedReason) {
     var grid = result.details().loadout().arkGrid();
     if (grid == null || grid.slots().isEmpty()) return null;
-    String blocked = CombatPowerSimulationService.roleReason(result);
+    String blocked =
+        forcedReason != null ? forcedReason : CombatPowerSimulationService.roleReason(result);
     if (blocked == null && result.details().profile().combatPower() == null)
       blocked = NO_OFFICIAL_BASIS;
     var gems = CombatPowerArkGridModel.gems(coefficients, grid.effects());

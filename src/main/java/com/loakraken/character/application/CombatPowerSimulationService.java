@@ -306,8 +306,28 @@ public class CombatPowerSimulationService {
       int unsupportedCount,
       List<String> assumptions) {}
 
+  private CombatPowerGuard guard;
+
+  /** 2부 대비 막기(계약 2026-11-28). 손으로 만든 시험 객체에는 없다(막지 않음). */
+  @org.springframework.beans.factory.annotation.Autowired
+  void guard(CombatPowerGuard guard) {
+    this.guard = guard;
+  }
+
+  /** 공개 시뮬레이터·전투력 기여의 막기: 막으면 고정 문장, 아니면 null. 스펙업·랭킹이 쓰는 내부 시뮬레이션은 각자 화면 스위치로 막는다. */
+  private String simulatorBlock(CharacterResult result) {
+    return guard != null && guard.blocks(result, CombatPowerGuard.Surface.SIMULATOR)
+        ? CombatPowerGuard.sentence()
+        : null;
+  }
+
+  /**
+   * 공개 시뮬레이터(#300). 막으면 모든 행이 GAME_UPDATE_UNSUPPORTED이고 after = before, delta = 0(계산하지 않은 요청과 같은
+   * 모양).
+   */
   public Result simulate(String characterName, List<Change> changes) {
-    return simulate(snapshot(characterName), changes);
+    var result = snapshot(characterName);
+    return simulate(result, models(result), changes, simulatorBlock(result));
   }
 
   /**
@@ -364,7 +384,8 @@ public class CombatPowerSimulationService {
         CombatPowerBraceletModel.of(
             braceletCoefficients, loadout, result.details().profile().stats());
     var items = new ArrayList<ContributionItem>();
-    var roleReason = roleReason(result);
+    var blocked = simulatorBlock(result);
+    var roleReason = blocked != null ? blocked : roleReason(result);
     if (braceletModel != null)
       items.add(
           roleReason != null
@@ -435,12 +456,17 @@ public class CombatPowerSimulationService {
    * 구조라 줄별 합은 전체 값과 같지 않다(줄별 값은 그 줄만 뺀 값). 시뮬레이터 플래그와 무관하고 공식 호출이 없다. 팔찌가 없으면 null.
    */
   public BraceletEfficiency braceletEfficiency(CharacterResult result) {
+    return braceletEfficiency(result, null);
+  }
+
+  /** forcedReason이 있으면 모든 줄을 그 이유로 UNSUPPORTED로 낸다(2부 대비 막기, 검색 카드). 저장용 계산은 막지 않은 값을 쓴다. */
+  public BraceletEfficiency braceletEfficiency(CharacterResult result, String forcedReason) {
     var loadout = result.details().loadout();
     var stats = result.details().profile().stats();
     var bracelet = CombatPowerBraceletModel.of(braceletCoefficients, loadout, stats);
     if (bracelet == null) return null;
     var leapText = bracelet.braceletLeap() > 0 ? "팔찌 도약 +" + bracelet.braceletLeap() : null;
-    String blocked = roleReason(result);
+    String blocked = forcedReason != null ? forcedReason : roleReason(result);
     if (blocked == null && result.details().profile().combatPower() == null)
       blocked = NO_OFFICIAL_BASIS;
     if (blocked != null) {
@@ -591,6 +617,12 @@ public class CombatPowerSimulationService {
 
   /** models는 같은 result로 만든 것이어야 한다(models(result)). */
   public Result simulate(CharacterResult result, Models models, List<Change> changes) {
+    return simulate(result, models, changes, null);
+  }
+
+  /** forcedReason이 있으면 역할과 상관없이 모든 행을 그 이유로 UNSUPPORTED로 낸다(2부 대비 막기). */
+  private Result simulate(
+      CharacterResult result, Models models, List<Change> changes, String forcedReason) {
     var loadout = result.details().loadout();
     // 같은 대상은 뒤의 변경이 이긴다. 순서는 처음 나온 자리를 지킨다.
     var merged = new LinkedHashMap<String, Planned>();
@@ -600,7 +632,8 @@ public class CombatPowerSimulationService {
       merged.put(
           key(change),
           describe(loadout, models.gem(), models.refine(), models.bracelet(), change, run));
-    return compute(result, models.gem(), models.refine(), models.bracelet(), merged.values());
+    return compute(
+        result, models.gem(), models.refine(), models.bracelet(), merged.values(), forcedReason);
   }
 
   /**
@@ -739,7 +772,8 @@ public class CombatPowerSimulationService {
       CombatPowerGemModel.Model gemModel,
       CombatPowerRefineModel.Model refineModel,
       CombatPowerBraceletModel.Model braceletModel,
-      java.util.Collection<Planned> merged) {
+      java.util.Collection<Planned> merged,
+      String forcedReason) {
     var loadout = result.details().loadout();
     var official = result.details().profile().combatPower();
     // 반올림은 서버에서 끝낸다(PM-프론트 18:31 (g)): 전투력 소수 둘째 자리, deltaPercent 소수 셋째 자리.
@@ -753,7 +787,7 @@ public class CombatPowerSimulationService {
     var running = before;
     var contributions = new ArrayList<Contribution>();
     int unsupported = 0;
-    var roleReason = roleReason(result);
+    var roleReason = forcedReason != null ? forcedReason : roleReason(result);
     var gemBlocked = arkGemBlocked(merged);
     for (var planned : merged) {
       String reason = roleReason != null ? roleReason : planned.reason();

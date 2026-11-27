@@ -329,7 +329,8 @@ public class CombatPowerController {
       @Schema(allowableValues = {"OK", "UNSUPPORTED"}) String status,
       @Schema(description = "근거 문장") String basis,
       @Schema(
-              description = "UNSUPPORTED 이유 코드(문자열, 값이 늘 수 있음, 스펙업·전투력 기여와 같은 코드). OK면 null",
+              description =
+                  "UNSUPPORTED 이유 코드(문자열, 값이 늘 수 있음, 스펙업·전투력 기여와 같은 코드). GAME_UPDATE_UNSUPPORTED(게임 업데이트로 바뀐 장비 정보 — 2부 대비 막기·끄기 스위치가 켜졌을 때만, 모든 줄이 이 코드이고 after = before). OK면 null",
               example = "SUPPORTER_MODEL_PENDING")
           @NullableResponse
           String reasonCode,

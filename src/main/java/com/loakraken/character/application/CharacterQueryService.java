@@ -165,11 +165,16 @@ public class CharacterQueryService {
                               fetchedAt,
                               Instant.now(clock).plus(cache.ttl()),
                               fetched.krakenScoreInput(),
-                              arkGridReal(fetched));
+                              arkGridReal(fetched),
+                              fetched.shapeVerdict());
                       if (shared()) cache.save(name, result);
                       if (recordable) {
                         history.record(profile, fetchedAt);
-                        cards.record(fetched.details(), fetched.krakenScoreInput(), fetchedAt);
+                        cards.record(
+                            fetched.details(),
+                            fetched.krakenScoreInput(),
+                            fetched.shapeVerdict(),
+                            fetchedAt);
                       }
                       return result;
                     }));
@@ -194,13 +199,18 @@ public class CharacterQueryService {
                               now,
                               now.plus(cache.ttl()),
                               fetched.krakenScoreInput(),
-                              arkGridReal(fetched));
+                              arkGridReal(fetched),
+                              fetched.shapeVerdict());
                       if (!shared()) return result;
                       cache.saveArmory(name, result);
                       var profile = fetched.details().profile();
                       if (stopList.recordable(profile.characterName(), profile.serverName())) {
                         history.record(profile, now);
-                        cards.record(fetched.details(), fetched.krakenScoreInput(), now);
+                        cards.record(
+                            fetched.details(),
+                            fetched.krakenScoreInput(),
+                            fetched.shapeVerdict(),
+                            now);
                       }
                       return result;
                     }));

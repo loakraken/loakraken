@@ -114,6 +114,15 @@ public class SpecUpService {
   }
 
   /**
+   * 상급 재련 기대 비용(#1081, spec-up.advanced-refine-cost.enabled, 기본 끔, 요청마다 읽음). 꺼져 있으면 상급 재련 줄·단계의 비용은
+   * #1081 전과 같이 REFINE_COST_UNCONFIRMED이고 기대 비용 계산(풀이)을 하지 않는다. 계산 검증 판정과 요청 시간 측정 뒤 켠다(코덱스 #1081
+   * P2: 연결 단계 상태, 후보마다 새 풀이).
+   */
+  boolean advancedRefineCostEnabled() {
+    return environment.getProperty("spec-up.advanced-refine-cost.enabled", Boolean.class, false);
+  }
+
+  /**
    * 연마 교체 줄의 Δ전투력(spec-up.polish-cp.enabled, 기본 끔). 켜면 딜러 연마 교체 줄(연마 수치표 1680 고대 장신구)에 Δ크라켄 점수와 같은
    * 목표 장신구로 Δ전투력을 낸다(점수 옵션만 아는 매물, 나머지 줄은 전투력 몫 0). 꺼져 있으면 지금처럼 점수만 낸다. 요청마다 읽는다.
    */
@@ -601,8 +610,9 @@ public class SpecUpService {
   }
 
   /**
-   * 단계 비용에 쓰는 규칙 버전(스펙업·재련·성장 비용·완갑). 목표 경로·추천 순서 캐시 키에 넣어 규칙이 바뀌면 이전 규칙으로 만든 값을 다시 주지 않는다(코드 리뷰
-   * 11-01 P3).
+   * 단계 비용에 쓰는 규칙 버전(스펙업·재련·성장 비용·완갑·상급 재련). 목표 경로·추천 순서 캐시 키에 넣어 규칙이 바뀌면 이전 규칙으로 만든 값을 다시 주지 않는다(코드
+   * 리뷰 11-01 P3). 상급 재련은 켜져 있으면 그 규칙 버전, 꺼져 있으면 adv-off(#1081 코덱스 P3 — 빠져 있어 규칙이 바뀐 배포 뒤 10분 동안 옛
+   * 경로를 줄 수 있었고, 스위치를 바꿔도 캐시가 옛 비용을 주지 않게).
    */
   String costRuleVersions() {
     return String.join(
@@ -610,7 +620,10 @@ public class SpecUpService {
         RULE_VERSION,
         plans.rules().ruleVersion(),
         plans.growthCosts().ruleVersion(),
-        vambrace == null ? "-" : vambrace.ruleVersion());
+        vambrace == null ? "-" : vambrace.ruleVersion(),
+        advancedRefineCostEnabled() && advancedRules != null
+            ? advancedRules.ruleVersion()
+            : "adv-off");
   }
 
   private com.loakraken.character.application.CombatPowerGuard guard;
@@ -1532,6 +1545,8 @@ public class SpecUpService {
       int to,
       java.util.Optional<RefiningMaterialPriceService.Prices> prices,
       Instant[] pricesAt) {
+    // 스위치가 꺼져 있으면 #1081 전과 같은 값(풀이 없음).
+    if (!advancedRefineCostEnabled()) return SpecUpCost.REFINE_COST_UNCONFIRMED;
     if (refineGrade(item.name()) != RefiningRules.Grade.UPHWA)
       return SpecUpCost.REFINE_COST_UNCONFIRMED;
     if (prices.isEmpty()) return SpecUpCost.REFINE_PRICE_PENDING;

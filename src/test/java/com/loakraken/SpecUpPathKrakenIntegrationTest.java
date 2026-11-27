@@ -49,7 +49,9 @@ import tools.jackson.databind.json.JsonMapper;
       "kraken-score.enabled=true",
       "combat-power-sim.enabled=true",
       "spec-up.polish-path.enabled=true",
-      "spec-up.support-order.enabled=true"
+      "spec-up.support-order.enabled=true",
+      // 상급 재련 기대 비용(#1081)은 스위치 뒤로 갔다(기본 끔). 이 시험은 켠 상태의 경로를 본다.
+      "spec-up.advanced-refine-cost.enabled=true"
     })
 class SpecUpPathKrakenIntegrationTest {
   private static final String SERVER = "점수순서서버";

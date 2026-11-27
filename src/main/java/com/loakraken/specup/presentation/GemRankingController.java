@@ -31,7 +31,8 @@ import org.springframework.web.bind.annotation.RestController;
 
 /**
  * 아크 그리드 젬 교체 순위(M49 2단계, 계약 초안 'gem-ranking' 2026-11-22). 스위치
- * combat-power-sim.gem-ranking.enabled(기본 꺼짐, 꺼져 있으면 404). 캐릭터 캐시와 시세 보드 캐시만 읽는다(공식 호출 없음).
+ * combat-power-sim.gem-ranking.enabled(기본 꺼짐, 꺼져 있으면 404). 캐릭터 캐시와 젬 순위 스냅숏(15분, 없으면 시세 보드 캐시의 아크
+ * 그리드 탭 스캔)만 읽는다(공식 호출 없음). 스냅숏은 보드 방문과 젬 순위 예열(ArkGridGemWarmup, 스위치가 켜져 있을 때 10분마다)이 갱신한다.
  */
 @RestController
 @ConditionalOnProperty(

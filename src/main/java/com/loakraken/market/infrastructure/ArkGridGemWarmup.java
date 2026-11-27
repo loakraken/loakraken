@@ -26,7 +26,8 @@ import org.springframework.stereotype.Component;
  *
  * <p>스위치는 틱마다 읽는다(꺼져 있으면 공식 호출 0). 다른 시세 예열과 같은 켜짐 조건(market.warmup.enabled)과 리더 임대를 써서 한 인스턴스에서만
  * 돈다. 스캔은 보드 방문과 같은 합치기·한 번에 하나이고, 공식 호출은 사용자 몫(reserve)을 남기도록 공유 예산 안에서 판정한다. 이 탭은 2쪽이라 10분에 약
- * 2번(하루 약 290번).
+ * 2번(하루 약 290번). 다른 예열의 분당 상한(market.warmup.max-calls-per-minute, MarketHistoryWarmup 인스턴스 안 카운터)에는
+ * 들지 않는다 — 주기마다 2번뿐이라 그 상한을 다른 예열과 나눠 쓰지 않고 공유 예산의 reserve 판정으로만 묶는다(#1119 대체 리뷰 P3-1).
  */
 @Component
 @ConditionalOnProperty(prefix = "market.warmup", name = "enabled", havingValue = "true")

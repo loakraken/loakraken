@@ -75,16 +75,36 @@ public class SpecUpKrakenScore {
     }
   }
 
+  private com.loakraken.character.application.CombatPowerGuard guard;
+
+  /** 2부 대비 막기(계약 2026-11-28). 손으로 만든 시험 객체에는 없다(막지 않음). */
+  @org.springframework.beans.factory.annotation.Autowired
+  void guard(com.loakraken.character.application.CombatPowerGuard guard) {
+    this.guard = guard;
+  }
+
+  /** 막으면 점수 문맥이 없다(GAME_UPDATE_UNSUPPORTED): Δ점수 null, KRAKEN은 효율 순으로. 세기는 화면 입구에서 한 번만 한다. */
+  private boolean blocked(CharacterResult snapshot) {
+    return guard != null
+        && guard.isBlocked(
+            snapshot, com.loakraken.character.application.CombatPowerGuard.Surface.SPEC_UP);
+  }
+
   Context context(CharacterResult snapshot) {
+    if (blocked(snapshot)) return new Context(null, Double.NaN, BLOCKED);
     if (!enabled) return new Context(null, Double.NaN, "DISABLED");
     return internalContext(snapshot);
   }
+
+  static final String BLOCKED =
+      com.loakraken.character.domain.CombatPowerReasons.GAME_UPDATE_UNSUPPORTED.code();
 
   /**
    * 점수 표시 스위치(kraken-score.enabled)와 상관없이 만든 점수 문맥. 화면에 점수를 보이지 않을 때도 비교 기준처럼 점수로 정하는 것(스톤 배치)에만
    * 쓴다(PM 총괄 11-15).
    */
   Context internalContext(CharacterResult snapshot) {
+    if (blocked(snapshot)) return new Context(null, Double.NaN, BLOCKED);
     var input = snapshot.krakenScoreInput();
     if (input == null || !input.isObject()) return new Context(null, Double.NaN, "INPUT_PENDING");
     var details = snapshot.details();

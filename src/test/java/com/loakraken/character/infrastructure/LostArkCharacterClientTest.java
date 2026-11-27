@@ -38,7 +38,8 @@ import tools.jackson.databind.json.JsonMapper;
 class LostArkCharacterClientTest {
   private final SimpleMeterRegistry registry = new SimpleMeterRegistry();
   private final LostArkMetrics metrics = new LostArkMetrics(registry);
-  private RawShapeGuardRecorder shapeGuard = new RawShapeGuardRecorder(registry);
+  private RawShapeGuardRecorder shapeGuard =
+      new RawShapeGuardRecorder(registry, new org.springframework.core.env.StandardEnvironment());
   private HttpServer server;
   private ExecutorService executor;
   private final AtomicInteger requests = new AtomicInteger();
@@ -560,6 +561,8 @@ class LostArkCharacterClientTest {
     client("test", Duration.ofSeconds(2)).fetchArmory("모험가");
 
     assertThat(fetched.details().profile().itemLevel()).isEqualByComparingTo("1700.50");
+    // 판정(HARD id)은 조회 결과에 실려 캐시까지 간다. 막을지는 읽을 때 정한다.
+    assertThat(fetched.shapeVerdict()).containsExactly("H1_NO_EQUIPMENT");
     assertThat(
             registry
                 .counter(RawShapeGuardRecorder.METER, "rule", "ALL", "outcome", "checked")
@@ -576,7 +579,8 @@ class LostArkCharacterClientTest {
   @Test
   void 원본_형태_검사가_실패해도_조회와_점수_입력은_그대로_간다() {
     shapeGuard =
-        new RawShapeGuardRecorder(registry) {
+        new RawShapeGuardRecorder(
+            registry, new org.springframework.core.env.StandardEnvironment()) {
           @Override
           com.loakraken.character.domain.RawShapeGuard.Verdict record(
               tools.jackson.databind.JsonNode armory) {
@@ -588,6 +592,8 @@ class LostArkCharacterClientTest {
 
     assertThat(fetched.details().profile().itemLevel()).isEqualByComparingTo("1700.50");
     assertThat(fetched.krakenScoreInput()).isNotNull();
+    // 검사하지 못하면 판정은 null(막지 않음).
+    assertThat(fetched.shapeVerdict()).isNull();
     assertThat(registry.find(RawShapeGuardRecorder.METER).counters()).isEmpty();
   }
 

@@ -170,7 +170,10 @@ public class GemRankingController {
       String characterName,
       @Schema(description = "캐릭터 캐시 수집 시각") Instant fetchedAt,
       @Schema(description = "OK·UNSUPPORTED(문자열, 값이 늘 수 있음)", example = "OK") String status,
-      @Schema(description = "UNSUPPORTED 이유 코드(시뮬레이터와 같은 코드). OK면 null") @NullableResponse
+      @Schema(
+              description =
+                  "UNSUPPORTED 이유 코드(시뮬레이터와 같은 코드). GAME_UPDATE_UNSUPPORTED(2부 대비 막기·끄기 스위치가 켜졌을 때만)면 rows 빈 목록. OK면 null")
+          @NullableResponse
           String reasonCode,
       @Schema(description = "UNSUPPORTED 이유 문장. OK면 null") @NullableResponse String basis,
       @Schema(description = "젬 시세 관측 시각. 시세 캐시가 없으면 null") @NullableResponse

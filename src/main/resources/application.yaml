@@ -217,6 +217,20 @@ gem:
 crit-speed:
   enabled: ${CRIT_SPEED_ENABLED:false}
 
+# 2부 대비 막기(계약 2026-11-28): 모두 기본 꺼짐이고 요청마다 읽는다. 원본 형태 검사는 늘 돌고 세기만 한다(loakraken.raw_shape_guard).
+# enforce: 조회 때 남긴 판정에 HARD 규칙이 있으면 전투력·스펙업 화면이 GAME_UPDATE_UNSUPPORTED(숫자 없음). 효율 랭킹에서도 뺀다.
+# kill.*: 그 화면을 원문과 상관없이 같은 이유로 막는다(card = 검색 카드 효율·실 효율·크라켄 점수 + 효율 랭킹).
+combat-power:
+  raw-shape-guard:
+    enforce: ${RAW_SHAPE_GUARD_ENFORCE:false}
+  kill:
+    simulator: ${CP_KILL_SIMULATOR:false}
+    card: ${CP_KILL_CARD:false}
+    spec-up: ${CP_KILL_SPEC_UP:false}
+    gem-ranking: ${CP_KILL_GEM_RANKING:false}
+    crit-speed: ${CP_KILL_CRIT_SPEED:false}
+    receipt: ${CP_KILL_RECEIPT:false}
+
 # 전투력 시뮬레이터 API: 계산식(실측 대조) 확정 전까지 기본 꺼짐
 combat-power-sim:
   enabled: ${COMBAT_POWER_SIM_ENABLED:false}

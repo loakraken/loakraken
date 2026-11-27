@@ -9,8 +9,20 @@ import java.util.Optional;
  * 시간 안). 공식 원문은 두지 않는다. 처리정지 목록 캐릭터는 저장하지 않고, 목록에 들기 전 것은 지운다.
  */
 public interface ReceiptInputStore {
-  /** observedAt: 이 장비를 관측한 시각. */
-  record Input(CharacterLoadout loadout, Instant observedAt) {}
+  /**
+   * observedAt: 이 장비를 관측한 시각. shapeVerdict: 같은 조회의 2부 대비 원본 형태 판정(어긋난 HARD 규칙 id). 판정 전에 보관한 입력은
+   * null(막지 않음).
+   */
+  record Input(
+      CharacterLoadout loadout,
+      Instant observedAt,
+      @com.fasterxml.jackson.annotation.JsonInclude(
+              com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+          java.util.List<String> shapeVerdict) {
+    public Input(CharacterLoadout loadout, Instant observedAt) {
+      this(loadout, observedAt, null);
+    }
+  }
 
   Optional<Input> find(String characterName);
 

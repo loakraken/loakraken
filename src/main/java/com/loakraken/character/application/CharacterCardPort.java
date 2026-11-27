@@ -110,7 +110,37 @@ public interface CharacterCardPort {
       BigDecimal braceletRealPct,
       String braceletRealRuleVersion,
       BigDecimal arkGridRealPct,
-      String arkGridRealRuleVersion) {
+      String arkGridRealRuleVersion,
+      List<String> shapeVerdict) {
+    /**
+     * shapeVerdict: 같은 조회의 2부 대비 원본 형태 판정(어긋난 HARD 규칙 id, 빈 목록 = 오늘의 모양, null = 모름). 값은 막지 않고 계산한
+     * 그대로 저장하고, 랭킹이 읽을 때 스위치로 거른다.
+     */
+    public Efficiency {
+      if (shapeVerdict != null) shapeVerdict = List.copyOf(shapeVerdict);
+    }
+
+    public Efficiency(
+        BigDecimal braceletPct,
+        String braceletRuleVersion,
+        BigDecimal arkGridGemPct,
+        String arkGridRuleVersion,
+        BigDecimal braceletRealPct,
+        String braceletRealRuleVersion,
+        BigDecimal arkGridRealPct,
+        String arkGridRealRuleVersion) {
+      this(
+          braceletPct,
+          braceletRuleVersion,
+          arkGridGemPct,
+          arkGridRuleVersion,
+          braceletRealPct,
+          braceletRealRuleVersion,
+          arkGridRealPct,
+          arkGridRealRuleVersion,
+          null);
+    }
+
     /** 실 효율 없이(전투력 기여 모델 값만). */
     public Efficiency(
         BigDecimal braceletPct,

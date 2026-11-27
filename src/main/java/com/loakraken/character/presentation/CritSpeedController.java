@@ -57,6 +57,11 @@ public class CritSpeedController {
         description = "UNSUPPORTED_MEDIA_TYPE",
         content = @Content(schema = @Schema(ref = "#/components/schemas/ErrorResponse"))),
     @io.swagger.v3.oas.annotations.responses.ApiResponse(
+        responseCode = "422",
+        description =
+            "GAME_UPDATE_UNSUPPORTED: 게임 업데이트로 바뀐 장비 정보라 계산하지 않음(2부 대비 막기·끄기 스위치가 켜졌을 때만, 기본 꺼짐). 숫자를 내지 않는다",
+        content = @Content(schema = @Schema(ref = "#/components/schemas/ErrorResponse"))),
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(
         responseCode = "429",
         description = "LOST_ARK_RATE_LIMITED",
         content = @Content(schema = @Schema(ref = "#/components/schemas/ErrorResponse"))),

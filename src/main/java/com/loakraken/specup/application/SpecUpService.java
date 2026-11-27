@@ -613,6 +613,14 @@ public class SpecUpService {
         vambrace == null ? "-" : vambrace.ruleVersion());
   }
 
+  private com.loakraken.character.application.CombatPowerGuard guard;
+
+  /** 2부 대비 막기(계약 2026-11-28). 손으로 만든 시험 객체에는 없다(막지 않음). */
+  @org.springframework.beans.factory.annotation.Autowired
+  void guard(com.loakraken.character.application.CombatPowerGuard guard) {
+    this.guard = guard;
+  }
+
   public Guide guide(String characterName, Sort sort, int limit) {
     return guide(characterName, sort, limit, null);
   }
@@ -644,6 +652,13 @@ public class SpecUpService {
       boolean allRefineStages) {
     var profile = snapshot.details().profile();
     var loadout = snapshot.details().loadout();
+    // 2부 대비 막기(계약 2026-11-28, 계산 검증 P2·PM 총괄 02:58): 후보를 만들기 전에 본다. 막으면 후보 0개(오늘 표에서 나온 보석·재련 목표·%도
+    // 내지 않음)와 맨 위 이유(krakenSortUnavailableReason)만. 줄 상세는 후보가 없어 SPEC_UP_CANDIDATE_NOT_FOUND다. 요청마다
+    // 한 번 센다.
+    if (guard != null
+        && guard.blocks(
+            snapshot, com.loakraken.character.application.CombatPowerGuard.Surface.SPEC_UP))
+      return blockedGuide(snapshot, requested, limit, includeCooldownGems);
     var prices = new HashMap<String, MarketAuctionService.GemCell>();
     for (var cell : auctions.cachedGems()) prices.put(cell.kind() + ":" + cell.level(), cell);
     var pricesAt = new Instant[1];
@@ -726,6 +741,37 @@ public class SpecUpService {
         // 추천 순서 sort=KRAKEN을 이 캐릭터에 쓸 수 있는지(스위치 + 점수 문맥, 프론트·PM 11-15: 웹은 이 값으로 버튼을 보인다).
         supportOrderEnabled() && krakenContext.available(),
         krakenScoreRole(krakenContext));
+  }
+
+  /**
+   * 막은 목록: 후보 0개, total 0, 점수 null, krakenSortUnavailableReason = GAME_UPDATE_UNSUPPORTED(정렬과 상관없이
+   * 맨 위 이유). sort는 KRAKEN을 요청해도 EFFICIENCY(쓸 수 있을 때만 KRAKEN을 돌려주는 규칙). 공식 전투력은 공식 값이라 그대로 둔다.
+   */
+  private Guide blockedGuide(
+      CharacterResult snapshot, Sort requested, int limit, Boolean includeCooldownGems) {
+    var profile = snapshot.details().profile();
+    var sort = requested == Sort.KRAKEN ? Sort.EFFICIENCY : requested;
+    return new Guide(
+        profile.characterName(),
+        profile.serverName(),
+        profile.className(),
+        profile.combatPower() == null
+            ? null
+            : profile.combatPower().setScale(2, RoundingMode.HALF_UP),
+        RULE_VERSION,
+        simulator.ruleVersion(),
+        snapshot.fetchedAt(),
+        null,
+        sort.name(),
+        limit,
+        0,
+        List.of(),
+        null,
+        null,
+        includeCooldownGems != null ? includeCooldownGems : requested != Sort.KRAKEN,
+        com.loakraken.character.domain.CombatPowerReasons.GAME_UPDATE_UNSUPPORTED.code(),
+        false,
+        null);
   }
 
   /**

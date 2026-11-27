@@ -87,7 +87,7 @@ public record ReceiptResponse(
       @NullableResponse BigDecimal itemLevel,
       @Schema(
               description =
-                  "READY, PENDING(이번 요청에서 전투정보를 아직 받지 못함, 다시 요청하면 채움), UNAVAILABLE(캐릭터를 찾지 못해 받을 수 없음, 대기 수에 넣지 않음)")
+                  "READY, PENDING(이번 요청에서 전투정보를 아직 받지 못함, 다시 요청하면 채움), UNAVAILABLE(캐릭터를 찾지 못해 받을 수 없음, 대기 수에 넣지 않음 — 또는 unavailableReasonCode가 있으면 그 이유로 계산하지 않음)")
           ReceiptService.Status status,
       @Schema(description = "READY가 아니면 null") @NullableResponse BigDecimal gold,
       List<ReceiptPartResponse> parts,
@@ -99,7 +99,13 @@ public record ReceiptResponse(
           Boolean complete,
       @Schema(description = "계산에 쓴 장비를 관측한 시각(조금 전 관측을 다시 쓸 수 있음). READY가 아니면 null")
           @NullableResponse
-          Instant observedAt) {
+          Instant observedAt,
+      @Schema(
+              description =
+                  "UNAVAILABLE의 이유 코드. 지금 값: GAME_UPDATE_UNSUPPORTED(게임 업데이트로 바뀐 장비 정보라 계산하지 않음 — 2부 대비 막기·끄기 스위치가 켜졌을 때만, 골드에 넣지 않음). 그 밖(캐릭터를 찾지 못한 UNAVAILABLE 포함)은 null",
+              example = "GAME_UPDATE_UNSUPPORTED")
+          @NullableResponse
+          String unavailableReasonCode) {
     static ReceiptCharacterResponse from(ReceiptService.CharacterReceipt receipt) {
       var equipment = receipt.equipment();
       return new ReceiptCharacterResponse(
@@ -115,7 +121,8 @@ public record ReceiptResponse(
               ? List.of()
               : equipment.excluded().stream().map(ReceiptExcludedResponse::from).toList(),
           equipment == null ? null : equipment.complete(),
-          receipt.observedAt());
+          receipt.observedAt(),
+          receipt.unavailableReasonCode());
     }
   }
 

@@ -76,6 +76,15 @@ public class CharacterCardService {
    * 효율만 비운다).
    */
   public void record(CharacterDetails details, JsonNode krakenScoreInput, Instant observedAt) {
+    record(details, krakenScoreInput, null, observedAt);
+  }
+
+  /** shapeVerdict: 같은 조회의 2부 대비 원본 형태 판정. 효율 값과 함께 저장하고 랭킹이 읽을 때 거른다(값은 막지 않고 계산). */
+  public void record(
+      CharacterDetails details,
+      JsonNode krakenScoreInput,
+      List<String> shapeVerdict,
+      Instant observedAt) {
     if (!policy.enabled()) return;
     var base = observe(details, observedAt);
     // 해석은 이미 한 도메인에서 뽑으므로 요청 스레드에서 해도 가볍다. 쓰기만 작업자에 넘긴다.
@@ -87,7 +96,8 @@ public class CharacterCardService {
           () -> {
             // 팔찌·젬 효율 재계산은 검색 응답 시간을 늘리지 않도록 작업자에서 한다(#443 성능 조건).
             var observation =
-                base.withEfficiency(efficiency(details, krakenScoreInput, observedAt));
+                base.withEfficiency(
+                    withVerdict(efficiency(details, krakenScoreInput, observedAt), shapeVerdict));
             write(observation);
             writeSummary(observation, summary);
             writeCollectibles(observation, collectibles);
@@ -161,6 +171,21 @@ public class CharacterCardService {
         braceletReal == null ? null : BraceletRealEfficiency.RULE_VERSION,
         gemReal,
         gemReal == null ? null : ArkGridRealEfficiency.RULE_VERSION);
+  }
+
+  static CharacterCardPort.Efficiency withVerdict(
+      CharacterCardPort.Efficiency efficiency, List<String> shapeVerdict) {
+    if (efficiency == null) return null;
+    return new CharacterCardPort.Efficiency(
+        efficiency.braceletPct(),
+        efficiency.braceletRuleVersion(),
+        efficiency.arkGridGemPct(),
+        efficiency.arkGridRuleVersion(),
+        efficiency.braceletRealPct(),
+        efficiency.braceletRealRuleVersion(),
+        efficiency.arkGridRealPct(),
+        efficiency.arkGridRealRuleVersion(),
+        shapeVerdict);
   }
 
   static CharacterCardPort.Observation observe(CharacterDetails details, Instant observedAt) {

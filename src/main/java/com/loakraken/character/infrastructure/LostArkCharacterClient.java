@@ -79,11 +79,13 @@ class LostArkCharacterClient implements CharacterDetailsPort {
             armory.toLoadout(),
             toDomain(siblings),
             armory.coverage(Arrays.asList(siblings)));
+    var inputs = armoryInputs(armoryPayload.json());
     return new FetchedCharacter(
         details,
         armoryPayload.json(),
         siblingsPayload.json(),
-        krakenScoreInput(armoryPayload.json()));
+        inputs.krakenScoreInput(),
+        inputs.shapeVerdict());
   }
 
   @Override
@@ -95,31 +97,45 @@ class LostArkCharacterClient implements CharacterDetailsPort {
     if (!UserKeyContext.applied())
       rawDump.ifAvailable(dump -> dump.write(profile, armoryPayload.json()));
     var details = new CharacterDetails(profile, armory.toLoadout(), null, armory.coverage(null));
+    var inputs = armoryInputs(armoryPayload.json());
     return new FetchedCharacter(
-        details, armoryPayload.json(), null, krakenScoreInput(armoryPayload.json()));
+        details, armoryPayload.json(), null, inputs.krakenScoreInput(), inputs.shapeVerdict());
   }
 
+  private record ArmoryInputs(
+      tools.jackson.databind.JsonNode krakenScoreInput, List<String> shapeVerdict) {}
+
   /**
-   * 크라켄 점수 엔진 입력(#559). 원문에서 엔진이 읽는 값만 뽑는다(원문은 남기지 않음). 만들지 못해도 조회는 그대로 성공하고 점수만 계산하지 않는다(로그에 캐릭터
-   * 이름 없음).
+   * 원문을 한 번 읽어 2부 대비 원본 형태 판정과 크라켄 점수 엔진 입력(#559, 엔진이 읽는 값만 — 원문은 남기지 않음)을 만든다. 둘 다 만들지 못해도 조회는 그대로
+   * 성공하고, 그 값만 null이다(로그에 캐릭터 이름 없음). 점수 입력을 만들지 못해도 판정은 남긴다.
    */
-  private tools.jackson.databind.JsonNode krakenScoreInput(String armoryJson) {
+  private ArmoryInputs armoryInputs(String armoryJson) {
+    tools.jackson.databind.JsonNode armory;
     try {
-      var armory = mapper.readTree(armoryJson);
-      recordShape(armory);
-      return com.loakraken.character.domain.KrakenScoreInputMapper.from(armory);
+      armory = mapper.readTree(armoryJson);
     } catch (RuntimeException exception) {
       log.warn("event=kraken_score_input_failed type={}", exception.getClass().getSimpleName());
-      return null;
+      return new ArmoryInputs(null, null);
+    }
+    var verdict = recordShape(armory);
+    try {
+      return new ArmoryInputs(
+          com.loakraken.character.domain.KrakenScoreInputMapper.from(armory), verdict);
+    } catch (RuntimeException exception) {
+      log.warn("event=kraken_score_input_failed type={}", exception.getClass().getSimpleName());
+      return new ArmoryInputs(null, verdict);
     }
   }
 
-  /** 2부 대비 원본 형태 검사(세기만 함). 검사가 어떤 이유로 실패해도 점수 입력과 조회는 그대로 간다. */
-  private void recordShape(tools.jackson.databind.JsonNode armory) {
+  /** 2부 대비 원본 형태 검사: HARD 규칙 id(빈 목록 = 오늘의 모양). 검사가 어떤 이유로 실패하면 null(막지 않음)이고 조회는 그대로 간다. */
+  private List<String> recordShape(tools.jackson.databind.JsonNode armory) {
     try {
-      shapeGuard.ifAvailable(guard -> guard.record(armory));
+      var guard = shapeGuard.getIfAvailable();
+      var verdict = guard == null ? null : guard.record(armory);
+      return verdict == null ? null : verdict.hard();
     } catch (RuntimeException exception) {
       log.warn("event=raw_shape_guard_error type={}", exception.getClass().getSimpleName());
+      return null;
     }
   }
 

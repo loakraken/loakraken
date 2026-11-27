@@ -41,6 +41,7 @@ class LostArkCharacterClient implements CharacterDetailsPort {
   private final LostArkMetrics metrics;
   private final org.springframework.beans.factory.ObjectProvider<ArmoryRawDump> rawDump;
   private final org.springframework.beans.factory.ObjectProvider<UserKeyGate> userKeys;
+  private final org.springframework.beans.factory.ObjectProvider<RawShapeGuardRecorder> shapeGuard;
 
   LostArkCharacterClient(
       RestClient lostArkRestClient,
@@ -49,7 +50,8 @@ class LostArkCharacterClient implements CharacterDetailsPort {
       JsonMapper mapper,
       LostArkMetrics metrics,
       org.springframework.beans.factory.ObjectProvider<ArmoryRawDump> rawDump,
-      org.springframework.beans.factory.ObjectProvider<UserKeyGate> userKeys) {
+      org.springframework.beans.factory.ObjectProvider<UserKeyGate> userKeys,
+      org.springframework.beans.factory.ObjectProvider<RawShapeGuardRecorder> shapeGuard) {
     this.client = lostArkRestClient;
     this.properties = properties;
     this.gate = gate;
@@ -57,6 +59,7 @@ class LostArkCharacterClient implements CharacterDetailsPort {
     this.metrics = metrics;
     this.rawDump = rawDump;
     this.userKeys = userKeys;
+    this.shapeGuard = shapeGuard;
   }
 
   @Override
@@ -102,11 +105,21 @@ class LostArkCharacterClient implements CharacterDetailsPort {
    */
   private tools.jackson.databind.JsonNode krakenScoreInput(String armoryJson) {
     try {
-      return com.loakraken.character.domain.KrakenScoreInputMapper.from(
-          mapper.readTree(armoryJson));
+      var armory = mapper.readTree(armoryJson);
+      recordShape(armory);
+      return com.loakraken.character.domain.KrakenScoreInputMapper.from(armory);
     } catch (RuntimeException exception) {
       log.warn("event=kraken_score_input_failed type={}", exception.getClass().getSimpleName());
       return null;
+    }
+  }
+
+  /** 2부 대비 원본 형태 검사(세기만 함). 검사가 어떤 이유로 실패해도 점수 입력과 조회는 그대로 간다. */
+  private void recordShape(tools.jackson.databind.JsonNode armory) {
+    try {
+      shapeGuard.ifAvailable(guard -> guard.record(armory));
+    } catch (RuntimeException exception) {
+      log.warn("event=raw_shape_guard_error type={}", exception.getClass().getSimpleName());
     }
   }
 

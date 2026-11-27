@@ -111,6 +111,13 @@ services:
       # 시뮬레이터 방어구 재련 · 상급 재련 칸(프론트2 web PR). on|off, 비우면 web 기본값(운영 SITE_URL이면 숨김).
       # 백엔드 짝 스위치(방어구 Δ전투력 게이트, 백엔드 PR3)와 같이 켠다(계산 검증 실경로 판정 + PM 총괄 OK 뒤, 하나만 켜지 않는다).
       ARMOR_CP_SIM: "${ARMOR_CP_SIM:-}"
+      # 시뮬레이터 아크 그리드 젬 바꾸기 · 바꿔 본 젬 순위(web #1936, api #1079). on|off, 비우면 web 기본값(운영 SITE_URL이면 숨김).
+      # api #1079가 든 api와 같은 배포에서 켠다(그 kind가 없는 api는 시뮬레이션 전체를 400으로 돌려준다).
+      ARK_GEM_SIM: "${ARK_GEM_SIM:-}"
+      # 시뮬레이터 젬 가공 순위(web #1970). on일 때만 켜짐. 백엔드 짝 GEM_RANKING_ENABLED를 먼저 켜고 젬 시세 예열이 찬 뒤 켠다.
+      GEM_RANKING: "${GEM_RANKING:-}"
+      # 재련 계산기 상급 재련 +10 · 구간별 기대 비용(web #1951). on일 때만 켜짐. 백엔드 짝 REFINING_ADVANCED_ENABLED를 먼저 켠다.
+      REFINING_ADVANCED: "${REFINING_ADVANCED:-}"
       # 이 둘은 비우면 어디서나 꺼짐(on일 때만 켜짐): 검색엔진 색인, 시세 알림 화면.
       CHARACTER_INDEXING: "${CHARACTER_INDEXING:-}"
       PRICE_ALERTS: "${PRICE_ALERTS:-}"
@@ -175,6 +182,9 @@ services:
       CLIENT_LIMIT_BOT_OFFICIAL: ${CLIENT_LIMIT_BOT_OFFICIAL:-20}
       # 검색봇 표시가 붙었지만 크롤러로 확인되지 않은 요청 전체가 분당 일으킬 수 있는 공식 호출 수(기본 20, 확인된 봇 합계와 따로). 봇 주소별 한도(5)보다 커야 한다(6 이상, 아니면 api 기동 실패).
       CLIENT_LIMIT_UNVERIFIED_BOT_OFFICIAL: ${CLIENT_LIMIT_UNVERIFIED_BOT_OFFICIAL:-20}
+      # 검색봇 표시 요청의 주소 확인(#1054): 역방향 DNS가 이 이름으로 끝나고 정방향 확인이 맞을 때만 봇 칸. 쉼표로 나눔(빈칸 없이). 비우면 코드 기본값.
+      CRAWLER_VERIFY_SUFFIXES: "${CRAWLER_VERIFY_SUFFIXES:-googlebot.com,google.com,search.msn.com,applebot.apple.com}"
+      CRAWLER_VERIFY_TIMEOUT: ${CRAWLER_VERIFY_TIMEOUT:-300ms}
       # 상점 공지 알림 배치(#640): 하루 한 번 공식 공지를 읽어 새 상점·패키지 공지를 Slack에 알린다. 기본 꺼짐.
       # 웹훅 주소는 상점 공지 전용 비밀 파일(감시 알림 웹훅과 분리)에서 보낼 때마다 읽는다.
       SHOP_NOTICE_ENABLED: ${SHOP_NOTICE_ENABLED:-false}
@@ -220,10 +230,19 @@ services:
       SPEC_UP_STONE_CP_ENABLED: ${SPEC_UP_STONE_CP_ENABLED:-false}
       SPEC_UP_KARMA_CP_ENABLED: ${SPEC_UP_KARMA_CP_ENABLED:-false}
       SPEC_UP_ARMOR_CP_GATE_ENABLED: ${SPEC_UP_ARMOR_CP_GATE_ENABLED:-false}
+      # 아크 그리드 젬 가공 순위 API(/combat-power/gem-ranking, #1095). 기본 끔(꺼져 있으면 경로 없음 = 404). web GEM_RANKING보다 먼저 켠다.
+      # 젬 시세 예열(#1119)도 이 스위치를 따른다: MARKET_WARMUP_ENABLED가 켜진 인스턴스에서 켜야 예열이 돈다(켜진 동안 하루 약 290 공식 호출).
+      GEM_RANKING_ENABLED: ${GEM_RANKING_ENABLED:-false}
       # 스펙업 추천 순서·목표 경로 연마 단계. 기본 끔, 웹 NONE 처리·계산 검증 판정 뒤 켠다.
       SPEC_UP_POLISH_PATH_ENABLED: ${SPEC_UP_POLISH_PATH_ENABLED:-false}
       # 재련 계획 숨결 OPTIMAL. 웹 화면(v0.3.4)과 같이 켠다.
       REFINING_OPTIMAL_ENABLED: ${REFINING_OPTIMAL_ENABLED:-false}
+      # 재련 계획 상급 재련 기대 비용 API(/refining/advanced-plans, #1091). 기본 끔, web REFINING_ADVANCED보다 먼저 켠다. 요청마다 읽는다.
+      REFINING_ADVANCED_ENABLED: ${REFINING_ADVANCED_ENABLED:-false}
+      # 특수 재련 돌파석 1개 가치 API(/refining/special-stone-values, #1099). 기본 끔(꺼져 있으면 404). 요청마다 읽는다.
+      REFINING_SPECIAL_STONE_ENABLED: ${REFINING_SPECIAL_STONE_ENABLED:-false}
+      # 사용자 가격 돌파석 요청의 따로 계산 자리 수(#1101 · #1105). 기본 1, PM 판단 없이는 바꾸지 않는다.
+      REFINING_SPECIAL_STONE_USER_PRICE_SOLVES: ${REFINING_SPECIAL_STONE_USER_PRICE_SOLVES:-1}
       FEATURE_AUCTION_SEARCH: ${FEATURE_AUCTION_SEARCH:-false}
       MARKET_GEM_FILTER_ENABLED: ${MARKET_GEM_FILTER_ENABLED:-true}
       MARKET_GEM_FILTER_QUOTA: ${MARKET_GEM_FILTER_QUOTA:-10}
@@ -242,6 +261,8 @@ services:
       MARKET_WARMUP_RELIC_BOOKS_ENABLED: ${MARKET_WARMUP_RELIC_BOOKS_ENABLED:-false}
       # 보석 시세 표 칸 예열(스펙업 보석 비용, 10분마다 20칸 = 분당 공식 호출 2회).
       MARKET_WARMUP_GEMS_ENABLED: ${MARKET_WARMUP_GEMS_ENABLED:-false}
+      # 아크 그리드 젬 시세 예열 간격(#1119, GEM_RANKING_ENABLED가 켜진 예열 인스턴스에서만 돈다). 기본 10m.
+      MARKET_WARMUP_ARK_GRID_INTERVAL: ${MARKET_WARMUP_ARK_GRID_INTERVAL:-10m}
       # 장신구 시세 표 기본 필터 24칸 예열(일별 최저가 빈 날 없애기, 1분에 최대 1칸 = 하루 최대 1,440 공식 호출, 보통 576).
       MARKET_WARMUP_ACCESSORIES_ENABLED: ${MARKET_WARMUP_ACCESSORIES_ENABLED:-false}
       # 거래량 정렬용 거래량 채우기(분당 15·하루 800 공식 호출 상한, 리더 한 곳만). 끄면 거래량 정렬은 스캔 순서로 보이고 거래량 칸은 비어 있다.

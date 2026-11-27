@@ -50,7 +50,9 @@ public final class RawShapeGuard {
       Set.of("무기", "투구", "상의", "하의", "장갑", "어깨", "목걸이", "귀걸이", "반지");
   private static final Set<String> POLISH_GRADES = Set.of("고대", "유물");
   private static final Set<String> POINT_NAMES = Set.of("진화", "깨달음", "도약");
-  private static final Pattern GEM_NAME = Pattern.compile("^\\d+레벨 (겁화|작열|광휘)의 보석( \\(귀속\\))?$");
+  // 3티어 멸화·홍염도 오늘의 모양이다(전투력 보석 모델·장비 요약이 읽음, 2026-10 표본에 다수).
+  private static final Pattern GEM_NAME =
+      Pattern.compile("^\\d+레벨 (겁화|작열|광휘|멸화|홍염)의 보석( \\(귀속\\))?$");
   private static final List<Pattern> GEM_SKILL =
       List.of(
           Pattern.compile("^피해 [\\d.]+% 증가$"),

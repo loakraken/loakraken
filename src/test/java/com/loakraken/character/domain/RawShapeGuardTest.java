@@ -207,6 +207,17 @@ class RawShapeGuardTest {
   }
 
   @Test
+  void tierThreeGemsAreTodaysShape() {
+    // 3티어 보석(멸화·홍염)을 아직 낀 캐릭터는 오늘의 모양이다(저장 원문 표본에는 없어서 따로 본다).
+    for (var name : List.of("10레벨 멸화의 보석", "7레벨 홍염의 보석", "9레벨 멸화의 보석 (귀속)")) {
+      var d = base();
+      ((ObjectNode) d.path("ArmoryGem").path("Gems").get(0)).put("Name", name);
+
+      assertThat(RawShapeGuard.check(d).hard()).as(name).isEmpty();
+    }
+  }
+
+  @Test
   void missingSectionsAreTodaysShape() {
     var d = base();
     d.remove(List.of("ArmoryGem", "ArkGrid", "ArmoryEngraving", "ArkPassive"));

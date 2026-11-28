@@ -703,10 +703,23 @@ public class SpecUpService {
       return blockedGuide(snapshot, requested, limit, includeCooldownGems);
     // 보안 v0.3.16 리드(목록 만들기가 요청 스레드에서 자리·캐시 없이 돔): 목록은 같은 입력이면 60초 캐시(limit과 무관하게 전체를 두고 자름),
     // 새로 만들 때는 계산 자리(인스턴스 처리기 수의 절반, 주소당 하나). 줄 상세는 가격 일치 확인 때문에 캐시하지 않고 자리만 쓴다.
+    long deadline = System.nanoTime() + GUIDE_SEAT_WAIT.toNanos();
     if (allRefineStages)
-      return seated(() -> build(snapshot, requested, limit, includeCooldownGems, true));
-    var key = guideKey(snapshot, requested, includeCooldownGems);
-    var cached = guideCache.find(key);
+      return seated(
+          deadline,
+          () ->
+              build(
+                  snapshot,
+                  requested,
+                  limit,
+                  includeCooldownGems,
+                  true,
+                  new MarketAuctionService.PolishFill(false)));
+    // 캐시 키 = 만들기 전 입력 지문(SHA-256). 연마 칸은 만들 때 무엇을 읽을지 미리 모르므로, 캐시에 읽은 칸을 같이 두고 꺼낼 때 그 칸이
+    // 그대로인지 다시 본다(코드 리뷰 #1146 P1-1).
+    var before = guideSignature(snapshot, requested, includeCooldownGems);
+    var key = sha256(before);
+    var cached = guideCache.find(key, this::polishUnchanged);
     if (cached != null) {
       guideOutcome("cache_hit");
       return cached.withLimit(limit);
@@ -714,29 +727,84 @@ public class SpecUpService {
     var full =
         guideFlight(
             key,
+            deadline,
             () -> {
-              var hit = guideCache.find(key);
+              var hit = guideCache.find(key, this::polishUnchanged);
               if (hit != null) return hit;
+              var fill = new MarketAuctionService.PolishFill(polishPriceFill);
               var built =
                   seated(
+                      deadline,
                       () ->
                           build(
-                              snapshot, requested, Integer.MAX_VALUE, includeCooldownGems, false));
-              // 만드는 동안 시세 칸이 채워질 수 있다(각인서 시세 등) — 다음 요청이 볼 상태의 키로 둔다(만들기 전 키로 두면 바로 다음 요청이 놓친다).
-              guideCache.save(guideKey(snapshot, requested, includeCooldownGems), built);
+                              snapshot,
+                              requested,
+                              Integer.MAX_VALUE,
+                              includeCooldownGems,
+                              false,
+                              fill));
               guideOutcome("computed");
+              // 만드는 동안 입력(시세 칸·스위치)이 바뀌었으면 캐시하지 않는다 — 옛 입력으로 만든 숫자를 새 입력의 키로 두지 않게(P1-2). 만드는 동안
+              // 채운 연마 칸은 읽은 기록에 있어 다음 요청이 그대로 쓴다.
+              // 연마 시세를 아직 채우는 중(PENDING)인 목록도 두지 않는다 — 캐시에서 꺼내면 채우기가 다시 돌지 않아 60초 동안 PENDING에
+              // 머문다(계산
+              // 검증 #1146). 다음 요청이 새로 만들며 몫만큼 더 채운다.
+              if (!pendingPolish(fill)
+                  && before.equals(guideSignature(snapshot, requested, includeCooldownGems)))
+                guideCache.save(key, built, fill.reads());
+              else guideOutcome("not_cached");
               return built;
             });
     return full.withLimit(limit);
   }
 
-  /** 목록 만들기(캐시·자리 밖). limit은 순위에 든 후보를 자르는 수(캐시용은 전체). */
+  /** 채우기가 켜져 있는데 비어 있던 연마 칸을 읽었는가(그 줄의 비용이 PENDING). */
+  private boolean pendingPolish(MarketAuctionService.PolishFill fill) {
+    if (!polishPriceFill) return false;
+    for (var read : fill.reads())
+      if (read.price() != null
+          && read.price().status() == MarketAuctionService.PolishStatus.MISSING) return true;
+    return false;
+  }
+
+  /** 캐시한 목록이 읽었던 연마 칸이 지금도 같은가(캐시만 봄, 채우지 않음, 공식 호출 없음). */
+  private boolean polishUnchanged(List<MarketAuctionService.PolishRead> reads) {
+    for (var read : reads)
+      if (!samePolish(auctions.cachedPolishPrice(read.part(), read.lines()), read.price()))
+        return false;
+    return true;
+  }
+
+  /** 상태·최저가·관측 시각(ms)이 같은가. 저장소를 거친 시각은 ms 아래가 달라질 수 있어 ms로 맞춘다. */
+  static boolean samePolish(
+      MarketAuctionService.PolishPrice now, MarketAuctionService.PolishPrice then) {
+    if (now == null || then == null) return now == then;
+    return now.status() == then.status()
+        && java.util.Objects.equals(now.minBuyPrice(), then.minBuyPrice())
+        && java.util.Objects.equals(
+            now.observedAt() == null ? null : now.observedAt().toEpochMilli(),
+            then.observedAt() == null ? null : then.observedAt().toEpochMilli());
+  }
+
+  static String sha256(String text) {
+    try {
+      return java.util.HexFormat.of()
+          .formatHex(
+              java.security.MessageDigest.getInstance("SHA-256")
+                  .digest(text.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+    } catch (java.security.NoSuchAlgorithmException exception) {
+      throw new IllegalStateException(exception);
+    }
+  }
+
+  /** 목록 만들기(캐시·자리 밖). limit은 순위에 든 후보를 자르는 수(캐시용은 전체). fill은 연마 시세 몫이자 읽은 칸 기록. */
   private Guide build(
       CharacterResult snapshot,
       Sort requested,
       int limit,
       Boolean includeCooldownGems,
-      boolean allRefineStages) {
+      boolean allRefineStages,
+      MarketAuctionService.PolishFill fill) {
     var profile = snapshot.details().profile();
     var loadout = snapshot.details().loadout();
     var prices = new HashMap<String, MarketAuctionService.GemCell>();
@@ -750,7 +818,7 @@ public class SpecUpService {
     if (armGuardEnabled()) armGuard(loadout, materials.cached(), pricesAt, planned);
     var krakenContext = kraken.context(snapshot);
     // 줄 상세(allRefineStages)는 목록이 이미 채운 연마 시세 칸만 쓴다 — 다시 만들기(최대 두 번)마다 채우기 몫을 새로 쓰지 않게(코드 리뷰 10-25).
-    others(loadout, planned, krakenContext, pricesAt, polishPriceFill && !allRefineStages);
+    others(loadout, planned, krakenContext, pricesAt, fill);
 
     // 점수를 낼 수 없으면 KRAKEN도 효율 순으로 되돌리고 그 이유를 응답에 둔다.
     var sort = requested == Sort.KRAKEN && !krakenContext.available() ? Sort.EFFICIENCY : requested;
@@ -869,7 +937,8 @@ public class SpecUpService {
 
   /** 최근 목록(전체, limit 전). 크기·수명 상한이 있는 접근 순서 LRU. */
   static final class GuideCache {
-    private record Entry(Guide guide, long expiresAtNanos) {}
+    private record Entry(
+        Guide guide, List<MarketAuctionService.PolishRead> reads, long expiresAtNanos) {}
 
     private final int max;
     private final long ttlNanos;
@@ -881,18 +950,27 @@ public class SpecUpService {
       this.entries = new java.util.LinkedHashMap<>(16, 0.75f, true);
     }
 
-    synchronized Guide find(String key) {
-      var entry = entries.get(key);
-      if (entry == null) return null;
-      if (System.nanoTime() - entry.expiresAtNanos() > 0) {
-        entries.remove(key);
-        return null;
+    /** 수명이 남았고 읽었던 연마 칸이 그대로면 목록, 아니면 지우고 null. 연마 칸 확인은 잠금 밖에서(캐시 읽기라도 Valkey일 수 있다). */
+    Guide find(
+        String key, java.util.function.Predicate<List<MarketAuctionService.PolishRead>> fresh) {
+      Entry entry;
+      synchronized (this) {
+        entry = entries.get(key);
+        if (entry == null) return null;
+        if (System.nanoTime() - entry.expiresAtNanos() > 0) {
+          entries.remove(key, entry);
+          return null;
+        }
       }
-      return entry.guide();
+      if (fresh.test(entry.reads())) return entry.guide();
+      synchronized (this) {
+        entries.remove(key, entry);
+      }
+      return null;
     }
 
-    synchronized void save(String key, Guide guide) {
-      entries.put(key, new Entry(guide, System.nanoTime() + ttlNanos));
+    synchronized void save(String key, Guide guide, List<MarketAuctionService.PolishRead> reads) {
+      entries.put(key, new Entry(guide, List.copyOf(reads), System.nanoTime() + ttlNanos));
       while (entries.size() > max) entries.remove(entries.keySet().iterator().next());
     }
 
@@ -902,10 +980,10 @@ public class SpecUpService {
   }
 
   /**
-   * 목록 캐시 키: 캐릭터 캐시(수집 시각) · 정렬 · 쿨 보석 포함 · 시세 칸(보석·재련 재료·각인서 관측 시각) · 스위치 · 규칙 버전. limit은 넣지
-   * 않는다(전체를 두고 자름).
+   * 목록 입력 지문(캐시 키는 이 글의 SHA-256): 캐릭터 캐시(수집 시각) · 정렬 · 쿨 보석 포함 · 시세 칸(보석 칸 전체·재련 재료·각인서 관측 시각) ·
+   * 스위치 · 규칙 버전. limit은 넣지 않는다(전체를 두고 자름). 연마 칸은 여기 없고 캐시 항목의 읽은 기록으로 따로 확인한다.
    */
-  String guideKey(CharacterResult snapshot, Sort requested, Boolean includeCooldownGems) {
+  String guideSignature(CharacterResult snapshot, Sort requested, Boolean includeCooldownGems) {
     var profile = snapshot.details().profile();
     var gems = new StringBuilder();
     for (var cell : auctions.cachedGems())
@@ -922,7 +1000,7 @@ public class SpecUpService {
         String.valueOf(snapshot.fetchedAt() == null ? 0 : snapshot.fetchedAt().toEpochMilli()),
         requested.name(),
         String.valueOf(includeCooldownGems),
-        Integer.toHexString(gems.toString().hashCode()) + "/" + gems.length(),
+        gems.toString(),
         String.valueOf(materials.cached().map(p -> p.observedAt().toEpochMilli()).orElse(0L)),
         String.valueOf(books.observedAt().map(Instant::toEpochMilli).orElse(0L)),
         RULE_VERSION,
@@ -939,15 +1017,26 @@ public class SpecUpService {
             + (polishPriceFill ? "pf" : "-"));
   }
 
-  private Guide guideFlight(String key, java.util.function.Supplier<Guide> loader) {
+  /**
+   * 같은 키를 이미 만드는 중이면 그 결과를 같은 기한(deadline)까지만 기다린다. 넘기거나 끊기면 busy로 429 — 따라온 요청이 만든 요청보다 오래 붙잡히지
+   * 않게(코드 리뷰 #1146 P2).
+   */
+  private Guide guideFlight(String key, long deadline, java.util.function.Supplier<Guide> loader) {
     var future = new java.util.concurrent.CompletableFuture<Guide>();
     var existing = guideFlights.putIfAbsent(key, future);
     if (existing != null) {
       try {
-        return existing.join();
-      } catch (java.util.concurrent.CompletionException exception) {
+        return existing.get(
+            Math.max(0, deadline - System.nanoTime()), java.util.concurrent.TimeUnit.NANOSECONDS);
+      } catch (java.util.concurrent.ExecutionException exception) {
         if (exception.getCause() instanceof RuntimeException cause) throw cause;
-        throw exception;
+        if (exception.getCause() instanceof Error cause) throw cause;
+        throw new IllegalStateException(exception.getCause());
+      } catch (java.util.concurrent.TimeoutException | InterruptedException exception) {
+        if (exception instanceof InterruptedException) Thread.currentThread().interrupt();
+        guideOutcome("busy");
+        throw new com.loakraken.common.api.BusinessException(
+            SpecUpErrorCode.SPEC_UP_LIST_BUSY, GUIDE_RETRY_AFTER);
       }
     }
     try {
@@ -967,10 +1056,9 @@ public class SpecUpService {
    * 429 SPEC_UP_LIST_BUSY(Retry-After 1초) — 같은 주소면 client_busy, 인스턴스가 차면 busy. 주소 키가 없으면(내부 호출·같은
    * 호스트 점검) 인스턴스 자리만 센다. 지표 loakraken.spec_up.guide{outcome}와 만든 시간 loakraken.spec_up.guide_build.
    */
-  private Guide seated(java.util.function.Supplier<Guide> build) {
+  private Guide seated(long deadline, java.util.function.Supplier<Guide> build) {
     var holder = com.loakraken.common.lostark.ClientLimiter.currentClient();
     var seat = com.loakraken.common.lostark.ClientLimiter.addressKey(holder);
-    long deadline = System.nanoTime() + GUIDE_SEAT_WAIT.toNanos();
     if (seat != null)
       while (!guideSeatHolders.add(seat)) {
         if (System.nanoTime() - deadline >= 0 || !pause()) {
@@ -2067,7 +2155,7 @@ public class SpecUpService {
       List<Planned> planned,
       SpecUpKrakenScore.Context context,
       Instant[] pricesAt,
-      boolean fillPolishPrices) {
+      MarketAuctionService.PolishFill fill) {
     boolean bracelet =
         loadout.equipment().stream()
             .anyMatch(
@@ -2093,7 +2181,6 @@ public class SpecUpService {
                 ? SpecUpSupportPolish.rows(kraken, context, loadout, polishValues)
                 : SpecUpScoreCandidates.polish(context.input(), loadout, polishValues);
     if (polishRows != null) {
-      var fill = new MarketAuctionService.PolishFill(fillPolishPrices);
       for (var row : polishRows)
         planned.add(row.withCost(polishCost(loadout, context, row, fill, pricesAt)));
     } else if (polish) planned.add(Planned.line(Kind.POLISH, "장신구 연마 효과"));

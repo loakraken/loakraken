@@ -17,7 +17,8 @@ public enum SpecUpErrorCode implements ErrorCode {
   SPEC_UP_BUSY(HttpStatus.TOO_MANY_REQUESTS, "추천 순서 요청이 몰려 지금 계산하지 못했습니다. 잠시 뒤 다시 요청해 주세요."),
   /**
    * 스펙업 목록·줄 상세를 새로 만들 계산 자리가 없다(같은 주소의 계산이 진행 중이거나 인스턴스 자리가 잠깐 기다려도 비지 않음). Retry-After를 준다. 같은
-   * 입력의 목록은 60초 캐시라 되풀이 요청은 여기 오지 않는다.
+   * 입력의 목록을 다른 요청이 만드는 중이면 그 결과도 같은 시간까지만 기다린다. 만든 목록은 60초 캐시(연마 시세를 채우는 중인 목록은 두지 않음)라 되풀이 요청은 보통
+   * 여기 오지 않는다.
    */
   SPEC_UP_LIST_BUSY(HttpStatus.TOO_MANY_REQUESTS, "스펙업 목록 요청이 몰려 지금 계산하지 못했습니다. 잠시 뒤 다시 요청해 주세요."),
   /** 젬 교체 순위(M49 2단계) 계산 자리가 모두 차 있다. 기다리지 않고 바로 돌려준다(Retry-After, REFINING_SOLVE_BUSY와 같은 모양). */

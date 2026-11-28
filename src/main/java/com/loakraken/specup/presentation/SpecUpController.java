@@ -78,7 +78,7 @@ public class SpecUpController {
     @io.swagger.v3.oas.annotations.responses.ApiResponse(
         responseCode = "429",
         description =
-            "SPEC_UP_LIST_BUSY: 목록을 새로 만들 계산 자리가 없음(이 클라이언트가 이미 계산 중이거나 인스턴스 자리가 잠깐 기다려도 비지 않음, Retry-After 초 뒤 다시). 같은 입력의 목록은 60초 캐시라 되풀이 요청에는 나오지 않음 · CLIENT_RATE_LIMITED: 요청이 많음",
+            "SPEC_UP_LIST_BUSY: 목록을 새로 만들 계산 자리가 없음(이 클라이언트가 이미 계산 중이거나 인스턴스 자리가 잠깐 기다려도 비지 않음, Retry-After 초 뒤 다시). 같은 입력의 목록을 다른 요청이 만드는 중이면 그 결과도 같은 시간까지만 기다림. 만든 목록은 60초 캐시(연마 시세를 채우는 중인 목록은 두지 않음)라 되풀이 요청에는 보통 나오지 않음 · CLIENT_RATE_LIMITED: 요청이 많음",
         content = @Content(schema = @Schema(ref = "#/components/schemas/ErrorResponse"))),
     @io.swagger.v3.oas.annotations.responses.ApiResponse(
         responseCode = "503",

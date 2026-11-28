@@ -99,7 +99,7 @@ class ValkeyAclIntegrationTest {
   }
 
   static final GenericContainer<?> VALKEY =
-      new GenericContainer<>(DockerImageName.parse("valkey/valkey:9.1.2"))
+      new GenericContainer<>(DockerImageName.parse("valkey/valkey:9.1.4"))
           .withExposedPorts(6379)
           .withCommand(serverCommand());
 

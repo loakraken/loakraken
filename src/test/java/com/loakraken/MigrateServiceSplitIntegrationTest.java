@@ -65,7 +65,7 @@ class MigrateServiceSplitIntegrationTest {
   static final String SERVER = "분리서버";
 
   static final PostgreSQLContainer POSTGRES =
-      new PostgreSQLContainer(DockerImageName.parse("postgres:18.6"))
+      new PostgreSQLContainer(DockerImageName.parse("postgres:18.7"))
           .withDatabaseName(DATABASE)
           .withUsername(OWNER)
           .withPassword(OWNER_PASSWORD);

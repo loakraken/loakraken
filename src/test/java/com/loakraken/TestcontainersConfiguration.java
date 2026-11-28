@@ -36,11 +36,11 @@ public class TestcontainersConfiguration {
   private static final AtomicInteger CONTEXTS = new AtomicInteger();
 
   private static final PostgreSQLContainer POSTGRES =
-      new PostgreSQLContainer(DockerImageName.parse("postgres:18.6"))
+      new PostgreSQLContainer(DockerImageName.parse("postgres:18.7"))
           .withCommand("postgres", "-c", "fsync=off", "-c", "max_connections=" + MAX_CONNECTIONS);
 
   private static final GenericContainer<?> VALKEY =
-      new GenericContainer<>(DockerImageName.parse("valkey/valkey:9.1.2"))
+      new GenericContainer<>(DockerImageName.parse("valkey/valkey:9.1.4"))
           .withExposedPorts(6379)
           .withCommand("valkey-server", "--databases", String.valueOf(VALKEY_DATABASES));
 

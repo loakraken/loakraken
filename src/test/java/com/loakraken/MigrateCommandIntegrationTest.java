@@ -26,7 +26,7 @@ import org.testcontainers.utility.DockerImageName;
 @ExtendWith(OutputCaptureExtension.class)
 class MigrateCommandIntegrationTest {
   static final PostgreSQLContainer POSTGRES =
-      new PostgreSQLContainer(DockerImageName.parse("postgres:18.6"))
+      new PostgreSQLContainer(DockerImageName.parse("postgres:18.7"))
           .withDatabaseName("loakraken")
           .withUsername("loakraken")
           .withPassword("owner-test-password");

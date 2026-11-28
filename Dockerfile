@@ -2,7 +2,7 @@
 # LOAKraken 백엔드 운영 이미지. 테스트는 CI(ci.yml)에서 실행하고 여기서는 실행 가능한 jar만 만든다.
 # 비밀값은 이미지에 넣지 않는다. 실행 시 /run/secrets(configtree)와 환경변수로 받는다(docs/ops/deploy.md).
 
-FROM eclipse-temurin:25.0.4.1_1-jdk-noble AS build
+FROM eclipse-temurin:25.0.5.1_2-jdk-noble AS build
 WORKDIR /workspace
 
 COPY gradlew settings.gradle build.gradle ./
@@ -16,7 +16,7 @@ RUN --mount=type=cache,target=/root/.gradle \
     && find build/libs -name '*.jar' ! -name '*-plain.jar' -exec cp {} app.jar \; \
     && java -Djarmode=tools -jar app.jar extract --layers --launcher --destination extracted
 
-FROM eclipse-temurin:25.0.4.1_1-jre-noble
+FROM eclipse-temurin:25.0.5.1_2-jre-noble
 RUN groupadd --system --gid 10001 app \
     && useradd --system --uid 10001 --gid app --no-create-home --shell /usr/sbin/nologin app
 WORKDIR /app

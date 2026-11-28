@@ -173,6 +173,18 @@ class RawShapeGuardSwitchIntegrationTest {
   }
 
   @Test
+  void 치명타_공이속_끄기는_캐릭터를_찾기_전에_막아_공식_호출이_없다() throws Exception {
+    // 보안 v0.3.16 조건 2: 끈 화면은 공식 호출 0. 검색한 적 없는(캐시에 없는) 캐릭터라도 찾지 않고 422다.
+    switches(Map.of("combat-power.kill.crit-speed", "true"));
+
+    var response = critSpeed();
+
+    assertThat(response.statusCode()).as(response.body()).isEqualTo(422);
+    assertThat(mapper.readTree(response.body()).path("code").asText()).isEqualTo(CODE);
+    org.mockito.Mockito.verifyNoInteractions(detailsPort);
+  }
+
+  @Test
   void 화면_끄기_스위치는_원문과_상관없이_그_화면만_막는다() throws Exception {
     when(auctions.cachedGems()).thenReturn(List.of());
     var card = search();

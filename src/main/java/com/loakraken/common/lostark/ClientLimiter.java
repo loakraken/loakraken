@@ -287,8 +287,8 @@ public class ClientLimiter {
   }
 
   /**
-   * 지금 스레드의 요청이 공식 호출을 하나 더 해도 되는지 센다. 클라이언트가 없으면(백그라운드) 세지 않는다. 검색봇 표시 요청은 OFFICIAL 대신 더 작은 주소별
-   * BOT_ADDRESS_OFFICIAL과 모든 봇이 함께 쓰는 BOT_OFFICIAL 상한을 센다(한 주소가 전체 상한을 다 쓰지 못하게).
+   * 지금 스레드의 요청이 공식 호출을 하나 더 해도 되는지 센다. 클라이언트가 없으면(백그라운드) 세지 않는다. 크롤러로 확인된 검색봇 요청은 OFFICIAL 대신 더 작은
+   * 주소별 BOT_ADDRESS_OFFICIAL과 확인된 봇이 함께 쓰는 BOT_OFFICIAL 상한을 센다(한 주소가 전체 상한을 다 쓰지 못하게).
    *
    * <p>검색봇 표시가 붙었지만 크롤러로 확인되지 않은 요청은 그 주소의 BOT_ADDRESS_OFFICIAL과 OFFICIAL, 그런 요청이 모두 함께 쓰는
    * UNVERIFIED_BOT_OFFICIAL 상한을 센다. 주소를 늘려도 합계가 그 상한을 넘지 못하고, 확인된 크롤러의 BOT_OFFICIAL과 따로라 흉내 낸 요청이
@@ -363,22 +363,28 @@ public class ClientLimiter {
   }
 
   /**
-   * 기능 버킷으로 세는 공식 호출(재료 검색 등, {@link LostArkRequestGate#withClientBucket})에서도 확인되지 않은 봇 표시 요청이면 그
-   * 주소의 BOT_ADDRESS_OFFICIAL과 UNVERIFIED_BOT_OFFICIAL 합계 상한을 되돌릴 수 있게 센다(#1065 코드 리뷰 P2: 이 경로가
-   * {@link #chargeOfficial}을 거치지 않음). 넘으면 센 것을 되돌리고 CLIENT_RATE_LIMITED. 되돌리기용 키를 돌려준다(세지 않았으면 빈
-   * 목록).
+   * 기능 버킷으로 세는 공식 호출(재료 검색 등, {@link LostArkRequestGate#withClientBucket})에서도 봇 상한을 되돌릴 수 있게 센다(이
+   * 경로는 {@link #chargeOfficial}을 거치지 않음): 크롤러로 확인된 검색봇은 그 주소의 BOT_ADDRESS_OFFICIAL과 BOT_OFFICIAL
+   * 합계(v0.3.16 P3), 확인되지 않은 봇 표시 요청은 BOT_ADDRESS_OFFICIAL과 UNVERIFIED_BOT_OFFICIAL 합계(#1065 코드 리뷰
+   * P2). 사람 클라이언트는 세지 않는다. 넘으면 센 것을 되돌리고 CLIENT_RATE_LIMITED. 되돌리기용 키를 돌려준다(세지 않았으면 빈 목록).
    */
-  java.util.List<String> chargeUnverifiedMarked() {
+  java.util.List<String> chargeBotBuckets() {
     var client = CLIENT.get();
-    if (client == null || !unverifiedMarked(client)) return java.util.List.of();
+    if (client == null) return java.util.List.of();
+    // 확인된 크롤러도 이 경로에서 주소별 봇 칸과 확인된 봇 합계 상한을 센다(v0.3.16 P3: 전에는 기능 버킷만 세어 봇 상한을 거치지 않았다).
+    if (bot(client)) return chargeBotPair(client, Bucket.BOT_OFFICIAL, BOT_ALL);
+    if (!unverifiedMarked(client)) return java.util.List.of();
+    return chargeBotPair(client, Bucket.UNVERIFIED_BOT_OFFICIAL, UNVERIFIED_ALL);
+  }
+
+  /** 주소별 BOT_ADDRESS_OFFICIAL과 합계 상한(all)을 되돌릴 수 있게 센다. 합계가 넘으면 주소 칸도 되돌린다. */
+  private java.util.List<String> chargeBotPair(String client, Bucket allBucket, String allKey) {
     var keys = new java.util.ArrayList<String>(2);
     var address =
         countRefundable(Bucket.BOT_ADDRESS_OFFICIAL, client, LostArkErrorCode.CLIENT_RATE_LIMITED);
     if (address != null) keys.add(address);
     try {
-      var all =
-          countRefundable(
-              Bucket.UNVERIFIED_BOT_OFFICIAL, UNVERIFIED_ALL, LostArkErrorCode.CLIENT_RATE_LIMITED);
+      var all = countRefundable(allBucket, allKey, LostArkErrorCode.CLIENT_RATE_LIMITED);
       if (all != null) keys.add(all);
     } catch (RuntimeException exception) {
       refund(address);

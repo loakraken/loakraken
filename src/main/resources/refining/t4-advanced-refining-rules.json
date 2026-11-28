@@ -1,0 +1,67 @@
+{
+ "ruleVersion": "t4-advanced-refining-v1",
+ "source": {
+  "spec": "계산 검증 상급 재련 기대 비용 모델 명세 2026-11-22(정정 포함: 재료는 업화 일반 재련과 같은 티어)",
+  "officialGuide": "https://lostark.game.onstove.com/GameGuide/Pages/상급 재련 (최근 수정 2026-10-14, 읽음 2026-11-22)",
+  "officialNotice": "https://lostark.game.onstove.com/News/Notice/Views/12684 (읽음 2026-11-22)",
+  "codeSource": "MIT 라이선스 공개 재련 계산 코드(파일 2025-02-16, 출처·저작권 고지는 저장소 NOTICE와 THIRD-PARTY-LICENSE-refining-data.txt)",
+  "verifiedOn": "2026-11-22"
+ },
+ "outcomeByChoice": {
+  "source": "K0(없음)·K3(숨결+책): 공식 가이드 이미지. K1(숨결)·K2(책): 공개 계산 코드 + 다른 공개 자료 한 곳, 서로 일치. 모든 구간·부위 같음",
+  "expPerOutcome": [10, 20, 40],
+  "tables": [
+   [0.80, 0.15, 0.05],
+   [0.50, 0.30, 0.20],
+   [0.30, 0.45, 0.25],
+   [0.00, 0.60, 0.40]
+  ]
+ },
+ "marblesPerTry": {
+  "value": 2,
+  "source": "공식 가이드 '1 ~ 40단계 도전 시 선조의 가호 구슬 2개씩' (구슬 6개면 다음 시도가 선조 턴)"
+ },
+ "ancestors": {
+  "stages1to20": {
+   "source": "사용자 확인 10-10 + 공개 계산 코드 + 다른 공개 자료 한 곳",
+   "GALATUR": 0.15, "GELAR": 0.35, "KUHUMBAR": 0.15, "TEMER": 0.35
+  },
+  "stages21to40": {
+   "source": "공식 가이드 이미지 + 공개 계산 코드 + 다른 공개 자료 한 곳",
+   "GALATUR": 0.125, "GELAR": 0.25, "KUHUMBAR": 0.125, "TEMER": 0.25, "NABER": 0.125, "EBER": 0.125
+  },
+  "enhanced": {
+   "source": "공개 계산 코드만(나베르는 다시 나오지 않음 — 공식 문구와 맞음)",
+   "singleSource": true,
+   "GALATUR": 0.2, "GELAR": 0.2, "KUHUMBAR": 0.2, "TEMER": 0.2, "EBER": 0.2
+  }
+ },
+ "growthSupport": {
+  "source": "공식 가이드 성장 지원(1~20단계): 재료·숨결 −70%, 파편·실링 −90%, 골드 −50%, 각각 올림, 책은 할인 없음. 방어구 0~10 공식 이미지 7개 값과 일치",
+  "bands": [0, 10],
+  "material": 0.3,
+  "breath": 0.3,
+  "shard": 0.1,
+  "silver": 0.1,
+  "gold": 0.5
+ },
+ "temperingStages": {
+  "source": "공식 가이드: 10·20·30·40단계는 담금질 상한, 상한에서 남은 경험치·구슬·무료 턴은 사라진다. 담금질 재료는 귀속이라 금액에 넣지 않는다",
+  "value": [10, 20, 30, 40]
+ },
+ "materialsPerTry": {
+  "source": "성장 지원 전 기본값. 방어구 0~10은 공식 이미지(할인 뒤 150·4·5·300·475·4·1)와 사용자 확인 11-22 일치. 다른 7구간은 공개 계산 코드만(singleSource)",
+  "ARMOR": [
+   {"start": 0, "singleSource": false, "materials": [{"name": "운명의 수호석", "count": 500}, {"name": "운명의 돌파석", "count": 12}, {"name": "아비도스 융화 재료", "count": 15}, {"name": "운명의 파편", "count": 3000}], "gold": 950, "breath": {"name": "빙하의 숨결", "count": 12}, "book": "장인의 재봉술 : 1단계", "silver": 28500},
+   {"start": 10, "singleSource": true, "materials": [{"name": "운명의 수호석", "count": 900}, {"name": "운명의 돌파석", "count": 16}, {"name": "아비도스 융화 재료", "count": 16}, {"name": "운명의 파편", "count": 6000}], "gold": 1800, "breath": {"name": "빙하의 숨결", "count": 18}, "book": "장인의 재봉술 : 2단계", "silver": null},
+   {"start": 20, "singleSource": true, "materials": [{"name": "운명의 수호석", "count": 1000}, {"name": "운명의 돌파석", "count": 18}, {"name": "아비도스 융화 재료", "count": 17}, {"name": "운명의 파편", "count": 7000}], "gold": 2000, "breath": {"name": "빙하의 숨결", "count": 20}, "book": "장인의 재봉술 : 3단계", "silver": null},
+   {"start": 30, "singleSource": true, "materials": [{"name": "운명의 수호석", "count": 1200}, {"name": "운명의 돌파석", "count": 23}, {"name": "아비도스 융화 재료", "count": 19}, {"name": "운명의 파편", "count": 8000}], "gold": 2400, "breath": {"name": "빙하의 숨결", "count": 24}, "book": "장인의 재봉술 : 4단계", "silver": null}
+  ],
+  "WEAPON": [
+   {"start": 0, "singleSource": true, "materials": [{"name": "운명의 파괴석", "count": 600}, {"name": "운명의 돌파석", "count": 16}, {"name": "아비도스 융화 재료", "count": 25}, {"name": "운명의 파편", "count": 5000}], "gold": 1125, "breath": {"name": "용암의 숨결", "count": 12}, "book": "장인의 야금술 : 1단계", "silver": null},
+   {"start": 10, "singleSource": true, "materials": [{"name": "운명의 파괴석", "count": 1100}, {"name": "운명의 돌파석", "count": 22}, {"name": "아비도스 융화 재료", "count": 27}, {"name": "운명의 파편", "count": 10000}], "gold": 2500, "breath": {"name": "용암의 숨결", "count": 18}, "book": "장인의 야금술 : 2단계", "silver": null},
+   {"start": 20, "singleSource": true, "materials": [{"name": "운명의 파괴석", "count": 1200}, {"name": "운명의 돌파석", "count": 25}, {"name": "아비도스 융화 재료", "count": 28}, {"name": "운명의 파편", "count": 11500}], "gold": 3000, "breath": {"name": "용암의 숨결", "count": 20}, "book": "장인의 야금술 : 3단계", "silver": null},
+   {"start": 30, "singleSource": true, "materials": [{"name": "운명의 파괴석", "count": 1400}, {"name": "운명의 돌파석", "count": 32}, {"name": "아비도스 융화 재료", "count": 30}, {"name": "운명의 파편", "count": 13000}], "gold": 4000, "breath": {"name": "용암의 숨결", "count": 24}, "book": "장인의 야금술 : 4단계", "silver": null}
+  ]
+ }
+}

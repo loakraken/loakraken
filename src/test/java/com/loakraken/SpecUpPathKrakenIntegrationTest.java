@@ -49,7 +49,9 @@ import tools.jackson.databind.json.JsonMapper;
       "kraken-score.enabled=true",
       "combat-power-sim.enabled=true",
       "spec-up.polish-path.enabled=true",
-      "spec-up.support-order.enabled=true"
+      "spec-up.support-order.enabled=true",
+      // 상급 재련 기대 비용(#1081)은 스위치 뒤로 갔다(기본 끔). 이 시험은 켠 상태의 경로를 본다.
+      "spec-up.advanced-refine-cost.enabled=true"
     })
 class SpecUpPathKrakenIntegrationTest {
   private static final String SERVER = "점수순서서버";
@@ -235,6 +237,82 @@ class SpecUpPathKrakenIntegrationTest {
       assertThat(Integer.parseInt(target) % 10).isZero();
     }
     assertThat(kraken.path("combatPowerStopOrder").isNumber()).isTrue();
+  }
+
+  @Autowired com.loakraken.market.application.MarketCache marketCache;
+  @Autowired com.loakraken.refining.domain.AdvancedRefineRules advancedRules;
+
+  /**
+   * 상급 재련 기대 비용(계산 검증 명세 2026-11-22 §3·§4-5): 업화 방어구의 상급 재련 단계는 재료 시세가 있으면 미확정이 아니라 기대 비용이다(코드
+   * ADVANCED_REFINE_EXPECTED). 값은 같은 규칙·시세로 그 단계(지금 → 목표 10의 배수)를 다시 구한 것과 같다. 이 시세표에는 책 값이 없어 책을
+   * 쓰는 조합은 빼고 고른다.
+   */
+  @Test
+  void 업화_방어구_상급_재련_단계는_재료_시세가_있으면_기대_비용을_준다() throws Exception {
+    when(auctions.cachedGems()).thenReturn(List.of());
+    when(auctions.polishPrice(anyString(), anyList(), any()))
+        .thenReturn(
+            new MarketAuctionService.PolishPrice(
+                MarketAuctionService.PolishStatus.MISSING, null, null));
+    marketCache.saveRefiningMaterials(
+        new com.loakraken.market.application.RefiningMaterialScan(
+            Instant.parse("2026-10-12T02:00:00Z"),
+            List.of(
+                price(1, "운명의 수호석", 100, "31"),
+                price(2, "운명의 돌파석", 1, "3"),
+                price(3, "아비도스 융화 재료", 1, "160"),
+                price(4, "운명의 파편 주머니(대)", 1, "240"),
+                price(5, "빙하의 숨결", 1, "180"))),
+        java.time.Duration.ofMinutes(5));
+    var units =
+        java.util.Map.of(
+            "운명의 수호석", new BigDecimal("0.31"),
+            "운명의 돌파석", new BigDecimal("3"),
+            "아비도스 융화 재료", new BigDecimal("160"),
+            "운명의 파편", new BigDecimal("0.08"),
+            "빙하의 숨결", new BigDecimal("180"));
+    int[] helmet = {-1};
+    search(
+        tooltip -> tooltip,
+        input -> {},
+        raw -> {
+          var equipment = raw.path("ArmoryEquipment");
+          for (int i = 0; i < equipment.size(); i++) {
+            var item = (tools.jackson.databind.node.ObjectNode) equipment.get(i);
+            if ("투구".equals(item.path("Type").asString(""))) {
+              item.put("Name", item.path("Name").asString("").replace("전율", "업화"));
+              helmet[0] = i;
+              return;
+            }
+          }
+        });
+    var kraken = path(NAME, "KRAKEN", 30);
+    var priced = 0;
+    for (var step : kraken.path("steps")) {
+      if (!step.path("candidateId")
+          .asText()
+          .startsWith("EQUIPMENT_ADVANCED_REFINE:" + helmet[0] + ":")) continue;
+      assertThat(step.at("/cost/status").asText()).as(step.toString()).isEqualTo("OK");
+      assertThat(step.at("/cost/code").asText()).isEqualTo("ADVANCED_REFINE_EXPECTED");
+      int from = Integer.parseInt(step.path("from").asText().replaceAll("\\D", ""));
+      int to = Integer.parseInt(step.path("to").asText().replaceAll("\\D", ""));
+      var model =
+          com.loakraken.refining.domain.AdvancedRefineCost.expected(
+              advancedRules, "ARMOR", from, to, units::get);
+      assertThat(step.at("/cost/amount").asLong())
+          .isEqualTo(
+              model.expectedGold().setScale(0, java.math.RoundingMode.CEILING).longValueExact());
+      assertThat(model.policyLimited()).isTrue();
+      priced++;
+    }
+    assertThat(priced).as("투구 상급 재련 단계 " + ids(kraken.path("steps"))).isPositive();
+    SiteNames.assertAbsent(kraken.toString());
+  }
+
+  private static com.loakraken.market.domain.MarketPrice price(
+      long id, String name, int bundle, String currentMin) {
+    return new com.loakraken.market.domain.MarketPrice(
+        id, name, "영웅", null, bundle, null, null, null, new BigDecimal(currentMin));
   }
 
   /** 방어구 재련·상급 재련·완갑 단계(무기 칸이 아닌 재련 종류). */

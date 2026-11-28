@@ -22,7 +22,9 @@ public enum RefiningErrorCode implements ErrorCode {
    */
   REFINING_ARTISAN_ENERGY_MISMATCH(
       HttpStatus.BAD_REQUEST,
-      "현재 성공 확률과 장인의 기운이 맞지 않습니다. 같은 단계 재련 화면에서 숨결·책을 올리기 전 두 값을 다시 확인해 주세요.");
+      "현재 성공 확률과 장인의 기운이 맞지 않습니다. 같은 단계 재련 화면에서 숨결·책을 올리기 전 두 값을 다시 확인해 주세요."),
+  /** 운명의 전율 상급 재련은 재료·확률 표를 아직 확인하지 않아 계산하지 않는다(업화만, 계약 초안 2026-11-22). */
+  REFINING_ADVANCED_UNCONFIRMED(HttpStatus.BAD_REQUEST, "운명의 전율 상급 재련 비용은 아직 확인하지 않아 계산하지 않았습니다.");
 
   private final HttpStatus httpStatus;
   private final String message;

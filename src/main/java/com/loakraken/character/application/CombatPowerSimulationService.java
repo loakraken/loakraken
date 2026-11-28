@@ -21,6 +21,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -137,8 +138,15 @@ public class CombatPowerSimulationService {
     STONE_ENGRAVING,
     ARK_PASSIVE_POINT,
     ARK_GRID_CORE,
-    ARM_GUARD
+    ARM_GUARD,
+    ARK_GRID_GEM
   }
+
+  /** 아크 그리드 젬 교체의 새 젬(M49 G1): 젬 종류(안정·견고·불변·침식·왜곡·붕괴), 의지력 효율, 옵션 두 줄. 포인트는 Change.point. */
+  public record GemSwap(String gemType, Integer willEfficiency, List<GemOption> effects) {}
+
+  /** 젬 옵션 한 줄(이름·레벨 1~5). */
+  public record GemOption(String name, Integer level) {}
 
   /** 바꾼 항목 하나. kind마다 쓰는 필드가 다르다(계약 문서 2절). */
   public record Change(
@@ -156,7 +164,84 @@ public class CombatPowerSimulationService {
       Integer points,
       Integer slotIndex,
       Integer point,
-      Integer karmaLevel) {
+      Integer karmaLevel,
+      GemSwap gem,
+      Integer karmaRank) {
+    /** 카르마 랭크가 없는 변경(젬 교체 포함). */
+    public Change(
+        Kind kind,
+        Integer slot,
+        Integer index,
+        Integer line,
+        Integer level,
+        Integer refine,
+        Integer quality,
+        String option,
+        String grade,
+        String name,
+        String tree,
+        Integer points,
+        Integer slotIndex,
+        Integer point,
+        Integer karmaLevel,
+        GemSwap gem) {
+      this(
+          kind,
+          slot,
+          index,
+          line,
+          level,
+          refine,
+          quality,
+          option,
+          grade,
+          name,
+          tree,
+          points,
+          slotIndex,
+          point,
+          karmaLevel,
+          gem,
+          null);
+    }
+
+    /** 젬 교체가 아닌 변경(깨달음 카르마 레벨 포함). */
+    public Change(
+        Kind kind,
+        Integer slot,
+        Integer index,
+        Integer line,
+        Integer level,
+        Integer refine,
+        Integer quality,
+        String option,
+        String grade,
+        String name,
+        String tree,
+        Integer points,
+        Integer slotIndex,
+        Integer point,
+        Integer karmaLevel) {
+      this(
+          kind,
+          slot,
+          index,
+          line,
+          level,
+          refine,
+          quality,
+          option,
+          grade,
+          name,
+          tree,
+          points,
+          slotIndex,
+          point,
+          karmaLevel,
+          null,
+          null);
+    }
+
     /** karmaLevel 없는 변경(깨달음 카르마 레벨 바꾸기가 아닌 모든 종류). */
     public Change(
         Kind kind,
@@ -192,7 +277,21 @@ public class CombatPowerSimulationService {
       BigDecimal delta,
       Status status,
       String basis,
-      String reasonCode) {}
+      String reasonCode,
+      boolean modelValue) {
+    /** 모델값 표시 없는 줄(공식·두 곳 이상 근거). */
+    public Contribution(
+        String kind,
+        String target,
+        String from,
+        String to,
+        BigDecimal delta,
+        Status status,
+        String basis,
+        String reasonCode) {
+      this(kind, target, from, to, delta, status, basis, reasonCode, false);
+    }
+  }
 
   public record Result(
       String characterName,
@@ -207,8 +306,71 @@ public class CombatPowerSimulationService {
       int unsupportedCount,
       List<String> assumptions) {}
 
+  private static final List<String> ASSUMPTIONS =
+      List.of(
+          "현재 세팅은 캐릭터 캐시(수집 시각 fetchedAt)를 기준으로 합니다.",
+          "before는 공식 전투력입니다. 계산식이 확정된 항목만 after에 반영하고, 나머지는 UNSUPPORTED로 값 없이 알립니다.",
+          "계산한 항목은 순서대로 적용합니다. contributions[].delta의 합은 delta와 같습니다.");
+
+  private CombatPowerGuard guard;
+
+  /** 2부 대비 막기(계약 2026-11-28). 손으로 만든 시험 객체에는 없다(막지 않음). */
+  @org.springframework.beans.factory.annotation.Autowired
+  void guard(CombatPowerGuard guard) {
+    this.guard = guard;
+  }
+
+  /** 공개 시뮬레이터·전투력 기여의 막기: 막으면 고정 문장, 아니면 null. 스펙업·랭킹이 쓰는 내부 시뮬레이션은 각자 화면 스위치로 막는다. */
+  private String simulatorBlock(CharacterResult result) {
+    return guard != null && guard.blocks(result, CombatPowerGuard.Surface.SIMULATOR)
+        ? CombatPowerGuard.sentence()
+        : null;
+  }
+
+  /**
+   * 공개 시뮬레이터(#300). 막으면 모든 행이 GAME_UPDATE_UNSUPPORTED이고 after = before, delta = 0(계산하지 않은 요청과 같은
+   * 모양).
+   */
   public Result simulate(String characterName, List<Change> changes) {
-    return simulate(snapshot(characterName), changes);
+    var result = snapshot(characterName);
+    var blocked = simulatorBlock(result);
+    // 막으면 바꿀 대상을 읽거나 모델을 만들기 전에 끝낸다(코덱스 P2: 바뀐 원문에서 대상 칸을 못 찾으면 409가 나던 것).
+    if (blocked != null) return blockedResult(result, changes, blocked);
+    return simulate(result, models(result), changes, null);
+  }
+
+  /**
+   * 막은 시뮬레이션: 요청 변경마다(같은 대상은 한 줄) UNSUPPORTED + GAME_UPDATE_UNSUPPORTED. 대상 이름·전후 값은 원문에서 읽지 않으므로
+   * target은 요청 kind, from·to는 null. after·delta·deltaPercent null, before는 공식 값.
+   */
+  private Result blockedResult(CharacterResult result, List<Change> changes, String why) {
+    var rows = new LinkedHashMap<String, Contribution>();
+    for (var change : changes)
+      rows.putIfAbsent(
+          key(change),
+          new Contribution(
+              change.kind().name(),
+              change.kind().name(),
+              null,
+              null,
+              null,
+              Status.UNSUPPORTED,
+              why,
+              CombatPowerReasons.classify(why).code(),
+              false));
+    var official = result.details().profile().combatPower();
+    return new Result(
+        result.details().profile().characterName(),
+        result.fetchedAt(),
+        official == null ? null : official.setScale(2, RoundingMode.HALF_UP),
+        null,
+        null,
+        null,
+        null,
+        true,
+        List.copyOf(rows.values()),
+        rows.size(),
+        ASSUMPTIONS);
   }
 
   /**
@@ -254,6 +416,20 @@ public class CombatPowerSimulationService {
     var loadout = result.details().loadout();
     var official = result.details().profile().combatPower();
     var before = official == null ? null : official.setScale(2, RoundingMode.HALF_UP);
+    var blocked = simulatorBlock(result);
+    // 막으면 모델을 만들기 전에 끝낸다(팔찌가 있으면 그 줄만 UNSUPPORTED + 코드).
+    if (blocked != null) {
+      boolean bracelet =
+          loadout.equipment().stream().anyMatch(item -> item != null && "팔찌".equals(item.type()));
+      return new Contributions(
+          result.details().profile().characterName(),
+          result.fetchedAt(),
+          before,
+          bracelet
+              ? List.of(
+                  new ContributionItem("BRACELET", "팔찌", Status.UNSUPPORTED, null, null, blocked))
+              : List.of());
+    }
     var gemModel = CombatPowerGemModel.of(gemCoefficients, loadout);
     var refineModel =
         CombatPowerRefineModel.of(
@@ -336,12 +512,17 @@ public class CombatPowerSimulationService {
    * 구조라 줄별 합은 전체 값과 같지 않다(줄별 값은 그 줄만 뺀 값). 시뮬레이터 플래그와 무관하고 공식 호출이 없다. 팔찌가 없으면 null.
    */
   public BraceletEfficiency braceletEfficiency(CharacterResult result) {
+    return braceletEfficiency(result, null);
+  }
+
+  /** forcedReason이 있으면 모든 줄을 그 이유로 UNSUPPORTED로 낸다(2부 대비 막기, 검색 카드). 저장용 계산은 막지 않은 값을 쓴다. */
+  public BraceletEfficiency braceletEfficiency(CharacterResult result, String forcedReason) {
     var loadout = result.details().loadout();
     var stats = result.details().profile().stats();
     var bracelet = CombatPowerBraceletModel.of(braceletCoefficients, loadout, stats);
     if (bracelet == null) return null;
     var leapText = bracelet.braceletLeap() > 0 ? "팔찌 도약 +" + bracelet.braceletLeap() : null;
-    String blocked = roleReason(result);
+    String blocked = forcedReason != null ? forcedReason : roleReason(result);
     if (blocked == null && result.details().profile().combatPower() == null)
       blocked = NO_OFFICIAL_BASIS;
     if (blocked != null) {
@@ -409,12 +590,13 @@ public class CombatPowerSimulationService {
       "진화 포인트 합의 전투력 배수(1 + 0.0075 × (포인트 − 40), 40 이하는 1)를 바꾼 비율을 공식 전투력에 곱한 모델값입니다(40~140 사이 포인트당"
           + " 기울기는 한 곳에서만 확인).";
   private static final String ENLIGHTENMENT_BASIS =
-      "깨달음 포인트 합의 전투력 배수(1 + 0.007 × 포인트)를 바꾼 비율을 공식 전투력에 곱했습니다.";
-  private static final String ENLIGHTENMENT_OVER_REASON =
-      "깨달음 포인트 100 초과의 전투력 계산식을 아직 확인하고 있어 계산하지 않았습니다.";
+      "깨달음 포인트 합의 전투력 배수(1 + 0.007 × 포인트, 100까지)를 바꾼 비율을 공식 전투력에 곱했습니다. 101번째 포인트는 전투력이 없습니다(캐릭터 사이 공식 전투력 대조).";
+  private static final String ENLIGHTENMENT_OVER_REASON = "깨달음 포인트가 최대(101)를 넘는 값이라 계산하지 않았습니다.";
   private static final String PASSIVE_UNREAD = "아크 패시브 포인트 합을 읽지 못해 계산하지 않았습니다.";
 
-  /** 트리 포인트 합의 전투력 배수. 계산할 수 없으면(깨달음 100 초과·모르는 트리) null. */
+  /**
+   * 트리 포인트 합의 전투력 배수. 계산할 수 없으면(깨달음 최대 101 초과·모르는 트리) null. 깨달음 101번째 포인트는 계산하되 전투력이 없다(100까지만 센다).
+   */
   private BigDecimal passiveFactor(String tree, int points) {
     if (LEAP.equals(tree))
       return BigDecimal.ONE.add(
@@ -491,13 +673,23 @@ public class CombatPowerSimulationService {
 
   /** models는 같은 result로 만든 것이어야 한다(models(result)). */
   public Result simulate(CharacterResult result, Models models, List<Change> changes) {
+    return simulate(result, models, changes, null);
+  }
+
+  /** forcedReason이 있으면 역할과 상관없이 모든 행을 그 이유로 UNSUPPORTED로 낸다(2부 대비 막기). */
+  private Result simulate(
+      CharacterResult result, Models models, List<Change> changes, String forcedReason) {
     var loadout = result.details().loadout();
     // 같은 대상은 뒤의 변경이 이긴다. 순서는 처음 나온 자리를 지킨다.
     var merged = new LinkedHashMap<String, Planned>();
+    // 카르마 랭크는 같은 요청의 앞 변경 뒤 포인트·랭크에 더한다(계약 초안 2026-11-22 a).
+    var run = new PassiveRun();
     for (var change : changes)
       merged.put(
-          key(change), describe(loadout, models.gem(), models.refine(), models.bracelet(), change));
-    return compute(result, models.gem(), models.refine(), models.bracelet(), merged.values());
+          key(change),
+          describe(loadout, models.gem(), models.refine(), models.bracelet(), change, run));
+    return compute(
+        result, models.gem(), models.refine(), models.bracelet(), merged.values(), forcedReason);
   }
 
   /**
@@ -636,7 +828,8 @@ public class CombatPowerSimulationService {
       CombatPowerGemModel.Model gemModel,
       CombatPowerRefineModel.Model refineModel,
       CombatPowerBraceletModel.Model braceletModel,
-      java.util.Collection<Planned> merged) {
+      java.util.Collection<Planned> merged,
+      String forcedReason) {
     var loadout = result.details().loadout();
     var official = result.details().profile().combatPower();
     // 반올림은 서버에서 끝낸다(PM-프론트 18:31 (g)): 전투력 소수 둘째 자리, deltaPercent 소수 셋째 자리.
@@ -645,13 +838,17 @@ public class CombatPowerSimulationService {
     var weaponAddDamage = CombatPowerEquipmentModel.currentWeaponAddDamage(weaponDetail(loadout));
     var state =
         new State(
-            Map.of(), null, Map.of(), Map.of(), Map.of(), null, Map.of(), Map.of(), Map.of(), null);
+            Map.of(), null, Map.of(), Map.of(), Map.of(), null, Map.of(), Map.of(), Map.of(), null,
+            Map.of());
     var running = before;
     var contributions = new ArrayList<Contribution>();
     int unsupported = 0;
-    var roleReason = roleReason(result);
+    var roleReason = forcedReason != null ? forcedReason : roleReason(result);
+    var gemBlocked = arkGemBlocked(merged);
     for (var planned : merged) {
       String reason = roleReason != null ? roleReason : planned.reason();
+      if (reason == null && planned.effect() instanceof ArkGridGemEffect gem)
+        reason = gemBlocked.get(gem.core().index());
       if (roleReason == null) {
         var hold = heldReason(loadout, braceletModel, planned);
         // 방어구 재련·상급 재련·완갑: 문이 열린 스냅샷이면 계산하고, r이 크면 그 이유로 닫는다(스위치가 꺼져 있으면 지금처럼).
@@ -687,23 +884,23 @@ public class CombatPowerSimulationService {
       contributions.add(planned.unsupported(reason == null ? UNSUPPORTED_BASIS : reason));
     }
     var delta = before == null ? null : running.subtract(before);
+    // 2부 대비 막기(계산 검증 P3, PM 총괄 02:58): 막으면 after·delta·deltaPercent는 0이 아니라 null(계산하지 않음). before는
+    // 공식 값이라 그대로.
+    boolean blocked = forcedReason != null;
     return new Result(
         result.details().profile().characterName(),
         result.fetchedAt(),
         before,
         null,
-        running,
-        delta,
-        before == null || before.signum() == 0
+        blocked ? null : running,
+        blocked ? null : delta,
+        blocked || before == null || before.signum() == 0
             ? null
             : delta.multiply(BigDecimal.valueOf(100)).divide(before, 3, RoundingMode.HALF_UP),
         unsupported > 0,
         List.copyOf(contributions),
         unsupported,
-        List.of(
-            "현재 세팅은 캐릭터 캐시(수집 시각 fetchedAt)를 기준으로 합니다.",
-            "before는 공식 전투력입니다. 계산식이 확정된 항목만 after에 반영하고, 나머지는 UNSUPPORTED로 값 없이 알립니다.",
-            "계산한 항목은 순서대로 적용합니다. contributions[].delta의 합은 delta와 같습니다."));
+        ASSUMPTIONS);
   }
 
   /** 계산할 수 있는 변경의 효과. 보석(칸 → 레벨), 무기 품질(새 추가 피해 %), 방어구 품질(배수 1), 각인(각인서·스톤 레벨, null은 그대로). */
@@ -739,9 +936,51 @@ public class CombatPowerSimulationService {
   /** 깨달음 카르마 레벨: 지금 → 새 레벨. W 항의 무기 공격력 %가 레벨마다 karmaWeaponPctPerLevel만큼 바뀐다. */
   private record KarmaEffect(int current, int next) implements Effect {}
 
+  /** 카르마 배수 종류(모델값, 계산 검증 M13 §3): 진화 랭크 × (1 + c·랭크), 도약 레벨 × (1 + c·레벨). */
+  private enum KarmaFactor {
+    EVOLUTION_RANK,
+    LEAP_LEVEL
+  }
+
+  /** 진화 카르마 랭크·도약 카르마 레벨: 공식 값 → 새 값(독립 배수). */
+  private record KarmaFactorEffect(KarmaFactor factor, int current, int next) implements Effect {}
+
+  /** 지금까지 적용한 카르마 변경(없으면 null 칸). */
+  private record KarmaState(
+      KarmaEffect enlightenment, KarmaFactorEffect evolutionRank, KarmaFactorEffect leapLevel) {
+    static final KarmaState NONE = new KarmaState(null, null, null);
+
+    KarmaState with(KarmaEffect next) {
+      return new KarmaState(next, evolutionRank, leapLevel);
+    }
+
+    KarmaState with(KarmaFactorEffect next) {
+      return next.factor() == KarmaFactor.EVOLUTION_RANK
+          ? new KarmaState(enlightenment, next, leapLevel)
+          : new KarmaState(enlightenment, evolutionRank, next);
+    }
+  }
+
   /** 아크 그리드 코어(slotIndex) 등급·포인트: 지금·바꾼 뒤 코어 계수 C(%). */
   private record ArkGridCoreEffect(int slot, BigDecimal nowPct, BigDecimal nextPct)
       implements Effect {}
+
+  /**
+   * 아크 그리드 젬 교체(M49 G1): 코어(공식 Slots 한 칸)의 젬 하나를 새 포인트·옵션 두 줄로 바꾼다. 같은 요청의 교체는 계산할 때 함께 다시 더한다(옵션
+   * 레벨은 이름별 합, 코어 포인트는 코어별 합).
+   */
+  private record ArkGridGemEffect(
+      CharacterLoadout.GridSlot core,
+      CharacterLoadout.GridGem old,
+      int point,
+      Map<String, Integer> options,
+      List<CharacterLoadout.GridEffect> officialEffects,
+      int required)
+      implements Effect {
+    String key() {
+      return core.index() + ":" + old.index();
+    }
+  }
 
   /** 각인 하나의 각인서·스톤 레벨. */
   private record EngravingLevels(int book, int stone) {}
@@ -757,9 +996,26 @@ public class CombatPowerSimulationService {
       Map<String, PolishEffect> polish,
       Map<Integer, ArkGridCoreEffect> cores,
       Map<String, PassiveEffect> passives,
-      KarmaEffect karma) {
+      KarmaState karma,
+      Map<String, ArkGridGemEffect> arkGems) {
     State apply(Effect effect, Map<String, CharacterLoadout.PassiveEngraving> currents) {
       return switch (effect) {
+        case ArkGridGemEffect gem -> {
+          var next = new HashMap<>(arkGems);
+          next.put(gem.key(), gem);
+          yield new State(
+              gems,
+              weaponAddDamage,
+              engravings,
+              refines,
+              bracelet,
+              armGuard,
+              polish,
+              cores,
+              passives,
+              karma,
+              Map.copyOf(next));
+        }
         case GemEffect gem -> {
           var next = new HashMap<>(gems);
           next.putAll(gem.levels());
@@ -773,7 +1029,8 @@ public class CombatPowerSimulationService {
               polish,
               cores,
               passives,
-              karma);
+              karma,
+              arkGems);
         }
         case WeaponQualityEffect quality ->
             new State(
@@ -786,7 +1043,8 @@ public class CombatPowerSimulationService {
                 polish,
                 cores,
                 passives,
-                karma);
+                karma,
+                arkGems);
         case RefineEffect refine -> {
           var next = new HashMap<>(refines);
           var base = refines.getOrDefault(refine.index(), refine.current());
@@ -805,7 +1063,8 @@ public class CombatPowerSimulationService {
               polish,
               cores,
               passives,
-              karma);
+              karma,
+              arkGems);
         }
         case BraceletEffect line -> {
           var next = new HashMap<>(bracelet);
@@ -820,7 +1079,8 @@ public class CombatPowerSimulationService {
               polish,
               cores,
               passives,
-              karma);
+              karma,
+              arkGems);
         }
         case ArmGuardEffect guard ->
             new State(
@@ -833,7 +1093,8 @@ public class CombatPowerSimulationService {
                 polish,
                 cores,
                 passives,
-                karma);
+                karma,
+                arkGems);
         case NeutralEffect neutral -> this;
         case KarmaEffect next ->
             new State(
@@ -846,7 +1107,21 @@ public class CombatPowerSimulationService {
                 polish,
                 cores,
                 passives,
-                next);
+                (karma == null ? KarmaState.NONE : karma).with(next),
+                arkGems);
+        case KarmaFactorEffect next ->
+            new State(
+                gems,
+                weaponAddDamage,
+                engravings,
+                refines,
+                bracelet,
+                armGuard,
+                polish,
+                cores,
+                passives,
+                (karma == null ? KarmaState.NONE : karma).with(next),
+                arkGems);
         case ArkGridCoreEffect core -> {
           var next = new HashMap<>(cores);
           next.put(core.slot(), core);
@@ -860,7 +1135,8 @@ public class CombatPowerSimulationService {
               polish,
               Map.copyOf(next),
               passives,
-              karma);
+              karma,
+              arkGems);
         }
         case PolishEffect line -> {
           var next = new HashMap<>(polish);
@@ -875,7 +1151,8 @@ public class CombatPowerSimulationService {
               Map.copyOf(next),
               cores,
               passives,
-              karma);
+              karma,
+              arkGems);
         }
         case PassiveEffect next -> {
           var map = new HashMap<>(passives);
@@ -890,7 +1167,8 @@ public class CombatPowerSimulationService {
               polish,
               cores,
               Map.copyOf(map),
-              karma);
+              karma,
+              arkGems);
         }
         case EngravingEffect engraving -> {
           var next = new HashMap<>(engravings);
@@ -917,7 +1195,8 @@ public class CombatPowerSimulationService {
               polish,
               cores,
               passives,
-              karma);
+              karma,
+              arkGems);
         }
       };
     }
@@ -934,7 +1213,15 @@ public class CombatPowerSimulationService {
       String reason) {
     Contribution ok(BigDecimal delta, String okBasis) {
       return new Contribution(
-          change.kind().name(), target, from, to, delta, Status.OK, okBasis, null);
+          change.kind().name(),
+          target,
+          from,
+          to,
+          delta,
+          Status.OK,
+          okBasis,
+          null,
+          modelValue(change));
     }
 
     Contribution unsupported(String why) {
@@ -946,7 +1233,8 @@ public class CombatPowerSimulationService {
           null,
           Status.UNSUPPORTED,
           why,
-          CombatPowerReasons.classify(why).code());
+          CombatPowerReasons.classify(why).code(),
+          modelValue(change));
     }
   }
 
@@ -987,14 +1275,26 @@ public class CombatPowerSimulationService {
           weaponPctDelta.add(line.to().weaponPct().subtract(line.from().weaponPct()), MATH);
     }
     // 깨달음 카르마(PM 총괄 11-15 (f), 딜러만): 레벨마다 무기 공격력 % +0.1%(W 항 안, 3곳 일치).
-    if (state.karma() != null)
+    var enlightenmentKarma = state.karma() == null ? null : state.karma().enlightenment();
+    if (enlightenmentKarma != null)
       weaponPctDelta =
           weaponPctDelta.add(
               refineModel
                   .coefficients()
                   .karmaWeaponPctPerLevel()
-                  .multiply(BigDecimal.valueOf(state.karma().next() - state.karma().current())),
+                  .multiply(
+                      BigDecimal.valueOf(enlightenmentKarma.next() - enlightenmentKarma.current())),
               MATH);
+    // 진화 카르마 랭크·도약 카르마 레벨(모델값, 계산 검증 M13 §3·5a-3): 다른 배수와 독립, 새/지금 비율을 곱한다(배수는 반올림하지 않음).
+    if (state.karma() != null)
+      for (var factor :
+          new KarmaFactorEffect[] {state.karma().evolutionRank(), state.karma().leapLevel()})
+        if (factor != null)
+          ratio =
+              ratio.multiply(
+                  karmaFactor(factor.factor(), factor.next())
+                      .divide(karmaFactor(factor.factor(), factor.current()), MATH),
+                  MATH);
     // 재련 단계와 팔찌·연마·카르마의 무기 공격력은 같은 W 항을 쓴다.
     if (!state.refines().isEmpty()
         || weaponFlatDelta.signum() != 0
@@ -1023,6 +1323,11 @@ public class CombatPowerSimulationService {
           ratio.multiply(
               CombatPowerEquipmentModel.weaponQualityRatio(weaponCurrent, state.weaponAddDamage()),
               MATH);
+    }
+    if (!state.arkGems().isEmpty()) {
+      var gemRatio = arkGemRatio(state);
+      if (gemRatio == null) return null;
+      ratio = ratio.multiply(gemRatio, MATH);
     }
     // 아크 그리드 코어(계산 검증 11-02): 코어 배수는 다른 항목과 독립이라 (1 + C(new)/100) / (1 + C(now)/100)를 곱한다.
     for (var core : state.cores().values())
@@ -1055,6 +1360,93 @@ public class CombatPowerSimulationService {
               entry.getValue().stone());
       if (before == null || after == null) return null;
       ratio = ratio.multiply(after.divide(before, MATH), MATH);
+    }
+    return ratio;
+  }
+
+  /**
+   * 아크 그리드 젬 교체 배수(M49 G1, 계산 검증 11-22). 공식 ArkGrid.Effects 레벨에서 바꾼 젬들의 옵션 레벨을 이름별로 빼고(활성 젬만) 새 옵션을
+   * 더해 젬 옵션 배수를 다시 구하고, 코어마다 공식 포인트에서 바꾼 젬의 포인트를 빼고(활성 젬만) 새 포인트를 더해 코어 배수를 다시 구한다. 두 배수는 독립이라 곱한다.
+   * 같은 요청에서 그 코어의 등급·포인트도 바꾸면(ARK_GRID_CORE) 함께 계산하지 않는다(null). 교체로 의지력이 남아 뒤 슬롯의 꺼진 젬이 켜지면(공식 활성화
+   * 규칙이 지금 IsActive를 재현할 때만) 그 젬의 옵션·코어 포인트도 더한다.
+   */
+  private BigDecimal arkGemRatio(State state) {
+    var official = state.arkGems().values().iterator().next().officialEffects();
+    var levels = new LinkedHashMap<String, Integer>();
+    for (var effect : official) {
+      if (effect == null || effect.name() == null || effect.level() == null) return null;
+      levels.merge(effect.name().strip(), effect.level(), Integer::sum);
+    }
+    var points = new LinkedHashMap<Integer, Integer>();
+    var slots = new LinkedHashMap<Integer, CharacterLoadout.GridSlot>();
+    for (var swap : state.arkGems().values()) {
+      int index = swap.core().index();
+      if (state.cores().containsKey(index)) return null;
+      slots.putIfAbsent(index, swap.core());
+      points.putIfAbsent(index, swap.core().point());
+      if (Boolean.TRUE.equals(swap.old().active())) {
+        // 코어 포인트는 젬의 질서·혼돈 포인트(공식 '혼돈 포인트 : 4')다. 젬 포인트(총합 '젬 포인트 : 15')가 아니다(#1079 계산 검증 P0).
+        points.merge(index, -swap.old().detail().corePoint(), Integer::sum);
+        for (var option : swap.old().detail().options())
+          levels.merge(option.name().strip(), -option.level(), Integer::sum);
+      }
+      points.merge(index, swap.point(), Integer::sum);
+      swap.options().forEach((name, level) -> levels.merge(name, level, Integer::sum));
+    }
+    // 교체로 의지력이 남아 뒤 슬롯의 꺼진 젬이 켜지면 그 젬의 옵션·코어 포인트를 더한다(공식 활성화 규칙이 지금 IsActive를 재현할 때만, #1079 대체 리뷰
+    // P3-2). 켜져 있던 젬이 꺼지는 경우는 arkGemBlocked가 의지력 부족으로 이미 막았다.
+    var byCore = new LinkedHashMap<Integer, List<ArkGridGemEffect>>();
+    for (var swap : state.arkGems().values())
+      byCore.computeIfAbsent(swap.core().index(), key -> new ArrayList<>()).add(swap);
+    for (var entry : byCore.entrySet()) {
+      var core = slots.get(entry.getKey());
+      var after = activeAfter(core, entry.getValue());
+      if (after == null) continue;
+      var swapped = new java.util.HashSet<Integer>();
+      for (var swap : entry.getValue()) swapped.add(swap.old().index());
+      for (var gem : core.gems()) {
+        if (gem == null || swapped.contains(gem.index()) || Boolean.TRUE.equals(gem.active()))
+          continue;
+        if (!after.contains(gem.index())) continue;
+        // 꺼진 젬은 gemUnreadable이 보지 않으므로 여기서 값을 확인한다(읽지 못하면 계산하지 않음 — 500이 아니라, #1109 대체 리뷰 P2).
+        if (gem.detail().corePoint() == null) return null;
+        for (var option : gem.detail().options())
+          if (option == null || option.name() == null || option.level() == null) return null;
+        points.merge(entry.getKey(), gem.detail().corePoint(), Integer::sum);
+        for (var option : gem.detail().options())
+          levels.merge(option.name().strip(), option.level(), Integer::sum);
+      }
+    }
+    var after = new ArrayList<CharacterLoadout.GridEffect>();
+    for (var entry : levels.entrySet()) {
+      if (entry.getValue() < 0) return null;
+      if (entry.getValue() > 0)
+        after.add(new CharacterLoadout.GridEffect(entry.getKey(), entry.getValue(), null, null));
+    }
+    var now = CombatPowerArkGridModel.gems(arkGridCoefficients, official);
+    var next = CombatPowerArkGridModel.gems(arkGridCoefficients, after);
+    if (now.ratio() == null || next.ratio() == null) return null;
+    var ratio = next.ratio().divide(now.ratio(), MATH);
+    for (var entry : slots.entrySet()) {
+      var slot = entry.getValue();
+      var moved =
+          new CharacterLoadout.GridSlot(
+              slot.index(),
+              slot.icon(),
+              slot.name(),
+              points.get(entry.getKey()),
+              slot.grade(),
+              slot.gems(),
+              slot.core(),
+              slot.lines());
+      var before = CombatPowerArkGridModel.core(arkGridCoefficients, slot);
+      var target = CombatPowerArkGridModel.core(arkGridCoefficients, moved);
+      if (before.reason() != null || target.reason() != null) return null;
+      ratio =
+          ratio.multiply(
+              CombatPowerArkGridModel.factor(target.pct())
+                  .divide(CombatPowerArkGridModel.factor(before.pct()), MATH),
+              MATH);
     }
     return ratio;
   }
@@ -1126,9 +1518,13 @@ public class CombatPowerSimulationService {
       case BRACELET_EFFECT -> "BRACELET:" + change.line();
       case ENGRAVING_LEVEL -> "ENGRAVING:" + change.name();
       case STONE_ENGRAVING -> "STONE:" + change.name();
-      case ARK_PASSIVE_POINT -> karmaChange(change) ? "KARMA" : "ARK_PASSIVE:" + change.tree();
+      case ARK_PASSIVE_POINT ->
+          change.karmaRank() != null
+              ? "KARMA_RANK:" + change.tree()
+              : karmaChange(change) ? "KARMA:" + change.tree() : "ARK_PASSIVE:" + change.tree();
       case ARK_GRID_CORE -> "ARK_GRID:" + change.slotIndex();
       case ARM_GUARD -> "ARM_GUARD";
+      case ARK_GRID_GEM -> "ARK_GRID_GEM:" + change.slotIndex() + ":" + change.index();
     };
   }
 
@@ -1137,10 +1533,13 @@ public class CombatPowerSimulationService {
       CombatPowerGemModel.Model gemModel,
       CombatPowerRefineModel.Model refineModel,
       CombatPowerBraceletModel.Model braceletModel,
-      Change change) {
+      Change change,
+      PassiveRun run) {
     if (change.kind() == null) throw invalid("kind가 필요합니다.");
     if (change.karmaLevel() != null && change.kind() != Kind.ARK_PASSIVE_POINT)
-      throw invalid("karmaLevel은 ARK_PASSIVE_POINT(tree 깨달음)에만 쓸 수 있습니다.");
+      throw invalid("karmaLevel은 ARK_PASSIVE_POINT(tree 깨달음·도약)에만 쓸 수 있습니다.");
+    if (change.karmaRank() != null && change.kind() != Kind.ARK_PASSIVE_POINT)
+      throw invalid("karmaRank는 ARK_PASSIVE_POINT에만 쓸 수 있습니다.");
     return switch (change.kind()) {
       case GEM_LEVEL_ALL -> {
         range("level", change.level(), 0, 10);
@@ -1363,12 +1762,18 @@ public class CombatPowerSimulationService {
             engraving);
       }
       case ARK_PASSIVE_POINT -> {
+        // points·karmaRank·karmaLevel 가운데 하나만(계약 초안 2026-11-22 §1).
+        if (change.karmaRank() != null
+            && (change.points() != null || change.karmaLevel() != null || change.level() != null))
+          throw invalid("karmaRank는 points·karmaLevel·level과 함께 쓸 수 없습니다.");
+        if (change.karmaRank() != null) yield karmaRank(loadout, change, run);
         if (change.karmaLevel() != null) {
-          // 깨달음 카르마 레벨은 자기 필드로만(포인트·level과 섞지 않음, PM 총괄 11-19).
-          if (!ENLIGHTENMENT.equals(change.tree()))
-            throw invalid("karmaLevel은 tree 깨달음에만 쓸 수 있습니다.");
+          // 카르마 레벨은 자기 필드로만(포인트·level과 섞지 않음, PM 총괄 11-19). 깨달음은 W 항, 도약은 모델값 배수, 진화는 근거 없음(400).
+          if (!ENLIGHTENMENT.equals(change.tree()) && !LEAP.equals(change.tree()))
+            throw invalid("karmaLevel은 tree 깨달음·도약에만 쓸 수 있습니다.");
           if (change.points() != null || change.level() != null)
             throw invalid("karmaLevel은 points·level과 함께 쓸 수 없습니다.");
+          if (LEAP.equals(change.tree())) yield leapKarmaLevel(loadout, change);
           yield karma(loadout, refineModel, change, change.karmaLevel(), karmaCpEnabled);
         }
         range("points", change.points(), 0, 999);
@@ -1395,6 +1800,7 @@ public class CombatPowerSimulationService {
         // 깨달음 포인트 최대 101(계수 리소스 enlightenmentLimitPoints): 넘으면 400, 100 초과는 계산하지 않음(아래).
         if (ENLIGHTENMENT.equals(point.name()))
           range("points", change.points(), 0, arkPassiveCoefficients.enlightenmentLimitPoints());
+        run.setPoints(point.name(), change.points());
         var target = "아크 패시브 " + point.name();
         var from = str(point.value());
         var to = str(change.points());
@@ -1470,8 +1876,428 @@ public class CombatPowerSimulationService {
             ARK_GRID_BASIS,
             reason);
       }
+      case ARK_GRID_GEM -> arkGridGem(loadout, change);
     };
   }
+
+  /**
+   * 젬 종류 → 그 종류가 가질 수 있는 옵션 4종(공식 확률 정보 '젬 가공, 젬 융합' 2025-08-20, 공지 13204). 질서 코어는 안정·견고·불변, 혼돈 코어는
+   * 침식·왜곡·붕괴.
+   */
+  static final Map<String, List<String>> GEM_TYPE_OPTIONS =
+      Map.of(
+          "안정", List.of("공격력", "추가 피해", "아군 피해 강화", "낙인력"),
+          "침식", List.of("공격력", "추가 피해", "아군 피해 강화", "낙인력"),
+          "견고", List.of("공격력", "보스 피해", "아군 피해 강화", "아군 공격 강화"),
+          "왜곡", List.of("공격력", "보스 피해", "아군 피해 강화", "아군 공격 강화"),
+          "불변", List.of("추가 피해", "보스 피해", "낙인력", "아군 공격 강화"),
+          "붕괴", List.of("추가 피해", "보스 피해", "낙인력", "아군 공격 강화"));
+
+  /** 젬 종류 → 기본 필요 의지력(공지 13204: 안정·침식 8, 견고·왜곡 9, 불변·붕괴 10). 필요 의지력 = 기본 − 의지력 효율. */
+  static final Map<String, Integer> GEM_TYPE_BASE_WILL =
+      Map.of("안정", 8, "침식", 8, "견고", 9, "왜곡", 9, "불변", 10, "붕괴", 10);
+
+  private static final List<String> ORDER_GEM_TYPES = List.of("안정", "견고", "불변");
+  private static final List<String> CHAOS_GEM_TYPES = List.of("침식", "왜곡", "붕괴");
+
+  /**
+   * 아크 그리드 젬 교체(M49 G1, 계산 검증 11-22 명세). 코어(slotIndex = 공식 Slots Index)의 젬(index = 공식 Gems Index)을
+   * 새 젬으로 바꾼다. 바꾼 뒤 그 코어의 활성 젬 필요 의지력 합이 공급 의지력을 넘으면 어느 젬이 꺼질지 공식 문구가 없어 계산하지
+   * 않는다(ARK_GRID_WILL_SHORT).
+   */
+  private Planned arkGridGem(CharacterLoadout loadout, Change change) {
+    var swap = change.gem();
+    if (swap == null) throw invalid("ARK_GRID_GEM에는 gemType·willEfficiency·effects가 있어야 합니다.");
+    // 빠지거나 음수인 칸 번호는 요청 오류(400)다. 없는 칸은 409(#1079 코드 리뷰 P3).
+    range("slotIndex", change.slotIndex(), 0, 99);
+    range("index", change.index(), 0, 99);
+    range("point", change.point(), 1, 5);
+    range("willEfficiency", swap.willEfficiency(), 1, 5);
+    var pool = swap.gemType() == null ? null : GEM_TYPE_OPTIONS.get(swap.gemType());
+    if (pool == null) throw invalid("gemType은 " + GEM_TYPE_BASE_WILL.keySet() + " 중 하나여야 합니다.");
+    if (swap.effects() == null || swap.effects().size() != 2)
+      throw invalid("effects는 옵션 두 줄이어야 합니다.");
+    var options = new LinkedHashMap<String, Integer>();
+    for (var effect : swap.effects()) {
+      if (effect == null || effect.name() == null || !pool.contains(effect.name().strip()))
+        throw invalid(swap.gemType() + " 젬의 옵션은 " + pool + " 중 하나여야 합니다.");
+      range("effects.level", effect.level(), 1, 5);
+      if (options.put(effect.name().strip(), effect.level()) != null)
+        throw invalid("effects의 두 옵션은 서로 달라야 합니다.");
+    }
+    var grid = loadout.arkGrid();
+    var slot =
+        grid == null
+            ? null
+            : grid.slots().stream()
+                .filter(item -> item != null && Objects.equals(change.slotIndex(), item.index()))
+                .findFirst()
+                .orElse(null);
+    if (slot == null) throw notFound("아크 그리드 slotIndex " + change.slotIndex());
+    var series = slot.name() == null ? "" : slot.name().strip();
+    var allowed =
+        series.startsWith("질서")
+            ? ORDER_GEM_TYPES
+            : series.startsWith("혼돈") ? CHAOS_GEM_TYPES : List.<String>of();
+    if (!allowed.contains(swap.gemType()))
+      throw invalid("이 코어(" + slot.name() + ")에는 " + allowed + " 젬만 넣을 수 있습니다.");
+    var old =
+        slot.gems() == null
+            ? null
+            : slot.gems().stream()
+                .filter(item -> item != null && Objects.equals(change.index(), item.index()))
+                .findFirst()
+                .orElse(null);
+    if (old == null)
+      throw notFound("아크 그리드 slotIndex " + change.slotIndex() + " 젬 index " + change.index());
+    // 화면 표시는 1부터(웹 편집기·순위와 같게, 프론트2 11-22). 요청의 index는 공식 Gems Index(0부터) 그대로.
+    var target = slot.name() + " 젬 " + (change.index() + 1);
+    var from = gemText(old);
+    var to =
+        swap.gemType()
+            + " "
+            + change.point()
+            + "P "
+            + String.join(
+                " · ",
+                options.entrySet().stream().map(e -> e.getKey() + " " + e.getValue()).toList());
+    var unreadable = gemUnreadable(slot, old, grid);
+    if (unreadable != null)
+      return new Planned(change, target, from, to, null, ARK_GRID_BASIS, unreadable);
+    // 의지력은 같은 요청의 그 코어 교체를 모두 반영한 뒤에 본다(compute의 arkGemBlocked, #1079 코드 리뷰).
+    return new Planned(
+        change,
+        target,
+        from,
+        to,
+        new ArkGridGemEffect(
+            slot,
+            old,
+            change.point(),
+            Map.copyOf(options),
+            grid.effects(),
+            GEM_TYPE_BASE_WILL.get(swap.gemType()) - swap.willEfficiency()),
+        ARK_GRID_BASIS,
+        null);
+  }
+
+  private static final String ARK_GRID_GEM_CORE_CONFLICT =
+      "같은 코어의 등급·포인트 변경과 젬 교체를 함께 계산하지 않았습니다. 하나씩 확인해 주세요.";
+
+  /**
+   * 젬 교체를 계산하지 않을 이유(코어 index → 이유). 같은 요청의 그 코어 교체를 모두 반영한 필요 의지력 합(바꾸지 않은 활성 젬 + 새 젬)이 공급 의지력을
+   * 넘으면 ARK_GRID_WILL_SHORT(어느 젬이 꺼질지 공식 문구가 없다), 같은 코어의 ARK_GRID_CORE와 함께 오면 그 조합은 계산하지 않는다. 그 코어의
+   * 교체를 모두 함께 계산할 수 없으면(코어 계수 미확인·혼돈의 별 : 무기 등) 그 코어의 교체는 모두 같은 이유로 계산하지 않는다 — 하나만 빠지고 나머지가 계산되면
+   * 의지력 판정의 전제(코어의 교체 전부)가 깨진다(#1079 대체 리뷰 P3). 코어마다 되어도 여러 코어의 교체를 함께 계산할 수 없으면(옵션 합은 그리드 전체) 남은 젬
+   * 교체를 모두 같은 이유로 계산하지 않는다(#1083 대체 리뷰 P3).
+   */
+  private Map<Integer, String> arkGemBlocked(java.util.Collection<Planned> merged) {
+    var swaps = new LinkedHashMap<Integer, List<ArkGridGemEffect>>();
+    var cores = new java.util.HashSet<Integer>();
+    for (var planned : merged) {
+      if (planned.effect() instanceof ArkGridGemEffect gem)
+        swaps.computeIfAbsent(gem.core().index(), key -> new ArrayList<>()).add(gem);
+      if (planned.effect() instanceof ArkGridCoreEffect core) cores.add(core.slot());
+    }
+    var blocked = new LinkedHashMap<Integer, String>();
+    for (var entry : swaps.entrySet()) {
+      if (cores.contains(entry.getKey())) {
+        blocked.put(entry.getKey(), ARK_GRID_GEM_CORE_CONFLICT);
+        continue;
+      }
+      var core = entry.getValue().getFirst().core();
+      var after = activeAfter(core, entry.getValue());
+      if (after != null) {
+        // 공식 활성화 규칙(한 번 차례로 훑기)이 지금 IsActive를 재현하면: 켜져 있던 젬이나 새 젬이 하나라도 꺼지면 의지력 부족(어느 젬이 꺼지는지의
+        // 계산은 슬롯 순서 확인 전까지 하지 않는다 — PM 총괄 11-22, 범위 (a)). 뒤 슬롯 젬이 새로 켜지는 것은 arkGemRatio가 더한다.
+        boolean starved = false;
+        var swapped = new java.util.HashSet<Integer>();
+        for (var swap : entry.getValue()) swapped.add(swap.old().index());
+        for (var gem : core.gems()) {
+          if (gem == null || gem.index() == null) continue;
+          boolean wasOn = swapped.contains(gem.index()) || Boolean.TRUE.equals(gem.active());
+          if (wasOn && !after.contains(gem.index())) starved = true;
+        }
+        if (starved) {
+          blocked.put(entry.getKey(), CombatPowerReasons.ARK_GRID_WILL_SHORT.text());
+          continue;
+        }
+      } else {
+        // 규칙이 지금 상태를 재현하지 못하면(또는 값을 읽지 못하면) 전처럼 합으로만 본다.
+        var replaced = new java.util.HashSet<Integer>();
+        int required = 0;
+        for (var swap : entry.getValue()) {
+          replaced.add(swap.old().index());
+          required += swap.required();
+        }
+        for (var gem : core.gems())
+          if (gem != null && !replaced.contains(gem.index()) && Boolean.TRUE.equals(gem.active()))
+            required += gem.detail().requiredWillpower();
+        if (required > core.core().supplyWillpower()) {
+          blocked.put(entry.getKey(), CombatPowerReasons.ARK_GRID_WILL_SHORT.text());
+          continue;
+        }
+      }
+      // 그 코어의 교체만 담은 상태로 미리 계산해 본다. 안 되면 코어 계수의 이유(있으면) 또는 일반 이유로 코어 전체를 막는다.
+      var only = new LinkedHashMap<String, ArkGridGemEffect>();
+      for (var swap : entry.getValue()) only.put(swap.key(), swap);
+      var trial =
+          new State(
+              Map.of(),
+              null,
+              Map.of(),
+              Map.of(),
+              Map.of(),
+              null,
+              Map.of(),
+              Map.of(),
+              Map.of(),
+              null,
+              Map.copyOf(only));
+      if (arkGemRatio(trial) == null) {
+        var reason = CombatPowerArkGridModel.core(arkGridCoefficients, core).reason();
+        blocked.put(entry.getKey(), reason != null ? reason : ARK_GRID_GEM_UNCOMPUTABLE);
+      }
+    }
+    // 옵션 합은 그리드 전체에서 더하므로, 코어마다 되어도 함께는 안 될 수 있다. 막히지 않은 교체를 모두 담아 한 번 더 계산해 보고, 안 되면 모두
+    // 막는다(앞 코어만 계산되고 뒤 코어만 빠지지 않게, #1083 대체 리뷰 P3).
+    var remaining = new LinkedHashMap<String, ArkGridGemEffect>();
+    for (var entry : swaps.entrySet())
+      if (!blocked.containsKey(entry.getKey()))
+        for (var swap : entry.getValue()) remaining.put(swap.key(), swap);
+    long remainingCores =
+        swaps.keySet().stream().filter(index -> !blocked.containsKey(index)).count();
+    if (remainingCores > 1) {
+      var together =
+          new State(
+              Map.of(),
+              null,
+              Map.of(),
+              Map.of(),
+              Map.of(),
+              null,
+              Map.of(),
+              Map.of(),
+              Map.of(),
+              null,
+              Map.copyOf(remaining));
+      if (arkGemRatio(together) == null)
+        for (var index : swaps.keySet())
+          if (!blocked.containsKey(index)) blocked.put(index, ARK_GRID_GEM_CROSS_CORE_UNCOMPUTABLE);
+    }
+    return blocked;
+  }
+
+  /**
+   * 그 코어의 교체를 반영한 뒤 켜지는 젬 Index(공식 활성화 규칙, {@link
+   * com.loakraken.character.domain.ArkGridActivation}). 규칙이 지금 공식 IsActive를 그대로 재현하지 못하거나(슬롯 순서가 다를
+   * 수 있다) 공급·필요 의지력·활성 여부를 읽지 못하면 null — 그때는 젬을 새로 켜지 않는다(#1079 대체 리뷰 P3-2, PM 총괄 11-22).
+   */
+  private static java.util.Set<Integer> activeAfter(
+      CharacterLoadout.GridSlot core, List<ArkGridGemEffect> swaps) {
+    if (core.core() == null || core.core().supplyWillpower() == null) return null;
+    var byIndex = new java.util.HashMap<Integer, ArkGridGemEffect>();
+    for (var swap : swaps) byIndex.put(swap.old().index(), swap);
+    var now = new java.util.HashMap<Integer, Integer>();
+    var next = new java.util.HashMap<Integer, Integer>();
+    var official = new java.util.TreeSet<Integer>();
+    for (var gem : core.gems()) {
+      if (gem == null
+          || gem.index() == null
+          || gem.active() == null
+          || gem.detail() == null
+          || gem.detail().requiredWillpower() == null) return null;
+      now.put(gem.index(), gem.detail().requiredWillpower());
+      if (gem.active()) official.add(gem.index());
+      var swap = byIndex.get(gem.index());
+      next.put(gem.index(), swap == null ? gem.detail().requiredWillpower() : swap.required());
+    }
+    int supply = core.core().supplyWillpower();
+    if (!com.loakraken.character.domain.ArkGridActivation.active(supply, now).equals(official))
+      return null;
+    return com.loakraken.character.domain.ArkGridActivation.active(supply, next);
+  }
+
+  private static final String ARK_GRID_GEM_CROSS_CORE_UNCOMPUTABLE =
+      "여러 코어의 젬 교체를 함께 계산하지 못해(옵션 합을 다시 더할 수 없음) 계산하지 않았습니다.";
+
+  /**
+   * M49 2단계: 한 코어 칸(slotIndex)의 젬 하나(gemIndex)를 type 젬으로 바꿀 때의 G1 값 표. 공식 호출 없음. 바꾼 뒤 전투력 비율 =
+   * gemsRatio(이름 쌍·레벨) × coreRatio(포인트) — G1(ARK_GRID_GEM)과 같은 계산(공식 옵션 합에서 옛 젬 몫을 빼고 새 옵션을 더한 젬 옵션
+   * 배수, 코어 포인트를 바꾼 코어 배수). 새 젬이 켜지는지는 의지력 효율만으로 정해진다(willFits). reason이 있으면 이 칸은 계산할 수 없다.
+   */
+  public record GemSwapEvaluator(
+      int slotIndex,
+      int gemIndex,
+      String type,
+      List<String> options,
+      int minWillEfficiency,
+      double[] coreRatio,
+      Map<String, double[][]> gemsRatio,
+      String reason) {
+    /** 의지력 효율 w(1~5)에서 그 코어의 필요 의지력 합이 공급 안에 드는지. */
+    public boolean willFits(int willEfficiency) {
+      return willEfficiency >= minWillEfficiency;
+    }
+
+    /** 바꾼 뒤 전투력 비율(point 1~5, 두 옵션 이름·레벨 1~5). 계산할 수 없으면 NaN. */
+    public double ratio(int point, String first, int firstLevel, String second, int secondLevel) {
+      var table = gemsRatio.get(pairKey(first, second));
+      if (table == null || reason != null) return Double.NaN;
+      boolean ordered = first.compareTo(second) <= 0;
+      double gems = ordered ? table[firstLevel][secondLevel] : table[secondLevel][firstLevel];
+      return gems * coreRatio[point];
+    }
+
+    static String pairKey(String a, String b) {
+      return a.compareTo(b) <= 0 ? a + "|" + b : b + "|" + a;
+    }
+  }
+
+  /** 젬 교체 순위(M49 2단계)용 G1 값 표. 칸·젬이 없으면 null, 계산할 수 없으면 reason이 있는 표. */
+  public GemSwapEvaluator gemSwapEvaluator(
+      CharacterResult result, int slotIndex, int gemIndex, String type) {
+    var loadout = result.details().loadout();
+    var grid = loadout.arkGrid();
+    if (grid == null || grid.slots() == null) return null;
+    var slot =
+        grid.slots().stream()
+            .filter(item -> item != null && item.index() != null && item.index() == slotIndex)
+            .findFirst()
+            .orElse(null);
+    if (slot == null || slot.gems() == null) return null;
+    var old =
+        slot.gems().stream()
+            .filter(item -> item != null && item.index() != null && item.index() == gemIndex)
+            .findFirst()
+            .orElse(null);
+    if (old == null) return null;
+    var options = GEM_TYPE_OPTIONS.get(type);
+    if (options == null) return null;
+    var unreadable = gemUnreadable(slot, old, grid);
+    if (unreadable != null)
+      return new GemSwapEvaluator(
+          slotIndex, gemIndex, type, options, 6, null, Map.of(), unreadable);
+    boolean active = Boolean.TRUE.equals(old.active());
+    // 의지력: 바꾸지 않은 활성 젬 + 새 젬(종류 기본값 − 효율) ≤ 공급.
+    int others = 0;
+    for (var gem : slot.gems())
+      if (gem != null
+          && !Objects.equals(gem.index(), gemIndex)
+          && Boolean.TRUE.equals(gem.active())) others += gem.detail().requiredWillpower();
+    int room = slot.core().supplyWillpower() - others;
+    int minWill = Math.max(1, GEM_TYPE_BASE_WILL.get(type) - room);
+    // 코어 배수: 공식 코어 포인트 − 옛 젬(활성) + 새 포인트.
+    var before = CombatPowerArkGridModel.core(arkGridCoefficients, slot);
+    if (before.reason() != null)
+      return new GemSwapEvaluator(
+          slotIndex, gemIndex, type, options, 6, null, Map.of(), before.reason());
+    var coreRatio = new double[6];
+    int base = slot.point() - (active ? old.detail().corePoint() : 0);
+    for (int point = 1; point <= 5; point++) {
+      var moved =
+          new CharacterLoadout.GridSlot(
+              slot.index(),
+              slot.icon(),
+              slot.name(),
+              base + point,
+              slot.grade(),
+              slot.gems(),
+              slot.core(),
+              slot.lines());
+      var target = CombatPowerArkGridModel.core(arkGridCoefficients, moved);
+      if (target.reason() != null)
+        return new GemSwapEvaluator(
+            slotIndex, gemIndex, type, options, 6, null, Map.of(), target.reason());
+      coreRatio[point] =
+          CombatPowerArkGridModel.factor(target.pct())
+              .divide(CombatPowerArkGridModel.factor(before.pct()), MATH)
+              .doubleValue();
+    }
+    // 젬 옵션 배수: 공식 옵션 합 − 옛 젬 옵션(활성) + 새 두 옵션.
+    var official = grid.effects();
+    var levels = new LinkedHashMap<String, Integer>();
+    for (var effect : official) levels.merge(effect.name().strip(), effect.level(), Integer::sum);
+    if (active)
+      for (var option : old.detail().options())
+        levels.merge(option.name().strip(), -option.level(), Integer::sum);
+    var now = CombatPowerArkGridModel.gems(arkGridCoefficients, official);
+    if (now.ratio() == null)
+      return new GemSwapEvaluator(
+          slotIndex, gemIndex, type, options, 6, null, Map.of(), ARK_GRID_GEM_UNCOMPUTABLE);
+    var gemsRatio = new LinkedHashMap<String, double[][]>();
+    for (int i = 0; i < options.size(); i++)
+      for (int j = i + 1; j < options.size(); j++) {
+        var a = options.get(i).compareTo(options.get(j)) <= 0 ? options.get(i) : options.get(j);
+        var b = a.equals(options.get(i)) ? options.get(j) : options.get(i);
+        var table = new double[6][6];
+        for (int la = 1; la <= 5; la++)
+          for (int lb = 1; lb <= 5; lb++) {
+            var after = new LinkedHashMap<>(levels);
+            after.merge(a, la, Integer::sum);
+            after.merge(b, lb, Integer::sum);
+            var effects = new ArrayList<CharacterLoadout.GridEffect>();
+            boolean negative = false;
+            for (var entry : after.entrySet()) {
+              if (entry.getValue() < 0) negative = true;
+              if (entry.getValue() > 0)
+                effects.add(
+                    new CharacterLoadout.GridEffect(entry.getKey(), entry.getValue(), null, null));
+            }
+            var next = negative ? null : CombatPowerArkGridModel.gems(arkGridCoefficients, effects);
+            table[la][lb] =
+                next == null || next.ratio() == null
+                    ? Double.NaN
+                    : next.ratio().divide(now.ratio(), MATH).doubleValue();
+          }
+        gemsRatio.put(GemSwapEvaluator.pairKey(a, b), table);
+      }
+    return new GemSwapEvaluator(
+        slotIndex, gemIndex, type, options, minWill, coreRatio, Map.copyOf(gemsRatio), null);
+  }
+
+  private static final String ARK_GRID_GEM_UNCOMPUTABLE =
+      "이 코어의 젬 교체를 함께 계산하지 못해(옵션 합·코어 포인트를 다시 더할 수 없음) 계산하지 않았습니다.";
+
+  /** 젬 교체에 필요한 공식 값(활성 여부, 포인트, 필요 의지력, 옵션, 코어 공급 의지력, 옵션 합)을 읽지 못했으면 이유. */
+  private static String gemUnreadable(
+      CharacterLoadout.GridSlot slot, CharacterLoadout.GridGem old, CharacterLoadout.ArkGrid grid) {
+    if (slot.point() == null || slot.core() == null || slot.core().supplyWillpower() == null)
+      return GEM_UNREADABLE;
+    if (grid.effects() == null || grid.effects().isEmpty()) return GEM_UNREADABLE;
+    for (var gem : slot.gems()) {
+      if (gem == null || gem.active() == null) return GEM_UNREADABLE;
+      if (!Boolean.TRUE.equals(gem.active())) continue;
+      var detail = gem.detail();
+      if (detail == null
+          || detail.corePoint() == null
+          || detail.requiredWillpower() == null
+          || detail.options() == null) return GEM_UNREADABLE;
+      for (var option : detail.options())
+        if (option == null || option.name() == null || option.level() == null)
+          return GEM_UNREADABLE;
+    }
+    return null;
+  }
+
+  private static String gemText(CharacterLoadout.GridGem gem) {
+    var detail = gem.detail();
+    if (detail == null) return "젬 " + gem.index();
+    var options =
+        detail.options() == null
+            ? ""
+            : String.join(
+                " · ",
+                detail.options().stream()
+                    .filter(Objects::nonNull)
+                    .map(option -> option.name() + " " + option.level())
+                    .toList());
+    return (detail.name() == null ? "" : detail.name().replaceFirst("^.*: ", "") + " ")
+        + (detail.corePoint() == null ? "" : detail.corePoint() + "P ")
+        + options;
+  }
+
+  private static final String GEM_UNREADABLE = "젬 포인트·필요 의지력·옵션을 읽지 못해 계산하지 않았습니다.";
 
   /**
    * 방어구 재련·상급 재련·팔 보호구처럼 전투력을 아직 계산하지 않는(UNSUPPORTED, 주 스탯 경로 확인 전) 변경인지. heldReason과 같은 규칙(팔찌 줄은
@@ -1660,8 +2486,143 @@ public class CombatPowerSimulationService {
     return name.endsWith("%") ? name.substring(0, name.length() - 1).strip() : name;
   }
 
-  /** 깨달음 카르마 레벨 최대(공식 가이드 아크 패시브: 랭크마다 레벨 1~30). */
+  /**
+   * 카르마 레벨 최대(요청 상한). 공식 가이드 아크 패시브(2026-06-24)에는 숫자가 없다('랭크 단계별로 성장 가능한 레벨 구간이 다르게 적용') — 저장한 공식
+   * 원문 82개에서 세 트리 모두 레벨 1~30, 30을 넘는 값 없음(계산 검증 2026-11-22). 랭크 × 레벨 교차 검사는 하지 않는다(공개되지 않음).
+   */
   static final int KARMA_MAX_LEVEL = 30;
+
+  private static final String ENLIGHTENMENT_RANK_BASIS =
+      "깨달음 카르마 랭크마다 깨달음 포인트 +1(공식 가이드)로 바꾼 포인트 합의 전투력 배수(1 + 0.007 × 포인트, 100까지)의 비율을 공식 전투력에 곱했습니다.";
+  private static final String LEAP_RANK_BASIS =
+      "도약 카르마 랭크마다 도약 포인트 +2(공식 가이드)로 바꾼 포인트 합의 전투력 배수(1 + 0.002 × 포인트)의 비율을 공식 전투력에 곱했습니다.";
+  private static final String EVOLUTION_RANK_BASIS =
+      "진화 카르마 랭크의 전투력 배수(1 + 0.006 × 랭크)를 바꾼 비율을 공식 전투력에 곱한 모델값입니다(비교 기준 한 곳의 식, 다른 배수와 독립).";
+  private static final String LEAP_LEVEL_BASIS =
+      "도약 카르마 레벨의 전투력 배수(1 + 0.0002 × 레벨)를 바꾼 비율을 공식 전투력에 곱한 모델값입니다(비교 기준 한 곳의 식, 다른 배수와 독립).";
+  private static final String KARMA_RANK_UNREAD = "카르마 랭크를 읽지 못해 계산하지 않았습니다.";
+  private static final String LEAP_LEVEL_UNREAD = "도약 카르마 레벨을 읽지 못해 계산하지 않았습니다.";
+  private static final String KARMA_INPUT_OFF = "카르마 랭크·레벨 전투력 계산은 아직 켜지 않아 계산하지 않았습니다.";
+
+  /** 같은 요청 안에서 트리마다 앞 변경까지 반영한 포인트·카르마 랭크(없으면 공식 값). */
+  private static final class PassiveRun {
+    private final Map<String, Integer> points = new HashMap<>();
+    private final Map<String, Integer> ranks = new HashMap<>();
+
+    int pointsOr(String tree, int official) {
+      return points.getOrDefault(tree, official);
+    }
+
+    void setPoints(String tree, Integer value) {
+      if (value != null) points.put(tree, value);
+    }
+
+    int rankOr(String tree, int official) {
+      return ranks.getOrDefault(tree, official);
+    }
+
+    void setRank(String tree, int value) {
+      ranks.put(tree, value);
+    }
+  }
+
+  /** 모델값 줄(계약 초안 2026-11-22 §2): 진화 포인트(기울기)·진화 카르마 랭크·도약 카르마 레벨. */
+  static boolean modelValue(Change change) {
+    if (change.kind() != Kind.ARK_PASSIVE_POINT) return false;
+    if (EVOLUTION.equals(change.tree())) return change.karmaLevel() == null;
+    return LEAP.equals(change.tree()) && change.karmaLevel() != null;
+  }
+
+  private CharacterLoadout.PassivePoint passivePoint(CharacterLoadout loadout, String tree) {
+    if (loadout.arkPassive() == null || tree == null) return null;
+    return loadout.arkPassive().points().stream()
+        .filter(item -> item != null && tree.equals(item.name()))
+        .findFirst()
+        .orElse(null);
+  }
+
+  /**
+   * 카르마 랭크 바꾸기(0~6). 깨달음 +1·도약 +2 포인트를 같은 요청의 앞 변경 뒤 포인트에 더하고(범위 밖이면 400, 자르지 않음), 진화는 모델값 배수. 검사는
+   * 스위치와 상관없고, 지금 랭크를 읽지 못하면 계산하지 않는다(0으로 보지 않음).
+   */
+  private Planned karmaRank(CharacterLoadout loadout, Change change, PassiveRun run) {
+    range("karmaRank", change.karmaRank(), 0, CombatPowerRefineModel.KARMA_MAX_RANK);
+    var tree = change.tree();
+    if (!ENLIGHTENMENT.equals(tree) && !LEAP.equals(tree) && !EVOLUTION.equals(tree))
+      throw invalid("karmaRank는 tree 진화·깨달음·도약에만 쓸 수 있습니다.");
+    var target = tree + " 카르마 랭크";
+    int next = change.karmaRank();
+    var to = String.valueOf(next);
+    var point = passivePoint(loadout, tree);
+    var official = point == null ? null : CombatPowerRefineModel.karmaRank(point.description());
+    if (official == null || point.value() == null)
+      return new Planned(change, target, null, to, null, null, KARMA_RANK_UNREAD);
+    var from = String.valueOf(official);
+    int previous = run.rankOr(tree, official);
+    run.setRank(tree, next);
+    if (EVOLUTION.equals(tree)) {
+      if (!karmaCpEnabled)
+        return new Planned(change, target, from, to, null, null, KARMA_INPUT_OFF);
+      return new Planned(
+          change,
+          target,
+          from,
+          to,
+          new KarmaFactorEffect(KarmaFactor.EVOLUTION_RANK, official, next),
+          EVOLUTION_RANK_BASIS,
+          null);
+    }
+    int perRank = ENLIGHTENMENT.equals(tree) ? 1 : 2;
+    int max =
+        ENLIGHTENMENT.equals(tree) ? arkPassiveCoefficients.enlightenmentLimitPoints() : LEAP_MAX;
+    int points = run.pointsOr(tree, point.value()) + (next - previous) * perRank;
+    if (points < 0 || points > max)
+      // 400 KARMA_POINTS_OUT_OF_RANGE(웹이 코드로 문구를 고른다). 메시지는 전과 같다(트리·범위).
+      throw new BusinessException(
+          new Detailed(
+              CharacterErrorCode.KARMA_POINTS_OUT_OF_RANGE.code(),
+              CharacterErrorCode.KARMA_POINTS_OUT_OF_RANGE.httpStatus(),
+              "카르마 랭크를 바꾼 " + tree + " 포인트 합이 0~" + max + " 밖입니다."));
+    run.setPoints(tree, points);
+    if (!karmaCpEnabled) return new Planned(change, target, from, to, null, null, KARMA_INPUT_OFF);
+    return new Planned(
+        change,
+        target,
+        from,
+        to,
+        new PassiveEffect(tree, point.value(), points),
+        ENLIGHTENMENT.equals(tree) ? ENLIGHTENMENT_RANK_BASIS : LEAP_RANK_BASIS,
+        null);
+  }
+
+  /** 도약 카르마 레벨 바꾸기(0~30, 모델값 배수). 스위치가 꺼져 있거나 지금 레벨을 읽지 못하면 계산하지 않는다. */
+  private Planned leapKarmaLevel(CharacterLoadout loadout, Change change) {
+    range("karmaLevel", change.karmaLevel(), 0, KARMA_MAX_LEVEL);
+    var target = LEAP + " 카르마 레벨";
+    var to = String.valueOf(change.karmaLevel());
+    if (!karmaCpEnabled) return new Planned(change, target, null, to, null, null, KARMA_INPUT_OFF);
+    var point = passivePoint(loadout, LEAP);
+    var official = point == null ? null : CombatPowerRefineModel.karmaLevel(point.description());
+    if (official == null)
+      return new Planned(change, target, null, to, null, null, LEAP_LEVEL_UNREAD);
+    return new Planned(
+        change,
+        target,
+        String.valueOf(official),
+        to,
+        new KarmaFactorEffect(KarmaFactor.LEAP_LEVEL, official, change.karmaLevel()),
+        LEAP_LEVEL_BASIS,
+        null);
+  }
+
+  /** 카르마 배수(모델값): 진화 랭크 1 + 0.006·랭크, 도약 레벨 1 + 0.0002·레벨. */
+  private BigDecimal karmaFactor(KarmaFactor factor, int value) {
+    return factor == KarmaFactor.EVOLUTION_RANK
+        ? com.loakraken.character.domain.CombatPowerArkPassiveModel.evolutionKarmaRank(
+            arkPassiveCoefficients, value)
+        : com.loakraken.character.domain.CombatPowerArkPassiveModel.leapKarmaLevel(
+            arkPassiveCoefficients, value);
+  }
 
   private static final String KARMA_BASIS =
       "깨달음 카르마 레벨마다 무기 공격력 +0.1%(전투력 W 항 안, 세 곳 일치)를 바꾼 비율을 공식 전투력에 곱했습니다.";

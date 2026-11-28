@@ -7,6 +7,7 @@ import com.loakraken.character.application.CharacterPopularService;
 import com.loakraken.character.application.CharacterQueryService;
 import com.loakraken.character.application.CharacterResult;
 import com.loakraken.character.application.CharacterViewService;
+import com.loakraken.character.application.CombatPowerGuard;
 import com.loakraken.character.application.CombatPowerSimulationService;
 import com.loakraken.common.api.ApiResponse;
 import com.loakraken.common.lostark.UserKeyContext;
@@ -38,6 +39,7 @@ public class CharacterController {
   private final ArkGridEfficiencyService arkGrids;
   private final com.loakraken.character.application.KrakenScoreService scores;
   private final com.loakraken.character.application.BraceletRealService braceletReals;
+  private final CombatPowerGuard guard;
   private static final org.slf4j.Logger log =
       org.slf4j.LoggerFactory.getLogger(CharacterController.class);
 
@@ -54,7 +56,9 @@ public class CharacterController {
       CombatPowerSimulationService simulator,
       ArkGridEfficiencyService arkGrids,
       com.loakraken.character.application.KrakenScoreService scores,
-      com.loakraken.character.application.BraceletRealService braceletReals) {
+      com.loakraken.character.application.BraceletRealService braceletReals,
+      CombatPowerGuard guard) {
+    this.guard = guard;
     this.queryService = queryService;
     this.views = views;
     this.cards = cards;
@@ -90,11 +94,11 @@ public class CharacterController {
     }
   }
 
-  /** 팔찌 효율(#345). 메모리 계산이고 실패해도 검색 응답은 막지 않는다(null). */
+  /** 팔찌 효율(#345). 메모리 계산이고 실패해도 검색 응답은 막지 않는다(null). forcedReason은 2부 대비 막기 문장(없으면 null). */
   private CombatPowerSimulationService.BraceletEfficiency braceletEfficiency(
-      CharacterResult result) {
+      CharacterResult result, String forcedReason) {
     try {
-      return simulator.braceletEfficiency(result);
+      return simulator.braceletEfficiency(result, forcedReason);
     } catch (RuntimeException exception) {
       log.warn("팔찌 효율을 계산하지 못했습니다. 예외 유형={}", exception.getClass().getSimpleName());
       return null;
@@ -102,9 +106,10 @@ public class CharacterController {
   }
 
   /** 아크 그리드 효율(L29·L39). 메모리 계산이고 실패해도 검색 응답은 막지 않는다(null). */
-  private ArkGridEfficiencyService.ArkGridEfficiency arkGridEfficiency(CharacterResult result) {
+  private ArkGridEfficiencyService.ArkGridEfficiency arkGridEfficiency(
+      CharacterResult result, String forcedReason) {
     try {
-      return arkGrids.efficiency(result);
+      return arkGrids.efficiency(result, forcedReason);
     } catch (RuntimeException exception) {
       log.warn("아크 그리드 효율을 계산하지 못했습니다. 예외 유형={}", exception.getClass().getSimpleName());
       return null;
@@ -172,13 +177,36 @@ public class CharacterController {
       // 인기 검색(F-10)은 조회수와 따로 하루 1회 중복을 제거해 센다. 원격 주소는 신뢰 프록시를 거친 값이다.
       popular.record(profile.characterName(), profile.serverName(), http.getRemoteAddr());
     }
+    // 2부 대비 막기(계약 2026-11-28): 스위치는 요청마다 읽는다. 막으면 카드의 효율·실 효율·크라켄 점수가 숫자 없이 같은 이유 코드를 낸다.
+    // 프로필·장비 목록은 그대로다. DB 저장용 계산은 막지 않은 값과 판정을 남기고, 랭킹이 읽을 때 거른다.
+    if (guard.blocks(result, CombatPowerGuard.Surface.CARD)) {
+      var why = CombatPowerGuard.sentence();
+      var shown =
+          new CharacterResult(
+              result.details(),
+              result.fetchedAt(),
+              result.refreshAvailableAt(),
+              result.krakenScoreInput(),
+              com.loakraken.character.application.ArkGridRealEfficiency.unsupported(
+                  CombatPowerGuard.code(), why),
+              result.shapeVerdict());
+      return ApiResponse.of(
+          CharacterSuccessCode.CHARACTER_SEARCH_SUCCESS,
+          CharacterResponse.from(
+              shown,
+              braceletEfficiency(result, why),
+              com.loakraken.character.application.BraceletRealEfficiency.unsupported(
+                  CombatPowerGuard.code(), why, null),
+              arkGridEfficiency(result, why),
+              scores.blocked()));
+    }
     return ApiResponse.of(
         CharacterSuccessCode.CHARACTER_SEARCH_SUCCESS,
         CharacterResponse.from(
             result,
-            braceletEfficiency(result),
+            braceletEfficiency(result, null),
             braceletReal(result),
-            arkGridEfficiency(result),
+            arkGridEfficiency(result, null),
             krakenScore(result)));
   }
 

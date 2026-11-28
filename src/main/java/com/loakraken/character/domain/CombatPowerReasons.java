@@ -29,7 +29,7 @@ public final class CombatPowerReasons {
   public static final Reason GEM_BASE_ATTACK_MISMATCH =
       new Reason("GEM_BASE_ATTACK_MISMATCH", "보석의 기본 공격력 표기가 계수표와 달라 계산하지 않았습니다.");
   public static final Reason BASE_ATTACK_SOURCE_UNKNOWN =
-      new Reason("BASE_ATTACK_SOURCE_UNKNOWN", "확인하지 않은 기본 공격력 % 출처가 있어 보석 변화는 계산하지 않았습니다.");
+      new Reason("BASE_ATTACK_SOURCE_UNKNOWN", "확인하지 않은 기본 공격력 % 효과가 있어 보석 변화는 계산하지 않았습니다.");
   public static final Reason STONE_BONUS_UNCONFIRMED =
       new Reason("STONE_BONUS_UNCONFIRMED", "스톤 레벨 보너스가 아직 확인하지 않은 구간으로 바뀌어 계산하지 않았습니다.");
   public static final Reason WEAPON_ADD_DAMAGE_UNREADABLE =
@@ -52,17 +52,33 @@ public final class CombatPowerReasons {
           "ARMOR_CP_RESIDUAL_HIGH",
           "장비로 계산한 전투력이 공식 전투력과 맞지 않아 방어구 재련 · 상급 재련 · 완갑 전투력은 계산하지 않았어요.");
 
+  /**
+   * 아크 그리드 젬 교체 뒤 그 코어의 활성 젬 필요 의지력 합이 공급 의지력을 넘는다(M49 G1). 어느 젬이 꺼질지 공식 문구가 없어 계산하지 않고, 순위에도 넣지
+   * 않는다.
+   */
+  public static final Reason ARK_GRID_WILL_SHORT =
+      new Reason("ARK_GRID_WILL_SHORT", "젬을 바꾸면 그 코어의 의지력이 모자라 어느 젬이 꺼질지 알 수 없어 계산하지 않았어요.");
+
+  /**
+   * 2부 대비 원본 형태 검사(계약 2026-11-28): 공식 장비 정보가 오늘 알려진 모양이 아니고 막기 스위치가 켜져 있거나, 그 화면의 끄기 스위치가 켜져 있다.
+   * 숫자를 하나도 내지 않는다. 스위치가 모두 꺼져 있으면 나오지 않는다.
+   */
+  public static final Reason GAME_UPDATE_UNSUPPORTED =
+      new Reason("GAME_UPDATE_UNSUPPORTED", "게임 업데이트로 바뀐 장비 정보라 아직 계산하지 않아요");
+
   /** 시뮬레이터 이유 문장 → 코드. 모르는 문장은 MODEL_UNCONFIRMED로 둔다(계산하지 않았다는 뜻은 같음). */
   public static Reason classify(String simulatorReason) {
     if (simulatorReason == null) return MODEL_UNCONFIRMED;
+    if (simulatorReason.equals(GAME_UPDATE_UNSUPPORTED.text())) return GAME_UPDATE_UNSUPPORTED;
     if (simulatorReason.equals(ARMOR_CP_RESIDUAL_HIGH.text())) return ARMOR_CP_RESIDUAL_HIGH;
+    if (simulatorReason.equals(ARK_GRID_WILL_SHORT.text())) return ARK_GRID_WILL_SHORT;
     if (simulatorReason.contains("서포터 전투력 계산식")) return SUPPORTER_MODEL_PENDING;
     if (simulatorReason.contains("딜러·서포터를 판정하지 못해")) return ROLE_UNKNOWN;
     if (simulatorReason.contains("공식 전투력이 없어")) return NO_OFFICIAL_COMBAT_POWER;
     if (simulatorReason.contains("티어 보석 계수")) return GEM_TIER_UNCONFIRMED;
     if (simulatorReason.contains("보석의 기본 공격력 수치")) return GEM_LEVEL_UNCONFIRMED;
     if (simulatorReason.contains("기본 공격력 표기")) return GEM_BASE_ATTACK_MISMATCH;
-    if (simulatorReason.contains("기본 공격력 % 출처")) return BASE_ATTACK_SOURCE_UNKNOWN;
+    if (simulatorReason.contains("기본 공격력 % 효과")) return BASE_ATTACK_SOURCE_UNKNOWN;
     if (simulatorReason.contains("레벨 보너스")) return STONE_BONUS_UNCONFIRMED;
     if (simulatorReason.contains("무기 추가 피해(공식 툴팁)를 읽지")) return WEAPON_ADD_DAMAGE_UNREADABLE;
     if (simulatorReason.contains("무기 추가 피해 수치")) return QUALITY_VALUE_UNCONFIRMED;

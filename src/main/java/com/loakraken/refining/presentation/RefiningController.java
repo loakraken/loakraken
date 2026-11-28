@@ -25,16 +25,179 @@ class RefiningController {
   private final com.loakraken.market.application.RefiningMaterialPriceService materials;
   private final com.loakraken.market.application.MaterialUnitPriceService unitPrices;
   private final org.springframework.core.env.Environment environment;
+  private final com.loakraken.refining.domain.AdvancedRefineRules advancedRules;
+  private final com.loakraken.refining.application.AdvancedPlanCache advancedCache;
+  private final com.loakraken.refining.application.SpecialStoneValueService specialStones;
 
   RefiningController(
       RefiningPlanService service,
       com.loakraken.market.application.RefiningMaterialPriceService materials,
       com.loakraken.market.application.MaterialUnitPriceService unitPrices,
-      org.springframework.core.env.Environment environment) {
+      org.springframework.core.env.Environment environment,
+      com.loakraken.refining.domain.AdvancedRefineRules advancedRules,
+      com.loakraken.refining.application.AdvancedPlanCache advancedCache,
+      com.loakraken.refining.application.SpecialStoneValueService specialStones) {
     this.service = service;
     this.materials = materials;
     this.unitPrices = unitPrices;
     this.environment = environment;
+    this.advancedRules = advancedRules;
+    this.advancedCache = advancedCache;
+    this.specialStones = specialStones;
+  }
+
+  /** 특수 재련 돌파석 가치 스위치(refining.special-stone.enabled, 기본 꺼짐 — 꺼져 있으면 404). 요청마다 읽는다. */
+  boolean specialStoneEnabled() {
+    return environment.getProperty("refining.special-stone.enabled", Boolean.class, false);
+  }
+
+  @PostMapping(value = "/special-stone-values", consumes = MediaType.APPLICATION_JSON_VALUE)
+  @Operation(
+      summary = "특수 재련 돌파석 1개 가치",
+      description =
+          "대상(등급·장비·현재 단계)마다 그 단계 일반 재련 기대 비용(회차별 최적, 보장 시도에는 숨결 없음) ÷ 특수 재련 평균 필요량(1회 소모량 ÷ 공식 기본 확률)으로 돌파석 1개 가치를 줍니다. "
+              + "재료 값은 서버 시세 캐시(priceBasis)와 사용자 가격(prices, 그 이름만 덮음)을 씁니다(공식 호출 없음). 운명의 업화·팔 보호구·10단계는 1회 소모량 출처가 없어 그 줄이 UNSUPPORTED(SPECIAL_REFINE_UNSOURCED)이고, 시세도 사용자 가격도 없는 재료가 있으면 그 줄은 PRICE_MISSING입니다. "
+              + "status는 닫힌 값(OK·UNSUPPORTED·PRICE_MISSING)입니다. 스위치 refining.special-stone.enabled가 꺼져 있으면 404입니다.")
+  @ApiResponses({
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(
+        responseCode = "200",
+        description = "REFINING_SPECIAL_STONE_SUCCESS"),
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(
+        responseCode = "400",
+        description =
+            "INVALID_REQUEST: 대상 0개·29개 이상·같은 대상 두 번, 단계 범위(10~24), 사용자 가격 형식(0~10억, 소수 둘째 자리)·같은 이름 두 번·요청한 단계가 쓰지 않는 이름",
+        content = @Content(schema = @Schema(ref = "#/components/schemas/ErrorResponse"))),
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(
+        responseCode = "404",
+        description = "스위치가 꺼져 있음",
+        content = @Content(schema = @Schema(ref = "#/components/schemas/ErrorResponse"))),
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(
+        responseCode = "409",
+        description = "REFINING_PRICE_PENDING: 재련 재료 시세 캐시가 아직 없음(Retry-After 초)",
+        content = @Content(schema = @Schema(ref = "#/components/schemas/ErrorResponse"))),
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(
+        responseCode = "429",
+        description = "REFINING_SOLVE_BUSY: 최적 풀이 자리가 모두 차 있음(기다리지 않음, Retry-After 초 뒤 다시)",
+        content = @Content(schema = @Schema(ref = "#/components/schemas/ErrorResponse")))
+  })
+  public ApiResponse<SpecialStoneValuesResponse> specialStoneValues(
+      @Valid @RequestBody SpecialStoneValuesRequest request) {
+    if (!specialStoneEnabled())
+      throw new org.springframework.web.server.ResponseStatusException(
+          org.springframework.http.HttpStatus.NOT_FOUND);
+    // 시세 캐시가 아예 없으면 409(OPTIMAL과 같음). 사용자 가격만으로 대신 계산하지 않는다.
+    if (materials.cached().isEmpty())
+      throw new com.loakraken.common.api.BusinessException(
+          com.loakraken.refining.application.RefiningErrorCode.REFINING_PRICE_PENDING, RETRY_AFTER);
+    var targets =
+        request.targets().stream()
+            .map(
+                t ->
+                    new com.loakraken.refining.application.SpecialStoneValueService.Target(
+                        t.grade(), t.equipmentType(), t.fromStage()))
+            .toList();
+    var names = specialStones.names(targets);
+    var overrides = new java.util.LinkedHashMap<String, java.math.BigDecimal>();
+    if (request.prices() != null)
+      for (var price : request.prices()) {
+        // 요청한 단계가 쓰지 않는 이름은 400(조용히 버리지 않는다).
+        if (!names.contains(price.name()))
+          throw new org.springframework.web.server.ResponseStatusException(
+              org.springframework.http.HttpStatus.BAD_REQUEST);
+        overrides.put(price.name(), price.unitPriceGold());
+      }
+    var basis = request.effectivePriceBasis();
+    var unit = new java.util.LinkedHashMap<String, java.math.BigDecimal>();
+    java.time.Instant observedAt = null;
+    for (var price : unitPrices.cachedPrices(basis, java.util.List.copyOf(names))) {
+      if (overrides.containsKey(price.name()) || price.unitPriceGold() == null) continue;
+      unit.put(price.name(), price.unitPriceGold());
+      if (price.observedAt() != null
+          && (observedAt == null || price.observedAt().isBefore(observedAt)))
+        observedAt = price.observedAt();
+    }
+    unit.putAll(overrides);
+    // 사용자 가격이 있으면 따로 둔 풀이 자리·캐시(공유 OPTIMAL 자리·캐시를 붙잡거나 밀어내지 않게, #1099 리뷰 P2).
+    var rows = specialStones.values(targets, unit, !overrides.isEmpty());
+    return ApiResponse.of(
+        RefiningSuccessCode.REFINING_SPECIAL_STONE_SUCCESS,
+        SpecialStoneValuesResponse.from(
+            basis.name(), observedAt, service.rules().ruleVersion(), specialStones.rules(), rows));
+  }
+
+  /** 상급 재련 API 스위치(refining.advanced.enabled, 기본 꺼짐 — 웹 화면이 붙을 때 켠다). 요청마다 읽는다. */
+  boolean advancedEnabled() {
+    return environment.getProperty("refining.advanced.enabled", Boolean.class, false);
+  }
+
+  @PostMapping(value = "/advanced-plans", consumes = MediaType.APPLICATION_JSON_VALUE)
+  @Operation(
+      summary = "티어 4 상급 재련 기대 비용",
+      description =
+          "운명의 업화 무기·방어구의 현재 상급 재련 단계부터 목표 단계(1~40)까지 10단계 구간마다 기대 턴(유료·무료·선조·강화 선조), 턴 종류별 숨결·책 선택(기대 비용이 가장 작은 조합), 기대 재료·재련 골드·실링·기대 비용을 계산합니다. "
+              + "재료 값은 서버 시세 캐시(1개 즉시 구매 최저가)만 읽습니다(공식 호출 없음). 스펙업 상급 재련 단계 비용과 같은 모델·같은 값입니다. 스위치 refining.advanced.enabled가 꺼져 있으면 400입니다.")
+  @ApiResponses({
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(
+        responseCode = "200",
+        description = "REFINING_ADVANCED_PLAN_SUCCESS"),
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(
+        responseCode = "400",
+        description =
+            "INVALID_REQUEST: 단계 범위(현재 0~39, 목표 1~40, 목표 > 현재), ARM_GUARD, 빠진 값, 스위치가 꺼져 있음. REFINING_ADVANCED_UNCONFIRMED: grade=JEONYUL(운명의 전율 상급 재련 표를 확인하기 전)",
+        content = @Content(schema = @Schema(ref = "#/components/schemas/ErrorResponse"))),
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(
+        responseCode = "409",
+        description = "REFINING_PRICE_PENDING: 기본 재료 시세가 아직 없음(Retry-After 초). 일부만 계산하지 않는다",
+        content = @Content(schema = @Schema(ref = "#/components/schemas/ErrorResponse"))),
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(
+        responseCode = "406",
+        description = "NOT_ACCEPTABLE",
+        content = @Content(schema = @Schema(ref = "#/components/schemas/ErrorResponse"))),
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(
+        responseCode = "415",
+        description = "UNSUPPORTED_MEDIA_TYPE",
+        content = @Content(schema = @Schema(ref = "#/components/schemas/ErrorResponse"))),
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(
+        responseCode = "500",
+        description = "INTERNAL_SERVER_ERROR",
+        content = @Content(schema = @Schema(ref = "#/components/schemas/ErrorResponse")))
+  })
+  public ApiResponse<AdvancedRefiningPlanResponse> advancedPlan(
+      @Valid @RequestBody AdvancedRefiningPlanRequest request) {
+    if (!advancedEnabled())
+      // 400 INVALID_REQUEST(OPTIMAL 스위치와 같은 처리)
+      throw new org.springframework.web.server.ResponseStatusException(
+          org.springframework.http.HttpStatus.BAD_REQUEST);
+    if (request.grade() != com.loakraken.refining.domain.RefiningRules.Grade.UPHWA)
+      throw new com.loakraken.common.api.BusinessException(
+          com.loakraken.refining.application.RefiningErrorCode.REFINING_ADVANCED_UNCONFIRMED);
+    // 시세 캐시만 읽는다(공식 호출 없음). 기본 재료 시세가 없으면 일부만 계산하지 않는다.
+    var prices =
+        materials
+            .cached()
+            .orElseThrow(
+                () ->
+                    new com.loakraken.common.api.BusinessException(
+                        com.loakraken.refining.application.RefiningErrorCode.REFINING_PRICE_PENDING,
+                        RETRY_AFTER));
+    // 같은 종류·단계·시세 관측 시각이면 다시 풀지 않는다(#1091 코드 리뷰 P2, 켜기 전 조건).
+    var result =
+        advancedCache.get(
+            new com.loakraken.refining.application.AdvancedPlanCache.Key(
+                request.ruleType(), request.fromStage(), request.toStage(), prices.observedAt()),
+            () ->
+                com.loakraken.refining.domain.AdvancedRefineCost.expected(
+                    advancedRules,
+                    request.ruleType(),
+                    request.fromStage(),
+                    request.toStage(),
+                    name -> prices.unit(name).orElse(null)));
+    if (result == null)
+      throw new com.loakraken.common.api.BusinessException(
+          com.loakraken.refining.application.RefiningErrorCode.REFINING_PRICE_PENDING, RETRY_AFTER);
+    return ApiResponse.of(
+        RefiningSuccessCode.REFINING_ADVANCED_PLAN_SUCCESS,
+        AdvancedRefiningPlanResponse.from(advancedRules, request, result, prices.observedAt()));
   }
 
   /**

@@ -6,6 +6,7 @@ import com.loakraken.character.application.CharacterException;
 import com.loakraken.character.application.CharacterQueryService;
 import com.loakraken.character.application.CharacterResult;
 import com.loakraken.character.application.CharacterStopList;
+import com.loakraken.character.application.CombatPowerGuard;
 import com.loakraken.character.application.SearchCharacterCommand;
 import com.loakraken.character.domain.CharacterLoadout;
 import com.loakraken.character.domain.CharacterSibling;
@@ -54,6 +55,13 @@ public class ReceiptService {
   private final LostArkRequestGate gate;
   private final Clock clock;
   private final MeterRegistry registry;
+  private CombatPowerGuard guard;
+
+  /** 2부 대비 막기(계약 2026-11-28). */
+  @org.springframework.beans.factory.annotation.Autowired
+  void guard(CombatPowerGuard guard) {
+    this.guard = guard;
+  }
 
   public ReceiptService(
       CharacterQueryService characters,
@@ -111,13 +119,25 @@ public class ReceiptService {
     UNAVAILABLE
   }
 
+  /** unavailableReasonCode: UNAVAILABLE의 이유 코드(2부 대비 막기면 GAME_UPDATE_UNSUPPORTED). 그 밖은 null. */
   public record CharacterReceipt(
       String characterName,
       String className,
       BigDecimal itemLevel,
       Status status,
       EquipmentReceipt.Result equipment,
-      Instant observedAt) {}
+      Instant observedAt,
+      String unavailableReasonCode) {
+    public CharacterReceipt(
+        String characterName,
+        String className,
+        BigDecimal itemLevel,
+        Status status,
+        EquipmentReceipt.Result equipment,
+        Instant observedAt) {
+      this(characterName, className, itemLevel, status, equipment, observedAt, null);
+    }
+  }
 
   public record NotIncluded(String kind, int count) {}
 
@@ -194,6 +214,11 @@ public class ReceiptService {
                     .reversed()
                     .thenComparing(CharacterSibling::characterName))
             .toList();
+    // 영수증 끄기(CP_KILL_RECEIPT): 받기 전에 모두 UNAVAILABLE + 이유로 끝낸다(코덱스 P2: 캐시에 없는 대원을 계속 받고 PENDING으로 남던
+    // 것).
+    // 공식 전투정보 호출 없음, 이어 받을 시각도 없음.
+    if (guard != null && guard.killed(CombatPowerGuard.Surface.RECEIPT))
+      return killedReceipt(server, self.characterName(), roster, assumeBook);
 
     var loadouts = new HashMap<String, ReceiptInputStore.Input>();
     var unavailableNames = new java.util.HashSet<String>();
@@ -260,9 +285,19 @@ public class ReceiptService {
       toSave.forEach(inputs::save);
     }
 
+    // 2부 대비 막기(계약 2026-11-28): 막힌 캐릭터는 시세도 찾지 않고 골드에 넣지 않는다(캐릭터마다 한 번 센다).
+    var guardedNames = new java.util.HashSet<String>();
+    loadouts.forEach(
+        (name, input) -> {
+          if (guard != null && guard.blocks(input.shapeVerdict(), CombatPowerGuard.Surface.RECEIPT))
+            guardedNames.add(name);
+        });
     var rules = refining.rules();
     var allEquipment =
-        loadouts.values().stream().flatMap(input -> input.loadout().equipment().stream()).toList();
+        loadouts.entrySet().stream()
+            .filter(entry -> !guardedNames.contains(entry.getKey()))
+            .flatMap(entry -> entry.getValue().loadout().equipment().stream())
+            .toList();
     var names = EquipmentReceipt.materialNames(rules, allEquipment);
     var unitPrices = new HashMap<String, BigDecimal>();
     Instant priceObservedAt = null;
@@ -295,6 +330,19 @@ public class ReceiptService {
                     : Status.PENDING,
                 null,
                 null));
+        continue;
+      }
+      // 2부 대비 막기(계약 2026-11-28): 그 캐릭터는 UNAVAILABLE + 이유 코드, 장비·보석 골드에 넣지 않는다.
+      if (guardedNames.contains(sibling.characterName())) {
+        characterReceipts.add(
+            new CharacterReceipt(
+                sibling.characterName(),
+                sibling.className(),
+                sibling.itemLevel(),
+                Status.UNAVAILABLE,
+                null,
+                null,
+                CombatPowerGuard.code()));
         continue;
       }
       var loadout = input.loadout();
@@ -362,16 +410,56 @@ public class ReceiptService {
         pending,
         nextAvailableAt(pending, stopped, budgetLow),
         assumeBook,
-        unavailableNames.size());
+        unavailableNames.size() + guardedNames.size());
   }
 
-  /** 영수증에 쓰는 것만(장비·보석·아크 그리드) 남긴 입력. 관측 시각은 그 전투정보를 받은 시각. */
+  /**
+   * 영수증 끄기: 모든 대원 UNAVAILABLE + GAME_UPDATE_UNSUPPORTED, 골드 0(값 아님, total.status UNAVAILABLE). 대원마다
+   * 한 번 센다.
+   */
+  private Receipt killedReceipt(
+      String server, String characterName, List<CharacterSibling> roster, boolean assumeBook) {
+    var rows = new ArrayList<CharacterReceipt>();
+    for (var sibling : roster) {
+      guard.blocks((List<String>) null, CombatPowerGuard.Surface.RECEIPT);
+      rows.add(
+          new CharacterReceipt(
+              sibling.characterName(),
+              sibling.className(),
+              sibling.itemLevel(),
+              Status.UNAVAILABLE,
+              null,
+              null,
+              CombatPowerGuard.code()));
+    }
+    return new Receipt(
+        server,
+        characterName,
+        clock.instant(),
+        null,
+        BigDecimal.ZERO,
+        List.copyOf(rows),
+        GemReceipt.calculate(List.of(), new HashMap<>()),
+        List.of(
+            new NotIncluded("ARK_GRID_GEM", 0),
+            new NotIncluded("BRACELET", 0),
+            new NotIncluded("ACCESSORY", 0)),
+        roster.size(),
+        0,
+        0,
+        null,
+        assumeBook,
+        roster.size());
+  }
+
+  /** 영수증에 쓰는 것만(장비·보석·아크 그리드)과 2부 대비 원본 형태 판정을 남긴 입력. 관측 시각은 그 전투정보를 받은 시각. */
   private static ReceiptInputStore.Input input(CharacterResult result) {
     var loadout = result.details().loadout();
     return new ReceiptInputStore.Input(
         new CharacterLoadout(
             loadout.equipment(), null, loadout.gems(), null, null, loadout.arkGrid(), List.of()),
-        result.fetchedAt());
+        result.fetchedAt(),
+        result.shapeVerdict());
   }
 
   /**

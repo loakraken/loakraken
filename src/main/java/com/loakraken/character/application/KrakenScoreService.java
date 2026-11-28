@@ -43,7 +43,9 @@ public class KrakenScoreService {
     FACTOR_PENDING("점수 요소를 아직 계산하지 않는 단계입니다."),
     SCORE_UNAVAILABLE("계산한 점수가 음수이거나 수가 아니어서 표시하지 않습니다."),
     INPUT_PENDING("점수 입력이 없는 이전 조회 결과라 계산하지 않았습니다(다시 조회하면 계산)."),
-    CALC_FAILED("점수를 계산하지 못했습니다.");
+    CALC_FAILED("점수를 계산하지 못했습니다."),
+    /** 2부 대비 막기(CombatPowerGuard). 막기·끄기 스위치가 모두 꺼져 있으면 나오지 않는다. */
+    GAME_UPDATE_UNSUPPORTED(CombatPowerGuard.sentence());
 
     private final String text;
 
@@ -115,6 +117,14 @@ public class KrakenScoreService {
         && arkPassive.path("evolution").path("points").isNumber()
         && arkPassive.path("enlightenment").path("points").isNumber()
         && arkPassive.path("leap").path("points").isNumber();
+  }
+
+  /** 2부 대비 막기(검색 카드): 점수를 내지 않는다. 기능이 꺼져 있으면 꺼짐(DISABLED) 모양 그대로. */
+  public KrakenScore blocked() {
+    if (!enabled)
+      return new KrakenScore(
+          Status.DISABLED, null, null, null, null, List.of(), tiers.ruleVersion());
+    return unsupported(null, Reason.GAME_UPDATE_UNSUPPORTED);
   }
 
   /** 켜진 상태에서 계산하지 못했을 때의 응답(UNSUPPORTED, CALC_FAILED). 컨트롤러의 마지막 안전망도 이 값을 쓴다. */

@@ -38,6 +38,8 @@ import tools.jackson.databind.json.JsonMapper;
 class LostArkCharacterClientTest {
   private final SimpleMeterRegistry registry = new SimpleMeterRegistry();
   private final LostArkMetrics metrics = new LostArkMetrics(registry);
+  private RawShapeGuardRecorder shapeGuard =
+      new RawShapeGuardRecorder(registry, new org.springframework.core.env.StandardEnvironment());
   private HttpServer server;
   private ExecutorService executor;
   private final AtomicInteger requests = new AtomicInteger();
@@ -94,8 +96,12 @@ class LostArkCharacterClientTest {
       assertThat(id.getTags())
           .allMatch(
               tag ->
-                  java.util.Set.of("endpoint", "outcome", "event", "origin")
+                  java.util.Set.of("endpoint", "outcome", "event", "origin", "rule")
                       .contains(tag.getKey()));
+      // 원본 형태 검사 태그 값은 고정 목록뿐(이름·원문 없음).
+      assertThat(id.getTags())
+          .filteredOn(tag -> tag.getKey().equals("rule"))
+          .allMatch(tag -> tag.getValue().matches("ALL|H[1-7]|W[1-3]"));
     }
     server.stop(0);
     executor.close();
@@ -548,6 +554,49 @@ class LostArkCharacterClientTest {
     assertError(client("test", Duration.ofSeconds(2)), CharacterErrorCode.LOST_ARK_API_ERROR);
   }
 
+  @Test
+  void 원본_형태_검사는_조회마다_규칙_묶음만_센다() {
+    // 기본 본문은 장비 칸이 없는 최소 본문이라 H1(장비 없음)로 센다. 조회 자체는 그대로 성공한다.
+    var fetched = client("test", Duration.ofSeconds(2)).fetch("모험가");
+    client("test", Duration.ofSeconds(2)).fetchArmory("모험가");
+
+    assertThat(fetched.details().profile().itemLevel()).isEqualByComparingTo("1700.50");
+    // 판정(HARD id)은 조회 결과에 실려 캐시까지 간다. 막을지는 읽을 때 정한다.
+    assertThat(fetched.shapeVerdict()).containsExactly("H1_NO_EQUIPMENT");
+    assertThat(
+            registry
+                .counter(RawShapeGuardRecorder.METER, "rule", "ALL", "outcome", "checked")
+                .count())
+        .isEqualTo(2.0);
+    assertThat(
+            registry.counter(RawShapeGuardRecorder.METER, "rule", "H1", "outcome", "fail").count())
+        .isEqualTo(2.0);
+    assertThat(registry.find(RawShapeGuardRecorder.METER).counters())
+        .extracting(c -> c.getId().getTag("rule"))
+        .containsExactlyInAnyOrder("ALL", "H1");
+  }
+
+  @Test
+  void 원본_형태_검사가_실패해도_조회와_점수_입력은_그대로_간다() {
+    shapeGuard =
+        new RawShapeGuardRecorder(
+            registry, new org.springframework.core.env.StandardEnvironment()) {
+          @Override
+          com.loakraken.character.domain.RawShapeGuard.Verdict record(
+              tools.jackson.databind.JsonNode armory) {
+            throw new IllegalStateException("guard down");
+          }
+        };
+
+    var fetched = client("test", Duration.ofSeconds(2)).fetch("모험가");
+
+    assertThat(fetched.details().profile().itemLevel()).isEqualByComparingTo("1700.50");
+    assertThat(fetched.krakenScoreInput()).isNotNull();
+    // 검사하지 못하면 판정은 null(막지 않음).
+    assertThat(fetched.shapeVerdict()).isNull();
+    assertThat(registry.find(RawShapeGuardRecorder.METER).counters()).isEmpty();
+  }
+
   private LostArkCharacterClient client(String key, Duration timeout) {
     return client(key, timeout, null);
   }
@@ -572,7 +621,9 @@ class LostArkCharacterClientTest {
         (userKeys == null
                 ? new StaticListableBeanFactory()
                 : new StaticListableBeanFactory(java.util.Map.of("userKeyGate", userKeys)))
-            .getBeanProvider(UserKeyGate.class));
+            .getBeanProvider(UserKeyGate.class),
+        new StaticListableBeanFactory(java.util.Map.of("rawShapeGuardRecorder", shapeGuard))
+            .getBeanProvider(RawShapeGuardRecorder.class));
   }
 
   private void assertError(LostArkCharacterClient client, CharacterErrorCode code) {

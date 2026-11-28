@@ -195,10 +195,17 @@ class PostgresCharacterCardRepository implements CharacterCardPort {
               bracelet_real_rule_version = :braceletRealVersion,
               ark_grid_real_pct = CAST(:gemReal AS NUMERIC),
               ark_grid_real_rule_version = :gemRealVersion,
+              shape_verdict = :shapeVerdict,
               efficiency_observed_at = :at
             WHERE character_id = :id
               AND (efficiency_observed_at IS NULL OR efficiency_observed_at <= :at)
             """)
+            // 2부 대비 원본 형태 판정: 어긋난 HARD 규칙 id를 쉼표로(빈 문자열 = 오늘의 모양, NULL = 모름). 랭킹이 읽을 때 스위치로 거른다.
+            .param(
+                "shapeVerdict",
+                efficiency.shapeVerdict() == null
+                    ? null
+                    : String.join(",", efficiency.shapeVerdict()))
             .param("bracelet", efficiency.braceletPct())
             .param("braceletVersion", efficiency.braceletRuleVersion())
             .param("gem", efficiency.arkGridGemPct())

@@ -16,11 +16,11 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
  * 이름을 받으므로 넣지 않는다.
  *
  * @param suffixes 역방향 이름이 끝나야 하는 크롤러 도메인(점 경계로 비교, 소문자). 점이 없는 값(최상위 도메인만)은 받지 않는다
- * @param timeout 요청 안에서 확인을 기다리는 최대 시간. 넘으면 이번 요청은 사람 칸, 확인은 뒤에서 마저 해 결과를 남긴다
+ * @param timeout 요청 안에서 확인을 기다리는 최대 시간. 넘으면 이번 요청은 확인되지 않은 것, 확인은 뒤에서 마저 해 결과를 남긴다
  * @param verifiedTtl 확인된 주소 결과를 쓰는 시간
  * @param unverifiedTtl 확인되지 않은 주소 결과를 쓰는 시간
  * @param maxEntries 결과를 남기는 주소 수 상한(넘으면 만료된 것부터 비우고, 그래도 차면 새 결과를 남기지 않는다)
- * @param maxPending 동시에 기다리는 확인 수 상한(넘는 요청은 확인 없이 사람 칸)
+ * @param maxPending 동시에 기다리는 확인 수 상한(넘는 요청은 확인 없이 확인되지 않은 것)
  */
 @ConfigurationProperties("lostark.crawler-verify")
 public record CrawlerVerifyProperties(

@@ -468,6 +468,8 @@ public class SpecUpGoalService {
   public Path path(String characterName, Pick requested, int limit) {
     if (!specUp.enabled()) throw new BusinessException(SpecUpErrorCode.SPEC_UP_DISABLED);
     var snapshot = simulator.snapshot(characterName);
+    // 2부 대비 막기(계약 2026-11-28): 결과 캐시보다 먼저 본다 — 스위치를 켜면 다음 요청부터 적용된다.
+    if (specUpBlocked(snapshot)) return blockedPath(snapshot, requested, limit);
     // KRAKEN(PM 총괄 11-15 (d)): 스위치가 꺼졌거나 점수를 낼 수 없으면 EFFICIENCY로 되돌리고 그 이유를 준다(목록
     // krakenSortUnavailableReason과
     // 같은 값). 응답 sort는 실제로 쓴 기준이라 KRAKEN은 KRAKEN을 요청한 경로에만 나온다.
@@ -577,6 +579,56 @@ public class SpecUpGoalService {
             .withSupportOrderAvailable(supportOrderAvailable, krakenScoreRole)
             .withConsidered(polishConsidered, karmaConsidered);
     return computed;
+  }
+
+  private com.loakraken.character.application.CombatPowerGuard guard;
+
+  /** 2부 대비 막기(계약 2026-11-28). 손으로 만든 시험 객체에는 없다(막지 않음). */
+  @org.springframework.beans.factory.annotation.Autowired
+  void guard(com.loakraken.character.application.CombatPowerGuard guard) {
+    this.guard = guard;
+  }
+
+  private boolean specUpBlocked(CharacterResult snapshot) {
+    return guard != null
+        && guard.blocks(
+            snapshot, com.loakraken.character.application.CombatPowerGuard.Surface.SPEC_UP);
+  }
+
+  /**
+   * 막은 추천 순서: 단계·시세 없는 칸 없음, 끝 전투력·점수 null, 이유 GAME_UPDATE_UNSUPPORTED(목록
+   * krakenSortUnavailableReason도 같은 값). sort는 KRAKEN을 요청해도 EFFICIENCY(쓸 수 있을 때만 KRAKEN을 돌려주는 규칙).
+   */
+  private Path blockedPath(CharacterResult snapshot, Pick requested, int limit) {
+    var profile = snapshot.details().profile();
+    var before =
+        profile.combatPower() == null
+            ? null
+            : profile.combatPower().setScale(2, RoundingMode.HALF_UP);
+    var reason = CombatPowerReasons.GAME_UPDATE_UNSUPPORTED;
+    var pick = requested == Pick.KRAKEN ? Pick.EFFICIENCY : requested;
+    return new Path(
+            profile.characterName(),
+            profile.serverName(),
+            profile.className(),
+            before,
+            null,
+            pick.name(),
+            limit,
+            reason.code(),
+            reason.text(),
+            null,
+            PATH_RULE_VERSION,
+            simulator.ruleVersion(),
+            snapshot.fetchedAt(),
+            null,
+            List.of(),
+            List.of(),
+            null,
+            null,
+            requested == Pick.KRAKEN ? reason.code() : null)
+        .withSupportOrderAvailable(false, null)
+        .withConsidered(false, false);
   }
 
   /** KRAKEN 요청을 실제 기준으로: 쓸 수 있으면 KRAKEN과 점수 문맥, 아니면 EFFICIENCY와 그 이유. */
@@ -848,6 +900,13 @@ public class SpecUpGoalService {
             ? null
             : profile.combatPower().setScale(2, RoundingMode.HALF_UP);
     var goal = target.setScale(2, RoundingMode.HALF_UP);
+    // 2부 대비 막기: 결과 캐시보다 먼저. 단계 없음, 끝 전투력·총비용 null(프론트2 11-28).
+    if (specUpBlocked(snapshot)) {
+      var reason = CombatPowerReasons.GAME_UPDATE_UNSUPPORTED;
+      return result(
+              snapshot, before, goal, null, reason.code(), reason.text(), null, 0, null, List.of())
+          .withConsidered(false, false);
+    }
     if (before != null && goal.compareTo(before.multiply(BigDecimal.TWO)) > 0)
       throw new BusinessException(SpecUpErrorCode.SPEC_UP_GOAL_OUT_OF_RANGE);
     var gems = gemPrices();
@@ -1917,7 +1976,9 @@ public class SpecUpGoalService {
                     null,
                     null,
                     null),
-                SpecUpCost.REFINE_COST_UNCONFIRMED,
+                // 상급 재련 기대 비용(계산 검증 명세 2026-11-22): 지금 단계에서 목표까지 구간별 사슬의 합.
+                specUp.advancedRefineCost(
+                    item.equipment(), item.refine(), next, refinePrices, pricesAt),
                 null,
                 null,
                 null));

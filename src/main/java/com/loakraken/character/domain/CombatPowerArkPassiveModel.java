@@ -15,7 +15,8 @@ public final class CombatPowerArkPassiveModel {
   /**
    * evolutionMaxPoints = 진화 포인트 최대(넘으면 요청 오류), evolutionFreePoints = 전투력이 없는 진화 1티어 포인트,
    * evolutionPerPoint = 그 위 포인트당 배수, enlightenmentPerPoint = 깨달음 포인트당 배수, enlightenmentLimitPoints
-   * = 깨달음 포인트 최대(넘으면 요청 오류), enlightenmentMaxPoints = 확인한 깨달음 포인트 상한(넘으면 계산하지 않음).
+   * = 깨달음 포인트 최대(넘으면 요청 오류), enlightenmentMaxPoints = 전투력에 세는 깨달음 포인트 상한(그 위 포인트는 전투력이 없다, M13 PM
+   * 총괄 11-22 — 캐릭터 25명 공식 전투력 대조).
    */
   public record Coefficients(
       String ruleVersion,
@@ -25,7 +26,21 @@ public final class CombatPowerArkPassiveModel {
       BigDecimal evolutionPerPoint,
       BigDecimal enlightenmentPerPoint,
       int enlightenmentMaxPoints,
-      int enlightenmentLimitPoints) {}
+      int enlightenmentLimitPoints,
+      BigDecimal evolutionKarmaPerRank,
+      BigDecimal leapKarmaPerLevel) {}
+
+  /** 진화 카르마 랭크 배수 1 + c × 랭크(모델값, 비교 기준 한 곳의 식). */
+  public static BigDecimal evolutionKarmaRank(Coefficients coefficients, int rank) {
+    return BigDecimal.ONE.add(
+        coefficients.evolutionKarmaPerRank().multiply(BigDecimal.valueOf(rank), MATH), MATH);
+  }
+
+  /** 도약 카르마 레벨 배수 1 + c × 레벨(모델값, 비교 기준 한 곳의 식). */
+  public static BigDecimal leapKarmaLevel(Coefficients coefficients, int level) {
+    return BigDecimal.ONE.add(
+        coefficients.leapKarmaPerLevel().multiply(BigDecimal.valueOf(level), MATH), MATH);
+  }
 
   /** 진화 포인트 P의 배수: 1 + c × max(P − 무료 포인트, 0). */
   public static BigDecimal evolution(Coefficients coefficients, int points) {
@@ -34,10 +49,14 @@ public final class CombatPowerArkPassiveModel {
         coefficients.evolutionPerPoint().multiply(BigDecimal.valueOf(counted), MATH), MATH);
   }
 
-  /** 깨달음 포인트 P의 배수: 1 + c × P. 확인한 상한을 넘으면 null(계산하지 않음). */
+  /**
+   * 깨달음 포인트 P의 배수: 1 + c × min(P, 상한 100). 101번째 포인트는 전투력이 없다(비교 기준 식과 같고, 101인 딜러 입력 44개(캐릭터 25명)
+   * 가운데 32개가 이 규칙에서 공식 전투력과 0.10% 안·중앙값 +0.000% — 세면 0개·모두 −0.41%). 요청 상한(101)을 넘으면 null.
+   */
   public static BigDecimal enlightenment(Coefficients coefficients, int points) {
-    if (points > coefficients.enlightenmentMaxPoints()) return null;
+    if (points > coefficients.enlightenmentLimitPoints()) return null;
+    int counted = Math.min(points, coefficients.enlightenmentMaxPoints());
     return BigDecimal.ONE.add(
-        coefficients.enlightenmentPerPoint().multiply(BigDecimal.valueOf(points), MATH), MATH);
+        coefficients.enlightenmentPerPoint().multiply(BigDecimal.valueOf(counted), MATH), MATH);
   }
 }

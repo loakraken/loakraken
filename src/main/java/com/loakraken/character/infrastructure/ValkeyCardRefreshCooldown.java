@@ -26,8 +26,11 @@ class ValkeyCardRefreshCooldown implements CardRefreshCooldownPort {
       var acquired = redis.opsForValue().setIfAbsent(key, "1", cooldown);
       if (Boolean.TRUE.equals(acquired)) return Optional.empty();
       Long millis = redis.getExpire(key, java.util.concurrent.TimeUnit.MILLISECONDS);
+      // 남은 만료(PTTL)는 저장소 시계로 잰다. SET과 PTTL 사이에 그 시계가 뒤로 가면 건 쿨다운보다 길게 나오므로 자른다(Retry-After ≤ 쿨다운).
       return Optional.of(
-          millis == null || millis <= 0 ? Duration.ofSeconds(1) : Duration.ofMillis(millis));
+          millis == null || millis <= 0
+              ? Duration.ofSeconds(1)
+              : Duration.ofMillis(Math.min(millis, cooldown.toMillis())));
     } catch (DataAccessException exception) {
       // 쿨다운을 확인할 수 없으면 공식 호출 예산을 지키기 위해 받지 않는다.
       throw new CharacterException(CharacterErrorCode.CHARACTER_CACHE_UNAVAILABLE);

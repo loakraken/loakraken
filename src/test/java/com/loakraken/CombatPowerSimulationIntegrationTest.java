@@ -557,9 +557,9 @@ class CombatPowerSimulationIntegrationTest {
   }
 
   @Test
-  void 진화_깨달음_포인트는_트리마다_독립_배수로_계산하고_깨달음_100_초과는_계산하지_않는다() throws Exception {
-    // PM 총괄 11-15 19:12: 진화 (1 + 0.0075·max(P − 40, 0), 모델값), 깨달음 (1 + 0.007·P, 100 이하만), 도약 (1 +
-    // 0.002·P).
+  void 진화_깨달음_포인트는_트리마다_독립_배수로_계산하고_깨달음_101번째_포인트는_전투력이_없다() throws Exception {
+    // PM 총괄 11-15 19:12: 진화 (1 + 0.0075·max(P − 40, 0), 모델값), 도약 (1 + 0.002·P). 깨달음은 M13(PM 총괄
+    // 11-22)부터 1 + 0.007·min(P, 100).
     when(detailsPort.fetch(anyString()))
         .thenAnswer(
             invocation -> {
@@ -590,7 +590,7 @@ class CombatPowerSimulationIntegrationTest {
         simulate("시뮬진화", "[{\"kind\": \"ARK_PASSIVE_POINT\", \"tree\": \"진화\", \"points\": 141}]");
     assertThat(over.statusCode()).isEqualTo(400);
     assertThat(over.body()).contains("INVALID_REQUEST", "points", "0~140");
-    // 깨달음 최대 101: 102는 400, 100은 계산, 101은 계산하지 않음(아래).
+    // 깨달음 최대 101: 102는 400, 100·101은 계산(101번째 포인트는 전투력 없음, 아래).
     var overEnlightenment =
         simulate("시뮬진화", "[{\"kind\": \"ARK_PASSIVE_POINT\", \"tree\": \"깨달음\", \"points\": 102}]");
     assertThat(overEnlightenment.statusCode()).isEqualTo(400);
@@ -616,14 +616,16 @@ class CombatPowerSimulationIntegrationTest {
     assertThat(all.path("contributions").size()).isEqualTo(3);
     assertThat(all.path("partial").asBoolean()).isFalse();
     assertThat(all.path("after").decimalValue()).isEqualByComparingTo("2881.12");
-    // 깨달음 100 초과는 바꿀 값이든 지금 값이든 계산하지 않는다(같은 캐릭터 공식 전투력 쌍으로 확인하기 전까지).
-    for (var unsupported : List.of(one("시뮬진화", "깨달음", 101), one("시뮬진화초과", "깨달음", 90))) {
-      assertThat(unsupported.at("/contributions/0/status").asText()).isEqualTo("UNSUPPORTED");
-      assertThat(unsupported.at("/contributions/0/reasonCode").asText())
-          .isEqualTo("MODEL_UNCONFIRMED");
-      assertThat(unsupported.at("/contributions/0/delta").isNull()).isTrue();
-      assertThat(unsupported.path("partial").asBoolean()).isTrue();
-    }
+    // M13(PM 총괄 11-22, 캐릭터 25명 공식 전투력 대조): 깨달음 101번째 포인트는 전투력이 없다 — 배수는 1 + 0.007 × min(P, 100).
+    // 100 → 101은 × 1(변화 없음), 101 → 90은 × 1.63 / 1.70(= −4.118%).
+    var toCap = one("시뮬진화", "깨달음", 101);
+    assertThat(toCap.at("/contributions/0/status").asText()).isEqualTo("OK");
+    assertThat(toCap.path("delta").decimalValue()).isEqualByComparingTo("0");
+    var fromCap = one("시뮬진화초과", "깨달음", 90);
+    assertThat(fromCap.at("/contributions/0/status").asText()).isEqualTo("OK");
+    assertThat(fromCap.path("partial").asBoolean()).isFalse();
+    assertThat(fromCap.path("deltaPercent").decimalValue()).isEqualByComparingTo("-4.118");
+    assertThat(fromCap.at("/contributions/0/basis").asText()).contains("101번째 포인트");
   }
 
   private JsonNode one(String name, String tree, int points) throws Exception {
@@ -1098,6 +1100,540 @@ class CombatPowerSimulationIntegrationTest {
     assertThat(data.path("deltaPercent").decimalValue()).isEqualByComparingTo("-3.938");
     assertThat(data.path("unsupportedCount").asInt()).isEqualTo(1);
     verify(detailsPort, times(1)).fetch(anyString());
+  }
+
+  /**
+   * M49 G1(계산 검증 11-22): 아크 그리드 젬 교체. 공식 원본(11-15 표본)과 같은 아크 그리드 상태를 이름 없이 만든다 — 젬 옵션 합 추가 피해 49 ·
+   * 공격력 34 · 보스 피해 4 · 낙인력 39 · 아군 피해 강화 24, 혼돈의 해 코어 : 현란한 공격(고대, Slots Index 5, 17P, 공급 의지력 17, 젬
+   * 필요 의지력 3+4+3+7 = 17). 비교 기준 식 기대값: 젬 1(아군 피해 강화 2 · 낙인력 5, 4P)을 침식 5P 추가 피해 3 · 공격력 2로 바꾸면 옵션
+   * +0.2443% × 코어 17 → 18P +0.1643% = +0.4091%.
+   */
+  @Test
+  void 아크_그리드_젬_교체는_옵션_합과_코어_포인트를_다시_더하고_의지력이_모자라면_계산하지_않는다() throws Exception {
+    when(detailsPort.fetch(anyString()))
+        .thenAnswer(
+            invocation -> {
+              var base = fetchedBracelet(invocation.getArgument(0));
+              var details = base.details();
+              var old = details.loadout();
+              var loadout =
+                  new CharacterLoadout(
+                      old.equipment(),
+                      old.engravings(),
+                      old.gems(),
+                      old.cards(),
+                      old.arkPassive(),
+                      gemSwapGrid(),
+                      old.skills());
+              return new FetchedCharacter(
+                  CharacterTestFixture.details(details.profile(), loadout, List.of()), "{}", "[]");
+            });
+    assertThat(get("/api/v1/characters/search?characterName=" + encode("시뮬젬")).statusCode())
+        .isEqualTo(200);
+    var swap =
+        """
+        {"kind": "ARK_GRID_GEM", "slotIndex": 5, "index": 1, "gemType": "침식", "willEfficiency": %d,
+         "point": %d, "effects": [{"name": "추가 피해", "level": 3}, {"name": "공격력", "level": 2}]}
+        """;
+    // (A) 효율 4(필요 4, 합 17 = 공급 17): 옵션 + 포인트.
+    var response = simulate("시뮬젬", "[" + swap.formatted(4, 5) + "]");
+    assertThat(response.statusCode()).as(response.body()).isEqualTo(200);
+    ApiContractFixture.write("character-combat-power-simulate-ark-grid-gem.json", response.body());
+    SiteNames.assertAbsent(response.body());
+    var data = mapper.readTree(response.body()).path("data");
+    assertThat(data.at("/contributions/0/status").asText()).isEqualTo("OK");
+    // 표시는 1부터: 공식 Gems Index 1 = 두 번째 젬 = "젬 2"(프론트2 11-22).
+    assertThat(data.at("/contributions/0/target").asText()).isEqualTo("혼돈의 해 코어 : 현란한 공격 젬 2");
+    assertThat(data.at("/contributions/0/from").asText()).isEqualTo("침식 4P 아군 피해 강화 2 · 낙인력 5");
+    assertThat(data.at("/contributions/0/to").asText()).isEqualTo("침식 5P 추가 피해 3 · 공격력 2");
+    assertThat(data.path("deltaPercent").decimalValue())
+        .isBetween(new BigDecimal("0.408"), new BigDecimal("0.410"));
+    // 옵션만(포인트 4 그대로, 코어 17P): +0.2443%.
+    var options = mapper.readTree(simulate("시뮬젬", "[" + swap.formatted(4, 4) + "]").body());
+    assertThat(options.at("/data/deltaPercent").decimalValue())
+        .isBetween(new BigDecimal("0.243"), new BigDecimal("0.245"));
+    // (B) 효율 3(필요 5, 합 18 > 공급 17): 어느 젬이 꺼질지 몰라 계산하지 않는다.
+    var shortWill = mapper.readTree(simulate("시뮬젬", "[" + swap.formatted(3, 5) + "]").body());
+    assertThat(shortWill.at("/data/contributions/0/status").asText()).isEqualTo("UNSUPPORTED");
+    assertThat(shortWill.at("/data/contributions/0/reasonCode").asText())
+        .isEqualTo("ARK_GRID_WILL_SHORT");
+    assertThat(shortWill.at("/data/contributions/0/delta").isNull()).isTrue();
+    // 잘못된 젬: 혼돈 코어에 질서 젬, 그 종류에 없는 옵션, 같은 옵션 두 줄 → 400. 없는 젬 칸 → 409.
+    assertThat(
+            simulate("시뮬젬", "[" + swap.formatted(4, 5).replace("\"침식\"", "\"견고\"") + "]")
+                .statusCode())
+        .isEqualTo(400);
+    assertThat(
+            simulate("시뮬젬", "[" + swap.formatted(4, 5).replace("\"공격력\"", "\"보스 피해\"") + "]")
+                .statusCode())
+        .isEqualTo(400);
+    assertThat(
+            simulate("시뮬젬", "[" + swap.formatted(4, 5).replace("\"공격력\"", "\"추가 피해\"") + "]")
+                .statusCode())
+        .isEqualTo(400);
+    assertThat(
+            simulate(
+                    "시뮬젬", "[" + swap.formatted(4, 5).replace("\"index\": 1", "\"index\": 9") + "]")
+                .statusCode())
+        .isEqualTo(409);
+    // 칸 번호가 빠지면 요청 오류(400, #1079 코드 리뷰 P3).
+    assertThat(
+            simulate("시뮬젬", "[" + swap.formatted(4, 5).replace("\"slotIndex\": 5, ", "") + "]")
+                .statusCode())
+        .isEqualTo(400);
+    // 같은 코어의 교체는 모두 반영한 의지력으로 본다(#1079 코드 리뷰). 젬 3(왜곡 필요 7) → 효율 5(필요 4)로 3을 비우고 젬 0(필요 3) → 효율
+    // 2(필요 6).
+    // 젬 0 교체만이면 17 − 3 + 6 = 20 > 17이라 계산하지 않지만, 둘 함께면 17로 맞는다.
+    var gem0 =
+        """
+        {"kind": "ARK_GRID_GEM", "slotIndex": 5, "index": 0, "gemType": "침식", "willEfficiency": 2,
+         "point": 4, "effects": [{"name": "추가 피해", "level": 3}, {"name": "낙인력", "level": 1}]}
+        """;
+    var gem3 =
+        """
+        {"kind": "ARK_GRID_GEM", "slotIndex": 5, "index": 3, "gemType": "왜곡", "willEfficiency": %d,
+         "point": 5, "effects": [{"name": "보스 피해", "level": 4}, {"name": "공격력", "level": 3}]}
+        """;
+    var alone = mapper.readTree(simulate("시뮬젬", "[" + gem0 + "]").body());
+    assertThat(alone.at("/data/contributions/0/reasonCode").asText())
+        .isEqualTo("ARK_GRID_WILL_SHORT");
+    var rebalanced =
+        mapper.readTree(simulate("시뮬젬", "[" + gem0 + "," + gem3.formatted(5) + "]").body());
+    assertThat(rebalanced.at("/data/contributions/0/status").asText()).isEqualTo("OK");
+    assertThat(rebalanced.at("/data/contributions/1/status").asText()).isEqualTo("OK");
+    // 합이 넘으면 그 코어의 교체는 모두 계산하지 않는다(젬 3 효율 2 = 필요 7 그대로 + 젬 0 필요 6 → 20). 젬 3 교체 줄만 보면 맞지만 같은 코어라 함께
+    // 막는다.
+    var together =
+        mapper.readTree(simulate("시뮬젬", "[" + gem0 + "," + gem3.formatted(2) + "]").body());
+    assertThat(together.at("/data/contributions/0/reasonCode").asText())
+        .isEqualTo("ARK_GRID_WILL_SHORT");
+    assertThat(together.at("/data/contributions/1/reasonCode").asText())
+        .isEqualTo("ARK_GRID_WILL_SHORT");
+    // 같은 코어의 등급·포인트 변경과 젬 교체는 함께 계산하지 않는다(그 이유 문장).
+    var mixed =
+        mapper.readTree(
+            simulate(
+                    "시뮬젬",
+                    "[{\"kind\": \"ARK_GRID_CORE\", \"slotIndex\": 5, \"grade\": \"고대\", \"point\": 20},"
+                        + swap.formatted(4, 5)
+                        + "]")
+                .body());
+    assertThat(mixed.at("/data/contributions/1/status").asText()).isEqualTo("UNSUPPORTED");
+    assertThat(mixed.at("/data/contributions/1/basis").asText()).contains("젬 교체를 함께 계산하지");
+  }
+
+  /**
+   * #1079 대체 리뷰 P3: 같은 코어의 교체 하나를 계산하지 못하면 그 코어의 교체는 모두 계산하지 않는다(의지력 판정은 그 코어의 교체 전부를 전제로 했다). 공식
+   * 옵션 합(추가 피해 1)이 젬 0의 추가 피해 3보다 작은 어긋난 상태: 젬 0을 빼면 레벨이 음수라 다시 더할 수 없다. 젬 1 교체만이면 계산된다.
+   */
+  @Test
+  void 같은_코어의_교체_하나를_계산하지_못하면_그_코어의_교체는_모두_계산하지_않는다() throws Exception {
+    when(detailsPort.fetch(anyString()))
+        .thenAnswer(
+            invocation -> {
+              var base = fetchedBracelet(invocation.getArgument(0));
+              var details = base.details();
+              var old = details.loadout();
+              var grid = gemSwapGrid();
+              var effects =
+                  grid.effects().stream()
+                      .map(
+                          effect ->
+                              "추가 피해".equals(effect.name())
+                                  ? new CharacterLoadout.GridEffect("추가 피해", 1, null, null)
+                                  : effect)
+                      .toList();
+              var loadout =
+                  new CharacterLoadout(
+                      old.equipment(),
+                      old.engravings(),
+                      old.gems(),
+                      old.cards(),
+                      old.arkPassive(),
+                      new CharacterLoadout.ArkGrid(grid.slots(), effects),
+                      old.skills());
+              return new FetchedCharacter(
+                  CharacterTestFixture.details(details.profile(), loadout, List.of()), "{}", "[]");
+            });
+    assertThat(get("/api/v1/characters/search?characterName=" + encode("시뮬젬형제")).statusCode())
+        .isEqualTo(200);
+    var gem1 =
+        """
+        {"kind": "ARK_GRID_GEM", "slotIndex": 5, "index": 1, "gemType": "침식", "willEfficiency": 4,
+         "point": 4, "effects": [{"name": "아군 피해 강화", "level": 2}, {"name": "낙인력", "level": 5}]}
+        """;
+    var gem0 =
+        """
+        {"kind": "ARK_GRID_GEM", "slotIndex": 5, "index": 0, "gemType": "침식", "willEfficiency": 5,
+         "point": 4, "effects": [{"name": "낙인력", "level": 1}, {"name": "공격력", "level": 2}]}
+        """;
+    var alone = mapper.readTree(simulate("시뮬젬형제", "[" + gem1 + "]").body());
+    assertThat(alone.at("/data/contributions/0/status").asText()).isEqualTo("OK");
+    var both = mapper.readTree(simulate("시뮬젬형제", "[" + gem1 + "," + gem0 + "]").body());
+    assertThat(both.at("/data/contributions/0/status").asText())
+        .as(both.toString())
+        .isEqualTo("UNSUPPORTED");
+    assertThat(both.at("/data/contributions/1/status").asText()).isEqualTo("UNSUPPORTED");
+    assertThat(both.at("/data/contributions/0/basis").asText())
+        .isEqualTo(both.at("/data/contributions/1/basis").asText())
+        .contains("함께 계산하지 못해");
+    assertThat(both.at("/data/delta").decimalValue()).isEqualByComparingTo("0");
+  }
+
+  /**
+   * #1083 대체 리뷰 P3: 코어마다 미리 계산해 보는 것으로는 부족하다 — 옵션 합은 그리드 전체에서 더한다. 공식 추가 피해 합 4인 어긋난 상태에서 두
+   * 코어(5·6)가 추가 피해 3인 젬을 하나씩 바꾸면 하나씩은 계산되지만(4 − 3 = 1) 함께면 −2라 다시 더할 수 없다. 그러면 젬 교체를 모두 같은 이유로 계산하지
+   * 않는다(앞 코어만 계산되고 뒤 코어만 빠지지 않게).
+   */
+  @Test
+  void 여러_코어의_젬_교체를_함께_계산하지_못하면_젬_교체는_모두_계산하지_않는다() throws Exception {
+    when(detailsPort.fetch(anyString()))
+        .thenAnswer(
+            invocation -> {
+              var base = fetchedBracelet(invocation.getArgument(0));
+              var details = base.details();
+              var old = details.loadout();
+              var grid = gemSwapGrid();
+              var second =
+                  new CharacterLoadout.GridSlot(
+                      6,
+                      null,
+                      "혼돈의 해 코어 : 현란한 공격",
+                      4,
+                      "고대",
+                      List.of(gridGem(0, 4, 3, 8, 5, "추가 피해", 3, "공격력", 1)),
+                      new CharacterLoadout.CoreDetail("혼돈", 17, List.of(), List.of()),
+                      null);
+              var slots = new java.util.ArrayList<>(grid.slots());
+              slots.add(second);
+              var effects =
+                  grid.effects().stream()
+                      .map(
+                          effect ->
+                              "추가 피해".equals(effect.name())
+                                  ? new CharacterLoadout.GridEffect("추가 피해", 4, null, null)
+                                  : effect)
+                      .toList();
+              var loadout =
+                  new CharacterLoadout(
+                      old.equipment(),
+                      old.engravings(),
+                      old.gems(),
+                      old.cards(),
+                      old.arkPassive(),
+                      new CharacterLoadout.ArkGrid(List.copyOf(slots), effects),
+                      old.skills());
+              return new FetchedCharacter(
+                  CharacterTestFixture.details(details.profile(), loadout, List.of()), "{}", "[]");
+            });
+    assertThat(get("/api/v1/characters/search?characterName=" + encode("시뮬젬두코어")).statusCode())
+        .isEqualTo(200);
+    var core5 =
+        """
+        {"kind": "ARK_GRID_GEM", "slotIndex": 5, "index": 0, "gemType": "침식", "willEfficiency": 5,
+         "point": 4, "effects": [{"name": "낙인력", "level": 1}, {"name": "공격력", "level": 2}]}
+        """;
+    var core6 =
+        """
+        {"kind": "ARK_GRID_GEM", "slotIndex": 6, "index": 0, "gemType": "침식", "willEfficiency": 5,
+         "point": 4, "effects": [{"name": "낙인력", "level": 1}, {"name": "공격력", "level": 2}]}
+        """;
+    // 하나씩은 계산된다.
+    for (var alone : List.of(core5, core6)) {
+      var body = mapper.readTree(simulate("시뮬젬두코어", "[" + alone + "]").body());
+      assertThat(body.at("/data/contributions/0/status").asText())
+          .as(body.toString())
+          .isEqualTo("OK");
+    }
+    var both = mapper.readTree(simulate("시뮬젬두코어", "[" + core5 + "," + core6 + "]").body());
+    assertThat(both.at("/data/contributions/0/status").asText())
+        .as(both.toString())
+        .isEqualTo("UNSUPPORTED");
+    assertThat(both.at("/data/contributions/1/status").asText()).isEqualTo("UNSUPPORTED");
+    assertThat(both.at("/data/contributions/0/basis").asText())
+        .isEqualTo(both.at("/data/contributions/1/basis").asText())
+        .contains("여러 코어의 젬 교체를 함께 계산하지 못해");
+    assertThat(both.at("/data/delta").decimalValue()).isEqualByComparingTo("0");
+  }
+
+  /**
+   * #1079 대체 리뷰 P3-2: 교체로 의지력이 남으면 뒤 슬롯의 꺼진 젬이 켜진다(공식 가이드 '아크 그리드' 최근수정일 2026-06-24 — 코어에서 가까운 슬롯부터
+   * 차례로 공급, 모자란 슬롯부터 그 뒤는 꺼짐). 공급 17, 젬 0·1·2가 3·4·3을 쓰고 젬 3(필요 8)은 7이 남아 꺼져 있다. 젬 1을 효율 5(필요 3)로
+   * 바꾸면 8이 남아 젬 3이 켜지고(보스 피해 4·공격력 3·코어 포인트 5가 더해짐), 효율 4(필요 4)면 7이라 그대로 꺼져 있다.
+   */
+  @Test
+  void 교체로_의지력이_남으면_뒤_슬롯의_꺼진_젬이_켜진다() throws Exception {
+    when(detailsPort.fetch(anyString()))
+        .thenAnswer(
+            invocation -> {
+              var base = fetchedBracelet(invocation.getArgument(0));
+              var details = base.details();
+              var old = details.loadout();
+              var loadout =
+                  new CharacterLoadout(
+                      old.equipment(),
+                      old.engravings(),
+                      old.gems(),
+                      old.cards(),
+                      old.arkPassive(),
+                      sleepingGemGrid(),
+                      old.skills());
+              return new FetchedCharacter(
+                  CharacterTestFixture.details(details.profile(), loadout, List.of()), "{}", "[]");
+            });
+    assertThat(get("/api/v1/characters/search?characterName=" + encode("시뮬젬깨움")).statusCode())
+        .isEqualTo(200);
+    var freesWill =
+        """
+        [{"kind": "ARK_GRID_GEM", "slotIndex": 5, "index": 1, "gemType": "침식", "willEfficiency": 5,
+          "point": 5, "effects": [{"name": "추가 피해", "level": 3}, {"name": "공격력", "level": 2}]}]
+        """;
+    var keepsWill =
+        """
+        [{"kind": "ARK_GRID_GEM", "slotIndex": 5, "index": 1, "gemType": "침식", "willEfficiency": 4,
+          "point": 5, "effects": [{"name": "추가 피해", "level": 3}, {"name": "공격력", "level": 2}]}]
+        """;
+    var woke = mapper.readTree(simulate("시뮬젬깨움", freesWill).body());
+    var slept = mapper.readTree(simulate("시뮬젬깨움", keepsWill).body());
+    assertThat(woke.at("/data/contributions/0/status").asText())
+        .as(woke.toString())
+        .isEqualTo("OK");
+    assertThat(slept.at("/data/contributions/0/status").asText())
+        .as(slept.toString())
+        .isEqualTo("OK");
+    // 효율만 다르고 옵션·포인트는 같다: 젬 3이 켜지는 쪽이 더 오른다.
+    assertThat(woke.at("/data/delta").decimalValue())
+        .as(woke.toString() + " vs " + slept)
+        .isGreaterThan(slept.at("/data/delta").decimalValue());
+  }
+
+  /**
+   * 규칙이 지금 IsActive를 재현하지 못하면(젬 3이 필요 7로 맞는데도 공식은 꺼짐 — 슬롯 순서가 다를 수 있다) 젬을 새로 켜지 않는다: 효율 5·4가 같은
+   * 값이다(전과 같음).
+   */
+  @Test
+  void 활성화_규칙이_지금_상태를_재현하지_못하면_젬을_새로_켜지_않는다() throws Exception {
+    when(detailsPort.fetch(anyString()))
+        .thenAnswer(
+            invocation -> {
+              var base = fetchedBracelet(invocation.getArgument(0));
+              var details = base.details();
+              var old = details.loadout();
+              var grid = sleepingGemGrid(7);
+              var loadout =
+                  new CharacterLoadout(
+                      old.equipment(),
+                      old.engravings(),
+                      old.gems(),
+                      old.cards(),
+                      old.arkPassive(),
+                      grid,
+                      old.skills());
+              return new FetchedCharacter(
+                  CharacterTestFixture.details(details.profile(), loadout, List.of()), "{}", "[]");
+            });
+    assertThat(get("/api/v1/characters/search?characterName=" + encode("시뮬젬어긋남")).statusCode())
+        .isEqualTo(200);
+    var five =
+        """
+        [{"kind": "ARK_GRID_GEM", "slotIndex": 5, "index": 1, "gemType": "침식", "willEfficiency": 5,
+          "point": 5, "effects": [{"name": "추가 피해", "level": 3}, {"name": "공격력", "level": 2}]}]
+        """;
+    var four = five.replace("\"willEfficiency\": 5", "\"willEfficiency\": 4");
+    var a = mapper.readTree(simulate("시뮬젬어긋남", five).body());
+    var b = mapper.readTree(simulate("시뮬젬어긋남", four).body());
+    assertThat(a.at("/data/contributions/0/status").asText()).as(a.toString()).isEqualTo("OK");
+    assertThat(a.at("/data/delta").decimalValue())
+        .isEqualByComparingTo(b.at("/data/delta").decimalValue());
+  }
+
+  /**
+   * #1109 대체 리뷰 P2: 새로 켜질 꺼진 젬의 옵션 레벨을 읽지 못하면(공식 값 없음) 500이 아니라 그 교체를 계산하지 않는다(UNSUPPORTED). 꺼진 젬은
+   * gemUnreadable이 보지 않는다.
+   */
+  @Test
+  void 새로_켜질_젬의_옵션을_읽지_못하면_계산하지_않는다() throws Exception {
+    when(detailsPort.fetch(anyString()))
+        .thenAnswer(
+            invocation -> {
+              var base = fetchedBracelet(invocation.getArgument(0));
+              var details = base.details();
+              var old = details.loadout();
+              var grid = sleepingGemGrid();
+              var core = grid.slots().getFirst();
+              var gems = new java.util.ArrayList<>(core.gems());
+              var sleeping = gems.get(3);
+              gems.set(
+                  3,
+                  new CharacterLoadout.GridGem(
+                      sleeping.index(),
+                      sleeping.icon(),
+                      sleeping.active(),
+                      sleeping.grade(),
+                      new CharacterLoadout.GemDetail(
+                          sleeping.detail().name(),
+                          sleeping.detail().gemType(),
+                          sleeping.detail().gemPoint(),
+                          sleeping.detail().requiredWillpower(),
+                          sleeping.detail().baseWillpower(),
+                          sleeping.detail().willpowerEfficiency(),
+                          sleeping.detail().corePoint(),
+                          List.of(
+                              new CharacterLoadout.GemOption("보스 피해", null, null, null),
+                              new CharacterLoadout.GemOption("공격력", 3, null, null)))));
+              var slot =
+                  new CharacterLoadout.GridSlot(
+                      core.index(),
+                      core.icon(),
+                      core.name(),
+                      core.point(),
+                      core.grade(),
+                      List.copyOf(gems),
+                      core.core(),
+                      core.lines());
+              var loadout =
+                  new CharacterLoadout(
+                      old.equipment(),
+                      old.engravings(),
+                      old.gems(),
+                      old.cards(),
+                      old.arkPassive(),
+                      new CharacterLoadout.ArkGrid(List.of(slot), grid.effects()),
+                      old.skills());
+              return new FetchedCharacter(
+                  CharacterTestFixture.details(details.profile(), loadout, List.of()), "{}", "[]");
+            });
+    assertThat(get("/api/v1/characters/search?characterName=" + encode("시뮬젬레벨없음")).statusCode())
+        .isEqualTo(200);
+    var response =
+        simulate(
+            "시뮬젬레벨없음",
+            """
+            [{"kind": "ARK_GRID_GEM", "slotIndex": 5, "index": 1, "gemType": "침식", "willEfficiency": 5,
+              "point": 5, "effects": [{"name": "추가 피해", "level": 3}, {"name": "공격력", "level": 2}]}]
+            """);
+    assertThat(response.statusCode()).as(response.body()).isEqualTo(200);
+    var body = mapper.readTree(response.body());
+    assertThat(body.at("/data/contributions/0/status").asText()).isEqualTo("UNSUPPORTED");
+  }
+
+  /** 젬 3이 꺼진 아크 그리드: 공급 17, 젬 0·1·2가 3·4·3, 젬 3은 필요 8이라 꺼짐 — 공식 옵션 합·코어 포인트는 켜진 젬만. */
+  private static CharacterLoadout.ArkGrid sleepingGemGrid() {
+    return sleepingGemGrid(8);
+  }
+
+  /** gem3Need: 젬 3의 필요 의지력(8이면 규칙대로 꺼짐, 7이면 규칙으로는 켜져야 하는데 공식은 꺼짐 — 어긋난 상태). */
+  private static CharacterLoadout.ArkGrid sleepingGemGrid(int gem3Need) {
+    var gems =
+        List.of(
+            gridGem(0, 4, 3, 8, 5, "추가 피해", 3, "낙인력", 1),
+            gridGem(1, 4, 4, 8, 4, "아군 피해 강화", 2, "낙인력", 5),
+            gridGem(2, 4, 3, 8, 5, "아군 피해 강화", 3, "낙인력", 2),
+            new CharacterLoadout.GridGem(
+                3,
+                null,
+                false,
+                "전설",
+                new CharacterLoadout.GemDetail(
+                    "혼돈의 젬 : 왜곡",
+                    "혼돈",
+                    16,
+                    gem3Need,
+                    9,
+                    9 - gem3Need,
+                    5,
+                    List.of(
+                        new CharacterLoadout.GemOption("보스 피해", 4, null, null),
+                        new CharacterLoadout.GemOption("공격력", 3, null, null)))));
+    var core =
+        new CharacterLoadout.GridSlot(
+            5,
+            null,
+            "혼돈의 해 코어 : 현란한 공격",
+            12,
+            "고대",
+            gems,
+            new CharacterLoadout.CoreDetail("혼돈", 17, List.of(), List.of()),
+            null);
+    return new CharacterLoadout.ArkGrid(
+        List.of(core),
+        List.of(
+            new CharacterLoadout.GridEffect("추가 피해", 49, null, null),
+            new CharacterLoadout.GridEffect("낙인력", 39, null, null),
+            new CharacterLoadout.GridEffect("아군 피해 강화", 24, null, null),
+            new CharacterLoadout.GridEffect("공격력", 31, null, null)));
+  }
+
+  /** 11-15 표본과 같은 아크 그리드(이름 없음): 혼돈의 해 코어 하나와 공식 옵션 합. */
+  private static CharacterLoadout.ArkGrid gemSwapGrid() {
+    var gems =
+        List.of(
+            gridGem(0, 4, 3, 8, 5, "추가 피해", 3, "낙인력", 1),
+            gridGem(1, 4, 4, 8, 4, "아군 피해 강화", 2, "낙인력", 5),
+            gridGem(2, 4, 3, 8, 5, "아군 피해 강화", 3, "낙인력", 2),
+            new CharacterLoadout.GridGem(
+                3,
+                null,
+                true,
+                "전설",
+                new CharacterLoadout.GemDetail(
+                    "혼돈의 젬 : 왜곡",
+                    "혼돈",
+                    16,
+                    7,
+                    9,
+                    2,
+                    5,
+                    List.of(
+                        new CharacterLoadout.GemOption("보스 피해", 4, null, null),
+                        new CharacterLoadout.GemOption("공격력", 3, null, null)))));
+    var core =
+        new CharacterLoadout.GridSlot(
+            5,
+            null,
+            "혼돈의 해 코어 : 현란한 공격",
+            17,
+            "고대",
+            gems,
+            new CharacterLoadout.CoreDetail("혼돈", 17, List.of(), List.of()),
+            null);
+    return new CharacterLoadout.ArkGrid(
+        List.of(core),
+        List.of(
+            new CharacterLoadout.GridEffect("추가 피해", 49, null, null),
+            new CharacterLoadout.GridEffect("낙인력", 39, null, null),
+            new CharacterLoadout.GridEffect("아군 피해 강화", 24, null, null),
+            new CharacterLoadout.GridEffect("공격력", 34, null, null),
+            new CharacterLoadout.GridEffect("보스 피해", 4, null, null)));
+  }
+
+  private static CharacterLoadout.GridGem gridGem(
+      int index,
+      int point,
+      int will,
+      int baseWill,
+      int efficiency,
+      String first,
+      int firstLevel,
+      String second,
+      int secondLevel) {
+    return new CharacterLoadout.GridGem(
+        index,
+        null,
+        true,
+        "전설",
+        new CharacterLoadout.GemDetail(
+            "혼돈의 젬 : 침식",
+            "혼돈",
+            // 젬 포인트(총합)는 코어 포인트(혼돈 포인트)와 다르다(공식 원본: 젬 포인트 15 · 혼돈 포인트 4, #1079 P0).
+            point + 11,
+            will,
+            baseWill,
+            efficiency,
+            point,
+            List.of(
+                new CharacterLoadout.GemOption(first, firstLevel, null, null),
+                new CharacterLoadout.GemOption(second, secondLevel, null, null))));
   }
 
   private static CharacterLoadout.GridSlot gridSlot(

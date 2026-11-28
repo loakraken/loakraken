@@ -499,6 +499,60 @@ class LostArkRequestGateTest {
     assertThat(officialCalls(filter, gate, "203.0.113.100", "1", 1)).isZero();
   }
 
+  /**
+   * v0.3.16 P3(#1065 코드 리뷰 뒤, PM 총괄 08:4x): 크롤러로 확인된 검색봇도 기능 버킷 경로(재료 검색)에서 주소별 봇 칸(5)과 확인된 봇 합계
+   * 상한(20)을 받는다. 지금은 재료 검색 버킷(주소별 15, 합계 36)만 받아 주소마다 8번, 합계 36번까지 된다.
+   */
+  @Test
+  void 확인된_크롤러도_재료_검색에서_주소별_봇_칸과_봇_합계_상한을_받는다() throws Exception {
+    var clock = new MutableClock();
+    var limiter = limiter(clock, 20, 15, 36);
+    var gate = materialGate(clock, limiter);
+    var verifier = verifiedEverywhere(clock);
+    var filter = new ClientLimitFilter(limiter, verifier);
+    // 확인되지 않은 표시 요청도 같은 [5,5,5,5,0,0]이 나오므로, 여섯 주소가 정말 확인된 크롤러인지 먼저 본다(시험이 판별하게).
+    for (int n = 0; n < 6; n++) assertThat(verifier.verified("66.249.70." + (10 + n))).isTrue();
+    var allowed = new java.util.ArrayList<Integer>();
+    for (int n = 0; n < 6; n++)
+      allowed.add(materialCalls(filter, gate, "66.249.70." + (10 + n), "1", 8));
+    assertThat(allowed).containsExactly(5, 5, 5, 5, 0, 0);
+    // 걸린 호출은 재료 검색 합계(36)를 쓰지 않았다(20만 씀): 표시 없는 사람 클라이언트는 자기 한도 15를 다 쓴다.
+    assertThat(materialCalls(filter, gate, "203.0.113.201", null, 15)).isEqualTo(15);
+  }
+
+  /** 모든 주소를 크롤러로 확인하는 확인기(역방향 이름이 허용 도메인이고 정방향이 같은 주소). */
+  private CrawlerVerifier verifiedEverywhere(Clock clock) {
+    var resolver =
+        new CrawlerVerifier.Resolver() {
+          @Override
+          public String reverse(java.net.InetAddress address) {
+            return "bot-" + address.getHostAddress().replace('.', '-') + ".crawler.example";
+          }
+
+          @Override
+          public java.util.List<java.net.InetAddress> forward(String host) {
+            try {
+              var ip = host.substring(4, host.indexOf(".crawler.example")).replace('-', '.');
+              return java.util.List.of(java.net.InetAddress.getByName(ip));
+            } catch (java.net.UnknownHostException exception) {
+              return java.util.List.of();
+            }
+          }
+        };
+    return new CrawlerVerifier(
+        new CrawlerVerifyProperties(
+            java.util.List.of("crawler.example"),
+            Duration.ofMillis(300),
+            Duration.ofHours(24),
+            Duration.ofHours(1),
+            100,
+            8),
+        resolver,
+        Runnable::run,
+        clock,
+        registry);
+  }
+
   /** 어느 주소도 크롤러로 확인되지 않는 확인기(역방향 이름 없음). */
   private CrawlerVerifier unverifiedEverywhere(Clock clock) {
     var resolver =

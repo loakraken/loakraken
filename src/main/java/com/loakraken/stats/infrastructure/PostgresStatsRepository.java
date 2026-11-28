@@ -1127,7 +1127,13 @@ class PostgresStatsRepository implements StatsPort {
             + " IS NOT NULL AND "
             + versionColumn
             + " = :version"
-            + (columns.dealersOnly() ? " AND position = 'DEALER'" : "");
+            + (columns.dealersOnly() ? " AND position = 'DEALER'" : "")
+            // 2부 대비 막기: 판정이 있는 행(막기 켜짐) 또는 전부(카드 끄기 켜짐)를 뺀다. NULL·빈 문자열은 통과.
+            + switch (columns.shapeFilter()) {
+              case NONE -> "";
+              case FAILED -> " AND (shape_verdict IS NULL OR shape_verdict = '')";
+              case ALL -> " AND FALSE";
+            };
     population(conditions, since)
         .statement(
             "SELECT character_name, server_name, class_name, position, item_level, combat_power, "
@@ -1390,7 +1396,7 @@ class PostgresStatsRepository implements StatsPort {
             + " c.combat_power, c.best_combat_power, c.position, c.gem_mean_level, c.bracelet_efficiency_pct,"
             + " c.bracelet_rule_version, c.ark_grid_gem_pct, c.ark_grid_rule_version,"
             + " c.bracelet_real_pct, c.bracelet_real_rule_version, c.ark_grid_real_pct,"
-            + " c.ark_grid_real_rule_version, c.efficiency_observed_at, c.image_url FROM characters c WHERE "
+            + " c.ark_grid_real_rule_version, c.efficiency_observed_at, c.shape_verdict, c.image_url FROM characters c WHERE "
             + where
             + ") ";
     return new Population(cte, params);

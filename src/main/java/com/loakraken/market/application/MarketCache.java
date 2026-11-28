@@ -32,6 +32,14 @@ public interface MarketCache {
   void saveBoardScan(MarketBoardScan scan);
 
   /**
+   * 젬 교체 순위용 '마지막 아크 그리드 탭 스캔'(보드 캐시 3분과 따로 15분, PM 총괄 2026-11-22). 아크 그리드 탭 스캔을 저장할 때마다(보드 방문·젬 순위
+   * 예열) 함께 갱신된다. 없거나 읽지 못하면 빈 값.
+   */
+  default Optional<MarketBoardScan> findArkGridGemSnapshot() {
+    return Optional.empty();
+  }
+
+  /**
    * day(KST) 거래량 지도에서 그 품목들의 완료일 거래량. 없거나 읽지 못하면 빈 값. 거래량 지도는 날짜별 캐시다(DB 없음). 돌림 탭(아바타)은 며칠에 한 번
    * 받으므로 보드가 최근 7일 지도까지 거슬러 찾을 수 있게 TTL을 8일로 둔다.
    */

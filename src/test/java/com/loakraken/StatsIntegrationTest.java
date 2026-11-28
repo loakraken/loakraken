@@ -1000,6 +1000,36 @@ class StatsIntegrationTest {
             .single();
     assertThat(supporter).isEqualTo(new BigDecimal("18.107142857142858"));
 
+    // 2부 대비 막기(계약 2026-11-28): 판정이 있는 행은 FAILED에서 빠지고, 빈 판정·판정 전(NULL)은 남는다. ALL은 모두 뺀다.
+    jdbc.sql(
+            "UPDATE characters SET shape_verdict = 'H6_GEM' WHERE server_name = :s AND character_name = '통계캐1'")
+        .param("s", SERVER)
+        .update();
+    jdbc.sql(
+            "UPDATE characters SET shape_verdict = '' WHERE server_name = :s AND character_name = '통계캐3'")
+        .param("s", SERVER)
+        .update();
+    var braceletColumns = StatsPort.EfficiencyKind.BRACELET.columns(true);
+    assertThat(
+            statsPort
+                .efficiencyRanking(
+                    conditions, since, braceletColumns.with(StatsPort.ShapeFilter.NONE), 0, 10)
+                .total())
+        .isEqualTo(2);
+    assertThat(
+            statsPort
+                .efficiencyRanking(
+                    conditions, since, braceletColumns.with(StatsPort.ShapeFilter.FAILED), 0, 10)
+                .rows())
+        .extracting(StatsPort.EfficiencyRow::characterName)
+        .containsExactly("통계캐3");
+    assertThat(
+            statsPort
+                .efficiencyRanking(
+                    conditions, since, braceletColumns.with(StatsPort.ShapeFilter.ALL), 0, 10)
+                .total())
+        .isZero();
+
     // 전투력 기여 모델 열은 따로다(실 효율만 저장된 캐릭터는 들어가지 않음).
     assertThat(
             statsPort

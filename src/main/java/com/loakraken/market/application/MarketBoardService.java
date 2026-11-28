@@ -343,6 +343,35 @@ public class MarketBoardService {
         search(tab, tab.defaultTier(), MarketBoardRules.Sort.DEFAULT, 1));
   }
 
+  /**
+   * 젬 교체 순위 예열 전용: 탭 기본 티어 전체 스캔을 캐시에 있어도 새로 받아 저장한다(보드 스캔과 같은 합치기·한 번에 하나 — 같은 스캔이 진행 중이면 그 결과를 같이
+   * 쓴다). 아크 그리드 탭이면 저장이 젬 순위 스냅숏도 갱신한다. 공식 검색은 쪽마다(이 탭은 2쪽).
+   */
+  public MarketBoardScan refreshScan(MarketTab tab) {
+    var tier = tab.defaultTier();
+    var key = new ScanKey(tab, tier);
+    var future = new CompletableFuture<MarketBoardScan>();
+    var existing = scans.putIfAbsent(key, future);
+    if (existing != null) return join(existing);
+    try {
+      MarketBoardScan fresh;
+      scanLock.lock();
+      try {
+        fresh = fetchAll(tab, tier);
+      } finally {
+        scanLock.unlock();
+      }
+      cache.saveBoardScan(fresh);
+      future.complete(fresh);
+      return fresh;
+    } catch (RuntimeException | Error exception) {
+      future.completeExceptionally(exception);
+      throw exception;
+    } finally {
+      scans.remove(key, future);
+    }
+  }
+
   private MarketBoardScan scan(MarketTab tab, Integer tier) {
     var cached = cache.findBoardScan(tab, tier);
     if (cached.isPresent()) return cached.get();

@@ -26,7 +26,9 @@ class ValkeyRosterRefreshCooldown implements RosterRefreshCooldownPort {
       String key = PREFIX + rosterKey;
       var acquired = redis.opsForValue().setIfAbsent(key, "1", cooldown);
       if (Boolean.TRUE.equals(acquired)) return Optional.empty();
-      return Optional.of(left(key).orElse(Duration.ofSeconds(1)));
+      // 남은 만료는 저장소 시계로 재므로 건 쿨다운을 넘을 수 있다(그 시계가 뒤로 갔을 때). Retry-After가 쿨다운을 넘지 않게 자른다.
+      var left = left(key).orElse(Duration.ofSeconds(1));
+      return Optional.of(left.compareTo(cooldown) > 0 ? cooldown : left);
     } catch (DataAccessException exception) {
       // 쿨다운을 확인할 수 없으면 공식 호출 예산을 지키기 위해 받지 않는다.
       throw new CharacterException(CharacterErrorCode.CHARACTER_CACHE_UNAVAILABLE);

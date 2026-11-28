@@ -75,7 +75,8 @@ public class CombatPowerController {
         description = "CHARACTER_COMBAT_POWER_SIMULATE_SUCCESS"),
     @io.swagger.v3.oas.annotations.responses.ApiResponse(
         responseCode = "400",
-        description = "INVALID_REQUEST: 범위 밖·모르는 kind·필수 값 없음(메시지에 필드와 허용 범위)",
+        description =
+            "INVALID_REQUEST: 범위 밖·모르는 kind·필수 값 없음(메시지에 필드와 허용 범위). KARMA_POINTS_OUT_OF_RANGE: karmaRank를 바꾸면 그 트리 포인트 합이 깨달음 0~101·도약 0~70을 벗어남(자르지 않음, 랭크 자체가 0~6 밖이면 INVALID_REQUEST)",
         content = @Content(schema = @Schema(ref = "#/components/schemas/ErrorResponse"))),
     @io.swagger.v3.oas.annotations.responses.ApiResponse(
         responseCode = "404",
@@ -207,12 +208,28 @@ public class CombatPowerController {
       @Schema(description = "팔찌 효과·각인·스톤 각인 이름") @Size(max = 32) String name,
       @Schema(description = "아크 패시브 트리(진화·깨달음·도약)") @Size(max = 8) String tree,
       @Schema(description = "아크 패시브 포인트(0~999, 도약은 0~70)") Integer points,
-      @Schema(description = "아크 그리드 slot index") Integer slotIndex,
-      @Schema(description = "아크 그리드 코어 포인트") Integer point,
+      @Schema(description = "아크 그리드 slot index(ARK_GRID_CORE·ARK_GRID_GEM, 공식 ArkGrid.Slots Index)")
+          Integer slotIndex,
+      @Schema(description = "아크 그리드 코어 포인트(ARK_GRID_CORE 0~20), 새 젬 포인트(ARK_GRID_GEM 1~5)")
+          Integer point,
       @Schema(
               description =
-                  "깨달음 카르마 레벨(0~30, ARK_PASSIVE_POINT tree 깨달음만, points·level과 함께 쓰지 않음). 딜러만 계산한다(무기 공격력 레벨당 +0.1%)")
-          Integer karmaLevel) {
+                  "카르마 레벨(0~30, ARK_PASSIVE_POINT tree 깨달음·도약, points·karmaRank·level과 함께 쓰지 않음). 깨달음은 무기 공격력 레벨당 +0.1%, 도약은 × (1 + 0.0002 × 레벨) 모델값. 진화는 400. 딜러만 계산한다")
+          Integer karmaLevel,
+      @Schema(
+              description =
+                  "카르마 랭크(0~6, ARK_PASSIVE_POINT tree 진화·깨달음·도약, points·karmaLevel·level과 함께 쓰지 않음). 깨달음은 랭크마다 포인트 +1, 도약은 +2(같은 요청의 앞 변경 뒤 포인트에 더하고, 깨달음 0~101·도약 0~70 밖이면 400), 진화는 × (1 + 0.006 × 랭크) 모델값. 같은 트리의 points 변경이 랭크 변경보다 뒤에 오면 그 points가 포인트 합을 정한다(랭크로 옮긴 포인트를 덮음). 딜러만 계산한다")
+          Integer karmaRank,
+      @Schema(
+              description =
+                  "새 젬 종류(ARK_GRID_GEM): 질서 코어는 안정·견고·불변, 혼돈 코어는 침식·왜곡·붕괴. 바꿀 젬은 index(공식 Gems Index). 종류별 옵션 4종(effects[].name, 공식 확률 정보·공지 13204): 안정·침식 = 공격력·추가 피해·아군 피해 강화·낙인력, 견고·왜곡 = 공격력·보스 피해·아군 피해 강화·아군 공격 강화, 불변·붕괴 = 추가 피해·보스 피해·낙인력·아군 공격 강화. 필요 의지력 기본값 안정·침식 8, 견고·왜곡 9, 불변·붕괴 10. 바꾼 뒤 그 코어의 의지력이 모자라면 그 줄은 UNSUPPORTED, reasonCode ARK_GRID_WILL_SHORT(basis에 한국어 문장)")
+          @Size(max = 4)
+          String gemType,
+      @Schema(description = "새 젬 의지력 효율(ARK_GRID_GEM 1~5). 필요 의지력 = 종류 기본값(8·9·10) − 효율")
+          Integer willEfficiency,
+      @Schema(description = "새 젬 옵션 두 줄(ARK_GRID_GEM): 그 종류의 옵션 4종 중 서로 다른 둘, 레벨 1~5")
+          @Size(max = 2)
+          List<@Valid GemOptionRequest> effects) {
     CombatPowerSimulationService.Change toChange() {
       return new CombatPowerSimulationService.Change(
           kind,
@@ -229,9 +246,31 @@ public class CombatPowerController {
           points,
           slotIndex,
           point,
-          karmaLevel);
+          karmaLevel,
+          kind == CombatPowerSimulationService.Kind.ARK_GRID_GEM
+              ? new CombatPowerSimulationService.GemSwap(
+                  gemType,
+                  willEfficiency,
+                  effects == null
+                      ? null
+                      : effects.stream()
+                          .map(
+                              effect ->
+                                  effect == null
+                                      ? null
+                                      : new CombatPowerSimulationService.GemOption(
+                                          effect.name(), effect.level()))
+                          .toList())
+              : null,
+          karmaRank);
     }
   }
+
+  @Schema(description = "젬 옵션 한 줄(ARK_GRID_GEM)")
+  public record GemOptionRequest(
+      @Schema(description = "옵션 이름(공격력·추가 피해·보스 피해·아군 피해 강화·아군 공격 강화·낙인력)") @Size(max = 16)
+          String name,
+      @Schema(description = "옵션 레벨 1~5") Integer level) {}
 
   public record CombatPowerSimulationResponse(
       @Schema(description = "계산 규칙 버전(문자열)") String ruleVersion,
@@ -241,7 +280,11 @@ public class CombatPowerController {
           BigDecimal before,
       @Schema(description = "현재 세팅의 모델값(검증용, 화면 표시 안 함). 계산식 확정 전 null") @NullableResponse
           BigDecimal modelBefore,
-      @Schema(description = "바꾼 항목을 함께 적용한 전투력(계산된 항목만)") @NullableResponse BigDecimal after,
+      @Schema(
+              description =
+                  "바꾼 항목을 함께 적용한 전투력(계산된 항목만). 2부 대비 막기(모든 줄 GAME_UPDATE_UNSUPPORTED)면 delta·deltaPercent와 함께 null")
+          @NullableResponse
+          BigDecimal after,
       @NullableResponse BigDecimal delta,
       @Schema(description = "% 단위, 소수 셋째 자리") @NullableResponse BigDecimal deltaPercent,
       @Schema(description = "UNSUPPORTED 항목이 있어 after가 일부 변경만 반영했으면 true") boolean partial,
@@ -271,7 +314,8 @@ public class CombatPowerController {
                           item.delta(),
                           item.status().name(),
                           item.basis(),
-                          item.reasonCode()))
+                          item.reasonCode(),
+                          item.modelValue()))
               .toList(),
           result.unsupportedCount(),
           result.assumptions());
@@ -289,10 +333,16 @@ public class CombatPowerController {
       @Schema(allowableValues = {"OK", "UNSUPPORTED"}) String status,
       @Schema(description = "근거 문장") String basis,
       @Schema(
-              description = "UNSUPPORTED 이유 코드(문자열, 값이 늘 수 있음, 스펙업·전투력 기여와 같은 코드). OK면 null",
+              description =
+                  "UNSUPPORTED 이유 코드(문자열, 값이 늘 수 있음, 스펙업·전투력 기여와 같은 코드). GAME_UPDATE_UNSUPPORTED(게임 업데이트로 바뀐 장비 정보 — 2부 대비 막기·끄기 스위치가 켜졌을 때만, 모든 줄이 이 코드이고 after·delta·deltaPercent는 null). OK면 null",
               example = "SUPPORTER_MODEL_PENDING")
           @NullableResponse
-          String reasonCode) {}
+          String reasonCode,
+      @Schema(
+              description =
+                  "이 줄의 배수가 모델값(공식이 아닌 비교 기준 한 곳의 식)이면 true: 진화 포인트·진화 카르마 랭크·도약 카르마 레벨. 배포 순서 때문에 계약에서는 선택 필드(없으면 false로 본다)")
+          @com.loakraken.common.api.OptionalResponse
+          boolean modelValue) {}
 
   public record CombatPowerOptionsResponse(
       String ruleVersion,

@@ -72,6 +72,22 @@ public class StatsQueryService {
     this.realEfficiencyRanking = realEfficiencyRanking;
   }
 
+  private com.loakraken.character.application.CombatPowerGuard guard;
+
+  /** 2부 대비 막기(계약 2026-11-28). 없으면(단위 시험) 거르지 않는다. */
+  @org.springframework.beans.factory.annotation.Autowired(required = false)
+  void guard(com.loakraken.character.application.CombatPowerGuard guard) {
+    this.guard = guard;
+  }
+
+  /** 스위치는 요청마다 읽는다. 카드 끄기가 켜져 있으면 모두, 막기가 켜져 있으면 판정이 있는 행을 뺀다. */
+  private StatsPort.ShapeFilter shapeFilter() {
+    if (guard == null) return StatsPort.ShapeFilter.NONE;
+    if (guard.killed(com.loakraken.character.application.CombatPowerGuard.Surface.CARD))
+      return StatsPort.ShapeFilter.ALL;
+    return guard.enforced() ? StatsPort.ShapeFilter.FAILED : StatsPort.ShapeFilter.NONE;
+  }
+
   public SummaryResult summary(StatsConditions conditions) {
     return cached(
         "summary:" + key(conditions),
@@ -1153,13 +1169,15 @@ public class StatsQueryService {
     int offset = (page - 1) * size;
     if (offset > MAX_RANKING_OFFSET)
       throw new BusinessException(StatsErrorCode.STATS_INVALID_RANGE);
-    var columns = kind.columns(realEfficiencyRanking);
-    // 열(정의)이 키에 들어가야 설정을 바꾼 뒤 옛 정의의 캐시 값을 내지 않는다.
+    var columns = kind.columns(realEfficiencyRanking).with(shapeFilter());
+    // 열(정의)이 키에 들어가야 설정을 바꾼 뒤 옛 정의의 캐시 값을 내지 않는다. 2부 대비 거르기도 키에 넣어 스위치를 켜면 다음 요청부터 적용된다.
     return cached(
         "efficiency-ranking:"
             + kind
             + ":"
             + columns.ruleVersion()
+            + ":"
+            + columns.shapeFilter()
             + ":"
             + page
             + ":"

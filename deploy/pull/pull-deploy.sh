@@ -198,6 +198,7 @@ if [[ -f images.env ]] && [[ -n "$(compose ps -q postgres 2>/dev/null)" ]]; then
     | sort -rn | tail -n +15 | cut -d' ' -f2- | xargs -r rm --
 fi
 # 개수 상한(위 14개)과 함께 기간 상한: 30일(30×24×60분)이 지난 서버 안 덤프(pre-deploy-*, 손으로 뜬 pre-infra-* 등 pre-*)는 지운다.
+# 배포가 없는 날은 매일 도는 backup/backup.sh가 같은 줄을 돌린다(이 스크립트는 새 릴리스가 없으면 위에서 일찍 끝남).
 # 개인정보 처리방침의 "백업에는 최대 30일"과 맞춘다(외부 백업 BACKUP_RETENTION_DAYS=30과 같은 기간).
 # 지우기가 실패해도 배포는 멈추지 않는다. 대신 오류는 로그(journal)에 남기고 Slack으로 알린다.
 if ! find backups -maxdepth 1 -name 'pre-*.dump' -type f -mmin +43200 -delete; then

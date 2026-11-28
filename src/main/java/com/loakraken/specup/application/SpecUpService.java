@@ -996,8 +996,11 @@ public class SpecUpService {
     try {
       return build.get();
     } finally {
-      meters
-          .timer("loakraken.spec_up.guide_build")
+      // p95·p99를 보고 SPEC_UP_LIST_MAX_CONCURRENT를 조절한다(평균이 아니라 분포).
+      io.micrometer.core.instrument.Timer.builder("loakraken.spec_up.guide_build")
+          .description("스펙업 목록·줄 상세를 새로 만든 시간(캐시 밖, 자리 안)")
+          .publishPercentileHistogram()
+          .register(meters)
           .record(java.time.Duration.ofNanos(System.nanoTime() - started));
       guideSeats.release();
       if (seat != null) guideSeatHolders.remove(seat);

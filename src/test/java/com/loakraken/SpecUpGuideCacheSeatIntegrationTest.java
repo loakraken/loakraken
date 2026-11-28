@@ -89,6 +89,10 @@ class SpecUpGuideCacheSeatIntegrationTest {
 
     assertThat(outcome("computed") - computed).isEqualTo(1);
     assertThat(outcome("cache_hit") - hits).isEqualTo(2);
+    // 만든 시간은 분포(히스토그램)로 남긴다 — 운영에서 p95·p99로 자리 수를 조절한다.
+    var build = meters.find("loakraken.spec_up.guide_build").timer();
+    assertThat(build).isNotNull();
+    assertThat(build.count()).isPositive();
     assertThat(fiveAgain).isEqualTo(five);
     // limit만 다른 목록: 순위에 든 후보는 앞에서 limit개, 순위 밖 후보는 그대로(limit으로 새로 만든 목록과 같은 모양).
     int total = five.path("total").asInt();

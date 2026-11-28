@@ -440,14 +440,35 @@ public class MarketAuctionService {
     static final PolishPrice UNSUPPORTED = new PolishPrice(PolishStatus.UNSUPPORTED, null, null);
   }
 
-  /** 요청 하나의 연마 시세 채우기 몫. 스위치가 꺼져 있으면 0칸(캐시만 읽음). 공식 호출이 한도·장애로 실패하면 남은 몫을 쓰지 않는다. */
+  /** 연마 시세를 한 번 읽은 기록(어느 칸을 어떤 값으로 봤는지). 결과를 캐시하는 쪽이 같은 칸이 그대로인지 다시 볼 때 쓴다. */
+  public record PolishRead(String part, List<PolishLine> lines, PolishPrice price) {
+    public PolishRead {
+      lines = List.copyOf(lines);
+    }
+  }
+
+  /**
+   * 요청 하나의 연마 시세 채우기 몫. 스위치가 꺼져 있으면 0칸(캐시만 읽음). 공식 호출이 한도·장애로 실패하면 남은 몫을 쓰지 않는다. 이 몫으로 읽은 칸은 {@link
+   * #reads()}에 남는다(한 요청 안, 한 스레드).
+   */
   public static final class PolishFill {
     private final boolean enabled;
     private int left;
+    private final List<PolishRead> reads = new ArrayList<>();
 
     public PolishFill(boolean enabled) {
       this.enabled = enabled;
       this.left = enabled ? MAX_FETCH_PER_REQUEST : 0;
+    }
+
+    /** 이 몫으로 읽은 연마 칸(읽은 순서). */
+    public List<PolishRead> reads() {
+      return List.copyOf(reads);
+    }
+
+    /** 이 몫으로 읽은 칸을 남긴다(읽는 쪽이 polishPrice 결과를 받은 뒤 부른다). */
+    public void read(String part, List<PolishLine> lines, PolishPrice price) {
+      reads.add(new PolishRead(part, lines == null ? List.of() : lines, price));
     }
 
     /** 스위치가 켜져 있었는가(몫을 다 써도 true). */
@@ -475,6 +496,14 @@ public class MarketAuctionService {
     var result = lookupPolish(slotOf(part), lines, fill);
     metrics.polishFill(result.event());
     return result.price();
+  }
+
+  /**
+   * 지금 캐시에 있는 연마 칸만 본다(채우지 않음, 공식 호출 없음, 채우기 지표를 세지 않음). 캐시한 결과가 읽었던 칸이 그대로인지 다시 볼 때 쓴다 — 없으면
+   * MISSING.
+   */
+  public PolishPrice cachedPolishPrice(String part, List<PolishLine> lines) {
+    return lookupPolish(slotOf(part), lines, null).price();
   }
 
   /** 연마 시세를 찾은 결과와 지표 사건 이름(MarketMetrics.polishFill). */

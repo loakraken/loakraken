@@ -88,6 +88,8 @@ final class SpecUpPolishCost {
     var tradeable = tradeable(item);
     if (tradeable == null) return SpecUpCost.POLISH_COST_UNCONFIRMED;
     var targetPrice = auctions.polishPrice(item.type(), target, fill);
+    // 읽은 칸을 남긴다 — 목록 캐시가 꺼낼 때 이 칸이 그대로인지 다시 본다(코드 리뷰 #1146 P1-1).
+    if (fill != null) fill.read(item.type(), target, targetPrice);
     if (targetPrice.status() != PolishStatus.OK) return missing(targetPrice, fillEnabled);
     if (targetPrice.minBuyPrice() == null) return SpecUpCost.POLISH_NO_LISTING;
     long amount = targetPrice.minBuyPrice();
@@ -96,6 +98,7 @@ final class SpecUpPolishCost {
       var mine = keyLines(support, current, keepFlat);
       if (mine == null) return SpecUpCost.POLISH_COST_UNCONFIRMED;
       var currentPrice = auctions.polishPrice(item.type(), mine, fill);
+      if (fill != null) fill.read(item.type(), mine, currentPrice);
       if (currentPrice.status() != PolishStatus.OK) return missing(currentPrice, fillEnabled);
       if (currentPrice.minBuyPrice() == null) return SpecUpCost.POLISH_COST_UNCONFIRMED;
       amount = Math.max(0, amount - currentPrice.minBuyPrice());

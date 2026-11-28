@@ -69,7 +69,8 @@ public class SpecUpDetailController {
         content = @Content(schema = @Schema(ref = "#/components/schemas/ErrorResponse"))),
     @io.swagger.v3.oas.annotations.responses.ApiResponse(
         responseCode = "429",
-        description = "CLIENT_RATE_LIMITED: 요청이 많음(Retry-After 초)",
+        description =
+            "CLIENT_RATE_LIMITED: 요청이 많음(Retry-After 초) · SPEC_UP_LIST_BUSY: 줄 상세를 만들 계산 자리가 없음(이 클라이언트가 이미 계산 중이거나 인스턴스 자리가 잠깐 기다려도 비지 않음, Retry-After 초 뒤 다시)",
         content = @Content(schema = @Schema(ref = "#/components/schemas/ErrorResponse"))),
     @io.swagger.v3.oas.annotations.responses.ApiResponse(
         responseCode = "503",

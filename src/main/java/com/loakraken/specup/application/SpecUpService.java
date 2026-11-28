@@ -559,6 +559,35 @@ public class SpecUpService {
       String krakenSortUnavailableReason,
       boolean supportOrderAvailable,
       String krakenScoreRole) {
+    /**
+     * limit으로 자른 목록(캐시한 전체 목록에서). candidates는 순위에 든 후보(total개, 정렬 순) 뒤에 순위 밖 후보가 붙어 있으므로 앞 total개만
+     * limit으로 자르고 뒤는 그대로 둔다 — limit을 바꿔 만든 목록과 같다.
+     */
+    Guide withLimit(int limit) {
+      int ranked = Math.min(limit, total);
+      var sliced = new ArrayList<Candidate>(candidates.subList(0, ranked));
+      sliced.addAll(candidates.subList(total, candidates.size()));
+      return new Guide(
+          characterName,
+          serverName,
+          className,
+          combatPower,
+          ruleVersion,
+          simulatorRuleVersion,
+          fetchedAt,
+          pricesAt,
+          sort,
+          limit,
+          total,
+          List.copyOf(sliced),
+          krakenScore,
+          krakenRuleVersion,
+          cooldownGemsIncluded,
+          krakenSortUnavailableReason,
+          supportOrderAvailable,
+          krakenScoreRole);
+    }
+
     /** supportOrderAvailable 없이(시험 등). */
     public Guide(
         String characterName,
@@ -672,6 +701,44 @@ public class SpecUpService {
         && guard.blocks(
             snapshot, com.loakraken.character.application.CombatPowerGuard.Surface.SPEC_UP))
       return blockedGuide(snapshot, requested, limit, includeCooldownGems);
+    // 보안 v0.3.16 리드(목록 만들기가 요청 스레드에서 자리·캐시 없이 돔): 목록은 같은 입력이면 60초 캐시(limit과 무관하게 전체를 두고 자름),
+    // 새로 만들 때는 계산 자리(인스턴스 처리기 수의 절반, 주소당 하나). 줄 상세는 가격 일치 확인 때문에 캐시하지 않고 자리만 쓴다.
+    if (allRefineStages)
+      return seated(() -> build(snapshot, requested, limit, includeCooldownGems, true));
+    var key = guideKey(snapshot, requested, includeCooldownGems);
+    var cached = guideCache.find(key);
+    if (cached != null) {
+      guideOutcome("cache_hit");
+      return cached.withLimit(limit);
+    }
+    var full =
+        guideFlight(
+            key,
+            () -> {
+              var hit = guideCache.find(key);
+              if (hit != null) return hit;
+              var built =
+                  seated(
+                      () ->
+                          build(
+                              snapshot, requested, Integer.MAX_VALUE, includeCooldownGems, false));
+              // 만드는 동안 시세 칸이 채워질 수 있다(각인서 시세 등) — 다음 요청이 볼 상태의 키로 둔다(만들기 전 키로 두면 바로 다음 요청이 놓친다).
+              guideCache.save(guideKey(snapshot, requested, includeCooldownGems), built);
+              guideOutcome("computed");
+              return built;
+            });
+    return full.withLimit(limit);
+  }
+
+  /** 목록 만들기(캐시·자리 밖). limit은 순위에 든 후보를 자르는 수(캐시용은 전체). */
+  private Guide build(
+      CharacterResult snapshot,
+      Sort requested,
+      int limit,
+      Boolean includeCooldownGems,
+      boolean allRefineStages) {
+    var profile = snapshot.details().profile();
+    var loadout = snapshot.details().loadout();
     var prices = new HashMap<String, MarketAuctionService.GemCell>();
     for (var cell : auctions.cachedGems()) prices.put(cell.kind() + ":" + cell.level(), cell);
     var pricesAt = new Instant[1];
@@ -760,6 +827,198 @@ public class SpecUpService {
    * 막은 목록: 후보 0개, total 0, 점수 null, krakenSortUnavailableReason = GAME_UPDATE_UNSUPPORTED(정렬과 상관없이
    * 맨 위 이유). sort는 KRAKEN을 요청해도 EFFICIENCY(쓸 수 있을 때만 KRAKEN을 돌려주는 규칙). 공식 전투력은 공식 값이라 그대로 둔다.
    */
+  /** 목록 캐시 수명. 시세 칸이 요청 중에 채워질 수 있어(연마 시세 채우기) 짧게 둔다 — 같은 요청을 되풀이해도 계산은 60초에 한 번. */
+  static final java.time.Duration GUIDE_CACHE_TTL = java.time.Duration.ofSeconds(60);
+
+  static final int GUIDE_CACHE_MAX = 256;
+
+  /** 새로 만드는 목록·줄 상세 동시 수(인스턴스) 기본: 처리기 수의 절반, 최소 1(운영 2개 → 1, 나머지 하나는 다른 요청 몫). */
+  static int defaultGuideConcurrency() {
+    return Math.max(1, Runtime.getRuntime().availableProcessors() / 2);
+  }
+
+  /** 자리를 기다리는 최대 시간(주소 자리와 인스턴스 자리 합). 공유 주소(PC방·통신사)는 같은 주소의 다른 사람이 흔해 바로 거절하지 않는다. */
+  static final java.time.Duration GUIDE_SEAT_WAIT = java.time.Duration.ofMillis(800);
+
+  static final java.time.Duration GUIDE_RETRY_AFTER = java.time.Duration.ofSeconds(1);
+
+  private java.util.concurrent.Semaphore guideSeats =
+      new java.util.concurrent.Semaphore(defaultGuideConcurrency());
+
+  /** spec-up.list.max-concurrent(SPEC_UP_LIST_MAX_CONCURRENT): 0이면 처리기 수의 절반(최소 1). */
+  @org.springframework.beans.factory.annotation.Autowired
+  void guideConcurrency(
+      @org.springframework.beans.factory.annotation.Value("${spec-up.list.max-concurrent:0}")
+          int configured) {
+    if (configured < 0) throw new IllegalArgumentException("spec-up.list.max-concurrent는 0 이상");
+    guideSeats =
+        new java.util.concurrent.Semaphore(
+            configured == 0 ? defaultGuideConcurrency() : configured);
+  }
+
+  int guideConcurrency() {
+    return guideSeats.availablePermits();
+  }
+
+  private final java.util.Set<String> guideSeatHolders =
+      java.util.concurrent.ConcurrentHashMap.newKeySet();
+  private final java.util.concurrent.ConcurrentHashMap<
+          String, java.util.concurrent.CompletableFuture<Guide>>
+      guideFlights = new java.util.concurrent.ConcurrentHashMap<>();
+  private final GuideCache guideCache = new GuideCache(GUIDE_CACHE_MAX, GUIDE_CACHE_TTL);
+
+  /** 최근 목록(전체, limit 전). 크기·수명 상한이 있는 접근 순서 LRU. */
+  static final class GuideCache {
+    private record Entry(Guide guide, long expiresAtNanos) {}
+
+    private final int max;
+    private final long ttlNanos;
+    private final java.util.LinkedHashMap<String, Entry> entries;
+
+    GuideCache(int max, java.time.Duration ttl) {
+      this.max = max;
+      this.ttlNanos = ttl.toNanos();
+      this.entries = new java.util.LinkedHashMap<>(16, 0.75f, true);
+    }
+
+    synchronized Guide find(String key) {
+      var entry = entries.get(key);
+      if (entry == null) return null;
+      if (System.nanoTime() - entry.expiresAtNanos() > 0) {
+        entries.remove(key);
+        return null;
+      }
+      return entry.guide();
+    }
+
+    synchronized void save(String key, Guide guide) {
+      entries.put(key, new Entry(guide, System.nanoTime() + ttlNanos));
+      while (entries.size() > max) entries.remove(entries.keySet().iterator().next());
+    }
+
+    synchronized int size() {
+      return entries.size();
+    }
+  }
+
+  /**
+   * 목록 캐시 키: 캐릭터 캐시(수집 시각) · 정렬 · 쿨 보석 포함 · 시세 칸(보석·재련 재료·각인서 관측 시각) · 스위치 · 규칙 버전. limit은 넣지
+   * 않는다(전체를 두고 자름).
+   */
+  String guideKey(CharacterResult snapshot, Sort requested, Boolean includeCooldownGems) {
+    var profile = snapshot.details().profile();
+    var gems = new StringBuilder();
+    for (var cell : auctions.cachedGems())
+      gems.append(cell.kind())
+          .append(cell.level())
+          .append('@')
+          .append(cell.cell() == null ? "-" : String.valueOf(cell.cell().observedAt()))
+          .append(cell.stale() ? 's' : '-')
+          .append(';');
+    return String.join(
+        ":",
+        profile.serverName(),
+        profile.characterName(),
+        String.valueOf(snapshot.fetchedAt() == null ? 0 : snapshot.fetchedAt().toEpochMilli()),
+        requested.name(),
+        String.valueOf(includeCooldownGems),
+        Integer.toHexString(gems.toString().hashCode()) + "/" + gems.length(),
+        String.valueOf(materials.cached().map(p -> p.observedAt().toEpochMilli()).orElse(0L)),
+        String.valueOf(books.observedAt().map(Instant::toEpochMilli).orElse(0L)),
+        RULE_VERSION,
+        simulator.ruleVersion(),
+        costRuleVersions(),
+        SpecUpKrakenScore.RULE_VERSION,
+        (armGuardEnabled() ? "ag" : "-")
+            + (polishCpEnabled() ? "pc" : "-")
+            + (stoneCpEnabled() ? "sc" : "-")
+            + (karmaCpEnabled() ? "kc" : "-")
+            + (polishPathEnabled() ? "pp" : "-")
+            + (supportOrderEnabled() ? "so" : "-")
+            + (simulator.armorGateEnabled() ? "acg" : "-")
+            + (polishPriceFill ? "pf" : "-"));
+  }
+
+  private Guide guideFlight(String key, java.util.function.Supplier<Guide> loader) {
+    var future = new java.util.concurrent.CompletableFuture<Guide>();
+    var existing = guideFlights.putIfAbsent(key, future);
+    if (existing != null) {
+      try {
+        return existing.join();
+      } catch (java.util.concurrent.CompletionException exception) {
+        if (exception.getCause() instanceof RuntimeException cause) throw cause;
+        throw exception;
+      }
+    }
+    try {
+      var result = loader.get();
+      future.complete(result);
+      return result;
+    } catch (RuntimeException | Error exception) {
+      future.completeExceptionally(exception);
+      throw exception;
+    } finally {
+      guideFlights.remove(key, future);
+    }
+  }
+
+  /**
+   * 계산 자리 안에서 만든다. 주소마다 하나, 인스턴스는 spec-up.list.max-concurrent개. 둘을 합쳐 최대 0.8초 기다리고(공유 주소), 그래도 없으면
+   * 429 SPEC_UP_LIST_BUSY(Retry-After 1초) — 같은 주소면 client_busy, 인스턴스가 차면 busy. 주소 키가 없으면(내부 호출·같은
+   * 호스트 점검) 인스턴스 자리만 센다. 지표 loakraken.spec_up.guide{outcome}와 만든 시간 loakraken.spec_up.guide_build.
+   */
+  private Guide seated(java.util.function.Supplier<Guide> build) {
+    var holder = com.loakraken.common.lostark.ClientLimiter.currentClient();
+    var seat = com.loakraken.common.lostark.ClientLimiter.addressKey(holder);
+    long deadline = System.nanoTime() + GUIDE_SEAT_WAIT.toNanos();
+    if (seat != null)
+      while (!guideSeatHolders.add(seat)) {
+        if (System.nanoTime() - deadline >= 0 || !pause()) {
+          guideOutcome("client_busy");
+          throw new com.loakraken.common.api.BusinessException(
+              SpecUpErrorCode.SPEC_UP_LIST_BUSY, GUIDE_RETRY_AFTER);
+        }
+      }
+    boolean acquired = false;
+    try {
+      long remaining = Math.max(0, deadline - System.nanoTime());
+      acquired = guideSeats.tryAcquire(remaining, java.util.concurrent.TimeUnit.NANOSECONDS);
+    } catch (InterruptedException exception) {
+      Thread.currentThread().interrupt();
+    }
+    if (!acquired) {
+      if (seat != null) guideSeatHolders.remove(seat);
+      guideOutcome("busy");
+      throw new com.loakraken.common.api.BusinessException(
+          SpecUpErrorCode.SPEC_UP_LIST_BUSY, GUIDE_RETRY_AFTER);
+    }
+    long started = System.nanoTime();
+    try {
+      return build.get();
+    } finally {
+      meters
+          .timer("loakraken.spec_up.guide_build")
+          .record(java.time.Duration.ofNanos(System.nanoTime() - started));
+      guideSeats.release();
+      if (seat != null) guideSeatHolders.remove(seat);
+    }
+  }
+
+  /** 같은 주소 자리를 다시 볼 때까지 잠깐 쉰다(20 ms). 끊기면 false. */
+  private static boolean pause() {
+    try {
+      Thread.sleep(20);
+      return true;
+    } catch (InterruptedException exception) {
+      Thread.currentThread().interrupt();
+      return false;
+    }
+  }
+
+  private void guideOutcome(String outcome) {
+    meters.counter("loakraken.spec_up.guide", "outcome", outcome).increment();
+  }
+
   private Guide blockedGuide(
       CharacterResult snapshot, Sort requested, int limit, Boolean includeCooldownGems) {
     var profile = snapshot.details().profile();

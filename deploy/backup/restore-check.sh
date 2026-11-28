@@ -8,7 +8,7 @@
 set -euo pipefail
 
 DUMP="${1:?덤프 파일 경로가 필요합니다}"
-POSTGRES_IMAGE="${POSTGRES_IMAGE:-postgres:18.6}"
+POSTGRES_IMAGE="${POSTGRES_IMAGE:-postgres:18.7@sha256:64c8b0d31e4ab6ea665e8426ea406a94bf52de3c05b3a4a8bf713704eefa9328}"
 NAME="lk-restore-check-$$"
 
 [[ -s "$DUMP" ]] || { echo "덤프 파일이 없거나 비어 있습니다: $DUMP" >&2; exit 1; }

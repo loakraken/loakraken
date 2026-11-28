@@ -199,7 +199,10 @@ if [[ -f images.env ]] && [[ -n "$(compose ps -q postgres 2>/dev/null)" ]]; then
 fi
 # 개수 상한(위 14개)과 함께 기간 상한: 30일(30×24×60분)이 지난 서버 안 덤프(pre-deploy-*, 손으로 뜬 pre-infra-* 등 pre-*)는 지운다.
 # 개인정보 처리방침의 "백업에는 최대 30일"과 맞춘다(외부 백업 BACKUP_RETENTION_DAYS=30과 같은 기간).
-find backups -maxdepth 1 -name 'pre-*.dump' -type f -mmin +43200 -delete 2>/dev/null || true
+# 지우기가 실패해도 배포는 멈추지 않는다. 대신 오류는 로그(journal)에 남기고 Slack으로 알린다.
+if ! find backups -maxdepth 1 -name 'pre-*.dump' -type f -mmin +43200 -delete; then
+  notify "30일 지난 배포 전 덤프 지우기 실패(배포는 계속). 서버 backups/ 권한·디스크 확인"
+fi
 
 # 3. 이미지를 digest로 고정해 올린다.
 [[ -f images.env ]] && cp images.env images.prev.env

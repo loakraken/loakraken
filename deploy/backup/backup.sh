@@ -31,8 +31,26 @@ cd "$STACK_DIR"
 # SECRETS_DIR·STACK_NAME만 읽는다(값을 출력하지 않는다).
 SECRETS_DIR="$(sed -n 's/^SECRETS_DIR=//p' stack.env | tail -n 1)"
 STACK_NAME="$(sed -n 's/^STACK_NAME=//p' stack.env | tail -n 1)"
-# SECRETS_DIR은 root 전용(700)이라 이 스크립트가 직접 읽지 않는다. 마운트는 Docker 데몬이 하고, 파일이 없으면 --mount가 실패한다.
+# SECRETS_DIR은 root 전용(700)이다. rclone.conf는 이 스크립트가 직접 읽지 않고 Docker 데몬이 마운트한다(파일이 없으면 --mount가 실패).
+# 직접 읽는 것은 아래 notify의 경보 웹훅 파일 하나뿐이다(root로 실행, 내용은 출력하지 않음).
 [[ -n "$SECRETS_DIR" ]] || fail "stack.env에 SECRETS_DIR가 없습니다"
+
+# 알림: pull-deploy·host-check와 같은 Slack 경보 웹훅(root만 읽는 파일). 웹훅 주소는 출력하지 않고, 보내기에 실패해도 멈추지 않는다.
+notify() {
+  local hook="${SECRETS_DIR}/slack_webhook_alerts" text="[${STACK_NAME:-loakraken}/백업] $1"
+  if [[ -r "$hook" ]]; then
+    curl -fsS -m 10 -X POST -H 'Content-Type: application/json' \
+      --data "$(printf '{"text":"%s"}' "${text//\"/\'}")" "$(cat "$hook")" >/dev/null || log "Slack 알림 실패"
+  fi
+  log "$1"
+}
+
+# 서버 안 배포 전 덤프(pre-deploy-*, 손으로 뜬 pre-infra-* 등 pre-*)의 30일 기간 상한. pull-deploy도 배포 때 같은 줄을 돌리지만,
+# 배포가 없는 날에도 지워지도록 매일 도는 이 스크립트가 맨 앞에서 돌린다(뒤 단계가 실패해도 먼저 끝남). 처리방침 "백업 최대 30일".
+# 실패해도 백업은 계속한다. 오류는 로그(journal)에 남고 Slack으로 알린다.
+if [[ -d backups ]] && ! find backups -maxdepth 1 -name 'pre-*.dump' -type f -mmin +43200 -delete; then
+  notify "30일 지난 배포 전 덤프 지우기 실패(백업은 계속). 서버 backups/ 권한·디스크 확인"
+fi
 
 env_files=(--env-file stack.env)
 [[ -f images.env ]] && env_files+=(--env-file images.env)
